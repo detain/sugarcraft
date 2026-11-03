@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A syntax highlighting component for code display.
@@ -195,7 +196,7 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             if ($isHighlighted) {
-                $result .= $theme['highlight']->toBg(ColorProfile::TrueColor);
+                $result .= $theme['highlight']->toBg(ColorMode::profile());
             }
 
             $result .= $this->highlightLine($line, $theme);
@@ -229,7 +230,7 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function renderLineNumber(int $number, array $theme): string
     {
         $lineNumStr = sprintf('%4d ', $number);
-        return $theme['line_number']->toFg(ColorProfile::TrueColor) . $lineNumStr . Ansi::reset();
+        return $theme['line_number']->toFg(ColorMode::profile()) . $lineNumStr . Ansi::reset();
     }
 
     /**
@@ -307,38 +308,38 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
         // String keys: "key":
         $line = preg_replace_callback(
             '/("(?:[^"\\\\]|\\\\.)*")\s*:/',
-            fn(array $matches): string => $theme['keyword']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset() . $theme['punctuation']->toFg(ColorProfile::TrueColor) . ':' . Ansi::reset(),
+            fn(array $matches): string => $theme['keyword']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset() . $theme['punctuation']->toFg(ColorMode::profile()) . ':' . Ansi::reset(),
             $line
         ) ?? $line;
 
         // String values
         $line = preg_replace_callback(
             '/:\s*("(?:[^"\\\\]|\\\\.)*")/',
-            fn(array $matches): string => $theme['punctuation']->toFg(ColorProfile::TrueColor) . ': ' . Ansi::reset() . $theme['string']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset(),
+            fn(array $matches): string => $theme['punctuation']->toFg(ColorMode::profile()) . ': ' . Ansi::reset() . $theme['string']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset(),
             $line
         ) ?? $line;
 
         // Numbers
         $line = preg_replace_callback(
             '/:\s*(-?\d+\.?\d*)/',
-            fn(array $matches): string => $theme['punctuation']->toFg(ColorProfile::TrueColor) . ': ' . Ansi::reset() . $theme['number']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset(),
+            fn(array $matches): string => $theme['punctuation']->toFg(ColorMode::profile()) . ': ' . Ansi::reset() . $theme['number']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset(),
             $line
         ) ?? $line;
 
         // Booleans and null
         $line = str_ireplace([': true', ': false', ': null'], [
-            $theme['punctuation']->toFg(ColorProfile::TrueColor) . ': ' . Ansi::reset() . $theme['keyword']->toFg(ColorProfile::TrueColor) . 'true' . Ansi::reset(),
-            $theme['punctuation']->toFg(ColorProfile::TrueColor) . ': ' . Ansi::reset() . $theme['keyword']->toFg(ColorProfile::TrueColor) . 'false' . Ansi::reset(),
-            $theme['punctuation']->toFg(ColorProfile::TrueColor) . ': ' . Ansi::reset() . $theme['keyword']->toFg(ColorProfile::TrueColor) . 'null' . Ansi::reset(),
+            $theme['punctuation']->toFg(ColorMode::profile()) . ': ' . Ansi::reset() . $theme['keyword']->toFg(ColorMode::profile()) . 'true' . Ansi::reset(),
+            $theme['punctuation']->toFg(ColorMode::profile()) . ': ' . Ansi::reset() . $theme['keyword']->toFg(ColorMode::profile()) . 'false' . Ansi::reset(),
+            $theme['punctuation']->toFg(ColorMode::profile()) . ': ' . Ansi::reset() . $theme['keyword']->toFg(ColorMode::profile()) . 'null' . Ansi::reset(),
         ], $line);
 
         // Punctuation
         $line = str_replace(['{', '}', '[', ']', ','], [
-            $theme['punctuation']->toFg(ColorProfile::TrueColor) . '{' . Ansi::reset(),
-            $theme['punctuation']->toFg(ColorProfile::TrueColor) . '}' . Ansi::reset(),
-            $theme['punctuation']->toFg(ColorProfile::TrueColor) . '[' . Ansi::reset(),
-            $theme['punctuation']->toFg(ColorProfile::TrueColor) . ']' . Ansi::reset(),
-            $theme['punctuation']->toFg(ColorProfile::TrueColor) . ',' . Ansi::reset(),
+            $theme['punctuation']->toFg(ColorMode::profile()) . '{' . Ansi::reset(),
+            $theme['punctuation']->toFg(ColorMode::profile()) . '}' . Ansi::reset(),
+            $theme['punctuation']->toFg(ColorMode::profile()) . '[' . Ansi::reset(),
+            $theme['punctuation']->toFg(ColorMode::profile()) . ']' . Ansi::reset(),
+            $theme['punctuation']->toFg(ColorMode::profile()) . ',' . Ansi::reset(),
         ], $line);
 
         return $line;
@@ -352,21 +353,21 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Tags
         $line = preg_replace_callback(
             '/<\/?[a-zA-Z][a-zA-Z0-9]*/',
-            fn(array $matches): string => $theme['keyword']->toFg(ColorProfile::TrueColor) . $matches[0] . Ansi::reset(),
+            fn(array $matches): string => $theme['keyword']->toFg(ColorMode::profile()) . $matches[0] . Ansi::reset(),
             $line
         ) ?? $line;
 
         // Attributes
         $line = preg_replace_callback(
             '/\s([a-zA-Z][a-zA-Z0-9-]*)=/',
-            fn(array $matches): string => ' ' . $theme['attribute']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset() . $theme['punctuation']->toFg(ColorProfile::TrueColor) . '=' . Ansi::reset(),
+            fn(array $matches): string => ' ' . $theme['attribute']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset() . $theme['punctuation']->toFg(ColorMode::profile()) . '=' . Ansi::reset(),
             $line
         ) ?? $line;
 
         // String values
         $line = preg_replace_callback(
             '/="([^"]*)"/',
-            fn(array $matches): string => $theme['punctuation']->toFg(ColorProfile::TrueColor) . '="' . Ansi::reset() . $theme['string']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset() . $theme['punctuation']->toFg(ColorProfile::TrueColor) . '"' . Ansi::reset(),
+            fn(array $matches): string => $theme['punctuation']->toFg(ColorMode::profile()) . '="' . Ansi::reset() . $theme['string']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset() . $theme['punctuation']->toFg(ColorMode::profile()) . '"' . Ansi::reset(),
             $line
         ) ?? $line;
 
@@ -391,28 +392,28 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Keys
         $line = preg_replace_callback(
             '/^(\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/m',
-            fn(array $matches): string => $matches[1] . $theme['keyword']->toFg(ColorProfile::TrueColor) . $matches[2] . Ansi::reset() . ':',
+            fn(array $matches): string => $matches[1] . $theme['keyword']->toFg(ColorMode::profile()) . $matches[2] . Ansi::reset() . ':',
             $line
         ) ?? $line;
 
         // String values in quotes
         $line = preg_replace_callback(
             '/:\s*["\']([^"\']*)["\']/',
-            fn(array $matches): string => $theme['punctuation']->toFg(ColorProfile::TrueColor) . ': ' . Ansi::reset() . $theme['string']->toFg(ColorProfile::TrueColor) . '"' . $matches[1] . '"' . Ansi::reset(),
+            fn(array $matches): string => $theme['punctuation']->toFg(ColorMode::profile()) . ': ' . Ansi::reset() . $theme['string']->toFg(ColorMode::profile()) . '"' . $matches[1] . '"' . Ansi::reset(),
             $line
         ) ?? $line;
 
         // Booleans and null
         $line = preg_replace_callback(
             '/:\s*(true|false|null)\s*$/i',
-            fn(array $matches): string => $theme['punctuation']->toFg(ColorProfile::TrueColor) . ': ' . Ansi::reset() . $theme['keyword']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset(),
+            fn(array $matches): string => $theme['punctuation']->toFg(ColorMode::profile()) . ': ' . Ansi::reset() . $theme['keyword']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset(),
             $line
         ) ?? $line;
 
         // Numbers
         $line = preg_replace_callback(
             '/:\s*(-?\d+\.?\d*)\s*$/',
-            fn(array $matches): string => $theme['punctuation']->toFg(ColorProfile::TrueColor) . ': ' . Ansi::reset() . $theme['number']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset(),
+            fn(array $matches): string => $theme['punctuation']->toFg(ColorMode::profile()) . ': ' . Ansi::reset() . $theme['number']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset(),
             $line
         ) ?? $line;
 
@@ -426,27 +427,27 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         // Comments (# or //)
         if (preg_match('/^(\s*)(#|\/\/)/', $line)) {
-            return $theme['comment']->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            return $theme['comment']->toFg(ColorMode::profile()) . $line . Ansi::reset();
         }
 
         // Strings (double quoted)
         $line = preg_replace_callback(
             '/"([^"\\\\]|\\\\.)*"/',
-            fn(array $matches): string => $theme['string']->toFg(ColorProfile::TrueColor) . $matches[0] . Ansi::reset(),
+            fn(array $matches): string => $theme['string']->toFg(ColorMode::profile()) . $matches[0] . Ansi::reset(),
             $line
         ) ?? $line;
 
         // Strings (single quoted)
         $line = preg_replace_callback(
             '/\'([^\'\\\\]|\\\\.)*\'/',
-            fn(array $matches): string => $theme['string']->toFg(ColorProfile::TrueColor) . $matches[0] . Ansi::reset(),
+            fn(array $matches): string => $theme['string']->toFg(ColorMode::profile()) . $matches[0] . Ansi::reset(),
             $line
         ) ?? $line;
 
         // Numbers
         $line = preg_replace_callback(
             '/\b(\d+\.?\d*)\b/',
-            fn(array $matches): string => $theme['number']->toFg(ColorProfile::TrueColor) . $matches[0] . Ansi::reset(),
+            fn(array $matches): string => $theme['number']->toFg(ColorMode::profile()) . $matches[0] . Ansi::reset(),
             $line
         ) ?? $line;
 
@@ -455,8 +456,8 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
         $line = preg_replace_callback(
             '/\b(' . implode('|', array_map('preg_quote', $allWords)) . ')\b/i',
             fn(array $matches) => in_array(mb_strtolower($matches[0]), array_map('mb_strtolower', $keywords), true)
-                ? $theme['keyword']->toFg(ColorProfile::TrueColor) . $matches[0] . Ansi::reset()
-                : $theme['builtin']->toFg(ColorProfile::TrueColor) . $matches[0] . Ansi::reset(),
+                ? $theme['keyword']->toFg(ColorMode::profile()) . $matches[0] . Ansi::reset()
+                : $theme['builtin']->toFg(ColorMode::profile()) . $matches[0] . Ansi::reset(),
             $line
         ) ?? $line;
 
@@ -469,7 +470,7 @@ final class Highlight implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function escapeAndColorize(string $text, Color $color): string
     {
         $escaped = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
-        return $color->toFg(ColorProfile::TrueColor) . $escaped . Ansi::reset();
+        return $color->toFg(ColorMode::profile()) . $escaped . Ansi::reset();
     }
 
     /**

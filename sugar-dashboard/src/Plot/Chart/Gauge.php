@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A horizontal progress bar / gauge component.
@@ -98,7 +99,7 @@ final class Gauge implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Build the bar with colors
         $bar = '';
         if ($this->filledColor !== null && $filledWidth > 0) {
-            $bar .= $this->filledColor->toFg(ColorProfile::TrueColor);
+            $bar .= $this->filledColor->toFg(ColorMode::profile());
             $bar .= $filledPart;
         } else {
             $bar .= $filledPart;
@@ -106,7 +107,7 @@ final class Gauge implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         if ($this->emptyColor !== null && $emptyWidth > 0) {
             $bar .= Ansi::reset();
-            $bar .= $this->emptyColor->toFg(ColorProfile::TrueColor);
+            $bar .= $this->emptyColor->toFg(ColorMode::profile());
             $bar .= $emptyPart;
         } elseif ($emptyWidth > 0) {
             $bar .= $emptyPart;

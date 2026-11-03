@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A vertical tabs component.
@@ -139,7 +140,7 @@ final class TabsVertical implements \SugarCraft\Dashboard\Foundation\SizedItem
         $paddedLabel = str_pad($label, $this->labelWidth - 2, ' ', STR_PAD_RIGHT);
 
         if ($color !== null) {
-            return $color->toFg(ColorProfile::TrueColor)
+            return $color->toFg(ColorMode::profile())
                 . $prefix . $paddedLabel . $suffix
                 . Ansi::reset();
         }

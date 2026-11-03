@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A gauge chart component for displaying a single value within a range.
@@ -142,7 +143,7 @@ final class GaugeChart implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Draw filled portion
             for ($col = 0; $col < $gaugeWidth; $col++) {
                 if ($col < $filledWidth) {
-                    $result .= $color->toFg(ColorProfile::TrueColor) . '█' . Ansi::reset();
+                    $result .= $color->toFg(ColorMode::profile()) . '█' . Ansi::reset();
                 } else {
                     $result .= '░';
                 }

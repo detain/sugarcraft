@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A dropdown menu component.
@@ -87,7 +88,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $this->label . ' ' . $icon;
 
         if ($this->triggerColor !== null) {
-            return $this->triggerColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->triggerColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;
@@ -125,11 +126,11 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $prefix . ' ' . $icon . ' ' . $label;
 
         if ($isSelected && $this->selectedItemColor !== null) {
-            return $this->selectedItemColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->selectedItemColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         if ($this->menuColor !== null) {
-            return $this->menuColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->menuColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;

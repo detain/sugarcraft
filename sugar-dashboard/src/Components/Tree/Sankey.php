@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A Sankey diagram component for flow visualization.
@@ -227,7 +228,7 @@ final class Sankey implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if ($lineY >= 1 && $lineY < $height - 1) {
                     $line = str_repeat(' ', 8);
                     if ($color !== null) {
-                        $line .= $color->toFg(ColorProfile::TrueColor);
+                        $line .= $color->toFg(ColorMode::profile());
                     }
                     $line .= str_repeat('█', $this->nodeWidth);
                     if ($color !== null) {
@@ -266,7 +267,7 @@ final class Sankey implements \SugarCraft\Dashboard\Foundation\SizedItem
             for ($i = 0; $i < $flowWidth; $i++) {
                 $x = 10 + $i;
                 if ($flowColor !== null) {
-                    $result .= $flowColor->toFg(ColorProfile::TrueColor);
+                    $result .= $flowColor->toFg(ColorMode::profile());
                 }
                 $result .= '─';
                 if ($flowColor !== null) {
@@ -321,7 +322,7 @@ final class Sankey implements \SugarCraft\Dashboard\Foundation\SizedItem
             $color = $node->color ?? $this->nodeColor;
 
             if ($color !== null) {
-                $nodesLine .= $color->toFg(ColorProfile::TrueColor);
+                $nodesLine .= $color->toFg(ColorMode::profile());
             }
             $nodesLine .= str_repeat('█', $nodeWidth);
             if ($color !== null) {
@@ -344,7 +345,7 @@ final class Sankey implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
             $labelsLine .= $v;
             if ($labelColor !== null) {
-                $labelsLine = $labelColor->toFg(ColorProfile::TrueColor) . $labelsLine . Ansi::reset();
+                $labelsLine = $labelColor->toFg(ColorMode::profile()) . $labelsLine . Ansi::reset();
             }
             $result .= $labelsLine . "\n";
         }

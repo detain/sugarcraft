@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Nav;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A sequence diagram component for visualizing object interactions.
@@ -236,7 +237,7 @@ final class Sequence implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             $headerLine .= str_repeat(' ', $padding);
             if ($participant->color !== null) {
-                $headerLine .= $participant->color->toFg(ColorProfile::TrueColor);
+                $headerLine .= $participant->color->toFg(ColorMode::profile());
             }
             $headerLine .= '┌' . str_repeat('─', $boxWidth - 2) . '┐';
             if ($participant->color !== null) {
@@ -353,7 +354,7 @@ final class Sequence implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $labelX = intval(($minX + $maxX) / 2) - intval(strlen($message->label) / 2);
                 $labelLine = str_repeat(' ', $labelX);
                 if ($messageColor !== null) {
-                    $labelLine .= $messageColor->toFg(ColorProfile::TrueColor);
+                    $labelLine .= $messageColor->toFg(ColorMode::profile());
                 }
                 $labelLine .= $message->label;
                 if ($messageColor !== null) {

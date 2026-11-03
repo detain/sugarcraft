@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A markdown rendering component for text display.
@@ -185,7 +186,7 @@ final class Markdown implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $result = '';
         if ($level <= 2) {
-            $result .= $barColor->toFg(ColorProfile::TrueColor) . $underline . Ansi::reset();
+            $result .= $barColor->toFg(ColorMode::profile()) . $underline . Ansi::reset();
             if ($level === 1) {
                 $result .= "\n";
             }
@@ -205,28 +206,28 @@ final class Markdown implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Process code spans first (they take precedence)
         $text = preg_replace_callback(
             '/`([^`]+)`/',
-            fn(array $matches): string => $theme['code']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset(),
+            fn(array $matches): string => $theme['code']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset(),
             $text
         ) ?? $text;
 
         // Bold
         $text = preg_replace_callback(
             '/\*\*([^*]+)\*\*/',
-            fn(array $matches): string => $theme['bold']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset(),
+            fn(array $matches): string => $theme['bold']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset(),
             $text
         ) ?? $text;
 
         // Italic
         $text = preg_replace_callback(
             '/\*([^*]+)\*/',
-            fn(array $matches): string => $theme['italic']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset(),
+            fn(array $matches): string => $theme['italic']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset(),
             $text
         ) ?? $text;
 
         // Strikethrough
         $text = preg_replace_callback(
             '/~~([^~]+)~~/',
-            fn(array $matches): string => $theme['strikethrough']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset(),
+            fn(array $matches): string => $theme['strikethrough']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset(),
             $text
         ) ?? $text;
 
@@ -234,7 +235,7 @@ final class Markdown implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->enableLinks) {
             $text = preg_replace_callback(
                 '/\[([^\]]+)\]\(([^)]+)\)/',
-                fn(array $matches): string => $theme['link']->toFg(ColorProfile::TrueColor) . $matches[1] . Ansi::reset() . $theme['link_url']->toFg(ColorProfile::TrueColor) . ' <' . $matches[2] . '>' . Ansi::reset(),
+                fn(array $matches): string => $theme['link']->toFg(ColorMode::profile()) . $matches[1] . Ansi::reset() . $theme['link_url']->toFg(ColorMode::profile()) . ' <' . $matches[2] . '>' . Ansi::reset(),
                 $text
             ) ?? $text;
         }
@@ -256,7 +257,7 @@ final class Markdown implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function renderCodeBlockLine(string $line, string $lang, array $theme): string
     {
         if (!$this->enableCodeHighlighting) {
-            return $theme['code']->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            return $theme['code']->toFg(ColorMode::profile()) . $line . Ansi::reset();
         }
 
         // Create a temporary Highlight component for syntax highlighting
@@ -270,7 +271,7 @@ final class Markdown implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function renderHorizontalRule(array $theme): string
     {
         $width = $this->width ?? 80;
-        return $theme['hr']->toFg(ColorProfile::TrueColor) . str_repeat('─', $width) . Ansi::reset();
+        return $theme['hr']->toFg(ColorMode::profile()) . str_repeat('─', $width) . Ansi::reset();
     }
 
     /**
@@ -278,7 +279,7 @@ final class Markdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function renderBlockquote(string $text, array $theme): string
     {
-        return $theme['blockquote']->toFg(ColorProfile::TrueColor) . '▌ ' . Ansi::reset() . $this->renderInlineElements($text, $theme);
+        return $theme['blockquote']->toFg(ColorMode::profile()) . '▌ ' . Ansi::reset() . $this->renderInlineElements($text, $theme);
     }
 
     /**
@@ -286,7 +287,7 @@ final class Markdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     private function renderUnorderedListItem(string $text, array $theme): string
     {
-        return $theme['list_bullet']->toFg(ColorProfile::TrueColor) . '• ' . Ansi::reset() . $this->renderInlineElements($text, $theme);
+        return $theme['list_bullet']->toFg(ColorMode::profile()) . '• ' . Ansi::reset() . $this->renderInlineElements($text, $theme);
     }
 
     /**
@@ -296,7 +297,7 @@ final class Markdown implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         preg_match('/^(\d+)\./', $line, $matches);
         $num = $matches[1] ?? '1';
-        return $theme['list_bullet']->toFg(ColorProfile::TrueColor) . sprintf('%2s. ', $num) . Ansi::reset() . $this->renderInlineElements($text, $theme);
+        return $theme['list_bullet']->toFg(ColorMode::profile()) . sprintf('%2s. ', $num) . Ansi::reset() . $this->renderInlineElements($text, $theme);
     }
 
     /**

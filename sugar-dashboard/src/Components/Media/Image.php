@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An image display component with fallback support.
@@ -119,13 +120,13 @@ final class Image implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply colors
         if ($this->backgroundColor !== null) {
-            $output .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $output .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         // Top border
         $borderLine = str_repeat('─', $w);
         if ($this->borderColor !== null) {
-            $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $output .= $this->borderColor->toFg(ColorMode::profile());
         }
         $output .= '┌' . $borderLine . '┐' . "\n";
 
@@ -133,7 +134,7 @@ final class Image implements \SugarCraft\Dashboard\Foundation\SizedItem
         $innerWidth = $w;
         for ($row = 0; $row < $h - 2; $row++) {
             if ($this->borderColor !== null) {
-                $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $output .= $this->borderColor->toFg(ColorMode::profile());
             }
             $output .= '│';
 
@@ -148,14 +149,14 @@ final class Image implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             if ($this->borderColor !== null) {
-                $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $output .= $this->borderColor->toFg(ColorMode::profile());
             }
             $output .= '│' . "\n";
         }
 
         // Bottom border
         if ($this->borderColor !== null) {
-            $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $output .= $this->borderColor->toFg(ColorMode::profile());
         }
         $output .= '└' . $borderLine . '┘';
 
@@ -218,7 +219,7 @@ final class Image implements \SugarCraft\Dashboard\Foundation\SizedItem
         $output = '';
 
         if ($this->backgroundColor !== null) {
-            $output .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $output .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         for ($row = 0; $row < $h; $row++) {
@@ -240,7 +241,7 @@ final class Image implements \SugarCraft\Dashboard\Foundation\SizedItem
         $output = '';
 
         if ($this->backgroundColor !== null) {
-            $output .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $output .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         // ASCII art representation

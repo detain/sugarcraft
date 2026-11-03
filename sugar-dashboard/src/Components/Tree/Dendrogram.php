@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A Dendrogram component for hierarchical clustering visualization.
@@ -241,7 +242,7 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $_childY = ($depth + 1) * $levelHeight + 1;
 
                 if ($lineColor !== null) {
-                    $result .= $lineColor->toFg(ColorProfile::TrueColor);
+                    $result .= $lineColor->toFg(ColorMode::profile());
                 }
 
                 // Draw horizontal line at child level connecting all children
@@ -258,7 +259,7 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Draw node box
         if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
 
         // Node representation
@@ -383,7 +384,7 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Draw leaf node
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
             $result .= str_repeat(' ', $nodeX) . '●─ ' . $node->label;
             if ($this->showValues) {
@@ -396,7 +397,7 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
         } else {
             // Draw branch
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
             $result .= str_repeat(' ', $nodeX) . '◆ ' . $node->label . "\n";
             if ($color !== null) {
@@ -413,7 +414,7 @@ final class Dendrogram implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $bottomY = $startY + $lastLeafIndex * $leafSpacing;
 
                 if ($lineColor !== null) {
-                    $result .= $lineColor->toFg(ColorProfile::TrueColor);
+                    $result .= $lineColor->toFg(ColorMode::profile());
                 }
 
                 // Vertical line connecting children

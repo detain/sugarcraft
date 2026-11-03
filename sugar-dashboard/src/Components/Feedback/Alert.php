@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A non-modal alert feedback component.
@@ -127,7 +128,7 @@ final class Alert implements \SugarCraft\Dashboard\Foundation\SizedItem
             $titleLine = $prefix . ' ' . $this->title;
             $titleLine = $this->padRight($titleLine, $contentWidth);
             $lines[] = $titleLine;
-            $coloredLines[] = $color->toFg(ColorProfile::TrueColor) . $titleLine . Ansi::reset();
+            $coloredLines[] = $color->toFg(ColorMode::profile()) . $titleLine . Ansi::reset();
         }
 
         // Message line with word wrapping
@@ -137,7 +138,7 @@ final class Alert implements \SugarCraft\Dashboard\Foundation\SizedItem
         foreach ($wrappedLines as $msgLine) {
             $msgLinePadded = $this->padRight($msgLine, $contentWidth);
             $lines[] = $msgLinePadded;
-            $coloredLines[] = $color->toFg(ColorProfile::TrueColor) . $msgLinePadded . Ansi::reset();
+            $coloredLines[] = $color->toFg(ColorMode::profile()) . $msgLinePadded . Ansi::reset();
         }
 
         // Build output with borders and colors

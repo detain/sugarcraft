@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\System;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A countdown timer component.
@@ -93,7 +94,7 @@ final class Timer implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($color !== null) {
-            return $color->toFg(ColorProfile::TrueColor) . $timeStr . Ansi::reset();
+            return $color->toFg(ColorMode::profile()) . $timeStr . Ansi::reset();
         }
 
         return $timeStr;

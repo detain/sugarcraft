@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A page footer component.
@@ -100,7 +101,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Background color if set
         if ($this->bgColor !== null) {
-            $result .= $this->bgColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->bgColor->toBg(ColorMode::profile());
         }
 
         $lines = [];
@@ -108,7 +109,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Top border
         if ($this->borderPosition === 'top' || $this->borderPosition === 'both') {
             if ($this->borderColor !== null) {
-                $lines[] = $this->borderColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $useWidth) . Ansi::reset();
+                $lines[] = $this->borderColor->toFg(ColorMode::profile()) . str_repeat('─', $useWidth) . Ansi::reset();
             } else {
                 $lines[] = str_repeat('─', $useWidth);
             }
@@ -118,7 +119,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
         $contentLine = $this->renderContentLine($useWidth);
         if ($contentLine !== '') {
             if ($this->textColor !== null) {
-                $contentLine = $this->textColor->toFg(ColorProfile::TrueColor) . $contentLine . Ansi::reset();
+                $contentLine = $this->textColor->toFg(ColorMode::profile()) . $contentLine . Ansi::reset();
             }
             $lines[] = $contentLine;
         } else {
@@ -128,7 +129,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Bottom border
         if ($this->borderPosition === 'bottom' || $this->borderPosition === 'both') {
             if ($this->borderColor !== null) {
-                $lines[] = $this->borderColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $useWidth) . Ansi::reset();
+                $lines[] = $this->borderColor->toFg(ColorMode::profile()) . str_repeat('─', $useWidth) . Ansi::reset();
             } else {
                 $lines[] = str_repeat('─', $useWidth);
             }
@@ -143,7 +144,7 @@ final class Footer implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply background to all lines
         if ($this->bgColor !== null) {
-            $bgPrefix = $this->bgColor->toBg(ColorProfile::TrueColor);
+            $bgPrefix = $this->bgColor->toBg(ColorMode::profile());
             $bgReset = Ansi::reset();
             $lines = array_map(function ($line) use ($bgPrefix, $bgReset) {
                 return $bgPrefix . $line . $bgReset;

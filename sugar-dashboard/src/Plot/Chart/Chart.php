@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A bar/line chart component with axes, labels, and grid.
@@ -231,7 +232,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if ($barHeight >= $threshold) {
                     // Filled bar
                     if ($this->color !== null) {
-                        $line .= $this->color->toFg(ColorProfile::TrueColor);
+                        $line .= $this->color->toFg(ColorMode::profile());
                     }
                     $line .= str_repeat('█', $barWidth);
                     if ($this->color !== null) {
@@ -248,7 +249,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Grid line
             if ($this->showGrid) {
                 if ($this->gridColor !== null) {
-                    $line .= $this->gridColor->toFg(ColorProfile::TrueColor);
+                    $line .= $this->gridColor->toFg(ColorMode::profile());
                 }
                 $line .= '─';
                 if ($this->gridColor !== null) {
@@ -264,7 +265,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line = str_repeat(' ', 8); // Y-axis spacing
             $line .= str_repeat('─', $chartWidth);
             if ($this->gridColor !== null) {
-                $line = $this->gridColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $line = $this->gridColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
             }
             $output .= $line . "\n";
         }
@@ -278,7 +279,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $line .= $label . ' ';
             }
             if ($this->labelColor !== null) {
-                $line = $this->labelColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $line = $this->labelColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
             }
             $output .= $line;
         }
@@ -323,7 +324,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
                 for ($col = 0; $col < $chartWidth; $col++) {
                     if ($row === 0 || $row === $chartHeight - 1 || $col === 0 || $col === $chartWidth - 1) {
                         if ($this->gridColor !== null) {
-                            $grid[$row][$col] = $this->gridColor->toFg(ColorProfile::TrueColor) . '·' . Ansi::reset();
+                            $grid[$row][$col] = $this->gridColor->toFg(ColorMode::profile()) . '·' . Ansi::reset();
                         } else {
                             $grid[$row][$col] = '·';
                         }
@@ -347,7 +348,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
 
                 if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
                     if ($this->color !== null) {
-                        $grid[$y][$x] = $this->color->toFg(ColorProfile::TrueColor) . '●' . Ansi::reset();
+                        $grid[$y][$x] = $this->color->toFg(ColorMode::profile()) . '●' . Ansi::reset();
                     } else {
                         $grid[$y][$x] = '●';
                     }
@@ -382,7 +383,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $line .= $label;
             }
             if ($this->labelColor !== null) {
-                $line = $this->labelColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $line = $this->labelColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
             }
             $output .= $line;
         }

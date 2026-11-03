@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An activity feed component for displaying a stream of events.
@@ -168,7 +169,7 @@ final class ActivityFeed implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Icon
             if ($this->showIcons) {
                 $iconColor = $this->iconColor ?? $this->getEventColor($event->type);
-                $line .= $iconColor->toFg(ColorProfile::TrueColor);
+                $line .= $iconColor->toFg(ColorMode::profile());
                 $line .= $this->getEventIcon($event->type) . ' ';
                 $line .= Ansi::reset();
             }
@@ -176,7 +177,7 @@ final class ActivityFeed implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Actor and action
             $text = $event->actor . ' ' . $event->action;
             if ($this->textColor !== null) {
-                $line .= $this->textColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->textColor->toFg(ColorMode::profile());
             }
             $line .= $text;
             if ($this->textColor !== null) {
@@ -203,7 +204,7 @@ final class ActivityFeed implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if ($lineLen + $tsLen < $useWidth) {
                     $line .= str_repeat(' ', $useWidth - $lineLen - $tsLen);
                     if ($this->timestampColor !== null) {
-                        $line .= $this->timestampColor->toFg(ColorProfile::TrueColor);
+                        $line .= $this->timestampColor->toFg(ColorMode::profile());
                     }
                     $line .= $ts;
                     if ($this->timestampColor !== null) {

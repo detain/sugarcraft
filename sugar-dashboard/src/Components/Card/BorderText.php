@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * Text with ASCII-art style border characters.
@@ -112,7 +113,7 @@ final class BorderText implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply border color if set
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
 
         // Top border

@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An area chart component for displaying time series data.
@@ -180,7 +181,7 @@ final class AreaChart implements \SugarCraft\Dashboard\Foundation\SizedItem
             for ($x = 0; $x < $useWidth; $x++) {
                 $cell = $grid[$y][$x];
                 if ($cell['color'] !== null) {
-                    $result .= $cell['color']->toFg(ColorProfile::TrueColor);
+                    $result .= $cell['color']->toFg(ColorMode::profile());
                 }
                 $result .= $cell['char'];
                 if ($cell['color'] !== null) {
@@ -194,7 +195,7 @@ final class AreaChart implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->showLegend) {
             $legendParts = [];
             foreach ($this->series as $s) {
-                $legendParts[] = $s['color']->toFg(ColorProfile::TrueColor) . '█ ' . $s['label'] . Ansi::reset();
+                $legendParts[] = $s['color']->toFg(ColorMode::profile()) . '█ ' . $s['label'] . Ansi::reset();
             }
             $result .= implode('  ', $legendParts);
         }

@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A simple pagination control component.
@@ -82,7 +83,7 @@ final class PaginationSimple implements \SugarCraft\Dashboard\Foundation\SizedIt
         $pageIndicator = sprintf('%d / %d', $currentPage, $this->totalPages);
         if ($this->activeColor !== null) {
             $result .= ' ';
-            $result .= $this->activeColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->activeColor->toFg(ColorMode::profile());
             $result .= $pageIndicator;
             $result .= Ansi::reset();
         } else {
@@ -122,7 +123,7 @@ final class PaginationSimple implements \SugarCraft\Dashboard\Foundation\SizedIt
         $result = '';
 
         if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
 
         $result .= '[' . $label . ']';

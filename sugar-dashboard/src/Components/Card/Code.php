@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A code block / snippet display component.
@@ -180,7 +181,7 @@ final class Code implements \SugarCraft\Dashboard\Foundation\SizedItem
         $output = '┌' . $borderLine . '┐';
 
         if ($this->borderColor !== null) {
-            $output = $this->borderColor->toFg(ColorProfile::TrueColor) . $output . Ansi::reset();
+            $output = $this->borderColor->toFg(ColorMode::profile()) . $output . Ansi::reset();
         }
 
         return $output;
@@ -208,7 +209,7 @@ final class Code implements \SugarCraft\Dashboard\Foundation\SizedItem
         $line = '│' . str_repeat(' ', (int) floor($padding / 2)) . $label;
 
         if ($this->languageColor !== null) {
-            $line = $this->languageColor->toFg(ColorProfile::TrueColor) . $line;
+            $line = $this->languageColor->toFg(ColorMode::profile()) . $line;
             $line .= Ansi::reset();
         }
 
@@ -236,10 +237,10 @@ final class Code implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply colors
         if ($this->backgroundColor !== null || $this->textColor !== null) {
             if ($this->backgroundColor !== null) {
-                $output = $this->backgroundColor->toBg(ColorProfile::TrueColor) . $output;
+                $output = $this->backgroundColor->toBg(ColorMode::profile()) . $output;
             }
             if ($this->textColor !== null) {
-                $output = $this->textColor->toFg(ColorProfile::TrueColor) . $output;
+                $output = $this->textColor->toFg(ColorMode::profile()) . $output;
             }
             $output .= Ansi::reset();
         }

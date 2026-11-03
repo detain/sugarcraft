@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A user profile card component.
@@ -143,7 +144,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Top border
         if ($this->borderColor !== null) {
-            $lines[] = $this->borderColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $width) . Ansi::reset();
+            $lines[] = $this->borderColor->toFg(ColorMode::profile()) . str_repeat('─', $width) . Ansi::reset();
         } else {
             $lines[] = str_repeat('─', $width);
         }
@@ -153,7 +154,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
             $avatarDisplay = '[' . str_pad($this->avatar, 4, ' ', STR_PAD_BOTH) . ']';
             if ($this->avatarBgColor !== null) {
                 $lines[] = str_repeat(' ', (int) floor(($width - 10) / 2))
-                    . $this->avatarBgColor->toBg(ColorProfile::TrueColor)
+                    . $this->avatarBgColor->toBg(ColorMode::profile())
                     . $avatarDisplay
                     . Ansi::reset();
             } else {
@@ -165,7 +166,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Name
         if ($this->name !== '') {
             if ($this->nameColor !== null) {
-                $lines[] = $this->nameColor->toFg(ColorProfile::TrueColor);
+                $lines[] = $this->nameColor->toFg(ColorMode::profile());
             }
             $lines[] = str_pad($this->name, $width);
             $lines[] = Ansi::reset();
@@ -174,7 +175,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Role
         if ($this->role !== '') {
             if ($this->roleColor !== null) {
-                $lines[] = $this->roleColor->toFg(ColorProfile::TrueColor);
+                $lines[] = $this->roleColor->toFg(ColorMode::profile());
             }
             $lines[] = str_pad($this->role, $width);
             $lines[] = Ansi::reset();
@@ -185,7 +186,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
             $bioLines = $this->wordWrap($this->bio, $width - 2);
             foreach ($bioLines as $bioLine) {
                 if ($this->bioColor !== null) {
-                    $lines[] = $this->bioColor->toFg(ColorProfile::TrueColor);
+                    $lines[] = $this->bioColor->toFg(ColorMode::profile());
                 }
                 $lines[] = ' ' . str_pad($bioLine, $width - 1);
                 $lines[] = Ansi::reset();
@@ -198,7 +199,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Bottom border
         if ($this->borderColor !== null) {
-            $lines[] = $this->borderColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $width) . Ansi::reset();
+            $lines[] = $this->borderColor->toFg(ColorMode::profile()) . str_repeat('─', $width) . Ansi::reset();
         } else {
             $lines[] = str_repeat('─', $width);
         }
@@ -215,7 +216,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Top border
         if ($this->borderColor !== null) {
-            $lines[] = $this->borderColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $width) . Ansi::reset();
+            $lines[] = $this->borderColor->toFg(ColorMode::profile()) . str_repeat('─', $width) . Ansi::reset();
         } else {
             $lines[] = str_repeat('─', $width);
         }
@@ -225,7 +226,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->avatar !== null) {
             $avatarDisplay = '[' . str_pad($this->avatar, 4, ' ', STR_PAD_BOTH) . ']';
             if ($this->avatarBgColor !== null) {
-                $content .= $this->avatarBgColor->toBg(ColorProfile::TrueColor);
+                $content .= $this->avatarBgColor->toBg(ColorMode::profile());
             }
             $content .= $avatarDisplay . ' ';
             $content .= Ansi::reset() . ' ';
@@ -233,7 +234,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Name and role
         if ($this->nameColor !== null) {
-            $content .= $this->nameColor->toFg(ColorProfile::TrueColor);
+            $content .= $this->nameColor->toFg(ColorMode::profile());
         }
         $content .= $this->name;
         $content .= Ansi::reset();
@@ -241,7 +242,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->role !== '') {
             if ($this->roleColor !== null) {
                 $content .= ' ';
-                $content .= $this->roleColor->toFg(ColorProfile::TrueColor);
+                $content .= $this->roleColor->toFg(ColorMode::profile());
             }
             $content .= $this->role;
             $content .= Ansi::reset();
@@ -254,7 +255,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
             $bioLines = $this->wordWrap($this->bio, $width - 2);
             foreach ($bioLines as $bioLine) {
                 if ($this->bioColor !== null) {
-                    $lines[] = $this->bioColor->toFg(ColorProfile::TrueColor);
+                    $lines[] = $this->bioColor->toFg(ColorMode::profile());
                 }
                 $lines[] = ' ' . str_pad($bioLine, $width - 1);
                 $lines[] = Ansi::reset();
@@ -263,7 +264,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Bottom border
         if ($this->borderColor !== null) {
-            $lines[] = $this->borderColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $width) . Ansi::reset();
+            $lines[] = $this->borderColor->toFg(ColorMode::profile()) . str_repeat('─', $width) . Ansi::reset();
         } else {
             $lines[] = str_repeat('─', $width);
         }
@@ -285,7 +286,7 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($this->nameColor !== null) {
-            $content .= $this->nameColor->toFg(ColorProfile::TrueColor);
+            $content .= $this->nameColor->toFg(ColorMode::profile());
         }
         $content .= $this->name;
         $content .= Ansi::reset();
@@ -293,20 +294,20 @@ final class Profile implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->role !== '') {
             if ($this->roleColor !== null) {
                 $content .= ' ';
-                $content .= $this->roleColor->toFg(ColorProfile::TrueColor);
+                $content .= $this->roleColor->toFg(ColorMode::profile());
             }
             $content .= $this->role;
             $content .= Ansi::reset();
         }
 
         if ($this->borderColor !== null) {
-            $lines[] = $this->borderColor->toFg(ColorProfile::TrueColor)
+            $lines[] = $this->borderColor->toFg(ColorMode::profile())
                 . str_repeat('─', $width)
                 . Ansi::reset();
         }
         $lines[] = str_pad($content, $width);
         if ($this->borderColor !== null) {
-            $lines[] = $this->borderColor->toFg(ColorProfile::TrueColor)
+            $lines[] = $this->borderColor->toFg(ColorMode::profile())
                 . str_repeat('─', $width)
                 . Ansi::reset();
         }

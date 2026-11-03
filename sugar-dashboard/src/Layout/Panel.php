@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Theme;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A panel component with header and footer sections.
@@ -116,7 +117,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply border color if set
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
 
         // Top border with title or header
@@ -136,11 +137,11 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             $result .= str_repeat($h, $leftPad);
             if ($this->titleColor !== null) {
-                $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->titleColor->toFg(ColorMode::profile());
             }
             $result .= $title;
             if ($this->borderColor !== null) {
-                $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->borderColor->toFg(ColorMode::profile());
             }
             $result .= str_repeat($h, $rightPad);
         } elseif ($this->header !== null) {

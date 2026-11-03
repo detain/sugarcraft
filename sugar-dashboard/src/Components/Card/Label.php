@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A form label component.
@@ -101,7 +102,7 @@ final class Label implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply color if set
         if ($this->color !== null) {
-            $result .= $this->color->toFg(ColorProfile::TrueColor);
+            $result .= $this->color->toFg(ColorMode::profile());
         }
 
         // Build the label text

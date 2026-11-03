@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A single metric/number display component.
@@ -188,7 +189,7 @@ final class Metric implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->labelColor === null) {
             return $line;
         }
-        return $this->labelColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+        return $this->labelColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
     }
 
     /**
@@ -218,7 +219,7 @@ final class Metric implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply trend color (or preserve uncolored if no trendColor)
         if ($this->trendColor !== null && $trendStr !== '') {
             $trendPart = mb_substr($line, $valueStart, $trendStrLen, 'UTF-8');
-            $result .= $this->trendColor->toFg(ColorProfile::TrueColor) . $trendPart . Ansi::reset();
+            $result .= $this->trendColor->toFg(ColorMode::profile()) . $trendPart . Ansi::reset();
         } elseif ($trendStr !== '') {
             // No trend color but still need to include the trend symbol
             $trendPart = mb_substr($line, $valueStart, $trendStrLen, 'UTF-8');
@@ -231,7 +232,7 @@ final class Metric implements \SugarCraft\Dashboard\Foundation\SizedItem
         $afterTrend = $valueStart + $trendStrLen + $trendSpacingLen;
         $valuePartOnly = mb_substr($line, $afterTrend, null, 'UTF-8');
         if ($this->valueColor !== null) {
-            $result .= $this->valueColor->toFg(ColorProfile::TrueColor) . $valuePartOnly . Ansi::reset();
+            $result .= $this->valueColor->toFg(ColorMode::profile()) . $valuePartOnly . Ansi::reset();
         } else {
             $result .= $valuePartOnly;
         }

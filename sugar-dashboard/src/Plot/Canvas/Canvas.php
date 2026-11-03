@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\SizedItem;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A 2D pixel drawing canvas.
@@ -273,7 +274,7 @@ final class Canvas implements SizedItem
                 if ($bgHex !== null) {
                     try {
                         $bgColor = Color::hex($bgHex);
-                        $output .= $bgColor->toBg(ColorProfile::TrueColor);
+                        $output .= $bgColor->toBg(ColorMode::profile());
                     } catch (\Throwable) {
                         $output .= ' ';
                     }
@@ -282,7 +283,7 @@ final class Canvas implements SizedItem
                 if ($fgHex !== null) {
                     try {
                         $fgColor = Color::hex($fgHex);
-                        $output .= $fgColor->toFg(ColorProfile::TrueColor);
+                        $output .= $fgColor->toFg(ColorMode::profile());
                     } catch (\Throwable) {
                         // use default
                     }

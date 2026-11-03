@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A multi-segment progress bar component.
@@ -125,7 +126,7 @@ final class Progress implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Apply segment color
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
 
             // Render the segment bar

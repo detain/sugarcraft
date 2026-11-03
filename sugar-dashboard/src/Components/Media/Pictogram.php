@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Media;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A pictogram chart using icons/symbols to represent values.
@@ -159,7 +160,7 @@ final class Pictogram implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Icons
             for ($i = 0; $i < $this->maxIcons; $i++) {
                 if ($i < $numIcons) {
-                    $line .= $color->toFg(ColorProfile::TrueColor) . $icon . Ansi::reset();
+                    $line .= $color->toFg(ColorMode::profile()) . $icon . Ansi::reset();
                 } else {
                     $line .= '░';
                 }

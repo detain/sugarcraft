@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A text diff display component.
@@ -199,7 +200,7 @@ final class Diff implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
 
             $result .= $prefix . $content;

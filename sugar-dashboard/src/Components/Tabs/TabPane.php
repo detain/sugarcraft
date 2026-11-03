@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A pane container for tab content.
@@ -72,7 +73,7 @@ final class TabPane implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply border styling if color is set
         if ($this->borderColor !== null) {
-            $rendered = $this->borderColor->toFg(ColorProfile::TrueColor) . $rendered . Ansi::reset();
+            $rendered = $this->borderColor->toFg(ColorMode::profile()) . $rendered . Ansi::reset();
         }
 
         return $rendered;

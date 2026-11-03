@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A radar/spider chart component for displaying multi-axis data.
@@ -160,7 +161,7 @@ final class RadarChart implements \SugarCraft\Dashboard\Foundation\SizedItem
             for ($x = 0; $x < $gridWidth; $x++) {
                 $cell = $grid[$y][$x];
                 if ($cell['color'] !== null) {
-                    $result .= $cell['color']->toFg(ColorProfile::TrueColor);
+                    $result .= $cell['color']->toFg(ColorMode::profile());
                 }
                 $result .= $cell['char'];
                 if ($cell['color'] !== null) {

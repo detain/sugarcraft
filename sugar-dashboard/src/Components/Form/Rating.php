@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A star rating component.
@@ -79,7 +80,7 @@ final class Rating implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($this->filledColor !== null) {
-            $result .= $this->filledColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->filledColor->toFg(ColorMode::profile());
         }
 
         $fullStars = (int) $safeValue;
@@ -98,7 +99,7 @@ final class Rating implements \SugarCraft\Dashboard\Foundation\SizedItem
         $remainingEmpty = $this->maxStars - $fullStars - ($hasPartial ? 1 : 0);
         if ($this->emptyColor !== null && $remainingEmpty > 0) {
             $result .= Ansi::reset();
-            $result .= $this->emptyColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->emptyColor->toFg(ColorMode::profile());
             $result .= str_repeat($this->emptyChar, $remainingEmpty);
         } else {
             $result .= str_repeat($this->emptyChar, $remainingEmpty);

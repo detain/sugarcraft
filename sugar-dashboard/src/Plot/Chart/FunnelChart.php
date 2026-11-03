@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A funnel chart component for displaying conversion flows.
@@ -125,7 +126,7 @@ final class FunnelChart implements \SugarCraft\Dashboard\Foundation\SizedItem
             $stageWidth = max(3, (int) round($useWidth * $ratio));
 
             // Build funnel shape
-            $colorStr = $color->toFg(ColorProfile::TrueColor);
+            $colorStr = $color->toFg(ColorMode::profile());
             $topWidth = ($i === 0) ? $stageWidth : $resultWidths[$i - 1] ?? $stageWidth;
 
             // Ensure each stage is smaller than the one above

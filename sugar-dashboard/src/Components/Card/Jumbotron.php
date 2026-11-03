@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A hero/jumbotron section component.
@@ -179,7 +180,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function renderTopBorder(int $width): string
     {
         if ($this->borderColor !== null) {
-            return $this->borderColor->toFg(ColorProfile::TrueColor) .
+            return $this->borderColor->toFg(ColorMode::profile()) .
                 '┌' . str_repeat('─', $width - 2) . '┐' .
                 Ansi::reset();
         }
@@ -193,7 +194,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         $shadow = '│' . str_repeat('░', $width - 2) . '│';
         if ($this->borderColor !== null) {
-            return $this->borderColor->toFg(ColorProfile::TrueColor) . $shadow . Ansi::reset();
+            return $this->borderColor->toFg(ColorMode::profile()) . $shadow . Ansi::reset();
         }
         return $shadow;
     }
@@ -219,7 +220,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line .= str_repeat(' ', (int) floor($padding / 2));
 
             if ($this->titleColor !== null) {
-                $line .= $this->titleColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->titleColor->toFg(ColorMode::profile());
             }
             $line .= $this->title;
             $line .= Ansi::reset();
@@ -233,7 +234,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line .= str_repeat(' ', $leftPad);
 
             if ($this->titleColor !== null) {
-                $line .= $this->titleColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->titleColor->toFg(ColorMode::profile());
             }
             $line .= $this->title;
             $line .= Ansi::reset();
@@ -265,7 +266,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line .= str_repeat(' ', (int) floor($padding / 2));
 
             if ($this->subtitleColor !== null) {
-                $line .= $this->subtitleColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->subtitleColor->toFg(ColorMode::profile());
             }
             $line .= $this->subtitle;
             $line .= Ansi::reset();
@@ -279,7 +280,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line .= str_repeat(' ', $leftPad);
 
             if ($this->subtitleColor !== null) {
-                $line .= $this->subtitleColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->subtitleColor->toFg(ColorMode::profile());
             }
             $line .= $this->subtitle;
             $line .= Ansi::reset();
@@ -308,7 +309,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line .= str_repeat(' ', $leftPad);
 
             if ($this->buttonColor !== null) {
-                $line .= $this->buttonColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->buttonColor->toFg(ColorMode::profile());
             }
             $line .= $buttonContent;
             $line .= Ansi::reset();
@@ -323,7 +324,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line = str_repeat(' ', $leftPad);
 
             if ($this->buttonColor !== null) {
-                $line .= $this->buttonColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->buttonColor->toFg(ColorMode::profile());
             }
             $line .= $buttonContent;
             $line .= Ansi::reset();
@@ -340,7 +341,7 @@ final class Jumbotron implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function renderBottomBorder(int $width): string
     {
         if ($this->borderColor !== null) {
-            return $this->borderColor->toFg(ColorProfile::TrueColor) .
+            return $this->borderColor->toFg(ColorMode::profile()) .
                 '└' . str_repeat('─', $width - 2) . '┘' .
                 Ansi::reset();
         }

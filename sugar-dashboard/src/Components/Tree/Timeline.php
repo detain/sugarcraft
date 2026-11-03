@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A timeline component for displaying chronological events.
@@ -138,13 +139,13 @@ final class Timeline implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             // Add color
-            $line = $color->toFg(ColorProfile::TrueColor) . $lineContent . Ansi::reset();
+            $line = $color->toFg(ColorMode::profile()) . $lineContent . Ansi::reset();
 
             // Add connector line (except for last event)
             if ($i < $eventCount - 1) {
                 $result[] = $line;
                 $connectorLine = str_repeat($connectorChar, $useWidth);
-                $result[] = $connectorColor->toFg(ColorProfile::TrueColor) . $connectorLine . Ansi::reset();
+                $result[] = $connectorColor->toFg(ColorMode::profile()) . $connectorLine . Ansi::reset();
             } else {
                 $result[] = $line;
             }

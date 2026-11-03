@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A horizontal menu bar component with dropdown submenus.
@@ -101,7 +102,7 @@ final class Menu implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = implode('  ', $parts);
 
         if ($this->barColor !== null) {
-            $result = $this->barColor->toFg(ColorProfile::TrueColor) . $result . Ansi::reset();
+            $result = $this->barColor->toFg(ColorMode::profile()) . $result . Ansi::reset();
         }
 
         return $result;
@@ -120,11 +121,11 @@ final class Menu implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $indicator . $label . $submenuIndicator;
 
         if ($isActive && $this->activeItemColor !== null) {
-            return $this->activeItemColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->activeItemColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         if ($this->itemColor !== null) {
-            return $this->itemColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->itemColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;
@@ -170,11 +171,11 @@ final class Menu implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($isSelected && $this->activeItemColor !== null) {
-            return $this->activeItemColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->activeItemColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         if ($this->submenuColor !== null) {
-            return $this->submenuColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->submenuColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;

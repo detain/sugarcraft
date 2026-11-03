@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A hint / caption text component.
@@ -162,7 +163,7 @@ final class Hint implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply color
         $result = '';
         if ($this->color !== null) {
-            $result .= $this->color->toFg(ColorProfile::TrueColor);
+            $result .= $this->color->toFg(ColorMode::profile());
         }
 
         // Word wrap if needed

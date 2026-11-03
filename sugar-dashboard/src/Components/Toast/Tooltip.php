@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A tooltip component.
@@ -134,16 +135,16 @@ final class Tooltip implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply colors
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
         if ($this->foregroundColor !== null) {
-            $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->foregroundColor->toFg(ColorMode::profile());
         }
 
         // Top border
         $innerWidth = max(1, $totalWidth - 2);
         $borderStr = $this->borderColor !== null
-            ? $this->borderColor->toFg(ColorProfile::TrueColor)
+            ? $this->borderColor->toFg(ColorMode::profile())
             : '';
         $result .= $borderStr . '┌' . str_repeat('─', $innerWidth) . '┐' . Ansi::reset() . "\n";
 

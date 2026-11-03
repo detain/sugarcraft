@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A breadcrumb navigation component.
@@ -92,7 +93,7 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Add color if set
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
 
             // Add the item
@@ -106,7 +107,7 @@ final class Breadcrumb implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Add separator if not last item
             if ($i < count($this->items) - 1) {
                 if ($this->separatorColor !== null) {
-                    $result .= $this->separatorColor->toFg(ColorProfile::TrueColor);
+                    $result .= $this->separatorColor->toFg(ColorMode::profile());
                 }
                 $result .= ' ' . $this->separator . ' ';
                 if ($this->separatorColor !== null) {

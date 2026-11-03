@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A styled console output component.
@@ -158,13 +159,13 @@ final class Console implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->showPrefix && $prefix !== '') {
             $prefixStr = $this->showTimestamps ? str_pad($prefix, $prefixWidth) : $prefix;
             if ($this->prefixColor !== null) {
-                $prefixStr = $this->prefixColor->toFg(ColorProfile::TrueColor) . $prefixStr . Ansi::reset();
+                $prefixStr = $this->prefixColor->toFg(ColorMode::profile()) . $prefixStr . Ansi::reset();
             } else {
-                $prefixStr = $color->toFg(ColorProfile::TrueColor) . $prefixStr . Ansi::reset();
+                $prefixStr = $color->toFg(ColorMode::profile()) . $prefixStr . Ansi::reset();
             }
         }
 
-        $colorStr = $color->toFg(ColorProfile::TrueColor);
+        $colorStr = $color->toFg(ColorMode::profile());
 
         if ($this->wordWrap && $messageWidth > 0) {
             $messageLines = $this->wrapMessage($entry->message, $messageWidth);

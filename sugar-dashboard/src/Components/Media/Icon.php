@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An icon display component.
@@ -243,7 +244,7 @@ final class Icon implements \SugarCraft\Dashboard\Foundation\SizedItem
         $output = '';
 
         if ($this->color !== null) {
-            $output .= $this->color->toFg(ColorProfile::TrueColor);
+            $output .= $this->color->toFg(ColorMode::profile());
         }
 
         $output .= $this->glyph;
@@ -251,9 +252,9 @@ final class Icon implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->label !== null) {
             $output .= ' ';
             if ($this->labelColor !== null) {
-                $output .= $this->labelColor->toFg(ColorProfile::TrueColor);
+                $output .= $this->labelColor->toFg(ColorMode::profile());
             } elseif ($this->color !== null) {
-                $output .= $this->color->toFg(ColorProfile::TrueColor);
+                $output .= $this->color->toFg(ColorMode::profile());
             }
             $output .= $this->label;
         }
@@ -276,14 +277,14 @@ final class Icon implements \SugarCraft\Dashboard\Foundation\SizedItem
         $scaled = str_repeat($this->glyph, max(1, $this->size));
 
         if ($this->color !== null) {
-            $output .= $this->color->toFg(ColorProfile::TrueColor);
+            $output .= $this->color->toFg(ColorMode::profile());
         }
 
         $output .= $scaled;
 
         if ($this->label !== null) {
             if ($this->labelColor !== null) {
-                $output .= ' ' . $this->labelColor->toFg(ColorProfile::TrueColor) . $this->label;
+                $output .= ' ' . $this->labelColor->toFg(ColorMode::profile()) . $this->label;
             } else {
                 $output .= ' ' . $this->label;
             }

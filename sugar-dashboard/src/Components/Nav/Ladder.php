@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Nav;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A ladder diagram for displaying process steps and timeline.
@@ -128,7 +129,7 @@ final class Ladder implements \SugarCraft\Dashboard\Foundation\SizedItem
             $status = $step['status'] ?? self::StatusPending;
             $color = $this->getColorForStatus($status);
 
-            $colorStr = $color->toFg(ColorProfile::TrueColor);
+            $colorStr = $color->toFg(ColorMode::profile());
             $nodeChar = $status === self::StatusComplete ? '●' : ($status === self::StatusCurrent ? '◉' : '○');
             $label = $step['label'];
             $description = $step['description'] ?? '';
@@ -165,7 +166,7 @@ final class Ladder implements \SugarCraft\Dashboard\Foundation\SizedItem
             $color = $this->getColorForStatus($status);
             $nodeChar = $status === self::StatusComplete ? '●' : ($status === self::StatusCurrent ? '◉' : '○');
 
-            $topLine .= ' ' . $color->toFg(ColorProfile::TrueColor) . $nodeChar . ' ' . $step['label'] . Ansi::reset();
+            $topLine .= ' ' . $color->toFg(ColorMode::profile()) . $nodeChar . ' ' . $step['label'] . Ansi::reset();
 
             if ($i < $stepCount - 1) {
                 $topLine .= $hLine;

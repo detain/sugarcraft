@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A multi-line text editor component with cursor support.
@@ -252,7 +253,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply border color
         $borderColor = $this->borderColor;
         if ($borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
 
         // Top border with line numbers gutter
@@ -276,13 +277,13 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             $lineIndex = $this->scrollOffset + $screenY;
 
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
 
             // Left border and line number
             if ($this->showLineNumbers) {
                 $result .= $v;
-                $result .= $lineNumberColor->toFg(ColorProfile::TrueColor);
+                $result .= $lineNumberColor->toFg(ColorMode::profile());
 
                 if ($lineIndex < count($this->lines)) {
                     $lineNum = (string) ($lineIndex + 1);
@@ -306,7 +307,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $lineContent = mb_substr($lineContent, 0, $contentWidth, 'UTF-8');
                 }
 
-                $result .= $textColor->toFg(ColorProfile::TrueColor);
+                $result .= $textColor->toFg(ColorMode::profile());
                 $result .= $lineContent;
 
                 // Draw cursor if on this line
@@ -320,14 +321,14 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
 
                     $result .= Ansi::reset();
                     if ($this->cursorColor !== null) {
-                        $result .= $this->cursorColor->toFg(ColorProfile::TrueColor);
-                        $result .= $this->cursorColor->toBg(ColorProfile::TrueColor);
+                        $result .= $this->cursorColor->toFg(ColorMode::profile());
+                        $result .= $this->cursorColor->toBg(ColorMode::profile());
                     } else {
                         $result .= Ansi::reverse();
                     }
                     $result .= $cursorChar;
                     $result .= Ansi::reset();
-                    $result .= $textColor->toFg(ColorProfile::TrueColor);
+                    $result .= $textColor->toFg(ColorMode::profile());
 
                     // Fill rest of line
                     $filledWidth = mb_strlen($lineContent, 'UTF-8') + 1;
@@ -344,7 +345,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
             $result .= $v;
             $result .= Ansi::reset();
@@ -358,7 +359,7 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Bottom border
         if ($borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
 
         if ($this->showLineNumbers) {

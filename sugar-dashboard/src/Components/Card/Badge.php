@@ -11,6 +11,7 @@ use SugarCraft\Dashboard\Foundation\Buffer;
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Rect;
 use SugarCraft\Dashboard\Foundation\Theme;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A badge/tag component for displaying labels and statuses.
@@ -244,8 +245,8 @@ final class Badge implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawabl
      */
     private function renderSolid(string $text, int $width): string
     {
-        $bgStr = $this->bgColor?->toBg(ColorProfile::TrueColor) ?? '';
-        $textStr = $this->textColor?->toFg(ColorProfile::TrueColor) ?? '';
+        $bgStr = $this->bgColor?->toBg(ColorMode::profile()) ?? '';
+        $textStr = $this->textColor?->toFg(ColorMode::profile()) ?? '';
 
         $padded = str_pad($text, $width - 2, ' ', STR_PAD_BOTH);
 
@@ -257,8 +258,8 @@ final class Badge implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawabl
      */
     private function renderOutline(string $text, int $width): string
     {
-        $borderStr = $this->textColor?->toFg(ColorProfile::TrueColor) ?? '';
-        $textStr = $this->textColor?->toFg(ColorProfile::TrueColor) ?? '';
+        $borderStr = $this->textColor?->toFg(ColorMode::profile()) ?? '';
+        $textStr = $this->textColor?->toFg(ColorMode::profile()) ?? '';
 
         $padded = str_pad($text, $width - 4, ' ', STR_PAD_BOTH);
 
@@ -274,7 +275,7 @@ final class Badge implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawabl
      */
     private function renderSubtle(string $text, int $width): string
     {
-        $textStr = $this->textColor?->toFg(ColorProfile::TrueColor) ?? '';
+        $textStr = $this->textColor?->toFg(ColorMode::profile()) ?? '';
         $padded = str_pad($text, $width - 2, ' ', STR_PAD_BOTH);
 
         return $textStr . ' ' . $padded . ' ' . Ansi::reset();

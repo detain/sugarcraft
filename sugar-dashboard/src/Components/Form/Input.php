@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A text input field component.
@@ -133,10 +134,10 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply colors
         $borderColor = $this->error !== null ? Color::hex('#EF4444') : $this->borderColor;
         if ($borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         // Top border
@@ -156,13 +157,13 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply text color
         if ($this->textColor !== null) {
-            $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->textColor->toFg(ColorMode::profile());
         }
         $result .= $lineContent . $v . "\n";
 
         // Bottom border
         if ($borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
         $result .= $bl . str_repeat($h, $contentWidth) . $br;
 
@@ -196,7 +197,7 @@ final class Input implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($value === '' && $this->placeholder !== null) {
             // Show placeholder in placeholder color
             if ($this->placeholderColor !== null) {
-                return $this->placeholderColor->toFg(ColorProfile::TrueColor) . $this->placeholder . Ansi::reset();
+                return $this->placeholderColor->toFg(ColorMode::profile()) . $this->placeholder . Ansi::reset();
             }
             return $this->placeholder;
         }

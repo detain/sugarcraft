@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Media;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * Figlet-style large text using ASCII art characters.
@@ -243,7 +244,7 @@ final class FigletText implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($this->textColor !== null) {
-            $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->textColor->toFg(ColorMode::profile());
         }
 
         for ($row = 0; $row < $numRows; $row++) {

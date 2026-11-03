@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A notification component for displaying alert messages.
@@ -136,12 +137,12 @@ final class Notification implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply background color for entire box
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         // Top border
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
         $result .= '╔' . str_repeat('═', max(0, $useWidth - 2)) . '╗' . "\n";
 
@@ -157,9 +158,9 @@ final class Notification implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Bottom border
         if ($this->borderColor !== null) {
             $result .= Ansi::reset();
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
             if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->backgroundColor->toBg(ColorMode::profile());
             }
         }
         $result .= '╚' . str_repeat('═', max(0, $useWidth - 2)) . '╝';
@@ -177,10 +178,10 @@ final class Notification implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '║';
 
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         $titleContent = '';
@@ -192,7 +193,7 @@ final class Notification implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($this->titleColor !== null) {
-            $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->titleColor->toFg(ColorMode::profile());
         }
         $result .= ' ' . $titleContent . ' ';
 
@@ -213,10 +214,10 @@ final class Notification implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         $lines = $this->wrapText($this->message, $width);
@@ -227,17 +228,17 @@ final class Notification implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             $result .= '║';
             if ($this->messageColor !== null) {
-                $result .= $this->messageColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->messageColor->toFg(ColorMode::profile());
             }
             if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->backgroundColor->toBg(ColorMode::profile());
             }
             $result .= ' ' . $line . str_repeat(' ', max(0, $padding)) . ' ';
             if ($this->borderColor !== null) {
                 $result .= Ansi::reset();
-                $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->borderColor->toFg(ColorMode::profile());
                 if ($this->backgroundColor !== null) {
-                    $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                    $result .= $this->backgroundColor->toBg(ColorMode::profile());
                 }
             }
             $result .= '║' . "\n";

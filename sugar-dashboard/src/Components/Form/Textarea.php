@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A multi-line text area input component.
@@ -113,7 +114,7 @@ final class Textarea implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Render label above textarea if present
         if ($this->label !== null) {
             if ($this->textColor !== null) {
-                $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->textColor->toFg(ColorMode::profile());
             }
             $result .= $this->label . "\n";
         }
@@ -121,10 +122,10 @@ final class Textarea implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply colors
         $borderColor = $this->error !== null ? Color::hex('#EF4444') : $this->borderColor;
         if ($borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         // Top border
@@ -134,10 +135,10 @@ final class Textarea implements \SugarCraft\Dashboard\Foundation\SizedItem
         $lines = $this->getContentLines($contentWidth, $useRows);
         foreach ($lines as $line) {
             if ($this->textColor !== null) {
-                $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->textColor->toFg(ColorMode::profile());
             }
             if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->backgroundColor->toBg(ColorMode::profile());
             }
 
             $lineContent = $v . ' ' . $line;
@@ -152,7 +153,7 @@ final class Textarea implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Bottom border
         if ($borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
         $result .= $bl . str_repeat($h, $contentWidth) . $br;
 
@@ -190,9 +191,9 @@ final class Textarea implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $placeholderLines = $this->wrapText($this->placeholder, $contentWidth - 1);
                 // Show placeholder only in first line
                 if (count($placeholderLines) > 0) {
-                    $placeholderLines[0] = $this->placeholderColor?->toFg(ColorProfile::TrueColor)
+                    $placeholderLines[0] = $this->placeholderColor?->toFg(ColorMode::profile())
                         . $placeholderLines[0]
-                        . ($this->textColor?->toFg(ColorProfile::TrueColor) ?? '');
+                        . ($this->textColor?->toFg(ColorMode::profile()) ?? '');
                 }
                 // Pad to maxLines
                 $placeholderCount = count($placeholderLines);

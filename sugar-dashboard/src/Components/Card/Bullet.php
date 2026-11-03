@@ -8,6 +8,7 @@ use SugarCraft\Style\Style;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A horizontal bullet chart component.
@@ -114,7 +115,7 @@ final class Bullet implements \SugarCraft\Dashboard\Foundation\SizedItem
             for ($i = 0; $i < $width; $i++) {
                 if ($i === $comparativePos) {
                     if ($this->comparativeColor !== null) {
-                        $bar .= $this->comparativeColor->toFg(ColorProfile::TrueColor);
+                        $bar .= $this->comparativeColor->toFg(ColorMode::profile());
                     }
                     $bar .= $this->comparativeChar;
                     if ($this->comparativeColor !== null) {
@@ -132,7 +133,7 @@ final class Bullet implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($i < $actualWidth) {
                 // Filled portion (actual)
                 if ($this->actualColor !== null) {
-                    $bar .= $this->actualColor->toFg(ColorProfile::TrueColor);
+                    $bar .= $this->actualColor->toFg(ColorMode::profile());
                 }
                 $bar .= $this->filledChar;
                 if ($this->actualColor !== null) {
@@ -141,7 +142,7 @@ final class Bullet implements \SugarCraft\Dashboard\Foundation\SizedItem
             } else {
                 // Empty portion (available range)
                 if ($this->backgroundColor !== null) {
-                    $bar .= $this->backgroundColor->toFg(ColorProfile::TrueColor);
+                    $bar .= $this->backgroundColor->toFg(ColorMode::profile());
                 }
                 $bar .= $this->emptyChar;
                 if ($this->backgroundColor !== null) {
@@ -154,7 +155,7 @@ final class Bullet implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->showTarget && $targetPos <= $width) {
             $bar .= ' ';
             if ($this->targetColor !== null) {
-                $bar .= $this->targetColor->toFg(ColorProfile::TrueColor);
+                $bar .= $this->targetColor->toFg(ColorMode::profile());
             }
             $bar .= $this->targetChar . ' ';
             if ($this->targetColor !== null) {

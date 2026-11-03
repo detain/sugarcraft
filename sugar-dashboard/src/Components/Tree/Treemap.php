@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A treemap visualization component.
@@ -282,7 +283,7 @@ final class Treemap implements \SugarCraft\Dashboard\Foundation\SizedItem
         // If cell is too small, just use fill
         if ($width < 3 || $height < 2) {
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
             $result .= str_repeat('█', min($width, $totalWidth - $x));
             if ($color !== null) {
@@ -300,7 +301,7 @@ final class Treemap implements \SugarCraft\Dashboard\Foundation\SizedItem
             $result .= $v;
         }
         if ($this->showBorders && $borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
         $result .= $tl . str_repeat($h, $innerWidth) . $tr;
         if ($this->showBorders && $borderColor !== null) {
@@ -329,21 +330,21 @@ final class Treemap implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $rightPad = $padding - $leftPad;
 
                 if ($color !== null) {
-                    $result .= $color->toFg(ColorProfile::TrueColor);
+                    $result .= $color->toFg(ColorMode::profile());
                 }
                 $result .= str_repeat($fillChar, $leftPad);
                 if ($color !== null) {
                     $result .= Ansi::reset();
                 }
                 if ($textColor !== null) {
-                    $result .= $textColor->toFg(ColorProfile::TrueColor);
+                    $result .= $textColor->toFg(ColorMode::profile());
                 }
                 $result .= $label;
                 if ($textColor !== null) {
                     $result .= Ansi::reset();
                 }
                 if ($color !== null) {
-                    $result .= $color->toFg(ColorProfile::TrueColor);
+                    $result .= $color->toFg(ColorMode::profile());
                 }
                 $result .= str_repeat($fillChar, $rightPad);
                 if ($color !== null) {
@@ -351,7 +352,7 @@ final class Treemap implements \SugarCraft\Dashboard\Foundation\SizedItem
                 }
             } else {
                 if ($color !== null) {
-                    $result .= $color->toFg(ColorProfile::TrueColor);
+                    $result .= $color->toFg(ColorMode::profile());
                 }
                 $result .= str_repeat($fillChar, $innerWidth);
                 if ($color !== null) {
@@ -361,7 +362,7 @@ final class Treemap implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Right border
             if ($this->showBorders && $borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
             $result .= $v;
             if ($this->showBorders && $borderColor !== null) {
@@ -375,7 +376,7 @@ final class Treemap implements \SugarCraft\Dashboard\Foundation\SizedItem
             $result .= $v;
         }
         if ($this->showBorders && $borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
         $result .= $bl . str_repeat($h, $innerWidth) . $br;
         if ($this->showBorders && $borderColor !== null) {

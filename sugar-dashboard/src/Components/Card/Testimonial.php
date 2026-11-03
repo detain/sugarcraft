@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A testimonial quote display component.
@@ -122,14 +123,14 @@ final class Testimonial implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Top border with accent color
         if ($this->accentColor !== null) {
-            $lines[] = $this->accentColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $width) . Ansi::reset();
+            $lines[] = $this->accentColor->toFg(ColorMode::profile()) . str_repeat('─', $width) . Ansi::reset();
         } else {
             $lines[] = str_repeat('─', $width);
         }
 
         // Opening quote
         if ($this->quoteColor !== null) {
-            $lines[] = $this->quoteColor->toFg(ColorProfile::TrueColor);
+            $lines[] = $this->quoteColor->toFg(ColorMode::profile());
         }
         $lines[] = '  ' . $this->openQuote . ' ';
         $lines[] = Ansi::reset();
@@ -138,7 +139,7 @@ final class Testimonial implements \SugarCraft\Dashboard\Foundation\SizedItem
         $textLines = $this->wordWrap($text, $contentWidth);
         foreach ($textLines as $line) {
             if ($this->quoteColor !== null) {
-                $lines[] = $this->quoteColor->toFg(ColorProfile::TrueColor);
+                $lines[] = $this->quoteColor->toFg(ColorMode::profile());
             }
             $lines[] = '  ' . str_pad($line, $contentWidth);
             $lines[] = Ansi::reset();
@@ -146,7 +147,7 @@ final class Testimonial implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Closing quote
         if ($this->quoteColor !== null) {
-            $lines[] = $this->quoteColor->toFg(ColorProfile::TrueColor);
+            $lines[] = $this->quoteColor->toFg(ColorMode::profile());
         }
         $lines[] = '  ' . $this->closeQuote . ' ';
         $lines[] = Ansi::reset();
@@ -163,7 +164,7 @@ final class Testimonial implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($this->authorColor !== null) {
-            $lines[] = $this->authorColor->toFg(ColorProfile::TrueColor);
+            $lines[] = $this->authorColor->toFg(ColorMode::profile());
         }
         $lines[] = str_pad($authorLine, $width);
         $lines[] = Ansi::reset();
@@ -177,7 +178,7 @@ final class Testimonial implements \SugarCraft\Dashboard\Foundation\SizedItem
             $roleLine .= $company;
 
             if ($this->roleColor !== null) {
-                $lines[] = $this->roleColor->toFg(ColorProfile::TrueColor);
+                $lines[] = $this->roleColor->toFg(ColorMode::profile());
             }
             $lines[] = str_pad($roleLine, $width);
             $lines[] = Ansi::reset();
@@ -185,7 +186,7 @@ final class Testimonial implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Bottom border
         if ($this->accentColor !== null) {
-            $lines[] = $this->accentColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $width) . Ansi::reset();
+            $lines[] = $this->accentColor->toFg(ColorMode::profile()) . str_repeat('─', $width) . Ansi::reset();
         } else {
             $lines[] = str_repeat('─', $width);
         }

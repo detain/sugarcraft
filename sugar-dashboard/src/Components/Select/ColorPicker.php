@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A color picker component with preset color swatches.
@@ -153,8 +154,8 @@ final class ColorPicker implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // When showHex is false, don't display hex codes even for selected swatch
         if (!$this->showHex) {
-            $result = $bgColor->toBg(ColorProfile::TrueColor);
-            $result .= $bgColor->toFg(ColorProfile::TrueColor);
+            $result = $bgColor->toBg(ColorMode::profile());
+            $result .= $bgColor->toFg(ColorMode::profile());
             $result .= '██';
             $result .= Ansi::reset();
             return $result;
@@ -162,16 +163,16 @@ final class ColorPicker implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         if ($isSelected && $this->selectedColor !== null) {
             // Selected: show [##] format
-            $result = $bgColor->toBg(ColorProfile::TrueColor);
-            $result .= $bgColor->toFg(ColorProfile::TrueColor);
+            $result = $bgColor->toBg(ColorMode::profile());
+            $result .= $bgColor->toFg(ColorMode::profile());
             $result .= '[█' . substr($hex, 1) . ']';
             $result .= Ansi::reset();
             return $result;
         }
 
         // Normal: show ██ hex
-        $result = $bgColor->toBg(ColorProfile::TrueColor);
-        $result .= $bgColor->toFg(ColorProfile::TrueColor);
+        $result = $bgColor->toBg(ColorMode::profile());
+        $result .= $bgColor->toFg(ColorMode::profile());
         $result .= '██' . substr($hex, 1);
         $result .= Ansi::reset();
         return $result;

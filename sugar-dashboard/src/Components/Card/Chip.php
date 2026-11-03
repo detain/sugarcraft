@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A chip component for compact, selectable items.
@@ -145,21 +146,21 @@ final class Chip implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->selected) {
             // Selected state: uses foreground as background
             if ($this->foregroundColor !== null) {
-                $result .= $this->foregroundColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->foregroundColor->toBg(ColorMode::profile());
             }
             // Use contrasting text color for selected state
             if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->backgroundColor->toFg(ColorMode::profile());
             } else {
-                $result .= Color::hex('#FFFFFF')->toFg(ColorProfile::TrueColor);
+                $result .= Color::hex('#FFFFFF')->toFg(ColorMode::profile());
             }
         } else {
             // Normal state
             if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->backgroundColor->toBg(ColorMode::profile());
             }
             if ($this->foregroundColor !== null) {
-                $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->foregroundColor->toFg(ColorMode::profile());
             }
         }
 

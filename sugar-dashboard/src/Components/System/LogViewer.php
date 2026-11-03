@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A scrollable log viewer component with severity-based colors.
@@ -165,7 +166,7 @@ final class LogViewer implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply color
         if ($color !== null) {
-            return $color->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            return $color->toFg(ColorMode::profile()) . $line . Ansi::reset();
         }
 
         return $line;

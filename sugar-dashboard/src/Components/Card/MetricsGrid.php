@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A metrics grid component for displaying a grid of stat cards.
@@ -169,7 +170,7 @@ final class MetricsGrid implements \SugarCraft\Dashboard\Foundation\SizedItem
                     }
                 }
                 if ($this->borderColor !== null) {
-                    $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                    $result .= $this->borderColor->toFg(ColorMode::profile());
                 }
                 $result .= $separator;
                 if ($this->borderColor !== null) {
@@ -217,7 +218,7 @@ final class MetricsGrid implements \SugarCraft\Dashboard\Foundation\SizedItem
             return mb_substr($value, 0, $width - 2, 'UTF-8') . '…';
         }
 
-        return $color->toFg(ColorProfile::TrueColor) . str_pad($value, $width, ' ', STR_PAD_LEFT) . Ansi::reset();
+        return $color->toFg(ColorMode::profile()) . str_pad($value, $width, ' ', STR_PAD_LEFT) . Ansi::reset();
     }
 
     /**
@@ -232,7 +233,7 @@ final class MetricsGrid implements \SugarCraft\Dashboard\Foundation\SizedItem
             return mb_substr($label, 0, $width, 'UTF-8');
         }
 
-        return $color->toFg(ColorProfile::TrueColor) . str_pad($label, $width, ' ', STR_PAD_LEFT) . Ansi::reset();
+        return $color->toFg(ColorMode::profile()) . str_pad($label, $width, ' ', STR_PAD_LEFT) . Ansi::reset();
     }
 
     /**
@@ -262,7 +263,7 @@ final class MetricsGrid implements \SugarCraft\Dashboard\Foundation\SizedItem
             $trendStr = mb_substr($trendStr, 0, $width - 1, 'UTF-8') . '…';
         }
 
-        return $trendColor->toFg(ColorProfile::TrueColor) . str_pad($trendStr, $width, ' ', STR_PAD_LEFT) . Ansi::reset();
+        return $trendColor->toFg(ColorMode::profile()) . str_pad($trendStr, $width, ' ', STR_PAD_LEFT) . Ansi::reset();
     }
 
     /**

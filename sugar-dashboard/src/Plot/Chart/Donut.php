@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Plot\Braille\Bresenham;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A donut chart component for displaying proportional data.
@@ -380,7 +381,7 @@ final class Donut implements \SugarCraft\Dashboard\Foundation\SizedItem
                         if ($runColor !== null) {
                             $result .= Ansi::reset();
                         }
-                        $result .= $cell['color']->toBg(ColorProfile::TrueColor);
+                        $result .= $cell['color']->toBg(ColorMode::profile());
                         $runColor = $cell['color'];
                     }
                     $result .= ' ';
@@ -392,7 +393,7 @@ final class Donut implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $runColor = null;
                 }
                 if ($cell['color'] !== null) {
-                    $result .= $cell['color']->toFg(ColorProfile::TrueColor);
+                    $result .= $cell['color']->toFg(ColorMode::profile());
                 }
                 $result .= $cell['char'];
                 if ($cell['color'] !== null) {
@@ -823,7 +824,7 @@ final class Donut implements \SugarCraft\Dashboard\Foundation\SizedItem
         foreach ($grid as $row) {
             foreach ($row as $cell) {
                 if ($cell['color'] !== null) {
-                    $result .= $cell['color']->toFg(ColorProfile::TrueColor);
+                    $result .= $cell['color']->toFg(ColorMode::profile());
                 }
                 $result .= $cell['char'];
                 if ($cell['color'] !== null) {

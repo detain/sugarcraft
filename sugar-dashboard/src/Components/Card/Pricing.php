@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A pricing table component.
@@ -186,7 +187,7 @@ final class Pricing implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             $color = $plan['highlighted'] ? $this->highlightColor : $this->headerColor;
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
 
             $result .= str_repeat(' ', $leftPad);
@@ -231,7 +232,7 @@ final class Pricing implements \SugarCraft\Dashboard\Foundation\SizedItem
             $result .= str_repeat(' ', $leftPad);
 
             if ($this->priceColor !== null) {
-                $result .= $this->priceColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->priceColor->toFg(ColorMode::profile());
             }
             $result .= $priceText;
             $result .= Ansi::reset();
@@ -270,7 +271,7 @@ final class Pricing implements \SugarCraft\Dashboard\Foundation\SizedItem
             $result .= str_repeat(' ', $leftPad);
 
             if ($this->featureColor !== null) {
-                $result .= $this->featureColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->featureColor->toFg(ColorMode::profile());
             }
             $result .= $descText;
             $result .= Ansi::reset();
@@ -302,7 +303,7 @@ final class Pricing implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             $borderChar = $plan['highlighted'] ? '─' : '─';
             if ($this->borderColor !== null) {
-                $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->borderColor->toFg(ColorMode::profile());
             }
             $result .= str_repeat($borderChar, $cellWidth);
             $result .= Ansi::reset();
@@ -357,17 +358,17 @@ final class Pricing implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Check mark color
             if ($checkMark === '✓ ' && $this->highlightColor !== null) {
-                $result .= $this->highlightColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->highlightColor->toFg(ColorMode::profile());
             } elseif ($checkMark === '✗ ' && $this->borderColor !== null) {
-                $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->borderColor->toFg(ColorMode::profile());
             } elseif ($this->featureColor !== null) {
-                $result .= $this->featureColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->featureColor->toFg(ColorMode::profile());
             }
             $result .= $checkMark;
             $result .= Ansi::reset();
 
             if ($this->featureColor !== null) {
-                $result .= $this->featureColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->featureColor->toFg(ColorMode::profile());
             }
             $result .= $featureText;
             $result .= Ansi::reset();
@@ -398,7 +399,7 @@ final class Pricing implements \SugarCraft\Dashboard\Foundation\SizedItem
             $cellWidth = $columnWidth + $extraWidth;
 
             if ($this->borderColor !== null) {
-                $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->borderColor->toFg(ColorMode::profile());
             }
             $result .= str_repeat('─', $cellWidth);
             $result .= Ansi::reset();

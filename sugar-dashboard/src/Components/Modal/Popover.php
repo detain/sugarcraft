@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A popover component that displays content in a bordered box.
@@ -121,7 +122,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Top border
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
         $result .= '┌' . str_repeat('─', max(0, $useWidth - 2)) . '┐' . "\n";
 
@@ -131,10 +132,10 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
             $titleWidth = Width::string($titleContent);
 
             if ($this->titleColor !== null) {
-                $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->titleColor->toFg(ColorMode::profile());
             }
             if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->backgroundColor->toBg(ColorMode::profile());
             }
             $result .= $titleContent . "\n";
         }
@@ -145,7 +146,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Bottom border
         if ($this->borderColor !== null) {
             $result .= Ansi::reset();
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
         $result .= '└' . str_repeat('─', max(0, $useWidth - 2)) . '┘';
 
@@ -162,7 +163,7 @@ final class Popover implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         $lines = $this->wrapText($this->content, $width);

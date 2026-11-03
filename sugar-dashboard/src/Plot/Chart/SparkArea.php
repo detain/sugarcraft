@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A spark area chart - minimal area chart for inline use.
@@ -81,7 +82,7 @@ final class SparkArea implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         $useWidth = $this->width ?? count($this->values);
-        $colorStr = $this->color->toFg(ColorProfile::TrueColor);
+        $colorStr = $this->color->toFg(ColorMode::profile());
 
         // Normalize values to chartHeight
         $min = min($this->values);

@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Media;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A barcode display component.
@@ -154,7 +155,7 @@ final class Barcode implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $thickness = strtolower($type);
 
                 if ($isBar) {
-                    $barRows[] = $this->renderBar($thickness, ColorProfile::TrueColor);
+                    $barRows[] = $this->renderBar($thickness, ColorMode::profile());
                 } else {
                     $barRows[] = $this->renderSpace($thickness);
                 }
@@ -176,7 +177,7 @@ final class Barcode implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Add text label below if enabled
         if ($this->showText) {
             if ($this->barColor !== null) {
-                $result .= $this->barColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->barColor->toFg(ColorMode::profile());
             }
             $result .= $this->content;
             if ($this->barColor !== null) {

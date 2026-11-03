@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A tag / chip component for displaying labels and metadata.
@@ -161,25 +162,25 @@ final class Tag implements \SugarCraft\Dashboard\Foundation\SizedItem
             $bottomBorder = '└' . str_repeat('─', $totalWidth - 2) . '┘';
 
             if ($this->foregroundColor !== null) {
-                $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->foregroundColor->toFg(ColorMode::profile());
             }
             $result .= $topBorder . "\n" . $middle . "\n" . $bottomBorder;
         } elseif ($this->style === 'soft') {
             // Soft style - subtle background
             if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->backgroundColor->toBg(ColorMode::profile());
             }
             if ($this->foregroundColor !== null) {
-                $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->foregroundColor->toFg(ColorMode::profile());
             }
             $result .= $leftStr . $content . $rightStr;
         } else {
             // Solid style - filled background
             if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->backgroundColor->toBg(ColorMode::profile());
             }
             if ($this->foregroundColor !== null) {
-                $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->foregroundColor->toFg(ColorMode::profile());
             }
             $result .= $leftStr . $content . $rightStr;
         }

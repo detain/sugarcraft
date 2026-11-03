@@ -243,7 +243,7 @@ final class Buffer implements Drawable, SizedItem
                 if (!$inStyle && ($style->foreground !== null || $style->background !== null
                         || $style->bold || $style->dim || $style->italic
                         || $style->underline || $style->reverse || $style->strike)) {
-                    $output .= $style->toAnsi();
+                    $output .= $style->toAnsi(ColorMode::profile());
                     $inStyle = true;
                     $currentStyle = $style;
                 }

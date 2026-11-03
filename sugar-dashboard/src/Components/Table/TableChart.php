@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A data table component with customizable columns, rows, and styling.
@@ -203,7 +204,7 @@ final class TableChart implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Left border
         $borderChar = $this->getBorderChar('left');
         if ($this->borderColor !== null) {
-            $line .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $line .= $this->borderColor->toFg(ColorMode::profile());
         }
         $line .= $borderChar;
         if ($this->borderColor !== null) {
@@ -220,9 +221,9 @@ final class TableChart implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Apply coloring
             if ($isHeader && $this->headerColor !== null) {
-                $cellStr = $this->headerColor->toFg(ColorProfile::TrueColor) . $cellStr . Ansi::reset();
+                $cellStr = $this->headerColor->toFg(ColorMode::profile()) . $cellStr . Ansi::reset();
             } elseif ($isZebra && $this->zebraColor !== null) {
-                $cellStr = $this->zebraColor->toFg(ColorProfile::TrueColor) . $cellStr . Ansi::reset();
+                $cellStr = $this->zebraColor->toFg(ColorMode::profile()) . $cellStr . Ansi::reset();
             }
 
             $line .= ' ' . $cellStr . ' ';
@@ -231,7 +232,7 @@ final class TableChart implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($i < $numCols - 1) {
                 $divider = $this->getBorderChar('divider');
                 if ($this->borderColor !== null) {
-                    $line .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                    $line .= $this->borderColor->toFg(ColorMode::profile());
                 }
                 $line .= $divider;
                 if ($this->borderColor !== null) {
@@ -243,7 +244,7 @@ final class TableChart implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Right border
         $borderChar = $this->getBorderChar('right');
         if ($this->borderColor !== null) {
-            $line .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $line .= $this->borderColor->toFg(ColorMode::profile());
         }
         $line .= $borderChar;
         if ($this->borderColor !== null) {
@@ -267,7 +268,7 @@ final class TableChart implements \SugarCraft\Dashboard\Foundation\SizedItem
         $divider = $this->getBorderChar('divider');
 
         if ($this->borderColor !== null) {
-            $line .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $line .= $this->borderColor->toFg(ColorMode::profile());
         }
 
         $line .= $left;

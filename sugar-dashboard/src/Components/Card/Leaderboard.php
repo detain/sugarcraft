@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A leaderboard component for displaying ranked items.
@@ -188,7 +189,7 @@ final class Leaderboard implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Rank
             if ($rankColor !== null) {
-                $line .= $rankColor->toFg(ColorProfile::TrueColor);
+                $line .= $rankColor->toFg(ColorMode::profile());
             }
             $line .= $rankStr . ' ';
             if ($rankColor !== null) {
@@ -207,7 +208,7 @@ final class Leaderboard implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $line .= str_repeat(' ', max(1, $padding));
 
                 if ($this->valueColor !== null) {
-                    $line .= $this->valueColor->toFg(ColorProfile::TrueColor);
+                    $line .= $this->valueColor->toFg(ColorMode::profile());
                 }
                 $line .= $valueStr;
                 if ($this->valueColor !== null) {

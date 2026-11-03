@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A log viewer component with severity level filtering and display.
@@ -157,11 +158,11 @@ final class Log implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->showTimestamps) {
             $timestampStr = str_pad($entry->timestamp, $timestampWidth);
             if ($this->timestampColor !== null) {
-                $timestampStr = $this->timestampColor->toFg(ColorProfile::TrueColor) . $timestampStr . Ansi::reset();
+                $timestampStr = $this->timestampColor->toFg(ColorMode::profile()) . $timestampStr . Ansi::reset();
             }
         }
 
-        $levelStr = $levelColor->toFg(ColorProfile::TrueColor) . $levelStr . Ansi::reset();
+        $levelStr = $levelColor->toFg(ColorMode::profile()) . $levelStr . Ansi::reset();
 
         if ($this->wordWrap && $messageWidth > 0) {
             $messageLines = $this->wrapMessage($entry->message, $messageWidth);

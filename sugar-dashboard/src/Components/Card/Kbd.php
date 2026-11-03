@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A keyboard key display component.
@@ -124,7 +125,7 @@ final class Kbd implements \SugarCraft\Dashboard\Foundation\SizedItem
             $width = $useWidth - 2; // account for borders
             $paddedContent = str_pad($plainContent, $width, ' ', STR_PAD_BOTH);
 
-            $bgStr = $this->bgColor?->toBg(ColorProfile::TrueColor) ?? '';
+            $bgStr = $this->bgColor?->toBg(ColorMode::profile()) ?? '';
             $top = ($this->rounded ? '╭' : '┌') . str_repeat($this->rounded ? '─' : '─', $width) . ($this->rounded ? '╮' : '┐');
             $bottom = ($this->rounded ? '╰' : '└') . str_repeat($this->rounded ? '─' : '─', $width) . ($this->rounded ? '╯' : '┘');
 
@@ -158,10 +159,10 @@ final class Kbd implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply colors
         if ($this->bgColor !== null) {
-            $result .= $this->bgColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->bgColor->toBg(ColorMode::profile());
         }
         if ($this->textColor !== null) {
-            $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->textColor->toFg(ColorMode::profile());
         }
 
         // Shadow

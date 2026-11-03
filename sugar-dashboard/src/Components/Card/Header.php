@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A page header component for displaying titles and subtitles.
@@ -142,7 +143,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($this->titleColor !== null) {
-            $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->titleColor->toFg(ColorMode::profile());
         }
 
         $result .= $this->title;
@@ -178,7 +179,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($this->titleColor !== null) {
-            $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->titleColor->toFg(ColorMode::profile());
         }
 
         $result .= $this->title;
@@ -207,7 +208,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result .= str_repeat(' ', $padding);
 
         if ($this->titleColor !== null) {
-            $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->titleColor->toFg(ColorMode::profile());
         }
 
         $result .= $this->title;
@@ -224,7 +225,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($this->subtitleColor !== null) {
-            $result .= $this->subtitleColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->subtitleColor->toFg(ColorMode::profile());
         }
 
         $result .= $this->subtitle;
@@ -254,7 +255,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($this->subtitleColor !== null) {
-            $result .= $this->subtitleColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->subtitleColor->toFg(ColorMode::profile());
         }
 
         $result .= $this->subtitle;
@@ -283,7 +284,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result .= str_repeat(' ', $padding);
 
         if ($this->subtitleColor !== null) {
-            $result .= $this->subtitleColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->subtitleColor->toFg(ColorMode::profile());
         }
 
         $result .= $this->subtitle;
@@ -300,7 +301,7 @@ final class Header implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
 
         $result .= str_repeat('─', $width);

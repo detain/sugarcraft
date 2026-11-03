@@ -8,6 +8,7 @@ use SugarCraft\Style\Style;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A loading spinner component that displays cycling animation frames.
@@ -72,7 +73,7 @@ final class Spinner implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($this->color !== null) {
-            return $this->color->toFg(ColorProfile::TrueColor) . $output . Ansi::reset();
+            return $this->color->toFg(ColorMode::profile()) . $output . Ansi::reset();
         }
 
         return $output;

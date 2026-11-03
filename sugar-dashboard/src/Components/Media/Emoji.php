@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An emoji display component.
@@ -225,7 +226,7 @@ final class Emoji implements \SugarCraft\Dashboard\Foundation\SizedItem
         $output = '';
 
         if ($this->tintColor !== null) {
-            $output .= $this->tintColor->toFg(ColorProfile::TrueColor);
+            $output .= $this->tintColor->toFg(ColorMode::profile());
         }
 
         // Render emoji with size scaling

@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A call-to-action button component.
@@ -130,7 +131,7 @@ final class CTA implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Top border
         $topBorder = '';
         if ($this->borderColor !== null) {
-            $topBorder .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $topBorder .= $this->borderColor->toFg(ColorMode::profile());
         }
         $topBorder .= str_repeat($this->borderChar, $totalWidth);
         $topBorder .= Ansi::reset();
@@ -140,7 +141,7 @@ final class CTA implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->description !== '') {
             $descLine = '';
             if ($this->textColor !== null) {
-                $descLine .= $this->textColor->toFg(ColorProfile::TrueColor);
+                $descLine .= $this->textColor->toFg(ColorMode::profile());
             }
             $descLine .= str_pad($this->description, $totalWidth);
             $descLine .= Ansi::reset();
@@ -150,10 +151,10 @@ final class CTA implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Button line
         $buttonLine = '';
         if ($this->bgColor !== null) {
-            $buttonLine .= $this->bgColor->toBg(ColorProfile::TrueColor);
+            $buttonLine .= $this->bgColor->toBg(ColorMode::profile());
         }
         if ($this->textColor !== null) {
-            $buttonLine .= $this->textColor->toFg(ColorProfile::TrueColor);
+            $buttonLine .= $this->textColor->toFg(ColorMode::profile());
         }
         $buttonLine .= ' ';
         $buttonLine .= str_pad($buttonContent, $totalWidth - 2);
@@ -164,7 +165,7 @@ final class CTA implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Bottom border
         $bottomBorder = '';
         if ($this->borderColor !== null) {
-            $bottomBorder .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $bottomBorder .= $this->borderColor->toFg(ColorMode::profile());
         }
         $bottomBorder .= str_repeat($this->borderChar, $totalWidth);
         $bottomBorder .= Ansi::reset();

@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A vertical sidebar navigation component.
@@ -100,12 +101,12 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Background color if set
         if ($this->bgColor !== null) {
-            $result .= $this->bgColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->bgColor->toBg(ColorMode::profile());
         }
 
         // Border color if set
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
 
         $lines = [];
@@ -135,9 +136,9 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $text = $this->truncateToWidth($text, $useWidth - 2);
 
                 if ($isActive && $this->activeColor !== null) {
-                    $lines[] = '>' . $this->activeColor->toFg(ColorProfile::TrueColor) . $text . Ansi::reset() . ' ';
+                    $lines[] = '>' . $this->activeColor->toFg(ColorMode::profile()) . $text . Ansi::reset() . ' ';
                 } elseif (!$isActive && $this->inactiveColor !== null) {
-                    $lines[] = ' ' . $this->inactiveColor->toFg(ColorProfile::TrueColor) . $text . Ansi::reset() . ' ';
+                    $lines[] = ' ' . $this->inactiveColor->toFg(ColorMode::profile()) . $text . Ansi::reset() . ' ';
                 } else {
                     $lines[] = ' ' . $text . ' ';
                 }
@@ -156,7 +157,7 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply background to all lines if set
         if ($this->bgColor !== null) {
-            $bgPrefix = $this->bgColor->toBg(ColorProfile::TrueColor);
+            $bgPrefix = $this->bgColor->toBg(ColorMode::profile());
             $bgReset = Ansi::reset();
             $lines = array_map(function ($line) use ($bgPrefix, $bgReset) {
                 return $bgPrefix . $line . $bgReset;
@@ -171,7 +172,7 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($lineWidth < $useWidth - 1) {
                 $line = mb_substr($line, 0, -1, 'UTF-8') . str_repeat(' ', $useWidth - 1 - $lineWidth) . mb_substr($line, -1, 1, 'UTF-8');
             }
-            $borderPrefix = $this->borderColor !== null ? $this->borderColor->toFg(ColorProfile::TrueColor) : '';
+            $borderPrefix = $this->borderColor !== null ? $this->borderColor->toFg(ColorMode::profile()) : '';
             $borderSuffix = $this->borderColor !== null ? Ansi::reset() : '';
             $output[] = $borderPrefix . $borderChar . mb_substr($line, 0, -1, 'UTF-8') . $borderChar . $borderSuffix;
         }

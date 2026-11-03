@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Media;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A scrolling marquee text component.
@@ -136,7 +137,7 @@ final class Marquee implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply color
         if ($this->textColor !== null) {
-            return $this->textColor->toFg(ColorProfile::TrueColor) . $visible . Ansi::reset();
+            return $this->textColor->toFg(ColorMode::profile()) . $visible . Ansi::reset();
         }
 
         return $visible;

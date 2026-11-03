@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A Sunburst chart component for radial hierarchical visualization.
@@ -277,7 +278,7 @@ final class Sunburst implements \SugarCraft\Dashboard\Foundation\SizedItem
                     }
 
                     if ($centerColor !== null) {
-                        $line .= $centerColor->toFg(ColorProfile::TrueColor);
+                        $line .= $centerColor->toFg(ColorMode::profile());
                     }
                     $line .= $char;
                     if ($centerColor !== null) {
@@ -294,9 +295,9 @@ final class Sunburst implements \SugarCraft\Dashboard\Foundation\SizedItem
                         if ($distance <= $segmentRadius && $distance > intval($centerDiameter / 2)) {
                             // In a ring segment
                             if ($segment->color !== null) {
-                                $line .= $segment->color->toFg(ColorProfile::TrueColor);
+                                $line .= $segment->color->toFg(ColorMode::profile());
                             } elseif ($segmentColor !== null) {
-                                $line .= $segmentColor->toFg(ColorProfile::TrueColor);
+                                $line .= $segmentColor->toFg(ColorMode::profile());
                             }
 
                             // Choose character based on angle
@@ -355,7 +356,7 @@ final class Sunburst implements \SugarCraft\Dashboard\Foundation\SizedItem
 
                 $entry = '';
                 if ($color !== null) {
-                    $entry .= $color->toFg(ColorProfile::TrueColor);
+                    $entry .= $color->toFg(ColorMode::profile());
                 }
                 $entry .= $visible;
                 if ($color !== null) {

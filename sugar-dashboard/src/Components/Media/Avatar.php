@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A user avatar component with fallback support.
@@ -147,12 +148,12 @@ final class Avatar implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply background color
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         // Apply foreground color
         if ($this->foregroundColor !== null) {
-            $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->foregroundColor->toFg(ColorMode::profile());
         }
 
         $result .= $leftStr . $initials . $rightStr;
@@ -162,7 +163,7 @@ final class Avatar implements \SugarCraft\Dashboard\Foundation\SizedItem
             $statusColor = $this->getStatusColor();
             $result .= Ansi::reset();
             $result .= ' ';
-            $result .= $statusColor->toFg(ColorProfile::TrueColor);
+            $result .= $statusColor->toFg(ColorMode::profile());
             $result .= $this->status;
         }
 
@@ -182,10 +183,10 @@ final class Avatar implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($this->backgroundColor !== null) {
-            $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->backgroundColor->toBg(ColorMode::profile());
         }
         if ($this->foregroundColor !== null) {
-            $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->foregroundColor->toFg(ColorMode::profile());
         }
 
         $result .= str_repeat('▓', $size);
@@ -194,7 +195,7 @@ final class Avatar implements \SugarCraft\Dashboard\Foundation\SizedItem
             $result .= Ansi::reset();
             $result .= ' ';
             $statusColor = $this->getStatusColor();
-            $result .= $statusColor->toFg(ColorProfile::TrueColor);
+            $result .= $statusColor->toFg(ColorMode::profile());
             $result .= $this->status;
         }
 

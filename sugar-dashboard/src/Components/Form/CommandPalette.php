@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A command palette component (Cmd+K style).
@@ -164,7 +165,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         $header = 'Commands';
         if ($this->paletteColor !== null) {
-            return $this->paletteColor->toFg(ColorProfile::TrueColor) . $header . Ansi::reset();
+            return $this->paletteColor->toFg(ColorMode::profile()) . $header . Ansi::reset();
         }
         return $header;
     }
@@ -184,7 +185,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $prefix . $queryDisplay;
 
         if ($this->queryColor !== null) {
-            $content = $this->queryColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            $content = $this->queryColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;
@@ -220,13 +221,13 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
             $content .= str_repeat(' ', $padding);
             $shortcutText = $shortcut;
             if ($this->shortcutColor !== null) {
-                $shortcutText = $this->shortcutColor->toFg(ColorProfile::TrueColor) . $shortcut . Ansi::reset();
+                $shortcutText = $this->shortcutColor->toFg(ColorMode::profile()) . $shortcut . Ansi::reset();
             }
             $content .= $shortcutText;
         }
 
         if ($isSelected && $this->selectedColor !== null) {
-            $content = $this->selectedColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            $content = $this->selectedColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;
@@ -264,7 +265,7 @@ final class CommandPalette implements \SugarCraft\Dashboard\Foundation\SizedItem
         $border = str_repeat($this->borderChar, $width);
 
         if ($this->paletteColor !== null) {
-            return $this->paletteColor->toFg(ColorProfile::TrueColor) . $border . Ansi::reset();
+            return $this->paletteColor->toFg(ColorMode::profile()) . $border . Ansi::reset();
         }
 
         return $border;

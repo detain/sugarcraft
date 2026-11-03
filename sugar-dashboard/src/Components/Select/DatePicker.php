@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A date picker component.
@@ -109,7 +110,7 @@ final class DatePicker implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $monthName . ' ' . $this->year;
 
         if ($this->headerColor !== null) {
-            return $this->headerColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->headerColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;
@@ -130,7 +131,7 @@ final class DatePicker implements \SugarCraft\Dashboard\Foundation\SizedItem
         $line = implode(' ', $headers);
 
         if ($this->headerColor !== null) {
-            return $this->headerColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            return $this->headerColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
         }
 
         return $line;
@@ -195,15 +196,15 @@ final class DatePicker implements \SugarCraft\Dashboard\Foundation\SizedItem
         $dayStr = str_pad((string) $day, 2, ' ', STR_PAD_LEFT);
 
         if ($isSelected && $this->selectedColor !== null) {
-            return $this->selectedColor->toFg(ColorProfile::TrueColor) . '[' . $dayStr . ']' . Ansi::reset();
+            return $this->selectedColor->toFg(ColorMode::profile()) . '[' . $dayStr . ']' . Ansi::reset();
         }
 
         if ($isToday && $this->todayColor !== null) {
-            return $this->todayColor->toFg(ColorProfile::TrueColor) . '(' . $dayStr . ')' . Ansi::reset();
+            return $this->todayColor->toFg(ColorMode::profile()) . '(' . $dayStr . ')' . Ansi::reset();
         }
 
         if ($isWeekend && $this->weekendColor !== null) {
-            return $this->weekendColor->toFg(ColorProfile::TrueColor) . $dayStr . Ansi::reset();
+            return $this->weekendColor->toFg(ColorMode::profile()) . $dayStr . Ansi::reset();
         }
 
         return ' ' . $dayStr;

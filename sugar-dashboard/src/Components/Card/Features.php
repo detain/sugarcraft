@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A features grid display component.
@@ -120,7 +121,7 @@ final class Features implements \SugarCraft\Dashboard\Foundation\SizedItem
 
                 if ($colIndex > 0) {
                     if ($this->borderColor !== null) {
-                        $sep = $this->borderColor->toFg(ColorProfile::TrueColor) . ' ' . $this->borderChar . ' ';
+                        $sep = $this->borderColor->toFg(ColorMode::profile()) . ' ' . $this->borderChar . ' ';
                         $iconLine .= $sep;
                         $titleLine .= $sep;
                         $descLine .= $sep;
@@ -134,19 +135,19 @@ final class Features implements \SugarCraft\Dashboard\Foundation\SizedItem
 
                 // Icon
                 if ($color !== null) {
-                    $iconLine .= $color->toFg(ColorProfile::TrueColor);
+                    $iconLine .= $color->toFg(ColorMode::profile());
                 }
                 $iconLine .= str_pad($icon, (int) floor($cellWidth / 2) - 1) . ' ';
 
                 // Title
                 if ($this->titleColor !== null) {
-                    $titleLine .= $this->titleColor->toFg(ColorProfile::TrueColor);
+                    $titleLine .= $this->titleColor->toFg(ColorMode::profile());
                 }
                 $titleLine .= str_pad($title, $cellWidth - 1);
 
                 // Description
                 if ($this->descriptionColor !== null) {
-                    $descLine .= $this->descriptionColor->toFg(ColorProfile::TrueColor);
+                    $descLine .= $this->descriptionColor->toFg(ColorMode::profile());
                 }
                 $descLine .= str_pad($desc, $cellWidth - 1);
 
@@ -166,7 +167,7 @@ final class Features implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $cellWidth = $this->getCellWidth($useWidth);
                     if ($colIndex > 0) {
                         if ($this->borderColor !== null) {
-                            $rowSep .= $this->borderColor->toFg(ColorProfile::TrueColor) . ' ' . $this->borderChar . ' ';
+                            $rowSep .= $this->borderColor->toFg(ColorMode::profile()) . ' ' . $this->borderChar . ' ';
                         }
                     }
                     $rowSep .= str_repeat('─', $cellWidth - 1) . ' ';

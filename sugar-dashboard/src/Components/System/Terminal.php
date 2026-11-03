@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A terminal emulator component with command history and scrollback.
@@ -318,7 +319,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply border color
         $borderColor = $this->borderColor;
         if ($borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
 
         // Top border
@@ -335,7 +336,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Render output lines
         foreach ($visibleOutput as $line) {
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
             $result .= $v;
 
@@ -349,7 +350,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
             $result .= $v . "\n";
         }
@@ -357,7 +358,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Render prompt + input line
         if ($promptLine) {
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
             $result .= $v;
 
@@ -365,7 +366,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
             $promptWidth = $this->calculateDisplayWidth($prompt);
 
             // Prompt
-            $result .= $this->promptColor?->toFg(ColorProfile::TrueColor) ?? Ansi::reset();
+            $result .= $this->promptColor?->toFg(ColorMode::profile()) ?? Ansi::reset();
             $result .= $prompt;
 
             // Input
@@ -374,7 +375,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
             $availableWidth = $contentWidth - $promptWidth;
 
             if ($inputDisplayWidth < $availableWidth) {
-                $result .= $inputColor->toFg(ColorProfile::TrueColor);
+                $result .= $inputColor->toFg(ColorMode::profile());
                 $result .= $this->currentInput;
                 $result .= Ansi::reset();
                 $result .= ' '; // Cursor position
@@ -384,7 +385,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
             } else {
                 // Input too long, show truncated with cursor at end
                 $truncated = mb_substr($this->currentInput, 0, $availableWidth - 1, 'UTF-8');
-                $result .= $inputColor->toFg(ColorProfile::TrueColor);
+                $result .= $inputColor->toFg(ColorMode::profile());
                 $result .= $truncated;
                 $result .= Ansi::reset();
                 $result .= ' '; // Cursor at end
@@ -398,7 +399,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
             $result .= $v;
             $result .= Ansi::reset();
@@ -407,7 +408,7 @@ final class Terminal implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Bottom border
         $result .= "\n";
         if ($borderColor !== null) {
-            $result .= $borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $borderColor->toFg(ColorMode::profile());
         }
         $result .= $bl . str_repeat($h, $useWidth - 2) . $br;
         $result .= Ansi::reset();

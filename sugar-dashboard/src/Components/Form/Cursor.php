@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Form;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A cursor component that renders a cursor character at a fixed position.
@@ -104,7 +105,7 @@ final class Cursor implements \SugarCraft\Dashboard\Foundation\SizedItem
         $cursor = $this->cursorChar();
 
         if ($this->color !== null) {
-            return $this->color->toFg(ColorProfile::TrueColor) . $cursor . Ansi::reset();
+            return $this->color->toFg(ColorMode::profile()) . $cursor . Ansi::reset();
         }
 
         return $cursor;

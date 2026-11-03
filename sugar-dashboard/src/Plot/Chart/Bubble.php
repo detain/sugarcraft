@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A data point for a bubble chart.
@@ -314,7 +315,7 @@ final class Bubble implements \SugarCraft\Dashboard\Foundation\SizedItem
             $label = $this->formatYLabel($yValue);
 
             if ($gridColor !== null) {
-                $result .= $gridColor->toFg(ColorProfile::TrueColor);
+                $result .= $gridColor->toFg(ColorMode::profile());
             }
             $result .= str_pad($label, 6) . ' ';
             if ($gridColor !== null) {
@@ -327,7 +328,7 @@ final class Bubble implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // X-axis labels
         if ($gridColor !== null) {
-            $result .= $gridColor->toFg(ColorProfile::TrueColor);
+            $result .= $gridColor->toFg(ColorMode::profile());
         }
         $result .= str_repeat(' ', 7);
         for ($x = 0; $x < $chartWidth; $x++) {
@@ -352,7 +353,7 @@ final class Bubble implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $labelLine .= str_pad($label, $perPoint);
             }
             if ($labelColor !== null) {
-                $labelLine = $labelColor->toFg(ColorProfile::TrueColor) . $labelLine . Ansi::reset();
+                $labelLine = $labelColor->toFg(ColorMode::profile()) . $labelLine . Ansi::reset();
             }
             $result .= $labelLine;
         }
@@ -380,7 +381,7 @@ final class Bubble implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Single cell
             if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
                 if ($color !== null) {
-                    $grid[$y][$x] = $color->toFg(ColorProfile::TrueColor) . '●' . Ansi::reset();
+                    $grid[$y][$x] = $color->toFg(ColorMode::profile()) . '●' . Ansi::reset();
                 } else {
                     $grid[$y][$x] = '●';
                 }
@@ -424,7 +425,7 @@ final class Bubble implements \SugarCraft\Dashboard\Foundation\SizedItem
                     // Determine which shape glyph to use based on position
                     $char = $this->glyphAtOffset($dx, $dy, $radius);
                     if ($color !== null) {
-                        $grid[$y][$x] = $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
+                        $grid[$y][$x] = $color->toFg(ColorMode::profile()) . $char . Ansi::reset();
                     } else {
                         $grid[$y][$x] = $char;
                     }

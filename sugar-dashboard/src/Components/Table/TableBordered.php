@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A table component with box-drawing character borders.
@@ -166,7 +167,7 @@ final class TableBordered implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $line = implode('', $parts);
         if ($this->borderColor !== null) {
-            return $this->borderColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            return $this->borderColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
         }
         return $line;
     }
@@ -188,7 +189,7 @@ final class TableBordered implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $line = implode('', $parts);
         if ($this->borderColor !== null) {
-            return $this->borderColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            return $this->borderColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
         }
         return $line;
     }
@@ -210,7 +211,7 @@ final class TableBordered implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $line = implode('', $parts);
         if ($this->borderColor !== null) {
-            return $this->borderColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            return $this->borderColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
         }
         return $line;
     }
@@ -236,10 +237,10 @@ final class TableBordered implements \SugarCraft\Dashboard\Foundation\SizedItem
         $line = implode('', $cells) . '│';
 
         if ($this->headerBackgroundColor !== null) {
-            $line = $this->headerBackgroundColor->toBg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            $line = $this->headerBackgroundColor->toBg(ColorMode::profile()) . $line . Ansi::reset();
         }
         if ($this->headerColor !== null) {
-            $line = $this->headerColor->toFg(ColorProfile::TrueColor) . $line;
+            $line = $this->headerColor->toFg(ColorMode::profile()) . $line;
             if ($this->headerBackgroundColor === null) {
                 $line .= Ansi::reset();
             } else {
@@ -272,7 +273,7 @@ final class TableBordered implements \SugarCraft\Dashboard\Foundation\SizedItem
         $line = implode('', $cells) . '│';
 
         if ($this->borderColor !== null) {
-            return $this->borderColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+            return $this->borderColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
         }
         return $line;
     }

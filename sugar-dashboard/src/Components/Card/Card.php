@@ -12,6 +12,7 @@ use SugarCraft\Dashboard\Foundation\Buffer;
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Rect;
 use SugarCraft\Dashboard\Foundation\Theme;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A card / container component with optional header and footer.
@@ -122,7 +123,7 @@ final class Card implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawable
 
         // Apply border color if set
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
 
         // Top border with title
@@ -135,11 +136,11 @@ final class Card implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawable
 
             $result .= str_repeat($h, max(0, $leftPad));
             if ($this->titleColor !== null) {
-                $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->titleColor->toFg(ColorMode::profile());
             }
             $result .= $this->title;
             if ($this->borderColor !== null) {
-                $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->borderColor->toFg(ColorMode::profile());
             }
             $result .= str_repeat($h, max(0, $rightPad));
         } else {

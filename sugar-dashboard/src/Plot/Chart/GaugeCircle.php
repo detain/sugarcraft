@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A circular gauge component (speedometer style).
@@ -282,7 +283,7 @@ final class GaugeCircle implements \SugarCraft\Dashboard\Foundation\SizedItem
                     continue;
                 }
                 if ($grid[$y][$x]['color'] !== null) {
-                    $result .= $grid[$y][$x]['color']->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
+                    $result .= $grid[$y][$x]['color']->toFg(ColorMode::profile()) . $char . Ansi::reset();
                     continue;
                 }
                 $result .= $char;
@@ -300,7 +301,7 @@ final class GaugeCircle implements \SugarCraft\Dashboard\Foundation\SizedItem
             $percentage = (int) round($ratio * 100);
             $label = sprintf(' %d%% ', $percentage);
             if ($this->labelColor !== null) {
-                $label = $this->labelColor->toFg(ColorProfile::TrueColor) . $label . Ansi::reset();
+                $label = $this->labelColor->toFg(ColorMode::profile()) . $label . Ansi::reset();
             }
             $result .= $label;
         }

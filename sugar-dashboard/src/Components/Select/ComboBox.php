@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A combobox component with search filtering.
@@ -92,12 +93,12 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $prefix . $queryDisplay;
 
         if (!empty($this->query) && $this->inputColor !== null) {
-            return $this->inputColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->inputColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         if (empty($this->query) && $this->inputColor !== null) {
             // Muted color for placeholder
-            return Color::hex('#9CA3AF')->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return Color::hex('#9CA3AF')->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;
@@ -138,7 +139,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $prefix . ' ' . $label;
 
         if ($isSelected && $this->selectedColor !== null) {
-            return $this->selectedColor->toFg(ColorProfile::TrueColor) . $content . Ansi::reset();
+            return $this->selectedColor->toFg(ColorMode::profile()) . $content . Ansi::reset();
         }
 
         return $content;
@@ -157,7 +158,7 @@ final class ComboBox implements \SugarCraft\Dashboard\Foundation\SizedItem
         // If the label contains the query (case-insensitive), highlight the whole label
         // to avoid breaking the string with ANSI codes
         if (stripos($label, $query) !== false) {
-            return $this->matchColor->toFg(ColorProfile::TrueColor) . $label . Ansi::reset();
+            return $this->matchColor->toFg(ColorMode::profile()) . $label . Ansi::reset();
         }
 
         return $label;

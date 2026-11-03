@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A circular progress ring component.
@@ -105,7 +106,7 @@ final class ProgressRing implements \SugarCraft\Dashboard\Foundation\SizedItem
 
                     if ($isFilled) {
                         if ($this->filledColor !== null) {
-                            $row .= $this->filledColor->toFg(ColorProfile::TrueColor);
+                            $row .= $this->filledColor->toFg(ColorMode::profile());
                         }
                         $row .= '●';
                         if ($this->filledColor !== null) {
@@ -113,7 +114,7 @@ final class ProgressRing implements \SugarCraft\Dashboard\Foundation\SizedItem
                         }
                     } else {
                         if ($this->emptyColor !== null) {
-                            $row .= $this->emptyColor->toFg(ColorProfile::TrueColor);
+                            $row .= $this->emptyColor->toFg(ColorMode::profile());
                         }
                         $row .= '○';
                         if ($this->emptyColor !== null) {
@@ -134,7 +135,7 @@ final class ProgressRing implements \SugarCraft\Dashboard\Foundation\SizedItem
             $percentage = (int) round($ratio * 100);
             $label = sprintf(' %d%% ', $percentage);
             if ($this->filledColor !== null) {
-                $label = $this->filledColor->toFg(ColorProfile::TrueColor) . $label . Ansi::reset();
+                $label = $this->filledColor->toFg(ColorMode::profile()) . $label . Ansi::reset();
             }
             $result .= "\n" . $label;
         }

@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A loading skeleton component.
@@ -136,10 +137,10 @@ final class Skeleton implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Apply colors
             $line = '';
             if ($this->backgroundColor !== null) {
-                $line .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+                $line .= $this->backgroundColor->toBg(ColorMode::profile());
             }
             if ($this->foregroundColor !== null) {
-                $line .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->foregroundColor->toFg(ColorMode::profile());
             }
 
             // Generate the skeleton bar with varying fill

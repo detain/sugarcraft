@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A funnel chart component.
@@ -209,7 +210,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
             $padding = $this->centered ? intval(($useWidth - $maxWidth) / 2) : 0;
             $result .= str_repeat(' ', $padding);
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
             $result .= $tl . str_repeat($h, $maxWidth) . $tr;
             if ($borderColor !== null) {
@@ -242,7 +243,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
                 // Left padding
                 if ($this->style !== 'empty') {
                     if ($borderColor !== null) {
-                        $line .= $borderColor->toFg(ColorProfile::TrueColor);
+                        $line .= $borderColor->toFg(ColorMode::profile());
                     }
                     $line .= $v . str_repeat(' ', $padding);
                 }
@@ -259,7 +260,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
                     if ($isLast) {
                         // Bottom border
                         if ($borderColor !== null) {
-                            $line .= $borderColor->toFg(ColorProfile::TrueColor);
+                            $line .= $borderColor->toFg(ColorMode::profile());
                         }
                         $line .= $bl . str_repeat($h, $stageWidth) . $br;
                         if ($borderColor !== null) {
@@ -274,7 +275,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
                 if ($this->style !== 'empty') {
                     $line .= str_repeat(' ', $padding);
                     if ($borderColor !== null) {
-                        $line .= $borderColor->toFg(ColorProfile::TrueColor);
+                        $line .= $borderColor->toFg(ColorMode::profile());
                     }
                     $line .= $v;
                     if ($borderColor !== null) {
@@ -303,7 +304,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
 
         // Top edge with rounded corners
@@ -331,7 +332,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
 
         if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
         $result .= '█';
         if ($color !== null) {
@@ -370,7 +371,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             if ($this->showValues && $contentWidth > 3) {
                 if ($valueColor !== null) {
-                    $result .= $valueColor->toFg(ColorProfile::TrueColor);
+                    $result .= $valueColor->toFg(ColorMode::profile());
                 }
             }
 
@@ -386,7 +387,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
 
         if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
         $result .= '█';
         if ($color !== null) {
@@ -409,7 +410,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         if ($this->style !== 'empty') {
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
         }
 
@@ -417,7 +418,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($leftPad > 0) {
             $result .= '█';
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
             $result .= str_repeat(' ', $leftPad - 1);
             $result .= '╲';
@@ -426,7 +427,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
         } else {
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
             $result .= '╲';
             if ($color !== null) {
@@ -442,7 +443,7 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
         $rightPad = $width - $nextWidth - $leftPad;
         if ($rightPad > 0) {
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
             $result .= '╱';
             if ($color !== null) {
@@ -450,12 +451,12 @@ final class Funnel implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
             $result .= str_repeat(' ', $rightPad - 1);
             if ($borderColor !== null) {
-                $result .= $borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $borderColor->toFg(ColorMode::profile());
             }
             $result .= '█';
         } else {
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
             $result .= '╱';
             if ($color !== null) {

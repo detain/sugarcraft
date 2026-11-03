@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A UML class diagram component for visualizing class structures.
@@ -300,7 +301,7 @@ final class ClassDiagram implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Top border
         if ($classColor !== null) {
-            $result .= $classColor->toFg(ColorProfile::TrueColor);
+            $result .= $classColor->toFg(ColorMode::profile());
         }
         $result .= '┌' . str_repeat('─', $innerWidth) . '┐';
         if ($classColor !== null) {
@@ -342,7 +343,7 @@ final class ClassDiagram implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Bottom border
         if ($classColor !== null) {
-            $result .= $classColor->toFg(ColorProfile::TrueColor);
+            $result .= $classColor->toFg(ColorMode::profile());
         }
         $result .= '╰' . str_repeat('─', $innerWidth) . '╯';
         if ($classColor !== null) {

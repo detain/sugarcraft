@@ -259,7 +259,7 @@ final class Segment implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function render(): string
     {
-        $profile = ColorProfile::TrueColor;
+        $profile = ColorMode::profile();
         $chars = mb_str_split($this->content, 1, 'UTF-8');
 
         $allRows = ['', '', '', '', ''];

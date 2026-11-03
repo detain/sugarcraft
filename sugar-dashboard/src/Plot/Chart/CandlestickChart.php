@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A candlestick chart component for financial data visualization.
@@ -252,7 +253,7 @@ final class CandlestickChart implements \SugarCraft\Dashboard\Foundation\SizedIt
                 for ($y = $lowY; $y <= $highY; $y++) {
                     $rowIndex = $chartHeight - 1 - $y;
                     if ($rowIndex >= 0 && $rowIndex < $chartHeight && $x >= 0) {
-                        $wick = $color !== null ? $color->toFg(ColorProfile::TrueColor) . '│' . Ansi::reset() : '│';
+                        $wick = $color !== null ? $color->toFg(ColorMode::profile()) . '│' . Ansi::reset() : '│';
                         $chartRows[$rowIndex] = substr_replace($chartRows[$rowIndex], $wick, $x, 1);
                     }
                 }
@@ -261,7 +262,7 @@ final class CandlestickChart implements \SugarCraft\Dashboard\Foundation\SizedIt
                 $bodyTop = min($openY, $closeY);
                 $bodyBottom = max($openY, $closeY);
                 $candleChar = $isBullish ? '█' : '▓';
-                $candleStr = $color !== null ? $color->toFg(ColorProfile::TrueColor) . str_repeat($candleChar, $candleWidth) . Ansi::reset() : str_repeat($candleChar, $candleWidth);
+                $candleStr = $color !== null ? $color->toFg(ColorMode::profile()) . str_repeat($candleChar, $candleWidth) . Ansi::reset() : str_repeat($candleChar, $candleWidth);
 
                 for ($y = $bodyBottom; $y <= $bodyTop; $y++) {
                     $rowIndex = $chartHeight - 1 - $y;

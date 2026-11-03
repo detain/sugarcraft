@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A bar-style sparkline chart component.
@@ -137,7 +138,7 @@ final class SparklineBar implements \SugarCraft\Dashboard\Foundation\SizedItem
                     // Filled at this height
                     $color = $this->getColorForValue($value, $min, $max);
                     if ($color !== null) {
-                        $line .= $color->toFg(ColorProfile::TrueColor);
+                        $line .= $color->toFg(ColorMode::profile());
                     }
                     $line .= '█';
                     if ($color !== null) {
@@ -163,7 +164,7 @@ final class SparklineBar implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $formatted = sprintf('%3d', (int) round($value));
                 $color = $this->getColorForValue($value, $min, $max);
                 if ($color !== null) {
-                    $valuesLine .= $color->toFg(ColorProfile::TrueColor);
+                    $valuesLine .= $color->toFg(ColorMode::profile());
                 }
                 $valuesLine .= $formatted;
                 if ($color !== null) {

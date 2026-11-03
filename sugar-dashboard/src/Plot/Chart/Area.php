@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * Data point for area charts.
@@ -276,7 +277,7 @@ final class Area implements \SugarCraft\Dashboard\Foundation\SizedItem
                     }
 
                     if ($color !== null) {
-                        $line .= $color->toFg(ColorProfile::TrueColor);
+                        $line .= $color->toFg(ColorMode::profile());
                     }
                     $line .= $fillChar;
                     if ($color !== null) {
@@ -290,7 +291,7 @@ final class Area implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Grid line
             if ($this->showGrid) {
                 if ($gridColor !== null) {
-                    $line .= $gridColor->toFg(ColorProfile::TrueColor);
+                    $line .= $gridColor->toFg(ColorMode::profile());
                 }
                 $line .= '│';
                 if ($gridColor !== null) {
@@ -306,7 +307,7 @@ final class Area implements \SugarCraft\Dashboard\Foundation\SizedItem
             $line = str_repeat(' ', 7);
             $line .= str_repeat('─', $dataCount);
             if ($gridColor !== null) {
-                $line = $gridColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $line = $gridColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
             }
             $output .= $line . "\n";
         }
@@ -320,7 +321,7 @@ final class Area implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $line .= str_pad($label, $perPoint);
             }
             if ($labelColor !== null) {
-                $line = $labelColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $line = $labelColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
             }
             $output .= $line;
         }

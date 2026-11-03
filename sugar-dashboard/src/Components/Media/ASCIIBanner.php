@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Media;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * ASCII art banner generator.
@@ -144,7 +145,7 @@ final class ASCIIBanner implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply colors
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
 
         // Top border
@@ -159,11 +160,11 @@ final class ASCIIBanner implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->textColor !== null) {
             $result .= $v;
             $result .= str_repeat(' ', max(0, (int) (($innerWidth - mb_strlen($this->title, 'UTF-8')) / 2)));
-            $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->textColor->toFg(ColorMode::profile());
             $result .= $this->title;
             $result .= Ansi::reset();
             if ($this->borderColor !== null) {
-                $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->borderColor->toFg(ColorMode::profile());
             }
             $remaining = $innerWidth - mb_strlen($this->title, 'UTF-8') - (int) (($innerWidth - mb_strlen($this->title, 'UTF-8')) / 2);
             $result .= str_repeat(' ', max(0, $remaining));

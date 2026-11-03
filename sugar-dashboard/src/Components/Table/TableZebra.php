@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A table component with alternating row colors (zebra striping).
@@ -196,15 +197,15 @@ final class TableZebra implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply colors
         if ($isHeader) {
             if ($this->headerBackgroundColor !== null) {
-                $line = $this->headerBackgroundColor->toBg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $line = $this->headerBackgroundColor->toBg(ColorMode::profile()) . $line . Ansi::reset();
             }
             if ($this->headerColor !== null) {
-                $line = $this->headerColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $line = $this->headerColor->toFg(ColorMode::profile()) . $line . Ansi::reset();
             }
         } else {
             $bgColor = ($rowIndex % 2 === 0) ? $this->oddRowColor : $this->evenRowColor;
             if ($bgColor !== null) {
-                $line = $bgColor->toBg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $line = $bgColor->toBg(ColorMode::profile()) . $line . Ansi::reset();
             }
         }
 

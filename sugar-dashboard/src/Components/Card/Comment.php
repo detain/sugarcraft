@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Components\Media\Avatar;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A comment/note display component.
@@ -101,10 +102,10 @@ final class Comment implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Apply header color if set
         $headerLine = '';
         if ($this->headerColor !== null) {
-            $headerLine .= $this->headerColor->toFg(ColorProfile::TrueColor);
+            $headerLine .= $this->headerColor->toFg(ColorMode::profile());
         } elseif (!$this->isReply) {
             // Default header color for top-level comments
-            $headerLine .= Color::hex('#3B82F6')->toFg(ColorProfile::TrueColor);
+            $headerLine .= Color::hex('#3B82F6')->toFg(ColorMode::profile());
         }
         $headerLine .= $header;
         if ($this->headerColor !== null || !$this->isReply) {

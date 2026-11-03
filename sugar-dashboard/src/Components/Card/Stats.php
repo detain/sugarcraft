@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A statistics display component.
@@ -139,7 +140,7 @@ final class Stats implements \SugarCraft\Dashboard\Foundation\SizedItem
         foreach ($this->items as $i => $item) {
             if ($i > 0) {
                 if ($this->separatorColor !== null) {
-                    $labelLine .= $this->separatorColor->toFg(ColorProfile::TrueColor);
+                    $labelLine .= $this->separatorColor->toFg(ColorMode::profile());
                 }
                 $labelLine .= ' ' . $this->separator . ' ';
                 $labelLine .= Ansi::reset();
@@ -147,7 +148,7 @@ final class Stats implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             $segment = str_pad($item['label'], $segmentWidth - 1);
             if ($this->labelColor !== null) {
-                $labelLine .= $this->labelColor->toFg(ColorProfile::TrueColor);
+                $labelLine .= $this->labelColor->toFg(ColorMode::profile());
             }
             $labelLine .= $segment;
             $labelLine .= Ansi::reset();
@@ -159,7 +160,7 @@ final class Stats implements \SugarCraft\Dashboard\Foundation\SizedItem
         foreach ($this->items as $i => $item) {
             if ($i > 0) {
                 if ($this->separatorColor !== null) {
-                    $valueLine .= $this->separatorColor->toFg(ColorProfile::TrueColor);
+                    $valueLine .= $this->separatorColor->toFg(ColorMode::profile());
                 }
                 $valueLine .= ' ' . $this->separator . ' ';
                 $valueLine .= Ansi::reset();
@@ -168,7 +169,7 @@ final class Stats implements \SugarCraft\Dashboard\Foundation\SizedItem
             $color = $item['color'] ?? $this->valueColor;
             $segment = str_pad($item['value'], $segmentWidth - 1);
             if ($color !== null) {
-                $valueLine .= $color->toFg(ColorProfile::TrueColor);
+                $valueLine .= $color->toFg(ColorMode::profile());
             }
             $valueLine .= $segment;
             $valueLine .= Ansi::reset();
@@ -197,7 +198,7 @@ final class Stats implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Separator line
         if ($this->separatorColor !== null) {
-            $sepLine = $this->separatorColor->toFg(ColorProfile::TrueColor);
+            $sepLine = $this->separatorColor->toFg(ColorMode::profile());
         } else {
             $sepLine = '';
         }
@@ -210,21 +211,21 @@ final class Stats implements \SugarCraft\Dashboard\Foundation\SizedItem
         foreach ($this->items as $i => $item) {
             if ($i > 0) {
                 if ($this->separatorColor !== null) {
-                    $content .= $this->separatorColor->toFg(ColorProfile::TrueColor);
+                    $content .= $this->separatorColor->toFg(ColorMode::profile());
                 }
                 $content .= ' ' . $this->separator . ' ';
                 $content .= Ansi::reset();
             }
 
             if ($this->labelColor !== null) {
-                $content .= $this->labelColor->toFg(ColorProfile::TrueColor);
+                $content .= $this->labelColor->toFg(ColorMode::profile());
             }
             $content .= str_pad($item['label'], $labelWidth) . ' ';
             $content .= Ansi::reset();
 
             $color = $item['color'] ?? $this->valueColor;
             if ($color !== null) {
-                $content .= $color->toFg(ColorProfile::TrueColor);
+                $content .= $color->toFg(ColorMode::profile());
             }
             $content .= $item['value'];
             $content .= Ansi::reset();
@@ -233,7 +234,7 @@ final class Stats implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Bottom separator line
         if ($this->separatorColor !== null) {
-            $sepLine2 = $this->separatorColor->toFg(ColorProfile::TrueColor);
+            $sepLine2 = $this->separatorColor->toFg(ColorMode::profile());
         } else {
             $sepLine2 = '';
         }

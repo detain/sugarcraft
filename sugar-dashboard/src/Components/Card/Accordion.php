@@ -11,6 +11,7 @@ use SugarCraft\Dashboard\Layout\HAlign;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An accordion component that displays collapsible sections.
@@ -204,7 +205,7 @@ final class Accordion implements SizedItem, Item
             }
 
             if ($this->headerColor !== null) {
-                $headerContent = $this->headerColor->toFg(ColorProfile::TrueColor) . $headerContent . Ansi::reset();
+                $headerContent = $this->headerColor->toFg(ColorMode::profile()) . $headerContent . Ansi::reset();
             }
 
             $lines[] = $headerContent;

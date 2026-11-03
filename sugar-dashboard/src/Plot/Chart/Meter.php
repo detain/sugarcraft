@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Plot\Gradient101;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An analog-style meter/gauge component.
@@ -178,7 +179,7 @@ final class Meter implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $tickChar = $isMajorTick ? '』' : '·';
 
                 if ($this->scaleColor !== null) {
-                    $row .= $this->scaleColor->toFg(ColorProfile::TrueColor);
+                    $row .= $this->scaleColor->toFg(ColorMode::profile());
                 }
                 $row .= $tickChar;
                 if ($this->scaleColor !== null) {
@@ -191,11 +192,11 @@ final class Meter implements \SugarCraft\Dashboard\Foundation\SizedItem
             $bodyChar = ($y === 0 || $y === $meterHeight - 1) ? '─' : '│';
 
             if ($isActive && $bodyColor !== null) {
-                $row .= $bodyColor->toFg(ColorProfile::TrueColor);
+                $row .= $bodyColor->toFg(ColorMode::profile());
                 $row .= '█';
                 $row .= Ansi::reset();
             } elseif ($this->meterColor !== null) {
-                $row .= $this->meterColor->toFg(ColorProfile::TrueColor);
+                $row .= $this->meterColor->toFg(ColorMode::profile());
                 $row .= '░';
                 $row .= Ansi::reset();
             } else {
@@ -205,7 +206,7 @@ final class Meter implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Needle column
             if ($this->showNeedle && $y === $needleY) {
                 if ($this->needleColor !== null) {
-                    $row .= $this->needleColor->toFg(ColorProfile::TrueColor);
+                    $row .= $this->needleColor->toFg(ColorMode::profile());
                 }
                 $row .= self::NEEDLE;
                 if ($this->needleColor !== null) {
@@ -219,7 +220,7 @@ final class Meter implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($y === $needleY) {
                 // Value indicator
                 if ($this->needleColor !== null) {
-                    $row .= $this->needleColor->toFg(ColorProfile::TrueColor);
+                    $row .= $this->needleColor->toFg(ColorMode::profile());
                 }
                 $row .= '●';
                 if ($this->needleColor !== null) {
@@ -243,7 +244,7 @@ final class Meter implements \SugarCraft\Dashboard\Foundation\SizedItem
             $label = str_repeat(' ', $padding) . $label;
 
             if ($this->needleColor !== null) {
-                $label = $this->needleColor->toFg(ColorProfile::TrueColor) . $label . Ansi::reset();
+                $label = $this->needleColor->toFg(ColorMode::profile()) . $label . Ansi::reset();
             }
             $result .= $label;
         }
@@ -513,10 +514,10 @@ final class Meter implements \SugarCraft\Dashboard\Foundation\SizedItem
             // PHP round() is half-away-from-zero, same as C++ std::round.
             $y = (int) round($i * 100 / $width);
             if ($value >= $y) {
-                $out .= $this->gradientMemo[$this->invert ? 100 - $y : $y]->toFg(ColorProfile::TrueColor)
+                $out .= $this->gradientMemo[$this->invert ? 100 - $y : $y]->toFg(ColorMode::profile())
                     . $this->glyph;
             } else {
-                $out .= $this->meterBg()->toFg(ColorProfile::TrueColor)
+                $out .= $this->meterBg()->toFg(ColorMode::profile())
                     . str_repeat($this->glyph, $width + 1 - $i);
                 break;
             }

@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * Box drawing frame generator using Unicode box-drawing characters.
@@ -157,10 +158,10 @@ final class BoxDrawing implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply colors
         if ($this->bgColor !== null) {
-            $result .= $this->bgColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->bgColor->toBg(ColorMode::profile());
         }
         if ($this->borderColor !== null) {
-            $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->borderColor->toFg(ColorMode::profile());
         }
 
         // Top border

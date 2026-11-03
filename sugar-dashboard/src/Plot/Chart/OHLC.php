@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An OHLC (Open-High-Low-Close) chart component for financial data.
@@ -275,7 +276,7 @@ final class OHLC implements \SugarCraft\Dashboard\Foundation\SizedItem
                             $line .= Ansi::reset();
                         }
                         if ($cellColor !== null) {
-                            $line .= $cellColor->toFg(ColorProfile::TrueColor);
+                            $line .= $cellColor->toFg(ColorMode::profile());
                         }
                         $currentColor = $cellColor;
                     }

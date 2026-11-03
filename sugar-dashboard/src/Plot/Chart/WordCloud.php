@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A word cloud component for displaying text frequency.
@@ -160,7 +161,7 @@ final class WordCloud implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $currentLineWidth++;
             }
 
-            $colorStr = $color->toFg(ColorProfile::TrueColor);
+            $colorStr = $color->toFg(ColorMode::profile());
             $currentLine .= $colorStr . $word . Ansi::reset();
             $currentLineWidth += $wordLen;
 

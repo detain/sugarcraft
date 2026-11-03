@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A timeline visualization component for displaying events chronologically.
@@ -175,7 +176,7 @@ final class TimelineViz implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Time
             if ($this->textColor !== null) {
-                $line .= $this->textColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->textColor->toFg(ColorMode::profile());
             }
             $line .= $timeStr;
             if ($this->textColor !== null) {
@@ -185,7 +186,7 @@ final class TimelineViz implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Vertical line (timeline connector)
             if ($this->showMarkers) {
-                $line .= $lineColor->toFg(ColorProfile::TrueColor);
+                $line .= $lineColor->toFg(ColorMode::profile());
                 if (!$isLast) {
                     $line .= '│';
                 } else {
@@ -196,14 +197,14 @@ final class TimelineViz implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             // Marker
-            $line .= $markerColor->toFg(ColorProfile::TrueColor);
+            $line .= $markerColor->toFg(ColorMode::profile());
             $line .= $markerChar;
             $line .= Ansi::reset();
             $line .= ' ';
 
             // Title
             if ($this->textColor !== null) {
-                $line .= $this->textColor->toFg(ColorProfile::TrueColor);
+                $line .= $this->textColor->toFg(ColorMode::profile());
             }
             $line .= $titleStr;
             if ($this->textColor !== null) {

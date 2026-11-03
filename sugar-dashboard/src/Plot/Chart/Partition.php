@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A Partition chart component for hierarchical proportional visualization.
@@ -241,7 +242,7 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Draw segment
         if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
 
         // Top border
@@ -378,7 +379,7 @@ final class Partition implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Draw segment box
         if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
 
         // Top border

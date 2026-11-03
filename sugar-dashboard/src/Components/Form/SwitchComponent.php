@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An on/off switch component with slider-style display.
@@ -84,7 +85,7 @@ final class SwitchComponent implements \SugarCraft\Dashboard\Foundation\SizedIte
 
         // Opening bracket
         if ($this->textColor !== null) {
-            $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->textColor->toFg(ColorMode::profile());
         }
         $result .= '[';
         if ($this->textColor !== null) {
@@ -94,7 +95,7 @@ final class SwitchComponent implements \SugarCraft\Dashboard\Foundation\SizedIte
         if ($this->on) {
             // ON state: space before O, both colored with onColor
             if ($this->onColor !== null) {
-                $result .= $this->onColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->onColor->toFg(ColorMode::profile());
             }
             $result .= ' O';
             if ($this->onColor !== null) {
@@ -103,7 +104,7 @@ final class SwitchComponent implements \SugarCraft\Dashboard\Foundation\SizedIte
         } else {
             // OFF state: O colored with offColor, then space
             if ($this->offColor !== null) {
-                $result .= $this->offColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->offColor->toFg(ColorMode::profile());
             }
             $result .= 'O';
             if ($this->offColor !== null) {
@@ -117,7 +118,7 @@ final class SwitchComponent implements \SugarCraft\Dashboard\Foundation\SizedIte
             $result .= Ansi::reset();
         }
         if ($this->textColor !== null) {
-            $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->textColor->toFg(ColorMode::profile());
         }
         $result .= ']';
         if ($this->textColor !== null) {

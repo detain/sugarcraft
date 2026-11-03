@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A PERT (Program Evaluation and Review Technique) chart component.
@@ -352,7 +353,7 @@ final class PERT implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $_arrowEndY = $depY;
 
                     if ($arrowColor !== null) {
-                        $result .= $arrowColor->toFg(ColorProfile::TrueColor);
+                        $result .= $arrowColor->toFg(ColorMode::profile());
                     }
 
                     // Draw horizontal arrow line
@@ -373,7 +374,7 @@ final class PERT implements \SugarCraft\Dashboard\Foundation\SizedItem
             $legendLine = $v . ' ';
             $legendLine .= 'Critical Path: ';
             if ($this->criticalColor !== null) {
-                $legendLine .= $this->criticalColor->toFg(ColorProfile::TrueColor);
+                $legendLine .= $this->criticalColor->toFg(ColorMode::profile());
             }
             $legendLine .= implode(' → ', $criticalPath);
             if ($this->criticalColor !== null) {
@@ -423,7 +424,7 @@ final class PERT implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Top border
         $result .= str_repeat(' ', $x);
         if ($color !== null) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
         $result .= $tl . str_repeat('─', $width - 2) . $tr . "\n";
 

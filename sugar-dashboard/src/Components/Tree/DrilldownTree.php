@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Components\Nav\Breadcrumb;
 use SugarCraft\Dashboard\Layout\StackLayout;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A drill-down tree view component.
@@ -315,7 +316,7 @@ final class DrilldownTree implements \SugarCraft\Dashboard\Foundation\SizedItem
         $valueStr = $this->showValues ? ' (' . sprintf('%.1f', $node->value) . ')' : '';
 
         if ($color !== null) {
-            $nodeLine .= $color->toFg(ColorProfile::TrueColor);
+            $nodeLine .= $color->toFg(ColorMode::profile());
         }
         $nodeLine .= $icon . $node->label . $valueStr;
         if ($color !== null) {

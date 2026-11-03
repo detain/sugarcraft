@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\StatusBar;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A status indicator dot/light component.
@@ -127,7 +128,7 @@ final class StatusIndicator implements \SugarCraft\Dashboard\Foundation\SizedIte
             return $symbol;
         }
 
-        $output = $color->toFg(ColorProfile::TrueColor);
+        $output = $color->toFg(ColorMode::profile());
 
         if ($this->pulse) {
             $tickMs = (int) (microtime(true) * 1000);
@@ -136,7 +137,7 @@ final class StatusIndicator implements \SugarCraft\Dashboard\Foundation\SizedIte
             if ($phase < 1.0) {
                 $output .= $symbol;
             } else {
-                $dimColor = $color->toFg(ColorProfile::TrueColor);
+                $dimColor = $color->toFg(ColorMode::profile());
                 $output = $dimColor . $symbol;
             }
         } else {

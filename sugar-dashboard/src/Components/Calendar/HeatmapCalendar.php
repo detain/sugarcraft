@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Calendar;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A calendar heatmap component (GitHub-style contributions).
@@ -187,7 +188,7 @@ final class HeatmapCalendar implements \SugarCraft\Dashboard\Foundation\SizedIte
         $color = $this->interpolateColor($value);
 
         if ($color !== null) {
-            return $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
+            return $color->toFg(ColorMode::profile()) . $char . Ansi::reset();
         }
 
         return $char;

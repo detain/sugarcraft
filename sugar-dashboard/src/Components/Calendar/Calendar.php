@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Calendar;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A simple calendar component.
@@ -114,7 +115,7 @@ final class Calendar implements \SugarCraft\Dashboard\Foundation\SizedItem
         $adjustedFirstDay = ($firstDayOfMonth - $this->startDayOfWeek + 7) % 7;
 
         // Build header
-        $headerColorStr = $this->headerColor?->toFg(ColorProfile::TrueColor) ?? '';
+        $headerColorStr = $this->headerColor?->toFg(ColorMode::profile()) ?? '';
         $headerLine = str_pad($header, 20, ' ', STR_PAD_BOTH);
         $result = [$headerColorStr . $headerLine . Ansi::reset()];
 
@@ -128,8 +129,8 @@ final class Calendar implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Calendar grid
         $dayNum = 1;
-        $todayColorStr = $this->todayColor?->toFg(ColorProfile::TrueColor) ?? '';
-        $markerColorStr = $this->markerColor?->toFg(ColorProfile::TrueColor) ?? '';
+        $todayColorStr = $this->todayColor?->toFg(ColorMode::profile()) ?? '';
+        $markerColorStr = $this->markerColor?->toFg(ColorMode::profile()) ?? '';
 
         for ($week = 0; $week < 6; $week++) {
             $weekLine = [];

@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Media;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A QR code display component.
@@ -163,7 +164,7 @@ final class QRCode implements \SugarCraft\Dashboard\Foundation\SizedItem
             foreach ($row as $x => $filled) {
                 if ($filled) {
                     if ($this->filledColor !== null) {
-                        $rowStr .= $this->filledColor->toFg(ColorProfile::TrueColor);
+                        $rowStr .= $this->filledColor->toFg(ColorMode::profile());
                     }
                     $rowStr .= self::CELL_FILLED;
                     if ($this->filledColor !== null) {
@@ -171,7 +172,7 @@ final class QRCode implements \SugarCraft\Dashboard\Foundation\SizedItem
                     }
                 } else {
                     if ($this->emptyColor !== null) {
-                        $rowStr .= $this->emptyColor->toFg(ColorProfile::TrueColor);
+                        $rowStr .= $this->emptyColor->toFg(ColorMode::profile());
                     }
                     $rowStr .= self::CELL_EMPTY;
                     if ($this->emptyColor !== null) {

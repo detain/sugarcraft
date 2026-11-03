@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A divider line component.
@@ -116,7 +117,7 @@ final class Divider implements \SugarCraft\Dashboard\Foundation\SizedItem
         $useWidth = $this->width ?? 40;
         $char = $this->getLineChar();
 
-        $colorStr = $this->color?->toFg(ColorProfile::TrueColor) ?? '';
+        $colorStr = $this->color?->toFg(ColorMode::profile()) ?? '';
 
         if ($this->label === null) {
             return $colorStr . str_repeat($char, $useWidth) . Ansi::reset();
@@ -143,7 +144,7 @@ final class Divider implements \SugarCraft\Dashboard\Foundation\SizedItem
         $useHeight = $this->height ?? 10;
         $char = $this->getLineChar();
 
-        $colorStr = $this->color?->toFg(ColorProfile::TrueColor) ?? '';
+        $colorStr = $this->color?->toFg(ColorMode::profile()) ?? '';
 
         $lines = [];
         for ($i = 0; $i < $useHeight; $i++) {

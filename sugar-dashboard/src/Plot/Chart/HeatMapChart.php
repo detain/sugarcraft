@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A heatmap component for displaying data intensity in a grid format.
@@ -136,7 +137,7 @@ final class HeatMapChart implements \SugarCraft\Dashboard\Foundation\SizedItem
         $color = $this->interpolateColor($value);
 
         if ($color !== null) {
-            return $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
+            return $color->toFg(ColorMode::profile()) . $char . Ansi::reset();
         }
 
         return $char;

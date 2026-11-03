@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A heat map visualization component.
@@ -110,7 +111,7 @@ final class Heatmap implements \SugarCraft\Dashboard\Foundation\SizedItem
         $color = $this->interpolateColor($value);
 
         if ($color !== null) {
-            return $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
+            return $color->toFg(ColorMode::profile()) . $char . Ansi::reset();
         }
 
         return $char;
@@ -139,7 +140,7 @@ final class Heatmap implements \SugarCraft\Dashboard\Foundation\SizedItem
                     $formatted = sprintf('%4.2f', $value);
                     $color = $this->interpolateColor($value);
                     if ($color !== null) {
-                        $rowStr .= $color->toFg(ColorProfile::TrueColor);
+                        $rowStr .= $color->toFg(ColorMode::profile());
                     }
                     $rowStr .= $formatted;
                     if ($color !== null) {

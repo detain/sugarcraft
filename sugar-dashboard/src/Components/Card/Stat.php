@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A single stat display component showing a label and value.
@@ -129,7 +130,7 @@ final class Stat implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->label !== null) {
             $labelStr = $this->padOrTruncate($this->label, $useWidth, $this->align);
             if ($this->labelColor !== null) {
-                $labelStr = $this->labelColor->toFg(ColorProfile::TrueColor) . $labelStr . Ansi::reset();
+                $labelStr = $this->labelColor->toFg(ColorMode::profile()) . $labelStr . Ansi::reset();
             }
             $lines[] = $labelStr;
         }
@@ -143,7 +144,7 @@ final class Stat implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
         $valueStr = $this->padOrTruncate($valueStr, $useWidth, $this->align);
         if ($this->valueColor !== null) {
-            $valueStr = $this->valueColor->toFg(ColorProfile::TrueColor) . $valueStr . Ansi::reset();
+            $valueStr = $this->valueColor->toFg(ColorMode::profile()) . $valueStr . Ansi::reset();
         }
         $lines[] = $valueStr;
 
@@ -151,7 +152,7 @@ final class Stat implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->subLabel !== null) {
             $subStr = $this->padOrTruncate($this->subLabel, $useWidth, $this->align);
             if ($this->labelColor !== null) {
-                $subStr = $this->labelColor->toFg(ColorProfile::TrueColor) . $subStr . Ansi::reset();
+                $subStr = $this->labelColor->toFg(ColorMode::profile()) . $subStr . Ansi::reset();
             }
             $lines[] = $subStr;
         }

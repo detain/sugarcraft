@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A tree visualization component for displaying hierarchical data.
@@ -114,7 +115,7 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Connector line to parent
         if ($depth > 0) {
             if ($this->showLines) {
-                $result .= $lineColor->toFg(ColorProfile::TrueColor);
+                $result .= $lineColor->toFg(ColorMode::profile());
                 $result .= $isLast ? '└── ' : '├── ';
                 $result .= Ansi::reset();
             }
@@ -128,16 +129,16 @@ final class TreeViz implements \SugarCraft\Dashboard\Foundation\SizedItem
                 'leaf' => '•',
                 default => '○',
             };
-            $result .= $nodeColor->toFg(ColorProfile::TrueColor);
+            $result .= $nodeColor->toFg(ColorMode::profile());
             $result .= $nodeChar . ' ';
             $result .= Ansi::reset();
 
             // Label
-            $result .= $labelColor->toFg(ColorProfile::TrueColor);
+            $result .= $labelColor->toFg(ColorMode::profile());
             $result .= $node->label;
             $result .= Ansi::reset();
         } else {
-            $result .= $nodeColor->toFg(ColorProfile::TrueColor);
+            $result .= $nodeColor->toFg(ColorMode::profile());
             $result .= match ($node->type) {
                 'root' => '● ' . $node->label,
                 'branch' => '○ ' . $node->label,

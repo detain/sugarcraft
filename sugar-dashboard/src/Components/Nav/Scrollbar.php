@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A scrollbar component for terminal content.
@@ -120,11 +121,11 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             $isThumb = ($i >= $thumbTop && $i < $thumbTop + $thumbHeight);
 
             if ($isThumb && $this->thumbColor !== null) {
-                $line = $this->thumbColor->toFg(ColorProfile::TrueColor);
+                $line = $this->thumbColor->toFg(ColorMode::profile());
                 $line .= $this->thumbChar;
                 $line .= Ansi::reset();
             } elseif ($this->trackColor !== null) {
-                $line = $this->trackColor->toFg(ColorProfile::TrueColor);
+                $line = $this->trackColor->toFg(ColorMode::profile());
                 $line .= $this->trackChar;
                 $line .= Ansi::reset();
             } else {
@@ -166,9 +167,9 @@ final class Scrollbar implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function renderArrow(string $arrow, bool $enabled): string
     {
         if ($enabled && $this->thumbColor !== null) {
-            return $this->thumbColor->toFg(ColorProfile::TrueColor) . $arrow . Ansi::reset();
+            return $this->thumbColor->toFg(ColorMode::profile()) . $arrow . Ansi::reset();
         } elseif (!$enabled && $this->trackColor !== null) {
-            return $this->trackColor->toFg(ColorProfile::TrueColor) . $arrow . Ansi::reset();
+            return $this->trackColor->toFg(ColorMode::profile()) . $arrow . Ansi::reset();
         }
         return $arrow;
     }

@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A tabbed interface component.
@@ -109,7 +110,7 @@ final class Tabs implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($i < count($this->tabs) - 1) {
                 $sepColor = '';
                 if ($this->inactiveColor !== null) {
-                    $sepColor = $this->inactiveColor->toFg(ColorProfile::TrueColor);
+                    $sepColor = $this->inactiveColor->toFg(ColorMode::profile());
                 }
                 $parts[] = $sepColor . $this->separator . Ansi::reset();
             }
@@ -134,7 +135,7 @@ final class Tabs implements \SugarCraft\Dashboard\Foundation\SizedItem
             $labelWidth = Width::string($activeLabel) + 3; // +3 for prefix/suffix
             $prefix = ' ';
             if ($this->activeColor !== null) {
-                $result .= $this->activeColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->activeColor->toFg(ColorMode::profile());
             }
             $result .= $prefix . str_repeat($this->activeChar, $labelWidth);
             $result .= Ansi::reset();
@@ -153,7 +154,7 @@ final class Tabs implements \SugarCraft\Dashboard\Foundation\SizedItem
         $suffix = $isActive ? ']' : ' ';
 
         if ($color !== null) {
-            return $color->toFg(ColorProfile::TrueColor)
+            return $color->toFg(ColorMode::profile())
                 . $prefix . $label . $suffix
                 . Ansi::reset();
         }

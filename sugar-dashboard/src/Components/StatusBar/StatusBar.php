@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Bar\StatusBar as StyleStatusBar;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A horizontal status bar with multiple segments.
@@ -112,10 +113,10 @@ final class StatusBar implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '';
         if ($this->foreground !== null || $this->background !== null) {
             if ($this->background !== null) {
-                $result .= $this->background->toBg(ColorProfile::TrueColor);
+                $result .= $this->background->toBg(ColorMode::profile());
             }
             if ($this->foreground !== null) {
-                $result .= $this->foreground->toFg(ColorProfile::TrueColor);
+                $result .= $this->foreground->toFg(ColorMode::profile());
             }
             $result .= $bar;
             $result .= Ansi::reset();

@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A multi-step wizard component.
@@ -149,7 +150,7 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Apply color
             if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
+                $result .= $color->toFg(ColorMode::profile());
             }
 
             // Add step indicator
@@ -172,7 +173,7 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
                     }
 
                     if ($connectorColor !== null) {
-                        $result .= $connectorColor->toFg(ColorProfile::TrueColor);
+                        $result .= $connectorColor->toFg(ColorMode::profile());
                     }
                     $result .= str_repeat($this->connectorChar, $connectorLen);
                     if ($connectorColor !== null) {
@@ -230,11 +231,11 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
             // Apply color
             if ($isCurrent) {
                 if ($this->currentColor !== null) {
-                    $result .= $this->currentColor->toFg(ColorProfile::TrueColor);
+                    $result .= $this->currentColor->toFg(ColorMode::profile());
                 }
             } elseif ($isUpcoming) {
                 if ($this->upcomingColor !== null) {
-                    $result .= $this->upcomingColor->toFg(ColorProfile::TrueColor);
+                    $result .= $this->upcomingColor->toFg(ColorMode::profile());
                 }
             }
 
@@ -280,10 +281,10 @@ final class Wizard implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply color if current or upcoming
         if ($isCurrent && $this->currentColor !== null) {
-            $result = $this->currentColor->toFg(ColorProfile::TrueColor) . $result;
+            $result = $this->currentColor->toFg(ColorMode::profile()) . $result;
             $description .= Ansi::reset();
         } elseif ($isUpcoming && $this->upcomingColor !== null) {
-            $result = $this->upcomingColor->toFg(ColorProfile::TrueColor) . $result;
+            $result = $this->upcomingColor->toFg(ColorMode::profile()) . $result;
             $description .= Ansi::reset();
         }
 

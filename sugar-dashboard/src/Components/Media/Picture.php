@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A picture display component with fallback support.
@@ -181,13 +182,13 @@ final class Picture implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Apply background
         if ($this->backgroundColor !== null) {
-            $output .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
+            $output .= $this->backgroundColor->toBg(ColorMode::profile());
         }
 
         // Top border
         $borderLine = str_repeat('─', $w);
         if ($this->borderColor !== null) {
-            $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $output .= $this->borderColor->toFg(ColorMode::profile());
         }
         $output .= '┌' . $borderLine . '┐' . "\n";
 
@@ -196,7 +197,7 @@ final class Picture implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         for ($row = 0; $row < $contentHeight; $row++) {
             if ($this->borderColor !== null) {
-                $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $output .= $this->borderColor->toFg(ColorMode::profile());
             }
             $output .= '│';
 
@@ -204,7 +205,7 @@ final class Picture implements \SugarCraft\Dashboard\Foundation\SizedItem
             $output .= $content;
 
             if ($this->borderColor !== null) {
-                $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $output .= $this->borderColor->toFg(ColorMode::profile());
             }
             $output .= '│' . "\n";
         }
@@ -212,7 +213,7 @@ final class Picture implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Caption row if present
         if ($this->caption !== null) {
             if ($this->borderColor !== null) {
-                $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $output .= $this->borderColor->toFg(ColorMode::profile());
             }
             $output .= '│';
 
@@ -227,20 +228,20 @@ final class Picture implements \SugarCraft\Dashboard\Foundation\SizedItem
             $leftPad = (int) floor($padding / 2);
 
             if ($this->captionColor !== null) {
-                $output .= $this->captionColor->toFg(ColorProfile::TrueColor);
+                $output .= $this->captionColor->toFg(ColorMode::profile());
             }
             $output .= str_repeat(' ', $leftPad) . $captionText;
             $output .= str_repeat(' ', $padding - $leftPad);
 
             if ($this->borderColor !== null) {
-                $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+                $output .= $this->borderColor->toFg(ColorMode::profile());
             }
             $output .= '│' . "\n";
         }
 
         // Bottom border
         if ($this->borderColor !== null) {
-            $output .= $this->borderColor->toFg(ColorProfile::TrueColor);
+            $output .= $this->borderColor->toFg(ColorMode::profile());
         }
         $output .= '└' . $borderLine . '┘';
 

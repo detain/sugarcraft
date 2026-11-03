@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A horizontal navigation bar component.
@@ -95,7 +96,7 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
         $content = $this->buildNavbarContent($useWidth);
 
         // Apply background to content
-        $bgPrefix = $this->bgColor !== null ? $this->bgColor->toBg(ColorProfile::TrueColor) : '';
+        $bgPrefix = $this->bgColor !== null ? $this->bgColor->toBg(ColorMode::profile()) : '';
         $bgReset = $this->bgColor !== null ? Ansi::reset() : '';
 
         $lines = explode("\n", $content);
@@ -112,14 +113,14 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Add bottom border if borderColor is set
         if ($this->borderColor !== null) {
-            $borderLine = $this->borderColor->toFg(ColorProfile::TrueColor) . str_repeat('─', $useWidth) . Ansi::reset();
+            $borderLine = $this->borderColor->toFg(ColorMode::profile()) . str_repeat('─', $useWidth) . Ansi::reset();
             $output[] = $borderLine;
         }
 
         // Apply background to border line as well
         if ($this->bgColor !== null) {
             $lastIndex = count($output) - 1;
-            $output[$lastIndex] = $this->bgColor->toBg(ColorProfile::TrueColor) . $output[$lastIndex] . Ansi::reset();
+            $output[$lastIndex] = $this->bgColor->toBg(ColorMode::profile()) . $output[$lastIndex] . Ansi::reset();
         }
 
         return implode("\n", $output);
@@ -176,9 +177,9 @@ final class Navbar implements \SugarCraft\Dashboard\Foundation\SizedItem
             }
 
             if ($item['isActive'] && $this->activeColor !== null) {
-                $result .= $this->activeColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->activeColor->toFg(ColorMode::profile());
             } elseif (!$item['isActive'] && $this->inactiveColor !== null) {
-                $result .= $this->inactiveColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->inactiveColor->toFg(ColorMode::profile());
             }
 
             $result .= $item['text'];

@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An area-style sparkline chart component.
@@ -151,7 +152,7 @@ final class SparklineArea implements \SugarCraft\Dashboard\Foundation\SizedItem
                     if ($this->showLine && $normalized >= ($threshold - (1 / $this->height)) && $normalized < ($threshold + (1 / $this->height))) {
                         // This is near the top edge - draw line color
                         if ($color !== null && $this->lineColor !== null) {
-                            $line .= $this->lineColor->toFg(ColorProfile::TrueColor);
+                            $line .= $this->lineColor->toFg(ColorMode::profile());
                         }
                         $line .= self::AREA_BLOCKS[(int) (min(7, $normalized * 8))];
                         if ($color !== null && $this->lineColor !== null) {
@@ -160,7 +161,7 @@ final class SparklineArea implements \SugarCraft\Dashboard\Foundation\SizedItem
                     } else {
                         // Fill area
                         if ($color !== null && $this->fillColor !== null) {
-                            $line .= $this->fillColor->toFg(ColorProfile::TrueColor);
+                            $line .= $this->fillColor->toFg(ColorMode::profile());
                         }
                         $line .= $this->getFillChar($normalized, $threshold);
                         if ($color !== null && $this->fillColor !== null) {
@@ -170,7 +171,7 @@ final class SparklineArea implements \SugarCraft\Dashboard\Foundation\SizedItem
                 } elseif ($this->showFill && $normalized >= ($threshold - (1 / $this->height))) {
                     // Partial fill for smoother edges
                     if ($color !== null && $this->fillColor !== null) {
-                        $line .= $this->fillColor->toFg(ColorProfile::TrueColor);
+                        $line .= $this->fillColor->toFg(ColorMode::profile());
                     }
                     $line .= self::FILL_BLOCKS[0];
                     if ($color !== null && $this->fillColor !== null) {

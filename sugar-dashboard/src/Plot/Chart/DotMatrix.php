@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A dot matrix display component.
@@ -406,7 +407,7 @@ final class DotMatrix implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function render(): string
     {
-        $profile = ColorProfile::TrueColor;
+        $profile = ColorMode::profile();
         $chars = mb_str_split(mb_strtoupper($this->content, 'UTF-8'), 1, 'UTF-8');
 
         // Each character is 5 dots tall, and 5 + spacing dots wide

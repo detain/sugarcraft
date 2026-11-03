@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\Theme;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A YouTube-style thin progress bar component.
@@ -86,7 +87,7 @@ final class NProgress implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Track (background)
         if ($this->trackColor !== null) {
-            $result .= $this->trackColor->toBg(ColorProfile::TrueColor);
+            $result .= $this->trackColor->toBg(ColorMode::profile());
         }
 
         $barWidth = $this->getBarWidth($useWidth);
@@ -97,14 +98,14 @@ final class NProgress implements \SugarCraft\Dashboard\Foundation\SizedItem
         } else {
             // Determinate state - filled bar
             if ($this->color !== null) {
-                $result .= $this->color->toBg(ColorProfile::TrueColor);
+                $result .= $this->color->toBg(ColorMode::profile());
             }
             $result .= str_repeat('█', $barWidth);
 
             // Remaining track
             if ($this->trackColor !== null) {
                 $result .= Ansi::reset();
-                $result .= $this->trackColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->trackColor->toBg(ColorMode::profile());
             }
             $result .= str_repeat('░', $useWidth - $barWidth);
         }
@@ -115,7 +116,7 @@ final class NProgress implements \SugarCraft\Dashboard\Foundation\SizedItem
             $pctStr = sprintf(' %d%%', $pct);
             $result .= Ansi::reset();
             if ($this->color !== null) {
-                $result .= $this->color->toFg(ColorProfile::TrueColor);
+                $result .= $this->color->toFg(ColorMode::profile());
             }
             $result .= $pctStr;
         }
@@ -143,12 +144,12 @@ final class NProgress implements \SugarCraft\Dashboard\Foundation\SizedItem
         for ($i = 0; $i < $totalWidth; $i++) {
             if ($i >= $barStart && $i < $barEnd) {
                 if ($this->color !== null) {
-                    $output .= $this->color->toBg(ColorProfile::TrueColor);
+                    $output .= $this->color->toBg(ColorMode::profile());
                 }
                 $output .= '█';
             } else {
                 if ($this->trackColor !== null) {
-                    $output .= $this->trackColor->toBg(ColorProfile::TrueColor);
+                    $output .= $this->trackColor->toBg(ColorMode::profile());
                 }
                 $output .= '░';
             }

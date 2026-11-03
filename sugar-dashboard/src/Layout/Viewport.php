@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A scrollable viewport for content.
@@ -114,7 +115,7 @@ final class Viewport implements \SugarCraft\Dashboard\Foundation\SizedItem
 
             // Apply background color if set
             if ($this->background !== null) {
-                $lineContent = $this->background->toBg(ColorProfile::TrueColor) . $line . Ansi::reset();
+                $lineContent = $this->background->toBg(ColorMode::profile()) . $line . Ansi::reset();
             } else {
                 $lineContent = $line;
             }
@@ -134,7 +135,7 @@ final class Viewport implements \SugarCraft\Dashboard\Foundation\SizedItem
         $visibleCount = count($visibleLines);
         while ($visibleCount < $height) {
             $emptyLine = $this->background !== null
-                ? $this->background->toBg(ColorProfile::TrueColor) . str_repeat(' ', $width) . Ansi::reset()
+                ? $this->background->toBg(ColorMode::profile()) . str_repeat(' ', $width) . Ansi::reset()
                 : str_repeat(' ', $width);
             $result .= $emptyLine . "\n";
             $visibleLines[] = '';

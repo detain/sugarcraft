@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * An empty state placeholder component.
@@ -131,7 +132,7 @@ final class EmptyState implements \SugarCraft\Dashboard\Foundation\SizedItem
         $titlePadding = (int) floor(($maxWidth - $titleWidth) / 2);
         $titleLine = str_repeat(' ', max(0, $titlePadding)) . $this->title;
         if ($this->titleColor !== null) {
-            $titleLine = $this->titleColor->toFg(ColorProfile::TrueColor) . $titleLine . Ansi::reset();
+            $titleLine = $this->titleColor->toFg(ColorMode::profile()) . $titleLine . Ansi::reset();
         }
         $lines[] = $titleLine;
 
@@ -143,7 +144,7 @@ final class EmptyState implements \SugarCraft\Dashboard\Foundation\SizedItem
                 $descPadding = (int) floor(($maxWidth - $descWidth) / 2);
                 $paddedLine = str_repeat(' ', max(0, $descPadding)) . $descLine;
                 if ($this->descriptionColor !== null) {
-                    $paddedLine = $this->descriptionColor->toFg(ColorProfile::TrueColor) . $paddedLine . Ansi::reset();
+                    $paddedLine = $this->descriptionColor->toFg(ColorMode::profile()) . $paddedLine . Ansi::reset();
                 }
                 $lines[] = $paddedLine;
             }
@@ -155,7 +156,7 @@ final class EmptyState implements \SugarCraft\Dashboard\Foundation\SizedItem
             $actionPadding = (int) floor(($maxWidth - $actionWidth) / 2);
             $actionLine = str_repeat(' ', max(0, $actionPadding)) . $this->action;
             if ($this->descriptionColor !== null) {
-                $actionLine = $this->descriptionColor->toFg(ColorProfile::TrueColor) . $actionLine . Ansi::reset();
+                $actionLine = $this->descriptionColor->toFg(ColorMode::profile()) . $actionLine . Ansi::reset();
             }
             $lines[] = $actionLine;
         }

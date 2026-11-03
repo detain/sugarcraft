@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A toggle switch component.
@@ -90,10 +91,10 @@ final class Toggle implements \SugarCraft\Dashboard\Foundation\SizedItem
         if ($this->on) {
             // ON state
             if ($this->trackColor !== null) {
-                $result .= $this->trackColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->trackColor->toBg(ColorMode::profile());
             }
             if ($this->onColor !== null) {
-                $result .= $this->onColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->onColor->toFg(ColorMode::profile());
             }
             $result .= '●';
             $result .= Ansi::reset();
@@ -101,10 +102,10 @@ final class Toggle implements \SugarCraft\Dashboard\Foundation\SizedItem
         } else {
             // OFF state
             if ($this->trackColor !== null) {
-                $result .= $this->trackColor->toBg(ColorProfile::TrueColor);
+                $result .= $this->trackColor->toBg(ColorMode::profile());
             }
             if ($this->offColor !== null) {
-                $result .= $this->offColor->toFg(ColorProfile::TrueColor);
+                $result .= $this->offColor->toFg(ColorMode::profile());
             }
             $result .= '○';
             $result .= Ansi::reset();

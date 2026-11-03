@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\SizedItem;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A state machine diagram component for visualizing system states and transitions.
@@ -294,7 +295,7 @@ final class StateMachine implements SizedItem
                     $transitionColor = $transition->color ?? $this->transitionColor ?? Color::hex('#CBA6F7');
                     $arrow = '';
                     if ($transitionColor !== null) {
-                        $arrow .= $transitionColor->toFg(ColorProfile::TrueColor);
+                        $arrow .= $transitionColor->toFg(ColorMode::profile());
                     }
                     $arrow .= ' ──' . $transition->label . '── ';
                     if ($transitionColor !== null) {

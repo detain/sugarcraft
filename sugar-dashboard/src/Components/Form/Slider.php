@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A slider / progress control component.
@@ -115,7 +116,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Track color if set
         if ($this->trackColor !== null) {
-            $result .= $this->trackColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->trackColor->toFg(ColorMode::profile());
         }
 
         // Build the track
@@ -125,12 +126,12 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
                 // Thumb position
                 if ($this->thumbColor !== null) {
                     $track .= Ansi::reset();
-                    $track .= $this->thumbColor->toFg(ColorProfile::TrueColor);
+                    $track .= $this->thumbColor->toFg(ColorMode::profile());
                 }
                 $track .= $this->thumbChar;
                 if ($this->trackColor !== null) {
                     $track .= Ansi::reset();
-                    $track .= $this->trackColor->toFg(ColorProfile::TrueColor);
+                    $track .= $this->trackColor->toFg(ColorMode::profile());
                 }
             } else {
                 $track .= $this->trackChar;
@@ -174,7 +175,7 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Track color if set
         if ($this->trackColor !== null) {
-            $result .= $this->trackColor->toFg(ColorProfile::TrueColor);
+            $result .= $this->trackColor->toFg(ColorMode::profile());
         }
 
         // Build the track (from top to bottom)
@@ -187,12 +188,12 @@ final class Slider implements \SugarCraft\Dashboard\Foundation\SizedItem
                 // Thumb position
                 if ($this->thumbColor !== null) {
                     $result .= Ansi::reset();
-                    $result .= $this->thumbColor->toFg(ColorProfile::TrueColor);
+                    $result .= $this->thumbColor->toFg(ColorMode::profile());
                 }
                 $result .= $this->thumbChar . "\n";
                 if ($this->trackColor !== null) {
                     $result .= Ansi::reset();
-                    $result .= $this->trackColor->toFg(ColorProfile::TrueColor);
+                    $result .= $this->trackColor->toFg(ColorMode::profile());
                 }
             } else {
                 $result .= $this->trackChar . "\n";

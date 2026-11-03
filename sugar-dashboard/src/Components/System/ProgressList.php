@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Layout\HAlign;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * A list component with progress indicators for each item.
@@ -184,7 +185,7 @@ final class ProgressList implements \SugarCraft\Dashboard\Foundation\SizedItem
         $result = '[';
 
         if ($color !== null && $filledWidth > 0) {
-            $result .= $color->toFg(ColorProfile::TrueColor);
+            $result .= $color->toFg(ColorMode::profile());
         }
 
         $result .= str_repeat('█', max(0, $filledWidth));
