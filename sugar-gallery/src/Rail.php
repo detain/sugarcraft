@@ -15,15 +15,31 @@ use SugarCraft\Style\Layout;
  */
 final readonly class Rail
 {
+    public readonly int $cursor;
+    public readonly int $scroll;
+
     /**
+     * The taught construction path is "restore a saved (cursor, scroll) pair",
+     * so the constructor CLAMPS rather than validates: the cursor lands inside
+     * [0, count-1] and the scroll at or below it, instead of a stale restore
+     * printing e.g. "(1000/2)" with a phantom empty row (2026-11-03 review
+     * m10). Every with*-carrier rides the same clamp via {@see carrying()};
+     * the render-time window re-clamp in {@see windowedScroll()} still handles
+     * perRow changes between moves.
+     *
      * @param list<PosterCard> $cards
      */
     public function __construct(
         public string $title,
         public array $cards = [],
-        public int $cursor = 0,
-        public int $scroll = 0,
+        int $cursor = 0,
+        int $scroll = 0,
     ) {
+        $last = $this->cards === [] ? 0 : count($this->cards) - 1;
+        $cursor = max(0, min($last, $cursor));
+
+        $this->cursor = $cursor;
+        $this->scroll = max(0, min($cursor, $scroll));
     }
 
     /** Canonical factory — mirrors the public constructor. */
@@ -33,18 +49,50 @@ final readonly class Rail
     }
 
     /**
-     * Replace the card list, clamping the cursor/scroll into range.
+     * The one carrier law (mirrors PosterCard::carrying() — 2026-11-03 review
+     * M9): every with-family and move-family mutator rebuilds through a full
+     * state snapshot plus named overrides, so a field added to the
+     * constructor can never be silently dropped by a hand-rolled positional
+     * reconstruction again.
+     *
+     * @param array<string, mixed> $overrides
+     */
+    private function carrying(array $overrides): self
+    {
+        $fields = [
+            'title' => $this->title,
+            'cards' => $this->cards,
+            'cursor' => $this->cursor,
+            'scroll' => $this->scroll,
+        ];
+
+        foreach ($overrides as $name => $value) {
+            if (!array_key_exists($name, $fields)) {
+                throw new \InvalidArgumentException("{$name} is not a constructor field of " . self::class);
+            }
+            $fields[$name] = $value;
+        }
+
+        return new self(...$fields);
+    }
+
+    /**
+     * Replace the card list; the constructor clamp pulls cursor/scroll back
+     * into range for the new list.
      *
      * @param list<PosterCard> $cards
      */
     public function withCards(array $cards): self
     {
-        $cursor = $cards === [] ? 0 : min($this->cursor, count($cards) - 1);
-
-        return new self($this->title, $cards, $cursor, min($this->scroll, $cursor));
+        return $this->carrying(['cards' => $cards]);
     }
 
-    /** Replace a single card by id (e.g. when its poster finishes loading). */
+    /**
+     * Replace a single card by id (e.g. when its poster finishes loading).
+     * A card whose id is not in the list is a SILENT no-op: the copy is
+     * returned with the original cards, cursor, and scroll untouched
+     * (2026-11-03 review m1 — this was pinned by tests but undocumented).
+     */
     public function withCard(PosterCard $card): self
     {
         $cards = $this->cards;
@@ -55,32 +103,26 @@ final readonly class Rail
             }
         }
 
-        return new self($this->title, $cards, $this->cursor, $this->scroll);
+        return $this->carrying(['cards' => $cards]);
     }
 
     /** Return a copy with a different title (immutable+fluent). */
     public function withTitle(string $title): self
     {
-        return new self($title, $this->cards, $this->cursor, $this->scroll);
+        return $this->carrying(['title' => $title]);
     }
 
     /**
      * Return a copy with a different cursor, clamped to [0, count-1].
      * Scroll is clamped to at most the cursor so the card stays visible.
-     * {@see moveCursor()} only ever takes a DELTA — to land on an arbitrary
-     * (scroll, cursor) pair, construct the rail directly: `new Rail($title,
-     * $cards, $cursor, $scroll)` (or {@see new()}, same signature).
+     * To restore an arbitrary (scroll, cursor) pair, construct the rail
+     * directly: `new Rail($title, $cards, $cursor, $scroll)` (or {@see new()},
+     * same signature) — the constructor applies the SAME clamp, so a stale
+     * pair degrades to the nearest legal window rather than rendering lies.
      */
     public function withCursor(int $cursor): self
     {
-        if ($this->cards === []) {
-            return new self($this->title, [], 0, 0);
-        }
-
-        $cursor = max(0, min(count($this->cards) - 1, $cursor));
-        $scroll = max(0, min($this->scroll, $cursor));
-
-        return new self($this->title, $this->cards, $cursor, $scroll);
+        return $this->carrying(['cursor' => $cursor]);
     }
 
     public function focusedCard(): ?PosterCard
@@ -102,7 +144,10 @@ final readonly class Rail
 
         $cursor = max(0, min(count($this->cards) - 1, $this->cursor + $delta));
 
-        return new self($this->title, $this->cards, $cursor, self::windowedScroll($cursor, $this->scroll, max(1, $perRow)));
+        return $this->carrying([
+            'cursor' => $cursor,
+            'scroll' => self::windowedScroll($cursor, $this->scroll, max(1, $perRow)),
+        ]);
     }
 
     /**
@@ -142,11 +187,20 @@ final readonly class Rail
         // (docs-review-1023 M4). Both header lines are then clamped to
         // $railWidth so an over-long title cannot overflow the rail (M4's
         // width twin of the README's exact-width invariant).
-        $head = ($focused ? '●' : '○') . ' ' . AnsiGuard::stripControls($this->title);
-        if ($count > 0) {
-            $head .= '  (' . ($this->cursor + 1) . '/' . $count . ')';
+        $prefix = ($focused ? '●' : '○') . ' ';
+        $counter = $count > 0 ? '  (' . ($this->cursor + 1) . '/' . $count . ')' : '';
+        $title = AnsiGuard::stripControls($this->title);
+
+        // The position/total counter is DATA, not decoration: it is reserved
+        // BEFORE the title is trimmed, so a narrow rail truncates the title
+        // and the counter survives whole. Before this the whole line went
+        // through one clamp and the counter died first (2026-11-03 review M3).
+        if (Width::string($prefix . $title . $counter) > max(1, $railWidth)) {
+            $room = max(1, $railWidth) - Width::string($prefix . $counter) - 1;
+            $title = $room > 0 ? Width::truncate($title, $room) . '…' : '';
         }
-        $head = self::fitHead($head, $railWidth);
+
+        $head = self::fitHead($prefix . $title . $counter, $railWidth);
 
         if ($this->cards === []) {
             // The one prose string in this widget is a translation lookup,
@@ -179,7 +233,9 @@ final readonly class Rail
      * Cap a plain (already control-stripped) header line at $max visible
      * cells, with an ellipsis on overflow — the same shape
      * PosterCard::render() uses for plain titles, so both header rows keep
-     * the "every row fits the rail" invariant regardless of locale.
+     * the "every row fits the rail" invariant regardless of locale. After
+     * the counter-reservation pass this is the safety net for the extreme
+     * widths where chrome alone cannot fit.
      */
     private static function fitHead(string $line, int $max): string
     {

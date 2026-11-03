@@ -77,13 +77,41 @@ final class RailGuardTest extends TestCase
 
         $lines = explode("\n", $frame);
         self::assertLessThanOrEqual($railWidth, Width::string($lines[0]), 'heading cannot exceed the rail');
-        self::assertStringEndsWith('…', $lines[0]);
+        // Dated flip (2026-11-03 review M3): this used to assert the line
+        // ENDS with '…' — which codified the defect. One whole-line clamp
+        // killed the position/total counter before the title ever yielded.
+        // The counter is now reserved first, so the ellipsis lands mid-line
+        // and '(1/3)' survives whole inside the same width budget.
+        self::assertStringContainsString('…', $lines[0], 'the title still yields with an ellipsis');
+        self::assertStringEndsWith('(1/3)', $lines[0], 'the counter is data, not decoration');
 
         // The empty-state line obeys the same budget.
         $emptyFrame = (new Rail(str_repeat('x', 200), []))->render($railWidth, true, 6, 2);
         foreach (explode("\n", $emptyFrame) as $line) {
             self::assertLessThanOrEqual($railWidth, Width::string($line));
         }
+    }
+
+    public function testThePositionCounterSurvivesANarrowRailAndALyingRestore(): void
+    {
+        // M3: even a long title at a narrow rail keeps the counter tail.
+        $frame = (new Rail('Movies Forever And Ever', $this->cards(3)))->render(14, true, 6, 2);
+        $line = explode("\n", $frame)[0];
+        self::assertStringEndsWith('(1/3)', $line);
+        self::assertLessThanOrEqual(14, Width::string($line));
+
+        // m10 twin: the taught restore path CLAMPS instead of printing lies
+        // — a stale (999, 0) pair used to render "(1000/2)" over a phantom
+        // empty body row because array_slice walked past the list.
+        $stale = (new Rail('R', $this->cards(2), 999, 0))->render(40, true, 10, 2);
+        $staleLines = explode("\n", $stale);
+        self::assertStringEndsWith('(2/2)', rtrim($staleLines[0]));
+        self::assertStringNotContainsString('(1000/2)', $stale);
+        self::assertStringContainsString('Card 0', $stale, 'the window lands on real cards, not a phantom row');
+
+        $negative = new Rail('R', $this->cards(3), -5, -3);
+        self::assertSame(0, $negative->cursor);
+        self::assertSame(0, $negative->scroll);
     }
 
     public function testWideTitlesCountVisibleCellsNotBytes(): void

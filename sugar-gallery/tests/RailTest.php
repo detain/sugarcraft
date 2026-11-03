@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Gallery\Tests;
 
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Gallery\PosterCard;
@@ -272,5 +273,35 @@ final class RailTest extends TestCase
         self::assertCount(2, $unchanged->cards);
         self::assertSame('Card 0', $unchanged->cards[0]->title);
         self::assertSame('Card 1', $unchanged->cards[1]->title);
+    }
+
+    public function testTheConstructorIsHandSpelledExactlyTwiceInTheSource(): void
+    {
+        // M9 mirror of PosterCardCarriersTest: new() mirrors the constructor
+        // and carrying() is the one internal rebuild. A third CODE-site
+        // `new self(` is a re-introduced hand-rolled carrier.
+        $source = file_get_contents((new \ReflectionClass(Rail::class))->getFileName());
+        self::assertIsString($source);
+        $code = implode("\n", array_filter(
+            explode("\n", $source),
+            static fn (string $line): bool => !preg_match('/^\s*(\*|\/\/)/', $line),
+        ));
+        self::assertSame(2, substr_count($code, 'new self('), 'Rail gained a hand-rolled carrier reconstruction');
+    }
+
+    public function testCarryingRebuildsEveryFieldAndRefusesUnknownOnes(): void
+    {
+        $rail = (new Rail('Old', $this->cards(4)))->moveCursor(3, 2);
+        $carrying = new \ReflectionMethod(Rail::class, 'carrying');
+
+        $relabeled = $carrying->invoke($rail, ['title' => 'Sentinel']);
+        self::assertSame('Sentinel', $relabeled->title);
+        self::assertSame($rail->cards, $relabeled->cards);
+        self::assertSame($rail->cursor, $relabeled->cursor);
+        self::assertSame($rail->scroll, $relabeled->scroll);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('is not a constructor field');
+        $carrying->invoke($rail, ['scrollRow' => 1]);
     }
 }
