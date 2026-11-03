@@ -17,10 +17,21 @@ use SugarCraft\Cli\AutoWidth;
  *    also never overridden;
  * 3. the terminal width, as far as it is resolvable: the exported `COLUMNS`
  *    variable (`getenv()`, then `$_ENV`, then `$_SERVER` for SAPIs where
- *    `getenv()` is disabled);
+ *    `getenv()` is disabled); values outside [1, {@see MAX_CREDIBLE}] are
+ *    treated as junk — a caller who really knows the width passes it
+ *    explicitly (tier 1), and an absurd advertisement otherwise turns a
+ *    filler `str_repeat()` into an out-of-memory crash;
  * 4. {@see self::FALLBACK} — the historical 80 cells, kept as the last
  *    resort so behaviour under a discoverable-but-quiet environment stays
  *    byte-for-byte what it was before width resolution existed.
+ *
+ * WHEN THIS BITES: `COLUMNS` must be *exported* to be seen. bash maintains a
+ * private COLUMNS variable but does not export it, and neither does it
+ * re-export after a window resize, so under plain bash an omitted width
+ * usually lands on the 80 fallback rather than the live terminal. zsh and
+ * fish export it; so does `export COLUMNS` in a bash profile. Programs that
+ * hold a real measurement (a pty size, an ioctl they already ran) should
+ * pass it explicitly — tier 1 exists for exactly that.
  *
  * WHY ENV-ONLY, NOT A `Tty::size()`-style ioctl probe: sugar-core's full TTY
  * size query shells out to `stty` and opens `/dev/tty` as fallbacks. On a
@@ -40,6 +51,16 @@ final class WidthProbe
     /** Width used when nothing better is known — the historical default. */
     public const int FALLBACK = 80;
 
+    /**
+     * Upper sanity bound on an advertised width. Real terminals (and tmux,
+     * and the widest multiplexers) stay far under this; a value above it is
+     * treated as junk so a hostile or typo'd `COLUMNS` cannot drive a
+     * filler `str_repeat()` (see {@see \SugarCraft\Cli\Section::rule()}) past
+     * the memory limit. Callers with a genuinely huge canvas pass an
+     * explicit integer (tier 1), which is never capped here.
+     */
+    public const int MAX_CREDIBLE = 10_000;
+
     private const string ENV_KEY = 'COLUMNS';
 
     /**
@@ -54,8 +75,9 @@ final class WidthProbe
 
     /**
      * The terminal width as advertised by the environment, or null when it is
-     * absent, blank, non-numeric, or below one cell. Never throws and never
-     * touches a device or subprocess — a missing answer is ordinary here.
+     * absent, blank, non-numeric, below one cell, or above
+     * {@see self::MAX_CREDIBLE}. Never throws and never touches a device or
+     * subprocess — a missing answer is ordinary here.
      */
     public static function columns(): ?int
     {
@@ -66,7 +88,9 @@ final class WidthProbe
         if ($raw === false) {
             return null;
         }
-        $columns = filter_var($raw, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $columns = filter_var($raw, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => self::MAX_CREDIBLE],
+        ]);
         return $columns === false ? null : $columns;
     }
 }

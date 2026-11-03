@@ -57,11 +57,30 @@ final class WidthResolutionTest extends TestCase
     /** Junk, zero, and negatives are "unknown", not an error and not a width. */
     public function testProbeFailsSoftOnUnusableValues(): void
     {
-        foreach (['', '0', '-5', 'abc', '80x', '1e3', '  ', '٣'] as $junk) {
+        foreach (['', '0', '-5', 'abc', '80x', '1e3', '  ', '٣', '999999999', '10001'] as $junk) {
             $this->pinTerminalColumns($junk);
             $this->assertNull(WidthProbe::columns(), "junk value '$junk' must not resolve");
             $this->assertSame(80, WidthProbe::resolve(AutoWidth::Auto));
         }
+    }
+
+    /**
+     * The credibility cap: an absurd advertised width would otherwise drive
+     * Section's filler str_repeat() past the memory limit (env-to-crash), so
+     * values above MAX_CREDIBLE fall back like any other junk — while the
+     * boundary itself still resolves, and an EXPLICIT huge int from a caller
+     * (tier 1) is never capped.
+     */
+    public function testAdvertisedWidthIsCappedAtTheCredibilityBound(): void
+    {
+        $this->pinTerminalColumns(WidthProbe::MAX_CREDIBLE);
+        $this->assertSame(WidthProbe::MAX_CREDIBLE, WidthProbe::columns());
+        $this->pinTerminalColumns(WidthProbe::MAX_CREDIBLE + 1);
+        $this->assertNull(WidthProbe::columns());
+        $this->assertSame(80, WidthProbe::resolve(AutoWidth::Auto));
+
+        // Tier 1 bypasses the cap: the probe does not second-guess callers.
+        $this->assertSame(50_000, WidthProbe::resolve(50_000));
     }
 
     /** Explicit ints and nulls pass through the resolver untouched. */
