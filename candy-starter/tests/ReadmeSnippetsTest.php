@@ -11,9 +11,18 @@ use PHPUnit\Framework\TestCase;
  * for the template every downstream app copies).
  *
  * Every fenced ```php block in README.md is linted AND executed in a
- * child `php` process with a wall-clock ceiling, asserting exit code 0
- * and empty stderr. A template that documents a fatal (or a hang)
- * teaches the fatal; a doc that runs is a doc that stays honest.
+ * child `php` process under a real wall-clock ceiling, asserting exit
+ * code 0 and empty stderr. A template that documents a fatal (or a
+ * hang) teaches the fatal; a doc that runs is a doc that stays honest.
+ *
+ * The ceiling is coreutils `timeout -s KILL N` (Linux, where this
+ * suite is gated) plus `</dev/null` — `-d max_execution_time` alone is
+ * decorative for CLI SAPI blocking work, and an inherited STDIN lets a
+ * snippet that reads input stall forever (lib-reviews-1102 int-php M2 /
+ * architect M2 / senior M2 / qa M3: the old "ceiling" was empirically
+ * vacuous on both counts). The ceiling's own pin is
+ * testTheWallClockCeilingActuallyKillsAStalledSnippet: neuter the
+ * wrapper and the suite hangs on that test instead of passing silently.
  *
  * README blocks must be self-contained: each runs against the package
  * autoloader plus `declare(strict_types=1)` prepended, so
@@ -23,7 +32,7 @@ final class ReadmeSnippetsTest extends TestCase
 {
     private const AUTOLOAD = __DIR__ . '/../vendor/autoload.php';
 
-    /** Wall-clock ceiling per snippet, seconds. */
+    /** Wall-clock ceiling per snippet, seconds (SIGKILL at the deadline). */
     private const RUN_TIMEOUT_SECONDS = 15;
 
     private string $scratchDir;
@@ -100,6 +109,23 @@ final class ReadmeSnippetsTest extends TestCase
         $this->assertSame('', trim($stderr), "the {$kind} snippet wrote to stderr:\n" . $stderr);
     }
 
+    public function testTheWallClockCeilingActuallyKillsAStalledSnippet(): void
+    {
+        // Discriminating pin for the ceiling itself (the pre-2026-11
+        // `-d max_execution_time` story was measured inert on this SAPI:
+        // `php -d max_execution_time=1 -r 'sleep(3);'` exits 0). Remove
+        // the timeout wrapper and THIS test hangs the suite — the honest
+        // shape of a guard whose ceiling regrows fake.
+        $script = $this->materialise('if (stream_get_contents(STDIN, 1) !== false) { echo "ate stdin\n"; } sleep(60);');
+
+        [$status, $stderr] = $this->runPhp([$script], 2);
+        $this->assertSame(
+            128 + 9,
+            $status,
+            'a stalled snippet must die by SIGKILL at the deadline (137), not run to completion:' . $stderr,
+        );
+    }
+
     /** README bodies become child-process scripts. */
     private function materialise(string $source): string
     {
@@ -114,14 +140,17 @@ final class ReadmeSnippetsTest extends TestCase
      * @param list<string> $args
      * @return array{0:int, 1:string} [exit status, captured stderr]
      */
-    private function runPhp(array $args): array
+    private function runPhp(array $args, int $timeoutSeconds = self::RUN_TIMEOUT_SECONDS): array
     {
         $errorFile = $this->scratchDir . '/stderr-' . substr(md5(implode('|', $args)), 0, 12);
-        $command   = escapeshellarg(PHP_BINARY);
+        // The ceiling is coreutils timeout itself: when it is missing the
+        // shell reports 127 and every assertion reddens loudly — never a
+        // silently unbounded run.
+        $command = escapeshellarg('timeout') . ' -s KILL ' . $timeoutSeconds . ' ' . escapeshellarg(PHP_BINARY);
         foreach ($args as $arg) {
             $command .= ' ' . escapeshellarg($arg);
         }
-        $command .= ' 2>' . escapeshellarg($errorFile);
+        $command .= ' 2>' . escapeshellarg($errorFile) . ' </dev/null';
 
         $lines = [];
         exec($command, $lines, $status);
