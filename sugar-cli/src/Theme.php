@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli;
 
+use SugarCraft\Cli\Internal\SafeText;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Palettes;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
@@ -225,7 +227,12 @@ final class Theme
     /**
      * Begin building a custom theme with a fluent interface.
      *
-     * @example Theme::build()->success(...)->error(...)->muted(...)->build()
+     * All seven slots (success/error/warn/info/prompt/accent/muted) must be
+     * set before {@see ThemeBuilder::build()} succeeds — the builder has no
+     * partial default, so an incomplete chain throws rather than returning a
+     * half-styled theme.
+     *
+     * @example $theme = Theme::build()->success($s)->error($e)->warn($w)->info($i)->prompt($p)->accent($a)->muted($m)->build()
      */
     public static function build(): ThemeBuilder
     {
@@ -298,25 +305,42 @@ final class Theme
         );
     }
 
+    /** Preset names accepted by {@see byName()}, in listing order. */
+    public const array PRESET_NAMES = ['ansi', 'plain', 'charm', 'dracula', 'nord', 'catppuccin', 'auto'];
+
     /**
      * Resolve a theme by name. Presets: `'ansi'`, `'plain'`, `'charm'`,
      * `'dracula'`, `'nord'`, `'catppuccin'`, and `'auto'` (the adaptive
      * factory with no background msg — the {@see ansi()} fallback).
      * Case-insensitive.
      *
-     * @throws \InvalidArgumentException if the name is not a recognised preset
+     * @throws \InvalidArgumentException if the name is not a recognised
+     *         preset; the offending value is sanitised and clipped so a
+     *         hostile config string cannot inject escape sequences through
+     *         the error message, and the accepted preset names are listed.
      */
     public static function byName(string $name): self
     {
-        return match (strtolower($name)) {
-            'ansi'        => self::ansi(),
-            'plain'       => self::plain(),
-            'charm'       => self::charm(),
-            'dracula'     => self::dracula(),
-            'nord'        => self::nord(),
-            'catppuccin'  => self::catppuccin(),
-            'auto'        => self::auto(),
-            default       => throw new \InvalidArgumentException("unknown theme: {$name}"),
-        };
+        switch (strtolower($name)) {
+            case 'ansi':       return self::ansi();
+            case 'plain':      return self::plain();
+            case 'charm':      return self::charm();
+            case 'dracula':    return self::dracula();
+            case 'nord':       return self::nord();
+            case 'catppuccin': return self::catppuccin();
+            case 'auto':       return self::auto();
+        }
+
+        // Neutralise the caller value (it may carry escapes / control bytes
+        // / a huge payload) before echoing it back, and name the presets.
+        $safe = SafeText::line($name);
+        if (Width::string($safe) > 40) {
+            $safe = Width::truncate($safe, 39) . '…';
+        }
+        throw new \InvalidArgumentException(sprintf(
+            'unknown theme: "%s" (expected one of: %s).',
+            $safe,
+            implode(', ', self::PRESET_NAMES),
+        ));
     }
 }

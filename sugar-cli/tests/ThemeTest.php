@@ -121,7 +121,39 @@ final class ThemeTest extends TestCase
     public function testByNameRejectsUnknown(): void
     {
         $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('expected one of: ansi, plain, charm, dracula, nord, catppuccin, auto');
         Theme::byName('nonexistent');
+    }
+
+    /**
+     * Security: the offending name is echoed into the error message, so it
+     * is sanitised (escapes/control bytes stripped) and clipped — a hostile
+     * config string must not smuggle an OSC-52 / clear-screen sequence out
+     * through the exception text, nor a megabyte-long payload.
+     */
+    public function testByNameRejectionSanitizesAndClipsTheHostileName(): void
+    {
+        $evil = "drac\x1b]52;c;aGVsbG8=\x07ula" . str_repeat('x', 200);
+        try {
+            Theme::byName($evil);
+            $this->fail('expected InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $msg = $e->getMessage();
+            $this->assertStringNotContainsString("\x1b", $msg, 'no ESC in the error');
+            $this->assertStringNotContainsString("\x07", $msg, 'no BEL in the error');
+            $this->assertStringNotContainsString('aGVsbG8=', $msg, 'OSC payload not echoed');
+            $this->assertStringContainsString('dracula', $msg, 'the surviving visible text is shown');
+            $this->assertLessThanOrEqual(160, strlen($msg), 'clipped: ' . strlen($msg) . ' bytes');
+        }
+    }
+
+    /** The advertised preset roster matches the names byName() accepts. */
+    public function testPresetNamesRosterMatchesResolution(): void
+    {
+        $this->assertSame(['ansi', 'plain', 'charm', 'dracula', 'nord', 'catppuccin', 'auto'], Theme::PRESET_NAMES);
+        foreach (Theme::PRESET_NAMES as $preset) {
+            $this->assertInstanceOf(Theme::class, Theme::byName($preset));
+        }
     }
 
     public function testPlainThemeAllFieldsUseSameStyleInstance(): void
