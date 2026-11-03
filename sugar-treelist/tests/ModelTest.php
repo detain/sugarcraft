@@ -1378,4 +1378,215 @@ final class ModelTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $m->setHeight(3000); // 1900×3000 = 5.7M > 4M
     }
+
+    // -------------------------------------------------------------------------
+    // Geometry-knob validation (2026-11-03: negatives were accept-then-misbehave)
+    // -------------------------------------------------------------------------
+
+    public function testSetCursorOffsetRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setCursorOffset(-1);
+    }
+
+    public function testSetLineOffsetRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setLineOffset(-1);
+    }
+
+    public function testSetWrapRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->model->setWrap(-1);
+    }
+
+    public function testSetCursorOffsetAcceptsZero(): void
+    {
+        $this->assertSame(0, $this->model->setCursorOffset(0)->cursorOffset());
+    }
+
+    // -------------------------------------------------------------------------
+    // Filter is a live view: mutations never silently lost (2026-11-03)
+    // -------------------------------------------------------------------------
+
+    public function testAddingUnderFilterIsProjectedThroughThePredicate(): void
+    {
+        $m = $this->model->addItemsFromArray(['apple', 'banana', 'cherry']);
+        $m = $m->withFilterFn(fn($v) => str_starts_with((string) $v, 'a'));
+        $this->assertSame(1, $m->length());
+
+        // A matching add lands in the projection…
+        $m = $m->addItem(new StringItem('apricot'));
+        $this->assertSame(2, $m->length());
+
+        // …a non-matching add is NOT shown (old behavior: predicate bypassed),
+        // yet it is NOT lost: widening the predicate reveals it.
+        $m = $m->addItem(new StringItem('DROPME'));
+        $this->assertSame(2, $m->length());
+        $widened = $m->withFilterFn(fn($v) => !str_starts_with((string) $v, 'b'));
+        $this->assertSame(4, $widened->length());
+        $restored = $m->withoutFilter();
+        $this->assertSame(['apple', 'banana', 'cherry', 'apricot', 'DROPME'], array_map(
+            static fn(\Stringable $v): string => (string) $v,
+            $this->valuesOf($restored)
+        ));
+    }
+
+    public function testClearUnderFilterDoesNotResurrectItems(): void
+    {
+        $m = $this->model->addItemsFromArray(['a', 'b', 'c'])->withFilterFn(
+            fn($v) => (string) $v !== 'b'
+        );
+        $this->assertSame(2, $m->length());
+
+        $cleared = $m->clear();
+        $this->assertTrue($cleared->isEmpty());
+        $this->assertTrue($cleared->withoutFilter()->isEmpty());
+    }
+
+    public function testRemoveUnderFilterRemovesFromThePristineList(): void
+    {
+        $m = $this->model->addItemsFromArray(['apple', 'banana', 'cherry'])->withFilterFn(
+            fn($v) => (string) $v !== 'cherry'
+        );
+        $this->assertSame(['apple', 'banana'], array_map(
+            static fn(\Stringable $v): string => (string) $v,
+            $this->valuesOf($m)
+        ));
+
+        $m = $m->removeItem(0); // removes the VISIBLE 'apple'
+        $this->assertSame(['banana'], array_map(
+            static fn(\Stringable $v): string => (string) $v,
+            $this->valuesOf($m)
+        ));
+
+        // Lifting the filter must NOT restore the removed item — only the
+        // filtered-away 'cherry' comes back.
+        $restored = $m->withoutFilter();
+        $this->assertSame(['banana', 'cherry'], array_map(
+            static fn(\Stringable $v): string => (string) $v,
+            $this->valuesOf($restored)
+        ));
+    }
+
+    public function testSortUnderFilterSurvivesLiftingTheFilter(): void
+    {
+        $m = $this->model
+            ->setLessFunc(fn($a, $b) => strcmp((string) $a, (string) $b))
+            ->addItemsFromArray(['z', 'a', 'm'])
+            ->withFilterFn(fn($v) => (string) $v !== 'm');
+        $this->assertSame(['z', 'a'], array_map(
+            static fn(\Stringable $v): string => (string) $v,
+            $this->valuesOf($m)
+        ));
+
+        $sorted = $m->sort();
+        $this->assertSame(['a', 'z'], array_map(
+            static fn(\Stringable $v): string => (string) $v,
+            $this->valuesOf($sorted)
+        ));
+
+        // withoutFilter() used to restore the UNSORTED pristine copy; the sort
+        // now lands on the authoritative list.
+        $restored = $sorted->withoutFilter();
+        $this->assertSame(['a', 'm', 'z'], array_map(
+            static fn(\Stringable $v): string => (string) $v,
+            $this->valuesOf($restored)
+        ));
+    }
+
+    public function testBatchAddsUnderFilterAreProjected(): void
+    {
+        $m = $this->model->addItemsFromArray(['keep'])->withFilterFn(
+            fn($v) => str_starts_with((string) $v, 'keep')
+        );
+        $m = $m->addItems(new StringItem('keep2'), new StringItem('drop'));
+        $this->assertSame(['keep', 'keep2'], array_map(
+            static fn(\Stringable $v): string => (string) $v,
+            $this->valuesOf($m)
+        ));
+        $this->assertSame(3, $m->withoutFilter()->length());
+    }
+
+    // -------------------------------------------------------------------------
+    // Cursor identity across removals (2026-11-03: was index-clamping)
+    // -------------------------------------------------------------------------
+
+    public function testCursorFollowsItsItemWhenARowAboveIsRemoved(): void
+    {
+        $m = $this->model->addItemsFromArray(['a', 'b', 'c', 'd'])->setCursor(2); // on 'c'
+        $m = $m->removeItem(1);                                                    // remove 'b'
+
+        // Old behavior: cursor stayed at index 2 and silently named 'd'.
+        $this->assertSame(1, $m->cursorIndex());
+        $this->assertSame('c', (string) $m->cursorItem());
+    }
+
+    public function testCursorStaysInPlaceWhenItsOwnItemIsRemoved(): void
+    {
+        $m = $this->model->addItemsFromArray(['a', 'b', 'c', 'd'])->setCursor(1); // on 'b'
+        $m = $m->removeItem(1);                                                    // remove 'b'
+
+        // Same position, now holding the following item (listbox convention).
+        $this->assertSame(1, $m->cursorIndex());
+        $this->assertSame('c', (string) $m->cursorItem());
+    }
+
+    public function testCursorClampsWhenLastItemIsRemovedFromUnderIt(): void
+    {
+        $m = $this->model->addItemsFromArray(['a', 'b'])->setCursor(1); // on 'b' (last)
+        $m = $m->removeItem(1);
+
+        $this->assertSame(0, $m->cursorIndex());
+        $this->assertSame('a', (string) $m->cursorItem());
+    }
+
+    public function testCursorSurvivesRemovalBelowIt(): void
+    {
+        $m = $this->model->addItemsFromArray(['a', 'b', 'c'])->setCursor(0); // on 'a'
+        $m = $m->removeItem(2);
+
+        $this->assertSame(0, $m->cursorIndex());
+        $this->assertSame('a', (string) $m->cursorItem());
+    }
+
+    // -------------------------------------------------------------------------
+    // Saturating cursor arithmetic (2026-11-03: PHP_INT_MAX overflowed to float
+    // and threw a TypeError under strict_types)
+    // -------------------------------------------------------------------------
+
+    public function testCursorMovesSaturateInsteadOfOverflowing(): void
+    {
+        $m = $this->model->addItemsFromArray(['a', 'b', 'c', 'd']);
+
+        $this->assertSame(3, $m->setCursor(0)->cursorDown(\PHP_INT_MAX)->cursorIndex());
+        $this->assertSame(0, $m->setCursor(3)->cursorUp(\PHP_INT_MAX)->cursorIndex());
+        $this->assertSame(0, $m->setCursor(2)->cursorDown(\PHP_INT_MIN)->cursorIndex());
+        $this->assertSame(3, $m->setCursor(2)->cursorUp(\PHP_INT_MIN)->cursorIndex());
+
+        $tall = $m->setViewport(80, 24);
+        $this->assertSame(3, $tall->setCursor(0)->cursorPageDown(\PHP_INT_MAX)->cursorIndex());
+        $this->assertSame(0, $tall->setCursor(3)->cursorPageUp(\PHP_INT_MAX)->cursorIndex());
+    }
+
+    public function testTryCursorItemIsNullOnEmptyList(): void
+    {
+        $this->assertNull($this->model->tryCursorItem());
+
+        $m = $this->model->addItem(new StringItem('solo'));
+        $this->assertSame('solo', (string) $m->tryCursorItem());
+    }
+
+    /**
+     * @return list<\Stringable>
+     */
+    private function valuesOf(Model $m): array
+    {
+        $values = [];
+        for ($i = 0; $i < $m->length(); $i++) {
+            $values[] = $m->itemAt($i);
+        }
+        return $values;
+    }
 }

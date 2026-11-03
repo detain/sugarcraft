@@ -66,10 +66,10 @@ final class Model
      */
     public const MAX_TOTAL_CELLS = 4_000_000;
 
-    // Configuration is PRIVATE (audit M7 fix wave): every field below has a
-    // guarded fluent setter and a bare accessor, so no write can bypass
-    // assertDimension()/assertArea()/sgrCodes()/the filter bookkeeping. The
-    // previous public surface let `$m->width = 1_000_000` skip the guards and
+    // Configuration is PRIVATE: every field below has a guarded fluent setter
+    // and a bare accessor, so no write can bypass
+    // assertDimension()/assertArea()/sgrCodes()/the filter bookkeeping. A
+    // public surface would let `$m->width = 1_000_000` skip the guards and
     // let `$m->filterFn = ...` desynchronise items/originalItems.
 
     private int $width  = 80;  // viewport width in cells
@@ -289,13 +289,30 @@ final class Model
         return $this->mutate(fn($m) => $m->equalsFunc = $fn);
     }
 
+    /**
+     * Desired number of context lines kept above the cursor.
+     *
+     * Validated like every other geometry knob (negative values are a caller
+     * bug, not a render decision). The renderer additionally clamps the gap
+     * to height-1, so an offset larger than the viewport can never strand
+     * the cursor outside the frame.
+     *
+     * @throws \InvalidArgumentException on negative $n
+     */
     public function setCursorOffset(int $n): self
     {
+        self::assertDimension($n, 'cursorOffset');
         return $this->mutate(fn($m) => $m->cursorOffset = $n);
     }
 
+    /**
+     * Maximum rendered lines per item (0 = unlimited, subject to the viewport).
+     *
+     * @throws \InvalidArgumentException on negative $maxLines
+     */
     public function setWrap(int $maxLines): self
     {
+        self::assertDimension($maxLines, 'wrap');
         return $this->mutate(fn($m) => $m->wrap = $maxLines);
     }
 
@@ -321,8 +338,15 @@ final class Model
         return $this->mutate(fn($m) => $m->currentStyle = $ansiStyle);
     }
 
+    /**
+     * Context-line offset handed to the prefixer/suffixer on every init call
+     * (relative positioning input for gutter hooks — not a viewport knob).
+     *
+     * @throws \InvalidArgumentException on negative $n
+     */
     public function setLineOffset(int $n): self
     {
+        self::assertDimension($n, 'lineOffset');
         return $this->mutate(fn($m) => $m->lineOffset = $n);
     }
 
@@ -331,7 +355,11 @@ final class Model
      *
      * The filterFn receives a \Stringable and returns bool (true = keep item).
      * Setting a filter transitions filterState to filtering; the items list
-     * is immediately filtered.
+     * is immediately filtered. While a filter is active the model keeps the
+     * pristine list authoritative — see {@see reapplyFilter()} — so the
+     * filter behaves as a live VIEW over the data: mutations under an active
+     * filter are not lost, and re-applying a wider predicate (or calling
+     * withoutFilter()) reveals everything that was really there.
      *
      * @param \Closure(\Stringable): bool $fn
      */
@@ -343,16 +371,11 @@ final class Model
         // Capture the pristine list ONLY when transitioning unfiltered → filtering.
         // Re-applying a filter (filter-as-you-type) must keep the originals saved by
         // the first withFilterFn(); overwriting them with the already-filtered list
-        // would make withoutFilter() restore a shrunken subset (audit M2 fix wave).
+        // would make withoutFilter() restore a shrunken subset.
         if ($this->filterFn === null) {
             $clone->originalItems = $clone->items;
         }
-        $clone->items = array_values(array_filter(
-            $clone->items,
-            fn(Item $item) => $fn($item->value),
-        ));
-        // Clamp cursor to new length
-        $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
+        $clone->reapplyFilter();
         // Reset diff state so the next view() emits a full frame, not a delta
         // against the pre-filter frame (which has a different line set).
         $clone->previousRows = null;
@@ -392,6 +415,52 @@ final class Model
         return $clone;
     }
 
+    /**
+     * Recompute the visible list from the pristine list while filtering.
+     *
+     * While a filter is active, `items` is a PROJECTION of `originalItems`,
+     * not a second source of truth: every mutation lands on the pristine list
+     * first and this runs immediately after, so nothing added, removed,
+     * cleared or sorted under a filter can be silently lost, resurrected, or
+     * undone when the filter lifts. The cursor is clamped into the projection.
+     *
+     * Call only on a clone (inside mutate()) or during a filter transition.
+     */
+    private function reapplyFilter(): void
+    {
+        if ($this->filterFn === null) {
+            return;
+        }
+        $fn = $this->filterFn;
+        $this->items = array_values(array_filter(
+            $this->originalItems,
+            static fn(Item $item): bool => (bool) $fn($item->value),
+        ));
+        $this->cursorIndex = min($this->cursorIndex, max(0, count($this->items) - 1));
+    }
+
+    /**
+     * Put the cursor back on the same logical item after a list edit.
+     *
+     * Clamping the raw index silently hands the cursor to a DIFFERENT item
+     * whenever something above it is removed. Re-anchoring by Item::$id keeps
+     * it on the row the user was looking at; when the cursor item itself was
+     * removed, the cursor stays at the same position (which now holds the
+     * following item), clamped into range.
+     *
+     * @param array<array-key, Item> $items
+     */
+    private static function relocateCursor(array $items, ?int $cursorId, int $preferredIndex): int
+    {
+        if ($cursorId !== null) {
+            $idMap = \array_flip(\array_map(static fn(Item $item): int => $item->id, $items));
+            if (isset($idMap[$cursorId])) {
+                return (int) $idMap[$cursorId];
+            }
+        }
+        return max(0, min($preferredIndex, count($items) - 1));
+    }
+
     // -------------------------------------------------------------------------
     // Items
     // -------------------------------------------------------------------------
@@ -404,14 +473,30 @@ final class Model
      * (breaking the "instances are immutable" contract) and desync its id
      * stream from later forks. Sibling forks of one base legitimately re-mint
      * the same id; ids are per-instance identity only (see class docblock).
+     *
+     * While a filter is active the item joins the pristine list and is then
+     * projected through the predicate: an item that does not match stays
+     * invisible but is never lost — withoutFilter() (or a widened predicate)
+     * reveals it.
      */
     public function addItem(\Stringable $value): self
     {
-        return $this->mutate(fn($m) => $m->items[] = new Item($value, $m->idCounter++));
+        return $this->mutate(function ($m) use ($value) {
+            $item = new Item($value, $m->idCounter++);
+            if ($m->filterFn !== null) {
+                $m->originalItems[] = $item;
+            } else {
+                $m->items[] = $item;
+            }
+            $m->reapplyFilter();
+        });
     }
 
     /**
      * Add multiple items in one call (one clone, multiple pushes).
+     *
+     * Filtered models follow the {@see addItem()} rule: pushes go to the
+     * pristine list, the projection is recomputed once.
      *
      * @param \Stringable ...$values
      */
@@ -419,13 +504,21 @@ final class Model
     {
         return $this->mutate(function ($m) use ($values) {
             foreach ($values as $value) {
-                $m->items[] = new Item($value, $m->idCounter++);
+                $item = new Item($value, $m->idCounter++);
+                if ($m->filterFn !== null) {
+                    $m->originalItems[] = $item;
+                } else {
+                    $m->items[] = $item;
+                }
             }
+            $m->reapplyFilter();
         });
     }
 
     /**
      * Add multiple items from a plain array (strings auto-wrapped in StringItem).
+     *
+     * Filtered models follow the {@see addItem()} rule.
      *
      * @param array<\Stringable|string> $values
      */
@@ -433,16 +526,28 @@ final class Model
     {
         return $this->mutate(function ($m) use ($values) {
             foreach ($values as $value) {
-                $m->items[] = new Item(
+                $item = new Item(
                     $value instanceof \Stringable ? $value : new StringItem((string) $value),
                     $m->idCounter++
                 );
+                if ($m->filterFn !== null) {
+                    $m->originalItems[] = $item;
+                } else {
+                    $m->items[] = $item;
+                }
             }
+            $m->reapplyFilter();
         });
     }
 
     /**
-     * Remove an item by index. Cursor is clamped.
+     * Remove an item by its VISIBLE index. Cursor is re-anchored by identity.
+     *
+     * The index addresses the projected list the user sees; removal is
+     * applied to the authoritative storage (pristine list while filtering),
+     * the projection is recomputed, and the cursor follows the logical item it
+     * was on — removing a row above the cursor no longer silently renames the
+     * selected item.
      *
      * Returns a new model instance in all cases — including no-op on
      * out-of-bounds index — so callers can always assume a new instance.
@@ -453,44 +558,64 @@ final class Model
             // Return a no-op clone to maintain referential transparency
             return $this->mutate(fn($m) => null);
         }
-        return $this->mutate(function ($m) use ($index) {
-            \array_splice($m->items, $index, 1);
-            $m->cursorIndex = \min($m->cursorIndex, \max(0, \count($m->items) - 1));
+        $cursorId = $this->items[$this->cursorIndex]->id;
+        $preferred = $this->cursorIndex;
+        return $this->mutate(function ($m) use ($index, $cursorId, $preferred) {
+            $targetId = $m->items[$index]->id;
+            if ($m->filterFn !== null) {
+                $m->originalItems = \array_values(\array_filter(
+                    $m->originalItems,
+                    static fn(Item $item): bool => $item->id !== $targetId,
+                ));
+                $m->reapplyFilter();
+            } else {
+                \array_splice($m->items, $index, 1);
+            }
+            $m->cursorIndex = self::relocateCursor($m->items, $cursorId, $preferred);
         });
     }
 
     /**
      * Clear all items and reset cursor.
+     *
+     * While a filter is active the pristine list is cleared too — otherwise
+     * lifting the filter would resurrect everything this call just deleted.
      */
     public function clear(): self
     {
-        return $this->mutate(fn($m) => [$m->items, $m->cursorIndex] = [[], 0]);
+        return $this->mutate(function ($m) {
+            $m->items = [];
+            $m->originalItems = [];
+            $m->cursorIndex = 0;
+        });
     }
 
     /**
      * Sort items using the configured LessFunc.
      *
-     * Cursor relocation uses O(1) identity map (Item::$id) rather than
-     * O(n) object-identity foreach after the sort.
+     * The cursor follows the logical item it was on (Item::$id), so a sort is
+     * never silently a de-select. While a filter is active the pristine list
+     * is the thing ordered, so the new order survives withoutFilter() instead
+     * of being un-sorted by the stale pristine copy.
      */
     public function sort(): self
     {
         if ($this->lessFunc === null) {
             return $this;
         }
-        $selected = $this->items[$this->cursorIndex] ?? null;
-        $selectedId = $selected?->id;
-        $items = $this->items;
-        \usort($items, fn(Item $a, Item $b) =>
-            ($this->lessFunc)($a->value, $b->value)
-        );
-        // O(1) cursor relocation via identity map — build id=>index flip, then lookup
-        $cursorIndex = $this->cursorIndex;
-        if ($selected !== null) {
-            $idMap = \array_flip(\array_map(fn(Item $item): int => $item->id, $items));
-            $cursorIndex = $idMap[$selectedId] ?? $this->cursorIndex;
-        }
-        return $this->mutate(fn($m) => [$m->items, $m->cursorIndex] = [$items, $cursorIndex]);
+        $cursorId = $this->items[$this->cursorIndex]?->id;
+        $preferred = $this->cursorIndex;
+        return $this->mutate(function ($m) use ($cursorId, $preferred) {
+            $list = $m->filterFn !== null ? $m->originalItems : $m->items;
+            \usort($list, fn(Item $a, Item $b): int => ($this->lessFunc)($a->value, $b->value));
+            if ($m->filterFn !== null) {
+                $m->originalItems = $list;
+                $m->reapplyFilter();
+            } else {
+                $m->items = $list;
+            }
+            $m->cursorIndex = self::relocateCursor($m->items, $cursorId, $preferred);
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -522,19 +647,79 @@ final class Model
         return $this->items[$this->cursorIndex]->value;
     }
 
+    /**
+     * Return the value at the cursor, or null when the list is empty.
+     *
+     * The non-throwing sibling of {@see cursorItem()} — mirrors tryItemAt()'s
+     * relationship to itemAt(). Prefer it in render/keystroke paths where an
+     * empty list is a normal state, not a caller bug.
+     */
+    public function tryCursorItem(): ?\Stringable
+    {
+        return ($this->items[$this->cursorIndex] ?? null)?->value;
+    }
+
     public function setCursor(int $index): self
     {
         return $this->mutate(fn($m) => $m->cursorIndex = \max(0, \min($index, \count($m->items) - 1)));
     }
 
+    /**
+     * Move the cursor up by $n items (negative $n moves down).
+     *
+     * Saturating: $n at either end of the integer range can overflow the
+     * subtraction into a float (which strict_types would then reject), so
+     * unreachable magnitudes clamp straight to the list bounds instead of
+     * being arithmetically evaluated.
+     */
     public function cursorUp(int $n = 1): self
     {
+        $count = \count($this->items);
+        if ($n > $this->cursorIndex) {
+            return $this->setCursor(0);
+        }
+        if ($n < -$count) {
+            // Negative beyond the whole list moving "up" = past the end.
+            return $this->setCursor($count - 1);
+        }
         return $this->setCursor($this->cursorIndex - $n);
     }
 
+    /**
+     * Move the cursor down by $n items (negative $n moves up).
+     *
+     * Saturating — see {@see cursorUp()} for why raw addition is unsafe.
+     */
     public function cursorDown(int $n = 1): self
     {
+        $count = \count($this->items);
+        if ($n > $count) {
+            return $this->setCursor($count - 1);
+        }
+        if ($n < -$this->cursorIndex) {
+            // Negative beyond the whole list moving "down" = past the top.
+            return $this->setCursor(0);
+        }
         return $this->setCursor($this->cursorIndex + $n);
+    }
+
+    /**
+     * Page size for cursorPageUp()/cursorPageDown(): one viewport height worth
+     * of ITEMS (not displayed lines — multi-line items advance by one per page
+     * unit; this is the documented upstream semantic).
+     */
+    private function pageSpan(int $pages): int
+    {
+        // height*$pages overflows to float at extreme $pages; saturate first.
+        // intdiv() is exact at the boundary where float division is not.
+        $factor = max(1, $this->height);
+        if ($pages > \intdiv(\PHP_INT_MAX, $factor)) {
+            return \PHP_INT_MAX;
+        }
+        if ($pages < \intdiv(\PHP_INT_MIN, $factor)) {
+            return \PHP_INT_MIN;
+        }
+        return $this->height * $pages;
     }
 
     /**
@@ -542,7 +727,7 @@ final class Model
      */
     public function cursorPageUp(int $pages = 1): self
     {
-        return $this->setCursor($this->cursorIndex - ($this->height * $pages));
+        return $this->cursorUp($this->pageSpan($pages));
     }
 
     /**
@@ -550,7 +735,7 @@ final class Model
      */
     public function cursorPageDown(int $pages = 1): self
     {
-        return $this->setCursor($this->cursorIndex + ($this->height * $pages));
+        return $this->cursorDown($this->pageSpan($pages));
     }
 
     /**
