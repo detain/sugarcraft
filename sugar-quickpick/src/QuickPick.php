@@ -9,11 +9,9 @@ use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\FuzzyMatcher;
-use SugarCraft\Style\Align;
+use SugarCraft\QuickPick\Support\UntrustedText;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
-use SugarCraft\Style\VAlign;
-use SugarCraft\Style\Border\TitleAnchor;
 use SugarCraft\Pty\SignalForwarder;
 
 /**
@@ -593,7 +591,10 @@ final class QuickPick
     {
         $prompt   = $this->prompt;
         $filter   = $this->filterText;
-        $headerLine = Width::padRight($prompt . $filter, $winWidth);
+        // The header echoes the filter text typed at runtime and the prompt
+        // (which hosts commonly seed from a previously selected history
+        // entry). Both are untrusted: guard before they reach the frame.
+        $headerLine = Width::padRight(UntrustedText::guard($prompt . $filter), $winWidth);
 
         $lines = [$headerLine];
 
@@ -611,7 +612,11 @@ final class QuickPick
         for ($i = 0; $i < $maxShow; $i++) {
             $actualIndex = $top + $i;
             $isSelected = ($actualIndex === $this->cursor);
-            $itemStr    = ($this->itemFormatter)($items[$actualIndex]->value(), $isSelected, $items[$actualIndex]->number());
+            // Guard the raw value BEFORE handing it to the formatter: the
+            // value may come from disk (FileHistory) or any other corpus
+            // the caller does not vet, while the formatter's own SGR is
+            // host styling applied after — it must survive.
+            $itemStr    = ($this->itemFormatter)(UntrustedText::guard($items[$actualIndex]->value()), $isSelected, $items[$actualIndex]->number());
 
             if ($filter !== '' && $this->matchStyle !== '') {
                 $itemStr = $this->ranker !== null

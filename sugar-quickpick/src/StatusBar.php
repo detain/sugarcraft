@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\QuickPick;
 
 use SugarCraft\QuickPick\Concerns\Visible;
+use SugarCraft\QuickPick\Support\UntrustedText;
 use SugarCraft\Style\Bar\StatusBar as BarStatusBar;
 
 /**
@@ -29,7 +30,10 @@ final class StatusBar
 
     public function __construct(string $message = '', bool $visible = true)
     {
-        $this->message = $message;
+        // Status text commonly echoes dynamic state (a selected path read
+        // back from history) — guard at ingress; the render-time bracket
+        // structure and separator are added after and survive.
+        $this->message = UntrustedText::guard($message);
         // Visible trait initializes $visible = true; re-apply if false passed.
         if ($visible === false) {
             $this->visible = false;
@@ -42,7 +46,7 @@ final class StatusBar
     public function withMessage(string $message): self
     {
         $clone = clone $this;
-        $clone->message = $message;
+        $clone->message = UntrustedText::guard($message);
         return $clone;
     }
 
@@ -63,21 +67,28 @@ final class StatusBar
 
     /**
      * Add a named segment that can be rendered alongside the primary message.
+     *
+     * Both the segment name and its value reach the rendered line verbatim,
+     * so both are guarded at ingress. Names are stored in guarded form, which
+     * is byte-identical for ordinary names (see {@see self::withoutSegment()}).
      */
     public function withSegment(string $name, string $value): self
     {
         $clone = clone $this;
-        $clone->segments[(string) $name] = $value;
+        $clone->segments[UntrustedText::guard($name)] = UntrustedText::guard($value);
         return $clone;
     }
 
     /**
      * Remove a named segment by name.
+     *
+     * Names are stored in guarded form, so the lookup name is guarded with
+     * the same function.
      */
     public function withoutSegment(string $name): self
     {
         $clone = clone $this;
-        unset($clone->segments[(string) $name]);
+        unset($clone->segments[UntrustedText::guard($name)]);
         return $clone;
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\QuickPick;
 
 use SugarCraft\QuickPick\Concerns\Visible;
+use SugarCraft\QuickPick\Support\UntrustedText;
 use SugarCraft\Style\Bar\HelpBar as BarHelpBar;
 
 /**
@@ -27,7 +28,9 @@ final class HelpBar
     public function __construct(array $shortcuts = [], bool $visible = true)
     {
         foreach ($shortcuts as $key => $description) {
-            $this->shortcuts[(string) $key] = (string) $description;
+            // Legend text reaches the terminal verbatim — guard at ingress so
+            // the separator glyphs and host styling added in render() survive.
+            $this->shortcuts[UntrustedText::guard((string) $key)] = UntrustedText::guard((string) $description);
         }
         if ($visible === false) {
             $this->visible = false;
@@ -40,17 +43,21 @@ final class HelpBar
     public function withShortcut(string $key, string $description): self
     {
         $clone = clone $this;
-        $clone->shortcuts[(string) $key] = $description;
+        $clone->shortcuts[UntrustedText::guard($key)] = UntrustedText::guard($description);
         return $clone;
     }
 
     /**
      * Remove a keyboard shortcut entry by key.
+     *
+     * Keys are stored in guarded form (see {@see self::withShortcut()}), so
+     * the lookup name is guarded with the same function — plain names are
+     * byte-identical under the guard and delete as expected.
      */
     public function withoutShortcut(string $key): self
     {
         $clone = clone $this;
-        unset($clone->shortcuts[(string) $key]);
+        unset($clone->shortcuts[UntrustedText::guard($key)]);
         return $clone;
     }
 
