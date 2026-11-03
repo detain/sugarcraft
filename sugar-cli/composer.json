@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-cli",
-    "description": "PHP port of charmbracelet/fang \u2014 opinionated CLI presentation helpers: StatusLine (\u2713/\u2717/\u26a0/\u2139), Banner, Section header, Stage step, HelpText page, and 6 stock themes (ansi/plain/charm/dracula/nord/catppuccin).",
+    "description": "Opinionated CLI presentation helpers shaped after charmbracelet/fang's output layer: StatusLine (✓/✗/⚠/ℹ), Banner, Section header, Stage step, HelpText page, Frame, Logo, and stock themes (ansi/plain/charm/dracula/nord/catppuccin, plus terminal-adaptive auto).",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -28,6 +28,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-style": "dev-master"
     },

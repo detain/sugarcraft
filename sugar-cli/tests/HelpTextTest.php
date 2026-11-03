@@ -352,7 +352,7 @@ final class HelpTextTest extends TestCase
         $this->assertStringStartsWith("CAFÉ\n", $out);
     }
 
-    // ---- renderPage (E453, multi-line-preserving page variant) ----------
+    // ---- renderPage (multi-line-preserving page variant) ----------------
 
     public function testRenderPageReturnsCleanPageByteIdentical(): void
     {
@@ -362,7 +362,7 @@ final class HelpTextTest extends TestCase
     }
 
     /**
-     * The defect E453 fixes: an authored page's newlines survive sanitizing,
+     * Why this variant exists: an authored page's newlines survive sanitizing,
      * while escape bytes and stray controls (tab, CR) do not.
      */
     public function testRenderPagePreservesRowsThroughPoison(): void

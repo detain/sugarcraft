@@ -188,7 +188,7 @@ final class SafeTextTest extends TestCase
     }
 
     /**
-     * E453: the page variant keeps LF rows — the layout of an authored
+     * The page variant keeps LF rows — the layout of an authored
      * multi-line page — while stripping everything {@see SafeText::line()}
      * strips. Tab and CR are NOT exempt: tabs render at terminal-dependent
      * widths, and dropping CR normalizes CRLF input to bare LF rows.

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Cli\Internal;
 
 /**
- * The kit presenters share one rule for their `$width` argument: a width
+ * This library's presenters share one rule for their `$width` argument: a width
  * below one cell is an authoring error and says so, while `null` stays a
  * deliberate opt-out whose meaning differs per presenter.
  *

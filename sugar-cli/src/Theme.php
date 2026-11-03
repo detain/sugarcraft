@@ -13,7 +13,9 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
- * Per-status palette used by {@see StatusLine} and {@see Banner}.
+ * Per-status palette for the presenters that take one — {@see StatusLine},
+ * {@see Banner}, {@see Section}, {@see Stage} and {@see HelpText} (every one
+ * of them falls back to {@see detect()} when handed no theme, per below).
  * Themes are immutable; {@see ansi()} ships the default colourful
  * palette, {@see plain()} produces a no-op palette ideal for
  * snapshot tests, and a handful of named presets (`charm`,
@@ -159,9 +161,9 @@ final class Theme
     public function withColorProfile(ColorProfile $profile): self
     {
         // Why the NoTty branch still unsets every attribute by hand, now that
-        // sugar-style strips every escape under NoTty itself (3a463ad16):
+        // sugar-style strips every escape under NoTty itself:
         // for a direct `render()` the two are byte-identical at every profile
-        // (pinned by DefaultThemeTest), but sprinkles' stripping keys off the
+        // (pinned by DefaultThemeTest), but sugar-style's stripping keys off the
         // style's *current* profile, while these unsets change the style's
         // *state*. Only the state survives what callers do with a detected
         // theme's style afterwards:
@@ -260,8 +262,9 @@ final class Theme
      * {@see Palettes::DRACULA} single-source-of-truth so they no longer
      * drift as they are hand-copied around the monorepo.
      *
-     * `accent` binds Dracula's `pink` (matching sugar-style' accent
-     * slot), not `purple`; before W5 it had diverged to `purple` #bd93f9.
+     * `accent` binds Dracula's `pink` (matching sugar-style's accent
+     * slot), not `purple`; an earlier revision had diverged to `purple`
+     * #bd93f9.
      */
     public static function dracula(): self
     {

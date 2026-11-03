@@ -209,8 +209,19 @@ final class DefaultThemeTest extends TestCase
     }
 
     /**
+     * Wall-clock budget for the probe child: it renders ~30 short strings and
+     * writes one file, so a child still alive well past this is wedged, and
+     * the suite must go red fast — never hang (a blocked stderr read would
+     * otherwise stall the runner indefinitely).
+     */
+    private const PROBE_WALL_CLOCK_BUDGET_SECONDS = 20;
+
+    /**
      * Run tests/Support/closed-stdout-probe.php in a child that closes its
      * own STDOUT (an in-process fclose would take PHPUnit's output with it).
+     *
+     * The child is bounded by `timeout -s KILL` so a wedged probe dies with a
+     * loud exit code (137) instead of blocking the drain below forever.
      *
      * @param array<string, string> $extraEnv
      * @return array{ok: bool, error?: string, rendered?: array<string, string>, plain?: array<string, string>}
@@ -218,7 +229,7 @@ final class DefaultThemeTest extends TestCase
     private function runClosedStdoutProbe(array $extraEnv): array
     {
         $probe = __DIR__ . '/Support/closed-stdout-probe.php';
-        $resultFile = tempnam(sys_get_temp_dir(), 'sc_kit_closed_stdout_');
+        $resultFile = tempnam(sys_get_temp_dir(), 'sc_cli_closed_stdout_');
         self::assertIsString($resultFile);
 
         $env = getenv();
@@ -229,7 +240,10 @@ final class DefaultThemeTest extends TestCase
 
         try {
             $process = proc_open(
-                [\PHP_BINARY, $probe, $resultFile],
+                [
+                    'timeout', '-s', 'KILL', (string) self::PROBE_WALL_CLOCK_BUDGET_SECONDS,
+                    \PHP_BINARY, $probe, $resultFile,
+                ],
                 [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
                 $pipes,
                 null,
@@ -268,8 +282,8 @@ final class DefaultThemeTest extends TestCase
 
     /**
      * For a direct render, Theme::withColorProfile() is byte-identical to
-     * sugar-style' own Style::colorProfile() at every tier — NoTty
-     * included, where sprinkles now strips every escape itself — across every
+     * sugar-style's own Style::colorProfile() at every tier — NoTty
+     * included, where sugar-style now strips every escape itself — across every
      * preset slot, a style carrying every attribute plus OSC 8 and a border,
      * and pre-styled content. Theme adds nothing to what a render emits; its
      * NoTty attribute unsets exist only for the state-carrying paths pinned
@@ -286,7 +300,7 @@ final class DefaultThemeTest extends TestCase
     }
 
     #[DataProvider('renderProfiles')]
-    public function testWithColorProfileRendersExactlyAsSprinklesProfile(ColorProfile $profile): void
+    public function testWithColorProfileRendersExactlyAsStyleColorProfile(ColorProfile $profile): void
     {
         $kitchenSink = Style::new()->bold()->italic()->underline()->strikethrough()->faint()
             ->blink()->rapidBlink()->reverse()->overline()->invisible()
@@ -321,7 +335,7 @@ final class DefaultThemeTest extends TestCase
     /**
      * The NoTty downgrade is one-way for text attributes and hyperlinks: a
      * detected-for-a-pipe theme re-profiled to a richer tier gets its colour
-     * back but not bold/OSC 8. Sprinkles' NoTty strip alone cannot hold this
+     * back but not bold/OSC 8. sugar-style's NoTty strip alone cannot hold this
      * — it keys off the current profile — which is why Theme still unsets
      * the attributes itself.
      */

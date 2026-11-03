@@ -15,7 +15,8 @@ use SugarCraft\Core\Util\Ansi;
  * screen clear, OSC 52 clipboard write, DCS/APC payload, or a raw newline in
  * that text would desync the renderer's one-line-per-row model or drive a
  * terminal-escape injection — so it must be stripped before it reaches the
- * terminal (only Frame previously bounded caller text, and only by width).
+ * terminal. {@see Frame} and {@see Logo} accept pre-rendered strings and are
+ * sanitized by the {@see styledLine()} and {@see page()} counterparts below.
  *
  * @internal Not part of the public API; may change without notice.
  */
@@ -110,9 +111,9 @@ final class SafeText
      * Strip escape sequences and control bytes from a multi-line page,
      * preserving the line structure.
      *
-     * The counterpart of {@see line()} for authored pages (E453, round of
-     * the crush_libs rerun): candy-code's translated `help` screen is one
-     * catalogue string whose embedded newlines ARE the layout, so the
+     * The counterpart of {@see line()} for authored pages: candy-code's
+     * translated `help` screen is one catalogue string whose embedded
+     * newlines ARE the layout, so the
      * line-wise flattening in {@see line()} destroys it. Here every byte
      * {@see line()} would remove still goes — escape sequences via
      * {@see Ansi::strip()}, the remaining C0 controls and DEL — except the

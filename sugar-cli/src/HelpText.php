@@ -107,7 +107,7 @@ final class HelpText
     /**
      * Sanitize — and optionally re-wrap — an already-laid-out multi-line page.
      *
-     * The multi-line-preserving counterpart of {@see render()} (E453): pages
+     * The multi-line-preserving counterpart of {@see render()}: pages
      * whose embedded newlines ARE the layout (a translated CLI help screen,
      * for instance) cannot ride {@see render()}, which flattens every caller
      * string through {@see SafeText::line()} and would collapse the whole

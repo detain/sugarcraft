@@ -7,7 +7,7 @@ namespace SugarCraft\Cli\Tests\Support;
 /**
  * Makes width-dependent assertions independent of the runner's environment.
  *
- * The kit presenters' omitted `$width` now resolves through
+ * This library's presenters' omitted `$width` now resolves through
  * {@see \SugarCraft\Cli\Internal\WidthProbe::columns()} — an exported
  * `COLUMNS` (or a superglobal copy of it) on the dev/CI box would otherwise
  * silently re-flow every default-width golden and every "80 cells" pin.
