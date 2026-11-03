@@ -227,7 +227,7 @@ final class Repo
      * (bin repo list/info, GitDaemon::findRepoByPath, SSHServer). Before
      * this fix `git init --bare` made $path itself the bare repo, so a
      * freshly created repository was invisible to every gate that looks
-     * for $path/.git (docs-fix-1023 lane N4).
+     * for $path/.git.
      *
      * @throws \RuntimeException If git is not available or init fails
      */

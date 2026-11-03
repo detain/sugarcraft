@@ -38,8 +38,7 @@ final class PktLine
 
     /**
      * Largest total packet size on the wire — the spec's 65520-byte cap
-     * (0xFFF0), header included. r1024/githttp2 review MINOR-2 cure: this
-     * was 0xFFFF, which neither the class's own docblock rule nor git
+     * (0xFFF0), header included. It used to be 0xFFFF, which neither the class's own docblock rule nor git
      * (LARGE_PACKET_MAX = 65520) sanctions; both encode and decode now
      * enforce the spec value, and the dated pins that recorded the old
      * permissive cap were flipped in the same step.

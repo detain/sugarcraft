@@ -20,7 +20,7 @@ declare(strict_types=1);
  * named `soft-serve` before the 2026-10 rename to candy-git-server.
  * STATUS: scaffold for ssh/daemon transports — bare `serve` still refuses
  * (assembly not implemented); `serve --http` starts the real smart-HTTP
- * READ listener (phase 1, r1024/githttp; push answers 501). See README
+ * READ listener (push answers an honest 501). See README
  * "Known gaps". // @rename-keep
  */
 
@@ -117,7 +117,7 @@ function main(array $argv): int
 
 function cmdServe(array $args): int
 {
-    // Truthful-stub law (docs-fix-1023 lane N4): the server assembly that
+    // Truthful-stub law: the server assembly that
     // binds the ssh/http/git listeners and dispatches protocol handlers was
     // never written. The old body printed a startup banner, listed repos,
     // and exited 0 without accepting a single connection — indistinguishable
@@ -130,7 +130,7 @@ function cmdServe(array $args): int
     // running host. Inventory: README "Known gaps — must fix before any
     // server wiring".
     //
-    // Exception (r1024/githttp, owner ruling 1b): the explicit --http flag
+    // Exception: the explicit --http flag
     // assembles ONLY the smart-HTTP read listener, which is now real. The
     // bare refusal below stays byte-identical for every other invocation —
     // ssh/git-daemon listeners and push remain unwired scaffold.
@@ -371,7 +371,7 @@ function cmdUser(array $args): int
 /**
  * Resolve the data directory the same way every persistence-touching
  * command does: explicit positional arg, then CANDY_GIT_SERVER_DATA_PATH,
- * then the /tmp default (undisclosed until docs-fix; see README "Data
+ * then the /tmp default (see README "Data
  * directory" — a systemd-tmpfiles-hostile default, so set the env for real
  * deployments).
  */
@@ -384,7 +384,7 @@ function bin_data_path(?string $explicit): string
  * Account names double as file-store keys, so the old /^[a-zA-Z0-9._-]+$/
  * gate is not enough on its own: '.' and '..' pass it and would address
  * parent paths wherever a name is later interpolated into a path
- * (review C-05's shape). Reject all-dot names outright.
+ * (the traversal shape the jail gate targets). Reject all-dot names outright.
  */
 function bin_valid_account_name(string $name): bool
 {
@@ -472,7 +472,7 @@ function cmdUserKey(array $args): int
         $store = UserStore::forDataPath($dataPath);
         // Keys belong to accounts that EXIST in the store — the pre-fix
         // version built a throwaway User in memory, printed success, and
-        // persisted nothing (review C-03).
+        // persisted nothing.
         $user = $store->find($username);
         if ($user === null) {
             return error("No such user '{$username}' in {$store->path()} — run 'candy-git-server user add {$username}' first.\n");
@@ -608,7 +608,7 @@ function cmdRepoCreate(array $args): int
     echo Lang::t('cli.repo_created', ['name' => $name, 'path' => $path]) . "\n";
     // No clone URL is printed: nothing listens for git traffic yet, and a
     // "Clone URL: ssh://…" line invites users to believe the repo is
-    // reachable (docs-fix-1023 lane N4; i18n law — raw string, all 16
+    // reachable (i18n law — raw string, all 16
     // locales stay untouched and the cli.repo_clone_url key goes unused).
     echo "Note: no server listens for this repository yet (status: scaffold); see README \"Known gaps\".\n";
 

@@ -22,9 +22,9 @@ final class User
 
     /**
      * password_hash() digest for HTTP Basic auth. The on-disk UserStore keeps
-     * ONLY this digest — a stored cleartext password is what review M-11
-     * called the account store's worst property. $password remains the
-     * in-memory (test/dev) channel until M-11 folds it away.
+     * ONLY this digest — a stored cleartext password is the account
+     * store's worst property. $password remains the in-memory
+     * (test/dev) channel until it folds away.
      */
     public readonly ?string $passwordHash;
 
@@ -64,7 +64,7 @@ final class User
 
     public function withActive(bool $v = true): self
     {
-        // Positional-truth fix (r1024/githttp): the constructor order is
+        // The constructor order is
         // (username, isAdmin, isActive, password, keys) — this setter used to
         // write $v into the isAdmin slot, so 'deactivating' a user stripped
         // admin and left the account ACTIVE. A trust gate on isActive cannot
