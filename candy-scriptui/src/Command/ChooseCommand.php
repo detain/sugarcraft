@@ -7,6 +7,7 @@ namespace SugarCraft\ScriptUi\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\ChooseModel;
+use SugarCraft\ScriptUi\Runtime\OptionList;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
@@ -35,7 +36,7 @@ final class ChooseCommand extends Command
             ->addOption('no-limit', null, InputOption::VALUE_NONE,    'Allow unlimited multi-select.')
             ->addOption('ordered',  null, InputOption::VALUE_NONE,    'Output multi-select in selection order.')
             ->addOption('header',   null, InputOption::VALUE_REQUIRED, 'Header text rendered above the list.', '')
-            ->addOption('selected', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option(s) (multi mode).', [])
+            ->addOption('selected', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option(s) (multi mode); repeatable, comma-separated lists are split.', [])
             ->addOption('select-if-one', null, InputOption::VALUE_NONE, 'Auto-pick when exactly one option is supplied.')
             ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n")
             ->addOption('cursor', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before the highlighted item.', '> ')
@@ -64,7 +65,7 @@ final class ChooseCommand extends Command
         $ordered = (bool) $input->getOption('ordered');
         $header  = (string) $input->getOption('header');
         /** @var list<string> $preselected */
-        $preselected = $input->getOption('selected');
+        $preselected = OptionList::expand((array) $input->getOption('selected'));
         $selectIfOne = (bool) $input->getOption('select-if-one');
         $delim   = (string) $input->getOption('output-delimiter');
 

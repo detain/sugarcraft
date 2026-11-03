@@ -7,6 +7,7 @@ namespace SugarCraft\ScriptUi\Command;
 use SugarCraft\Core\Program;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\FilterModel;
+use SugarCraft\ScriptUi\Runtime\OptionList;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
@@ -38,7 +39,7 @@ final class FilterCommand extends Command
             ->addOption('header',           null, InputOption::VALUE_REQUIRED, 'Header text rendered above the list.', '')
             ->addOption('value',            null, InputOption::VALUE_REQUIRED, 'Pre-fill the filter buffer.', '')
             ->addOption('placeholder',      null, InputOption::VALUE_REQUIRED, 'Placeholder text shown when filter is empty.', '')
-            ->addOption('selected',         null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option (multi mode).', [])
+            ->addOption('selected',         null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option(s) (multi mode); repeatable, comma-separated lists are split.', [])
             ->addOption('reverse',          null, InputOption::VALUE_NONE,    'Reverse the multi-select output order.')
             ->addOption('select-if-one',    null, InputOption::VALUE_NONE,    'Auto-pick when the input has exactly one line.')
             ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n")
@@ -84,7 +85,7 @@ final class FilterCommand extends Command
             limit:            (int)    $input->getOption('limit'),
             noLimit:          (bool)   $input->getOption('no-limit'),
             header:           (string) $input->getOption('header'),
-            preselected:      $input->getOption('selected'),
+            preselected:      OptionList::expand((array) $input->getOption('selected')),
             reverse:          (bool)   $input->getOption('reverse'),
             value:            (string) $input->getOption('value'),
             cursorPrefix:     is_string($cursor) ? $cursor : null,

@@ -150,7 +150,7 @@ and does not trigger autoloading.
 | `completion` | Emit shell completion script (bash · zsh · fish). |
 | `confirm`  | Yes/no prompt — exit `0` on confirm, `1` on cancel. |
 | `file`     | Interactive file picker. |
-| `filter`   | Fuzzy filter over stdin lines (single- or multi-select). |
+| `filter`   | Incremental filter over stdin lines (substring default, `--fuzzy` opt-in). |
 | `format`   | Render Markdown / code / template / emoji to the terminal. |
 | `input`    | Read a single line; supports `--password` masking. |
 | `join`     | Join N strings (or stdin lines) with a separator — raw text, not styled fragments. |
@@ -167,11 +167,17 @@ Some flags from the original `gum` CLI surface are not wired here yet; the
 shipped surface covers the 80 % case for shell scripts. Common
 flags across commands:
 
-- `--limit N` / `--no-limit` / `--ordered` / `--selected="a,b"` —
-  multi-select on `choose` and `filter`.
+- `--limit N` / `--no-limit` / `--selected="a,b"` — multi-select on
+  `choose` and `filter`; `--selected` is repeatable and comma-separated
+  lists are split into separate items (previously the whole string named
+  ONE item, silently selecting nothing).
+- `--ordered` — keep selection order instead of click order on `choose`
+  only (`filter` has no such flag).
+- `--strict` / `--fuzzy` / `--no-fuzzy` — matching mode on `filter`.
+  Substring matching is the default; fuzzy Smith-Waterman is opt-in.
 - `--header "Email:"` / `--prompt "> "` / `--value "$LAST"` /
-  `--char-limit N` / `--width N` / `--max-lines N` / `--show-line-numbers`
-  on `input` / `write`.
+  `--char-limit N` / `--width N` on `input` and `write`; `--max-lines N`
+  and `--show-line-numbers` exist on `write` only.
 - `--affirmative "Yes"` / `--negative "No"` / `--default=yes|no` /
   `--show-output` on `confirm`. An unknown `--default` word is refused
   (exit `1`) rather than silently treated as "no".
