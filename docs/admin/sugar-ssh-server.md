@@ -314,7 +314,10 @@ to settlement before the chain continues. Operational consequences:
 token buckets (`burst`, `ratePerSec`); per-username buckets are opt-in
 via `$userBurst`/`$userRatePerSec` (a request must get a token from
 *both* buckets, and a rejection consumes neither). `penalize()` lets an
-auth-failure hook drain buckets faster than connection attempts alone.
+auth-failure hook drain buckets faster than connection attempts alone -- but
+nothing in this library calls it: the shipped gates know nothing about whose
+bucket to blame. Wire it yourself after a denied `PasswordAuth` or
+`KeyboardInteractive` attempt if you want the penalty to exist.
 
 - **Ordering law:** register `RateLimit` **before** any
   authentication middleware, or unauthenticated traffic reaches the

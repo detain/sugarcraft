@@ -475,6 +475,38 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringNotContainsString('SSH-level keepalive interval', $guide);
     }
 
+    public function testTheMiddlewareTableStatesWhatCannotArriveAndWhatNeverRuns(): void
+    {
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+
+        $flat = (string) \preg_replace('/\s+/', ' ', $readme);
+
+        // PasswordAuth: the variable it reads is one no OpenSSH exports.
+        self::assertStringContainsString('Compares a password from `SSH_PASSWORD`', $flat);
+        self::assertStringContainsString('Nothing in OpenSSH ever sets that variable', $flat);
+        self::assertStringNotContainsString('against a caller-supplied callback (`SSH_PASSWORD` env var).', $flat);
+
+        // CertificateAuth: same story, and the silence was the defect (audit K6).
+        self::assertStringContainsString('Stock OpenSSH exports none of them', $flat);
+        self::assertStringContainsString('`CertificateAuth::ENV_KEYS`', $flat);
+        self::assertStringNotContainsString('Validates X.509 peer certificate (`SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars).', $flat);
+
+        // penalize(): real method, no caller (audit MAJOR 20).
+        self::assertStringContainsString('nothing in this library calls it', $flat);
+
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
+        }
+
+        $guide = (string) \preg_replace('/\s+/', ' ', $guide);
+        self::assertStringContainsString('nothing in this library calls it', $guide);
+        self::assertStringNotContainsString('drain buckets faster than connection attempts alone.', $guide);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');
