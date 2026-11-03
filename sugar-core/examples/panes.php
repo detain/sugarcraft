@@ -20,6 +20,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Pane;
 use SugarCraft\Core\Panes;
+use SugarCraft\Core\Program;
 use SugarCraft\Core\Rect;
 
 /**
@@ -27,6 +28,8 @@ use SugarCraft\Core\Rect;
  */
 final class Counter implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     private int $count = 0;
 
     public function init(): ?\Closure
@@ -63,6 +66,8 @@ final class Counter implements Model
  */
 final class TextDisplay implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function init(): ?\Closure
     {
         return null;

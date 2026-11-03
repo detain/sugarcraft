@@ -22,6 +22,8 @@ use SugarCraft\Core\Program;
 
 final class Tabs implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     /** @param list<string> $names @param list<string> $bodies */
     public function __construct(
         public readonly array $names,

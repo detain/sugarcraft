@@ -29,6 +29,8 @@ final class TickMsg implements Msg
 
 final class Realtime implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(public readonly float $now = 0.0)
     {
     }

@@ -23,6 +23,8 @@ use SugarCraft\Core\ProgramOptions;
 
 final class PreventQuit implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(public readonly bool $confirming = false)
     {
     }

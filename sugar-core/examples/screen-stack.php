@@ -84,7 +84,7 @@ final class DemoRootModel implements Model, \SugarCraft\Core\ScreenStackCapable
     {
         if ($msg instanceof ScreenStackPushedMsg) {
             $next = clone $this;
-            $next->pushedIds[] = $msg->screen->model->id;
+            $next->pushedIds[] = (string) $msg->screen->model->level;
             $msg->screen->onEnter?->__invoke();
             $next->screens = $next->screens->push($msg->screen);
             $next->currentModel = $msg->screen->model;
@@ -96,7 +96,7 @@ final class DemoRootModel implements Model, \SugarCraft\Core\ScreenStackCapable
             if (!$next->screens->isEmpty()) {
                 $popped = $next->screens->current();
                 $popped->onExit?->__invoke();
-                $next->pushedIds[] = 'pop:' . $popped->model->id;
+                $next->pushedIds[] = 'pop:' . $popped->model->level;
                 $next->screens = $next->screens->pop();
                 $next->currentModel = $next->screens->isEmpty()
                     ? null

@@ -23,6 +23,8 @@ use SugarCraft\Core\Program;
 
 final class WindowTitle implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(public readonly string $current = '(default)')
     {
     }

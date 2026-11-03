@@ -23,6 +23,8 @@ use SugarCraft\Core\Program;
 
 final class WindowSize implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(
         public readonly int $width  = 0,
         public readonly int $height = 0,
@@ -37,7 +39,7 @@ final class WindowSize implements Model
     public function update(Msg $msg): array
     {
         if ($msg instanceof WindowSizeMsg) {
-            return [new self($msg->width, $msg->height), null];
+            return [new self($msg->cols, $msg->rows), null];
         }
         if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
             return [$this, Cmd::quit()];

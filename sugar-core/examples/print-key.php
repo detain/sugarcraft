@@ -21,6 +21,8 @@ use SugarCraft\Core\Program;
 
 final class PrintKey implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     /** @param list<string> $log */
     public function __construct(public readonly array $log = [])
     {

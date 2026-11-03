@@ -21,6 +21,8 @@ use SugarCraft\Core\ProgramOptions;
 
 final class AltscreenToggle implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(public readonly bool $alt = false)
     {
     }

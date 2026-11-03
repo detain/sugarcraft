@@ -31,6 +31,8 @@ final class PingMsg implements Msg
 
 final class SendMsg implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(public readonly int $pings = 0)
     {
     }

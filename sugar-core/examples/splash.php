@@ -33,6 +33,8 @@ final class FinishedMsg implements Msg
 
 final class Splash implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(
         public readonly int $frame    = 0,
         public readonly bool $finished = false,

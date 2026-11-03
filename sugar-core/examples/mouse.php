@@ -25,6 +25,8 @@ use SugarCraft\Core\ProgramOptions;
 
 final class MouseDemo implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     /** @param list<string> $log */
     public function __construct(public readonly array $log = [])
     {

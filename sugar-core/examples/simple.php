@@ -19,6 +19,8 @@ use SugarCraft\Core\Program;
 
 final class Hello implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function init(): ?\Closure
     {
         return null;

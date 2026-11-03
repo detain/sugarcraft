@@ -26,6 +26,8 @@ use SugarCraft\Core\ProgramOptions;
 
 final class FocusBlur implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(public readonly bool $focused = true)
     {
     }

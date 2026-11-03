@@ -26,6 +26,8 @@ use SugarCraft\Core\Program;
 
 final class SuspendDemo implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(public readonly int $resumeCount = 0)
     {
     }

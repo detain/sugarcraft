@@ -31,6 +31,8 @@ final class StepMsg implements Msg
 
 final class Sequence implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     /** @param list<string> $log */
     public function __construct(public readonly array $log = [])
     {

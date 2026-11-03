@@ -22,6 +22,8 @@ use SugarCraft\Core\Program;
 
 final class Views implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(public readonly int $current = 0)
     {
     }
