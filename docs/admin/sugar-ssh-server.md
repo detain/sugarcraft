@@ -140,6 +140,31 @@ snippet): `is_writable()` on each directory and existing file, and log
 | `TERM` | Inherited from sshd; passed to the PTY child; respected by `DefaultChannelHandler` |
 | `COLUMNS` / `LINES` | Fallback dimensions when sshd doesn't provide them (used by `DefaultChannelHandler`) |
 | `SUGARCRAFT_PTY_BACKEND` | Override PTY backend selection (see `sugar-pty` docs) |
+| `SSH_SERVER_LOG` | Where `Logger::auto()` appends. Unset, the logger falls back to stderr — which under `ForceCommand` is the connecting client's channel |
+| `LANG` | Read into `Session->$lang` when sshd's `AcceptEnv` allows it. Peer-asserted; never consulted to pick the server's message language |
+
+### Language
+
+Sixteen catalogues ship under `sugar-ssh-server/lang/`, and **nothing in
+this stack selects among them**: no code path calls `T::setLocale()`, so
+every notice — the throttle's fail-open announcement, the exec refusal,
+`Unauthorized. (…)` — is rendered from `lang/en.php` regardless of what the
+connecting user's environment claims.
+
+Pin the locale once at entry-script start if you want a translated service:
+
+```php
+\SugarCraft\Core\I18n\T::setLocale('de');
+```
+
+Do not use `T::detect()` on an internet-facing listener. It reads
+`LC_ALL`, `LC_MESSAGES` and `LANG`, and `LANG` only reaches the
+`ForceCommand` child when `AcceptEnv` lists it — which means the peer picks
+the language your server answers in, right next to the username it also
+picked. `tests/Middleware/RateLimitTest.php` pins that a pinned locale
+actually changes the notice; `tests/LangRosterTest.php` pins the roster and
+the eleven keys that are still English placeholders in all fifteen
+translated locales (the list can only shrink).
 
 ### CLI flags
 

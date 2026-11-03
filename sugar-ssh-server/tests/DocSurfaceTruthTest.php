@@ -507,6 +507,42 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringNotContainsString('drain buckets faster than connection attempts alone.', $guide);
     }
 
+    public function testTheLanguageStoryIsToldWherePeopleWouldLookForIt(): void
+    {
+        $lang = (string) \preg_replace(
+            '/\s+/',
+            ' ',
+            (string) \file_get_contents(\dirname(__DIR__) . '/src/Lang.php'),
+        );
+        $this->assertStringContainsString("'sshserver'` namespace baked in", $lang);
+        $this->assertStringNotContainsString("'wish'`", $lang, 'audit MINOR 19: the facade must not teach a namespace that was renamed away');
+        $this->assertStringContainsString('Nothing here selects a locale (audit MAJOR 15)', $lang);
+        $this->assertStringContainsString('Do not reach for `T::detect()`', $lang);
+
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+        $this->assertStringContainsString(
+            '## Language: nothing selects it for you',
+            $readme,
+            'the README must own the headline, not just the admin guide',
+        );
+        $readme = (string) \preg_replace('/\s+/', ' ', $readme);
+        $this->assertStringContainsString('T::setLocale', $readme);
+        $this->assertStringContainsString('connecting peer choose the language', $readme);
+
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
+        }
+        $this->assertStringContainsString('### Language', $guide);
+        $guide = (string) \preg_replace('/\s+/', ' ', $guide);
+        $this->assertStringContainsString('no code path calls `T::setLocale()`', $guide);
+        $this->assertStringContainsString('Peer-asserted', $guide);
+        $this->assertStringContainsString('| `SSH_SERVER_LOG` |', $guide);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

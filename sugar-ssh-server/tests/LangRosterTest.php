@@ -176,4 +176,72 @@ final class LangRosterTest extends TestCase
             'the second migration path must survive in the message too',
         );
     }
+
+    /**
+     * Keys whose value is still the English string in EVERY translated
+     * locale (audit MAJOR 15).
+     *
+     * Measured, not remembered: each of these is byte-identical to
+     * `lang/en.php` in all fifteen siblings, so selecting a locale changes
+     * nothing for them. The roster is fail-closed in both directions — a
+     * new key shipped untranslated lands here and has to be an explicit
+     * decision, and actually translating one means deleting its line,
+     * because a roster that can only grow is a to-do list nobody reads.
+     *
+     * @var list<string>
+     */
+    private const ACCEPTED_UNTRANSLATED = [
+        'bubbletea.requires_host_sshd',
+        'channel.exec_refused',
+        'keepalive.invalid_interval',
+        'middleware.cannot_open_stream',
+        'middleware.stream_not_resource',
+        'spawn.bad_cmd',
+        'spawn.bad_factory_return',
+        'spawn.no_transport',
+        'transport.async_timeout',
+        'transport.bad_stdin',
+        'transport.bad_stdout',
+    ];
+
+    public function testTheUntranslatedRosterIsExactlyWhatWasMeasured(): void
+    {
+        $en = include \dirname(__DIR__) . '/lang/en.php';
+        $this->assertIsArray($en);
+
+        $stillEnglish = null;
+        foreach (glob(\dirname(__DIR__) . '/lang/*.php') ?: [] as $file) {
+            $code = basename($file, '.php');
+            if ($code === 'en') {
+                continue;
+            }
+            $loc = include $file;
+            $this->assertIsArray($loc);
+
+            $same = [];
+            foreach ($en as $key => $value) {
+                if (($loc[$key] ?? null) === $value) {
+                    $same[] = $key;
+                }
+            }
+            sort($same);
+            $stillEnglish[$code] = $same;
+        }
+
+        $this->assertNotNull($stillEnglish);
+
+        $accepted = self::ACCEPTED_UNTRANSLATED;
+        sort($accepted);
+
+        // Per locale, in both directions: a new English placeholder fails,
+        // and a key that has genuinely been translated must leave the roster.
+        foreach ($stillEnglish as $code => $keys) {
+            $this->assertSame(
+                $accepted,
+                $keys,
+                $code . ' does not carry exactly the rostered English placeholders '
+                    . '(found: ' . implode(', ', $keys) . ')',
+            );
+        }
+    }
 }

@@ -383,13 +383,12 @@ final class RateLimit implements Middleware
      */
     private function onStateError(string $why): bool
     {
-        \fwrite(
-            $this->stderr,
-            ($this->failClosed
-                ? 'Rate limiter unavailable, denying connection: '
-                : 'Rate limiter degraded, allowing connection (fail-open): ')
-            . $why . "\n",
-        );
+        $notice = $this->failClosed
+            ? Lang::t('ratelimit.unavailable_denying', ['why' => $why])
+            : Lang::t('ratelimit.degraded_allowing', ['why' => $why]);
+
+        \fwrite($this->stderr, $notice . "\n");
+
         return !$this->failClosed;
     }
 
@@ -414,8 +413,7 @@ final class RateLimit implements Middleware
             // onStateError) instead of muting it.
             \fwrite(
                 $this->stderr,
-                'Rate limiter could not persist state (this update is lost): '
-                . \get_class($e) . "\n",
+                Lang::t('ratelimit.state_lost', ['why' => \get_class($e)]) . "\n",
             );
         }
     }

@@ -481,6 +481,33 @@ async middleware) from inside a loop callback — the stop would end your
 loop. Read `PromiseAwait`'s class docblock before wiring a custom
 transport.
 
+## Language: nothing selects it for you
+
+Sixteen catalogues ship under `lang/`, and by default **none of them is
+used**. Nothing in this library calls `T::setLocale()`, so every notice —
+the throttle's fail-open announcement, the exec refusal, the
+`Unauthorized. (…)` line — is rendered from `lang/en.php`. Choosing a
+language is a one-line decision at the top of your entry script:
+
+```php
+use SugarCraft\Core\I18n\T;
+
+T::setLocale('de'); // once, before building the Server
+```
+
+Prefer pinning it per service to detecting it. `T::detect()` reads
+`LC_ALL`, `LC_MESSAGES` and `LANG`, and `LANG` only reaches a `ForceCommand`
+child when sshd's `AcceptEnv` lists it ([What sshd actually hands your
+middleware](#what-sshd-actually-hands-your-middleware)) — so detection lets
+the connecting peer choose the language your server answers in, beside the
+name it also chose for itself. `Session->$lang` is that same peer-asserted
+value: log it, do not obey it.
+
+Coverage is uneven, and the suite keeps the list honest rather than letting
+it grow quietly: eleven of the twenty-six keys are still English placeholders
+in all fifteen translated locales (`ACCEPTED_UNTRANSLATED` in
+`tests/LangRosterTest.php`; curing one means deleting it from the roster).
+
 ## Session metadata
 
 `Session::fromEnvironment()` reads the standard sshd-supplied environment:

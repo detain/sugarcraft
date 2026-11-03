@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshServer\Tests\Middleware;
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\SshServer\Context;
 use SugarCraft\SshServer\Middleware\RateLimit;
 use SugarCraft\SshServer\Session;
@@ -435,5 +436,33 @@ final class RateLimitTest extends TestCase
         $this->assertArrayHasKey('ip:7.7.7.7', $stored, 'a bucket that still constrains someone must survive the prune');
         $this->assertArrayHasKey('ip:5.5.5.5', $stored, 'the connect that just happened is by definition live');
         fclose($err);
+    }
+
+    public function testTheStateNoticeIsTranslatedWhenTheOperatorPinsALocale(): void
+    {
+        // Audit MAJOR 15: the catalogues ship, but nothing selects them.
+        // This is the proof that selection is possible at all - the operator
+        // calls T::setLocale(), and the degradation notice follows.
+        T::setLocale('de');
+        try {
+            $err = fopen('php://memory', 'w+');
+            $this->assertNotFalse($err);
+            $served = 0;
+            (new RateLimit($this->unwritablePath('locale'), 5, 0.5, $err))
+                ->handle(Context::background(), $this->session('9.9.9.9'), function () use (&$served): void {
+                    $served++;
+                });
+
+            rewind($err);
+            $notice = (string) stream_get_contents($err);
+            fclose($err);
+
+            $this->assertSame(1, $served, 'the default posture still fails open');
+            $this->assertStringContainsString('Ratenbegrenzer degradiert', $notice, $notice);
+            $this->assertStringContainsString('(fail-open)', $notice, 'the technical fragment survives the translation');
+            $this->assertStringNotContainsString('degraded, allowing', $notice);
+        } finally {
+            T::setLocale('en');
+        }
     }
 }
