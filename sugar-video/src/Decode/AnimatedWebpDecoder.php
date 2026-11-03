@@ -52,6 +52,14 @@ use SugarCraft\Video\Render\Mode;
  *  - startSec is a container-truth skip (cumulative durations), exact for
  *    the forward-only pipe — better than GifDecoder's fps-rounded guess.
  *
+ * RESIDENCY (what stays allocated between calls): the composited snapshots —
+ * one full canvas per frame at GD's 4 bytes/pixel — live for the whole open,
+ * which is why MAX_TOTAL_PIXELS caps them near ~128 MB up front. Nothing
+ * ELSE is retained: the output box is resampled transiently at use time
+ * ({@see next()} destroys it per emission), and an embedded still that
+ * declares or decodes larger than the canvas is refused before it can
+ * allocate, so a small-canvas container cannot smuggle a large one.
+ *
  * @implements Decoder
  */
 final class AnimatedWebpDecoder implements Decoder
@@ -107,9 +115,6 @@ final class AnimatedWebpDecoder implements Decoder
     private int $frameW = 0;
     private int $frameH = 0;
     private bool $graphics = false;
-
-    /** @var array<int, \GdImage> output-box frames keyed by source canvas object id (memo per open) */
-    private array $boxes = [];
 
     /**
      * @param int $cellPxW terminal cell pixel width (graphics-mode box)
@@ -312,13 +317,22 @@ final class AnimatedWebpDecoder implements Decoder
         }
 
         $canvas = $this->canvases[$this->cursor++];
+
+        // The output box is resampled fresh per emission and destroyed after
+        // encoding. A memo keyed by canvas object id could never profitably
+        // hit: every canvas is visited exactly once per open, and a loop
+        // reopen re-composites (new canvases, cold memo) — it was pure
+        // residency, one terminal-sized GD image per frame held forever.
         $box = $this->boxFor($canvas);
+        try {
+            if ($this->graphics) {
+                return new RgbFrame('', $this->frameW, $this->frameH, self::pngOf($box));
+            }
 
-        if ($this->graphics) {
-            return new RgbFrame('', $this->frameW, $this->frameH, self::pngOf($box));
+            return new RgbFrame(self::rgb24Of($box), $this->frameW, $this->frameH);
+        } finally {
+            imagedestroy($box);
         }
-
-        return new RgbFrame(self::rgb24Of($box), $this->frameW, $this->frameH);
     }
 
     /**
@@ -362,7 +376,6 @@ final class AnimatedWebpDecoder implements Decoder
     public function close(): void
     {
         $this->canvases = [];
-        $this->boxes = [];
         $this->delaysMs = [];
         $this->loopCount = 0;
         $this->cursor = 0;
@@ -530,6 +543,65 @@ final class AnimatedWebpDecoder implements Decoder
         return ord($bytes[$offset]) | (ord($bytes[$offset + 1]) << 8) | (ord($bytes[$offset + 2]) << 16);
     }
 
+    /**
+     * The (width, height) a still-WebP RIFF declares, sniffed from its chunk
+     * headers without decoding. Bitstream dimensions win over a VP8X canvas
+     * declaration (VP8X is the wrapper we synthesize, the bitstream is the
+     * payload GD will render); null means "no readable header" and the caller
+     * falls through to the post-decode gate instead.
+     *
+     * @return ?array{0:int,1:int}
+     */
+    private static function stillDimensions(string $riff): ?array
+    {
+        if (strlen($riff) < 12 || substr($riff, 0, 4) !== 'RIFF' || substr($riff, 8, 4) !== 'WEBP') {
+            return null;
+        }
+
+        $vp8x = null;
+        $i = 12;
+        $len = strlen($riff);
+        for ($step = 0; $step < self::MAX_CHUNK_STEPS && $i + 8 <= $len; $step++) {
+            $fourcc = substr($riff, $i, 4);
+            $size = unpack('V', substr($riff, $i + 4, 4))[1];
+            $payload = substr($riff, $i + 8, $size);
+
+            if ($fourcc === 'VP8 ' && ($dims = self::lossyDimensions($payload)) !== null) {
+                return $dims;
+            }
+            if ($fourcc === 'VP8L' && ($dims = self::losslessDimensions($payload)) !== null) {
+                return $dims;
+            }
+            if ($fourcc === 'VP8X' && $vp8x === null && strlen($payload) >= 10) {
+                $vp8x = [self::le24($payload, 4) + 1, self::le24($payload, 7) + 1];
+            }
+
+            $i += 8 + $size + ($size & 1);
+        }
+
+        return $vp8x;
+    }
+
+    /**
+     * The (width, height) a VP8L lossless bitstream declares: a 0x2F
+     * signature byte, then a 32-bit LE header whose bits 0..13 are width-1
+     * and bits 14..27 are height-1. Null on anything that is not that shape.
+     *
+     * @return ?array{0:int,1:int}
+     */
+    private static function losslessDimensions(string $bitstream): ?array
+    {
+        if (strlen($bitstream) < 5 || $bitstream[0] !== "\x2f") {
+            return null;
+        }
+
+        $bits = unpack('V', substr($bitstream, 1, 4))[1];
+        $w = 1 + ($bits & 0x3FFF);
+        $h = 1 + (($bits >> 14) & 0x3FFF);
+
+        return [$w, $h];
+    }
+
     // -------------------------------------------------------------------------
     // Compositing
     // -------------------------------------------------------------------------
@@ -567,11 +639,46 @@ final class AnimatedWebpDecoder implements Decoder
                 );
             }
 
+            // Hostile-container gate #1 (declared dims): an ANMF still may be
+            // far larger than the canvas it draws onto, and drawOnto clips
+            // everything outside it — so anything above canvas area buys
+            // nothing but a multi-megabyte GD allocation the canvas ceilings
+            // never counted. Sniffing the bitstream header refuses BEFORE the
+            // decode, so the giant allocation never happens.
+            $declared = self::stillDimensions($frame['still']);
+            if ($declared !== null && $declared[0] * $declared[1] > $canvasW * $canvasH) {
+                throw new \RuntimeException(sprintf(
+                    'animated WebP frame %d declares a %dx%d still larger than the %dx%d canvas',
+                    count($this->canvases),
+                    $declared[0],
+                    $declared[1],
+                    $canvasW,
+                    $canvasH,
+                ));
+            }
+
             $sub = imagecreatefromstring($frame['still']);
             if ($sub === false) {
                 throw new \RuntimeException(sprintf(
                     'animated WebP frame %d bitstream failed to decode',
                     count($this->canvases),
+                ));
+            }
+
+            // Hostile-container gate #2 (decoded dims): headers can lie, so
+            // the truth GD produced is checked again before any per-pixel
+            // work or snapshot cost is paid against it.
+            if (imagesx($sub) * imagesy($sub) > $canvasW * $canvasH) {
+                $liarW = imagesx($sub);
+                $liarH = imagesy($sub);
+                imagedestroy($sub);
+                throw new \RuntimeException(sprintf(
+                    'animated WebP frame %d decodes to a %dx%d still larger than the %dx%d canvas',
+                    count($this->canvases),
+                    $liarW,
+                    $liarH,
+                    $canvasW,
+                    $canvasH,
                 ));
             }
 
@@ -677,16 +784,14 @@ final class AnimatedWebpDecoder implements Decoder
      * Fit the canvas into the output box preserving aspect, centered on the
      * box background — the PHP equivalent of ffmpeg's
      * force_original_aspect_ratio=decrease + pad. Graphics boxes keep alpha
-     * (letterbox bars transparent); text boxes are opaque black. Memoized per
-     * source canvas so a repeated play-through does no second resample.
+     * (letterbox bars transparent); text boxes are opaque black.
+     *
+     * The returned box is transient: {@see next()} owns it for exactly one
+     * frame encode and destroys it. The only resident surfaces are the
+     * composited canvases themselves (bounded by MAX_TOTAL_PIXELS).
      */
     private function boxFor(\GdImage $canvas): \GdImage
     {
-        $id = spl_object_id($canvas);
-        if (isset($this->boxes[$id])) {
-            return $this->boxes[$id];
-        }
-
         $cw = imagesx($canvas);
         $ch = imagesy($canvas);
         $fit = min($this->frameW / $cw, $this->frameH / $ch);
@@ -711,7 +816,7 @@ final class AnimatedWebpDecoder implements Decoder
         imagecopy($box, $scaled, intdiv($this->frameW - $fitW, 2), intdiv($this->frameH - $fitH, 2), 0, 0, $fitW, $fitH);
         imagedestroy($scaled);
 
-        return $this->boxes[$id] = $box;
+        return $box;
     }
 
     /** Flatten a box to raw rgb24 (alpha composited over the box background, which is black here). */

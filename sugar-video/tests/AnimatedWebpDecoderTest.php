@@ -351,4 +351,71 @@ final class AnimatedWebpDecoderTest extends TestCase
         self::assertSame([100, 100, 100], $d->frameDelaysMs());
         self::assertNotNull($d->next());
     }
+
+    // ---- hostile-container residency (review C2/C3) ----
+
+    public function testStillLargerThanTheCanvasIsRefusedByDeclaredDimensions(): void
+    {
+        // The measured review shape: a tiny canvas carrying a real, larger
+        // still bitstream. drawOnto clips everything outside the canvas, so
+        // the oversized still buys nothing but a multi-megabyte GD allocation
+        // the canvas ceilings never counted — it must be refused BEFORE the
+        // decode, from the bitstream header alone.
+        $bytes = AnimatedWebpBytes::animContainer(16, 16, [
+            ['still' => hex2bin(AnimatedWebpBytes::RED_32), 'blend' => true],
+        ]);
+
+        $d = new AnimatedWebpDecoder();
+        try {
+            $d->open($this->file($bytes, 'oversized.webp'), 8, 4, 10.0);
+            self::fail('the oversized-still gate did not fire');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('declares a 32x32 still larger than the 16x16 canvas', $e->getMessage());
+        }
+        self::assertSame([], $d->frameDelaysMs(), 'refusal lands before any compositing bookkeeping');
+        self::assertNull($d->next(), 'nothing streams out of a refused container');
+    }
+
+    public function testCanvasSizedStillsStillPassTheDimensionGate(): void
+    {
+        // The other half of the `>` boundary: still exactly as large as the
+        // canvas is the normal full-frame case and stays accepted.
+        $d = new AnimatedWebpDecoder();
+        $d->open($this->file(AnimatedWebpBytes::animContainer(32, 32, [
+            ['still' => hex2bin(AnimatedWebpBytes::RED_32), 'blend' => true],
+        ]), 'square.webp'), 8, 4, 10.0);
+
+        self::assertNotNull($d->next());
+    }
+
+    public function testTheStillDimensionGatesAreOrderedAndNeverMemoizeTheOutputBox(): void
+    {
+        // Structural pins. (a) The declared-dimension refusal must sit
+        // BEFORE imagecreatefromstring — after it, the hostile allocation
+        // has already happened and the gate only polices the wreckage.
+        // (b) The post-decode refusal (headers can lie) must exist.
+        // (c) The per-canvas output-box memo (spl_object_id keyed, cleared
+        // only at close) is permanently gone: every canvas is visited once
+        // per open and a loop reopen re-composites, so it could never hit —
+        // it held one terminal-sized GD image per frame as pure residency.
+        $class = new \ReflectionClass(AnimatedWebpDecoder::class);
+        self::assertFalse($class->hasProperty('boxes'));
+
+        $src = (string) file_get_contents((string) $class->getFileName());
+        self::assertStringNotContainsString('$this->boxes', $src);
+
+        $nextStart = (int) strpos($src, 'public function next(');
+        $nextEnd = (int) strpos($src, 'public function frameDelaysMs');
+        $nextBody = substr($src, $nextStart, $nextEnd - $nextStart);
+        self::assertStringContainsString('imagedestroy($box)', $nextBody, 'the transient box is destroyed on every exit path of next()');
+
+        $compStart = (int) strpos($src, 'private function compositeAll');
+        $compEnd = (int) strpos($src, 'private static function drawOnto');
+        $compBody = substr($src, $compStart, $compEnd - $compStart);
+        $declared = (int) strpos($compBody, 'self::stillDimensions($frame');
+        $decode = (int) strpos($compBody, 'imagecreatefromstring(');
+        self::assertGreaterThan(0, $declared);
+        self::assertGreaterThan($declared, $decode, 'declared-dimension refusal must precede the decode');
+        self::assertStringContainsString('decodes to a ', $compBody, 'the post-decode gate must police lying headers too');
+    }
 }
