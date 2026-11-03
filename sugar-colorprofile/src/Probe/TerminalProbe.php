@@ -297,7 +297,7 @@ class TerminalProbe
                 $cap = $known[$termProgram];
                 $key = Capability::key($cap);
                 if (!isset($caps[$key])) {
-                    $caps[$key] = 'env:TERM_PROGRAM=' . Env::sanitize($termProgram);
+                    $caps[$key] = Env::sanitize('env:TERM_PROGRAM=' . $termProgram);
                 }
             }
         }

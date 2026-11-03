@@ -125,7 +125,7 @@ final class DetectionChain
         if ($colorterm !== null) {
             $ctLower = strtolower($colorterm);
             if ($ctLower === '24bit' || $ctLower === 'truecolor' || $ctLower === 'yes') {
-                return new self(self::LEVEL_TRUECOLOR, 'env:COLORTERM=' . Env::sanitize($colorterm), $term);
+                return new self(self::LEVEL_TRUECOLOR, Env::sanitize('env:COLORTERM=' . $colorterm), $term);
             }
         }
 
@@ -168,7 +168,7 @@ final class DetectionChain
 
         // 11. TERM=xterm-kitty|xterm-ghostty|*-256color → ansi256
         if (str_contains($termLower, '-256color') || $termLower === 'xterm-kitty' || $termLower === 'xterm-ghostty') {
-            return new self(self::LEVEL_ANSI256, 'env:TERM=' . Env::sanitize($term), $term);
+            return new self(self::LEVEL_ANSI256, Env::sanitize('env:TERM=' . $term), $term);
         }
 
         // 12. TERM=xterm*|screen*|tmux* → ansi
@@ -177,7 +177,7 @@ final class DetectionChain
             || str_starts_with($termLower, 'screen')
             || str_starts_with($termLower, 'tmux')
         ) {
-            return new self(self::LEVEL_ANSI, 'env:TERM=' . Env::sanitize($term), $term);
+            return new self(self::LEVEL_ANSI, Env::sanitize('env:TERM=' . $term), $term);
         }
 
         // 13. Default → ansi
