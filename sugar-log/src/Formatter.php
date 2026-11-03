@@ -19,6 +19,8 @@ interface Formatter
      * @param \DateTimeImmutable $time     Timestamp of the log event.
      * @param string|null        $caller   Source location (file:line) if reportCaller is on.
      * @param string|null        $prefix   Logger prefix string.
+     *
+     * @return string The rendered record, terminated by a single newline.
      */
     public function format(
         Level $level,

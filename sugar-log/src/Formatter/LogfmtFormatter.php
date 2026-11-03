@@ -20,10 +20,21 @@ use SugarCraft\Log\Level;
 final class LogfmtFormatter implements Formatter
 {
     private bool $reportTimestamp;
+    private string $timeFormat;
 
-    public function __construct(bool $reportTimestamp = true)
+    /**
+     * @param bool        $reportTimestamp Emit the `time` field.
+     * @param string|null $timeFormat      date() format for it; null keeps the
+     *                                     machine-parsing default RFC 3339
+     *                                     (DateTimeInterface::ATOM). Change it
+     *                                     only when a collector demands another
+     *                                     shape (m3) — the value quoting keeps
+     *                                     any format safely inside one field.
+     */
+    public function __construct(bool $reportTimestamp = true, ?string $timeFormat = null)
     {
         $this->reportTimestamp = $reportTimestamp;
+        $this->timeFormat = $timeFormat ?? \DateTimeInterface::ATOM;
     }
 
     public function format(
@@ -37,7 +48,7 @@ final class LogfmtFormatter implements Formatter
         $parts = [];
 
         if ($this->reportTimestamp) {
-            $parts[] = 'time=' . $this->escape($time->format(\DateTimeInterface::ATOM));
+            $parts[] = 'time=' . $this->escape($time->format($this->timeFormat));
         }
 
         $parts[] = 'level=' . $this->escape($level->label());

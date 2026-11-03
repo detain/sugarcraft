@@ -205,4 +205,17 @@ final class RecordIntegrityTest extends TestCase
         $keyed = $this->logfmtLine(["k{$ls}v" => 'w']);
         $this->assertStringContainsString("\"k{$ls}v\"=w", $keyed);
     }
+
+    // [m3] logfmt side of the timeFormat knob.
+    public function testLogfmtTimeFormatHonoursOverrideAndKeepsAtomDefault(): void
+    {
+        $time = new \DateTimeImmutable('2026-01-01 14:33:05', new \DateTimeZone('UTC'));
+
+        $default = (new LogfmtFormatter())->format(Level::Info, 'm', [], $time, null, null);
+        $this->assertStringContainsString('time=2026-01-01T14:33:05+00:00', $default);
+
+        $custom = (new LogfmtFormatter(true, 'H:i:s'))->format(Level::Info, 'm', [], $time, null, null);
+        $this->assertStringContainsString('time=14:33:05', $custom);
+        $this->assertStringNotContainsString('+00:00', $custom);
+    }
 }

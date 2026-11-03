@@ -76,7 +76,7 @@ final class Styles
             };
         }
 
-        // Per-field key styles (e.g., "time", "level", "msg", "caller").
+        // Per-field key styles (e.g., "time", "level", "message", "caller").
         // Identity defaults keep previously-dead knobs honest: configuring one
         // now actually changes output; leaving it untouched changes nothing.
         $this->keys['time']    = Style::new();
@@ -101,6 +101,37 @@ final class Styles
     public static function default(): self
     {
         return self::$defaultInstance ??= new self();
+    }
+
+    /**
+     * An INDEPENDENT copy of the shared defaults.
+     *
+     * {@see self::default()} is a process-wide mutable singleton — editing it
+     * recolors every logger riding the defaults. snapshot() hands back a copy
+     * whose public arrays (and scalar knobs) can be mutated freely:
+     * `$log->setStyles(Styles::snapshot()->withLevel(...))` never leaks.
+     * The Style objects inside are value objects (every mutator clones), so
+     * sharing them between copies stays safe.
+     */
+    public static function snapshot(): self
+    {
+        return self::default()->copy();
+    }
+
+    /** Copy of this instance (fresh arrays, same Style objects). */
+    public function copy(): self
+    {
+        $copy = new self();
+        $copy->levels      = $this->levels;
+        $copy->keys        = $this->keys;
+        $copy->values      = $this->values;
+        $copy->timestamp   = $this->timestamp;
+        $copy->prefix      = $this->prefix;
+        $copy->caller      = $this->caller;
+        $copy->message     = $this->message;
+        $copy->padLevelText = $this->padLevelText;
+
+        return $copy;
     }
 
     /**

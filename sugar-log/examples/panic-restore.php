@@ -19,32 +19,20 @@ if (!class_exists(Tty::class)) {
     exit(1);
 }
 
-// Capture output for display
-$stderr = fopen('php://stdout', 'w');
-
 echo "=== Tty::restoreLast() (standalone) ===\n";
 
-// Tty::restoreLast() is a static convenience that saves/restores terminal
-// state without needing a Tty instance. It's what Log::restoreTerminal()
-// calls internally, but you can use it directly for custom scenarios.
-//
-// The first call saves the current terminal state.
-// The second call restores it and clears the saved state.
-//
-// This is useful when:
-// - You've entered raw mode via some other mechanism
-// - You're building a custom TUI that doesn't use the Program loop
-// - You need fine-grained control over when state is restored
-//
-// Note: In normal usage with Program, the loop handles restore automatically.
-// This example shows standalone usage outside that loop.
+// Tty::restoreLast() is a static convenience that saves the terminal state
+// on the first call and restores (clearing the save) on the second. It is
+// what Log::restoreTerminal() calls internally; the Program loop normally
+// handles restore automatically, this shows standalone usage outside it.
+
 Tty::restoreLast(); // First call: save state (idempotent no-op if already saved)
 
-echo "Terminal state saved. Type some characters, then press Enter...\n";
-echo "After you press Enter, we'll restore the terminal state.\n";
-
-$input = fgets($stderr);
-echo "You typed: " . trim((string) $input) . "\n";
+// [M22] The demo used to block on fgets(STDIN) waiting for a keypress,
+// which hung any non-interactive run (CI, pipes, docs guards). The save /
+// restore pair is what is being demonstrated, and it needs no input: show
+// an intermediate step, then restore.
+echo "Terminal state saved; doing intermediate work...\n";
 
 // Second call: restore the saved state.
 // This exits altscreen mode and shows the cursor.

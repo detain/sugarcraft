@@ -9,15 +9,22 @@ namespace SugarCraft\Log;
  *
  * Mirrors charmbracelet/log's caller functionality.
  *
- * @internal This class is public API but is for framework integration
- *           use. Prefer Logger::setReportCaller(true) for normal use.
+ * Public API — but normal callers never touch it: enable caller reporting
+ * once with {@see Logger::setReportCaller()} and the Logger wires this
+ * into the emit path for every record. Direct use is for integrations
+ * that assemble their own formatted line.
  */
 final class CallerFormatter
 {
     /**
      * Walk back the call stack to find the first file outside the log package.
      *
-     * @return string|null "file:line" of the caller, or null if not found.
+     * The walk is bounded at 20 frames: a caller nested deeper than that
+     * inside the package reports no caller rather than paying an unbounded
+     * trace (N8) — the null below is that cap, not an error.
+     *
+     * @return string|null "basename:line" of the first frame outside the
+     *                     package, or null when none appears in the walk.
      */
     public static function find(): ?string
     {

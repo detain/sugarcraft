@@ -7,9 +7,12 @@ namespace SugarCraft\Log;
 use SugarCraft\Log\Formatter\ValueCoercion;
 
 /**
- * Wrap a Logger as a *log.Logger interface for compatibility with
- * code that expects the standard log.Logger type (e.g. net/http Server#ErrorLog).
- * Mirrors charmbracelet/log's StandardLog adapter.
+ * Go-style stdlog call pattern (Print/Println/Fatal/Panic) over a sugar-log
+ * {@see Logger}.
+ *
+ * M16 truth: PHP has no `*log.Logger` interface and no net/http — this class
+ * implements NO contract. It exists so Go-shaped call sites port
+ * mechanically, mirroring charmbracelet/log's StandardLog adapter.
  */
 final class StandardLogAdapter
 {
@@ -28,7 +31,12 @@ final class StandardLogAdapter
     }
 
     /**
-     * Print a line at the configured or forced level.
+     * Print a line — unconditionally when no level was forced.
+     *
+     * Go's stdlib logger has no level filter and always writes; the faithful
+     * analogue is {@see Logger::print()} (bypasses minLevel, labels INF), so
+     * print()/printLn() use it unless a level above Info was forced, which
+     * rides the filtered {@see Logger::log()} path instead (m7).
      *
      * Arguments are space-joined; non-string values are coerced the same
      * way the formatters render context (arrays become '[a b]', never the
@@ -38,7 +46,15 @@ final class StandardLogAdapter
      */
     public function print(mixed ...$args): void
     {
-        $this->logger->log($this->forceLevel ?? Level::Info, $this->message($args));
+        $message = $this->message($args);
+
+        if ($this->forceLevel === null || $this->forceLevel === Level::Info) {
+            $this->logger->print($message);
+
+            return;
+        }
+
+        $this->logger->log($this->forceLevel, $message);
     }
 
     public function printLn(mixed ...$args): void

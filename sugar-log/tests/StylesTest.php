@@ -103,4 +103,24 @@ final class StylesTest extends TestCase
         $this->assertFalse((new Styles())->padLevelText);
         $this->assertFalse(Styles::default()->padLevelText);
     }
+
+    // [m1] snapshot() hands back an INDEPENDENT copy: mutating it must not
+    // recolor the process-wide default every other logger rides, and copy()
+    // sheds array state from any instance.
+    public function testSnapshotIsIndependentFromSharedDefault(): void
+    {
+        $snapshot = Styles::snapshot();
+        $snapshot->padLevelText = true;
+        $snapshot->keys['time'] = Style::new()->foreground(Color::ansi(1));
+
+        $this->assertFalse(Styles::default()->padLevelText);
+        $this->assertSame('x', Styles::default()->keys['time']->render('x'));
+        $this->assertNotSame('x', $snapshot->keys['time']->render('x'));
+
+        $snapshot->padLevelText = false;
+        $snapshot->keys['time'] = Style::new();
+        $copy = $snapshot->copy();
+        $copy->keys['time'] = Style::new()->foreground(Color::ansi(2));
+        $this->assertSame('x', $snapshot->keys['time']->render('x'));
+    }
 }

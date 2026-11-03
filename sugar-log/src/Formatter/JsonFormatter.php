@@ -35,10 +35,21 @@ final class JsonFormatter implements Formatter
     private const FLAGS = \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE;
 
     private bool $reportTimestamp;
+    private string $timeFormat;
 
-    public function __construct(bool $reportTimestamp = true)
+    /**
+     * @param bool        $reportTimestamp Emit the `time` member.
+     * @param string|null $timeFormat      date() format for it; null keeps the
+     *                                     machine-parsing default RFC 3339
+     *                                     (DateTimeInterface::ATOM). Change it
+     *                                     only when a collector demands another
+     *                                     shape (m3) — parsers pinned on ATOM
+     *                                     will stumble on anything else.
+     */
+    public function __construct(bool $reportTimestamp = true, ?string $timeFormat = null)
     {
         $this->reportTimestamp = $reportTimestamp;
+        $this->timeFormat = $timeFormat ?? \DateTimeInterface::ATOM;
     }
 
     public function format(
@@ -55,7 +66,7 @@ final class JsonFormatter implements Formatter
         ];
 
         if ($this->reportTimestamp) {
-            $record['time'] = $time->format(\DateTimeInterface::ATOM);
+            $record['time'] = $time->format($this->timeFormat);
         }
 
         if ($caller !== null) {

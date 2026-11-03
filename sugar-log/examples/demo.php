@@ -45,7 +45,7 @@ $child = $parent->with(['user' => 'chef', 'session' => 'am-batch']);
 $child->info('Preheating');
 $child->info('Adding mix-ins', ['chocolate' => true, 'nuts' => false]);
 
-echo "\n=== StandardLogAdapter (net/http *log.Logger compat) ===\n";
+echo "\n=== StandardLogAdapter (Go-style stdlog call pattern) ===\n";
 // The adapter forces every line to the constructor's level (Error here),
 // so even its print() renders with the ERR label.
 $stdAdapter = new StandardLogAdapter(Logger::new(prefix: 'http', stream: $out), Level::Error);

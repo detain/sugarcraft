@@ -56,20 +56,41 @@ final class StandardLogAdapterTest extends TestCase
         $this->assertStringContainsString('INF', $content);
     }
 
-    public function testPrintIsFilteredByMinLevel(): void
+    // [m7 flip] Go's stdlib logger writes unconditionally; the adapter's
+    // print() now rides Logger::print() (bypasses the level filter) unless a
+    // level ABOVE Info was forced. The old pin asserted the filtered shape.
+    public function testPrintBypassesMinLevelLikeGoStdlib(): void
     {
         $stream = \fopen($this->tempPath, 'w');
-        // Logger minLevel is Error, print uses Info
         $logger = Logger::new(stream: $stream, level: Level::Error, reportTimestamp: false);
         $adapter = new StandardLogAdapter($logger);
 
-        $adapter->print('should not appear');
+        $adapter->print('always written');
 
         \fclose($stream);
-        $content = \file_get_contents($this->tempPath);
-        // StandardLogAdapter::print routes through logger->log(), not logger->print()
-        // So it IS filtered by minLevel
-        $this->assertSame('', $content);
+        $content = (string) \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('always written', $content);
+        $this->assertStringContainsString('INF', $content);
+    }
+
+    public function testForcedInfoAlsoBypassesWhileForcedWarnIsFiltered(): void
+    {
+        $infoPath = $this->tempPath . '.info';
+        $warnPath = $this->tempPath . '.warn';
+        $info = \fopen($infoPath, 'w');
+        $warn = \fopen($warnPath, 'w');
+
+        (new StandardLogAdapter(Logger::new(stream: $info, level: Level::Error, reportTimestamp: false), Level::Info))
+            ->print('forced-info rides the bypass');
+        (new StandardLogAdapter(Logger::new(stream: $warn, level: Level::Error, reportTimestamp: false), Level::Warn))
+            ->print('forced-warn is filtered');
+
+        \fclose($info);
+        \fclose($warn);
+        $this->assertStringContainsString('forced-info', (string) \file_get_contents($infoPath));
+        $this->assertSame('', (string) \file_get_contents($warnPath));
+        \unlink($infoPath);
+        \unlink($warnPath);
     }
 
     public function testPrintLnDelegatesToPrint(): void

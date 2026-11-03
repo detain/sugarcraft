@@ -31,24 +31,12 @@ echo "Panic handler installed. Triggering a fatal error...\n";
 // 5. Collapses repeated stack frames
 // 6. Appends a neutral report footer with filing guidance
 //
-// Real output (colors stripped; the report goes to STDERR, exit code 255):
-//
-//   Panic handler installed. Triggering a fatal error...
-//   PHP Fatal error:  test in .../examples/panic-handler.php on line 52
-//
-//     PANIC   ErrorException
-//
-//     User error: test in .../examples/panic-handler.php on line 52
-//
-//     .../src/Log.php:122
-//
-//       ?:? SugarCraft\Log\Log::SugarCraft\Log\{closure}()
-//
-//   report rendered by sugar-log — include the trace above when filing an issue
-//
-// The banner's own file/line frame points at the shutdown closure inside
-// Log.php (where the ErrorException is constructed); the ORIGINAL fatal's
-// location rides inside the message text above it.
+// The exact shape of the report is pinned by tests/ReadmeSnippetsTest
+// (testPanicHandlerExampleDiesRenderingTheReport): the process exits 255,
+// STDERR carries the PANIC banner and the sugar-log footer. The banner's
+// own file/line frame points at the shutdown closure inside Log.php (the
+// ErrorException's birthplace); the ORIGINAL fatal's location rides
+// inside the message text.
 trigger_error('test', E_USER_ERROR);
 
 echo "This line is never reached.\n";

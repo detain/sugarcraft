@@ -62,6 +62,13 @@ final class ValueCoercion
     }
 
     /**
+     * Elements are joined POSITIONALLY inside brackets — associative keys
+     * are deliberately NOT rendered (m17): a nested value has no field-name
+     * channel of its own here, and inventing one would double-encode what the
+     * record's top-level context already carries. Keep meaningful names by
+     * passing them as top-level context entries (logfmt/JSON emit those as
+     * real fields); stringify(['id' => 7]) renders '[7]', not 'id=7'.
+     *
      * @param array<mixed> $arr
      */
     private static function stringifyArray(array $arr, int $depth, string $delim): string

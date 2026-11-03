@@ -178,4 +178,17 @@ final class JsonEncodingTest extends TestCase
         $this->assertSame('msg', $decoded['msg']);
         $this->assertSame('prefix', $decoded['prefix']);
     }
+
+    // [m3] timeFormat knob: null keeps the ATOM machine default; an explicit
+    // format lands verbatim (quoting stays JSON-safe even with spaces).
+    public function testTimeFormatDefaultsToAtomAndHonoursOverride(): void
+    {
+        $time = new \DateTimeImmutable('2026-01-01 14:33:05', new \DateTimeZone('UTC'));
+
+        $default = \json_decode((new JsonFormatter())->format(Level::Info, 'm', [], $time, null, null), true);
+        $this->assertSame('2026-01-01T14:33:05+00:00', $default['time']);
+
+        $custom = \json_decode((new JsonFormatter(true, 'Y/m/d H:i'))->format(Level::Info, 'm', [], $time, null, null), true);
+        $this->assertSame('2026/01/01 14:33', $custom['time']);
+    }
 }
