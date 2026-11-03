@@ -97,4 +97,95 @@ final class LangTest extends TestCase
         $this->assertInstanceOf(Lang::class, $lang1);
         $this->assertInstanceOf(Lang::class, $lang2);
     }
+
+    /**
+     * M25: every locale must ship exactly the canonical key set. Before this
+     * arm existed, six keys were English-only (their throws were unreachable
+     * for every other locale) and nine more were dead weight copied across
+     * sixteen files with no producer.
+     */
+    public function testEveryLocaleCarriesTheSameKeySet(): void
+    {
+        $dir      = __DIR__ . '/../lang';
+        $en       = require "{$dir}/en.php";
+        $expected = array_keys($en);
+        sort($expected);
+
+        $codes = glob("{$dir}/*.php");
+        $this->assertNotCount(0, $codes, 'no locale files found');
+
+        foreach ($codes as $path) {
+            $code = basename($path, '.php');
+            $body = require $path;
+            $keys = array_keys($body);
+            sort($keys);
+            $this->assertSame(
+                $expected,
+                $keys,
+                "locale '{$code}' does not carry the canonical key set",
+            );
+        }
+    }
+
+    /**
+     * M25: bidirectional liveness. Every key in en.php must be requested by
+     * a literal Lang::t('key') call in src/, and every literal key src/
+     * requests must exist in en.php. A key nobody throws (or a throw naming
+     * a missing key) now reddens instead of drifting silently.
+     */
+    public function testCatalogueIsExactlyTheKeysSrcRequests(): void
+    {
+        $en = require __DIR__ . '/../lang/en.php';
+
+        $requested = [];
+        $srcRoot   = __DIR__ . '/../src';
+        $iterator  = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($srcRoot, \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iterator as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $text = (string) file_get_contents($file->getPathname());
+                if (preg_match_all("/Lang::t\\('([a-z0-9_.]+)'/", $text, $hits)) {
+                    foreach ($hits[1] as $key) {
+                        $requested[$key] = true;
+                    }
+                }
+            }
+        }
+
+        $catalogue = array_keys($en);
+        $used      = array_keys($requested);
+        sort($catalogue);
+        sort($used);
+
+        $this->assertSame(
+            $catalogue,
+            $used,
+            'the lang catalogue and the src request sites have diverged',
+        );
+    }
+
+    /**
+     * M25: the {column} placeholder is interpolated into user-facing refusal
+     * text; a locale that translates it away would silently drop the column
+     * name from the error.
+     */
+    public function testPlaceholderSurvivesInEveryLocale(): void
+    {
+        $dir = __DIR__ . '/../lang';
+        foreach (glob("{$dir}/*.php") as $path) {
+            $body = require $path;
+            $this->assertStringContainsString(
+                '{column}',
+                $body['table.sort_unknown_column'],
+                'locale ' . basename($path, '.php') . ' dropped the {column} placeholder',
+            );
+        }
+    }
+
+    /** m11: withPageSize() refuses negatives with its own message, not the width/height one. */
+    public function testPageSizeKeyIsLive(): void
+    {
+        $this->assertSame('page size must be >= 0', Lang::t('table.page_size_nonneg'));
+    }
 }

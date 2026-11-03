@@ -35,6 +35,21 @@ final readonly class SortState
         return new self([]);
     }
 
+    /**
+     * Drop criteria whose column index is out of range for a table that now
+     * has $columnCount columns (M4: setHeaders()/setColumns() replace the
+     * header vector, and a stale index silently sorts the wrong column — or
+     * none — once the table shrinks and later widens again).
+     */
+    public function withoutColumnsBeyond(int $columnCount): self
+    {
+        $kept = array_values(array_filter(
+            $this->criteria,
+            static fn(array $c): bool => $c[0] < $columnCount,
+        ));
+        return count($kept) === count($this->criteria) ? $this : new self($kept);
+    }
+
     public function isEmpty(): bool
     {
         return $this->criteria === [];

@@ -34,9 +34,13 @@ final class TableStyleFuncTest extends TestCase
         $t = $this->newTable()->styleFunc(static fn(int $row, int $col): Style
             => Style::new()->bold());
         $view = $t->view();
-        // Bold SGR (1) should appear at least once per data cell + per header cell.
-        // Two columns × four rows (1 header + 3 body) = 8 bold-on / 8 reset pairs.
-        $this->assertSame(8, substr_count($view, "\x1b[1m"));
+        // Bold reaches all 8 cells (header + 3 rows × 2 cols). Since the M6/C4
+        // composition the header cells merge the default header underline
+        // into one SGR run (`1;4`), while plain body cells keep bare `1` —
+        // the old 8×`\x1b[1m` byte-count premise counted header cells that
+        // no longer render as a standalone-bold prefix.
+        $this->assertSame(6, substr_count($view, "\x1b[1m"));
+        $this->assertSame(2, substr_count($view, "\x1b[1;4m"));
     }
 
     public function testStyleFuncSeesHeaderRowSentinel(): void
@@ -131,7 +135,28 @@ final class TableStyleFuncTest extends TestCase
             ->styleFunc(static fn(int $_row, int $col): Style => Style::new()->underline());
         $view = $t->view();
         // Italic (SGR 3) from row-level Styles + Underline (SGR 4) from styleFunc.
-        $this->assertStringContainsString("\x1b[3m", $view);
-        $this->assertStringContainsString("\x1b[4m", $view);
+
+        // C4 (CRITICAL): per-cell styleFunc used to render each cell with
+        // its own trailing reset, which WIPED the row-level wrap from cell
+        // one on — a focused table drew byte-identical to a blurred one and
+        // the cursor vanished. The cure composes the row style INTO every
+        // cell (Style::inherit, row wins). This pin is now discriminating:
+        // focused and unfocused frames must DIFFER, the selected cells must
+        // carry both properties, and the text must be SGR-invariant.
+        $unfocused = $view;
+        [$focused, ] = $t->focus();
+        $focusedView = $focused->view();
+
+        // The selection is now VISIBLE through the styleFunc: the cursor
+        // row merges underline (styleFunc) + reverse (selected slot, which
+        // since M6 also has a real default) per cell.
+        $this->assertNotSame($unfocused, $focusedView);
+        $this->assertStringContainsString("\x1b[4;7mAlice\x1b[0m", $focusedView);
+        $this->assertStringNotContainsString("\x1b[4;7m", $unfocused);
+        // Non-cursor rows keep the italic-cell + underline composition.
+        $this->assertStringContainsString("\x1b[3;4mBob", $focusedView);
+        // Same visible text in both frames — only SGR differs.
+        $strip = static fn(string $s): string => (string) preg_replace('/\x1b\[[0-9;]*m/', '', $s);
+        $this->assertSame($strip($unfocused), $strip($focusedView));
     }
 }

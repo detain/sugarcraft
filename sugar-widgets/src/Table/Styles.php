@@ -8,10 +8,16 @@ use SugarCraft\Style\Style;
 
 /**
  * Styles for {@see Table}: one slot per visible table element.
- * Defaults are no-op {@see Style} instances so existing snapshot
- * tests stay green; pass non-default styles to
- * {@see Table::withStyles()} to customise. Mirrors upstream
- * Bubbles' `table.Styles`.
+ *
+ * Each unset slot falls back to the SAME decoration the unstyled
+ * (`styles === null`) render applies — underline for the header, reverse
+ * for the selected row — so supplying a PARTIAL Styles (e.g. only a bold
+ * header) no longer silently deletes the cursor/header affordance (M6;
+ * before, every unset slot defaulted to a no-op Style and the selection
+ * highlight vanished the moment any style object was passed).
+ * {@see Table::withStyles()} carries them; pass `null` to drop the object
+ * entirely (same bytes via the fallback path). Mirrors upstream Bubbles'
+ * `table.Styles`, whose unset fields keep the default renderer's look.
  */
 final class Styles
 {
@@ -24,9 +30,8 @@ final class Styles
         ?Style $cell     = null,
         ?Style $selected = null,
     ) {
-        $noop = Style::new();
-        $this->header   = $header   ?? $noop;
-        $this->cell     = $cell     ?? $noop;
-        $this->selected = $selected ?? $noop;
+        $this->header   = $header   ?? Style::new()->underline();
+        $this->cell     = $cell     ?? Style::new();
+        $this->selected = $selected ?? Style::new()->reverse();
     }
 }

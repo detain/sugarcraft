@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Style;
 
 /**
  * Selectable, scrollable data table.
@@ -110,7 +111,9 @@ final class Table implements Model
             $titles[] = $col->title;
             $widths[] = $col->width;
         }
-        return $this->mutate(headers: $titles, colWidths: $widths);
+        return $this->mutate(headers: $titles, colWidths: $widths)
+            ->reconcileSort(count($titles))
+            ->reclamp();
     }
 
     /** @return list<Column> */
@@ -167,11 +170,21 @@ final class Table implements Model
         }
 
         $lines = [];
+        // C4: with a styleFunc set, every cell closes its own SGR with a
+        // reset, so a whole-row wrap applied after renderRow is wiped from
+        // the first cell on. The row style is instead composed INTO each
+        // cell (renderRow's $rowStyle). Without a styleFunc the old
+        // whole-row wrap stays byte-for-byte as before.
+        $composed = $this->styleFunc !== null;
         if ($this->headers !== []) {
-            $headerRow = $this->renderRow($this->headers, $cols, self::HEADER_ROW);
-            $lines[] = $this->styles !== null
-                ? $this->styles->header->render($headerRow)
-                : Ansi::sgr(Ansi::UNDERLINE) . $headerRow . Ansi::reset();
+            // M5: sorted columns carry their direction in the header cell
+            // (displayHeaders), measured through the same width budget.
+            $headerRow = $this->renderRow($this->displayHeaders(), $cols, self::HEADER_ROW, $composed ? $this->headerStyle() : null);
+            $lines[]   = $composed
+                ? $headerRow
+                : ($this->styles !== null
+                    ? $this->styles->header->render($headerRow)
+                    : Ansi::sgr(Ansi::UNDERLINE) . $headerRow . Ansi::reset());
         }
 
         $top    = max(0, $this->offset);
@@ -189,8 +202,15 @@ final class Table implements Model
         $window = array_slice($filteredRows, $top, $windowSize);
         foreach ($window as $i => $row) {
             $idx = $top + $i;
-            $line = $this->renderRow($row, $cols, $idx);
             $isSelected = $idx === $this->cursor && $this->focused;
+            if ($composed) {
+                $rowStyle = $isSelected
+                    ? ($this->styles !== null ? $this->styles->selected : Style::new()->reverse())
+                    : ($this->styles !== null ? $this->styles->cell : null);
+                $lines[]  = $this->renderRow($row, $cols, $idx, $rowStyle);
+                continue;
+            }
+            $line = $this->renderRow($row, $cols, $idx);
             if ($this->styles !== null) {
                 $line = $isSelected
                     ? $this->styles->selected->render($line)
@@ -201,6 +221,59 @@ final class Table implements Model
             $lines[] = $line;
         }
         return implode("\n", $lines);
+    }
+
+    /** The row-level style the header line composes under (C4 path). */
+    private function headerStyle(): Style
+    {
+        return $this->styles !== null ? $this->styles->header : Style::new()->underline();
+    }
+
+    /**
+     * Column index → direction glyph for every sorted column (M5).
+     *
+     * Upstream Bubbles renders sorted headers through a caller-supplied
+     * function; SugarCraft styles are whole-row value objects with no
+     * per-column channel, so the indicator rides the header TEXT itself —
+     * the same place bubbles-table's default theme puts it. The FIRST
+     * criterion for a column wins the glyph.
+     *
+     * @return array<int, string>
+     */
+    private function sortMarkers(): array
+    {
+        if ($this->sortState === null || $this->sortState->isEmpty()) {
+            return [];
+        }
+        $markers = [];
+        foreach ($this->sortState->criteria as [$col, $direction]) {
+            if ($col < count($this->headers)) {
+                $markers[$col] ??= $direction->marker();
+            }
+        }
+        return $markers;
+    }
+
+    /**
+     * Headers with sort-direction glyphs appended — used for BOTH width
+     * measurement and rendering so the indicator never overflows its cell
+     * in auto-width tables. With explicit widths from setColumns() the
+     * per-cell budget is fixed and a marker can be clipped; the indicator
+     * is then the truncated tail, never a layout break.
+     *
+     * @return list<string>
+     */
+    private function displayHeaders(): array
+    {
+        $markers = $this->sortMarkers();
+        if ($markers === []) {
+            return $this->headers;
+        }
+        $out = [];
+        foreach ($this->headers as $i => $header) {
+            $out[] = isset($markers[$i]) ? $header . ' ' . $markers[$i] : $header;
+        }
+        return $out;
     }
 
     /** Read-only accessor for the rows. Mirrors Bubbles' `Rows()`. */
@@ -298,7 +371,10 @@ final class Table implements Model
     /** @param list<string> $headers */
     public function setHeaders(array $headers): self
     {
-        return $this->mutate(headers: array_values($headers));
+        $headers = array_values($headers);
+        return $this->mutate(headers: $headers)
+            ->reconcileSort(count($headers))
+            ->reclamp();
     }
 
     public function setSize(int $width, int $height): self
@@ -368,7 +444,9 @@ final class Table implements Model
      */
     public function withFilter(string $query): self
     {
-        return $this->mutate(filter: $query, filterSet: true);
+        // The projection shrinks (or grows) — the cursor/page must follow
+        // now, not at first render (M1).
+        return $this->mutate(filter: $query, filterSet: true)->reclamp();
     }
 
     /** @return string */
@@ -387,7 +465,8 @@ final class Table implements Model
      */
     public function withFilterPredicate(?\Closure $predicate): self
     {
-        return $this->mutate(filterPredicate: $predicate, filterPredicateSet: true);
+        // Same projection-shrink reconciliation as withFilter (M1).
+        return $this->mutate(filterPredicate: $predicate, filterPredicateSet: true)->reclamp();
     }
 
     /** @return ?\Closure(list<string> $row): bool */
@@ -404,9 +483,14 @@ final class Table implements Model
     public function withPageSize(int $size): self
     {
         if ($size < 0) {
-            throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'));
+            // m11: this guards the PAGE SIZE, not a table dimension — the
+            // old shared message blamed "table width/height" for a bad
+            // pageSize argument.
+            throw new \InvalidArgumentException(Lang::t('table.page_size_nonneg'));
         }
-        return $this->mutate(pageSize: $size, pageSizeSet: true);
+        // M1: shrinking the page window can strand the cursor (and the page)
+        // beyond the last row — re-run the reconciliation.
+        return $this->mutate(pageSize: $size, pageSizeSet: true)->reclamp();
     }
 
     /** @return int */
@@ -454,23 +538,22 @@ final class Table implements Model
             ->reclampCursorForPage($paginator);
     }
 
-    /** Move cursor to the first row of the current page. Mirrors Bubbles' `GotoStart`. */
+    /**
+     * Move the cursor to the FIRST row of the visible list (m15: the old
+     * body jumped to page 0 while the docblock claimed "first row of the
+     * current page" — one of the two had to be wrong; upstream Bubbles
+     * `GotoStart` means start-of-list, so the docblock was). With a page
+     * window set, the cursor's page follows automatically (M2).
+     */
     public function pageFirst(): self
     {
-        if ($this->pageSize <= 0) {
-            return $this->moveCursor(0);
-        }
-        return $this->withPage(0);
+        return $this->moveCursor(0);
     }
 
-    /** Move cursor to the last row of the current page. Mirrors `GotoEnd`. */
+    /** Move the cursor to the LAST row of the visible list (`GotoEnd`). */
     public function pageLast(): self
     {
-        if ($this->pageSize <= 0) {
-            return $this->moveCursor(PHP_INT_MAX);
-        }
-        $last = max(0, $this->paginator()->totalPages() - 1);
-        return $this->withPage($last);
+        return $this->moveCursor(PHP_INT_MAX);
     }
 
     /**
@@ -602,15 +685,20 @@ final class Table implements Model
     /** @return list<int> */
     private function columnWidths(): array
     {
+        // N7: size columns from the PROJECTED rows (filter + sort applied),
+        // not the raw list — a filtered-out row with a monster cell used to
+        // widen every column of the visible table. visibleRows() is memoized,
+        // so this costs nothing extra per view().
+        $projection = $this->visibleRows();
         $cols = max(
             count($this->headers),
-            ...array_map('count', $this->rows ?: [[]]),
+            ...array_map('count', $projection ?: [[]]),
         );
         if ($cols === 0) {
             return [];
         }
         $widths = array_fill(0, $cols, 0);
-        foreach (array_merge([$this->headers], $this->rows) as $row) {
+        foreach (array_merge([$this->displayHeaders()], $projection) as $row) {
             foreach ($row as $i => $cell) {
                 $widths[$i] = max($widths[$i], Width::string($cell));
             }
@@ -656,22 +744,35 @@ final class Table implements Model
     /**
      * @param list<string> $row
      * @param list<int>    $widths
+     * @param ?Style       $rowStyle  Row-level style (header / cell / selected)
+     *                                to compose UNDER each styleFunc cell. Only
+     *                                supplied when a styleFunc is set; the
+     *                                whole-row-wrap path passes null and stays
+     *                                byte-identical to the legacy render.
      */
-    private function renderRow(array $row, array $widths, int $rowIndex = self::HEADER_ROW): string
+    private function renderRow(array $row, array $widths, int $rowIndex = self::HEADER_ROW, ?Style $rowStyle = null): string
     {
         $cells = [];
         foreach ($widths as $i => $w) {
             $cell = $row[$i] ?? '';
-            $cell = Sanitize::controlChars($cell);
+            // C3: controlChars deliberately keeps the U+E000/U+E001 zone
+            // sentinels and ANSI/C1 bytes a table cell has no business
+            // drawing. This is the marked-frame world (cells feed hosts that
+            // call Manager::mark/scan), so run the full marked-frame sweep.
+            $cell = Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($cell));
             $cell = Width::truncate($cell, $w);
             $pad  = $w - Width::string($cell);
             $padded = $cell . str_repeat(' ', max(0, $pad));
-            // Apply per-cell styleFunc when set. Runs before any row-level
-            // Styles, so striped rows / conditional highlighting compose
-            // with the selected-row inversion downstream.
+            // Apply per-cell styleFunc when set. The row-level style is
+            // composed as the PARENT (winning) layer so the selected-row
+            // inversion survives: each cell's own render ends in `0m`,
+            // which would otherwise wipe a whole-row wrap from cell 1 on
+            // (C4). The cell style still supplies colours the row style does
+            // not set, so striping/conditional highlighting is preserved.
             if ($this->styleFunc !== null) {
-                $style = ($this->styleFunc)($rowIndex, $i);
-                $padded = $style->render($padded);
+                $cellStyle = ($this->styleFunc)($rowIndex, $i);
+                $style     = $rowStyle !== null ? $rowStyle->inherit($cellStyle) : $cellStyle;
+                $padded    = $style->render($padded);
             }
             $cells[] = $padded;
         }
@@ -682,9 +783,22 @@ final class Table implements Model
     {
         $count = count($this->visibleRows());
         if ($count === 0) {
-            return $this->mutate(cursor: 0, offset: 0);
+            return $this->mutate(cursor: 0, offset: 0, currentPage: 0, currentPageSet: true);
         }
         $cursor = max(0, min($count - 1, $idx));
+        if ($this->pageSize > 0) {
+            // M2: with pagination the window IS the page (view() slices at
+            // currentPage * pageSize), so the cursor must carry its page.
+            // Previously the cursor could sit outside the drawn window while
+            // selectedRow()/index() reported it as the selection.
+            $page = intdiv($cursor, $this->pageSize);
+            return $this->mutate(
+                cursor: $cursor,
+                offset: $page * $this->pageSize,
+                currentPage: $page,
+                currentPageSet: true,
+            );
+        }
         $offset = $this->offset;
         if ($cursor < $offset) {
             $offset = $cursor;
@@ -693,6 +807,23 @@ final class Table implements Model
             $offset = $cursor - $this->height + 1;
         }
         return $this->mutate(cursor: $cursor, offset: max(0, $offset));
+    }
+
+    /**
+     * M4: SortState resolves column names to indices at set time and stores
+     * the indices. setHeaders()/setColumns() replace the header vector, so a
+     * carried criterion pointing past the new end would silently re-target
+     * nothing (or the wrong column after a later widen). Drop out-of-range
+     * criteria instead of laundering them.
+     */
+    private function reconcileSort(int $columnCount): self
+    {
+        $state = $this->sortState;
+        if ($state === null) {
+            return $this;
+        }
+        $kept = $state->withoutColumnsBeyond($columnCount);
+        return $kept === $state ? $this : $this->mutate(sortState: $kept, sortStateSet: true);
     }
 
     private function reclamp(): self
