@@ -7,7 +7,7 @@ namespace SugarCraft\Spring\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * README-compiles guard (docs-fix-1023 spring B1/B2 genre).
+ * README-compiles guard.
  *
  * Every fenced ```php block in README.md and every file under examples/ is
  * linted AND executed in a child `php` process with a wall-clock ceiling,
@@ -19,6 +19,13 @@ use PHPUnit\Framework\TestCase;
  * README blocks must be self-contained: each runs against the lib autoloader
  * plus `declare(strict_types=1)` prepended, so snippet-local imports are
  * part of what this test pins.
+ *
+ * Fleet lesson (lib-reviews-1102 minor 5): the original extractor anchored
+ * its fence match at column 0, so the two INDENTED frame-loop fences under
+ * the driving section were invisible to the guard — snippets that never ran
+ * could rot silently inside the exact guard genre that was supposed to
+ * prevent that. `^[ \t]*` + dedent closes the hole, and the block count is
+ * pinned EXACT (a bare floor stays green while snippets go missing).
  */
 final class ReadmeSnippetsTest extends TestCase
 {
@@ -26,6 +33,13 @@ final class ReadmeSnippetsTest extends TestCase
 
     /** Wall-clock ceiling per snippet, seconds. */
     private const RUN_TIMEOUT_SECONDS = 15;
+
+    /**
+     * Exact number of php fences in README.md. Add a snippet, bump the
+     * count — the guard fails CLOSED both ways, so no fence can be silently
+     * lost to a regex change or silently skipped for being indented.
+     */
+    private const README_PHP_BLOCK_COUNT = 13;
 
     private string $scratchDir;
 
@@ -55,13 +69,14 @@ final class ReadmeSnippetsTest extends TestCase
 
         $blocks  = [];
         $offset  = 0;
-        while (preg_match('/^```php[ \t]*\n(.*?)\n```/ms', $readme, $block, PREG_OFFSET_CAPTURE, $offset) === 1) {
-            $blocks[] = $block[1][0];
+        while (preg_match('/^[ \t]*```php[ \t]*\n(.*?)\n[ \t]*```/ms', $readme, $block, PREG_OFFSET_CAPTURE, $offset) === 1) {
+            $blocks[] = self::dedent($block[1][0]);
             $offset   = $block[0][1] + strlen($block[0][0]);
         }
-        if (count($blocks) < 8) {
+        if (count($blocks) !== self::README_PHP_BLOCK_COUNT) {
             self::fail(sprintf(
-                'expected at least eight fenced php blocks in README.md, found %d — the extractor broke',
+                'expected exactly %d fenced php blocks in README.md, found %d — the extractor broke or a snippet went missing',
+                self::README_PHP_BLOCK_COUNT,
                 count($blocks),
             ));
         }
@@ -102,6 +117,32 @@ final class ReadmeSnippetsTest extends TestCase
         ]);
         $this->assertSame(0, $status, "running the {$kind} snippet exited {$status}:\n" . $stderr);
         $this->assertSame('', trim($stderr), "the {$kind} snippet wrote to stderr:\n" . $stderr);
+    }
+
+    /**
+     * Strip the leading whitespace shared by every non-blank line so an
+     * indented fence (a snippet living inside a list or narrative section)
+     * executes exactly like its column-zero siblings.
+     */
+    public static function dedent(string $block): string
+    {
+        $lines   = explode("\n", $block);
+        $minimum = null;
+        foreach ($lines as $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+            $indent  = strlen($line) - strlen(ltrim($line, " \t"));
+            $minimum = $minimum === null ? $indent : min($minimum, $indent);
+        }
+        if ($minimum === null || $minimum === 0) {
+            return $block;
+        }
+
+        return implode("\n", array_map(
+            static fn (string $line): string => trim($line) === '' ? $line : substr($line, $minimum),
+            $lines,
+        ));
     }
 
     /** README bodies become child-process scripts; example files run in place. */
