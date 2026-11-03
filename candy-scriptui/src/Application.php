@@ -309,8 +309,12 @@ final class Application extends SymfonyApplication
         // the value is re-parsed and persists.
         //
         // @var array<string,string> env-backed value options as name => value;
-        //      injected as tokens when possible, else applied best-effort.
+        //      injected as --name=value tokens when possible, else best-effort.
+        // @var list<string> env-backed flag (VALUE_NONE) options as bare
+        //      '--name' tokens; setOption(true) dies on every re-bind because
+        //      a flag has no value the token stream could restore (M1).
         $valueOptions = [];
+        $flagTokens = [];
         $definition = clone $command->getDefinition();
         foreach ($definition->getOptions() as $option) {
             // Explicit CLI flag always wins over env var.
@@ -326,10 +330,10 @@ final class Application extends SymfonyApplication
                 continue;
             }
             if (!$option->acceptValue()) {
-                // Flag option — setOption works fine for these since they have no
-                // value that could be reset by a second bind() call.
+                // Flag option — the bare '--name' token re-parses to true on
+                // every bind, exactly like the explicit CLI form.
                 if (in_array(strtolower($envValue), ['1', 'true', 'yes'], true)) {
-                    $input->setOption($option->getName(), true);
+                    $flagTokens[] = '--' . $option->getName();
                 }
             } else {
                 // Value option — MUST use token injection. setOption() appears to
@@ -340,13 +344,15 @@ final class Application extends SymfonyApplication
                 $valueOptions[$option->getName()] = $envValue;
             }
         }
-        // Inject the env-backed value options at the front of the ArgvInput
-        // token stream so they survive Command::run()'s second bind().
-        if ($valueOptions === [] || !$input instanceof \Symfony\Component\Console\Input\ArgvInput) {
+        // Inject the env-backed options at the front of the ArgvInput token
+        // stream so they survive Command::run()'s second bind().
+        if ($valueOptions === [] && $flagTokens === []) {
             return;
         }
-        if (property_exists($input, self::ARGV_TOKENS_PROPERTY)) {
-            $tokens = [];
+        if ($input instanceof \Symfony\Component\Console\Input\ArgvInput
+            && property_exists($input, self::ARGV_TOKENS_PROPERTY)
+        ) {
+            $tokens = $flagTokens;
             foreach ($valueOptions as $name => $value) {
                 $tokens[] = '--' . $name . '=' . $value;
             }
@@ -357,12 +363,16 @@ final class Application extends SymfonyApplication
             return;
         }
         // Documented graceful fallback: a Symfony upgrade renamed or removed
-        // ArgvInput's private $tokens property, so we can no longer inject
-        // tokens. Fall back to best-effort setOption() for each value option.
-        // This may not survive Command::run()'s second bind() (the very reason
-        // token injection exists), but it beats a fatal ReflectionException.
-        // ApplicationEnvTokenInjectionTest fails loudly in CI when this path is
-        // reached so ARGV_TOKENS_PROPERTY gets updated to the new name.
+        // ArgvInput's private $tokens property (or the input is not ArgvInput
+        // at all), so we can no longer inject tokens. Fall back to best-effort
+        // setOption() for each option. This may not survive Command::run()'s
+        // second bind() (the very reason token injection exists), but it beats
+        // a fatal ReflectionException. ApplicationEnvTokenInjectionTest fails
+        // loudly in CI when the ArgvInput path is reached so
+        // ARGV_TOKENS_PROPERTY gets updated to the new name.
+        foreach ($flagTokens as $token) {
+            $input->setOption(substr($token, 2), true);
+        }
         foreach ($valueOptions as $name => $value) {
             $input->setOption($name, $value);
         }

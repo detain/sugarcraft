@@ -125,4 +125,59 @@ final class EnvVarFallbackTest extends TestCase
             putenv('CANDY_SCRIPTUI_FOREGROUND');
         }
     }
+
+    /**
+     * M1 (review 2026-11-02): VALUE_NONE options get no value for a re-bind
+     * to restore, so setOption(true) was wiped exactly like value options —
+     * every CANDY_SCRIPTUI_<FLAG> was dead in the bin. The README's promise
+     * that the two invocations are the same is the spec: the env-backed run
+     * must produce byte-identical output to the explicit-flag run.
+     */
+    public function testEnvVarBackedFlagEqualsExplicitFlag(): void
+    {
+        putenv('CANDY_SCRIPTUI_BOLD=1');
+        try {
+            $envOut = new BufferedOutput();
+            $this->assertSame(0, (new Application())->run(new ArgvInput(['candy-scriptui', 'style', 'hi']), $envOut));
+
+            $flagOut = new BufferedOutput();
+            $this->assertSame(0, (new Application())->run(new ArgvInput(['candy-scriptui', 'style', '--bold', 'hi']), $flagOut));
+
+            $envDisplay = $envOut->fetch();
+            $this->assertSame($flagOut->fetch(), $envDisplay, 'env-backed --bold must equal explicit --bold');
+            $this->assertStringContainsString("\x1b[1m", $envDisplay, 'guard against both sides silently losing bold');
+        } finally {
+            putenv('CANDY_SCRIPTUI_BOLD');
+        }
+    }
+
+    public function testEnvVarFalseyValueLeavesFlagOff(): void
+    {
+        putenv('CANDY_SCRIPTUI_BOLD=0');
+        try {
+            $envOut = new BufferedOutput();
+            $this->assertSame(0, (new Application())->run(new ArgvInput(['candy-scriptui', 'style', 'hi']), $envOut));
+
+            $plainOut = new BufferedOutput();
+            $this->assertSame(0, (new Application())->run(new ArgvInput(['candy-scriptui', 'style', 'hi']), $plainOut));
+
+            $envDisplay = $envOut->fetch();
+            $this->assertSame($plainOut->fetch(), $envDisplay);
+            $this->assertStringNotContainsString("\x1b[1m", $envDisplay);
+        } finally {
+            putenv('CANDY_SCRIPTUI_BOLD');
+        }
+    }
+
+    public function testEnvVarAndExplicitFlagTogetherStillBold(): void
+    {
+        putenv('CANDY_SCRIPTUI_BOLD=yes');
+        try {
+            $out = new BufferedOutput();
+            $this->assertSame(0, (new Application())->run(new ArgvInput(['candy-scriptui', 'style', '--bold', 'hi']), $out));
+            $this->assertStringContainsString("\x1b[1m", $out->fetch());
+        } finally {
+            putenv('CANDY_SCRIPTUI_BOLD');
+        }
+    }
 }
