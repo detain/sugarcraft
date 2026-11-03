@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'Sauvegarde refusée (illisible ou altérée)',
     'ui.save_failed' => 'Échec de la sauvegarde',
     'ui.resume' => 'Une sauvegarde attend — appuyez sur L pour la charger',
+    'ui.new_best' => 'NOUVEAU RECORD',
 ];
