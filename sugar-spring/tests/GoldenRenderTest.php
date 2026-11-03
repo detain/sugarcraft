@@ -20,15 +20,52 @@ use SugarCraft\Testing\Snapshot\GoldenFile;
  * `assertGolden` helper on `SugarCraft\Testing\Assertions`; the assertGolden*
  * family there is ANSI/cell-grid specific.
  *
+ * M-G (review 1102): the fixtures are byte-comparisons, so the comparison
+ * environment is pinned HERE, not inherited:
+ *  - REDUCE_MOTION / PREFERS_REDUCED_MOTION are cleared for the duration —
+ *    Spring::fromPreset() consults the ambient probe, so a host (or an a11y
+ *    CI contributor) exporting REDUCE_MOTION=1 used to snap the spring golden
+ *    to 100 from step 1 and redden the suite with no code change.
+ *  - serialize_precision is forced to -1 (shortest round-trip): the same ini
+ *    set to 17 makes json_encode(0.3) emit 0.29999999999999999 and BOTH
+ *    goldens fail.
+ * Remaining caveat (devops N1): last-ULP libm answers (sin/cos/pow) are
+ * deterministic per platform; these goldens are recorded on Linux — re-record
+ * per platform before the spring trajectory joins the Windows/macOS legs.
+ *
  * Mirrors the spring physics of charmbracelet/harmonica.
  */
 final class GoldenRenderTest extends TestCase
 {
     private string $fixturesDir;
 
+    /** @var array<string, string|false> env values to restore after each test */
+    private array $savedEnv = [];
+
+    private string|false $savedSerializePrecision = false;
+
     protected function setUp(): void
     {
         $this->fixturesDir = __DIR__ . '/fixtures';
+
+        $this->savedSerializePrecision = ini_set('serialize_precision', '-1');
+
+        foreach (['REDUCE_MOTION', 'PREFERS_REDUCED_MOTION'] as $key) {
+            $this->savedEnv[$key] = getenv($key);
+            putenv($key);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->savedSerializePrecision !== false) {
+            ini_set('serialize_precision', $this->savedSerializePrecision);
+        }
+
+        foreach ($this->savedEnv as $key => $value) {
+            putenv($value === false ? $key : "{$key}={$value}");
+        }
+        $this->savedEnv = [];
     }
 
     /**

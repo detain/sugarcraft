@@ -114,6 +114,134 @@ final class SpringCollectionTest extends TestCase
         $this->assertFalse($collection->has('nonexistent'));
     }
 
+    // ── M-I (review 1102): the completion contract ──────────────────────────
+
+    public function testSettledFalseWhileAnimatingTrueAfterConvergence(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $collection = (new SpringCollection())->withSpring('a', $spring, 0.0, 0.0, 100.0);
+
+        $this->assertFalse($collection->settled(), 'mid-flight must not report settled');
+
+        $ticks = 0;
+        while (!$collection->settled()) {
+            $collection = $collection->tick();
+            $this->assertLessThan(1200, ++$ticks, 'the settle loop must terminate');
+        }
+
+        $this->assertTrue($collection->settled());
+        $this->assertEqualsWithDelta(100.0, $collection->get('a'), Spring::SETTLING_THRESHOLD);
+        $this->assertLessThan(1e-4, abs($collection->velocity('a')), 'velocity must be within threshold too');
+    }
+
+    public function testSettledNeedsVelocityTooPositionOnlyStopIsWrong(): void
+    {
+        // Under-damped springs pass THROUGH the target with real velocity:
+        // a position-only stop would paint "done" while the value rings.
+        $spring = new Spring(1.0 / 60.0, 13.416, 0.365); // Wobbly
+        $collection = (new SpringCollection())->withSpring('a', $spring, 0.0, 0.0, 100.0);
+
+        // Advance until position happens to sit ON the target mid-ring.
+        for ($i = 0; $i < 600; $i++) {
+            $collection = $collection->tick();
+            if (abs($collection->get('a') - 100.0) < 1e-4 && abs($collection->velocity('a')) > 1.0) {
+                $this->assertFalse(
+                    $collection->settled(),
+                    'at-target position with a live velocity must NOT be settled'
+                );
+
+                return;
+            }
+        }
+        $this->markTestSkipped('did not cross the target with a live velocity within 600 frames');
+    }
+
+    public function testVelocityAndAllVelocitiesExposeStoredState(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $collection = (new SpringCollection())->withSpring('a', $spring, 0.0, 3.5, 100.0);
+
+        $this->assertSame(3.5, $collection->velocity('a'));
+        $this->assertSame(['a' => 3.5], $collection->allVelocities());
+    }
+
+    // ── Misuse guards (devops m1 / int m4 / senior m5 / tui m2) ─────────────
+
+    public function testUnknownIdReadsThrowNamingTheId(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $collection = (new SpringCollection())->withSpring('menu', $spring);
+
+        foreach (['get', 'target', 'velocity'] as $method) {
+            try {
+                $collection->{$method}('menue');
+                $this->fail("{$method}() on a typo'd id must throw");
+            } catch (\OutOfBoundsException $e) {
+                $this->assertStringContainsString('menue', $e->getMessage(), "{$method}() must name the id");
+            }
+        }
+
+        $this->expectException(\OutOfBoundsException::class);
+        $this->expectExceptionMessage('menue');
+        $collection->withTarget('menue', 10.0);
+    }
+
+    public function testConstructorRefusesMisalignedPlanes(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+
+        // A spring with no position entry: the old code surfaced this as an
+        // internals-flavoured TypeError inside tick(), frames later.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringCollection is missing positions data for spring "a"');
+        new SpringCollection(
+            springs: ['a' => $spring],
+            positions: [],
+            velocities: ['a' => 0.0],
+            targets: ['a' => 10.0],
+        );
+    }
+
+    public function testConstructorRefusesOrphanPlaneEntries(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('ghost');
+        new SpringCollection(
+            springs: ['a' => $spring],
+            positions: ['a' => 0.0, 'ghost' => 5.0],
+            velocities: ['a' => 0.0],
+            targets: ['a' => 10.0],
+        );
+    }
+
+    public function testConstructorRefusesNonFinitePlaneValues(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be a finite number');
+        new SpringCollection(
+            springs: ['a' => $spring],
+            positions: ['a' => NAN],
+            velocities: ['a' => 0.0],
+            targets: ['a' => 10.0],
+        );
+    }
+
+    public function testConstructorRefusesNonSpringValuesInSpringsPlane(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('needs a Spring instance');
+        new SpringCollection(
+            springs: ['a' => new \stdClass()],
+            positions: ['a' => 0.0],
+            velocities: ['a' => 0.0],
+            targets: ['a' => 10.0],
+        );
+    }
+
     // ── Deprecated in-place shims (retained one release) ────────────────────
 
     /**

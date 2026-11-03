@@ -23,12 +23,21 @@ final class SpringTest extends TestCase
         Spring::fps(0);
     }
 
-    public function testZeroFrequencyIsIdentity(): void
+    public function testZeroFrequencyIsRefused(): void
     {
-        $s = new Spring(1.0 / 60.0, 0.0, 1.0);
-        [$pos, $vel] = $s->update(5.0, 2.0, 100.0);
-        $this->assertEqualsWithDelta(5.0, $pos, self::EPS);
-        $this->assertEqualsWithDelta(2.0, $vel, self::EPS);
+        // M-A: a spring that cannot oscillate never settles — the old silent
+        // identity branch turned every `while (!$spring->settled(...))` loop
+        // into an infinite frame loop.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('angularFrequency must be >= 1e-9');
+
+        new Spring(1.0 / 60.0, 0.0, 1.0);
+    }
+
+    public function testTinyFrequencyIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Spring(1.0 / 60.0, 1e-12, 1.0);
     }
 
     public function testAtTargetWithZeroVelocityStaysPut(): void
@@ -87,14 +96,25 @@ final class SpringTest extends TestCase
         $this->assertEqualsWithDelta(10.0, $pos, 1e-3);
     }
 
-    public function testNegativeDampingClampedToZero(): void
+    public function testNegativeDampingIsRefused(): void
     {
-        // Should not throw or NaN; just behaves as undamped (or near it).
-        $s = new Spring(1.0 / 60.0, 6.0, -0.5);
-        [$pos, $vel] = $s->update(0.0, 0.0, 1.0);
-        $this->assertIsFloat($pos);
-        $this->assertFalse(is_nan($pos));
-        $this->assertFalse(is_nan($vel));
+        // M-A: negative damping is the divergence case (exponential blow-up);
+        // the old max(0.0, ·) clamp folded it into the never-settling pure
+        // oscillator instead of refusing it.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('dampingRatio must be > 0');
+
+        new Spring(1.0 / 60.0, 6.0, -0.5);
+    }
+
+    public function testZeroDampingIsRefused(): void
+    {
+        // ζ=0 is the perpetual oscillator: never settles, so the boundary
+        // refuses it rather than shipping the hang.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('dampingRatio must be > 0');
+
+        new Spring(1.0 / 60.0, 6.0, 0.0);
     }
 
     public function testSettledTrueAtRest(): void
@@ -140,7 +160,7 @@ final class SpringTest extends TestCase
         $this->assertEqualsWithDelta(80.0852, $pos, 0.05);
     }
 
-    // ─── Lane A3b (re-verify 2026-10-08) ──────────────────────────────────
+    // ─── Construction fail-fast (re-verified 2026-10-08) ───────────────────
 
     /**
      * INF dampingRatio used to flow into the over-damped branch where
@@ -167,7 +187,6 @@ final class SpringTest extends TestCase
 
     /**
      * Negative dt integrates the oscillator backwards; exp() diverges.
-     * (Negative frequency/damping stay legal — clamped by max(0.0, ·).)
      */
     public function testNegativeDeltaTimeThrowsAtConstruction(): void
     {
@@ -180,5 +199,102 @@ final class SpringTest extends TestCase
         $s = new Spring(0.0, 6.0, 1.0);
         // dt=0 ⇒ identity coefficients: the state passes through untouched.
         $this->assertSame([5.0, 2.0], $s->update(5.0, 2.0, 5.0));
+    }
+
+    // ─── Review-1102 M-A: per-frame data plane ─────────────────────────────
+
+    /**
+     * A NaN/INF frame value poisoned `settled()` forever — the whole
+     * `while (!$chain->isComplete())` idiom spun on it. update() is the data
+     * plane the ctor never saw, so it guards its own three inputs.
+     */
+    public function testUpdateRejectsNonFiniteState(): void
+    {
+        $s = new Spring(1.0 / 60.0, 6.0, 1.0);
+
+        foreach ([
+            [NAN, 0.0, 100.0],
+            [0.0, NAN, 100.0],
+            [0.0, 0.0, NAN],
+            [INF, 0.0, 100.0],
+            [0.0, 0.0, INF],
+        ] as [$pos, $vel, $target]) {
+            try {
+                $s->update($pos, $vel, $target);
+                $this->fail('update() accepted a non-finite frame value');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('must be finite', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * The data-plane guard runs BEFORE the reduced-motion snap branch: the
+     * snap path returns the caller's target verbatim, so NaN/INF would ride
+     * the "instant" branch unguarded otherwise.
+     */
+    public function testReducedMotionSnapStillRefusesNonFiniteTarget(): void
+    {
+        $s = new Spring(1.0 / 60.0, 6.0, 1.0, reducedMotionOverride: true);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $s->update(0.0, 0.0, NAN);
+    }
+
+    /**
+     * Large-but-finite parameters can overflow the closed-form coefficients
+     * (ζ² terms blow up around ω ≈ 1e155); the post-branch belt refuses them
+     * instead of minting a NaN-coefficient spring.
+     */
+    public function testOverflowingCoefficientsAreRefusedAtConstruction(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('overflowed to non-finite');
+
+        // senior M3's exact scenario: ζ² overflows to INF inside the
+        // over-damped branch while every INPUT passes is_finite.
+        new Spring(1.0 / 60.0, 1e155, 1e155);
+    }
+
+    public function testFpsRejectsNonFiniteRates(): void
+    {
+        foreach ([INF, NAN] as $bad) {
+            try {
+                Spring::fps($bad);
+                $this->fail('fps() accepted a non-finite rate');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('fps must be > 0', $e->getMessage());
+            }
+        }
+    }
+
+    /**
+     * settled() is a pure predicate: non-finite inputs answer "not settled"
+     * (safe direction) rather than throwing — but the update() guard above
+     * means real callers cannot reach the predicate with poisoned values.
+     */
+    public function testSettledAnswersFalseForNonFiniteInputs(): void
+    {
+        $this->assertFalse(Spring::settled(NAN, 0.0, 0.0));
+        $this->assertFalse(Spring::settled(0.0, INF, 0.0));
+    }
+
+    public function testFromPresetThreadsReducedMotionOverride(): void
+    {
+        // The ctor-only override was unreachable on the recommended
+        // fromPreset()/spring() path; it is now an optional parameter.
+        $calm = Spring::fromPreset(
+            \SugarCraft\Spring\SpringPreset::Stiff,
+            1.0 / 60.0,
+            reducedMotionOverride: true,
+        );
+        $this->assertSame([42.0, 0.0], $calm->update(0.0, 0.0, 42.0));
+
+        $moving = Spring::fromPreset(
+            \SugarCraft\Spring\SpringPreset::Stiff,
+            1.0 / 60.0,
+            reducedMotionOverride: false,
+        );
+        $this->assertNotSame([42.0, 0.0], $moving->update(0.0, 0.0, 42.0));
     }
 }

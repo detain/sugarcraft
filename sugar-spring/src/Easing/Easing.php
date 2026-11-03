@@ -38,7 +38,16 @@ enum Easing implements EasingFunction
     /**
      * Apply the easing function to a normalized time value.
      *
-     * @param float $t Time value in range [0.0, 1.0]
+     * Designed for $t ∈ [0, 1]; an out-of-range $t is NOT rejected and NOT
+     * clamped — the curves EXTRAPOLATE, so ease(2.0) answers whatever the
+     * formula gives. Callers feeding a progress ratio from host state should
+     * clamp upstream. The RETURN value is likewise unclamped by design:
+     * Elastic/Back curves overshoot past 1.0 (and below 0.0 on their
+     * anticipation legs) — that swing IS the effect. Mapping an eased value
+     * onto discrete cells (indices, widths) requires your own clamp or
+     * rounding gate; `round(ease($t) * 40)` can be a negative cell.
+     *
+     * @param float $t Normalized time, designed for [0.0, 1.0]
      * @return float Eased value (may exceed [0,1] for Elastic/Back curves due to intentional overshoot)
      */
     public function ease(float $t): float
@@ -58,11 +67,9 @@ enum Easing implements EasingFunction
                 ? 4.0 * $t * $t * $t
                 : 1.0 - pow(-2.0 * $t + 2.0, 3.0) / 2.0,
 
-            self::ElasticIn => -pow(2.0, 10.0 * $t - 10.0) * sin(($t * 10.0 - 10.75) * ((2.0 * M_PI) / 3.0)),
-            self::ElasticOut => sin(13.0 * M_PI / 2.0 * $t) * pow(2.0, -10.0 * $t) + $t,
-            self::ElasticInOut => $t < 0.5
-                ? -(pow(2.0, 20.0 * $t - 10.0) * sin((20.0 * $t - 11.125) * M_PI * 2.5)) / 2.0
-                : (pow(2.0, -20.0 * $t + 10.0) * sin((20.0 * $t - 11.125) * M_PI * 2.5)) / 2.0 + 1.0,
+            self::ElasticIn => $this->elasticIn($t),
+            self::ElasticOut => $this->elasticOut($t),
+            self::ElasticInOut => $this->elasticInOut($t),
 
             self::BounceIn => 1.0 - $this->bounceOut(1.0 - $t),
             self::BounceOut => $this->bounceOut($t),
@@ -70,14 +77,78 @@ enum Easing implements EasingFunction
                 ? (1.0 - $this->bounceOut(1.0 - 2.0 * $t)) / 2.0
                 : (1.0 + $this->bounceOut(2.0 * $t - 1.0)) / 2.0,
 
+            // Back* here follow the sin-modulated family (t³ ∓ sin shaping),
+            // NOT Penner's c1 = 1.70158 polynomial. Same overshoot idea,
+            // different amplitude curve — documented variance, not a bug.
+            // BackOut carries an exact-endpoint guard because sin(π) is
+            // 1.2246e-16, not 0, in binary floating point.
             self::BackIn => pow($t, 3.0) - $t * sin($t * M_PI),
-            self::BackOut => 1.0 - pow(1.0 - $t, 3.0) + (1.0 - $t) * sin((1.0 - $t) * M_PI),
+            self::BackOut => $t === 0.0 ? 0.0 : 1.0 - pow(1.0 - $t, 3.0) + (1.0 - $t) * sin((1.0 - $t) * M_PI),
             self::BackInOut => $t < 0.5
                 ? (pow(2.0 * $t, 3.0) - (2.0 * $t) * sin((2.0 * $t) * M_PI)) / 2.0
                 : (1.0 - pow(-2.0 * $t + 2.0, 3.0) + (1.0 - $t) * sin((-2.0 * $t + 2.0) * M_PI)) / 2.0 + 0.5,
         };
 
         return $result;
+    }
+
+    /**
+     * ElasticIn — canonical Penner/easings.net form `-(2^(10t-10)) ·
+     * sin((10t - 10.75) · (2π/3))`. The raw formula answers -4.88e-4 at
+     * t = 0 (sin of a huge negative phase, not zero), so the exact endpoints
+     * are guarded.
+     */
+    private function elasticIn(float $t): float
+    {
+        if ($t === 0.0) {
+            return 0.0;
+        }
+        if ($t === 1.0) {
+            return 1.0;
+        }
+        return -pow(2.0, 10.0 * $t - 10.0) * sin((10.0 * $t - 10.75) * ((2.0 * M_PI) / 3.0));
+    }
+
+    /**
+     * ElasticOut — canonical form `2^(-10t) · sin((10t - 0.75) · (2π/3)) + 1`.
+     *
+     * The previous spelling `sin(13πt/2) · 2^(-10t) + t` dropped the phase
+     * shift and added t instead of 1: it collapsed the rubber-band overshoot
+     * to a near-monotonic ramp that DIPPED NEGATIVE at t = 0.2 (-0.0023) —
+     * an "ease-out" with an anticipation dip, contradicting the curve's own
+     * overshoot contract. Endpoints agreed, which is why endpoint-only pins
+     * stayed green over the wrong shape.
+     */
+    private function elasticOut(float $t): float
+    {
+        if ($t === 0.0) {
+            return 0.0;
+        }
+        if ($t === 1.0) {
+            return 1.0;
+        }
+        return pow(2.0, -10.0 * $t) * sin((10.0 * $t - 0.75) * ((2.0 * M_PI) / 3.0)) + 1.0;
+    }
+
+    /**
+     * ElasticInOut — canonical two-half form with the (2π)/4.5 angular
+     * constant continuity REQUIRES: at t = 0.5 both halves answer exactly
+     * 0.5. The previous M_PI * 2.5 constant left the two halves disagreeing
+     * by 0.444 across the half-way frame — a renderer crossing that frame
+     * visibly teleported the object.
+     */
+    private function elasticInOut(float $t): float
+    {
+        if ($t === 0.0) {
+            return 0.0;
+        }
+        if ($t === 1.0) {
+            return 1.0;
+        }
+        $omega = (2.0 * M_PI) / 4.5;
+        return $t < 0.5
+            ? -(pow(2.0, 20.0 * $t - 10.0) * sin((20.0 * $t - 11.125) * $omega)) / 2.0
+            : (pow(2.0, -20.0 * $t + 10.0) * sin((20.0 * $t - 11.125) * $omega)) / 2.0 + 1.0;
     }
 
     /**

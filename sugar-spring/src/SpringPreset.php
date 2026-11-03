@@ -9,10 +9,10 @@ namespace SugarCraft\Spring;
  *
  * Each preset encodes tension / friction / mass values that translate
  * to physically meaningful angularFrequency and dampingRatio inside
- * {@see SpringConfig}.
- *
- * @see https://developer.apple.com/documentation/uikit/uiviewpropertyanimator
- *   for the canonical real-world preset values (translated from UIKit).
+ * {@see SpringConfig}. The five triples are TUNED BY HAND for feel
+ * (the react-spring/RN folk-table lineage); they are not verbatim
+ * transcriptions of any published table — UIKit's animator, for
+ * instance, exposes duration/damping curves, not tension/friction/mass.
  */
 enum SpringPreset
 {

@@ -17,11 +17,26 @@ namespace SugarCraft\Spring;
  */
 final class Vector implements \JsonSerializable
 {
+    private const EPSILON = 1e-9;
+
+    /**
+     * @throws \InvalidArgumentException on a non-finite component — NaN/INF
+     *         would propagate through every add/scale/length downstream and
+     *         jsonSerialize() false on INF, far from the cause.
+     */
     public function __construct(
         public readonly float $x,
         public readonly float $y,
         public readonly float $z = 0.0,
-    ) {}
+    ) {
+        if (!is_finite($x) || !is_finite($y) || !is_finite($z)) {
+            throw new \InvalidArgumentException(Lang::t('vector.components_finite', [
+                'x' => $x,
+                'y' => $y,
+                'z' => $z,
+            ]));
+        }
+    }
 
     public static function zero(): self
     {
@@ -85,18 +100,22 @@ final class Vector implements \JsonSerializable
     /**
      * Normalized (unit) vector.
      *
-     * @throws \RuntimeException if called on a zero-length vector
+     * @throws \RuntimeException if called on a zero-length vector, or on one
+     *         whose length OVERFLOWED to INF (finite components around 1e154
+     *         and up sum their squares past float_MAX) — dividing by INF would
+     *         silently answer the zero vector, the opposite of a unit vector.
      */
     public function normalize(): self
     {
         $len = $this->length();
+        if (!is_finite($len)) {
+            throw new \RuntimeException(Lang::t('vector.normalize_overflow', ['length' => $len]));
+        }
         if ($len < self::EPSILON) {
-            throw new \RuntimeException('Cannot normalize a zero-length vector');
+            throw new \RuntimeException(Lang::t('vector.normalize_zero'));
         }
         return $this->scale(1.0 / $len);
     }
-
-    private const EPSILON = 1e-9;
 
     /**
      * Linear interpolation between this vector and $other.

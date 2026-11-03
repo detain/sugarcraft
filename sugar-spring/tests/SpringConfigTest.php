@@ -47,22 +47,83 @@ final class SpringConfigTest extends TestCase
         $this->assertInstanceOf(Spring::class, $spring);
     }
 
-    public function testZeroTensionYieldsZeroFrequency(): void
+    // M-A (review 1102): the old `max(0.0, ·)` clamps manufactured exactly
+    // the springs that never settle — ω=0 freezes the state, ζ=0 oscillates
+    // forever, and the `while (!$config->spring()->settled(...))` idiom hangs
+    // on a VALID-looking config. A spring that cannot converge is illegal at
+    // this boundary, not slow. Tests renamed from "Yields*"/"TreatedAs*" to
+    // "IsRefused" — flipping them is the point.
+
+    public function testZeroTensionIsRefused(): void
     {
-        $config = new SpringConfig(tension: 0.0, friction: 5.0, mass: 1.0);
-        $this->assertEqualsWithDelta(0.0, $config->angularFrequency, self::EPS);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringConfig tension must be > 0');
+        new SpringConfig(tension: 0.0, friction: 5.0, mass: 1.0);
     }
 
-    public function testZeroFrictionYieldsZeroDamping(): void
+    public function testZeroFrictionIsRefused(): void
     {
-        $config = new SpringConfig(tension: 100.0, friction: 0.0, mass: 1.0);
-        $this->assertEqualsWithDelta(0.0, $config->dampingRatio, self::EPS);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringConfig friction must be > 0');
+        new SpringConfig(tension: 100.0, friction: 0.0, mass: 1.0);
     }
 
-    public function testNegativeTensionTreatedAsZero(): void
+    public function testNegativeTensionIsRefused(): void
     {
-        $config = new SpringConfig(tension: -50.0, friction: 10.0, mass: 1.0);
-        $this->assertEqualsWithDelta(0.0, $config->angularFrequency, self::EPS);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringConfig tension must be > 0');
+        new SpringConfig(tension: -50.0, friction: 10.0, mass: 1.0);
+    }
+
+    /**
+     * @dataProvider nonFiniteConfigValueProvider
+     */
+    public function testNonFiniteInputsAreRefused(string $plane, float $value): void
+    {
+        // NaN mass used to pass the `mass <= 0` door (NAN <= 0 is false) and
+        // leak a permanently unsettled spring into the public ω/ζ props.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringConfig inputs must be finite');
+        new SpringConfig(
+            tension: $plane === 'tension' ? $value : 100.0,
+            friction: $plane === 'friction' ? $value : 10.0,
+            mass: $plane === 'mass' ? $value : 1.0,
+        );
+    }
+
+    public static function nonFiniteConfigValueProvider(): iterable
+    {
+        foreach (['tension', 'friction', 'mass'] as $plane) {
+            yield "{$plane} NaN" => [$plane, NAN];
+            yield "{$plane} INF" => [$plane, INF];
+            yield "{$plane} -INF" => [$plane, -INF];
+        }
+    }
+
+    public function testOverflowingDerivationIsRefused(): void
+    {
+        // 1e308 / 1e-308 overflows to INF inside sqrt(tension / mass) even
+        // though every INPUT is finite — the derived belt catches it before
+        // the poisoned ω/ζ become public readonly properties.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringConfig derived a non-converging spring');
+        new SpringConfig(tension: 1e308, friction: 1.0, mass: 1e-308);
+    }
+
+    public function testSpringThreadsReducedMotionOverride(): void
+    {
+        $config = new SpringConfig(tension: 100.0, friction: 10.0, mass: 1.0);
+
+        $this->assertSame(
+            [100.0, 0.0],
+            $config->spring(1.0 / 60.0, true)->update(0.0, 0.0, 100.0),
+            'spring(dt, override: true) must snap despite any host env'
+        );
+        $this->assertNotSame(
+            [100.0, 0.0],
+            $config->springAt60Fps(false)->update(0.0, 0.0, 100.0),
+            'springAt60Fps(override: false) must animate despite any host env'
+        );
     }
 
     public function testSpringFromConfigConverges(): void

@@ -130,4 +130,12 @@ final class PointTest extends TestCase
         $this->assertSame($originalY, $p->y);
         $this->assertSame($originalZ, $p->z);
     }
+
+    public function testConstructorRefusesNonFiniteComponents(): void
+    {
+        // Mirrors VectorTest (security m4): the ctor is the trust boundary.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Point components must be finite');
+        new Point(1.0, NAN, 3.0);
+    }
 }

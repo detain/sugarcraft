@@ -30,37 +30,67 @@ final readonly class SpringConfig
         public float $friction,
         public float $mass,
     ) {
-        if ($mass <= 0.0) {
-            throw new \InvalidArgumentException(
-                "SpringConfig mass must be > 0; got {$mass}"
-            );
+        // Boundary validation mirrors Spring's own: NAN slips past `<= 0`
+        // (every NAN comparison is false), and the former max(0.0, ·) clamps
+        // folded zero/negative tension or friction into ω = 0 / ζ = 0 —
+        // derived values that LEAK through the public readonly properties
+        // and, once handed to Spring, produce a spring that never settles.
+        // A non-converging config is refused here, at its cause.
+        if (!is_finite($tension) || !is_finite($friction) || !is_finite($mass)) {
+            throw new \InvalidArgumentException(Lang::t('spring.config_inputs_finite', [
+                'tension' => $tension,
+                'friction' => $friction,
+                'mass' => $mass,
+            ]));
         }
-        $safeMass   = $mass;
-        $safeTension = max(0.0, $tension);
+        if ($mass <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('spring.config_mass', ['mass' => $mass]));
+        }
+        if ($tension <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('spring.config_tension', ['tension' => $tension]));
+        }
+        if ($friction <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('spring.config_friction', ['friction' => $friction]));
+        }
 
-        $root = sqrt($safeTension * $safeMass);
-        if ($root < 1e-12) {
-            $this->angularFrequency = 0.0;
-            $this->dampingRatio     = 0.0;
-        } else {
-            $this->angularFrequency = sqrt($safeTension / $safeMass);
-            $this->dampingRatio     = max(0.0, $friction) / (2.0 * $root);
+        $root = sqrt($tension * $mass);
+        $this->angularFrequency = sqrt($tension / $mass);
+        $this->dampingRatio     = $friction / (2.0 * $root);
+
+        // Extreme-but-finite triples (tension/mass overflow, underflow to a
+        // zero root) can still derive a non-converging spring; the derived
+        // props are public, so they must not escape poisoned.
+        if (!is_finite($this->angularFrequency)
+            || !is_finite($this->dampingRatio)
+            || $this->angularFrequency <= 0.0
+            || $this->dampingRatio <= 0.0
+        ) {
+            throw new \InvalidArgumentException(Lang::t('spring.config_derived', [
+                'tension' => $tension,
+                'friction' => $friction,
+                'mass' => $mass,
+                'angularFrequency' => $this->angularFrequency,
+                'dampingRatio' => $this->dampingRatio,
+            ]));
         }
     }
 
     /**
      * Construct a spring pre-configured at 60 fps by default.
+     *
+     * @param bool|null $reducedMotionOverride Overrides the environment
+     *        reduced-motion lookup for the produced spring (null = consult env).
      */
-    public function spring(float $deltaTime = 1.0 / 60.0): Spring
+    public function spring(float $deltaTime = 1.0 / 60.0, ?bool $reducedMotionOverride = null): Spring
     {
-        return new Spring($deltaTime, $this->angularFrequency, $this->dampingRatio);
+        return new Spring($deltaTime, $this->angularFrequency, $this->dampingRatio, $reducedMotionOverride);
     }
 
     /**
      * Spring at 60 fps using this config's derived values.
      */
-    public function springAt60Fps(): Spring
+    public function springAt60Fps(?bool $reducedMotionOverride = null): Spring
     {
-        return $this->spring(1.0 / 60.0);
+        return $this->spring(1.0 / 60.0, $reducedMotionOverride);
     }
 }

@@ -4,10 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Spring\Tests;
 
+use PHPUnit\Framework\TestCase;
 use SugarCraft\Spring\Spring;
 use SugarCraft\Spring\SpringChain;
-use PHPUnit\Framework\TestCase;
 
+/**
+ * Review-1102 M-D: tick() now returns the advanced chain directly
+ * (`tick(): self`), not a 3-tuple whose element 0 was computed from the
+ * PRE-update stages — the stale tuple let a renderer paint yesterday's
+ * frame, and dropping its third element silently looped forever. Freshness
+ * is pinned explicitly below: positions read off the RESULT of a tick must
+ * have moved within that same call.
+ */
 final class SpringChainTest extends TestCase
 {
     public function testEmptyChainIsComplete(): void
@@ -25,16 +33,16 @@ final class SpringChainTest extends TestCase
         $this->assertFalse($chain->isComplete());
         $this->assertEquals(0, $chain->activeStage());
 
-        // Advance until settled (immutable - each tick returns new chain)
-        $positions = [];
+        // Advance until settled (immutable - each tick returns the new chain)
         for ($i = 0; $i < 600; $i++) {
-            [$positions, $complete, $chain] = $chain->tick();
-            if ($complete === true) {
+            $chain = $chain->tick();
+            if ($chain->isComplete()) {
                 break;
             }
         }
 
         $this->assertTrue($chain->isComplete());
+        $positions = $chain->currentPositions();
         $this->assertEqualsWithDelta(100.0, $positions[0], 0.01);
     }
 
@@ -51,9 +59,9 @@ final class SpringChainTest extends TestCase
         // First stage is active
         $this->assertEquals(0, $chain->activeStage());
 
-        // Advance first stage until settled (immutable - each tick returns new chain)
+        // Advance first stage until settled (immutable - each tick returns the new chain)
         for ($i = 0; $i < 600; $i++) {
-            [, , $chain] = $chain->tick();
+            $chain = $chain->tick();
             if ($chain->activeStage() > 0) {
                 break;
             }
@@ -77,13 +85,11 @@ final class SpringChainTest extends TestCase
             [$spring, 0.0, 0.0, 75.0],
         ]);
 
-        $complete = false;
-        $positions = [];
-        for ($i = 0; $i < 2000 && $complete === false; $i++) {
-            [$positions, $complete, $chain] = $chain->tick();
+        for ($i = 0; $i < 2000 && !$chain->isComplete(); $i++) {
+            $chain = $chain->tick();
         }
 
-        $this->assertTrue($complete);
+        $this->assertTrue($chain->isComplete());
         $finalPositions = $chain->currentPositions();
         $this->assertEqualsWithDelta(100.0, $finalPositions[0], 0.01);
         $this->assertEqualsWithDelta(50.0, $finalPositions[1], 0.01);
@@ -100,16 +106,41 @@ final class SpringChainTest extends TestCase
         $this->assertCount(2, $chain->currentPositions());
     }
 
-    public function testTickReturnsPositionsAndCompleteStatus(): void
+    /**
+     * M-D discriminator: a single tick must move the ACTIVE stage's position
+     * within the same call — a renderer reading currentPositions() off the
+     * returned chain sees this frame, not yesterday's. (The old tuple's
+     * element 0 was computed before the update ran.)
+     */
+    public function testTickPositionsAreFreshNotOneFrameStale(): void
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
         $chain = SpringChain::new([[$spring, 0.0, 0.0, 100.0]]);
 
-        [$positions, $complete, $newChain] = $chain->tick();
+        $this->assertSame([0.0], $chain->currentPositions());
 
-        $this->assertIsArray($positions);
-        $this->assertFalse($complete);
+        $advanced = $chain->tick();
+
+        $this->assertNotSame($chain, $advanced, 'tick must be copy-on-write');
+        $positions = $advanced->currentPositions();
+        $this->assertGreaterThan(
+            0.0,
+            $positions[0],
+            'the frame a tick returns must already contain the advanced position (no one-frame staleness)',
+        );
+        // And the pre-tick chain is untouched (immutability).
+        $this->assertSame([0.0], $chain->currentPositions());
+    }
+
+    public function testTickIsCopyOnWriteAndReturnsChain(): void
+    {
+        $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
+        $chain = SpringChain::new([[$spring, 0.0, 0.0, 100.0]]);
+
+        $newChain = $chain->tick();
+
         $this->assertInstanceOf(SpringChain::class, $newChain);
+        $this->assertFalse($newChain->isComplete());
     }
 
     /**
@@ -126,7 +157,7 @@ final class SpringChainTest extends TestCase
             [$spring, 0.0, 0.0, 50.0],
         ]);
 
-        [, , $advanced] = $chain->tick();
+        $advanced = $chain->tick();
         $positions = $advanced->currentPositions();
 
         $this->assertGreaterThan(0.0, $positions[0], 'active stage must advance');
@@ -146,35 +177,89 @@ final class SpringChainTest extends TestCase
 
         $runOne = $build();
         $runTwo = $build();
-        $posOne = [];
-        $posTwo = [];
         for ($i = 0; $i < 200; $i++) {
-            [$posOne, , $runOne] = $runOne->tick();
-            [$posTwo, , $runTwo] = $runTwo->tick();
+            $runOne = $runOne->tick();
+            $runTwo = $runTwo->tick();
         }
 
-        $this->assertSame($posOne, $posTwo);
+        $this->assertSame($runOne->currentPositions(), $runTwo->currentPositions());
         $this->assertSame($runOne->activeStage(), $runTwo->activeStage());
     }
 
-    public function testTickOnCompletedChainReturnsCompleteState(): void
+    public function testTickOnCompletedChainIsIdempotent(): void
     {
         $spring = new Spring(1.0 / 60.0, 6.0, 1.0);
         $chain = SpringChain::new([[$spring, 0.0, 0.0, 100.0]]);
 
         // Advance until complete
-        for ($i = 0; $i < 600; $i++) {
-            [, $complete, $chain] = $chain->tick();
-            if ($complete) {
-                break;
-            }
+        for ($i = 0; $i < 600 && !$chain->isComplete(); $i++) {
+            $chain = $chain->tick();
         }
         $this->assertTrue($chain->isComplete());
 
-        // Calling tick on already-complete chain returns early with complete=true
-        [$positions, $complete, $newChain] = $chain->tick();
-        $this->assertTrue($complete);
-        $this->assertSame($chain->currentPositions(), $positions);
-        $this->assertSame($chain->activeStage(), $newChain->activeStage());
+        // Ticking an already-complete chain is a no-op: same state, positions
+        // and stage unchanged (the loop-terminates predicate stays stable).
+        $after = $chain->tick();
+        $this->assertTrue($after->isComplete());
+        $this->assertSame($chain->currentPositions(), $after->currentPositions());
+        $this->assertSame($chain->activeStage(), $after->activeStage());
+    }
+
+    // ---- stage parsing guards (M-A/parse-don't-validate family) ----
+
+    public function testStageWithTooFewElementsIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringChain stage 0 must be [Spring, float, float, float]');
+
+        SpringChain::new([[new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0]]);
+    }
+
+    public function testStageWithNonSpringFirstElementIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringChain stage 1 must be [Spring, float, float, float]');
+
+        SpringChain::new([
+            [new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 100.0],
+            ['not-a-spring', 0.0, 0.0, 50.0],
+        ]);
+    }
+
+    public function testStageWithNonNumericPositionIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringChain stage 0 must be [Spring, float, float, float]');
+
+        SpringChain::new([[new Spring(1.0 / 60.0, 6.0, 1.0), 'ocean', 0.0, 100.0]]);
+    }
+
+    public function testActiveIndexBeyondStageCountIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringChain activeIndex must be between 0 and the stage count; got 5 with 1 stages');
+
+        new SpringChain(
+            [[new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 100.0]],
+            5,
+        );
+    }
+
+    public function testNegativeActiveIndexIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringChain activeIndex must be between 0 and the stage count; got -1 with 1 stages');
+
+        new SpringChain(
+            [[new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 100.0]],
+            -1,
+        );
+    }
+
+    public function testSettlingThresholdIsPubliclyConsultable(): void
+    {
+        // The README quotes this constant as the hand-off tolerance; it used
+        // to be private, so the quote was unbackable.
+        $this->assertSame(0.0005, SpringChain::SETTLING_THRESHOLD);
     }
 }

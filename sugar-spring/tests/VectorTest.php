@@ -257,4 +257,50 @@ final class VectorTest extends TestCase
         $this->assertSame($originalY, $v->y);
         $this->assertSame($originalZ, $v->z);
     }
+
+    // M-A/security m4 (review 1102): Vector/Point accepted non-finite
+    // components while Projectile refused them. A NaN length also failed the
+    // `$len < EPSILON` zero-door (NaN comparisons are false), so normalize()
+    // divided by it and returned a NaN vector in silence. Now the ctor is
+    // the trust boundary, mirroring Projectile's.
+
+    /**
+     * @dataProvider nonFiniteComponentProvider
+     */
+    public function testConstructorRefusesNonFiniteComponents(string $axis, float $value): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Vector components must be finite');
+        new Vector(
+            $axis === 'x' ? $value : 1.0,
+            $axis === 'y' ? $value : 2.0,
+            $axis === 'z' ? $value : 3.0,
+        );
+    }
+
+    public static function nonFiniteComponentProvider(): iterable
+    {
+        foreach (['x', 'y', 'z'] as $axis) {
+            yield "{$axis} NaN"  => [$axis, NAN];
+            yield "{$axis} INF"  => [$axis, INF];
+            yield "{$axis} -INF" => [$axis, -INF];
+        }
+    }
+
+    public function testNormalizeRefusesOverflowedLength(): void
+    {
+        // Sum-of-squares overflow at ~1e154: components are finite, but the
+        // length is INF. The old code divided by INF and handed back the
+        // zero vector — a silent annihilation, not a unit vector.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('overflowed to infinity');
+        (new Vector(1e308, 1e308, 1e308))->normalize();
+    }
+
+    public function testNormalizeStillRefusesZeroVector(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cannot normalize a zero-length vector');
+        (new Vector(0.0, 0.0, 0.0))->normalize();
+    }
 }

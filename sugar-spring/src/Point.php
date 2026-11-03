@@ -13,11 +13,23 @@ namespace SugarCraft\Spring;
  */
 final class Point implements \JsonSerializable
 {
+    /**
+     * @throws \InvalidArgumentException on a non-finite component (see
+     *         {@see Vector} — the same trust boundary for the same reason).
+     */
     public function __construct(
         public readonly float $x,
         public readonly float $y,
         public readonly float $z = 0.0,
-    ) {}
+    ) {
+        if (!is_finite($x) || !is_finite($y) || !is_finite($z)) {
+            throw new \InvalidArgumentException(Lang::t('point.components_finite', [
+                'x' => $x,
+                'y' => $y,
+                'z' => $z,
+            ]));
+        }
+    }
 
     public static function zero(): self
     {

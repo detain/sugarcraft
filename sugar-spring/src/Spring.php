@@ -42,13 +42,16 @@ final class Spring
     ) {
         $this->reducedMotionOverride = $reducedMotionOverride;
 
-        // A3b fail-fast: the max(0.0, ·) clamps below silently fold NAN into
-        // 0.0 (max returns the other operand), and an INF dampingRatio flows
-        // into the over-damped branch where 0·INF produces NAN coefficients —
-        // every later update() then returns NAN for the rest of the spring's
-        // life, far from its cause. A negative deltaTime integrates the
-        // oscillator backwards and exp() diverges. Validate the inputs here,
-        // at the boundary, and trust the coefficients throughout.
+        // Fail-fast at the boundary. Non-finite inputs poison the oscillator
+        // (NAN folds silently through comparisons, an INF dampingRatio flows
+        // into the over-damped branch where 0·INF produces NAN coefficients),
+        // and a negative deltaTime integrates the oscillator backwards.
+        // Beyond that, a spring that cannot converge is ILLEGAL, not slow:
+        // ω below the numeric floor carries no restoring force (the former
+        // identity transform froze position forever), ζ = 0 oscillates with
+        // undecaying amplitude, and ζ < 0 diverges. All three make the
+        // documented `while (!Spring::settled(...))` loop spin forever, so the
+        // constructor refuses them here and every frame downstream is trusted.
         if (!is_finite($deltaTime) || !is_finite($angularFrequency) || !is_finite($dampingRatio)) {
             throw new \InvalidArgumentException(Lang::t('spring.inputs_finite', [
                 'deltaTime' => $deltaTime,
@@ -59,17 +62,11 @@ final class Spring
         if ($deltaTime < 0.0) {
             throw new \InvalidArgumentException(Lang::t('spring.negative_dt', ['deltaTime' => $deltaTime]));
         }
-
-        $angularFrequency = max(0.0, $angularFrequency);
-        $dampingRatio     = max(0.0, $dampingRatio);
-
         if ($angularFrequency < self::EPSILON) {
-            // No restoring force — identity transform.
-            $this->posPosCoef = 1.0;
-            $this->posVelCoef = 0.0;
-            $this->velPosCoef = 0.0;
-            $this->velVelCoef = 1.0;
-            return;
+            throw new \InvalidArgumentException(Lang::t('spring.angular_too_small', ['angularFrequency' => $angularFrequency]));
+        }
+        if ($dampingRatio <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('spring.damping_positive', ['dampingRatio' => $dampingRatio]));
         }
 
         if ($dampingRatio > 1.0 + self::EPSILON) {
@@ -91,10 +88,7 @@ final class Spring
             $this->posVelCoef = -$e1OverTwoZb + $e2OverTwoZb;
             $this->velPosCoef = ($z1e1OverTwoZb - $z2e2OverTwoZb + $e2) * $z2;
             $this->velVelCoef = -$z1e1OverTwoZb + $z2e2OverTwoZb;
-            return;
-        }
-
-        if ($dampingRatio < 1.0 - self::EPSILON) {
+        } elseif ($dampingRatio < 1.0 - self::EPSILON) {
             $omegaZeta = $angularFrequency * $dampingRatio;
             $alpha     = $angularFrequency * sqrt(1.0 - $dampingRatio * $dampingRatio);
 
@@ -111,30 +105,65 @@ final class Spring
             $this->posVelCoef = $expSin * $invAlpha;
             $this->velPosCoef = -$expSin * $alpha - $omegaZeta * $expOmegaZetaSinOverAlpha;
             $this->velVelCoef = $expCos - $expOmegaZetaSinOverAlpha;
-            return;
+        } else {
+            // Critically damped (|ζ - 1| ≤ ε).
+            $expTerm     = exp(-$angularFrequency * $deltaTime);
+            $timeExp     = $deltaTime * $expTerm;
+            $timeExpFreq = $timeExp * $angularFrequency;
+
+            $this->posPosCoef = $timeExpFreq + $expTerm;
+            $this->posVelCoef = $timeExp;
+            $this->velPosCoef = -$angularFrequency * $timeExpFreq;
+            $this->velVelCoef = -$timeExpFreq + $expTerm;
         }
 
-        // Critically damped (|ζ - 1| ≤ ε).
-        $expTerm     = exp(-$angularFrequency * $deltaTime);
-        $timeExp     = $deltaTime * $expTerm;
-        $timeExpFreq = $timeExp * $angularFrequency;
-
-        $this->posPosCoef = $timeExpFreq + $expTerm;
-        $this->posVelCoef = $timeExp;
-        $this->velPosCoef = -$angularFrequency * $timeExpFreq;
-        $this->velVelCoef = -$timeExpFreq + $expTerm;
+        // Belt: finite inputs do not imply finite coefficients. ω on the order
+        // of 1e155 overflows the intermediates (ω·ζ, exp(z·dt), the sqrt
+        // argument under ζ²) into NAN, and a NAN coefficient corrupts every
+        // later frame in silence. Refuse such a spring at construction.
+        foreach ([$this->posPosCoef, $this->posVelCoef, $this->velPosCoef, $this->velVelCoef] as $coefficient) {
+            if (!is_finite($coefficient)) {
+                throw new \InvalidArgumentException(Lang::t('spring.coeffs_finite', [
+                    'deltaTime' => $deltaTime,
+                    'angularFrequency' => $angularFrequency,
+                    'dampingRatio' => $dampingRatio,
+                ]));
+            }
+        }
     }
 
     /**
      * Advance one step toward $target, returning the new position and velocity.
      *
      * If reduced motion is enabled via environment (REDUCE_MOTION or
-     * PREFERS_REDUCED_MOTION), the spring snaps to its target instantly.
+     * PREFERS_REDUCED_MOTION) — or pinned per spring via the constructor's
+     * $reducedMotionOverride — the spring snaps to its target instantly.
+     * Anything composed of springs inherits that behaviour: {@see SpringChain}
+     * and {@see SpringCollection} advance through their stage/spring updates,
+     * so under reduced motion they settle in one tick per stage / one tick
+     * flat. {@see Projectile} and the easing curves are NOT spring-based and
+     * need application-level gating.
+     *
+     * @throws \InvalidArgumentException if any input is non-finite — a NAN
+     *         target would otherwise ride the snap branch verbatim and pin
+     *         settled() to false forever (a non-terminating animation loop).
      *
      * @return array{0:float,1:float}
      */
     public function update(float $pos, float $vel, float $target): array
     {
+        // The data plane (pos/vel/target) is host state — accumulated
+        // keyboard input, divided layout values — and arrives unvalidated
+        // every frame. The parameter plane was guarded in the constructor;
+        // this closes the value plane ahead of the snap branch.
+        if (!is_finite($pos) || !is_finite($vel) || !is_finite($target)) {
+            throw new \InvalidArgumentException(Lang::t('spring.update_finite', [
+                'pos' => $pos,
+                'vel' => $vel,
+                'target' => $target,
+            ]));
+        }
+
         if (($this->reducedMotionOverride ?? Probe::reducedMotion()) === true) {
             return [$target, 0.0];
         }
@@ -152,6 +181,11 @@ final class Spring
      * fallen below $threshold. The default is {@see SETTLING_THRESHOLD}; callers
      * that need a different band (e.g. {@see SpringChain}'s looser stage-handoff
      * threshold) pass their own.
+     *
+     * Non-finite inputs answer FALSE — the safe direction: a poisoned state is
+     * never reported settled. {@see update()} refuses to produce one, so a
+     * spring-driven loop that only feeds this predicate values it emitted
+     * terminates by construction.
      */
     public static function settled(float $pos, float $vel, float $target, float $threshold = self::SETTLING_THRESHOLD): bool
     {
@@ -161,7 +195,10 @@ final class Spring
     /** Frame-time (seconds) for a given frame rate. `Spring::fps(60)` → 1/60. */
     public static function fps(float $n): float
     {
-        if ($n <= 0.0) {
+        // is_finite() first: `INF <= 0.0` is false, so fps(INF) would
+        // otherwise "succeed" at 0.0 — a frozen step time, the identity
+        // spring's other door to never advancing.
+        if (!is_finite($n) || $n <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('spring.fps_positive', ['fps' => $n]));
         }
         return 1.0 / $n;
@@ -172,10 +209,11 @@ final class Spring
      *
      * @param SpringPreset $preset  One of Gentle / Wobbly / Stiff / Slow / Molasses
      * @param float|null   $deltaTime Overrides the default 1/60s frame time
+     * @param bool|null    $reducedMotionOverride Overrides the environment reduced-motion lookup
      */
-    public static function fromPreset(SpringPreset $preset, ?float $deltaTime = null): Spring
+    public static function fromPreset(SpringPreset $preset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null): Spring
     {
         $config = $preset->resolve();
-        return $config->spring($deltaTime ?? (1.0 / 60.0));
+        return $config->spring($deltaTime ?? (1.0 / 60.0), $reducedMotionOverride);
     }
 }

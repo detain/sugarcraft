@@ -329,16 +329,81 @@ final class EasingTest extends TestCase
         }
     }
 
+    /**
+     * M-E (review 1102): the old spelling `sin(13πt/2)·2^(-10t) + t` dropped
+     * the phase shift and added t instead of 1 — an "ease-out" that DIPPED
+     * NEGATIVE at t=0.2 (-0.0023) while endpoint pins stayed green. The
+     * canonical curve answers 1.125 at t=0.2 and never leaves (0, 1.26]
+     * after the start. The previous version of this test asserted the BROKEN
+     * dip ("must be negative"); flipping it is the point.
+     */
     public function testElasticOutOvershootsAboveOne(): void
     {
         $easing = Easing::ElasticOut;
 
-        // ElasticOut dips below 0 at t=0.2 (negative overshoot)
-        $this->assertLessThan(
-            0.0,
+        $this->assertEqualsWithDelta(
+            1.125,
             $easing->ease(0.2),
-            'ElasticOut at t=0.2 must be negative (anticipation dip)'
+            1e-9,
+            'ElasticOut at t=0.2 must answer the canonical 2^(-2)·sin(1.25·2π/3)+1 = 1.125'
         );
+
+        // A rubber-band ease-out rings AROUND 1 — it must never dip back
+        // below the start anywhere on the sampled curve (the broken form did).
+        for ($t = 0.01; $t <= 1.0; $t += 0.01) {
+            $this->assertGreaterThan(
+                0.0,
+                $easing->ease($t),
+                sprintf('ElasticOut must stay positive past t=%s', number_format($t, 2))
+            );
+        }
+    }
+
+    public function testElasticCurveEndpointsAreExact(): void
+    {
+        // Guards removed the faithful-but-imprecise endpoint residues
+        // (ElasticIn(0) = -4.88e-4, BackOut(0) = 1.22e-16).
+        $this->assertSame(0.0, Easing::ElasticIn->ease(0.0));
+        $this->assertSame(1.0, Easing::ElasticIn->ease(1.0));
+        $this->assertSame(0.0, Easing::ElasticOut->ease(0.0));
+        $this->assertSame(1.0, Easing::ElasticOut->ease(1.0));
+        $this->assertSame(0.0, Easing::ElasticInOut->ease(0.0));
+        $this->assertSame(1.0, Easing::ElasticInOut->ease(1.0));
+        $this->assertSame(0.0, Easing::BackOut->ease(0.0));
+        $this->assertSame(1.0, Easing::BackOut->ease(1.0));
+    }
+
+    /**
+     * M-F (review 1102): the old angular constant M_PI*2.5 left the two
+     * halves of ElasticInOut disagreeing by 0.444 across the t=0.5 frame
+     * (left limit 0.2778 vs value 0.7222 — a renderer visibly teleported
+     * the object). Continuity requires (2π)/4.5: both halves answer 0.5.
+     */
+    public function testElasticInOutIsContinuousAtMidpoint(): void
+    {
+        $easing = Easing::ElasticInOut;
+
+        $this->assertEqualsWithDelta(0.5, $easing->ease(0.5), 1e-9);
+
+        $left  = $easing->ease(0.5 - 1e-9);
+        $right = $easing->ease(0.5 + 1e-9);
+        $this->assertLessThan(
+            1e-6,
+            abs($left - $right),
+            'ElasticInOut must not jump across the half-way frame'
+        );
+    }
+
+    public function testElasticOutPeaksNearCanonicalAmplitude(): void
+    {
+        // The reference first peak is ~1.0058 at t≈0.18; the broken form's
+        // max was 1.0010 with the oscillation smothered — sampling the band
+        // pins the real rubber band, not just the endpoints.
+        $peak = 0.0;
+        for ($t = 0.15; $t <= 0.25; $t += 0.001) {
+            $peak = max($peak, Easing::ElasticOut->ease($t));
+        }
+        $this->assertGreaterThan(1.12, $peak, 'ElasticOut must overshoot past 1.12');
     }
 
     public function testBackOvershootsOutsideUnitInterval(): void

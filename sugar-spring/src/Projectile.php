@@ -47,7 +47,7 @@ final class Projectile
         public readonly Vector $velocity,
         public readonly Vector $acceleration,
     ) {
-        // A3b fail-fast: explicit Euler with a non-finite or negative step
+        // Fail-fast: explicit Euler with a non-finite or negative step
         // diverges (INF dt ⇒ INF displacement; NaN dt poisons every frame
         // after the first; negative dt integrates time backwards), and a
         // non-finite state component never returns to the finite domain —
@@ -101,8 +101,9 @@ final class Projectile
      * `Projectile` instance and leaves the receiver untouched —
      * matches the rest of the SugarCraft stack's immutable-with-
      * pattern and avoids spooky action when you keep a reference to
-     * an earlier frame for replay / debugging. Read the new position
-     * from `result->position` after each call.
+     * an earlier frame for replay / debugging. The receiver keeps
+     * its old state — read the new position off the RESULT (and
+     * reassign: `$p = $p->update();`).
      */
     public static function gravity(): Vector
     {

@@ -36,6 +36,13 @@ final class SpringCollection
      * @param array<string, float> $positions
      * @param array<string, float> $velocities
      * @param array<string, float> $targets
+     *
+     * @throws \InvalidArgumentException when a plane holds a wrong-typed or
+     *         non-finite value, or the four arrays are misaligned (an id with
+     *         no spring, or a spring with no state). The four-array shape is
+     *         easy to pass unaligned; the failure names the offending id and
+     *         plane instead of surfacing as an internals-flavoured TypeError
+     *         inside tick() frames later.
      */
     public function __construct(
         array $springs = [],
@@ -43,10 +50,50 @@ final class SpringCollection
         array $velocities = [],
         array $targets = []
     ) {
+        foreach ($springs as $id => $spring) {
+            if (!$spring instanceof Spring) {
+                throw new \InvalidArgumentException(Lang::t('spring.collection_bad_spring', ['id' => (string) $id]));
+            }
+        }
+
+        $planes = ['positions' => $positions, 'velocities' => $velocities, 'targets' => $targets];
+        foreach ($planes as $plane => $values) {
+            foreach ($values as $id => $value) {
+                if (!is_numeric($value) || !is_finite((float) $value)) {
+                    throw new \InvalidArgumentException(Lang::t('spring.collection_bad_value', [
+                        'plane' => $plane,
+                        'id' => (string) $id,
+                    ]));
+                }
+            }
+        }
+
+        foreach (array_keys($springs) as $id) {
+            foreach ($planes as $plane => $values) {
+                if (!array_key_exists($id, $values)) {
+                    throw new \InvalidArgumentException(Lang::t('spring.collection_misaligned', [
+                        'id' => (string) $id,
+                        'plane' => $plane,
+                    ]));
+                }
+            }
+        }
+        foreach ($planes as $plane => $values) {
+            foreach (array_keys($values) as $id) {
+                if (!array_key_exists($id, $springs)) {
+                    throw new \InvalidArgumentException(Lang::t('spring.collection_orphan', [
+                        'id' => (string) $id,
+                        'plane' => $plane,
+                    ]));
+                }
+            }
+        }
+
+        $floatPlane = static fn (array $values): array => array_map('floatval', $values);
         $this->springs = $springs;
-        $this->positions = $positions;
-        $this->velocities = $velocities;
-        $this->targets = $targets;
+        $this->positions = $floatPlane($positions);
+        $this->velocities = $floatPlane($velocities);
+        $this->targets = $floatPlane($targets);
     }
 
     /**
@@ -94,9 +141,15 @@ final class SpringCollection
 
     /**
      * Return a NEW collection with the target for one spring changed (immutable).
+     *
+     * @throws \OutOfBoundsException for an unknown id — the old unguarded
+     *         write created a targetless orphan that survived without() and
+     *         then crashed tick() on its missing spring.
      */
     public function withTarget(string $id, float $target): self
     {
+        $this->requireSpring($id);
+
         $targets = $this->targets;
         $targets[$id] = $target;
 
@@ -111,7 +164,7 @@ final class SpringCollection
      */
     public function add(string $id, Spring $spring, float $position = 0.0, float $velocity = 0.0, float $target = 0.0): void
     {
-        @trigger_error(
+        trigger_error(
             'SpringCollection::add() is deprecated; use withSpring() which returns a new collection.',
             E_USER_DEPRECATED,
         );
@@ -130,7 +183,7 @@ final class SpringCollection
      */
     public function remove(string $id): void
     {
-        @trigger_error(
+        trigger_error(
             'SpringCollection::remove() is deprecated; use without() which returns a new collection.',
             E_USER_DEPRECATED,
         );
@@ -151,11 +204,12 @@ final class SpringCollection
      */
     public function setTarget(string $id, float $target): void
     {
-        @trigger_error(
+        trigger_error(
             'SpringCollection::setTarget() is deprecated; use withTarget() which returns a new collection.',
             E_USER_DEPRECATED,
         );
 
+        $this->requireSpring($id);
         $this->targets[$id] = $target;
     }
 
@@ -190,10 +244,65 @@ final class SpringCollection
 
     /**
      * Get the current position of a spring by id.
+     *
+     * @throws \OutOfBoundsException naming the unknown id (the raw array
+     *         read used to surface a warning-only null then a TypeError in
+     *         the renderer three lines later).
      */
     public function get(string $id): float
     {
+        if (!array_key_exists($id, $this->positions)) {
+            throw new \OutOfBoundsException(Lang::t('spring.unknown_id', ['id' => $id]));
+        }
         return $this->positions[$id];
+    }
+
+    /**
+     * Get the current velocity of a spring by id.
+     *
+     * Positions alone cannot answer "has it stopped?" — an under-damped
+     * spring coasts through its target with full speed. Completion checks
+     * need both, hence this twin of {@see get()} (and {@see settled()},
+     * which folds the pair).
+     *
+     * @throws \OutOfBoundsException naming the unknown id.
+     */
+    public function velocity(string $id): float
+    {
+        if (!array_key_exists($id, $this->velocities)) {
+            throw new \OutOfBoundsException(Lang::t('spring.unknown_id', ['id' => $id]));
+        }
+        return $this->velocities[$id];
+    }
+
+    /**
+     * Get all current velocities, keyed by spring id.
+     *
+     * @return array<string, float>
+     */
+    public function allVelocities(): array
+    {
+        return $this->velocities;
+    }
+
+    /**
+     * Whether EVERY spring in the collection has settled at its target.
+     *
+     * The stop predicate the house tick-loop needs — comparing rounded
+     * positions alone repaints a 60 Hz loop long after an under-damped
+     * spring has passed through its target. Feed this to your
+     * `while (!$collection->settled())` loop instead (see the README
+     * completion contract section for the per-frame output-coalescing
+     * companion rule).
+     */
+    public function settled(float $threshold = Spring::SETTLING_THRESHOLD): bool
+    {
+        foreach ($this->springs as $id => $spring) {
+            if (!Spring::settled($this->positions[$id], $this->velocities[$id], $this->targets[$id], $threshold)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -202,6 +311,13 @@ final class SpringCollection
     public function has(string $id): bool
     {
         return isset($this->springs[$id]);
+    }
+
+    private function requireSpring(string $id): void
+    {
+        if (!isset($this->springs[$id])) {
+            throw new \OutOfBoundsException(Lang::t('spring.unknown_id', ['id' => $id]));
+        }
     }
 
     /**
@@ -216,9 +332,14 @@ final class SpringCollection
 
     /**
      * Get the target for a specific spring.
+     *
+     * @throws \OutOfBoundsException naming the unknown id.
      */
     public function target(string $id): float
     {
+        if (!array_key_exists($id, $this->targets)) {
+            throw new \OutOfBoundsException(Lang::t('spring.unknown_id', ['id' => $id]));
+        }
         return $this->targets[$id];
     }
 

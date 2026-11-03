@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Spring\Easing;
 
+use SugarCraft\Spring\Lang;
+
 /**
  * Cubic bezier easing functions — matches the CSS `cubic-bezier()` spec.
  *
@@ -17,18 +19,27 @@ namespace SugarCraft\Spring\Easing;
  *
  * The named family beyond the four CSS keywords ships the ORIGINAL (pre-2022)
  * easings.net cubic-bezier approximation table; the site's 2022 redesign
- * revised several rows. Do not mix generations — the easeInOutCirc repair in
- * lane A3b restored the original-table Circ value precisely so the family
- * stays internally consistent with its Quint/Expo neighbours.
+ * revised several rows. Do not mix generations — the easeInOutCirc repair
+ * restored the original-table Circ value precisely so the family stays
+ * internally consistent with its Quint/Expo neighbours.
  *
  * @see https://www.w3.org/TR/css-easing-3/#cubic-bezier-algo
  * @see https://github.com/ai/easings.net (2022 table in src/easings.yml; pre-2022 table mirrored at https://30secondsofcode.org/css/s/easing-variables/)
  */
-final class CubicBezier
+final readonly class CubicBezier
 {
     private const NEWTON_ITERATIONS    = 8;
     private const NEWTON_MIN_STEP      = 0.000_001;
     private const SUBDIVISION_PRECISION = 0.000_000_1;
+    /**
+     * The two solvers aim at different tolerances BY DESIGN: the Newton pass
+     * stops at NEWTON_MIN_STEP (1e-6 — plenty for a 60 fps frame), and only
+     * its derivative-stall fallback walks the subdivision down to
+     * SUBDIVISION_PRECISION (1e-7). Answers from the two paths may therefore
+     * disagree in the sixth decimal; both are inside a frame's worth of
+     * visible motion.
+     */
+    private const MAX_SUBDIVISION_ITERATIONS = 64; // float bisection converges < 53; 64 is a loud safety net
 
     /** Control point 1 x */
     private float $x1;
@@ -55,15 +66,19 @@ final class CubicBezier
         // NaN progress value, and the corruption surfaces frames later far
         // from its cause.
         if (!is_finite($x1) || !is_finite($y1) || !is_finite($x2) || !is_finite($y2)) {
-            throw new \InvalidArgumentException(
-                "cubic-bezier control points must be finite, got [$x1, $y1, $x2, $y2]"
-            );
+            throw new \InvalidArgumentException(Lang::t('bezier.points_finite', [
+                'x1' => $x1,
+                'y1' => $y1,
+                'x2' => $x2,
+                'y2' => $y2,
+            ]));
         }
 
         if ($x1 < 0.0 || $x1 > 1.0 || $x2 < 0.0 || $x2 > 1.0) {
-            throw new \InvalidArgumentException(
-                "CubicBezier control points must have x-values in [0, 1]; got x1={$x1}, x2={$x2}"
-            );
+            throw new \InvalidArgumentException(Lang::t('bezier.x_range', [
+                'x1' => $x1,
+                'x2' => $x2,
+            ]));
         }
         $this->x1 = $x1;
         $this->y1 = $y1;
@@ -117,7 +132,7 @@ final class CubicBezier
     /**
      * Pre-2022 easings.net approximation: cubic-bezier(0.785, 0.135, 0.15, 0.86).
      *
-     * A3b repair: this row shipped byte-identical to {@see easeInOutQuint()}
+     * Repair: this row once shipped byte-identical to {@see easeInOutQuint()}
      * (0.86, 0, 0.07, 1) — a copy-paste error; the Quint row is the genuine
      * table value, the Circ row was the corrupted one. Restored from the
      * original easings.net approximation table (mirrored at
@@ -132,7 +147,7 @@ final class CubicBezier
     /**
      * Evaluate the cubic bezier at normalized time $t ∈ [0, 1].
      *
-     * Range honesty (A3b): designed for $t in [0, 1]; an out-of-range $t is
+     * Range honesty: designed for $t in [0, 1]; an out-of-range $t is
      * NOT rejected and NOT clamped — the Newton solve walks the polynomial
      * outside [0, 1] (the binary fallback stays inside it), so the result is
      * a curve-dependent extrapolation. The RETURN value is likewise unclamped: control points with y
@@ -184,7 +199,12 @@ final class CubicBezier
         $lower = 0.0;
         $upper = 1.0;
 
-        while ($lower < $upper) {
+        // Bounded by construction: each pass halves the bracket, so 64
+        // iterations is past the point where $lower and $upper collapse onto
+        // the same double (the natural exit). The bound turns a would-be
+        // infinite loop on a pathological polynomial into a best-bracket
+        // answer — same value, never a hang.
+        for ($i = 0; $i < self::MAX_SUBDIVISION_ITERATIONS && $lower < $upper; $i++) {
             $mid = ($lower + $upper) / 2.0;
             $sampleX = $this->sampleCurveX($mid);
             if (abs($sampleX - $x) < $this->epsilon) {
@@ -210,31 +230,30 @@ final class CubicBezier
 
     private function sampleCurveX(float $t): float
     {
-        // x(t) = (1-t)³·0 + 3(1-t)²t·x1 + 3(1-t)t²·x2 + t³·1
-        //      = 3(1-t)²t·x1 + 3(1-t)t²·x2 + t³
-        $t1 = 1.0 - $t;
-        $t2 = $t * $t;
-        $t3 = $t2 * $t;
+        // WebKit UnitBezier coefficient form — the SAME representation the
+        // Newton derivative uses below, so slope and value cannot drift out of
+        // agreement (the Bernstein spelling `3(1-t)²t·x1 + 3(1-t)t²·x2 + t³`
+        // is algebraically identical but rounds differently).
+        // x(t) = ax·t³ + bx·t² + cx·t, endpoints x(0)=0, x(1)=1 baked in.
+        $cx = 3.0 * $this->x1;
+        $bx = 3.0 * ($this->x2 - $this->x1) - $cx;
+        $ax = 1.0 - $cx - $bx;
 
-        return 3.0 * $t1 * $t1 * $t * $this->x1
-             + 3.0 * $t1 * $t2 * $this->x2
-             +       $t3;
+        return ($ax * $t + $bx) * $t * $t + $cx * $t;
     }
 
     private function sampleCurveY(float $t): float
     {
-        $t1 = 1.0 - $t;
-        $t2 = $t * $t;
-        $t3 = $t2 * $t;
+        $cy = 3.0 * $this->y1;
+        $by = 3.0 * ($this->y2 - $this->y1) - $cy;
+        $ay = 1.0 - $cy - $by;
 
-        return 3.0 * $t1 * $t1 * $t * $this->y1
-             + 3.0 * $t1 * $t2 * $this->y2
-             +       $t3;
+        return ($ay * $t + $by) * $t * $t + $cy * $t;
     }
 
     private function sampleCurveDerivativeX(float $t): float
     {
-        // A3b repair: the previous spelling 3(t-1)((2-t)x1+(t-2)x2) is NOT
+        // Repair note: the previous spelling 3(t-1)((2-t)x1+(t-2)x2) is NOT
         // d/dt of sampleCurveX() — e.g. at t=0 it returns -6·x1 where the true
         // derivative is 3·x1, and it collapses to 0 for every x1===x2 curve.
         // Closed form of x(t) = at³ + bt² + ct with the WebKit UnitBezier
