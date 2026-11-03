@@ -97,14 +97,14 @@ final class GitDaemon
     /** Whether the async transport is currently registered with a loop. */
     private bool $asyncActive = false;
 
-    /** Snapshot of git.allow_anonymous_read taken at construction (C-13). */
+    /** Snapshot of git.allow_anonymous_read taken at construction. */
     private bool $anonymousRead = false;
 
 
     /** Upper bound for the pre-auth request line, in bytes. */
     public const MAX_REQUEST_BYTES = 65536;
 
-    /** Absolute pre-auth lifetime: bytes alone never extend this (C-08). */
+    /** Absolute pre-auth lifetime: bytes alone never extend this. */
     public const PREAUTH_DEADLINE_SECONDS = 10;
 
     /** Stats collector override (null = shared instance). */
@@ -126,7 +126,7 @@ final class GitDaemon
         // anonymous reads are allowed and NEVER lowers a decision another
         // component already honoured. canRead() consults the singleton,
         // so without this arm a freshly exec'd daemon process refused
-        // its own published repos (the C-13 lever simply not reaching
+        // its own published repos (the anonymous-read lever simply not reaching
         // the transport that parsed it).
         if ($config->allowAnonymousRead) {
             AccessControl::getInstance()->setAllowAnonymousRead(true);
@@ -153,7 +153,7 @@ final class GitDaemon
         // Registration is state the operator means to survive the process:
         // a PUBLIC registration persists its visibility marker (idempotent
         // write), so the repo stays published for the next boot's scan
-        // instead of silently reverting to fail-closed private (M-28 —
+        // instead of silently reverting to fail-closed private (
         // the same control-plane-theater family as the CLI's user add).
         // Private/collaborator-only registrations must NOT write a marker
         // (fail-closed reads need no on-disk declaration). The exists()
@@ -222,7 +222,7 @@ final class GitDaemon
         $this->running = true;
         // A prior shutdown() latched the flag on this instance; the loop
         // would exit at once and a restarted daemon would silently refuse
-        // to serve (M-14 — serveAsync already resets it, serve() did not).
+        // to serve (serveAsync already reset it; serve() had not).
         $this->shutdownRequested = false;
 
         // Register signal handlers
@@ -362,7 +362,7 @@ final class GitDaemon
             // version selected on the listener only, so client bytes sat
             // in the kernel buffer forever — checkConnectionTimeouts()
             // then found every buffer empty and never issued the first
-            // read (C-01: accept-only, no fetch protocol). Idle sweeps
+            // read (accept-only, no fetch protocol). Idle sweeps
             // still run each second via the select timeout.
             foreach ($this->clients as $client) {
                 $read[] = $client['socket'];
@@ -413,7 +413,7 @@ final class GitDaemon
         // Capacity refuses the NEWCOMER (git-daemon's own behavior); the
         // old code killed the OLDEST established connection instead, so
         // any number of probing sockets could serially evict every real
-        // transfer in flight (C-08: oldest-kick DoS).
+        // transfer in flight (evicting the oldest was a DoS magnet).
         if (\count($this->clients) >= $this->config->gitMaxConnections) {
             \socket_clear_error($client);
             \socket_close($client);
@@ -449,7 +449,7 @@ final class GitDaemon
         $this->stats()->recordConnection();
 
         // Capacity refuses the NEWCOMER, never an established client
-        // (same C-08 policy as the blocking transport). The check must
+        // (same capacity policy as the blocking transport). The check must
         // run BEFORE the list is appended: recording a row for the
         // socket it then closed burned a permanent seat on every
         // over-capacity probe.
@@ -504,7 +504,7 @@ final class GitDaemon
         unset($client);
 
         if (!$this->clients[$idx]['handled']) {
-            // Same pre-auth caps as the blocking transport (C-08).
+            // Same pre-auth caps as the blocking transport.
             if (\strlen($this->clients[$idx]['buffer']) >= self::MAX_REQUEST_BYTES
                 || \time() - $this->clients[$idx]['connected_at'] > self::PREAUTH_DEADLINE_SECONDS
             ) {
@@ -641,7 +641,7 @@ final class GitDaemon
         // Pre-auth guardrails: an unhandled client gets a bounded request
         // line AND a bounded lifetime. Without these, anonymous sockets
         // could append unbounded bytes (memory) or trickle bytes slowly
-        // while the idle clock reset on every read (C-08).
+        // while the idle clock reset on every read.
         if (!$client['handled']) {
             if (\strlen($client['buffer']) >= self::MAX_REQUEST_BYTES) {
                 unset($client);
@@ -731,12 +731,12 @@ final class GitDaemon
         // first line is "git-upload-pack /repo\0host=...\0" PKT-LINE framed
         // (a 4-hex length prefix and NUL-separated args) — real `git clone
         // git://…` NEVER emits the bare-line form the old regex required,
-        // so no genuine client ever matched this dispatch (M-08). Accept
+        // so no genuine client ever matched this dispatch. Accept
         // the pkt-framed wire and tolerate the bare line for fixtures.
         // parseRequest also reports how many bytes the request line
         // consumed: whatever the client coalesced behind it (want
         // packets) is passed through to the pump verbatim — the daemon
-        // never pretends to parse the rest of the stream (C-02). The
+        // never pretends to parse the rest of the stream. The
         // one-shot advertisement child does not read them; a later
         // stateless-rpc relay is the disclosed upgrade path.
         $request = self::parseRequest($client['buffer']);
@@ -780,8 +780,8 @@ final class GitDaemon
             $ac = AccessControl::getInstance();
             // The daemon's only identity is the config lever: with
             // git.allow_anonymous_read off, this anonymous transport
-            // refuses EVERY request before serving a byte (C-13,
-            // fail-closed — the same lever the HTTP surface consults,
+            // refuses EVERY request before serving a byte —
+            // fail-closed: the same lever the HTTP surface consults,
             // armed once at construction).
             if (!$this->anonymousRead) {
                 $this->writePacket($client['socket'], "err Access denied\n");
@@ -869,7 +869,7 @@ final class GitDaemon
             // Non-blocking by construction (accept sets it): one
             // socket_write hands the kernel AT MOST one send window and
             // the rest of the packet silently vanishes on close — real
-            // clones died on truncated advertisements (M-09). Drain with
+            // clones died on truncated advertisements. Drain with
             // POLLOUT and a wall-clock stall bound.
             $stream = @\socket_export_stream($socket);
             if ($stream === false) {

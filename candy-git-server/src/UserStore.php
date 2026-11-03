@@ -8,7 +8,7 @@ namespace SugarCraft\GitServer;
  * Persistent user accounts store — JSON file, one per data directory.
  *
  * Before this class existed, `user add` / `user key` / `user list` printed
- * success lines while storing nothing at all (review C-03: the control plane
+ * success lines while storing nothing at all (the control plane
  * was theater — every claim evaporated on process exit). The store fixes the
  * honesty contract from the write side: an account exists exactly when its
  * bytes are on disk, and the CLI refuses (non-zero exit, stderr) whenever it
