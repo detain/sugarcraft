@@ -23,6 +23,10 @@ zone a mouse event landed in. One package, two layers:
 composer require sugarcraft/sugar-mouse
 ```
 
+Requires PHP `^8.3`; the only package dependency is `sugarcraft/sugar-core`
+(escape-sequence constants, `Sanitize`, `Width`, and the core `MouseMsg` /
+`MouseWheelMsg` wire types the Zones layer consumes).
+
 ## Quickstart
 
 ```php
@@ -68,9 +72,11 @@ if ($click !== null) {
 | `MouseEvent` | Immutable event (x, y, button, action enum) |
 | `MouseAction` | `Press` / `Release` / `Drag` / `Scroll` enum (the X10 button consts `BUTTON_LEFT/MIDDLE/RIGHT` hang off it — a legacy of the primitive's numeric-button vocabulary) |
 | `Selection` | Press → drag → release text-selection state machine over a selectable region |
-| `SelectionRange` | Normalised, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
+| `SelectionRange` | Normalized, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
 | `Sentinel` | The two framing codepoints (`U+E000` open / `U+E001` close), anchored to sugar-core |
 | `ClickResult` | The agreed press+release pair `ZoneClickTracker::track()` returns on a confirmed click |
+| `Lang` | Refusal-message lookup for this package's catalogue (`lang/`, `sugar-mouse:`-prefixed keys) |
+| `Zones\Msg\MsgZoneInBounds` | Zone-bound Msg emitted by `Manager::anyInBoundsAndUpdate()` into a Model's `update()` |
 
 `Selection` / `SelectionRange` were ported from candy-code's
 `Tui\TextSelection`, and candy-code now runs on them: `Tui\TextSelection` is
@@ -115,9 +121,15 @@ structurally indistinguishable from a marker this lib emitted — the sentinels
   against what actually reaches the terminal, or every such glyph drifts the
   recorded geometry one cell. That masking is a consumer-side duty like the
   sweep below (candy-code's `maskImageMarkers` is the precedent).
-- **Bounded work.** `Mark::MAX_ID_BYTES` is checked before any substring
-  is materialised, so an attacker-sized span between a stray `U+E000` and a
-  distant `U+E001` is rejected in O(1).
+- **Bounded work.** `Mark::MAX_ID_BYTES` (256) is checked before any
+  substring is materialized, so an attacker-sized span between a stray
+  `U+E000` and a distant `U+E001` is rejected in O(1);
+  `Mark::MAX_CONTENT_BYTES` (1 MiB) caps what `Mark` will emit around a
+  chunk. Both caps bound the EMIT side; parsing is linear single-pass with
+  no cap of its own, so feed `Scan::parse()` frames you expect to be
+  terminal-sized — a hostile multi-megabyte blob (or an unterminated CSI/OSC
+  run, which swallows the rest of its frame by design) is caller input-trust
+  like everything else untrusted.
 
 **The consumer's duty.** Anything pasted or otherwise untrusted must be
 swept *before* it is composed into a marked frame. This package re-exports
@@ -162,7 +174,7 @@ the cells it painted after it. The same holds for a leading `\n`: a zone
 that painted nothing before the newline starts on the first row it paints,
 at column 1, whatever column it opened on — `'123456789' . zone("\nabc")`
 and a bare `zone("\nabc")` opened at column 1 are both cols 1-3 of row 2.
-This departs from bubblezone's behaviour, which keeps the open position: opened
+This departs from bubblezone's behavior, which keeps the open position: opened
 past the content's last column it reports an inverted rectangle no click
 ever matches; opened short of it (`'12' . zone("\nabcdef")`) a box that
 claims unpainted cols 3-6 of row 1 while missing the painted cols 1-2 of
@@ -170,7 +182,18 @@ row 2; and opened at column 1 a box that also spans the unpainted row 1.
 
 ## Multi-row zones
 
-A zone spanning multiple rows (e.g. `"line1\nline2"`) is stored as the **smallest axis-aligned bounding box** that contains all marked cells.  The `inBounds()` check uses this rectangle, so an interior cell that was never part of the original content may still report as inside the zone.  Callers wrapping reflowed or indented text should be aware that the hit-test is approximate for multi-line content.
+A zone spanning multiple rows (e.g. `"line1\nline2"`) is stored as the
+**smallest axis-aligned bounding box** that contains all cells it painted.
+Consequences worth knowing before you mark reflowed or indented text:
+
+- The box is a union rectangle: an interior cell that was never part of the
+  content (the gap beside a short line) still reports as inside the zone.
+  The hit-test for multi-line content is approximate *by design*.
+- Only rows the zone actually painted extend it. Interior blank rows between
+  painted rows stay covered (both ends are the zone's own cells); trailing
+  blank lines inside the tags — content ending `"\n\n"` before the close
+  tag — add nothing, so the box ends on the last row that holds a painted
+  cell of the zone.
 
 ## Mouse-tracking modes
 
@@ -360,7 +383,9 @@ if ($msg instanceof ZoneEnterMsg) {
 **Boundary crossing:** moving directly from zone A to zone B produces
 an exit for A first; call `update()` again to receive the enter for B.
 This two-step pattern lets the Program animate the exit before routing
-the enter.
+the enter. `DragTracker` is deliberately the opposite: one boundary
+crossing emits its `ZoneDragMoveMsg` in the same call — do not re-feed
+the event there or you will spin.
 
 **State accessors:**
 - `currentZoneId()` — id of the hovered zone, or null

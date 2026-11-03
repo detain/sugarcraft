@@ -5,13 +5,19 @@
 
 ## Sentinel codepoints
 
-- Sentinel triple uses Unicode Private Use Area codepoints U+E000
+- The sentinel pair uses Unicode Private Use Area codepoints U+E000
   (open) and U+E001 (close).
-- **Do not** collapse U+E000+ during text normalisation** — the
+- **Do not** collapse U+E000+ during text normalization — the
   sentinel codepoints would be lost and zones would fail to parse.
-- These codepoints are guaranteed not to appear in any ANSI escape
-  sequence (CSI starts with ESC [, OSC with ESC ]) and are invisible
-  in terminal emulators.
+- These codepoints never appear in ANSI escape-sequence payloads (CSI/OSC
+  bodies are printable ASCII, U+E000/U+E001 are not) — that much is
+  guaranteed. What is NOT guaranteed: invisibility on a host. PUA codepoints
+  may render as boxes or Dotted Circles, and the lib's guarantee is only
+  that its OWN scanner treats tags as zero-width. Foreign U+E002+ glyphs
+  (Nerd Font, image-overlay markers) are visible cells; each one before a
+  zone drifts its measured geometry one cell on hosts that do not mask them
+  (sweep/mark hygiene is the consumer's lane — `Mark::untrusted()` is the
+  shipped sweep tool for U+E000/U+E001 framing bytes).
 
 ## CJK column accounting
 
@@ -33,20 +39,24 @@
 ### 2026-05-28 — Sentinel codepoints are PUA, not OSC 1337
 
 Pattern: sugar-mouse uses private-use Unicode PUA U+E000/U+E001 for
-zone sentinel markers. These codepoints are guaranteed safe from ANSI SGR
-sequence clobbering — they never appear in CSI (ESC [) or OSC (ESC ])
- byte ranges.
-Anti-pattern: Do not normalise or collapse U+E000+ during text
+zone sentinel markers. These codepoints cannot be clobbered by ANSI SGR
+sequence bytes — they never appear in CSI (ESC [) or OSC (ESC ]) ranges.
+(Zero-width-to-the-scanner, not host-invisible — see "Sentinel
+codepoints".)
+Anti-pattern: Do not normalize or collapse U+E000+ during text
 processing — the sentinel codepoints would be lost and zones would fail to
 parse.
-Source: step-05 ai/sugar-mouse-new
+Source: findings/sugar-mouse.md
 
 ## Synchronous-only design (async gap)
 
 - sugar-mouse is **synchronous-only** — no ReactPHP async integration.
-- `ZoneClickTracker::track()` and `Scanner::hit()` are blocking operations.
+- `ZoneClickTracker::track()` and `Scanner::hit()` are synchronous pure
+  computations: no I/O, no timers, nothing that can block — "blocking" was
+  always the wrong word. Async integration, if it comes, is about feeding
+  them from an event loop, not about making them async.
 - If async TUI use cases emerge, consider an async variant of the scanner.
-Source: plan_sugar-mouse.md — Item 5.1
+Source: findings/plan_sugar-mouse.md — Item 5.1
 
 ## Scanner::hit() — grid-bucket spatial index
 
@@ -57,13 +67,15 @@ Source: plan_sugar-mouse.md — Item 5.1
   table/list/grid UIs bubblezone targets.
 - Buckets are populated in zone insertion order, so among overlapping
   zones the earliest-registered still wins — identical result to the old
-  O(n) linear scan.
+  O(n) linear scan (the Zones Manager layer's lookup is different:
+  smallest-area wins, ties go to the first recorded — see
+  src/Zones/Manager.php).
 - The index is invalidated on every `scan()`/`clear()` and rebuilt on the
   next `hit()` (`Scanner.php:115-162`).
 - **Stale-warning for this file's history:** an earlier entry claimed
   hit() was an unindexed O(n) scan citing `Scanner.php:83-86`; that was
   superseded when the index landed (index-invalidation tests included).
-Source: plan_sugar-mouse.md — Item 5.2 (closed: index shipped)
+Source: findings/plan_sugar-mouse.md — Item 5.2 (closed: index shipped)
 
 ## Memoization opportunity for repeated scans
 
@@ -72,7 +84,7 @@ Source: plan_sugar-mouse.md — Item 5.2 (closed: index shipped)
   memoizing scan results could avoid redundant parsing.
 - A `ScanIterator` (implementing `IteratorAggregate`) could also yield
   zones incrementally to support streaming renderers.
-Source: plan_sugar-mouse.md — Item 5.3
+Source: findings/plan_sugar-mouse.md — Item 5.3
 
 ## From candy-zone <!-- @rename-keep historical provenance heading -->
 
@@ -80,8 +92,8 @@ Source: plan_sugar-mouse.md — Item 5.3
 - **[pattern]** When changes touch `sugar-core`, regression-check the downstream packages before opening the PR: run `vendor/bin/phpunit` in `sugar-widgets`, `sugar-forms`, and `candy-scriptui` (chain them: `cd ... && vendor/bin/phpunit && cd ... && vendor/bin/phpunit`). They consume the runtime and break silently if a Cmd/Msg surface shifts.
 - **[gotcha]** Don't bottom-stack a second `final class` inside an existing PSR-4 file (e.g. defining `Point` at the end of `src/Vector.php`). Composer autoloading expects one class per file matching the class name, so `use SugarCraft\Spring\Point` fails with `Class X not found` even though tests in the same namespace see other classes fine — extract each class into its own file matching the class name.
 - **[pattern]** For Bubble-Tea-style runtime ports, when adding a new sentinel Msg type that the Program intercepts (e.g. `SequenceMsg`, `ExecRequest`, `SuspendMsg`), the dispatch order matters: handle the sentinel branches in `Program::dispatch()` BEFORE the `WithFilter` pre-processor and BEFORE `model->update()`, otherwise filters can drop runtime sentinels and the Program will hang waiting for a teardown that never fires.
-- **[pattern:click-counter-state-machine]** `ClickCounter` uses the `SugarCraft\Core\Concerns\Mutable` trait with a custom `mutate()` override: the trait provides `use Mutable;` declaration and the array-merge pattern (`new static(...array_merge(get_object_vars($this), $changes))`), but because `ClickCounter`'s mutable private fields (`clickCount`, `lastClickTime`, `lastClickZoneId`) are not constructor parameters, the override manually creates the instance and assigns private fields after construction. This hybrid approach keeps the mutable state separate from the readonly constructor config (`manager`, `clickIntervalMs`). See `sugar-core/src/Concerns/Mutable.php` for the standard trait.
-- **[arch:facade-over-candy-mouse]** CandyMouse is a TEA-facing façade over `candy-mouse` (the SSOT low-level hit-test primitive). `Manager::mark()` → `SugarCraft\Mouse\Mark::wrap(prefix.id, content)`; `Manager::scan()` → `SugarCraft\Mouse\Scan::parse()` for bounds, then `stripMarkers()` removes the tags and returns the display-ready frame. `Zone\Zone` is a BC adapter: it keeps its public readonly bounds + `MouseMsg`-based `inBounds()`/`pos()`/`contains()`, but delegates the point-in-rect / width / height math to a wrapped `SugarCraft\Mouse\Zone` built from the same bounds (bridging `MouseMsg`→`Mouse\MouseEvent`). The marker WIRE FORMAT changed APC (`ESC _ candyzone:S:<id> ESC \`) <!-- @rename-keep historical wire token --> → PUA sentinels (`U+E000 <id> U+E001 … U+E000 /<id> U+E001`) — behaviour (bounds, get/all/anyInBounds, DragTracker/HoverTracker/ClickCounter) is byte-identical because both scanners use the same close-marker union-rectangle math + candy-core `Width`.
-- **[gotcha:id-charset]** `Mark::wrap()` (PR #1272) validates the marked id against `^[A-Za-z0-9._:-]+$` and throws `\InvalidArgumentException` otherwise, so `Manager::mark()` now throws on an out-of-charset `prefix().id` (only when enabled — disabled managers still pass content through unvalidated). Real consumer ids (`tab-N`, `cell:N`, `item:N`) and auto-prefixes (`1-`) already comply. Re-baseline any test asserting raw APC bytes to the PUA sentinels (`SugarCraft\Mouse\Sentinel::OPEN`/`CLOSE`); keep behavioural assertions as-is.
-- **[gotcha:consumer-wire-format-test]** `sugar-bits` `TabsTest::testViewContainsZoneMarkersWhenManagerIsSet` asserts the OLD APC bytes (`\x1b_`, `candyzone:S:testtab-0`) in `Tabs::view()`. The APC→PUA façade change makes that assertion fail — it must be re-baselined to PUA sentinels inside sugar-bits (out of candy-mouse's edit scope). The behavioural sugar-bits path (`testMsgZoneInBoundsActivatesMatchingTab`, mark→scan→`MsgZoneInBounds->zone->id`) stays green. <!-- @rename-keep historical wire token -->
-- **[gotcha:strip-scan-lockstep]** `Manager::stripMarkers()` must apply the SAME tag rule as sugar-mouse `Scan::parse()` (15a7f0c9f): a `U+E000 [/] <id> U+E001` span is a tag only when `<id>` is empty or passes `Mark::isValidId()` (length-checked against `Mark::MAX_ID_BYTES` before substr); otherwise only the 3 sentinel bytes go and the following text stays. Stripping "everything up to the next U+E001" desynced the cleaned frame from the scanned bounds — zones landed on cells they never painted. Pinned by `tests/ManagerStripMarkersTest.php` (`cellOf()` cross-checks bounds against the cleaned frame).
+- **[pattern:click-counter-state-machine]** `ClickCounter` does NOT use the `SugarCraft\Core\Concerns\Mutable` trait — this entry previously claimed it did, which was false (the class has no `use Mutable;` and never did). The real shape: readonly constructor config (`manager`, `clickIntervalMs`, optional `?callable $now` clock seam), mutable private streak fields (`clickCount`, `lastClickTime`, `lastClickZoneId`), and a hand-rolled private `withState(int $clickCount, float $lastClickTime, ?string $lastClickZoneId): self` that constructs the clone and threads the named private fields — no `get_object_vars()` array-merge, no dynamic property writes. `withManager()` carries the streak across rebinding (a silent reset there once lost users' double-click state). The `$now` seam lets timing tests step a virtual clock instead of sleeping.
+- **[arch:facade-over-candy-mouse]** Historical: the TEA-facing Manager layer once shipped as a separate package (`CandyMouse`, over the primitive `candy-mouse` hit-tester). The fleet rename merged BOTH layers into this single `sugar-mouse` package — the primitives and the `Zones\` Manager now live under one manifest, so docblocks and prose must speak of one package with two layers, not a façade over another package. `Manager::mark()` → `SugarCraft\Mouse\Mark::wrap(prefix.id, content)`; `Manager::scan()` → `SugarCraft\Mouse\Scan::parse()` for bounds, then the (now public) `Scan::strip()` removes the tags and returns the display-ready frame. `Zones\Zone` is a BC adapter: it keeps its public readonly bounds + `MouseMsg`-based `inBounds()`/`pos()`/`contains()`, but delegates the point-in-rect / width / height math to a wrapped `SugarCraft\Mouse\Zone` built from the same bounds; `Zones\Zone::toMouseEvent()` is the single public bridge between the three action vocabularies (core `Press|Release|Motion` + wheel message type, primitive `Press|Release|Drag|Scroll`, wire `b`-field). The marker WIRE FORMAT changed from APC (`ESC _ candyzone:S:<id> ESC \`) <!-- @rename-keep historical wire token --> to PUA sentinels (`U+E000 <id> U+E001 … U+E000 /<id> U+E001`) — bounds/registry behavior was preserved because both scanners use the same close-marker union-rectangle math + sugar-core `Width`.
+- **[gotcha:id-charset]** `Mark::wrap()` (PR #1272) validates the marked id against `/\A[A-Za-z0-9._:-]+\z/` (byte-wise anchors — no newline-allowed `$`, no `u` flag needed for this charset) and throws `\InvalidArgumentException` otherwise. `Manager::mark()` validates the id EVEN ON A DISABLED MANAGER — the previous "only when enabled; disabled managers still pass content through unvalidated" carve-out was removed: `Mark::wrap()` validates unconditionally and merely skips the tag emission when disabled (an invalid id must fail the same way whether or not the frame carries markers). `Mark::MAX_ID_BYTES`/`Mark::MAX_CONTENT_BYTES` bound id and content lengths. The APC-era instruction to re-baseline raw-byte tests to PUA sentinels (`SugarCraft\Mouse\Sentinel::OPEN`/`CLOSE`) is done history; keep behavioral assertions as-is.
+- **[gotcha:consumer-wire-format-test]** The `TabsTest::testViewContainsZoneMarkersWhenManagerIsSet` that asserted the OLD APC bytes (`\x1b_`, `candyzone:S:testtab-0`) in `Tabs::view()` lives in **sugar-widgets** (`sugar-widgets/tests/Tabs/TabsTest.php` — an earlier draft of this entry misfiled it under sugar-bits). The APC→PUA change makes that assertion fail; it was re-baselined to PUA sentinels on the consumer side (outside this lib's edit scope). The behavioral sugar-widgets path (`testMsgZoneInBoundsActivatesMatchingTab`, mark→scan→`MsgZoneInBounds->zone->id`) stays green. <!-- @rename-keep historical wire token -->
+- **[gotcha:strip-scan-lockstep]** `Scan::strip()` (public since the Manager refactor — `Manager::scan()` delegates to it; it used to be a private `Manager::stripMarkers()`) must apply the SAME tag rule as `Scan::parse()`: a `U+E000 [/] <id> U+E001` span is a tag only when `<id>` is empty or passes `Mark::isValidId()` (length-checked against `Mark::MAX_ID_BYTES` before substr); otherwise only the 3 sentinel bytes go and the following text stays. Stripping "everything up to the next U+E001" desynced the cleaned frame from the scanned bounds — zones landed on cells they never painted. Pinned by `tests/Zones/ManagerStripMarkersTest.php` (`cellOf()` cross-checks bounds against the cleaned frame). Lock-step is byte-wise-strip vs grid-walking-parse: they diverge only for well-formed tags embedded inside OSC/CSI payloads (parse skips them, strip removes them) — a known, documented edge; sweep hostile input with `Mark::untrusted()` instead of relying on either.
