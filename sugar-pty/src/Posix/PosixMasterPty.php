@@ -55,23 +55,30 @@ final class PosixMasterPty implements MasterPty
     }
 
     /**
-     * Null-timeout path (audit 2026-10-07, doc-contract ruling — no behavior
-     * change): the select arm is skipped entirely and @fread runs on the
-     * stream AS-IS, so the wait is governed by the stream's blocking mode —
-     * set only externally via Pty::setBlocking() (src/Pty.php:116) on this
-     * same stream, default blocking. Probe-proven on this box: read(8192, null)
-     * on an idle fresh master hangs until killed, returns as soon as the slave
-     * writes, and returns immediately once the stream was flipped
-     * non-blocking. Callers passing null must ensure non-blocking mode
-     * themselves or accept the blocking read; finite timeouts are recommended.
-     * The mode is deliberately NOT forced here: the stream is shared with
-     * PosixPump/MultiPump selects and owned by the caller's mode choice —
-     * switching it inside read() would mutate shared state (follow-up if a
-     * mode-owning API is ever wanted).
+     * Read up to `$len` bytes, waiting at most `$timeout` seconds.
+     *
+     * Return taxonomy: a non-empty string is data; `''` is END-OF-FILE
+     * (every slave closed — feof confirmed); `null` means "nothing to
+     * report this instant" (select timeout elapsed, or a transient
+     * would-block). Idle non-blocking reads therefore return `null`,
+     * never `''` — a caller must never confuse "quiet" with "gone".
+     *
+     * The default is a FINITE 0.05s bound so the bare one-argument
+     * shape cannot hang an interactive caller (audit: the previous
+     * `null` default meant "mode-governed", which surfaced as a
+     * permanent stall on the lib's own default-blocking master).
+     * Passing `null` explicitly keeps the old mode-governed contract:
+     * the select arm is skipped entirely and @fread runs on the stream
+     * AS-IS, so the wait is governed by the stream's blocking mode —
+     * set only externally via stream_set_blocking($master->stream(),
+     * false) or Pty::setBlocking(). Callers passing null must ensure
+     * non-blocking mode themselves or accept the blocking read. The
+     * mode is deliberately NOT forced here: the stream is shared with
+     * PosixPump/MultiPump selects and owned by the caller's mode choice.
      *
      * @see creack/pty.Read()
      */
-    public function read(int $len = 8192, ?float $timeout = null): ?string
+    public function read(int $len = 8192, ?float $timeout = 0.05): ?string
     {
         $this->assertOpen();
         if ($len <= 0) {
@@ -122,6 +129,14 @@ final class PosixMasterPty implements MasterPty
             }
             return null;  // transient error / no data
         }
+        if ($bytes === '' && !@\feof($stream)) {
+            // A would-block on a non-blocking stream surfaces as a
+            // SUCCESSFUL zero-length fread, not as false. Reporting that
+            // as '' would make "quiet" indistinguishable from "gone" —
+            // the pump loops key teardown off ''-is-EOF. `null` keeps
+            // the taxonomy: '' only ever means confirmed EOF.
+            return null;
+        }
         return $bytes;
     }
 
@@ -169,7 +184,7 @@ final class PosixMasterPty implements MasterPty
     }
 
     /**
-     * @return array{cols: int, rows: int, xpix: int, ypix: int}
+     * @return array{rows: int, cols: int, xpix: int, ypix: int}
      * @see creack/pty.GetsizeFull()
      */
     public function size(): array
@@ -389,6 +404,7 @@ final class PosixMasterPty implements MasterPty
 
     public function fd(): int
     {
+        $this->assertOpen();
         return $this->fd;
     }
 

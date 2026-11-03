@@ -71,9 +71,14 @@ final class SizeIoctl
      */
     public static function pack(int $rows, int $cols, int $xpix = 0, int $ypix = 0): \FFI\CData
     {
-        if ($rows < 0 || $cols < 0 || $xpix < 0 || $ypix < 0) {
+        // struct winsize members are `unsigned short`: values above 65535
+        // do not throw here — CData assignment wraps modulo 2^16, so a
+        // request for 65536 rows would silently set 0. Refuse up front.
+        if ($rows < 0 || $cols < 0 || $xpix < 0 || $ypix < 0
+            || $rows > 65535 || $cols > 65535 || $xpix > 65535 || $ypix > 65535
+        ) {
             throw new \InvalidArgumentException(
-                "winsize fields must be non-negative; got rows={$rows} cols={$cols} xpix={$xpix} ypix={$ypix}"
+                "winsize fields must fit an unsigned short (0..65535); got rows={$rows} cols={$cols} xpix={$xpix} ypix={$ypix}"
             );
         }
 
@@ -117,13 +122,17 @@ final class SizeIoctl
      * evidence. Callers get the same shape either way.
      *
      * @param int $fd a file descriptor that refers to a TTY
-     * @return array{cols:int, rows:int, xpix:int, ypix:int}
+     * @return array{rows:int, cols:int, xpix:int, ypix:int}
      * @throws \RuntimeException if fd is not a TTY or ioctl fails
      * @see creack/pty.GetsizeFull
      */
     public static function query(int $fd): array
     {
-        if (!\function_exists('posix_isatty') || !\posix_isatty($fd)) {
+        // The tty gate is a courtesy check, not a source of truth: when
+        // ext-posix is absent the ioctl itself answers (EBADF/ENOTTY on a
+        // non-tty, surfaced as a failing rc below). A missing function
+        // must never be reported as "not a tty".
+        if (\function_exists('posix_isatty') && !\posix_isatty($fd)) {
             throw new \RuntimeException('Cannot query size of non-tty fd');
         }
 
@@ -232,11 +241,14 @@ final class SizeIoctl
      * explicit resizes surfaced it, as a plain dead no-op rather than
      * an error. See {@see withDupAlias()} for the full WHY.
      *
-     * Multiple rapid resizes (e.g. from a fast SIGWINCH forwarding loop)
-     * are rate-limited: if the same (fd, rows, cols) triple was set
-     * within the last 20 ms, the stty subprocess is skipped. This
-     * prevents a burst of resize events from spawning a dozen stty
-     * processes that mostly race each other.
+     * No rate-limiting: a pre-execution "recently applied" cache cannot
+     * know whether the spawn it skipped actually SUCCEEDED — an early
+     * implementation that cached (fd, rows, cols) before running stty
+     * laundered a failing rc=1 into a reported 0, defeating the
+     * post-spawn re-assert of winsize (the kernel-winsize-at-0 bug this
+     * fallback exists for) and mis-skipping on recycled fds. Size
+     * requests alternate values under a SIGWINCH storm anyway, so the
+     * cache only ever suppressed identical-repeated FAILED calls.
      *
      * Fails closed: a dup or spawn failure returns non-zero and
      * {@see setSizeViaLibc()} surfaces the original ioctl rc unchanged
@@ -246,20 +258,6 @@ final class SizeIoctl
      */
     private static function sttySetSize(\FFI $libc, int $fd, int $rows, int $cols): int
     {
-        // Rate-limit: skip redundant stty calls within 20 ms window.
-        // Uses a static cache per (fd, rows, cols) triple.
-        static $lastCall = null;
-        $now = \hrtime(true);
-        if ($lastCall !== null
-            && $lastCall['fd'] === $fd
-            && $lastCall['rows'] === $rows
-            && $lastCall['cols'] === $cols
-            && ($now - $lastCall['when']) < 20_000_000  // 20 ms in nanoseconds
-        ) {
-            return 0;  // skip — recent identical call already applied
-        }
-        $lastCall = ['fd' => $fd, 'rows' => $rows, 'cols' => $cols, 'when' => $now];
-
         $rc = self::withDupAlias($libc, $fd, static function (int $dup) use ($rows, $cols): int {
             $cmd = ['stty', '-f', '/dev/fd/' . $dup, 'rows', (string) $rows, 'cols', (string) $cols];
             $desc = [

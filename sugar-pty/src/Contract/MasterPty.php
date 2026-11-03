@@ -22,18 +22,23 @@ interface MasterPty
      *
      * Returns null on timeout, empty string on EOF, bytes otherwise.
      *
-     * Timeout contract (audit 2026-10-07): with a finite $timeout the wait is
-     * bounded by an internal select. With $timeout = null NO mode control
-     * happens — the read inherits the stream's current blocking mode, which
-     * only {@see \SugarCraft\Pty\Pty::setBlocking()} changes and which a
-     * freshly opened master defaults to BLOCKING. Passing null therefore
-     * requires the caller to have armed non-blocking mode itself, or to accept
-     * an unbounded wait; prefer a finite timeout.
+     * Timeout contract: the default is a FINITE 0.05s bound so the bare
+     * one-argument shape can never hang a caller. With a finite $timeout the
+     * wait is bounded by an internal select. With $timeout = null NO mode
+     * control happens — the read inherits the stream's current blocking mode,
+     * which only stream_set_blocking on {@see stream()} (or Pty::setBlocking()
+     * via the facade) changes and which a freshly opened master defaults to
+     * BLOCKING. Passing null therefore requires the caller to have armed
+     * non-blocking mode itself, or to accept an unbounded wait.
+     *
+     * Return taxonomy: non-empty string = data; '' = confirmed EOF (every
+     * slave closed); null = nothing this instant (timeout elapsed or
+     * would-block). Quiet and gone are never conflated.
      *
      * @see creack/pty.Read()
      * @see portable-pty.MasterPty.Read()
      */
-    public function read(int $len = 8192, ?float $timeout = null): ?string;
+    public function read(int $len = 8192, ?float $timeout = 0.05): ?string;
 
     /**
      * Write bytes to the master.
@@ -56,7 +61,7 @@ interface MasterPty
     /**
      * Read the current terminal size via TIOCGWINSZ.
      *
-     * @return array{cols: int, rows: int, xpix: int, ypix: int}
+     * @return array{rows: int, cols: int, xpix: int, ypix: int}
      * @see creack/pty.GetsizeFull()
      */
     public function size(): array;

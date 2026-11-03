@@ -16,7 +16,7 @@ final class PosixMasterPtyTest extends TestCase
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi is required.');
         }
         if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
@@ -155,11 +155,11 @@ final class PosixMasterPtyTest extends TestCase
             $deadline = \microtime(true) + 1.0;
             while (\microtime(true) < $deadline) {
                 $chunk = $master->read(4096);
-                if ($chunk === null) {
-                    break;
-                }
                 if ($chunk === '') {
-                    \usleep(10_000);
+                    break;  // confirmed EOF
+                }
+                if ($chunk === null) {
+                    \usleep(10_000);  // idle — keep draining until deadline
                     continue;
                 }
                 $captured .= $chunk;

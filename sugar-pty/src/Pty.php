@@ -101,7 +101,7 @@ final class Pty implements MasterPty
         $this->impl->resize($cols, $rows);
     }
 
-    /** @return array{cols: int, rows: int, xpix: int, ypix: int} */
+    /** @return array{rows: int, cols: int, xpix: int, ypix: int} */
     public function size(): array
     {
         return $this->impl->size();
@@ -123,7 +123,13 @@ final class Pty implements MasterPty
         }
     }
 
-    public function read(int $len = 8192, ?float $timeout = null): ?string
+    /**
+     * @param ?float $timeout seconds to wait; omit for the finite 0.05s
+     *                        default, pass null explicitly for the old
+     *                        mode-governed (blocking on a fresh master)
+     *                        behaviour.
+     */
+    public function read(int $len = 8192, ?float $timeout = 0.05): ?string
     {
         return $this->impl->read($len, $timeout);
     }

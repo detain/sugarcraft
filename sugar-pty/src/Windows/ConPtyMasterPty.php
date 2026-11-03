@@ -97,9 +97,11 @@ final class ConPtyMasterPty implements MasterPty
      * null means "no data arrived before $timeout expired"; '' means the
      * output pipe is gone (the pseudo console closed it, which is what a
      * dead child's final flush leaves behind) — exactly the POSIX master's
-     * meanings, so one loop shape works against either backend.
+     * meanings, so one loop shape works against either backend. The default
+     * timeout is a finite 0.05s so the bare shape cannot hang; null = the
+     * backend's own mode-governed wait.
      */
-    public function read(int $len = 8192, ?float $timeout = null): ?string
+    public function read(int $len = 8192, ?float $timeout = 0.05): ?string
     {
         $this->assertOpen();
 
@@ -174,7 +176,9 @@ final class ConPtyMasterPty implements MasterPty
      * IS the answer — including xpix/ypix, which pseudo consoles do not
      * track at all and report as 0.
      *
-     * @return array{cols: int, rows: int, xpix: int, ypix: int}
+     * @return array shape with keys cols, rows, xpix, ypix — dimensions are
+     *               fixed at construction from CreatePseudoConsole (no
+     *               console re-query).
      */
     public function size(): array
     {

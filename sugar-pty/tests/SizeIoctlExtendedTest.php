@@ -60,7 +60,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testPackRejectsNegativeRows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('winsize fields must be non-negative');
+        $this->expectExceptionMessage('winsize fields must fit an unsigned short');
 
         SizeIoctl::pack(-1, 80);
     }
@@ -68,7 +68,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testPackRejectsNegativeCols(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('winsize fields must be non-negative');
+        $this->expectExceptionMessage('winsize fields must fit an unsigned short');
 
         SizeIoctl::pack(24, -1);
     }
@@ -76,7 +76,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testPackRejectsNegativeXpix(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('winsize fields must be non-negative');
+        $this->expectExceptionMessage('winsize fields must fit an unsigned short');
 
         SizeIoctl::pack(24, 80, -1, 0);
     }
@@ -84,7 +84,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testPackRejectsNegativeYpix(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('winsize fields must be non-negative');
+        $this->expectExceptionMessage('winsize fields must fit an unsigned short');
 
         SizeIoctl::pack(24, 80, 0, -1);
     }
@@ -181,7 +181,7 @@ final class SizeIoctlExtendedTest extends TestCase
     public function testSetSizeViaLibcRoundTrip(): void
     {
         $this->requirePtySyscalls();
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi required for this test.');
         }
 

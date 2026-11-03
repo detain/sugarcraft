@@ -15,7 +15,7 @@ final class IoTest extends TestCase
         if (PHP_OS_FAMILY === 'Windows') {
             $this->markTestSkipped('sugar-pty is POSIX-only.');
         }
-        if (!\extension_loaded('ffi')) {
+        if (!\SugarCraft\Pty\Tests\Support\PtyCapability::ffiUsable()) {
             $this->markTestSkipped('ext-ffi is required.');
         }
         if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
@@ -38,7 +38,7 @@ final class IoTest extends TestCase
         }
     }
 
-    public function testNonBlockingReadOnEmptyPtyReturnsEmptyString(): void
+    public function testNonBlockingReadOnEmptyPtyReportsNullNotEof(): void
     {
         $this->requirePtySyscalls();
 
@@ -46,11 +46,14 @@ final class IoTest extends TestCase
         try {
             $pty->setBlocking(false);
             $start = \microtime(true);
-            $bytes = $pty->read(1024);
+            $bytes = $pty->read(1024, 0.0);
             $elapsed = \microtime(true) - $start;
 
-            $this->assertSame('', $bytes, 'non-blocking read on empty PTY must return empty string');
-            $this->assertLessThan(0.05, $elapsed, 'non-blocking read must return immediately');
+            // Taxonomy: '' is CONFIRMED EOF only. An idle stream must
+            // report null so pump loops never tear down a live child
+            // because the kernel momentarily had nothing queued.
+            $this->assertNull($bytes, 'idle non-blocking read must return null, never the EOF token');
+            $this->assertLessThan(0.05, $elapsed, 'zero timeout must return immediately');
         } finally {
             $pty->close();
         }
@@ -110,14 +113,11 @@ final class IoTest extends TestCase
             $deadline = \microtime(true) + 1.0;
             while (\microtime(true) < $deadline) {
                 $chunk = $pty->read(4096);
-                if ($chunk === null) {
-                    break;
-                }
                 if ($chunk === '') {
-                    if (\str_contains($captured, $marker)) {
-                        break;
-                    }
-                    \usleep(10_000);
+                    break;  // confirmed EOF: every slave closed
+                }
+                if ($chunk === null) {
+                    \usleep(10_000);  // idle this instant — keep draining
                     continue;
                 }
                 $captured .= $chunk;
@@ -139,10 +139,10 @@ final class IoTest extends TestCase
             // verify read() returns instantly when there's no data.
             $pty->setBlocking(false);
             $start = \microtime(true);
-            $bytes = $pty->read(1024);
+            $bytes = $pty->read(1024, 0.0);
             $elapsed = \microtime(true) - $start;
 
-            $this->assertSame('', $bytes);
+            $this->assertNull($bytes, 'idle reads report null; the empty string is reserved for EOF');
             $this->assertLessThan(0.02, $elapsed, 'non-blocking read must not wait');
         } finally {
             $pty->close();
