@@ -402,7 +402,7 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
 | `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` moves live alerts to history (rendering stops until `clear()`, which also resets the flag) |
 | `->history(): list<Alert>` | Return all dismissed alerts |
-| `->view(string $background, int $w, int $h): string` | Render toast layer over background (the legacy `View()` call sites keep resolving via PHP's case-insensitive method dispatch — there is no alias method) |
+| `->view(string $background, int $w, int $h): string` | Render toast layer over background; both dimensions must lie in `1..Toast::MAX_VIEWPORT_DIMENSION` (10 000) or an `InvalidArgumentException` is thrown before any allocation — the frame is a real `width × height` cell grid, so bogus winsizes fail loud instead of exhausting memory. Boxes that cannot fit ellipsize (`…`): the icon and the line indent drop out on very narrow frames, and message/action content degrades instead of vanishing. (the legacy `View()` call sites keep resolving via PHP's case-insensitive method dispatch — there is no alias method) |
 
 | Class | Method | Description |
 |-------|--------|-------------|

@@ -37,6 +37,15 @@ final class Toast
     private const ZONE_OPEN = "\u{e000}";
     private const ZONE_CLOSE = "\u{e001}";
 
+    /**
+     * Hard ceiling for view()/actionRects()/actionAt() viewport dimensions
+     * (lib-reviews-1102 M5). The frame Buffer allocates width*height cells
+     * eagerly, and a mis-parsed winsize used to reach Buffer::new unbounded —
+     * an OOM Error a host cannot even catch. Out-of-range dimensions now fail
+     * loud with a descriptive InvalidArgumentException instead of allocating.
+     */
+    public const MAX_VIEWPORT_DIMENSION = 10000;
+
     // Configuration
     private int $maxWidth   = 50;
     private int $minWidth   = 0;
@@ -604,6 +613,10 @@ final class Toast
      * @param int $viewportWidth  Viewport width in cells
      * @param int $viewportHeight Viewport height in lines
      * @return string  The composited output
+     *
+     * @throws \InvalidArgumentException when either viewport dimension is
+     *         outside 1..self::MAX_VIEWPORT_DIMENSION (M5 fail-fast: the
+     *         frame allocates width*height cells eagerly)
      */
     public function view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string
     {
@@ -726,6 +739,21 @@ final class Toast
      */
     private function layout(string $background, int $viewportWidth, int $viewportHeight): ?array
     {
+        if ($viewportWidth < 1 || $viewportWidth > self::MAX_VIEWPORT_DIMENSION) {
+            throw new \InvalidArgumentException(\sprintf(
+                'viewportWidth %d is outside the supported range 1..%d (sugar-toast::MAX_VIEWPORT_DIMENSION)',
+                $viewportWidth,
+                self::MAX_VIEWPORT_DIMENSION
+            ));
+        }
+        if ($viewportHeight < 1 || $viewportHeight > self::MAX_VIEWPORT_DIMENSION) {
+            throw new \InvalidArgumentException(\sprintf(
+                'viewportHeight %d is outside the supported range 1..%d (sugar-toast::MAX_VIEWPORT_DIMENSION)',
+                $viewportHeight,
+                self::MAX_VIEWPORT_DIMENSION
+            ));
+        }
+
         if ($this->dismissed || $this->queue === []) {
             return null;
         }
@@ -951,6 +979,15 @@ final class Toast
         // to the inner cell width (Width::* are ANSI- and multibyte-aware).
         // Null message renders as empty string — never "null".
         $iconCells = Width::string($prefix);
+        if ($inner < $iconCells + 1) {
+            // A box narrower than icon + one content cell must ELLIPSIZE,
+            // never DELETE (lib-reviews-1102 M4: at cols<=4 the styled prefix
+            // consumed the whole inner width and the message's leading
+            // characters vanished silently). Dropping the icon is the
+            // honest degrade — the severity still shows in the border colour.
+            $prefix = '';
+            $iconCells = 0;
+        }
         $headerWrap = $this->wordWrap($alert->message ?? '', \max(1, $inner - $iconCells));
         $firstWord  = \array_shift($headerWrap) ?? '';
         $headerBody = $prefix . $firstWord;
@@ -958,7 +995,10 @@ final class Toast
 
         // Remaining wrapped message lines, indented one cell.
         foreach ($headerWrap as $wl) {
-            $body = ' ' . $wl;
+            // One-cell indent — dropped on the same degrade path as the
+            // icon: at inner<=2 the indent would itself truncate a chunk's
+            // last character (M4: delete, not ellipsize).
+            $body = ($inner <= 2 ? '' : ' ') . $wl;
             $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($body, $inner), $inner) . '│';
         }
 
@@ -970,7 +1010,15 @@ final class Toast
         // Render action buttons if any
         foreach ($alert->actions as $action) {
             $label = '[' . $action->label . ']';
-            $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($label, $inner), $inner) . '│';
+            if (Width::string(Ansi::strip($label)) > $inner) {
+                // Same ellipsize-never-delete law as the header (M4): a
+                // button that cannot fit shows '…', not silence. Styling is
+                // dropped on this edge path — a truncated button is already
+                // degraded, and cell-exact width beats colour there.
+                $middleLines[] = '│' . Width::padRight(Width::truncateMiddle(Ansi::strip($label), $inner), $inner) . '│';
+            } else {
+                $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($label, $inner), $inner) . '│';
+            }
         }
 
         $lines = [$top, ...$middleLines, $bottom];
@@ -1399,8 +1447,11 @@ final class Toast
      */
     private function renderProgressBar(float $progress, int $width): string
     {
-        // $width is the inner cell width (between the vertical borders).
-        $width = \max(4, $width);
+        // $width is the inner cell width (between the vertical borders) —
+        // the bar fills EXACTLY that budget. It used to floor at 4 cells,
+        // so a narrow box got a row longer than its own interior and the
+        // right border fell off mid-box (lib-reviews-1102 m8).
+        $width = \max(1, $width);
         $progress = \max(0.0, \min(1.0, $progress));
         $filled = (int) \round($progress * $width);
         $filled = \max(0, \min($width, $filled));
