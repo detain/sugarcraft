@@ -11,13 +11,13 @@ use SugarCraft\Constraints\GreedySolver;
 use SugarCraft\Constraints\Region;
 
 /**
- * Characterizes the opt-in boxer-compat solver mode against hand-computed
+ * Characterizes the opt-in compat solver mode against hand-computed
  * expected splits, and pins the DEFAULT mode's divergent behaviour on the same
  * inputs so the two modes are provably distinct.
  *
  * Compat mode reproduces sugar-panels's distribute()/distributeFlex():
  * round()-split + remainder-to-LAST + non-truncating overflow. See
- * {@see GreedySolver::compat()} and plan_missing.md W12.
+ * {@see GreedySolver::compat()}.
  */
 final class GreedySolverCompatTest extends TestCase
 {

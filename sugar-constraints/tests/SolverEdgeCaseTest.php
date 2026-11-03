@@ -13,8 +13,8 @@ use SugarCraft\Constraints\LayoutSolver;
 use SugarCraft\Constraints\Region;
 
 /**
- * E736/Phase-6 edge cases re-derived against the current tree: the scenarios
- * the retired-simplex plan listed that the compat/min-share/default suites do
+ * Edge cases re-derived against the current tree: the scenarios the
+ * retired-simplex era enumerated that the compat/min-share/default suites do
  * not yet pin — Max-at-available-space boundary, Fill weight overflow
  * (PHP_INT_MAX), mixed Percentage+Min tiling, Length-only slack behaviour, plus
  * the interface and direct-construction back-compat promises.
@@ -284,7 +284,7 @@ final class SolverEdgeCaseTest extends TestCase
 
     public function testCompatMinOnlyRemainderStillGoesToLastRegion(): void
     {
-        // boxer-compat keeps its own remainder-to-last policy for Min slack.
+        // Compat mode keeps its own remainder-to-last policy for Min slack.
         $rects = GreedySolver::compat()->solve(
             Region::fromSize(100, 1),
             Direction::Horizontal,

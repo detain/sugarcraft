@@ -17,8 +17,7 @@ use SugarCraft\Constraints\Region;
  *
  * The floor is the fourth quirk compat()'s three flags cannot express: a
  * sequential "reserve ≥1 cell per not-yet-placed region" clamp that keeps the
- * trailing region from collapsing to 0. See {@see GreedySolver::withMinShare()}
- * and plan_missing.md W12.
+ * trailing region from collapsing to 0. See {@see GreedySolver::withMinShare()}.
  */
 final class GreedySolverMinShareTest extends TestCase
 {

@@ -20,7 +20,7 @@ use SugarCraft\Constraints\GreedySolver;
 use SugarCraft\Constraints\Region;
 
 /**
- * Width-sum invariant sweep (crush_libs re-verify lane A5, 2026-10-08).
+ * Width-sum invariant sweep (added 2026-10-08).
  *
  * Nothing in this library used to prove that split/allocation results tile the
  * available span: the dock had a HEIGHT sweep (DockLayoutTest) but no width
@@ -38,11 +38,12 @@ use SugarCraft\Constraints\Region;
  *    over-constrained truncation (default mode, and round mode via the same
  *    truncation pass) — horizontally AND vertically, both remainder policies,
  *    and the opt-in min-share floor.
- *  - The one honest exception is documented behaviour, not drift: an
+ *  - The honest exceptions are documented behaviour, not drift: an
  *    under-constrained fixed-only layout (Length/Percentage/Ratio summing to
  *    less than the span) keeps its exact sizes and leaves the slack as a gap
- *    (testUnderconstrainedFixedLayoutKeepsItsGap); nothing may inflate a fixed
- *    constraint.
+ *    (testUnderconstrainedFixedLayoutKeepsItsGap); and the Max-clamp reclaim,
+ *    all-zero-weight Fill, and compat off-grid shapes are carried point-exact
+ *    by testNamedExceptionsOffTheTilingLaw. Nothing else may break the sum.
  *  - Same input → same output for every case swept (determinism), and the
  *    deprecated CassowarySolver delegates byte-identically.
  */
@@ -377,6 +378,53 @@ final class WidthSumInvariantSweepTest extends TestCase
                 $this->assertEquals($expected, $actual, "delegation drifted for $name at w=$width");
             }
         }
+    }
+
+    /**
+     * Point-exact named exceptions off the "sizes tile the span" law, each a
+     * documented engine behaviour the sweep above must not silently widen:
+     *  - Max-clamp reclaims reach Length/Percentage/Ratio when the set holds
+     *    neither Min nor Fill — a "fixed" Length inflates ([95, 5]).
+     *  - An all-zero-weight Fill set has no total weight to divide: every pane
+     *    collapses to 0 and the span stays untiled.
+     *  - Compat mode (non-truncating overflow) runs off-grid by design.
+     *  - A lone Percentage keeps its own gap (sibling of the fixed-only law).
+     */
+    public function testNamedExceptionsOffTheTilingLaw(): void
+    {
+        $solver = GreedySolver::new();
+
+        $reclaim = array_map(
+            static fn (Region $r): int => $r->width,
+            $solver->solve(Region::fromSize(100, 1), Direction::Horizontal, [new Length(10), new Max(5)]),
+        );
+        $this->assertSame([95, 5], $reclaim, 'Max-clamp reclaim must inflate Length in a Min/Fill-free set');
+
+        $reclaimPair = array_map(
+            static fn (Region $r): int => $r->width,
+            $solver->solve(Region::fromSize(100, 1), Direction::Horizontal, [new Length(20), new Max(50)]),
+        );
+        $this->assertSame([50, 50], $reclaimPair, 'the second reclaim leg must keep its documented pair');
+
+        $zeroWeights = array_map(
+            static fn (Region $r): int => $r->width,
+            $solver->solve(Region::fromSize(100, 1), Direction::Horizontal, [new Fill(0), new Fill(0)]),
+        );
+        $this->assertSame([0, 0], $zeroWeights, 'zero total Fill weight collapses every region (equal-shares guard)');
+        $this->assertSame(0, array_sum($zeroWeights), '...and leaves the span untiled — a named gap, not drift');
+
+        $compat = array_map(
+            static fn (Region $r): int => $r->width,
+            GreedySolver::compat()->solve(Region::fromSize(100, 1), Direction::Horizontal, [new Length(60), new Length(60)]),
+        );
+        $this->assertSame([60, 60], $compat, 'compat overflow keeps full base sizes');
+        $this->assertSame(120, array_sum($compat), 'compat mode is off-grid by design (non-truncating)');
+
+        $lone = array_map(
+            static fn (Region $r): int => $r->width,
+            $solver->solve(Region::fromSize(100, 1), Direction::Horizontal, [new Percentage(30)]),
+        );
+        $this->assertSame([30], $lone, 'a lone Percentage never inflates to fill the span');
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
