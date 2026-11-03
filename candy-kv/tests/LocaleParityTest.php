@@ -7,7 +7,7 @@ namespace SugarCraft\Kv\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Locale-parity guard for candy-kv (D4, docs-fix-1023).
+ * Locale-parity guard for candy-kv.
  *
  * candy-kv ships 16 locales; a key added to en.php without the matching
  * translation in every other locale silently degrades those users to the

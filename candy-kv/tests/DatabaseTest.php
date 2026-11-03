@@ -368,7 +368,7 @@ final class DatabaseTest extends TestCase
         $this->db->set('after-close', 'value');
     }
 
-    // ─── file permissions (docs-fix D4: secrets store is 0600) ──────────────
+    // ─── file permissions (secrets store is 0600) ───────────────────────────
 
     public function testDatabaseFileIsTightenedToOwnerOnly(): void
     {

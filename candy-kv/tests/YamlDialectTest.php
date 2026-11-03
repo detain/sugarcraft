@@ -12,7 +12,7 @@ use SugarCraft\Kv\Store;
 use SugarCraft\Kv\YamlDialect;
 
 /**
- * Dialect contract pins for docs-fix-1023 M4/M5.
+ * Dialect contract pins for the build/parse round-trip.
  *
  * The corruption class: values with backslashes, newlines, colons, or
  * binary bytes went through the fallback emitter unescaped or leaked as
@@ -193,7 +193,7 @@ final class YamlDialectTest extends TestCase
         $exportCmd = new ExportCommand($this->store);
         $yaml = $exportCmd->exportToString('yaml', 'pw');
 
-        // Flat metadata lines — no nested maps on either route (D4 M4/M5).
+        // Flat metadata lines — no nested maps on either route.
         // Keys may arrive quoted by symfony, hence the flexible opener.
         $this->assertMatchesRegularExpression('/skate_ttl_token@pw[\'\"]?: [0-9]+$/m', $yaml);
         $this->assertMatchesRegularExpression('/skate_binary_blob@pw[\'\"]?: 1$/m', $yaml);

@@ -8,12 +8,12 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Kv\Database;
 
 /**
- * Regression pins for the D4 TTL epoch migration (docs-fix-1023 M3).
+ * Regression pins for the TTL epoch migration.
  *
- * Pre-D4 databases stored expires_at as a DATE_ATOM offset string and
+ * Legacy databases stored expires_at as a DATE_ATOM offset string and
  * compared it lexicographically against the reader's local clock — so the
  * SAME row could read expired-while-alive or alive-while-expired depending
- * on the reader's UTC offset. D4 stores integer epoch seconds and converts
+ * on the reader's UTC offset. The current schema stores integer epoch seconds and converts
  * legacy rows once on open. These tests build legacy-shaped files with a
  * bare SQLite3 handle (exactly what exists in the wild) and prove the tip
  * reads them by true instant.
@@ -52,7 +52,7 @@ final class DatabaseTtlMigrationTest extends TestCase
     }
 
     /**
-     * Create a pre-D4 file: the old schema (expires_at TEXT, no epoch),
+     * Create a legacy file: the old schema (expires_at TEXT, no epoch),
      * populated with one row per callback.
      *
      * @param list<array{key:string,expires:?string}> $rows
@@ -217,7 +217,7 @@ final class DatabaseTtlMigrationTest extends TestCase
     }
 
     /**
-     * The in-the-wild story end to end: a pre-D4 database written by an old
+     * The in-the-wild story end to end: a legacy database written by an old
      * candy-kv, discovered by the tip BINARY (not a test-constructed
      * Database), is migrated on open and read by true instant.
      */

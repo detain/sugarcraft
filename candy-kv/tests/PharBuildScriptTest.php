@@ -14,7 +14,7 @@ use SugarCraft\Kv\Support\Version;
  *
  *  1. bin/candy-kv is a VALID STUB: the build script refuses any other shape,
  *     and the archive guard candidate is what makes `php candy-kv.phar` find
- *     its own vendor (the DST-1 law measured on PHP 8.3.6: a bare
+ *     its own vendor (measured on PHP 8.3.6: a bare
  *     '/x.phar/entry' path is refused by is_file()).
  *  2. The build script fails fast (exit 2, usage on stderr, stdout clean) on
  *     options it does not know — the door its guard wording relies on.
@@ -35,7 +35,7 @@ final class PharBuildScriptTest extends TestCase
         self::assertStringContainsString(
             "'phar://' . __FILE__",
             $bin,
-            'the stub-context identity (DST-1 guard shape) must be addressed as a phar:// URI',
+            'the stub-context identity must be addressed as a phar:// URI',
         );
         self::assertStringContainsString(
             '\Phar::running(false)',

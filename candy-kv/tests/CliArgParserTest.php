@@ -211,7 +211,7 @@ final class CliArgParserTest extends TestCase
         ArgParser::export(['candy-kv', 'export', 'json', '--unknown-flag'], 2);
     }
 
-    // ─── both-form option parsing (docs-fix D4, M1) ─────────────────────────
+    // ─── both-form option parsing ───────────────────────────────────────────
 
     public function testSetAcceptsTtlSpaceForm(): void
     {

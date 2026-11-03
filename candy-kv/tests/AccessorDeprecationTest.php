@@ -10,7 +10,7 @@ use SugarCraft\Kv\Database;
 use SugarCraft\Kv\Store;
 
 /**
- * Pins the accessor-deprecation era (2026-10-24, ruling 3b, W-G1).
+ * Pins the accessor-deprecation era (2026-10-24).
  *
  * Database::getRaw() was renamed to its bare twin raw(), and the
  * file-writing verb Store::getFile() to saveTo() — era-correct because

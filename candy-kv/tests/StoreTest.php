@@ -636,7 +636,7 @@ final class StoreTest extends TestCase
         $this->assertFalse($method->invoke($this->store, 'plainkey'));
     }
 
-    // ─── docs-fix D4: data dir resolution, mkdir fail-loud, setWithTtl ─────
+    // ─── Data dir resolution, mkdir fail-loud, setWithTtl ───────────────
 
     public function testResolveDataDirPrefersXdgThenHome(): void
     {
@@ -657,7 +657,7 @@ final class StoreTest extends TestCase
 
     public function testResolveDataDirNeverFallsBackIntoTheInstallTree(): void
     {
-        // The D4 bug: with HOME unset the old code wrote .config/skate
+        // Regression: with HOME unset the old code wrote .config/skate
         // under dirname(__DIR__,2) — inside the library's own checkout.
         $savedXdg = \getenv('XDG_CONFIG_HOME');
         $savedHome = \getenv('HOME');
