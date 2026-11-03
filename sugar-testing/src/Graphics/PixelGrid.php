@@ -105,7 +105,7 @@ final class PixelGrid
     }
 
     /**
-     * True when the whole raster carries a single colour, returned as that triple.
+     * True when the whole raster carries a single color, returned as that triple.
      *
      * @return array{int, int, int}|null
      */
@@ -131,7 +131,7 @@ final class PixelGrid
     }
 
     /**
-     * Materialise the grid as a GD truecolour image (alpha for unpainted cells).
+     * Materialize the grid as a GD truecolor image (alpha for unpainted cells).
      *
      * @throws RuntimeException when ext-gd is unavailable in this runtime
      */

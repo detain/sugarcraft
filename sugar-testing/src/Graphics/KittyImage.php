@@ -268,6 +268,8 @@ final class KittyImage
             throw new RuntimeException(Lang::t('graphics.gd.unavailable'));
         }
 
+        DecodeLimits::assertMaterialisablePng($this->png(), 'graphics.kitty.payload_not_image');
+
         $image = imagecreatefromstring($this->png());
         if (!$image instanceof \GdImage) {
             throw new MalformedGraphicsException(Lang::t('graphics.kitty.payload_not_image'));

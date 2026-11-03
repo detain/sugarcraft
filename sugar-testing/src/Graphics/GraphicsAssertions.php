@@ -68,7 +68,7 @@ final class GraphicsAssertions extends Assert
      * Assert the stream decodes cleanly and stays internally consistent.
      *
      * Sixel: raster matches the declared header and every painted cell references
-     * a defined colour. Kitty / iTerm2: the reassembled payload is a real PNG and
+     * a defined color. Kitty / iTerm2: the reassembled payload is a real PNG and
      * its pixel size agrees with any declared `s`/`v` hint.
      */
     public static function assertProtocolRoundTrip(string $stream, Mode $mode, string $message = ''): void
@@ -118,6 +118,8 @@ final class GraphicsAssertions extends Assert
         if (!function_exists('imagecreatefromstring')) {
             throw new RuntimeException(Lang::t('graphics.gd.unavailable'));
         }
+
+        DecodeLimits::assertMaterialisablePng($png, 'graphics.payload_not_image');
 
         $image = imagecreatefromstring($png);
         if (!$image instanceof \GdImage) {

@@ -352,8 +352,45 @@ final class KittyStream
             return $bytes;
         }
 
-        $inflated = @gzuncompress($bytes);
-        if ($inflated === false) {
+        // Budgeted streaming inflate: a few hundred KB of zlib data can
+        // expand a thousand-fold, so the cap must apply to the OUTPUT as it
+        // accrues — a plain gzuncompress() turns such a bomb into a killed
+        // runner instead of a test failure. (Measured: 271 KB inflating
+        // 1030x.)
+        // ZLIB_ENCODING_DEFLATE is the zlib-wrapped (RFC 1950) window mode —
+        // the format gzcompress() emits. Its ZLIB_ENCODING_ZLIB alias is not
+        // registered on every build, so this spells the always-present name.
+        $context = inflate_init(ZLIB_ENCODING_DEFLATE);
+        $inflated = '';
+        $offset = 0;
+        $size = strlen($bytes);
+
+        while (true) {
+            $slice = substr($bytes, $offset, 32_768);
+            $offset += strlen($slice);
+            // ext-zlib raises E_WARNING ('data error') on corrupt input and
+            // returns false — the false is the contract, the diagnostic is
+            // noise a budgeted decoder does not leak into the runner log.
+            $part = @inflate_add($context, $slice, $offset >= $size ? ZLIB_FINISH : ZLIB_NO_FLUSH);
+            if ($part === false) {
+                throw new MalformedGraphicsException(Lang::t('graphics.kitty.decompress_failed'));
+            }
+            $inflated .= $part;
+            if (strlen($inflated) > DecodeLimits::MAX_DECOMPRESSED_BYTES) {
+                throw new MalformedGraphicsException(Lang::t('graphics.kitty.decompress_too_large', [
+                    'max' => DecodeLimits::MAX_DECOMPRESSED_BYTES,
+                ]));
+            }
+            if ($offset >= $size) {
+                break;
+            }
+        }
+
+        // A completed zlib stream reports ZLIB_STREAM_END; anything else —
+        // truncated (-5), corrupt checksum (-3), still in progress (0) —
+        // gets the same loud refusal gzuncompress() gave before the budget
+        // made streaming necessary.
+        if (inflate_get_status($context) !== ZLIB_STREAM_END) {
             throw new MalformedGraphicsException(Lang::t('graphics.kitty.decompress_failed'));
         }
 

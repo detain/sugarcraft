@@ -147,7 +147,7 @@ final class LoopPin
         // shared loop for you. A suite that schedules work on Loop::get() and
         // relies on that hook to execute it would silently get nothing. For a
         // test process that is the right side of the trade — no surprise loop
-        // run after the last test — but it is a behaviour change, which is part
+        // run after the last test — but it is a behavior change, which is part
         // of why pinning is opt-in rather than an autoload side effect.
         Loop::stop();
 
@@ -159,7 +159,7 @@ final class LoopPin
      * between the moment it was last refreshed and the moment a timer is armed.
      *
      * Deliberately an allowlist of implementations known to refresh the clock
-     * when a timer goes in, so an unrecognised loop reads as risky rather than
+     * when a timer goes in, so an unrecognized loop reads as risky rather than
      * silently safe. `StreamSelectLoop` qualifies because `Timers::add()` calls
      * `Timers::updateTime()` at arm time. Every ext-backed loop is reported as
      * at risk: ext-uv is confirmed and measured (see the class docblock), and

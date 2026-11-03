@@ -15,7 +15,7 @@ use SugarCraft\Testing\Lang;
  * runs (`!count char`), graphics CR (`$`) and NL (`-`), terminated by ST.
  *
  * Parsing is strict and fail-fast: an unterminated string, a bad introducer, a
- * colour used before it is defined, or a run that overflows the declared raster
+ * color used before it is defined, or a run that overflows the declared raster
  * all raise {@see MalformedGraphicsException} rather than guessing.
  *
  * Parse-side mirror (inverse) of sugarcraft/sugar-image's SixelRenderer.
@@ -153,6 +153,7 @@ final class SixelStream
                 $digits .= $rest[$offset];
                 $offset++;
             }
+            self::assertDigitRun($digits);
             $numbers[] = (int) $digits;
         }
 
@@ -182,6 +183,16 @@ final class SixelStream
 
         if ($width <= 0 || $height <= 0) {
             throw new MalformedGraphicsException(Lang::t('graphics.sixel.bad_raster'));
+        }
+
+        // Budget BEFORE allocation: the constructor pre-fills the whole
+        // raster, so an unchecked "10000;10000 would kill the runner here.
+        if ($width * $height > DecodeLimits::MAX_RASTER_CELLS) {
+            throw new MalformedGraphicsException(Lang::t('graphics.sixel.raster_too_large', [
+                'width' => $width,
+                'height' => $height,
+                'max' => DecodeLimits::MAX_RASTER_CELLS,
+            ]));
         }
 
         return [$width, $height];
@@ -246,7 +257,7 @@ final class SixelStream
             ];
         } elseif ($arity !== 1) {
             // A bare `#idx` selects an existing register; two-to-four numbers are a
-            // truncated/invalid colour definition and must not be guessed at.
+            // truncated/invalid color definition and must not be guessed at.
             throw new MalformedGraphicsException(Lang::t('graphics.sixel.bad_color_introducer'));
         }
 
@@ -377,7 +388,27 @@ final class SixelStream
             $this->cursor++;
         }
 
-        return $digits === '' ? null : (int) $digits;
+        if ($digits === '') {
+            return null;
+        }
+        self::assertDigitRun($digits);
+
+        return (int) $digits;
+    }
+
+    /**
+     * Refuse numeric literals long enough to saturate an (int) cast; a real
+     * Sixel value (register, repeat count, percent) never approaches
+     * {@see DecodeLimits::MAX_NUMBER_DIGITS} digits.
+     */
+    private static function assertDigitRun(string $digits): void
+    {
+        if (strlen($digits) > DecodeLimits::MAX_NUMBER_DIGITS) {
+            throw new MalformedGraphicsException(Lang::t('graphics.sixel.number_overflow', [
+                'value' => substr($digits, 0, 20) . '…',
+                'max' => DecodeLimits::MAX_NUMBER_DIGITS,
+            ]));
+        }
     }
 
     /**
