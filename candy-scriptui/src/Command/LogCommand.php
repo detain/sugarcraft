@@ -22,6 +22,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'log', description: 'Print a styled log line at the given level.')]
 final class LogCommand extends Command
 {
+    /** @var list<string> every spelling LogLevel::fromString() resolves ('' = info). */
+    public const LEVEL_SPELLINGS = ['debug', 'dbg', 'info', '', 'warn', 'warning', 'wrn', 'error', 'err', 'fatal', 'crit'];
+
     protected function configure(): void
     {
         $this
@@ -40,6 +43,18 @@ final class LogCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        foreach (['--level' => 'level', '--min-level' => 'min-level'] as $flag => $opt) {
+            $name = strtolower((string) $input->getOption($opt));
+            if (in_array($name, self::LEVEL_SPELLINGS, true)) {
+                continue;
+            }
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option' => $flag,
+                'value' => (string) $input->getOption($opt),
+                'allowed' => 'debug|info|warn|error|fatal',
+            ]) . "\n");
+            return Command::FAILURE;
+        }
         $level    = LogLevel::fromString((string) $input->getOption('level'));
         $minLevel = LogLevel::fromString((string) $input->getOption('min-level'));
         if ($level->order() < $minLevel->order()) {

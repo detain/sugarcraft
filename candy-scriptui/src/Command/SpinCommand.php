@@ -116,6 +116,18 @@ final class SpinCommand extends Command
         $argv  = $input->getArgument('argv');
         $title = (string) $input->getOption('title');
         $styleName = $input->getOption('spinner') ?? $input->getOption('style');
+        // Refuse an unknown style as a plain diagnostic naming every
+        // accepted spelling; the static pickStyle() throw stays as the
+        // library contract, but CLI users never see an exception frame.
+        $styleKey = strtolower((string) $styleName);
+        if (!in_array($styleKey, self::STYLE_SPELLINGS, true)) {
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option' => '--style',
+                'value' => (string) $styleName,
+                'allowed' => 'line|dot|mini-dot|points|pulse|globe|meter|jump|moon|monkey|hamburger|ellipsis',
+            ]) . "\n");
+            return Command::FAILURE;
+        }
         $style = self::pickStyle((string) $styleName);
         $showOutput = (bool) ($input->getOption('show-output') || $input->getOption('show-stdout'));
         $showError  = (bool) ($input->getOption('show-error')  || $input->getOption('show-stderr'));
@@ -196,6 +208,9 @@ final class SpinCommand extends Command
         $process->close();
         return $code;
     }
+
+    /** @var list<string> every spelling pickStyle() resolves (incl. aliases). */
+    public const STYLE_SPELLINGS = ['line', 'dot', 'minidot', 'mini-dot', 'points', 'pulse', 'globe', 'meter', 'jump', 'moon', 'monkey', 'hamburger', 'ellipsis'];
 
     public static function pickStyle(string $name): SpinStyle
     {

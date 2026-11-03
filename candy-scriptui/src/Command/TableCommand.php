@@ -27,6 +27,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'table', description: 'Render CSV / TSV input as a styled table.')]
 final class TableCommand extends Command
 {
+    /** @var list<string> every spelling parseBorder() resolves (incl. aliases). */
+    public const BORDER_SPELLINGS = ['none', 'off', 'normal', 'rounded', 'thick', 'double', 'ascii', 'hidden'];
+
     protected function configure(): void
     {
         $this
@@ -111,7 +114,16 @@ final class TableCommand extends Command
             }
         }
 
-        $border = self::parseBorder((string) $input->getOption('border'));
+        $borderName = strtolower((string) $input->getOption('border'));
+        if (!in_array($borderName, self::BORDER_SPELLINGS, true)) {
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option' => '--border',
+                'value' => (string) $input->getOption('border'),
+                'allowed' => 'none|normal|rounded|thick|double|ascii|hidden',
+            ]) . "\n");
+            return Command::FAILURE;
+        }
+        $border = self::parseBorder($borderName);
 
         $table = Table::new()->headers(...$headers);
         if ($border !== null) {
