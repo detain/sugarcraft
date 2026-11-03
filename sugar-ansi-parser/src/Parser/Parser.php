@@ -66,6 +66,12 @@ final class Parser
     /** Default string-buffer cap (64 KiB) — prevents memory exhaustion from malicious sequences. */
     private const MAX_STRING_BUFFER = 65536;
 
+    /** CSI/DCS parameter slots collected at most (ECMA-48 slack; caps hostile `;` floods). */
+    private const MAX_PARAMS = 32;
+
+    /** Parameter value saturates here so unbounded digit runs cannot overflow int math. */
+    private const MAX_PARAM_VALUE = 65535;
+
     /** States accumulating a string payload; an abort out of one drops it (see advance()). */
     private const STRING_STATES = [
         State::DcsString,
@@ -108,12 +114,28 @@ final class Parser
      *                               validation calls mb_check_encoding(), so
      *                               ext-mbstring (declared in composer.json) is
      *                               required by this mode.
+     * @throws \InvalidArgumentException if $maxStringBuffer is less than 1 (a
+     *                                  zero/negative cap cannot accumulate any
+     *                                  payload and is always a mistake) or if
+     *                                  $replaceMalformed is requested without
+     *                                  ext-mbstring present to serve it.
      */
     public function __construct(
         private readonly Handler $handler,
         private readonly bool $replaceMalformed = false,
         private readonly int $maxStringBuffer = self::MAX_STRING_BUFFER,
     ) {
+        if ($maxStringBuffer < 1) {
+            throw new \InvalidArgumentException(
+                'String buffer cap must be at least 1 byte; got ' . $maxStringBuffer . '.',
+            );
+        }
+        if ($replaceMalformed && !function_exists('mb_check_encoding')) {
+            throw new \InvalidArgumentException(
+                'replaceMalformed mode validates runes with mb_check_encoding();'
+                . ' install ext-mbstring or construct the parser without the flag.',
+            );
+        }
         $this->subparamsSink = $handler instanceof SubparamsAwareHandler ? $handler : null;
     }
 
@@ -393,8 +415,8 @@ final class Parser
         // be able to reopen the bleed silently, so the guard stays. (The
         // start()-clears-buffer shape of the original bleed fix was rejected
         // because a mid-string C1 re-introducer MUST keep the bytes collected
-        // before it — pinned downstream by sugar-vterm, CALIBER 2026-05-30
-        // step-20, and here by ParserTest::testC1ReintroducerPreservesStringPayload.)
+        // before it — pinned downstream by sugar-vterm and here by
+        // ParserTest::testC1ReintroducerPreservesStringPayload.)
         if ($next === State::Ground
             && \in_array($from, self::STRING_STATES, true)
             && $action !== Action::Dispatch
@@ -438,10 +460,6 @@ final class Parser
     {
         $this->cmd = ($this->cmd & ~(0xFF << 8)) | ($byte << 8);
     }
-
-    private const MAX_PARAMS = 32;
-
-    private const MAX_PARAM_VALUE = 65535;
 
     private function param(int $byte): void
     {
