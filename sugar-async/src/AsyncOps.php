@@ -9,13 +9,15 @@ use React\EventLoop\TimerInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use function React\Promise\reject;
+use function React\Promise\resolve;
 
 /**
  * Static helpers for async operations on top of ReactPHP.
  *
- * withTimeout(), withDeadline(), cancellable() and retry() are stateless
- * helpers. debounce(), throttle() and singleFlight() return stateful closures
- * that retain mutable timer/cooldown/in-flight state across calls.
+ * withTimeout(), withDeadline(), cancellable(), retry(), all(), race() and
+ * onPending() are stateless helpers. debounce() and throttle() return
+ * invokable Subscription handles that retain mutable timer/cooldown state
+ * across calls; singleFlight() returns a stateful coalescing closure.
  *
  * Nothing here blocks the caller: every wait is expressed as a promise,
  * and every timer is armed on a supplied or shared event loop.
@@ -434,6 +436,11 @@ final class AsyncOps
      * @param null|callable(): float $now  Optional monotonic-seconds clock
      *        (test seam — fake it to drive budget exhaustion without sleeping);
      *        defaults to hrtime(true)/1e9.
+     * @param null|callable(int, float): void $onRetry  Progress hook fired at
+     *        scheduling time with (attemptNumber, plannedDelaySeconds) before
+     *        each backoff is armed — the surface an "attempt 2 of 3" spinner
+     *        renders from. Advisory: like the other notice hooks, a throw from
+     *        it is logged, never propagated.
      * @return PromiseInterface
      */
     public static function retry(
@@ -445,6 +452,7 @@ final class AsyncOps
         float $jitter = 0.0,
         ?LoopInterface $loop = null,
         ?callable $now = null,
+        ?callable $onRetry = null,
     ): PromiseInterface {
         if ($attempts < 1) {
             throw new \InvalidArgumentException('Attempts must be >= 1');
@@ -495,6 +503,7 @@ final class AsyncOps
             $deadline,
             $clock,
             $maxTotalSeconds,
+            $onRetry,
         );
 
         $outer = new Deferred(static function () use ($stop, $core): never {
@@ -532,6 +541,7 @@ final class AsyncOps
      * @param callable(): float $now  Monotonic-seconds clock (see retry()).
      * @param float|null $maxTotalSeconds  The budget behind $deadline, for the
      *        exhaustion message.
+     * @param null|callable(int, float): void $onRetry  Progress hook; see retry().
      */
     private static function retryAttempt(
         callable $operation,
@@ -544,6 +554,7 @@ final class AsyncOps
         ?float $deadline = null,
         ?callable $now = null,
         ?float $maxTotalSeconds = null,
+        ?callable $onRetry = null,
     ): PromiseInterface {
         $loop ??= \React\EventLoop\Loop::get();
         $clock = $now ?? static fn(): float => Clock::monotonicSeconds();
@@ -559,7 +570,7 @@ final class AsyncOps
         }
         return $operationPromise->then(
             static fn ($value) => $value,
-            static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt, $loop, $jitter, $deadline, $clock, $maxTotalSeconds): PromiseInterface {
+            static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt, $loop, $jitter, $deadline, $clock, $maxTotalSeconds, $onRetry): PromiseInterface {
                 if ($token->isCancelled()) {
                     return reject(new OperationCancelledException('Retry cancelled after attempt ' . $attempt));
                 }
@@ -597,6 +608,15 @@ final class AsyncOps
                 if ($remainingBudget !== null && $delay > $remainingBudget) {
                     $delay = $remainingBudget;
                 }
+                if ($onRetry !== null) {
+                    // Reported with the CLAMPED delay so a UI counting down
+                    // to the next attempt cannot be fooled by a budget cut.
+                    try {
+                        $onRetry($attempt, $delay);
+                    } catch (\Throwable $hookError) {
+                        error_log('sugar-async: retry progress hook failed: ' . $hookError->getMessage());
+                    }
+                }
                 $deferred = new Deferred();
 
                 // Cancellation must be prompt. Without this wiring a cancel
@@ -625,14 +645,14 @@ final class AsyncOps
 
                 $pending = $loop->addTimer(
                     $delay,
-                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred, $loop, $jitter, $deadline, $clock, $maxTotalSeconds, &$settled, &$pending): void {
+                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred, $loop, $jitter, $deadline, $clock, $maxTotalSeconds, $onRetry, &$settled, &$pending): void {
                         if ($settled === true) {
                             return; // cancelled during backoff; abort already rejected
                         }
                         $settled = true;
                         $pending = null;
                         try {
-                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1, $loop, $jitter, $deadline, $clock, $maxTotalSeconds);
+                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1, $loop, $jitter, $deadline, $clock, $maxTotalSeconds, $onRetry);
                             $next->then(
                                 static fn ($v) => $deferred->resolve($v),
                                 static fn ($e) => $deferred->reject($e),
@@ -684,64 +704,235 @@ final class AsyncOps
     }
 
     /**
-     * Wrap a callable with debounce — only the last call within the
-     * window fires, and only after $seconds have elapsed since the last call.
+     * Fan-in: resolve with every value once ALL promises resolve, preserving
+     * keys; reject with the FIRST error the moment one arrives. Non-promise
+     * entries are treated as already-resolved values. An empty set resolves
+     * with []. This is the library-side promise vocabulary so callers never
+     * reach past this package for the primitive.
      *
-     * @param callable(mixed...): void $fn  The function to debounce
-     * @param float $seconds  Debounce window (seconds)
+     * @param iterable<mixed> $promises
+     * @return PromiseInterface<array>
+     */
+    public static function all(iterable $promises): PromiseInterface
+    {
+        $list = is_array($promises) ? $promises : iterator_to_array($promises);
+        if ($list === []) {
+            return resolve([]);
+        }
+
+        $deferred = new Deferred();
+        $pending = count($list);
+        $values = [];
+        $settled = false;
+
+        foreach ($list as $key => $item) {
+            $promise = $item instanceof PromiseInterface ? $item : resolve($item);
+            $promise->then(
+                static function (mixed $value) use ($key, &$values, &$pending, &$settled, $deferred): void {
+                    if ($settled === true) {
+                        return;
+                    }
+                    $values[$key] = $value;
+                    if (--$pending === 0) {
+                        $settled = true;
+                        $deferred->resolve($values);
+                    }
+                },
+                static function (\Throwable $error) use (&$settled, $deferred): void {
+                    if ($settled === true) {
+                        return; // first rejection wins; later settles are nobody's business
+                    }
+                    $settled = true;
+                    $deferred->reject($error);
+                },
+            );
+        }
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Fan-in: settle with whoever gets there first, value or error. The empty
+     * set is a refusal, not a forever-pending promise — that shape renders as
+     * a screen frozen with no error to show.
+     *
+     * @param iterable<mixed> $promises
+     * @return PromiseInterface<mixed>
+     */
+    public static function race(iterable $promises): PromiseInterface
+    {
+        $list = is_array($promises) ? $promises : iterator_to_array($promises);
+        if ($list === []) {
+            throw new \InvalidArgumentException('race() requires at least one promise');
+        }
+
+        $deferred = new Deferred();
+        $settled = false;
+
+        foreach ($list as $item) {
+            $promise = $item instanceof PromiseInterface ? $item : resolve($item);
+            $promise->then(
+                static function (mixed $value) use (&$settled, $deferred): void {
+                    if ($settled === true) {
+                        return;
+                    }
+                    $settled = true;
+                    $deferred->resolve($value);
+                },
+                static function (\Throwable $error) use (&$settled, $deferred): void {
+                    if ($settled === true) {
+                        return;
+                    }
+                    $settled = true;
+                    $deferred->reject($error);
+                },
+            );
+        }
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Watch a promise for slowness. While $promise is still pending after
+     * $seconds, the $onPending notice runs ONCE (a "taking longer than
+     * expected" spinner hint). The returned promise tracks the inner one
+     * either way — the notice neither cancels nor abandons the work, and the
+     * E646 law holds: this is an advisory tick, never a wall-clock killer of
+     * user-paced operations. With $onPending null the wait itself is bounded:
+     * the returned promise rejects with a TimeoutException (still pending)
+     * instead, and the inner keeps running like under withTimeout().
+     *
+     * @param null|callable(): void $onPending  Advisory notice; throws are logged, never propagated
+     * @return PromiseInterface<mixed>
+     */
+    public static function onPending(
+        PromiseInterface $promise,
+        float $seconds,
+        ?callable $onPending = null,
+        ?LoopInterface $loop = null,
+        ?string $label = null,
+    ): PromiseInterface {
+        if ($seconds <= 0 || !is_finite($seconds)) {
+            throw new \InvalidArgumentException('Pending notice seconds must be a positive finite number');
+        }
+
+        $loop ??= \React\EventLoop\Loop::get();
+        $settled = false;
+        $timer = null;
+
+        $deferred = new Deferred(static function () use (&$settled, &$timer, $loop): never {
+            if ($settled !== true) {
+                $settled = true;
+                if ($timer !== null) {
+                    $loop->cancelTimer($timer);
+                    $timer = null;
+                }
+            }
+            throw new OperationCancelledException('Async operation cancelled');
+        });
+
+        $timer = $loop->addTimer($seconds, static function () use (&$settled, &$timer, $loop, $onPending, $deferred, $seconds, $label): void {
+            $timer = null;
+            if ($settled === true) {
+                return;
+            }
+            if ($onPending !== null) {
+                try {
+                    $onPending();
+                } catch (\Throwable $noticeError) {
+                    error_log('sugar-async: pending notice failed: ' . $noticeError->getMessage());
+                }
+                return; // advisory: the wait continues
+            }
+            $settled = true;
+            $deferred->reject(new TimeoutException(
+                self::timeoutMessage($label, $seconds) . ' (still pending)',
+                seconds: $seconds,
+                label: $label,
+            ));
+        });
+
+        $promise->then(
+            static function (mixed $value) use (&$settled, &$timer, $loop, $deferred): void {
+                if ($settled === true) {
+                    return;
+                }
+                $settled = true;
+                if ($timer !== null) {
+                    $loop->cancelTimer($timer);
+                    $timer = null;
+                }
+                $deferred->resolve($value);
+            },
+            static function (\Throwable $error) use (&$settled, &$timer, $loop, $deferred): void {
+                if ($settled === true) {
+                    return;
+                }
+                $settled = true;
+                if ($timer !== null) {
+                    $loop->cancelTimer($timer);
+                    $timer = null;
+                }
+                $deferred->reject($error);
+            },
+        );
+
+        return $deferred->promise();
+    }
+
+    /**
+     * Wrap a callable with debounce — only the last call within the window
+     * fires, and only after $seconds have elapsed since it.
+     *
+     * The returned handle is an invokable {@see Debounced} Subscription: each
+     * call answers a promise (fire's value; null when superseded or dropped),
+     * flush() runs the pending burst now, and unsubscribe() disposes it. A
+     * CancellationSource given as $source disposes the handle on cancel.
+     *
+     * @param callable(mixed...): mixed $fn  The function to debounce
+     * @param float $seconds  Debounce window (positive finite seconds)
      * @param LoopInterface|null $loop  Optional loop; uses Loop::get() if null
-     * @return callable(mixed...): void  The debounced wrapper
+     * @param CancellationSource|null $source  Optional extra dispose source
+     * @return Debounced  The invokable, disposable wrapper
      */
     public static function debounce(
         callable $fn,
         float $seconds,
         ?LoopInterface $loop = null,
-    ): callable {
+        ?CancellationSource $source = null,
+    ): Debounced {
         if ($seconds <= 0 || !is_finite($seconds)) {
             throw new \InvalidArgumentException('Debounce seconds must be a positive finite number');
         }
-        $loop ??= \React\EventLoop\Loop::get();
-        $timer = null;
 
-        return static function (...$args) use ($fn, $seconds, $loop, &$timer): void {
-            if ($timer !== null) {
-                $loop->cancelTimer($timer);
-            }
-            $timer = $loop->addTimer($seconds, static function () use ($fn, $args): void {
-                $fn(...$args);
-            });
-        };
+        return Debounced::new($fn, $seconds, $loop, $source);
     }
 
     /**
-     * Wrap a callable with throttle — the function fires at most once
-     * every $seconds, regardless of call frequency.
+     * Wrap a callable with throttle — the function fires at most once every
+     * $seconds, regardless of call frequency. Leading-edge by default: calls
+     * inside the window answer null. With $trailing true, the LAST suppressed
+     * call fires when the window closes instead.
      *
-     * @param callable(mixed...): void $fn  The function to throttle
-     * @param float $seconds  Minimum interval between calls (seconds)
+     * The returned handle is an invokable {@see Throttled} Subscription;
+     * unsubscribe() cancels the cooldown and drops any queued trailing call.
+     *
+     * @param callable(mixed...): mixed $fn  The function to throttle
+     * @param float $seconds  Minimum interval between fires (positive finite seconds)
      * @param LoopInterface|null $loop  Optional loop; uses Loop::get() if null
-     * @return callable(mixed...): void  The throttled wrapper
+     * @param bool $trailing  Fire the last suppressed call at window end
+     * @return Throttled  The invokable, disposable wrapper
      */
     public static function throttle(
         callable $fn,
         float $seconds,
         ?LoopInterface $loop = null,
-    ): callable {
+        bool $trailing = false,
+    ): Throttled {
         if ($seconds <= 0 || !is_finite($seconds)) {
             throw new \InvalidArgumentException('Throttle seconds must be a positive finite number');
         }
-        $loop ??= \React\EventLoop\Loop::get();
-        $cooldown = false;
 
-        return static function (...$args) use ($fn, $seconds, $loop, &$cooldown): void {
-            if ($cooldown === true) {
-                return;
-            }
-            $cooldown = true;
-            $fn(...$args);
-            $loop->addTimer($seconds, static function () use (&$cooldown): void {
-                $cooldown = false;
-            });
-        };
+        return Throttled::new($fn, $seconds, $loop, $trailing);
     }
 }

@@ -33,6 +33,11 @@ use function React\Promise\resolve;
  * {@see AsyncOps::withDeadline()} — bounded I/O ceiling semantics: pass
  * the remaining budget, never a blanket per-request wall-clock killer.
  *
+ * Space-bound law: with maxEntries set, an adopt past the cap evicts the
+ * LEAST-recently-stored entry; expired entries are NOT eagerly reaped, so an
+ * uncapped cache releases memory only via invalidate()/clear() — the cap
+ * bounds values, in-flight loads never count against it.
+ *
  * Options are immutable in house style: withTtl()/withServeStaleOnError()
  * return NEW handles viewing the SAME store — configure-by-clone never forks
  * the cache and never strands an in-flight load.
@@ -43,6 +48,7 @@ final class AsyncCache
         private readonly float $ttlSeconds,
         private readonly bool $serveStaleOnError,
         private readonly CacheStore $store,
+        private readonly ?int $maxEntries = null,
     ) {
     }
 
@@ -50,14 +56,16 @@ final class AsyncCache
      * @param float $ttlSeconds        Seconds an entry stays fresh (must be > 0)
      * @param bool $serveStaleOnError  Resolve failed loads with the last known value when one exists
      * @param null|callable():float $clock  Monotonic-seconds clock seam (defaults to hrtime()/1e9); tests may drive freshness boundaries without sleeping
+     * @param int|null $maxEntries  Optional cap on stored keys (>= 1); an adopt past it evicts the least-recently-stored entry. null (default) keeps the bounded-caller-side law: memory follows caller key discipline.
      */
-    public static function new(float $ttlSeconds = 60.0, bool $serveStaleOnError = false, ?callable $clock = null): self
+    public static function new(float $ttlSeconds = 60.0, bool $serveStaleOnError = false, ?callable $clock = null, ?int $maxEntries = null): self
     {
         if ($ttlSeconds <= 0 || !is_finite($ttlSeconds)) {
             throw new \InvalidArgumentException('TTL seconds must be a positive finite number');
         }
+        self::guardMaxEntries($maxEntries);
 
-        return new self($ttlSeconds, $serveStaleOnError, new CacheStore($clock));
+        return new self($ttlSeconds, $serveStaleOnError, new CacheStore($clock), $maxEntries);
     }
 
     /**
@@ -73,6 +81,44 @@ final class AsyncCache
         return $this->serveStaleOnError;
     }
 
+    /** The stored-key cap, or null when unbounded (the default). */
+    public function maxEntries(): ?int
+    {
+        return $this->maxEntries;
+    }
+
+    /** Number of stored values, fresh or stale. In-flight loads are not stored. */
+    public function count(): int
+    {
+        return count($this->store->values);
+    }
+
+    /** Stored keys (fresh or stale) in insertion order. */
+    public function keys(): array
+    {
+        return array_keys($this->store->values);
+    }
+
+    /** True when the key is fresh OR a load is in flight — the loading-indicator read. */
+    public function isLoaded(string $key): bool
+    {
+        return $this->isFresh($key) || $this->store->flights->find($key) !== null;
+    }
+
+    /**
+     * Monotonic age of the stored value, fresh or stale; null when none is
+     * held. Reads past the TTL on purpose: stale-serving and age reporting
+     * both consult peek semantics, not freshness.
+     */
+    public function ageSeconds(string $key): ?float
+    {
+        if (!array_key_exists($key, $this->store->values)) {
+            return null;
+        }
+
+        return max(0.0, ($this->store->clock)() - $this->store->storedAt[$key]);
+    }
+
     /**
      * @param float $ttlSeconds  Must be > 0
      * @return self  New handle over the same store
@@ -83,7 +129,7 @@ final class AsyncCache
             throw new \InvalidArgumentException('TTL seconds must be a positive finite number');
         }
 
-        return new self($ttlSeconds, $this->serveStaleOnError, $this->store);
+        return new self($ttlSeconds, $this->serveStaleOnError, $this->store, $this->maxEntries);
     }
 
     /**
@@ -92,7 +138,18 @@ final class AsyncCache
      */
     public function withServeStaleOnError(bool $serveStaleOnError): self
     {
-        return new self($this->ttlSeconds, $serveStaleOnError, $this->store);
+        return new self($this->ttlSeconds, $serveStaleOnError, $this->store, $this->maxEntries);
+    }
+
+    /**
+     * @param int|null $maxEntries  Must be >= 1 when set
+     * @return self  New handle over the same store
+     */
+    public function withMaxEntries(?int $maxEntries): self
+    {
+        self::guardMaxEntries($maxEntries);
+
+        return new self($this->ttlSeconds, $this->serveStaleOnError, $this->store, $maxEntries);
     }
 
     /**
@@ -128,7 +185,14 @@ final class AsyncCache
         $this->store->flights->begin($key, $flight);
 
         try {
-            $loader()->then(
+            $loaderResult = $loader();
+            if (!$loaderResult instanceof PromiseInterface) {
+                // Fail LOUD and early: a non-promise here used to surface as
+                // 'Call to a member function then() on string' several frames
+                // deep. The throw rides the catch below, freeing the slot.
+                throw new \InvalidArgumentException('AsyncCache loader must return a promise; ' . get_debug_type($loaderResult) . ' returned.');
+            }
+            $loaderResult->then(
                 function (mixed $value) use ($key, $flight, $deferred): void {
                     $this->adopt($key, $flight, $deferred, $value);
                 },
@@ -188,6 +252,39 @@ final class AsyncCache
         $this->store->flights->forgetAll();
     }
 
+    private static function guardMaxEntries(?int $maxEntries): void
+    {
+        if ($maxEntries !== null && $maxEntries < 1) {
+            throw new \InvalidArgumentException('Max entries must be >= 1 when set');
+        }
+    }
+
+    /**
+     * Cap enforcement at adoption time: evict least-recently-stored keys
+     * (equal stamps break insertion-first via a strict '<' scan). The
+     * just-adopted key carries the newest stamp, so it is never a candidate.
+     * Flights are untouched — a coalescing load is not a stored value.
+     */
+    private function evictOverflow(): void
+    {
+        if ($this->maxEntries === null || count($this->store->values) <= $this->maxEntries) {
+            return;
+        }
+
+        $oldest = array_key_first($this->store->values);
+        $oldestStamp = $this->store->storedAt[$oldest];
+        foreach ($this->store->values as $candidate => $_) {
+            if ($this->store->storedAt[$candidate] < $oldestStamp) {
+                $oldest = $candidate;
+                $oldestStamp = $this->store->storedAt[$candidate];
+            }
+        }
+
+        unset($this->store->values[$oldest], $this->store->storedAt[$oldest]);
+
+        $this->evictOverflow();
+    }
+
     private function adopt(string $key, PromiseInterface $flight, Deferred $deferred, mixed $value): void
     {
         // The identity-guarded release doubles as the adoption gate: a flight
@@ -196,6 +293,7 @@ final class AsyncCache
         if ($this->store->flights->end($key, $flight) === true) {
             $this->store->values[$key] = $value;
             $this->store->storedAt[$key] = ($this->store->clock)();
+            $this->evictOverflow();
         }
 
         $deferred->resolve($value);
