@@ -95,21 +95,23 @@ final class MarkedFrame
                     break;
 
                 case 'zone-open':
-                    if (!$pastBudget) {
+                    if (!$pastBudget && $width < $max) {
                         $out .= $seg['bytes'];
                         $zone = $seg['id'];
                     }
-                    // Past the budget a whole new zone is opening whose content
-                    // was just dropped — its envelope is meaningless here.
+                    // Past the budget (or with the budget exactly spent — no
+                    // content of this zone can survive) a whole new zone is
+                    // opening whose content was just dropped; its envelope
+                    // is meaningless here.
                     break;
 
                 case 'zone-close':
-                    if (!$pastBudget) {
+                    if (!$pastBudget && $width < $max) {
                         $out .= $seg['bytes'];
                         if ($zone === $seg['id']) {
                             $zone = null;
                         }
-                    } elseif ($zone === $seg['id']) {
+                    } elseif ($zone !== null && $zone === $seg['id']) {
                         // The zone opened before the cut and its real close
                         // arrived after it — keeping the original bytes is
                         // byte-faithful balance; the synth at the end skips it.
@@ -119,7 +121,7 @@ final class MarkedFrame
                     break;
 
                 case 'osc8':
-                    if (!$pastBudget) {
+                    if (!$pastBudget && $width < $max) {
                         $out .= $seg['bytes'];
                         $linkActive = $seg['id'] !== '';
                     } elseif ($seg['id'] === '' && $linkActive) {
