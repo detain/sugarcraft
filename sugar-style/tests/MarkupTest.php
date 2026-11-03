@@ -265,11 +265,12 @@ final class MarkupTest extends TestCase
         }
     }
 
-    public function testParseUnknownTagIsIgnored(): void
+    public function testParseUnknownTagIsReEmittedLiterally(): void
     {
-        // An unknown tag should not crash - it should be ignored
+        // A region whose every word is unknown survives verbatim — it used
+        // to be silently deleted ("[unknown-tag]hello" came out "hello").
         $cells = Markup::parse('[unknown-tag]hello[/]', Style::new());
-        $this->assertSame('hello', implode(array_map(fn(Cell $c) => $c->rune, $cells)));
+        $this->assertSame('[unknown-tag]hello[/]', implode(array_map(fn(Cell $c) => $c->rune, $cells)));
     }
 
     public function testParseMixedColorTags(): void
@@ -294,5 +295,51 @@ final class MarkupTest extends TestCase
         $cells = Markup::parse('[bright-white]a[/]', Style::new());
         $fg = $cells[0]->style->getForeground();
         $this->assertSame(255, $fg->r);
+    }
+
+    public function testNoEffectBracketedRunsSurviveVerbatim(): void
+    {
+        // Every one of these used to LOSE characters: brackets whose words
+        // carry no effect are plain text, not tags.
+        foreach ([
+            'a[b]c',            // unknown word between brackets
+            '[on] status',      // brackets in ordinary prose
+            '[]',               // empty region
+            '[[lit]]',          // nested-looking literal
+            '[fg:zzz x]',       // only an unresolvable color shortcut
+        ] as $input) {
+            $cells = Markup::parse($input, Style::new());
+            $this->assertSame(
+                $input,
+                implode(array_map(fn(Cell $c) => $c->rune, $cells)),
+                'literal preservation moved: ' . $input,
+            );
+        }
+    }
+
+    public function testEffectiveTagStillSwallowsDelimitersAndIgnoresUnknownWords(): void
+    {
+        // The counterpart: an EFFECTIVE region is still consumed as a tag,
+        // and merely-unknown words inside it stay ignored (they do not
+        // force the whole region back to literal).
+        $cells = Markup::parse('[bold typo]hi[/]', Style::new());
+        $this->assertSame('hi', implode(array_map(fn(Cell $c) => $c->rune, $cells)));
+        foreach ($cells as $cell) {
+            $this->assertTrue($cell->style->isBold());
+        }
+    }
+
+    public function testNestingBeyondTheDepthCeilingIsRefused(): void
+    {
+        // 128 concurrent open regions parse; 129 refuse loudly instead of
+        // growing the style stack per codepoint of adversarial input.
+        $ok = str_repeat('[bold]', 128) . 'x' . str_repeat('[/]', 128);
+        $cells = Markup::parse($ok, Style::new());
+        $this->assertCount(1, $cells);
+        $this->assertSame('x', $cells[0]->rune);
+        $this->assertTrue($cells[0]->style->isBold());
+
+        $this->expectException(\RuntimeException::class);
+        Markup::parse(str_repeat('[bold]', 129) . 'x', Style::new());
     }
 }

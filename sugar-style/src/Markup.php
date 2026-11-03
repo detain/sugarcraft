@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Style;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Style\Lang;
 
 /**
  * Parses Rich-style inline markup into Cell arrays.
@@ -25,6 +26,14 @@ use SugarCraft\Core\Util\Color;
  *   [bold red]hello[/]       — bold red text
  *   [fg:blue bg:yellow]hi[/] — blue on yellow
  *   hello [bold]world[/] end — plain text with bold section
+ *
+ * Literal preservation: a `[...]` region whose words are ALL unknown or
+ * no-effect (`[b]`, `[on] status`, `[]`, `[[lit]]`) is re-emitted verbatim
+ * as plain text — nothing is silently dropped. An effective tag still
+ * swallows its own delimiters, and unknown words inside an otherwise
+ * effective tag (`[bold typo]`) remain ignored. Nesting beyond
+ * {@see self::MAX_NESTING_DEPTH} opening tags is refused with a
+ * RuntimeException (hostile input must not grow state unboundedly).
  */
 final class Markup
 {
@@ -46,6 +55,12 @@ final class Markup
         'bright-cyan' => [  0, 255, 255],
         'bright-white' => [255, 255, 255],
     ];
+
+    /**
+     * Ceiling on simultaneously-open markup regions. Beyond it the input
+     * is adversarial (or deeply mistaken), not styled text.
+     */
+    private const MAX_NESTING_DEPTH = 128;
 
     /**
      * Parse markup string into a list of Cells.
@@ -119,9 +134,22 @@ final class Markup
                 // Extract and parse tag content
                 $tagContent = substr($input, $i, $closePos - $i);
                 $markupTags = array_filter(array_map('trim', explode(' ', $tagContent)));
+                $appliedStyle = self::applyTags($markupTags, $currentStyle);
+                if ($appliedStyle === $currentStyle) {
+                    // No word in this region carried effect. Re-emit the
+                    // bracketed run verbatim instead of deleting it — the
+                    // old silent drop mangled data (`a[b]c` came out `ac`).
+                    // Delimiters of EFFECTIVE tags are still swallowed.
+                    $pendingText .= '[' . $tagContent . ']';
+                    $i = $closePos + 1;
+                    continue;
+                }
+                if (count($styleStack) >= self::MAX_NESTING_DEPTH) {
+                    throw new \RuntimeException(Lang::t('style.markup_depth', ['levels' => self::MAX_NESTING_DEPTH]));
+                }
                 // Push current style before applying new one
                 $styleStack[] = $currentStyle;
-                $currentStyle = self::applyTags($markupTags, $currentStyle);
+                $currentStyle = $appliedStyle;
 
                 $i = $closePos + 1; // skip past ']'
                 continue;
