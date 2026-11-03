@@ -20,23 +20,45 @@ namespace SugarCraft\Async;
  *
  * @template T
  */
-final readonly class Suspended
+final class Suspended
 {
+    private readonly \Closure $resume;
+
+    private bool $resumed = false;
+
     /**
      * @param callable(): (?\Closure) $resume  Called to resume the paused operation
      * @param T|null $state  Optional opaque state carried through the pause
      */
     public function __construct(
-        private \Closure $resume,
+        callable $resume,
         private mixed $state = null,
     ) {
+        $this->resume = \Closure::fromCallable($resume);
     }
 
     /**
-     * Resume the paused operation. Returns the Cmd closure to be dispatched.
+     * @param callable(): (?\Closure) $resume
+     * @param T|null $state
+     */
+    public static function new(callable $resume, mixed $state = null): self
+    {
+        return new self($resume, $state);
+    }
+
+    /**
+     * Resume the paused operation. Returns the Cmd closure to be dispatched —
+     * once. A second call yields null instead of re-running the effect: a
+     * handle handed to two schedulers must not double-fire the command.
      */
     public function resume(): ?\Closure
     {
+        if ($this->resumed) {
+            return null;
+        }
+
+        $this->resumed = true;
+
         return ($this->resume)();
     }
 

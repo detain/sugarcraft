@@ -51,4 +51,44 @@ final class SuspendedTest extends TestCase
 
         $this->assertNull($result);
     }
+
+    public function testTheFactoryMirrorsTheConstructor(): void
+    {
+        $innerCmd = static fn(): null => null;
+        $suspended = Suspended::new(fn() => $innerCmd, 'carry-me');
+
+        $this->assertSame($innerCmd, $suspended->resume());
+        $this->assertSame('carry-me', $suspended->state());
+    }
+
+    public function testAnyCallableIsAdmittedAndNormalised(): void
+    {
+        // A plain string callable is not a Closure; the seam admits it.
+        $suspended = Suspended::new(StringResumer::class . '::toCmd');
+
+        $this->assertSame('cmd', ($suspended->resume())());
+    }
+
+    public function testResumeIsOneShotSoSharedHandlesCannotDoubleFire(): void
+    {
+        $runs = 0;
+        $suspended = new Suspended(
+            static function () use (&$runs): \Closure {
+                $runs++;
+                return static fn(): null => null;
+            },
+        );
+
+        $this->assertInstanceOf(\Closure::class, $suspended->resume());
+        $this->assertNull($suspended->resume());
+        $this->assertSame(1, $runs, 'the resume callable runs at most once');
+    }
+}
+
+final class StringResumer
+{
+    public static function toCmd(): \Closure
+    {
+        return static fn (): string => 'cmd';
+    }
 }

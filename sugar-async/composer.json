@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-async",
-    "description": "Shared async utilities for SugarCraft \u2014 cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
+    "description": "Shared async utilities for SugarCraft \u2014 cancellation tokens, subscriptions, timeout/deadline combinators, fan-in, debounce/throttle handles, retry, and a bounded cache-aside store, built on ReactPHP.",
     "type": "library",
     "license": "MIT",
     "keywords": [

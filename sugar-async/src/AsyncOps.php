@@ -352,6 +352,12 @@ final class AsyncOps
      * loader dedupe: the slot is occupied before the worker runs and freed
      * exactly once when it settles.
      *
+     * A leader whose promise never settles blocks the key forever: bound the
+     * worker itself ({ withDeadline()}/{ onPending()}) when the loader
+     * may stall. Flight state is per-process — never share a singleFlight
+     * closure across pcntl_fork: a child's settles do not propagate, so the
+     * parent's slot leaks.
+     *
      * The shared flight is deliberately NOT caller-abandonable: every
      * coalesced caller holds the SAME promise, so one caller's cancel() must
      * not reject it for the others. If YOUR join must be abandonable, wrap
