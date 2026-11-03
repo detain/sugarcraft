@@ -13,46 +13,177 @@ use SugarCraft\SshServer\Session;
  * Connect / disconnect logger.
  *
  * Writes a one-line JSON record at session start and another at
- * session end (with elapsed seconds). The log target is a file
- * path or a writable resource — the default `php://stderr` is
- * what `sshd` captures into the system journal automatically, so
- * production deployments can leave it as-is and read connection
- * history with `journalctl -u sshd`.
+ * session end (with elapsed seconds).
+ *
+ * **Where the lines land, and who can read them.** The obvious
+ * target — the process's error stream — is NOT a safe operator
+ * sink on the transport this library exists for. Under
+ * `ForceCommand`, sshd forwards the child's fd 1 AND fd 2 to the
+ * CONNECTING CLIENT as the session's data and extended-data
+ * channels: `new Logger()` with no argument prints every session
+ * record into the user's terminal and gives the operator nothing
+ * to keep. (The `Auth`, `KeyboardInteractive`, `CertificateAuth`
+ * and `RateLimit` notices have the same shape for the same
+ * reason.) journald only captures what *sshd itself* writes, not
+ * what its forced command writes.
+ *
+ * So the default is resolved rather than assumed:
+ *
+ * - `Logger::auto()` (what the no-argument constructor calls)
+ *   reads `SSH_SERVER_LOG` from the environment and appends to
+ *   that file when it is set — a directory the service user owns,
+ *   provisioned once (see `docs/admin/sugar-ssh-server.md`).
+ * - With nothing configured it falls back to `php://stderr`,
+ *   which is the right answer for a plain CLI/tooling run and the
+ *   wrong one for a live `sshd` panel. `target()` reports which
+ *   one you got; it is worth logging at boot.
+ * - `Logger::toFile($path)` states the intent. A log file this
+ *   constructor CREATES is chmod-ed to `0600` (mode comes from us,
+ *   not from the ambient umask, because the records carry
+ *   usernames and client addresses); a file that already exists is
+ *   left at its current mode so a deliberate group-readable
+ *   rotation setup survives.
+ * - `Logger::toStream($resource)` hands the lines to something the
+ *   operator controls — a pipe into the daemon's own logger, an
+ *   already-open journald socket handle, a test buffer.
+ *
+ * `ext-curl`/HTTP shipping is out of scope here: whatever the sink,
+ * one line per event, appended, flushed by the stream layer.
  */
 final class Logger implements Middleware
 {
+    /**
+     * Environment variable `Logger::auto()` consults for an
+     * operator-owned log path. Deliberately not a name sshd
+     * exports: this is the deployment's own configuration, read
+     * from the service environment (systemd `Environment=`).
+     */
+    public const LOG_PATH_ENV = 'SSH_SERVER_LOG';
+
     /** @var resource */
     private $stream;
     private bool $owns = false;
+    private string $describedAs = 'stream';
 
     /**
      * @param resource|string|null $target File path, open resource,
-     *                                     or null for stderr.
+     *                                     or null to resolve with
+     *                                     `Logger::auto()`
+     *                                     (`LOG_PATH_ENV`, then
+     *                                     `php://stderr`).
      */
     public function __construct($target = null)
     {
         if ($target === null) {
-            $stream = fopen('php://stderr', 'a');
-            if ($stream === false) {
-                throw new \RuntimeException(Lang::t('middleware.cannot_open_stderr'));
+            $configured = getenv(self::LOG_PATH_ENV);
+            if (is_string($configured) && $configured !== '') {
+                $this->openFile($configured);
+                return;
             }
-            $this->stream = $stream;
-            $this->owns = true;
+            $this->openStderr();
             return;
         }
         if (is_string($target)) {
-            $stream = fopen($target, 'a');
-            if ($stream === false) {
-                throw new \RuntimeException(Lang::t('logger.cannot_open_target', ['target' => $target]));
-            }
-            $this->stream = $stream;
-            $this->owns = true;
+            $this->openFile($target);
             return;
         }
         if (!is_resource($target)) {
             throw new \InvalidArgumentException(Lang::t('logger.invalid_target'));
         }
         $this->stream = $target;
+        $this->describedAs = 'stream';
+    }
+
+    /**
+     * Resolve the sink from the deployment environment: the
+     * configured `SSH_SERVER_LOG` file when present, stderr
+     * otherwise. Prefer this over `new Logger()` in boot code so
+     * the resolution is visible at the call site.
+     */
+    public static function auto(): self
+    {
+        return new self();
+    }
+
+    /** Append to `$path`, creating it `0600` when it does not exist. */
+    public static function toFile(string $path): self
+    {
+        return new self($path);
+    }
+
+    /**
+     * Write to an already-open resource the caller keeps (a pipe
+     * into the daemon's logger, a test buffer). Not closed by this
+     * middleware.
+     *
+     * @param resource $stream
+     */
+    public static function toStream($stream): self
+    {
+        return new self($stream);
+    }
+
+    /**
+     * Explicitly choose the process error stream. Under
+     * `ForceCommand` that is the connecting client's extended-data
+     * channel — use it only where that is what you want (a local
+     * run, a tool, a test).
+     */
+    public static function toStderr(): self
+    {
+        $logger = new self();
+        $logger->openStderr();
+        return $logger;
+    }
+
+    /**
+     * Which sink this instance resolved to, as a short
+     * machine-readable description: `file:<path>`, `stderr`, or
+     * `stream`. The client-visible hazard of `stderr` is why this
+     * is public.
+     */
+    public function target(): string
+    {
+        return $this->describedAs;
+    }
+
+    private function openStderr(): void
+    {
+        // `toStderr()` resolves through the constructor first (which
+        // may have opened the configured file); release that handle
+        // rather than orphaning it.
+        if ($this->owns && isset($this->stream) && is_resource($this->stream)) {
+            fclose($this->stream);
+        }
+        $stream = fopen('php://stderr', 'a');
+        if ($stream === false) {
+            throw new \RuntimeException(Lang::t('middleware.cannot_open_stderr'));
+        }
+        $this->stream = $stream;
+        $this->owns = true;
+        $this->describedAs = 'stderr';
+    }
+
+    private function openFile(string $path): void
+    {
+        $directory = dirname($path);
+        $existed = is_file($path);
+        if (!$existed && !is_dir($directory)) {
+            // The audit case that matters: a missing directory used
+            // to throw here, and the fatal trace travelled on the
+            // same channel as the log it failed to write.
+            @mkdir($directory, 0700, true);
+        }
+        $stream = @fopen($path, 'a');
+        if ($stream === false) {
+            throw new \RuntimeException(Lang::t('logger.cannot_open_target', ['target' => $path]));
+        }
+        if (!$existed) {
+            @chmod($path, 0600);
+        }
+        $this->stream = $stream;
+        $this->owns = true;
+        $this->describedAs = 'file:' . $path;
     }
 
     public function __destruct()

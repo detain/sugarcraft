@@ -36,7 +36,7 @@ use SugarCraft\SshServer\Session;
 exit(Server::new()
     // InProcessTransport is the default in PR1+ — explicit
     // ->withTransport() is unnecessary but documents the choice.
-    ->use(new Logger())
+    ->use(Logger::auto())
     ->use(new Spawn(fn (Session $s) => [
         'cmd' => ['/bin/bash', '-l'],
         'env' => [

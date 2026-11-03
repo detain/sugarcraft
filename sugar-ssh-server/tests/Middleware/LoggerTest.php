@@ -11,6 +11,24 @@ use PHPUnit\Framework\TestCase;
 
 final class LoggerTest extends TestCase
 {
+    /** @var string|false */
+    private $savedLogPath = false;
+
+    protected function setUp(): void
+    {
+        $this->savedLogPath = getenv(Logger::LOG_PATH_ENV);
+        putenv(Logger::LOG_PATH_ENV);
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->savedLogPath === false) {
+            putenv(Logger::LOG_PATH_ENV);
+        } else {
+            putenv(Logger::LOG_PATH_ENV . '=' . $this->savedLogPath);
+        }
+    }
+
     private function session(): Session
     {
         return new Session(
@@ -132,5 +150,108 @@ final class LoggerTest extends TestCase
         // But the key is that Logger doesn't explicitly fclose() injected streams
         // This test documents the behavior
         $this->assertTrue(true);
+    }
+
+    public function testTheConfiguredSinkWinsOverStderr(): void
+    {
+        $path = sys_get_temp_dir() . '/wish-logger-auto-' . uniqid() . '.jsonl';
+        putenv(Logger::LOG_PATH_ENV . '=' . $path);
+        try {
+            $logger = Logger::auto();
+            $this->assertSame('file:' . $path, $logger->target());
+
+            $logger->handle(Context::background(), $this->session(), function (): void {});
+
+            $contents = (string) file_get_contents($path);
+            $this->assertStringContainsString('session.start', $contents);
+            $this->assertStringContainsString('session.end', $contents);
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
+    public function testAnUncodedSinkSaysSoInsteadOfClaimingAJournal(): void
+    {
+        // Nothing configured => the stderr fallback, and `target()` is
+        // what a deployment logs at boot to discover it did NOT get a
+        // file. (Audit K3: silently choosing the stream the SSH client
+        // reads is how operators ended up with no forensics.)
+        $logger = Logger::auto();
+        $this->assertSame('stderr', $logger->target());
+        $this->assertSame('stderr', (new Logger())->target());
+        $this->assertSame('stream', Logger::toStream(fopen('php://memory', 'w+'))->target());
+    }
+
+    public function testTheClientVisibleHazardIsDocumentedOnTheClass(): void
+    {
+        // Half-moved-truth guard: the class used to advertise
+        // `journalctl -u sshd` for the default stream. That claim is
+        // false under ForceCommand (fd 2 is the client's extended-data
+        // channel), and the docblock is the only place most deployments
+        // read. If someone restores it, this test says why it went.
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Middleware/Logger.php');
+        $this->assertStringContainsString('extended-data', $source);
+        $this->assertStringNotContainsString('journalctl -u sshd', $source);
+        $this->assertStringContainsString(Logger::LOG_PATH_ENV, $source);
+    }
+
+    public function testACreatedLogFileIsOwnerOnlyEvenUnderAnOpenUmask(): void
+    {
+        $path = sys_get_temp_dir() . '/wish-logger-mode-' . uniqid() . '.jsonl';
+        $previous = umask(0);
+        try {
+            Logger::toFile($path)->handle(Context::background(), $this->session(), function (): void {});
+            clearstatcache();
+            $this->assertSame(
+                0600,
+                (int) (fileperms($path) & 0777),
+                'a log file the logger creates must not depend on the ambient umask'
+            );
+        } finally {
+            umask($previous);
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
+    public function testAnExistingLogFileKeepsTheModeTheOperatorChose(): void
+    {
+        // The 0600 stamp is for files WE create. A deliberately
+        // group-readable log (rotation set up by the service) must
+        // survive a restart, not get tightened behind the operator's
+        // back.
+        $path = sys_get_temp_dir() . '/wish-logger-keeps-' . uniqid() . '.jsonl';
+        try {
+            $this->assertNotFalse(file_put_contents($path, ''));
+            $this->assertNotFalse(chmod($path, 0640));
+            Logger::toFile($path)->handle(Context::background(), $this->session(), function (): void {});
+            clearstatcache();
+            $this->assertSame(0640, (int) (fileperms($path) & 0777));
+        } finally {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+    }
+
+    public function testAStreamTheCallerOwnsSurvivesTheLogger(): void
+    {
+        $buffer = fopen('php://memory', 'w+');
+        $this->assertNotFalse($buffer);
+        $logger = Logger::toStream($buffer);
+        $logger->handle(Context::background(), $this->session(), function (): void {});
+        unset($logger);
+
+        // If the logger had claimed ownership, this write would warn
+        // (and failOnWarning turns that warning into a red run).
+        $this->assertNotFalse(fwrite($buffer, "after\n"));
+        rewind($buffer);
+        $contents = (string) stream_get_contents($buffer);
+        $this->assertStringContainsString('session.start', $contents);
+        $this->assertStringContainsString('after', $contents);
+        fclose($buffer);
     }
 }

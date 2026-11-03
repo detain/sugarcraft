@@ -19,3 +19,12 @@ require __DIR__ . '/../vendor/autoload.php';
 // AGENTS.md "Tests" for the family law (sugar-async, sugar-image,
 // sugar-pty, sugar-testing, candy-code all pin the same way).
 \SugarCraft\Testing\LoopPin::pinStableClock();
+
+// Logger::auto() resolves its sink from SSH_SERVER_LOG (see
+// src/Middleware/Logger.php). The suite must not depend on what the
+// developer's shell happens to export: with the variable cleared here,
+// `new Logger()` in any test means the stderr fallback, and a test that
+// wants the file branch sets the variable itself (LoggerTest does, and
+// restores it).
+putenv('SSH_SERVER_LOG');
+unset($_ENV['SSH_SERVER_LOG'], $_SERVER['SSH_SERVER_LOG']);

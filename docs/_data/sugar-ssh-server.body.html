@@ -94,7 +94,7 @@ Server::new()
 <tr><td>SubsystemHandler</td><td>handle(Context, Session): void</td><td>Interface — implement to handle a named subsystem request</td></tr>
 <tr><td>SftpStub</td><td>new()</td><td>Example <code>SubsystemHandler</code> impl — stub demonstrating wiring; not a real SFTP server</td></tr>
 <tr><td>RateLimit</td><td>new(string $statePath, int $burst, float $ratePerSec)</td><td>Per-IP token-bucket rate limiter</td></tr>
-<tr><td>Logger</td><td>new(string|resource|null)</td><td>JSON one-line logger to file or stderr</td></tr>
+<tr><td>Logger</td><td>new(string|resource|null) · <code>auto()</code> · <code>toFile()</code> · <code>toStream()</code> · <code>toStderr()</code> · <code>target()</code></td><td>One-line JSON session records. Sink resolution: <code>$SSH_SERVER_LOG</code> when set, else stderr — which under <code>ForceCommand</code> is the connecting client's channel, not journald. Files created here are <code>0600</code>; an existing file keeps its mode.</td></tr>
 <tr><td>Keepalive</td><td>new(int $intervalSeconds)</td><td>Sends SSH keepalive messages at the given interval</td></tr>
 <tr><td>InProcessTransport</td><td>new(?PtySystem, ?ChannelHandler)</td><td>Default transport — PTY supervisor + sugar-pty; optional custom ChannelHandler</td></tr>
 <tr><td>HostSshdTransport</td><td>new()</td><td>Legacy transport — inline middleware, Program on STDIN/STDOUT</td></tr>

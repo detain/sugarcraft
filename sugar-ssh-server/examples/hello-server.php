@@ -52,6 +52,10 @@ final class Banner implements Middleware
 // sshd's PTY, the way pre-PTY-upgrade sugar-ssh-server always was.
 exit(Server::new()
     ->withTransport(new HostSshdTransport())
-    ->use(new Logger())
+    // Logger::auto() appends to $SSH_SERVER_LOG when the service sets
+    // it; unset, it writes to stderr, and under ForceCommand stderr is
+    // the CONNECTED USER's channel — an operator run wants the env var
+    // (or Logger::toFile()) so the records are actually kept.
+    ->use(Logger::auto())
     ->use(new Banner())
     ->serve());

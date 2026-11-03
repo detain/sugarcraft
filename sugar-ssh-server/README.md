@@ -175,7 +175,7 @@ ssh wishuser@your-host
 
 | Middleware           | Transport       | Purpose                                                                                              |
 |----------------------|-----------------|------------------------------------------------------------------------------------------------------|
-| `Logger`             | both            | One-line JSON event at session start + end, with elapsed time and connection meta.                  |
+| `Logger`             | both            | One-line JSON event at session start + end, with elapsed time and connection meta. Sink matters: `Logger::auto()` (and `new Logger()`) append to `$SSH_SERVER_LOG` when set, else `php://stderr` — which under `ForceCommand` **is the connecting client's extended-data channel**, not journald. Pass a file path (we create it `0600`; an existing file keeps its mode) or `Logger::toStream($handle)` you control. `target()` reports the choice. |
 | `Auth`               | both            | Username allowlist, key-fingerprint allowlist, or the paired `userKeys` map (name => that name's keys). **The two flat lists are a cross product, not a pairing:** with `users` `['alice','bob']` and `keyFingerprints` `[alice-key, bob-key]`, bob presenting alice's key is admitted *as alice*. Use `userKeys` when the question is whose key this is (`[Auth::ANY_KEY]` = any key, that name only). An empty list arms nothing — `new Auth()` admits every session. |
 | `PasswordAuth`       | both            | Validates user+password against a caller-supplied callback (`SSH_PASSWORD` env var).                 |
 | `CertificateAuth`    | both            | Validates X.509 peer certificate (`SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars).                   |
@@ -205,6 +205,36 @@ final class HelloBanner implements Middleware
     }
 }
 ```
+
+## Sinks: who actually reads what you write
+
+There is no server process to log into. The code runs as sshd's
+forced command, so the streams it inherits belong to the *session*:
+under `ForceCommand`, fd 1 is the client's data channel and fd 2 is
+the client's extended-data channel — OpenSSH forwards both to the
+person who just connected. Anything written there is user-facing,
+on a path that may not even be authenticated yet. journald captures
+what sshd itself writes, never what its child writes.
+
+Consequences worth knowing before you deploy:
+
+- `Logger` with no target appends to `$SSH_SERVER_LOG` if you set it
+  (`Logger::auto()`), and falls back to stderr otherwise. A live
+  panel wants the file branch or `Logger::toFile()` /
+  `Logger::toStream()`; `target()` returns which one you got, so a
+  boot line can say it out loud. Files this class creates are
+  `0600` — the records carry usernames and client addresses.
+- `Auth`, `RateLimit`, `KeyboardInteractive` and `CertificateAuth`
+  take a `$stderr` stream. Left alone, their notices (including
+  "fail-open, allowing") reach the prober. Inject a real operator
+  sink there; the messages themselves carry no paths and no
+  posture detail by design.
+- `AuthMethods` prints its banner to stdout on purpose — that one
+  *is* meant for the client.
+
+For the fail-open/fail-closed posture of every gate, see
+[Authentication: pairing a key to a name](#authentication-pairing-a-key-to-a-name)
+and `docs/admin/sugar-ssh-server.md`.
 
 ## Authentication: pairing a key to a name
 

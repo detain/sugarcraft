@@ -39,7 +39,7 @@ Under **HostSshdTransport** (legacy, opt-in):
 | Path | When | Contents |
 |------|------|----------|
 | Rate-limit state file (your `RateLimit` constructor's `$statePath`) | on each admitted request | JSON token-bucket map keyed `ip:<host>` / `user:<name>`, entries `{tokens, last, burst, rate}`. The read-decide-publish cycle is serialised by an exclusive `flock(LOCK_EX)` taken on a **stable sidecar** `<state-path>.lock`; the payload itself is republished 0600 via temp-file + atomic rename (`AtomicJsonFile`), which is why the lock cannot ride the payload inode (see below). Buckets that have refilled to burst are pruned on each publish. |
-| Logger output (your `Logger` constructor's `$target`; defaults to stderr) | on each session | JSONL one-line events (session start/end, user, client address, elapsed seconds) |
+| Logger output (your `Logger` constructor's `$target`, or `$SSH_SERVER_LOG` when you use `Logger::auto()`; falls back to stderr) | on each session | JSONL one-line events (session start/end, user, client address, elapsed seconds). **A file sink is the only one that keeps them:** under `ForceCommand` the child's stderr is the connecting client's extended-data channel, and journald records only what sshd itself writes. `Logger::target()` reports the resolution; files the logger creates are `0600`. |
 
 Neither path is written unless the corresponding middleware is registered.
 
@@ -260,6 +260,7 @@ stdin/stdout.
 ## Monitoring
 
 - Logger middleware emits a JSONL line on session start (`{ "event": "session.start", "ts": "...", "user": "...", "client_addr": "host:port", "term": "...", "tty": "...", "pty": "COLSxROWS", "command": "..." }`) and session end (same shape plus `{ "event": "session.end", "elapsed_s": N }` — seconds, rounded to 3 dp).
+- Choose the sink deliberately. `Logger::auto()` / `new Logger()` append to `$SSH_SERVER_LOG` when the service exports it; with nothing set they write to stderr, and the forced command's stderr is forwarded to *the client*, so those records print into the user's terminal and the operator keeps nothing. Set `Environment=SSH_SERVER_LOG=/var/log/sshd-hub/sessions.jsonl` in the socket-activated service unit, or pass `Logger::toFile($path)` / `Logger::toStream($handle)` explicitly. Log a `Logger::target()` line at boot so the choice is on the record.
 - Parse the JSONL with `jq 'select(.event == "session.end") | .elapsed_s'` to graph p95 session durations.
 - Rate-limit state file (your configured `$statePath`, e.g. `/var/lib/sshd-hub/buckets.json`) is human-readable JSON — monitor its size to gauge active-bucket count.
 

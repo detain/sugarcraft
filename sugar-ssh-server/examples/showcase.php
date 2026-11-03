@@ -47,7 +47,7 @@ echo "\n";
 
 echo "=== Pipeline: Logger → RateLimit → hello ===\n";
 Server::new()
-    ->use(new Logger())
+    ->use(Logger::auto())
     ->use(new RateLimit(statePath: sys_get_temp_dir() . '/wish-showcase-buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new class implements Middleware {
         public function handle(Context $ctx, Session $s, callable $next): void
