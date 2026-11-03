@@ -9,24 +9,33 @@ use PHPUnit\Framework\Assert;
 /**
  * The result of a {@see ProgramSimulator::run()} call.
  *
- * Captures the final model state, accumulated view bytes, emitted commands,
- * and the concatenated view() output across steps for golden-file assertion.
- *
- * @readonly
+ * Captures the final model state, the last and per-step view() frames,
+ * emitted commands, the accumulated output stream, and how many queued
+ * messages were dropped because a QuitMsg/InterruptMsg ended the drain
+ * early — so a test can pin "the quit actually stopped things" instead of
+ * trusting an empty-looking run.
  */
 final readonly class TestResult
 {
     /**
-     * @param object          $model  Final model after all messages processed
-     * @param string         $view   Last view() output string
-     * @param list<\Closure> $cmds   All commands emitted during the run
-     * @param string         $output Concatenated view() output across steps
+     * @param object         $model            Final model after all messages processed
+     * @param string         $view             Last view() output string
+     * @param list<\Closure> $cmds             All commands emitted during the run
+     * @param string         $output           Concatenated view() output across steps
+     * @param list<string>   $frames           view() after init-trio updates, each
+     *                                         update leg, and the final render —
+     *                                         every frame the run produced, in order
+     * @param int            $droppedAfterStop Messages skipped because the drain hit
+     *                                         a QuitMsg/InterruptMsg (parity with
+     *                                         Program stopping its loop)
      */
     public function __construct(
         public object $model,
         public string $view,
         public array $cmds,
         public string $output,
+        public array $frames = [],
+        public int $droppedAfterStop = 0,
     ) {}
 
     /**
@@ -52,10 +61,13 @@ final readonly class TestResult
     /**
      * Assert that at least one command matches the given filter.
      *
-     * @param callable(\Closure): bool $filter Returns true for matching cmd
+     * @param callable(\Closure): bool $filter  Returns true for matching cmd
+     * @param string|null              $message Failure context — without it the
+     *                                          report says only how many cmds were
+     *                                          captured, which is rarely actionable
      * @throws \PHPUnit\Framework\AssertionFailedError if no cmd matches
      */
-    public function assertCmdContains(callable $filter): void
+    public function assertCmdContains(callable $filter, ?string $message = null): void
     {
         foreach ($this->cmds as $cmd) {
             if ($filter($cmd) === true) {
@@ -64,7 +76,11 @@ final readonly class TestResult
             }
         }
 
-        Assert::fail('No command matched the given filter.');
+        Assert::fail(sprintf(
+            'No command matched the given filter (out of %d captured command(s)).%s',
+            count($this->cmds),
+            $message === null ? '' : ' ' . $message,
+        ));
     }
 
     /**

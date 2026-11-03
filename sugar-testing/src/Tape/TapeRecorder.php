@@ -10,24 +10,34 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Testing\Lang;
 
 /**
- * Records a Program's output stream to a VHS-compatible `.tape` file.
+ * Builds VHS-compatible `.tape` files for demo-GIF rendering.
  *
- * TapeRecorder wraps a program output stream and emits a `.tape` file
- * in the VHS format used by the Charmbracelet VHS tool for
- * rendering demo GIFs.
+ * TapeRecorder is a SCRIPT BUILDER, not a recorder: nothing is captured
+ * from a running Program. You compose the keystroke choreography
+ * ({@see type()}, {@see enter()}, {@see sleep()}) and {@see save()} emits
+ * the `.tape` the Charmbracelet VHS tool renders into a GIF in CI.
+ *
+ * All interpolated text is escaped so it cannot forge a standalone
+ * directive line: {@see type()} neutralizes newlines, carriage returns and
+ * other control bytes inside the quoted string, and {@see comment()}
+ * prefixes every physical line. {@see line()} is the deliberate verbatim
+ * escape hatch — whatever you hand it lands in the tape unescaped, so it
+ * must only ever receive trusted, generated directive text (CI executes
+ * the resulting tape; a `Shell "..."` line is arbitrary command execution).
  *
  * The tape format:
  *   Set Theme "TokyoNight"
  *   Set FontSize 14
  *   Set Width 800
  *   Set Height 480
- *   Type "php examples/counter.php"
+ *   Type "php examples/tape-recorder.php"
  *   Enter
  *   Sleep 1
  *   Type "q"
  *   Enter
  *
- * First-party harness — no 1:1 Go counterpart (see docs/MATCHUPS.md).
+ * First-party harness; the output format is charmbracelet/vhs's tape
+ * dialect (see docs/MATCHUPS.md).
  */
 final class TapeRecorder
 {
@@ -64,7 +74,9 @@ final class TapeRecorder
         int $fontSize = 14,
     ): self {
         if ($this->headerWritten === false) {
-            $this->lines[] = 'Set Theme "' . $theme . '"';
+            // $theme is caller-supplied and CI executes the tape: escape it
+            // like typed content so a quote or newline cannot forge a line.
+            $this->lines[] = 'Set Theme "' . self::escapeVhsRune($theme) . '"';
             $this->lines[] = 'Set FontSize ' . $fontSize;
             $this->lines[] = 'Set Width ' . $width;
             $this->lines[] = 'Set Height ' . $height;
@@ -110,7 +122,11 @@ final class TapeRecorder
     }
 
     /**
-     * Record a window resize event.
+     * Emit a resize annotation.
+     *
+     * VHS tapes carry no mid-tape resize directive — output dimensions are
+     * fixed by {@see header()} — so this records the intent as a comment
+     * line, nothing more.
      *
      * @param int $cols
      * @param int $rows
@@ -125,12 +141,18 @@ final class TapeRecorder
     /**
      * Record a comment.
      *
+     * A multi-line comment becomes one '# '-prefixed tape line per
+     * physical line, so no comment body can surface an unprefixed line
+     * (which VHS would execute as a directive).
+     *
      * @param string $comment
      * @return $this
      */
     public function comment(string $comment): self
     {
-        $this->lines[] = '# ' . $comment;
+        foreach (preg_split('/\r\n|\r|\n/', $comment) ?: [$comment] as $physical) {
+            $this->lines[] = '# ' . $physical;
+        }
         return $this;
     }
 
@@ -149,20 +171,35 @@ final class TapeRecorder
     /**
      * Finalize and write the tape file to disk.
      *
+     * A short or failed write throws with the underlying reason — a tape
+     * that silently stops half-way would render a truncated GIF that looks
+     * intentional.
+     *
      * @return void
      */
     public function save(): void
     {
         $dir = \dirname($this->outputPath);
         if (\is_dir($dir) === false) {
-            \mkdir($dir, 0755, true);
+            @\mkdir($dir, 0755, true);
+            if (\is_dir($dir) === false) {
+                throw new \RuntimeException(Lang::t('tape.write_failed', [
+                    'path' => $dir,
+                    'reason' => (string) (error_get_last()['message'] ?? 'directory could not be created'),
+                ]));
+            }
         }
 
         $content = implode("\n", $this->lines) . "\n";
-        $result = \file_put_contents($this->outputPath, $content);
+        $written = @\file_put_contents($this->outputPath, $content);
 
-        if ($result === false || $result === 0) {
-            throw new \RuntimeException(Lang::t('tape.write_failed', ['path' => $this->outputPath]));
+        if ($written !== \strlen($content)) {
+            throw new \RuntimeException(Lang::t('tape.write_failed', [
+                'path' => $this->outputPath,
+                'reason' => $written === false
+                    ? (string) (error_get_last()['message'] ?? 'write failed')
+                    : \sprintf('short write (%d of %d bytes)', $written, \strlen($content)),
+            ]));
         }
     }
 
@@ -214,17 +251,33 @@ final class TapeRecorder
     }
 
     /**
-     * Escape a rune (character key) for safe inclusion in VHS Type command.
+     * Escape a string for safe inclusion in a quoted VHS directive.
      *
-     * Both double-quotes and backslashes must be escaped so a rune like
-     * `\` produces valid VHS output.
+     * Double quotes and backslashes are escaped first so a payload like
+     * `\` produces valid VHS output. Control bytes are then neutralized to
+     * VHS backslash escapes: an unescaped newline inside type()'s argument
+     * would otherwise emit a STANDALONE directive line — "\nSet FontSize 4242"
+     * or "\nShell \"...\"" becomes arbitrary CI action (vhs.yml renders
+     * committed tapes), so the one-line-per-directive guarantee is a
+     * security boundary, not cosmetics.
      *
      * @param string $rune
      * @return string
      */
     private static function escapeVhsRune(string $rune): string
     {
-        return addcslashes($rune, '\\"');
+        $escaped = addcslashes($rune, '"\\');
+
+        $neutralised = preg_replace_callback('/[\x00-\x1f\x7f]/', static function (array $m): string {
+            return match ($m[0]) {
+                "\n" => '\\n',
+                "\r" => '\\r',
+                "\t" => '\\t',
+                default => sprintf('\\x%02X', \ord($m[0])),
+            };
+        }, $escaped);
+
+        return $neutralised ?? $escaped;
     }
 
     /**

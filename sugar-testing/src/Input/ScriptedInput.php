@@ -27,7 +27,7 @@ use SugarCraft\Testing\Lang;
  *   ScriptedInput::new()
  *       ->key('a')
  *       ->enter()
- *       ->ticks(5)
+ *       ->ticks(5)          // matches nothing unless your lib uses this TickMsg — see ticks()
  *       ->resize(80, 24)
  *       ->key('q')
  *       ->build();
@@ -35,9 +35,12 @@ use SugarCraft\Testing\Lang;
  * Terminal-shaped input — {@see paste()} and {@see bytes()} — is not
  * re-implemented here: the bytes are fed through sugar-core's real
  * {@see InputReader}, the same parser {@see \SugarCraft\Core\Program}
- * reads stdin with, so a script sees exactly the message sequence the live
- * runtime would deliver (bracketed-paste envelope, chunking past
- * {@see InputReader::MAX_PASTE_BYTES}, sanitized payload, stale-paste close).
+ * reads stdin with, so a script decodes through the same code path as the
+ * live runtime (bracketed-paste envelope, chunking past
+ * {@see InputReader::MAX_PASTE_BYTES}, sanitized payload, stale-paste
+ * close). One deliberate divergence: the runtime performs idle recovery on
+ * a timer, while a script runs it eagerly when the last read is consumed —
+ * same resulting messages, no wall clock involved.
  *
  * Symbolic vs wire-shaped input — the arrow-key contract:
  * {@see arrow()} (and {@see key()}/{@see namedKey()}) build SYMBOLIC messages
@@ -48,8 +51,8 @@ use SugarCraft\Testing\Lang;
  * character input, never as KeyType::Down. A PTY harness driving a program
  * must send the ESC [ C bytes, not the glyph.
  *
- * @readonly
- * First-party harness — no 1:1 Go counterpart (see docs/MATCHUPS.md).
+ * First-party harness — upstream-antecedented (charmbracelet/teatest input
+ * scripting) but re-implemented for sugar-core's message types.
  */
 final readonly class ScriptedInput
 {
@@ -132,18 +135,30 @@ final readonly class ScriptedInput
     /**
      * Append a named key message.
      *
+     * Modifiers default to false but are settable — kitty keyboard-protocol
+     * programs distinguish Ctrl+Enter from plain Enter, and a script that
+     * cannot raise the flags cannot exercise those chords.
+     *
      * @param \SugarCraft\Core\KeyType $type KeyType enum value
      * @param string                  $rune Character representation (empty for non-char keys)
+     * @param bool                    $shift Whether to set the shift modifier
+     * @param bool                    $ctrl  Whether to set the ctrl modifier
+     * @param bool                    $alt   Whether to set the alt modifier
      * @return self
      */
-    public function namedKey(\SugarCraft\Core\KeyType $type, string $rune = ''): self
-    {
+    public function namedKey(
+        \SugarCraft\Core\KeyType $type,
+        string $rune = '',
+        bool $shift = false,
+        bool $ctrl = false,
+        bool $alt = false,
+    ): self {
         return $this->push(new KeyMsg(
             type: $type,
             rune: $rune,
-            alt: false,
-            ctrl: false,
-            shift: false,
+            alt: $alt,
+            ctrl: $ctrl,
+            shift: $shift,
         ));
     }
 
@@ -191,9 +206,12 @@ final readonly class ScriptedInput
      * Append arrow keys.
      *
      * @param 'up'|'down'|'left'|'right' $dir
+     * @param bool $shift Whether to set the shift modifier (Shift+Arrow selection)
+     * @param bool $ctrl  Whether to set the ctrl modifier (word-wise motion)
+     * @param bool $alt   Whether to set the alt modifier
      * @return self
      */
-    public function arrow(string $dir): self
+    public function arrow(string $dir, bool $shift = false, bool $ctrl = false, bool $alt = false): self
     {
         $type = match ($dir) {
             'up' => KeyType::Up,
@@ -202,25 +220,37 @@ final readonly class ScriptedInput
             'right' => KeyType::Right,
             default => throw new \InvalidArgumentException(Lang::t('input.invalid_arrow', ['dir' => $dir])),
         };
-        return $this->namedKey($type);
+        return $this->namedKey($type, shift: $shift, ctrl: $ctrl, alt: $alt);
     }
 
     /**
-     * Append $count tick messages with $seconds interval each.
+     * Append $count tick messages, one per interval of $seconds.
      *
-     * Used to advance the virtual clock and trigger subscription handlers.
-     * Emits {@see TickMsg} instances so models can match on them via
-     * instanceof rather than relying on anonymous class identity.
+     * IMPORTANT — there is no virtual clock. The simulator has no timer: it
+     * pumps the message queue, and a tick is just another message arriving
+     * between the others. A model therefore only advances if it matches the
+     * exact class it was written to match, and fleet libs each ship their
+     * OWN TickMsg class (SugarCraft\Dash\TickMsg, SugarCraft\Forms\TickMsg,
+     * ...). Feeding this harness's {@see TickMsg} to a lib with its own
+     * class matches NOTHING and passes vacuously.
      *
-     * @param int   $count   Number of ticks
-     * @param float $seconds Interval between ticks
+     * Two correct uses:
+     *  - pass a $factory minting your lib's tick class:
+     *    ->ticks(3, 1.0, static fn (int $i, float $s) => new \Your\TickMsg($s))
+     *  - or push() those messages directly.
+     *
+     * @param int $count Number of ticks
+     * @param float $seconds Interval each tick represents
+     * @param (callable(int, float): Msg)|null $factory Produces the tick message for index/interval
      * @return self
      */
-    public function ticks(int $count, float $seconds = 1.0): self
+    public function ticks(int $count, float $seconds = 1.0, ?callable $factory = null): self
     {
         $messages = $this->messages;
         for ($i = 0; $i < $count; $i++) {
-            $messages[] = new TickMsg($seconds);
+            $messages[] = $factory !== null
+                ? $factory($i, $seconds)
+                : new TickMsg($seconds);
         }
         return new self($messages, $this->reader);
     }
@@ -353,13 +383,13 @@ final readonly class ScriptedInput
      * sequence split across reads with no pause between them — e.g. a paste
      * end marker straddling two reads.
      *
-     * After the last read the input goes silent, and the runtime's idle
-     * recovery runs as {@see \SugarCraft\Core\Program} would run it: a
-     * lone buffered ESC becomes an Escape key, and a paste whose end marker
-     * never arrived is closed after {@see InputReader::PASTE_IDLE_TIMEOUT}
-     * (PasteEndMsg + PasteMsg), handing the keyboard back. Any other
-     * incomplete sequence stays buffered for the next call, as it does in
-     * the runtime.
+     * After the last read the script closes out the way the runtime's idle
+     * recovery does — but eagerly, not on a timer: a lone buffered ESC
+     * becomes an Escape key, and a paste whose end marker never arrived is
+     * closed ({@see InputReader::flushStalePaste()}: PasteEndMsg + PasteMsg),
+     * handing the keyboard back. Any other incomplete sequence stays
+     * buffered in the returned builder and joins the next {@see bytes()}
+     * call's decode, as it would straddle reads in the runtime.
      *
      * @param string ...$reads Raw bytes, one string per read
      * @return self

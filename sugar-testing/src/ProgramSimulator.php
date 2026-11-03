@@ -4,22 +4,72 @@ declare(strict_types=1);
 
 namespace SugarCraft\Testing;
 
-use SugarCraft\Core\Cmd;
+use RuntimeException;
+use SugarCraft\Core\BatchMsg;
+use SugarCraft\Core\ExecRequest;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
+use SugarCraft\Core\Msg\EnvMsg;
+use SugarCraft\Core\Msg\InterruptMsg;
+use SugarCraft\Core\Msg\QuitMsg;
+use SugarCraft\Core\Msg\SuspendMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\PrintMsg;
 use SugarCraft\Core\Program;
+use SugarCraft\Core\RawMsg;
+use SugarCraft\Core\SequenceMsg;
+use SugarCraft\Core\TickRequest;
+use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Drives a TEA {@see Program} with scripted input for deterministic testing.
+ * Drives a {@see Program} (or bare Model) with scripted input, deterministically.
  *
  * ProgramSimulator wraps a Program and allows enqueuing messages via
  * {@see send()}, then drains the queue via {@see run()} which invokes
  * init(), update(), and view() in sequence — without touching real
  * stdin/stdout or installing signal handlers.
  *
+ * Control-layer parity: messages are routed through the SAME interception
+ * ladder {@see Program::dispatch()} uses, so a model never sees what the
+ * runtime would have swallowed:
+ *  - {@see BatchMsg} / {@see SequenceMsg} — their Cmd closures are executed
+ *    (through the cmd-runner hooks, so they are captured like any cmd) and
+ *    the messages they return are dispatched; the batch itself never reaches
+ *    update(). The simulator runs both strictly in list order; production
+ *    Batch schedules its cmds through the loop's tick queue, so if a model
+ *    depends on Batch-vs-Sequence scheduling differences, test that on a
+ *    real Program, not here.
+ *  - {@see TickRequest} — its produce closure fires IMMEDIATELY (there is
+ *    no virtual clock; the simulator has no timers). Subscription stand-ins
+ *    for timers live in {@see ScriptedInput::ticks()}.
+ *  - {@see RawMsg} / {@see PrintMsg} — appended verbatim to the output
+ *    stream ({@see TestResult::$output}); the model is not updated and no
+ *    frame is rendered for them, matching the runtime's side-channel.
+ *  - {@see ExecRequest} — THROWS. Exec suspends the real terminal; the
+ *    simulator has none to hand over. A test that exercises exec belongs at
+ *    the ProcessExecutor/integration layer, not the TEA-unit layer.
+ *  - {@see SuspendMsg} — no-op (nothing to suspend).
+ *  - {@see QuitMsg} / {@see InterruptMsg} — the drain STOPS, and these
+ *    messages never reach the model (exactly what Program does); messages
+ *    still queued behind the stop are dropped and counted in
+ *    {@see TestResult::$droppedAfterStop}.
+ *
+ * The runtime's startup trio (WindowSizeMsg, EnvMsg, ColorProfileMsg, which
+ * Program dispatches BEFORE init()) is NOT emitted by default. Opt in with
+ * {@see withWindowSize()}, {@see withEnvironment()}, and
+ * {@see withColorProfile()} to replay it — a model whose behavior depends
+ * on those messages (palette, width veto) is only testable with them armed.
+ *
  * The fake-cmd runner hook lets tests decide the message injected for each
  * command; to skip the commands' side effects entirely, also opt out of
  * execution with {@see withRealCmdRunner(false)}.
+ *
+ * Clone discipline: send() MUTATES this instance; with*() methods CLONE.
+ * Configure (with*) FIRST, then send() on the returned handle — or send
+ * everything first and configure the final handle. Mixing the two loses
+ * whichever messages were sent to the pre-clone handle (see
+ * tests/ProgramSimulatorCloneQueueTest for the pinned semantics).
  *
  * @see Assertions::assertGoldenAnsi() for snapshot assertions
  */
@@ -34,7 +84,16 @@ final class ProgramSimulator
     /** @var string */
     private string $outputBytes = '';
 
+    /** Safety bound on update-legs per drained message chain (see pump()). */
+    private const MAX_CYCLES = 10_000;
+
     private ?\Closure $fakeCmdRunner = null;
+
+    /** Set once a QuitMsg/InterruptMsg has been intercepted mid-drain. */
+    private bool $stopped = false;
+
+    /** Messages skipped because the drain had already stopped. */
+    private int $dropped = 0;
 
     /**
      * When true, executes cmds and threads their returned messages through
@@ -43,6 +102,13 @@ final class ProgramSimulator
      * compatibility with existing tests.
      */
     private bool $executeCmds = true;
+
+    /** Startup-trio opt-ins (null = not armed; see class docblock). */
+    private ?WindowSizeMsg $startupSize = null;
+
+    private ?EnvMsg $startupEnv = null;
+
+    private ?ColorProfileMsg $startupProfile = null;
 
     /**
      * @param private readonly Program $program PHP's readonly keyword prevents
@@ -60,7 +126,7 @@ final class ProgramSimulator
     /**
      * Factory — wrap a Program or a bare Model for testing.
      *
-     * A bare {@see Model} is convenient for behaviour tests that only
+     * A bare {@see Model} is convenient for behavior tests that only
      * exercise init/update/view and don't need to configure runtime
      * {@see ProgramOptions}; it is wrapped in a default {@see Program}
      * (no I/O happens because the simulator never calls Program::run()).
@@ -75,14 +141,23 @@ final class ProgramSimulator
     }
 
     /**
-     * Enqueue a message for the next {@see run()} cycle.
-     * Fluent — returns $this for chaining.
+     * Enqueue a message for the {@see run()} cycle.
+     *
+     * Mutates this instance (the queue is array state on $this) and returns
+     * $this for chaining. Because the with*() configuration methods CLONE,
+     * the queue a run() sees is the queue of the handle you call run() on:
+     * configure first, then send; or send first, then configure and use the
+     * returned handle for run(). Sends against a pre-clone handle after the
+     * clone are invisible to the clone.
      *
      * @return $this
      */
-    public function send(Msg $msg): self
+    public function send(Msg ...$msgs): self
     {
-        $this->queue[] = $msg;
+        foreach ($msgs as $msg) {
+            $this->queue[] = $msg;
+        }
+
         return $this;
     }
 
@@ -93,8 +168,11 @@ final class ProgramSimulator
      * return a Msg to inject, or null to skip. Naming caveat discovered by
      * audit (docs-fix-1023): the fake does NOT stop execution by itself —
      * the real Cmd closure still runs for its side effects under the
-     * default execute mode. Pair with {@see withRealCmdRunner(false}) for
+     * default execute mode. Pair with {@see withRealCmdRunner(false)} for
      * capture-without-executing determinism.
+     *
+     * Clones: configure BEFORE sending (or run on the returned handle) —
+     * see the class docblock's clone discipline.
      *
      * @param \Closure(\Closure): ?Msg $runner
      * @return $this
@@ -114,6 +192,8 @@ final class ProgramSimulator
      * false, cmds are captured but NOT executed — this is the safe,
      * deterministic mode that avoids side effects from sync cmds.
      *
+     * Clones: configure BEFORE sending — see the class docblock.
+     *
      * @param bool $execute Pass false to capture without executing
      * @return $this
      */
@@ -125,10 +205,51 @@ final class ProgramSimulator
     }
 
     /**
+     * Arm the startup WindowSizeMsg (dispatched before init(), like Program).
+     *
+     * Clones — configure before sending, or use the returned handle.
+     */
+    public function withWindowSize(int $cols, int $rows): self
+    {
+        $sim = clone $this;
+        $sim->startupSize = new WindowSizeMsg($cols, $rows);
+        return $sim;
+    }
+
+    /**
+     * Arm the startup EnvMsg (dispatched before init(), like Program).
+     *
+     * Clones — configure before sending, or use the returned handle.
+     */
+    public function withEnvironment(array $vars): self
+    {
+        $sim = clone $this;
+        $sim->startupEnv = new EnvMsg($vars);
+        return $sim;
+    }
+
+    /**
+     * Arm the startup ColorProfileMsg (dispatched before init(), like
+     * Program) — the message candy-top's color veto keys off.
+     *
+     * Clones — configure before sending, or use the returned handle.
+     */
+    public function withColorProfile(ColorProfile $profile): self
+    {
+        $sim = clone $this;
+        $sim->startupProfile = new ColorProfileMsg($profile);
+        return $sim;
+    }
+
+    /**
      * Drain the message queue, running init/update/view in sequence.
      *
      * The program loop is not used — we call the Model's methods directly
-     * so tests remain deterministic and side-effect-free.
+     * so tests remain deterministic and side-effect-free. Routing matches
+     * {@see Program::dispatch()}: control messages (Batch, Sequence,
+     * TickRequest, Raw, Print, Suspend, Quit, Interrupt) are intercepted
+     * and never reach the model; Quit/Interrupt end the drain early.
+     * ExecRequest throws (see class docblock).
      *
      * Subscriptions stand in for the runtime's timers on a virtual clock:
      * each one fires once after init() and once after every {@see send()}
@@ -148,25 +269,45 @@ final class ProgramSimulator
     public function run(): TestResult
     {
         $this->capturedCmds = [];
-        $this->outputBytes = '';
+        $this->outputBytes  = '';
+        $this->stopped      = false;
+        $this->dropped      = 0;
+        $frames             = [];
 
         // We use a simplified approach: just call init/update/view directly.
         $model = $this->getModelFromProgram();
+
+        // Startup trio, before init() — exactly what Program::run() dispatches
+        // first, but only when armed (default: nothing, historical behavior).
+        foreach ([$this->startupSize, $this->startupEnv, $this->startupProfile] as $startupMsg) {
+            if ($startupMsg === null) {
+                continue;
+            }
+
+            $model = $this->pump($model, $startupMsg, $frames);
+        }
 
         // Call init() once at startup and thread any produced message.
         $initCmd = $model->init();
         $initMsg = $this->runCmd($initCmd);
         if ($initMsg !== null) {
-            [$model, ] = $this->applyMsg($model, $initMsg);
+            $model = $this->pump($model, $initMsg, $frames);
         }
 
         // Fire subscriptions once after init to collect startup messages.
-        $model = $this->fireSubscriptions($model);
+        $model = $this->fireSubscriptions($model, $frames);
 
         // Process the sent messages in order; subscriptions fire after each.
         foreach ($this->queue as $msg) {
-            [$model, ] = $this->applyMsg($model, $msg);
-            $model = $this->fireSubscriptions($model);
+            if ($this->stopped) {
+                $this->dropped++;
+                continue;
+            }
+
+            $model = $this->pump($model, $msg, $frames);
+            if (!$this->stopped) {
+                $model = $this->fireSubscriptions($model, $frames);
+            }
         }
 
         // Final view call.
@@ -174,6 +315,7 @@ final class ProgramSimulator
         if ($model instanceof Model) {
             $finalViewResult = $model->view();
             $finalView = is_string($finalViewResult) ? $finalViewResult : '';
+            $frames[]  = $finalView;
         }
 
         return new TestResult(
@@ -181,23 +323,32 @@ final class ProgramSimulator
             view: $finalView,
             cmds: $this->capturedCmds,
             output: $this->outputBytes,
+            frames: $frames,
+            droppedAfterStop: $this->dropped,
         );
     }
 
     /**
      * Fire every subscription the model currently wants and deliver what
-     * they produce through update(), in subscription order.
+     * they produce through the dispatch pump, in subscription order.
      *
      * The set is read once, from the model as it stands now; the produced
      * messages are then applied in turn. They are applied here rather than
      * appended to the send() queue: a fixed-length drain of that queue left
      * them unprocessed, and the queue outlived run(), so the next run()
      * replayed them on top of its own.
+     *
+     * @param list<string> $frames
      */
-    private function fireSubscriptions(Model $model): Model
+    private function fireSubscriptions(Model $model, array &$frames): Model
     {
         foreach ($this->pumpSubscriptions($model) as $msg) {
-            [$model, ] = $this->applyMsg($model, $msg);
+            if ($this->stopped) {
+                $this->dropped++;
+                continue;
+            }
+
+            $model = $this->pump($model, $msg, $frames);
         }
 
         return $model;
@@ -229,30 +380,93 @@ final class ProgramSimulator
     }
 
     /**
-     * Apply a single message to the model, running any resulting command
-     * and iteratively draining cmd-produced messages (bounded to prevent
-     * infinite loops).
+     * The dispatch() ladder, simulator edition: intercept control messages
+     * exactly as {@see Program::dispatch()} does, and run ordinary messages
+     * through update() — draining whatever the update's cmd (or a batch
+     * member) produces, iteratively, through this same pump.
      *
-     * The $maxCycles limit of 10,000 prevents infinite cmd loops in models
-     * that produce a cmd on every update (e.g., models with continuous
-     * subscriptions). This is a safety guard — if your model legitimately
-     * needs more cycles, you can increase this limit, but it typically
-     * indicates a model design issue. For stress tests with many tick
-     * messages, consider using a smaller tick count or mocking subscriptions.
+     * The $maxCycles bound (self::MAX_CYCLES = 10,000) guards against
+     * infinite cmd loops in models that produce a cmd on every update. It
+     * is fixed — a model that trips it is looping, not stretching a limit,
+     * and the throw names it.
      *
-     * @param Model $model
-     * @param Msg $msg
-     * @return array{0: Model, 1: ?\Closure} Updated model and any cmd
+     * @param list<string> $frames view() outputs collected across the run
      */
-    private function applyMsg(Model $model, Msg $msg): array
+    private function pump(Model $model, Msg $msg, array &$frames): Model
     {
-        $cycleCount = 0;
-        $maxCycles = 10_000;
+        $pending   = [$msg];
+        $cycles    = 0;
 
-        while (true) {
-            if ($cycleCount++ > $maxCycles) {
-                throw new \RuntimeException(
-                    Lang::t('simulator.cmd_loop_overflow', ['max' => $maxCycles])
+        while ($pending !== []) {
+            if ($this->stopped) {
+                $this->dropped += count($pending);
+                break;
+            }
+
+            $msg = array_shift($pending);
+
+            if ($msg instanceof BatchMsg || $msg instanceof SequenceMsg) {
+                // The runtime never feeds a batch to the model: its members
+                // are scheduled as cmds. Run them through the same cmd hooks
+                // so capture/execute semantics apply, threading results.
+                foreach ($msg->cmds as $cmd) {
+                    if (!$cmd instanceof \Closure) {
+                        throw new RuntimeException(Lang::t('simulator.batch_member_not_closure', [
+                            'class' => $msg::class,
+                            'type' => get_debug_type($cmd),
+                        ]));
+                    }
+
+                    $produced = $this->runCmd($cmd);
+                    if ($produced !== null) {
+                        $pending[] = $produced;
+                    }
+                }
+
+                continue;
+            }
+
+            if ($msg instanceof TickRequest) {
+                // No virtual clock here: the request fires immediately and
+                // its result dispatches like any message (Program::dispatch
+                // recurses the same way from inside its one-shot timer).
+                $produced = ($msg->produce)();
+                if ($produced !== null) {
+                    $pending[] = $produced;
+                }
+
+                continue;
+            }
+
+            if ($msg instanceof RawMsg) {
+                // Side-channel: bytes verbatim, no model touch, no frame.
+                $this->outputBytes .= $msg->bytes;
+                continue;
+            }
+
+            if ($msg instanceof PrintMsg) {
+                $this->outputBytes .= $msg->text . "\n";
+                continue;
+            }
+
+            if ($msg instanceof ExecRequest) {
+                throw new RuntimeException(Lang::t('simulator.exec_unsupported'));
+            }
+
+            if ($msg instanceof SuspendMsg) {
+                continue; // nothing to suspend; consumed like the runtime consumes it
+            }
+
+            if ($msg instanceof QuitMsg || $msg instanceof InterruptMsg) {
+                $this->stopped = true;
+                $this->dropped += count($pending);
+                break;
+            }
+
+            // Ordinary message: the update leg.
+            if ($cycles++ > self::MAX_CYCLES) {
+                throw new RuntimeException(
+                    Lang::t('simulator.cmd_loop_overflow', ['max' => self::MAX_CYCLES])
                 );
             }
 
@@ -262,21 +476,16 @@ final class ProgramSimulator
             $viewOutput = $model->view();
             if (is_string($viewOutput)) {
                 $this->outputBytes .= $viewOutput;
+                $frames[]           = $viewOutput;
             }
 
-            // Run the cmd and get any produced message.
             $producedMsg = $this->runCmd($cmd);
-
-            // If no message was produced, we're done with this update cycle.
-            if ($producedMsg === null) {
-                break;
+            if ($producedMsg !== null) {
+                $pending[] = $producedMsg;
             }
-
-            // A cmd produced a message — feed it back into update().
-            $msg = $producedMsg;
         }
 
-        return [$model, $cmd ?? null];
+        return $model;
     }
 
     /**
