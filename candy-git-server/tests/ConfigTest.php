@@ -323,9 +323,6 @@ git:
 http:
   listen_addr: ":8080"
   max_pack_bytes: 2097152
-db:
-  driver: "sqlite"
-  data_source: "nested.db"
 lfs:
   enabled: false
   ssh_enabled: true
@@ -345,7 +342,6 @@ YAML;
         $this->assertSame(16, $c->gitMaxConnections);
         $this->assertSame(':8080', $c->httpListenAddr);
         $this->assertSame(2097152, $c->maxPackBytes);
-        $this->assertStringContainsString('nested.db', $c->dbDataSource);
         $this->assertFalse($c->lfsEnabled);
         $this->assertTrue($c->lfsSshEnabled);
         $this->assertSame('@every 8h', $c->mirrorPullSchedule);
@@ -471,18 +467,6 @@ YAML;
 
         $this->assertStringContainsString('ssh', $sshPath);
         $this->assertDirectoryExists($sshPath);
-    }
-
-    public function testDbPath(): void
-    {
-        // db nested parsing doesn't work, but dbPath() returns resolved dataSource
-        $configPath = $this->tmpDir . '/db.yaml';
-        file_put_contents($configPath, "name: DbTest\n");
-
-        $c = Config::load($configPath);
-        $dbPath = $c->dbPath();
-
-        $this->assertStringContainsString('candy-git-server.db', $dbPath);
     }
 
     public function testReposPathCreatesDirectory(): void

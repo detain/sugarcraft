@@ -18,7 +18,6 @@ final class GitServerTest extends TestCase
         $this->assertSame(':23231', $c->sshListenAddr);
         $this->assertSame(':9418', $c->gitListenAddr);
         $this->assertSame(':23232', $c->httpListenAddr);
-        $this->assertSame('sqlite', $c->dbDriver);
         $this->assertTrue($c->lfsEnabled);
     }
 

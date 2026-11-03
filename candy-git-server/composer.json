@@ -32,8 +32,11 @@
         "react/promise": "^3.3",
         "symfony/yaml": "^6.4 || ^7.0",
         "ext-json": "*",
-        "ext-openssl": "*",
-        "ext-ssh2": "*"
+        "ext-hash": "*",
+        "ext-sockets": "*"
+    },
+    "suggest": {
+        "ext-ssh2": "Enables the anonymous-read capability gate on the SSH ForceCommand dispatcher; without it, that gate stays closed and SSH access requires a stored account key."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"

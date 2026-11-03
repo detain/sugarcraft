@@ -73,10 +73,6 @@ final class Config
     /** Max buffered packfile size in bytes (null = server default). */
     public readonly ?int $maxPackBytes;
 
-    /** Database. */
-    public readonly string $dbDriver;
-    public readonly string $dbDataSource;
-
     /** Git LFS. */
     public readonly bool $lfsEnabled;
     public readonly bool $lfsSshEnabled;
@@ -147,10 +143,6 @@ final class Config
                 'tls_key_path'    => '',
                 'tls_cert_path'   => '',
             ],
-            'db'       => [
-                'driver'      => 'sqlite',
-                'data_source' => 'candy-git-server.db',
-            ],
             'lfs'      => [
                 'enabled'     => true,
                 'ssh_enabled' => false,
@@ -207,10 +199,6 @@ final class Config
         $this->trustedProxies = self::parseTrustedProxies($http['trusted_proxies'] ?? []);
         $this->authSecret     = (string) ($http['auth_secret'] ?? '');
 
-        $db = $data['db'] ?? [];
-        $this->dbDriver     = (string) ($db['driver'] ?? 'sqlite');
-        $this->dbDataSource = $this->resolvePath((string) ($db['data_source'] ?? 'candy-git-server.db'), $dataPath);
-
         $lfs = $data['lfs'] ?? [];
         $this->lfsEnabled   = (bool) ($lfs['enabled'] ?? true);
         $this->lfsSshEnabled = (bool) ($lfs['ssh_enabled'] ?? false);
@@ -244,11 +232,6 @@ final class Config
             \mkdir($p, 0700, true);
         }
         return $p;
-    }
-
-    public function dbPath(): string
-    {
-        return $this->dbDataSource;
     }
 
     /** Directory holding LFS objects (created on first use). */
