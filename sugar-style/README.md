@@ -337,7 +337,9 @@ solarizedDark/Light) sets them explicitly; consumers must NOT assume
 - **`StyleParser`** — `StyleParser::parse($input, $defaultStyle)` for the
   termui-style `[text](fg:red,bg:blue,bold)` inline form, returning
   `list<Cell>` (port of sugar-dashboard's inline parser). Both parameters
-  are required; there is no one-argument form.
+  are required; there is no one-argument form. Malformed-colour polarity:
+  a `#`-prefixed value that fails to parse **throws** (it routes through
+  `Color::hex`), while an unknown bare word is dropped and ignored.
 - **`Cell`** — one styled grapheme produced by `Markup`/`StyleParser`.
 - **`Canvas` / `Layer`** — multi-layer compositor: `Canvas::new()->addLayer(
   Layer::new($block)->withX(...)->withY(...)->withZ(...))->render()`
@@ -713,9 +715,12 @@ documented and the text keeps its own colour.
 
 Use `Style::colorProfile(ColorProfile::Ansi)` for a forced
 downgrade or `Renderer::fromEnvironment()` to auto-detect from
-`NO_COLOR` / `CLICOLOR_FORCE` / `FORCE_COLOR` / `TERM` / `COLORTERM` /
-`TERM_PROGRAM` / `WT_SESSION` / CI markers. `CLICOLOR` (the "prefer colour
-when not a tty" convention) is deliberately **not** consulted.
+`NO_COLOR` / `CLICOLOR` / `CLICOLOR_FORCE` / `FORCE_COLOR` / `TERM` /
+`COLORTERM` / `TERM_PROGRAM` / `WT_SESSION` / CI markers. `CLICOLOR=0`
+(the BSD-family colour opt-out) is honoured: it downgrades to `Ascii`,
+ranked below `NO_COLOR` and the two force variables but above `TERM`.
+`CLICOLOR=1` asserts no extra capability — detection still reads
+`TERM`/`COLORTERM` behind it.
 
 ## Trust and sanitisation
 

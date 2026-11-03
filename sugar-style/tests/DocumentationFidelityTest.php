@@ -221,4 +221,221 @@ final class DocumentationFidelityTest extends TestCase
         self::assertStringContainsString('PHP cannot overload by arity', $style);
         self::assertStringContainsString('only the spelling deviates', $style);
     }
+
+    // ─── docs-review-1023 / lib-reviews-1102 sugar-style lane ───────────────
+
+    public function testStyleParserTakesTwoRequiredParamsAndTheReadmeSaysSo(): void
+    {
+        $parse = new \ReflectionMethod(\SugarCraft\Style\StyleParser::class, 'parse');
+        self::assertSame(2, $parse->getNumberOfRequiredParameters(), 'README claims no one-argument form');
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('StyleParser::parse($input, $defaultStyle)', $readme);
+        self::assertStringContainsString('no one-argument form', $readme);
+        self::assertStringNotContainsString('StyleParser::parse(string)', $readme, 'the old one-param cite is back — it fatals on paste');
+        self::assertStringContainsString('unknown bare word is dropped and ignored', $readme, 'the throw-vs-ignore polarity must be documented');
+    }
+
+    public function testThemeAccentMutedFallbackOnlyHoldsInDarkAndTheReadmeMatches(): void
+    {
+        $hex = static fn (\SugarCraft\Core\Util\Color $c): string => strtolower($c->toHex());
+
+        $dark = \SugarCraft\Style\Theme::dark();
+        self::assertSame($hex($dark->accent), $hex($dark->primary));
+        self::assertSame($hex($dark->muted), $hex($dark->secondary));
+
+        $light = \SugarCraft\Style\Theme::light();
+        self::assertSame($hex($light->accent), $hex($light->primary));
+        self::assertSame('#6b7280', $hex($light->muted), 'light muted is its own grey');
+        self::assertSame('#10b981', $hex($light->secondary));
+
+        $ansi = \SugarCraft\Style\Theme::ansi();
+        self::assertSame('#00cdcd', $hex($ansi->primary));
+        self::assertSame('#cd00cd', $hex($ansi->accent));
+        self::assertSame('#00cd00', $hex($ansi->secondary));
+        self::assertSame('#7f7f7f', $hex($ansi->muted));
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('fall back to `primary`/`secondary` only in `dark()`', $readme);
+    }
+
+    public function testBareTableCarriesNoBorderAndTheReadmeSaysSo(): void
+    {
+        $bare = \SugarCraft\Style\Table\Table::new()->headers('a')->row('b')->render();
+        self::assertStringNotContainsString("\u{256D}", $bare);
+        self::assertStringNotContainsString("\u{2502}", $bare, 'a bare table draws no verticals either');
+
+        $bordered = \SugarCraft\Style\Table\Table::new()->headers('a')->row('b')
+            ->border(\SugarCraft\Style\Border::rounded())->render();
+        self::assertStringContainsString("\u{256D}", $bordered);
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('a bare `Table::new()` carries **no** border', $readme);
+    }
+
+    public function testSevenBorderFlagsExistAndTheReadmeCountsThemCorrectly(): void
+    {
+        $flags = [];
+        foreach ((new \ReflectionClass(\SugarCraft\Style\Table\Table::class))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            $name = $method->getName();
+            if (preg_match('/^border[A-Z]/', $name) === 1) {
+                $flags[] = $name;
+            }
+        }
+        sort($flags);
+        self::assertSame([
+            'borderBottom', 'borderColumn', 'borderHeader', 'borderLeft',
+            'borderRight', 'borderRow', 'borderTop',
+        ], $flags);
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('Seven border flags', $readme);
+        self::assertStringNotContainsString('four border-section flags', $readme);
+    }
+
+    public function testEnumeratorStyleSetMatchesTheReadmeBullet(): void
+    {
+        $styles = ['dash', 'bullet', 'asterisk', 'arabic', 'alphabet', 'roman', 'romanUpper', 'decimal', 'tree', 'none'];
+        foreach ($styles as $style) {
+            self::assertTrue(
+                method_exists(\SugarCraft\Style\Listing\Enumerator::class, $style),
+                "Listing\\Enumerator::{$style}() named in the README does not exist",
+            );
+        }
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('arabic, alphabet, roman, romanUpper, decimal, tree, none', $readme);
+    }
+
+    public function testUnderlineStyleIsInertWithoutUnderlineAndTheReadmeSaysSo(): void
+    {
+        $alone = Style::new()->underlineStyle(UnderlineStyle::Curly)->of('x')->render();
+        self::assertStringNotContainsString("\x1b[4:", $alone, 'the sub-style alone emits nothing');
+
+        $together = Style::new()->underline()->underlineStyle(UnderlineStyle::Curly)->of('x')->render();
+        self::assertStringContainsString("\x1b[4:3m", $together);
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('Inert on its own', $readme);
+
+        $style = self::flattened(dirname(__DIR__) . '/src/Style.php');
+        self::assertStringContainsString('in combination with `underline()`', $style, 'the setter docblock must state the gate');
+    }
+
+    public function testLightDarkIsAClosureAndNoDocSellsAPickMethod(): void
+    {
+        $renderer = \SugarCraft\Style\Renderer::new()->withHasDarkBackground(true);
+        $picker   = $renderer->lightDark();
+        self::assertInstanceOf(\Closure::class, $picker);
+
+        $picked = $picker(Color::hex('#ffffff'), Color::hex('#000000'));
+        self::assertSame('#000000', strtolower($picked->toHex()), 'dark background picks the dark colour');
+
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Renderer.php');
+        self::assertStringNotContainsString('lightDark()->pick', $src, 'the docblock example must not resurrect the phantom method');
+    }
+
+    public function testPreStyledContentIsNotRestyledAfterTheInnerReset(): void
+    {
+        $inner = Style::new()->fg(Color::hex('#ff0000'))->of('a')->render();
+        $outer = Style::new()->bold()->of($inner . ' b')->render();
+
+        self::assertStringContainsString("\x1b[0m b", $outer, 'the outer style stops at the inner reset (documented bleed)');
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('is **not** re-applied to the remainder', $readme);
+    }
+
+    public function testFgOnAliasesAreHexOnlyAndTheReadmeSaysSo(): void
+    {
+        foreach (['fg' => 'white', 'on' => 'red'] as $setter => $name) {
+            try {
+                Style::new()->{$setter}($name);
+                self::fail("Style::{$setter}('{$name}') must throw — the alias routes through Color::hex");
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('invalid hex color', $e->getMessage());
+            }
+        }
+
+        self::assertInstanceOf(Color::class, Color::parse('white'), 'names DO parse via Color::parse / markup');
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('**hex-only**', $readme);
+    }
+
+    public function testCassowaryNoticesFireOncePerProcessAndOncePerSolve(): void
+    {
+        \SugarCraft\Style\Layout\SolverFactory::resetEnvironmentResolutionForTesting();
+        putenv('SUGARCRAFT_LAYOUT_SOLVER=cassowary');
+        \SugarCraft\Style\Layout\SolverFactory::resetEnvironmentResolutionForTesting();
+
+        $notices = [];
+        try {
+            set_error_handler(static function (int $number, string $message) use (&$notices): bool {
+                $notices[] = $message;
+
+                return true;
+            });
+
+            \SugarCraft\Style\Layout\SolverFactory::fromEnvironment();
+            \SugarCraft\Style\Layout\SolverFactory::fromEnvironment();
+
+            $area      = \SugarCraft\Style\Layout\Rect::fromSize(80, 10);
+            $structure = [Constraint::length(20), Constraint::fill(1)];
+            ConstraintLayout::horizontal($structure)->split($area);
+            ConstraintLayout::horizontal($structure)->split($area);
+        } finally {
+            restore_error_handler();
+            putenv('SUGARCRAFT_LAYOUT_SOLVER');
+            \SugarCraft\Style\Layout\SolverFactory::resetEnvironmentResolutionForTesting();
+        }
+
+        self::assertSame(
+            1,
+            substr_count(implode("\n", $notices), 'This notice fires once per process.'),
+            'the factory announcement must be once-per-process',
+        );
+        self::assertSame(
+            2,
+            substr_count(implode("\n", $notices), 'CassowarySolver never converges'),
+            'the shim announces on EVERY solve — README trust section says so',
+        );
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('on **every** `solve()` it takes', $readme);
+    }
+
+    public function testClicolorIsConsultedAndTheRosterSaysHowItRanks(): void
+    {
+        self::assertSame(ColorProfile::Ascii, ColorProfile::detect(['TERM' => 'xterm-256color', 'CLICOLOR' => '0']));
+        self::assertSame(ColorProfile::Ansi256, ColorProfile::detect(['TERM' => 'xterm-256color', 'CLICOLOR' => '1']));
+        self::assertSame(ColorProfile::TrueColor, ColorProfile::detect(['CLICOLOR' => '0', 'CLICOLOR_FORCE' => '1']), 'force outranks CLICOLOR=0');
+        self::assertSame(ColorProfile::Ascii, ColorProfile::detect(['NO_COLOR' => '1', 'CLICOLOR_FORCE' => '1']), 'NO_COLOR precedes even force');
+
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('is honoured', $readme, 'the env roster must state CLICOLOR is consulted');
+        self::assertStringNotContainsString('deliberately **not** consulted', $readme);
+    }
+
+    public function testSiteBodyCarriesTheTruthPass(): void
+    {
+        $body = dirname(__DIR__, 2) . '/docs/_data/sugar-style.body.html';
+        if (!is_file($body)) {
+            $this->markTestSkipped('site data is monorepo-only (split-repo checkout has no docs/)');
+        }
+
+        $text = (string) file_get_contents($body);
+        self::assertStringNotContainsString('alpha-aware merge', $text, 'Canvas blends no alpha — README says cell-aware splice');
+        self::assertStringContainsString('Underline truth', $text, 'the 4:N gate must exist on the generated surface too');
+        self::assertStringContainsString('>Bar<', $text, 'the API table must list the Bar widgets');
+        self::assertStringNotContainsString('tree/main/examples', $text, 'examples links ride the master branch');
+    }
+
+    public function testTrustAndSanitisationSectionHasAReadmeHome(): void
+    {
+        $readme = self::flattened(dirname(__DIR__) . '/README.md');
+        self::assertStringContainsString('## Trust and sanitisation', $readme);
+        self::assertStringContainsString('Sanitize::untrustedForMarkedFrames', $readme);
+        self::assertStringContainsString('never collapsed', $readme, 'the \\r handling contract is stated');
+    }
 }

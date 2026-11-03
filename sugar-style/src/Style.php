@@ -136,7 +136,7 @@ final class Style
      * `null` — the resting state — keeps the historical TrueColor default
      * byte-for-byte for every library that never negotiates one. A host
      * application that has resolved its terminal's real capability (the
-     * NO_COLOR / CLICOLOR_FORCE / TERM=dumb family) calls
+     * NO_COLOR / CLICOLOR / CLICOLOR_FORCE / TERM=dumb family) calls
      * {@see setDefaultProfile()} once at startup so every Style minted
      * afterwards renders within that capability instead of emitting
      * escapes the terminal cannot honour.
