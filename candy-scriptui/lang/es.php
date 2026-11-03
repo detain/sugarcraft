@@ -50,4 +50,5 @@ return [
     'hints.filter' => 'escribe para filtrar · ↑/↓ mover · enter seleccionar · esc cancelar',
     'hints.pager' => 'space/PgDn abajo · PgUp/b arriba · g inicio · G fin · q salir',
     'format.template_unresolved' => 'plantilla: {count} marcador(es) expandido(s) a vacío: {names} — una variable debe estar definida y permitida con --allow-env.',
+    'runtime.empty_input' => 'La entrada no contenía líneas; nada que hacer.',
 ];

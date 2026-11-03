@@ -37,4 +37,5 @@ return [
     'hints.filter' => 'digite para filtrar · ↑/↓ mover · enter selecionar · esc cancelar',
     'hints.pager' => 'space/PgDn para baixo · PgUp/b para cima · g início · G fim · q sair',
     'format.template_unresolved' => 'modelo: {count} espaço(s) reservado(s) expandidos para vazio: {names} — uma variável deve estar definida e permitida via --allow-env.',
+    'runtime.empty_input' => 'A entrada não continha linhas; nada a fazer.',
 ];

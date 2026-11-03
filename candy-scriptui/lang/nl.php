@@ -37,4 +37,5 @@ return [
     'hints.filter' => 'typ om te filteren · ↑/↓ verplaats · enter selecteren · esc annuleren',
     'hints.pager' => 'space/PgDn omlaag · PgUp/b omhoog · g begin · G einde · q afsluiten',
     'format.template_unresolved' => 'sjabloon: {count} tijdelijke aanduiding(en) uitgebreid naar leeg: {names} — een variabele moet zijn ingesteld en toegestaan via --allow-env.',
+    'runtime.empty_input' => 'De invoer bevatte geen regels; niets te doen.',
 ];

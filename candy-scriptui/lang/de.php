@@ -50,4 +50,5 @@ return [
     'hints.filter' => 'tippen zum Filtern · ↑/↓ bewegen · Enter auswählen · Esc abbrechen',
     'hints.pager' => 'Space/PgDn abwärts · PgUp/b aufwärts · g Anfang · G Ende · q beenden',
     'format.template_unresolved' => 'Vorlage: {count} Platzhalter wurde(n) als leer expandiert: {names} — eine Variable muss gesetzt und über --allow-env erlaubt sein.',
+    'runtime.empty_input' => 'Die Eingabe enthielt keine Zeilen; nichts zu tun.',
 ];

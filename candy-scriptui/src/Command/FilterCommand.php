@@ -68,6 +68,10 @@ final class FilterCommand extends Command
 
         $lines = self::stdinLines();
         if ($lines === []) {
+            // Silence on empty stdin read as a crash to shell scripts;
+            // the FAILURE polarity stays (gum parity), the reason is said.
+            fwrite(STDERR, Lang::t('runtime.empty_input') . "\n");
+
             return Command::FAILURE;
         }
         if ($input->getOption('select-if-one') && count($lines) === 1) {

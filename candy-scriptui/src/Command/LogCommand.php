@@ -93,6 +93,13 @@ final class LogCommand extends Command
             return Command::FAILURE;
         }
 
+        if ($formatter !== 'json') {
+            // CWE-117: one call must never forge extra entries in the
+            // line-per-record sinks. Real newlines fold to literal \n;
+            // the JSON leg escapes control characters natively.
+            $text = str_replace(["\r\n", "\r", "\n"], '\\n', $text);
+        }
+
         try {
             $line = self::formatLine($level, $text, $prefix, $time, $formatter);
         } catch (\JsonException $e) {

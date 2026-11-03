@@ -37,4 +37,5 @@ return [
     'hints.filter' => '입력으로 필터 · ↑/↓ 이동 · enter 선택 · esc 취소',
     'hints.pager' => 'space/PgDn 아래 · PgUp/b 위 · g 처음 · G 끝 · q 종료',
     'format.template_unresolved' => '템플릿: 자리 표시자 {count}개가 비어 있는 값으로 확장됨: {names} — 변수를 설정하고 --allow-env로 허용해야 합니다.',
+    'runtime.empty_input' => '입력에 줄이 없습니다. 작업을 수행하지 않습니다.',
 ];

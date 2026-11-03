@@ -63,6 +63,10 @@ final class TableCommand extends Command
             $raw = self::readStdin();
         }
         if ($raw === '') {
+            // Opposite polarity to `filter`, same cause: an empty table
+            // renders nothing and is not an error — but it is announced.
+            fwrite(STDERR, Lang::t('runtime.empty_input') . "\n");
+
             return Command::SUCCESS;
         }
 
