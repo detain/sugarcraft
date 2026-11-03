@@ -314,6 +314,37 @@ final class EdgeCaseTest extends TestCase
         $this->assertSame('', $result);
     }
 
+    public function testRepeatedZeroWidthFramesDoNotThrow(): void
+    {
+        // A zero-area frame cannot be represented as a diff buffer, so it must
+        // never be retained as diff state: the second frame used to crash with
+        // "Buffer dimensions must be positive" from inside sugar-cellbuffer.
+        $layout = Node::leaf('content')->withBorder(false);
+
+        $this->assertSame($this->panels->render($layout, 0, 5), $this->panels->render($layout, 0, 5));
+    }
+
+    public function testRepeatedZeroHeightFramesDoNotThrow(): void
+    {
+        $layout = Node::leaf('content')->withBorder(false);
+
+        $this->assertSame('', $this->panels->render($layout, 10, 0));
+        $this->assertSame('', $this->panels->render($layout, 10, 0));
+    }
+
+    public function testAZeroAreaFrameLeavesNoDiffStateBehind(): void
+    {
+        // Same-size renders normally take the diff path (a byte-small delta).
+        // Sandwiching a zero-area frame between two same-size frames must drop
+        // the state, so the third frame repaints in full rather than diffing
+        // against a grid the zero frame could not record.
+        $layout = Node::leaf('content')->withBorder(false);
+        $full = $this->panels->render($layout, 10, 1);
+        $this->panels->render($layout, 0, 1);
+
+        $this->assertSame($full, $this->panels->render($layout, 10, 1), 'the frame after a zero-area render is a full frame');
+    }
+
     public function testRenderNegativeWidthViewport(): void
     {
         $layout = Node::leaf('content')->withBorder(false);

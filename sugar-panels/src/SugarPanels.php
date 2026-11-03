@@ -143,6 +143,12 @@ final class SugarPanels
      * @param int  $height Viewport height in lines (0 allowed → ''; negative rejected)
      * @return string      Rendered layout with box-drawing characters
      *
+     *  A zero-area frame (either dimension 0) always paints in full and is never
+     *  retained as diff state: it has no cell grid a buffer could represent, so
+     *  recording it would make the next same-size render crash. A host that
+     *  collapses a pane to zero lines and back therefore gets a full repaint,
+     *  which is exactly what the terminal needs after being off-screen.
+     *
      * @throws \InvalidArgumentException If either viewport dimension is negative.
      */
     public function render(Node $root, int $width, int $height): string
@@ -166,6 +172,18 @@ final class SugarPanels
             $out[] = \implode('', $row);
         }
         $fullOutput = \implode("\n", $out);
+
+        // A zero-area frame has no cell grid to diff against: sugar-cellbuffer
+        // refuses a zero-dimension buffer, so storing this shape as retained
+        // state made the NEXT same-size render crash inside Buffer::fromGrid().
+        // Zero area therefore never enters the diff state — it paints empty and
+        // leaves the renderer as if it had not been called.
+        if ($width === 0 || $height === 0) {
+            $this->previousCells = null;
+            $this->previousFrame = null;
+
+            return $fullOutput;
+        }
 
         // First frame (or after a resize): emit the full output and remember the
         // cell GRID. Building the diff buffer here is pure waste for callers that
