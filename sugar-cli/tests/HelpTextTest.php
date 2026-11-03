@@ -62,6 +62,60 @@ final class HelpTextTest extends TestCase
         $this->assertStringContainsString('myapp', $out);
     }
 
+    /** A section with no entries must not leave an orphan heading behind. */
+    public function testSectionWithNoEntriesIsSkippedEntirely(): void
+    {
+        $out = HelpText::render('myapp', ['flags' => [], 'commands' => ['build' => 'compile']], theme: Theme::plain());
+        $this->assertStringNotContainsString('FLAGS', $out, 'empty section rendered no heading');
+        $this->assertStringContainsString('COMMANDS', $out, 'non-empty sibling still renders');
+        $this->assertStringNotContainsString("\n\n\n", $out, 'skipping leaves no dangling separator');
+    }
+
+    /** M5: the heading above the synopsis is caller-settable. */
+    public function testUsageLabelIsCustomizable(): void
+    {
+        $out = HelpText::render('myapp', [], theme: Theme::plain(), usageLabel: 'AUFRUF');
+        $this->assertStringStartsWith("AUFRUF\n  myapp", $out);
+        $this->assertStringNotContainsString('USAGE', $out);
+    }
+
+    /** The default label stays byte-identical for every existing caller. */
+    public function testUsageLabelDefaultsToUsage(): void
+    {
+        $this->assertSame(
+            HelpText::render('myapp', [], theme: Theme::plain()),
+            HelpText::render('myapp', [], theme: Theme::plain(), usageLabel: 'USAGE'),
+        );
+    }
+
+    /** An empty label drops the heading row: synopsis rides the first line. */
+    public function testEmptyUsageLabelDropsHeadingLine(): void
+    {
+        $this->assertSame('  myapp', HelpText::render('myapp', [], theme: Theme::plain(), usageLabel: ''));
+    }
+
+    /** The label is ingress-sanitized and uppercased like a section title. */
+    public function testUsageLabelNeutralizesInjectionAndUppercases(): void
+    {
+        $out = HelpText::render('myapp', [], theme: Theme::plain(), usageLabel: "aufr\x1b[2Juf");
+        $this->assertStringStartsWith("AUFRUF\n", $out);
+        $this->assertStringNotContainsString("\x1b", $out);
+    }
+
+    /** Narrow canvases squeeze the continuation indent instead of overflowing it. */
+    public function testStackedIndentIsClampedToWidth(): void
+    {
+        // '--x' plus margins puts the description column past width 5, so the
+        // row stacks; the historical fixed 6-cell indent alone exceeded the
+        // canvas before any text was added. The clamp leaves 4 indent cells
+        // plus a 1-cell wrap column — every line fits width 5.
+        $out = HelpText::renderRows(['--x' => 'a b c d'], Theme::plain(), 5);
+        $this->assertSame("  --x\n    a\n    b\n    c\n    d", $out);
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(5, Width::string($line), "line fits: '{$line}'");
+        }
+    }
+
     public function testRenderRowsAlignsKeys(): void
     {
         $out = HelpText::renderRows([
@@ -163,11 +217,17 @@ final class HelpTextTest extends TestCase
         $this->assertSame('', $out);
     }
 
-    public function testRenderWithNoSectionsRendersUsageOnly(): void
+    /**
+     * The null-width variant: the whole render path still works with no
+     * wrapping canvas at all (previously a byte-for-byte clone of
+     * testEmptySectionsRenderUsageOnly above — differentiated to the
+     * one canvas mode no other case here exercises).
+     */
+    public function testRenderWithNoSectionsNeverWraps(): void
     {
-        $out = HelpText::render('myapp', [], theme: Theme::plain());
-        $this->assertStringContainsString('USAGE', $out);
-        $this->assertStringContainsString('myapp', $out);
+        $long = trim(str_repeat('word ', 30));
+        $out = HelpText::render($long, [], theme: Theme::plain(), width: null);
+        $this->assertSame("USAGE\n  " . $long, $out, 'no wrap point in the synopsis');
     }
 
     public function testRenderWithAnsiThemeEmitsSgr(): void

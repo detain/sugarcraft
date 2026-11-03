@@ -14,8 +14,10 @@ use SugarCraft\Cli\Internal\WidthProbe;
  * supplied section becomes a labelled block of two-column
  * `KEY  description` rows (like git's `--help` output).
  *
- * Mirrors charmbracelet/fang's HelpText surface — used by CLIs that
- * want a polished, branded help screen without rolling their own.
+ * Inspired by charmbracelet/fang's help screen: fang drives its layout
+ * from cobra's typed flag metadata (required/optional/default markers),
+ * while this surface lays out plain key/description pairs — any such
+ * affordance is text the caller supplies, not something parsed here.
  */
 final class HelpText
 {
@@ -40,17 +42,24 @@ final class HelpText
      * {@see renderRows()} for how wrapped rows keep their alignment. Section
      * titles and row keys are never wrapped or cut — a flag name split over
      * two lines would no longer be the flag — so one that is itself wider
-     * than `$width` still overflows.
+     * than `$width` still overflows. Note that a title's cell width can grow
+     * under uppercasing (`ß` becomes `SS` in UTF-8); it is measured after the
+     * growth but never re-wrapped.
      *
      * @param string $usage  one-line synopsis, e.g. `myapp [flags] <file>`
      * @param array<string, array<string, string>> $sections
      *        section title => entry => description. Section order
-     *        is preserved.
+     *        is preserved. A section whose entry map is empty renders no
+     *        heading at all.
      * @param int|AutoWidth|null $width  cell width to wrap to; null = never
      *                     wrap. Omitted (or `AutoWidth::Auto`) resolves to the
      *                     terminal width — the exported `COLUMNS` where the
      *                     environment advertises one, else the historical
      *                     80-cell fallback (see {@see WidthProbe}).
+     * @param string $usageLabel  heading over the synopsis, uppercased like a
+     *                     section title; default `USAGE`. Pass a translated
+     *                     string for localized help, or `''` to drop the
+     *                     heading line and print the synopsis alone.
      *
      * @throws \InvalidArgumentException when `$width` is less than 1
      */
@@ -60,25 +69,37 @@ final class HelpText
         string $description = '',
         ?Theme $theme = null,
         int|AutoWidth|null $width = AutoWidth::Auto,
+        string $usageLabel = 'USAGE',
     ): string {
         $width = WidthProbe::resolve($width);
         self::assertWidth($width);
         $theme ??= Theme::detect();
         $blocks = [];
-        // Caller-supplied usage/description/titles/rows are interpolated raw
-        // into the help page — neutralize escape/control injection on each.
+        // Caller-supplied usage/description/titles/rows/label are interpolated
+        // raw into the help page — neutralize escape/control injection on each.
         if ($usage !== '') {
-            $blocks[] = $theme->accent->render('USAGE') . "\n"
-                      . self::indentLines(self::wrap(SafeText::line($usage), self::shrink($width, 2)), 2);
+            $label = SafeText::line($usageLabel);
+            $label = $label === '' ? '' : mb_strtoupper($label, 'UTF-8');
+            $synopsis = self::indentLines(
+                self::wrap(SafeText::line($usage), self::shrink($width, self::clampedIndent($width, 2))),
+                self::clampedIndent($width, 2),
+            );
+            $blocks[] = $label === '' ? $synopsis : $theme->accent->render($label) . "\n" . $synopsis;
         }
         if ($description !== '') {
             $blocks[] = implode("\n", self::wrap(SafeText::line($description), $width));
         }
         foreach ($sections as $title => $rows) {
+            $renderedRows = self::renderRows($rows, $theme, $width);
+            if ($renderedRows === '') {
+                // An empty section would leave a heading with nothing under
+                // it (and a dangling separator in the join) — skip the block.
+                continue;
+            }
             // mb_strtoupper, not strtoupper: the byte-wise ASCII version left
             // non-ASCII titles (`café`) half-lowercase beside their siblings.
             $blocks[] = $theme->accent->render(mb_strtoupper(SafeText::line((string) $title), 'UTF-8')) . "\n"
-                      . self::renderRows($rows, $theme, $width);
+                      . $renderedRows;
         }
         return implode("\n\n", $blocks);
     }
@@ -174,9 +195,10 @@ final class HelpText
             if ($stacked) {
                 $out[] = '  ' . $theme->prompt->render($key);
                 if ($desc !== '') {
+                    $indent = self::clampedIndent($width, self::STACKED_INDENT);
                     $out[] = self::indentLines(
-                        self::wrap($desc, self::shrink($width, self::STACKED_INDENT)),
-                        self::STACKED_INDENT,
+                        self::wrap($desc, self::shrink($width, $indent)),
+                        $indent,
                     );
                 }
                 continue;
@@ -185,7 +207,7 @@ final class HelpText
             $first = array_shift($lines);
             $out[] = '  ' . $theme->prompt->render(Width::padRight($key, $maxKey)) . '  ' . $first;
             if ($lines !== []) {
-                $out[] = self::indentLines($lines, $descColumn);
+                $out[] = self::indentLines($lines, self::clampedIndent($width, $descColumn));
             }
         }
         return implode("\n", $out);
@@ -219,6 +241,16 @@ final class HelpText
     private static function shrink(?int $width, int $margin): ?int
     {
         return $width === null ? null : max(1, $width - $margin);
+    }
+
+    /**
+     * A continuation indent that can never consume the whole canvas: at most
+     * `$indent` cells, but squeezed below the width when the window is
+     * narrower than the margin (null width = no wrapping, no clamp).
+     */
+    private static function clampedIndent(?int $width, int $indent): int
+    {
+        return $width === null ? $indent : min($indent, max(1, $width - 1));
     }
 
     /**
