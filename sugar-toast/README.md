@@ -123,18 +123,28 @@ When the cap is reached, the configured `Overflow` strategy determines behaviour
 
 
 By default, alerts inherit `withDuration()` for auto-dismiss timing. A `null`
-`$expiresAt` means "use the default", not "never expire" — to get a persistent
-alert that never expires automatically, keep the toast's duration unset (the
-default, or `withDuration(null)`) so queued alerts inherit nothing:
+`$expiresAt` means "use the default", not "never expire" — persistence is its
+own explicit sentinel on `Alert`. To get a persistent alert that never expires
+automatically, either keep the toast's duration unset (the default, or
+`withDuration(null)`) so queued alerts inherit nothing, or mark the alert
+itself persistent — `withoutExpiry()` and its alias `withCancelledExpiry()`
+set the sentinel, and every queueing door (`alert()`, `progressToast()`,
+`push()`) honours it, so the escape hatch works even on a toast that has
+`withDuration()` configured:
 
 ```php
 $toast = Toast::new(50)->withPosition(Position::TopRight);  // no duration set
 $toast = $toast->alert(ToastType::Info, 'Connected');       // never expires
 
-// Per-alert escape hatch from an inherited expiry:
+// Per-alert escape hatch from an inherited expiry — persistent is explicit,
+// so push() will NOT re-arm the toast's duration on this alert:
 $alert = (new Alert(ToastType::Info, 'Connected'))->withoutExpiry();
 $toast = $toast->push($alert);
 ```
+
+A later `withExpiry()`/`withExtendedExpiry()` on a persistent alert clears the
+sentinel (asking for a timer is asking for a timer). `Toast::cancelAlert()`
+routes through the same sentinel.
 
 Persistent alerts never expire, so `pruneExpired()` cannot remove them — take
 them down with `dismiss()` (moves live alerts into the history log and stops
@@ -235,16 +245,27 @@ $counter = Lang::t('count', ['count' => $n]);
 
 
 
-Add a progress bar beneath the message body using `progressToast()`:
+Add a progress bar beneath the message body using `progressToast()`. Pass a
+stable `id` and re-queuing with the same id **updates the box in place** —
+without it, every tick appends another box, and on the default unlimited
+concurrency the queue leaks a fresh toast per frame:
 
 ```php
-$toast = $toast->progressToast(ToastType::Info, 'Downloading...', 0.65);
-// Re-render as progress updates:
-$toast = $toast->progressToast(ToastType::Info, 'Downloading...', 0.80);
+$toast = $toast->progressToast(ToastType::Info, 'Downloading...', 0.65, id: 'download');
+// Re-render as progress updates — same id, same box, replaced at its slot:
+$toast = $toast->progressToast(ToastType::Info, 'Downloading...', 0.80, id: 'download');
+// Finished — retire it without filing a dismissal in history:
+$toast = $toast->removeAlert('download');
 ```
 
-`progressToast()` accepts the same `$expiresAt` override as `alert()`. The
-progress value (0.0–1.0) is clamped automatically.
+An id-carrying re-queue replaces the live alert at its queue position (order
+among siblings preserved), bypasses the overflow policy and never consumes an
+extra `maxConcurrent` slot — it is an update, not an append. Each tick
+re-inherits the expiry, so a progress bar whose host stopped ticking
+eventually expires on its own instead of freezing on screen forever.
+`alert()` and `push()` accept ids too; `removeAlert(string $id)` retires a
+single alert by identity. `progressToast()` accepts the same `$expiresAt`
+override as `alert()`. The progress value (0.0–1.0) is clamped automatically.
 
 ## Action Buttons
 
@@ -334,10 +355,11 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded) |
-| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`) |
-| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null)` | Add alert with progress bar (0.0–1.0) |
+| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place) |
+| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0); same `id` = same box |
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
+| `->removeAlert(string $id): self` | Retire the queued alert with this id, unrecorded (companion of id updates) |
 | `->extendAlert(int $index, float $additionalSeconds): self` | Push one alert's expiry later |
 | `->extendAll(float $additionalSeconds): self` | Push every expiring alert's expiry later |
 | `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it; the renderer handles no input) |
@@ -355,8 +377,9 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 | `Alert` | `withActions(list<Action>)` | Attach action buttons |
 | `Alert` | `isExpired(): bool` | Check expiry |
 | `Alert` | `withExpiry(float $duration)` | Set expiry from now |
-| `Alert` | `withoutExpiry()` | Make this alert persistent (never auto-dismisses) |
-| `Alert` | `withCancelledExpiry()` | Clear the expiry (used by `Toast::cancelAlert()`) |
+| `Alert` | `new(ToastType, ?string, ?float, ?float, array, ?Color, ?Color, ?Color, bool $persistent = false, ?string $id = null)` | Factory (ctor mirror; trailing persistent/id named args) |
+| `Alert` | `withoutExpiry()` | Make this alert persistent (never auto-dismisses) — alias of `withCancelledExpiry()`, sets the explicit sentinel |
+| `Alert` | `withCancelledExpiry()` | Set the persistent sentinel + clear the expiry (used by `Toast::cancelAlert()`) |
 | `Alert` | `withExtendedExpiry(float)` | Move the expiry later by N seconds |
 | `Alert` | `withBackgroundColor(?Color)` | Override box background (`null` = type default) |
 | `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = type default) |

@@ -14,12 +14,27 @@ final class Alert
     /**
      * @param ToastType $type  Alert severity
      * @param string|null $message  User-visible message text (null renders as empty)
-     * @param float|null $expiresAt  Seconds since epoch; null = never expires
+     * @param float|null $expiresAt  Absolute seconds-since-epoch instant the
+     *        alert stops rendering. null means INHERIT — Toast::alert(),
+     *        progressToast() and push() arm the configured withDuration()
+     *        timer when one is set; a truly never-expiring alert is expressed
+     *        by $persistent (via withoutExpiry()/withCancelledExpiry() or
+     *        Toast::cancelAlert()), not by null alone (lib-reviews-1102 M15).
      * @param float|null $progress  Progress 0.0–1.0; null = no progress bar
      * @param list<Action> $actions  Clickable action buttons
      * @param Color|null $backgroundColor  Optional box background fill (null = no fill, plain render)
      * @param Color|null $foregroundColor  Optional message-text colour (null = terminal default)
      * @param Color|null $borderColor  Optional box-glyph (border) colour (null = terminal default)
+     * @param bool $persistent  Explicit never-expire sentinel. When true, the
+     *        queueing doors skip duration inheritance entirely. An explicit
+     *        withExpiry()/withExtendedExpiry() clears it (a timer was asked
+     *        for); withoutExpiry() sets it.
+     * @param string|null $id  Stable identity for update-in-place. Re-queuing
+     *        an alert with the same id through alert()/progressToast()/push()
+     *        REPLACES the live alert at its queue position instead of
+     *        appending a second box (lib-reviews-1102 C3 — progress toasts
+     *        previously had no lifecycle at all). null = anonymous, always
+     *        appends.
      */
     public function __construct(
         public readonly ToastType $type,
@@ -30,16 +45,43 @@ final class Alert
         public readonly ?Color $backgroundColor = null,
         public readonly ?Color $foregroundColor = null,
         public readonly ?Color $borderColor = null,
+        public readonly bool $persistent = false,
+        public readonly ?string $id = null,
     ) {}
+
+    /**
+     * Factory mirroring Action::new() / Toast::new() (lib-reviews-1102 n4:
+     * Alert had only the bare ctor while its siblings led with ::new()).
+     * Arguments and defaults mirror the constructor exactly.
+     */
+    public static function new(
+        ToastType $type,
+        ?string $message = null,
+        ?float $expiresAt = null,
+        ?float $progress = null,
+        array $actions = [],
+        ?Color $backgroundColor = null,
+        ?Color $foregroundColor = null,
+        ?Color $borderColor = null,
+        bool $persistent = false,
+        ?string $id = null,
+    ): self {
+        return new self($type, $message, $expiresAt, $progress, $actions, $backgroundColor, $foregroundColor, $borderColor, $persistent, $id);
+    }
 
     public function isExpired(): bool
     {
-        if ($this->expiresAt === null) return false;
+        if ($this->persistent || $this->expiresAt === null) return false;
         return \microtime(true) >= $this->expiresAt;
     }
 
     /**
-     * Alias for withCancelledExpiry — makes the alert never expire.
+     * Alias for {@see withCancelledExpiry()} — makes the alert explicitly
+     * persistent (sets the $persistent sentinel, so the queueing doors will
+     * not re-inherit a duration). The two spellings are the same door and
+     * are documented as aliases (lib-reviews-1102 M15: they used to be
+     * undisclosed, and push() re-inherited an expiry precisely because no
+     * sentinel distinguished "never" from "not stated").
      */
     public function withoutExpiry(): self
     {
@@ -48,7 +90,7 @@ final class Alert
 
     public function withCancelledExpiry(): self
     {
-        return new self($this->type, $this->message, null, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor);
+        return new self($this->type, $this->message, null, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, true, $this->id);
     }
 
     /**
@@ -65,12 +107,14 @@ final class Alert
             $this->backgroundColor,
             $this->foregroundColor,
             $this->borderColor,
+            false,
+            $this->id,
         );
     }
 
     public function withExpiry(float $duration): self
     {
-        return new self($this->type, $this->message, \microtime(true) + $duration, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor);
+        return new self($this->type, $this->message, \microtime(true) + $duration, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, false, $this->id);
     }
 
     /**
@@ -79,7 +123,7 @@ final class Alert
     public function withProgress(float $progress): self
     {
         $clamped = \max(0.0, \min(1.0, $progress));
-        return new self($this->type, $this->message, $this->expiresAt, $clamped, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor);
+        return new self($this->type, $this->message, $this->expiresAt, $clamped, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, $this->persistent, $this->id);
     }
 
     /**
@@ -89,7 +133,7 @@ final class Alert
      */
     public function withActions(array $actions): self
     {
-        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor);
+        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, $this->persistent, $this->id);
     }
 
     /**
@@ -100,7 +144,7 @@ final class Alert
      */
     public function withBackgroundColor(?Color $color): self
     {
-        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $color, $this->foregroundColor, $this->borderColor);
+        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $color, $this->foregroundColor, $this->borderColor, $this->persistent, $this->id);
     }
 
     /**
@@ -108,7 +152,7 @@ final class Alert
      */
     public function withForegroundColor(?Color $color): self
     {
-        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $this->backgroundColor, $color, $this->borderColor);
+        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $this->backgroundColor, $color, $this->borderColor, $this->persistent, $this->id);
     }
 
     /**
@@ -116,6 +160,6 @@ final class Alert
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $color);
+        return new self($this->type, $this->message, $this->expiresAt, $this->progress, $this->actions, $this->backgroundColor, $this->foregroundColor, $color, $this->persistent, $this->id);
     }
 }

@@ -197,8 +197,14 @@ final class Toast
      * If $expiresAt is provided, it overrides the configured duration; when it
      * is left null the alert INHERITS withDuration() — a null $expiresAt is
      * "use the default", not "never expire". For a persistent alert keep the
-     * toast's duration unset (the default, or withDuration(null)), or call
-     * cancelAlert() on a queued alert.
+     * toast's duration unset (the default, or withDuration(null)), queue a
+     * ->withoutExpiry() Alert via push() (that sets the explicit persistent
+     * sentinel, which the inheritance door honours — lib-reviews-1102 M15),
+     * or call cancelAlert() on a queued alert.
+     *
+     * @param string|null $id  Stable identity: re-queuing with the same id
+     *        REPLACES the live alert in place instead of appending a second
+     *        box (progress/feedback toasts; see progressToast()).
      * Accepts a ToastType or a string type name (case-insensitive).
      *
      * The message text is app-supplied: inline SGR sequences in it are honoured
@@ -215,7 +221,7 @@ final class Toast
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the message
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
-    public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null): self
+    public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
     {
         $resolvedType = $type instanceof ToastType
             ? $type
@@ -223,7 +229,7 @@ final class Toast
                 ?? throw new \InvalidArgumentException("Unknown toast type: {$type}");
 
         $clone = clone $this;
-        $alert = new Alert($resolvedType, $message, $expiresAt, null, $actions ?? []);
+        $alert = new Alert($resolvedType, $message, $expiresAt, null, $actions ?? [], id: $id);
         if ($expiresAt === null && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
@@ -239,7 +245,7 @@ final class Toast
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the progress bar
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
-    public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null, ?array $actions = null): self
+    public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
     {
         $resolvedType = $type instanceof ToastType
             ? $type
@@ -247,7 +253,7 @@ final class Toast
                 ?? throw new \InvalidArgumentException("Unknown toast type: {$type}");
 
         $clone = clone $this;
-        $alert = (new Alert($resolvedType, $message, $expiresAt, null, $actions ?? []))->withProgress($progress);
+        $alert = (new Alert($resolvedType, $message, $expiresAt, null, $actions ?? [], id: $id))->withProgress($progress);
         if ($expiresAt === null && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
@@ -272,7 +278,7 @@ final class Toast
     {
         $clone = clone $this;
 
-        if ($alert->expiresAt === null && $clone->duration !== null) {
+        if ($alert->expiresAt === null && !$alert->persistent && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
 
@@ -293,6 +299,8 @@ final class Toast
      * DropNewest discards the incoming alert; DropOldest evicts the oldest
      * queued alert — at a zero cap there is nothing to evict, so the incoming
      * alert is discarded too rather than letting the queue exceed the cap.
+     * An alert carrying an id that matches a live alert bypasses all policy:
+     * it is an update, not an append (see the replace-by-id leg).
      * Enqueue lets the queue grow past the cap (DropOldest is the default).
      *
      * @param list<Alert> $queue
@@ -312,6 +320,20 @@ final class Toast
         $queue = \array_values(
             \array_filter($queue, fn(Alert $a): bool => !$a->isExpired())
         );
+
+        // Update-in-place door (lib-reviews-1102 C3): an alert carrying an
+        // id REPLACES the live alert with the same id, at that position —
+        // progress ticks must not leak a new box per frame, and a replacement
+        // must not consume (or evict) a maxConcurrent slot. It rides no
+        // overflow policy: the queue length is unchanged by definition.
+        if ($alert->id !== null) {
+            foreach ($queue as $position => $existing) {
+                if ($existing->id === $alert->id) {
+                    $queue[$position] = $alert;
+                    return $queue;
+                }
+            }
+        }
 
         if ($this->maxConcurrent !== null && \count($queue) >= $this->maxConcurrent) {
             if ($this->overflow === Overflow::DropNewest) {
@@ -415,8 +437,39 @@ final class Toast
     }
 
     /**
-     * Cancel the auto-dismiss timer on the alert at $index, making it persistent.
-     * Has no effect if $index is out of bounds or the alert is already non-expiring.
+     * Remove the queued alert carrying $id (first match), WITHOUT recording
+     * it in history — this is the lifecycle door for updates and cancellations
+     * the host performs deliberately (a finished download's progress box
+     * disappearing is not a dismissal). The companion of the replace-by-id
+     * leg in {@see appendBounded()} (lib-reviews-1102 C3: before this, the
+     * only way to retire an alert before expiry was dismiss(), which nukes
+     * the whole queue and files every survivor under history).
+     *
+     * Returns an identical instance when no queued alert carries $id.
+     */
+    public function removeAlert(string $id): self
+    {
+        $queue = [];
+        $removed = false;
+        foreach ($this->queue as $alert) {
+            if (!$removed && $alert->id === $id) {
+                $removed = true;
+                continue;
+            }
+            $queue[] = $alert;
+        }
+        if (!$removed) {
+            return $this;
+        }
+        return $this->mutate(['queue' => $queue]);
+    }
+
+    /**
+     * Cancel the auto-dismiss timer on the alert at $index, making it
+     * persistent (sets the explicit sentinel via {@see
+     * Alert::withoutExpiry()}). Indexes the raw queue, which may still hold
+     * expired alerts that leave on the next write or prune. Has no effect if
+     * $index is out of bounds or the alert is already persistent.
      */
     public function cancelAlert(int $index): self
     {
