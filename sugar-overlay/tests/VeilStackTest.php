@@ -433,4 +433,58 @@ final class VeilStackTest extends TestCase
         // Original stack still reports the removed veil (immutability).
         $this->assertSame(9, $stack->maxZIndex());
     }
+
+    // ─── m17: layer bound (lib-fixes-1103) ──────────────────────────────────────
+
+    public function testAddRefusesBeyondTheLayerBound(): void
+    {
+        $stack = VeilStack::new();
+        for ($i = 0; $i < VeilStack::MAX_LAYERS; $i++) {
+            $stack = $stack->add(Veil::new()->withZIndex($i % 7));
+        }
+        $this->assertCount(VeilStack::MAX_LAYERS, $stack);
+
+        $this->expectException(\OverflowException::class);
+        $stack->add(Veil::new());
+    }
+
+    public function testRemoveWhereMakesRoomBelowTheBound(): void
+    {
+        $stack = VeilStack::new();
+        for ($i = 0; $i < VeilStack::MAX_LAYERS; $i++) {
+            $stack = $stack->add(Veil::new());
+        }
+        $this->assertCount(1, $stack->removeWhere(fn(Veil $v): bool => true)->add(Veil::new()), 'a cleared stack accepts new layers again');
+    }
+
+    // ─── m7: the stack reads content verbatim — sweep is a per-veil duty ────────
+
+    /**
+     * Hazard pin for the corrected doc claim: compositeAll() does NOT sweep
+     * untrusted content. A forged zone sentinel inside a veil's content
+     * survives into the stacked output and the scanner MINTS A PHANTOM ZONE
+     * — click handlers would fire on attacker-chosen ids. The cure is the
+     * documented per-veil withUntrustedContent() before stacking, which the
+     * second half of this test proves kills the phantom.
+     */
+    public function testForgedSentinelMintsAPhantomZoneUnlessTheVeilIsSweptFirst(): void
+    {
+        $forged = "\xEE\x80\x80evil\xEE\x80\x81CLICK\xEE\x80\x80/evil\xEE\x80\x81";
+        $bg = "..............................\n..............................";
+
+        $raw = VeilStack::new()->add(
+            Veil::new()->withPosition(Position::TOP, Position::LEFT)->withContent($forged . 'X')
+        );
+        $phantom = $raw->all()[0]->scan($raw->compositeAll($bg))->hit(1, 1);
+        $this->assertNotNull($phantom, 'documents the hazard: the stack itself does not sweep');
+        $this->assertSame('evil', $phantom?->id, 'the attacker picked the zone id');
+
+        $clean = VeilStack::new()->add(
+            Veil::new()->withPosition(Position::TOP, Position::LEFT)->withUntrustedContent($forged . 'X')
+        );
+        $this->assertNull(
+            $clean->all()[0]->scan($clean->compositeAll($bg))->hit(1, 1),
+            'per-veil withUntrustedContent() strips the forgery before stacking — no phantom zone'
+        );
+    }
 }

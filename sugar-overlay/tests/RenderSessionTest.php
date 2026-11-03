@@ -207,4 +207,50 @@ final class RenderSessionTest extends TestCase
 
         $this->assertFalse($session->shouldEmitFull(10, 2));
     }
+
+    // ─── lastFullFrame (M5, lib-fixes-1103) ────────────────────────────────────
+
+    public function testLastFullFrameIsNullOnAColdSession(): void
+    {
+        $this->assertNull((new RenderSession())->lastFullFrame());
+    }
+
+    public function testRememberFullRecordsTheFullFrame(): void
+    {
+        $session = new RenderSession();
+        $session->rememberFull('the-frame', 80, 24);
+        $this->assertSame('the-frame', $session->lastFullFrame());
+    }
+
+    public function testDiffKeepsTheFullFrameBehindTheDelta(): void
+    {
+        $session = new RenderSession();
+        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+        $session->rememberFull('first', 10, 2);
+
+        $delta = $session->diff('second', 10, 2, $factory);
+
+        $this->assertNotSame('', $delta, 'changed frames must return a non-empty delta');
+        $this->assertSame('second', $session->lastFullFrame(), 'lastFullFrame() names the FULL frame the delta was derived from, even when the delta textually coincides with it');
+    }
+
+    public function testColdDiffPrimesTheFrameWithoutEmittingIt(): void
+    {
+        // m18 truth-of-the-prime: the first diff() returns '' (paints
+        // nothing) yet REMEMBERS the frame — direct session drivers must
+        // read lastFullFrame() to print their own initial full frame.
+        $session = new RenderSession();
+        $factory = fn(string $out, int $w, int $h): Buffer => Buffer::fromString($out, $w, $h);
+
+        $this->assertSame('', $session->diff('cold-frame', 10, 2, $factory));
+        $this->assertSame('cold-frame', $session->lastFullFrame());
+    }
+
+    public function testResetClearsTheFullFrame(): void
+    {
+        $session = new RenderSession();
+        $session->rememberFull('x', 80, 24);
+        $session->reset();
+        $this->assertNull($session->lastFullFrame());
+    }
 }
