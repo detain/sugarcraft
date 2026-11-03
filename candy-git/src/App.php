@@ -305,6 +305,7 @@ final class App implements Model
 
         // Diff viewer: Space stages the current hunk, Up/Down navigate hunks, Escape/d closes
         if ($this->diffViewer !== null) {
+            $dv = $this->diffViewer;
             if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === 'd')) {
                 return [$this->withDiffViewer(null), null];
             }
@@ -316,6 +317,19 @@ final class App implements Model
             }
             if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
                 return [$this->navigateHunk(+1), null];
+            }
+            // Audit K3: Page keys hop hunks, Home/End snap to the first/last one.
+            if ($msg->type === KeyType::PageUp) {
+                return [$this->navigateHunk(-1), null];
+            }
+            if ($msg->type === KeyType::PageDown) {
+                return [$this->navigateHunk(+1), null];
+            }
+            if ($msg->type === KeyType::Home) {
+                return [$this->withDiffViewer($dv->withHunkCursor(0)), null];
+            }
+            if ($msg->type === KeyType::End) {
+                return [$this->withDiffViewer($dv->withHunkCursor(PHP_INT_MAX)), null];
             }
             return [$this, null];
         }
@@ -336,6 +350,12 @@ final class App implements Model
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
             return [$this->moveCursor(+1), null];
+        }
+        // Audit K3: viewport keys for the list panes — Page keys jump roughly a
+        // screen, Home/End snap to the edges.
+        if ($msg->type === KeyType::PageUp || $msg->type === KeyType::PageDown
+            || $msg->type === KeyType::Home || $msg->type === KeyType::End) {
+            return [$this->viewportKey($msg->type), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 's') {
             return [$this->toggleStage(), null];
@@ -420,6 +440,93 @@ final class App implements Model
         // Two frames each cost 4 cols (rounded border + 1-col padding, both
         // sides) plus a 2-col gutter between them: total overhead = 10.
         return max(self::MIN_PANE_WIDTH, intdiv($this->width - 10, 2));
+    }
+
+    /**
+     * Rows available for the pane/overlay area after fixed chrome (header row,
+     * help line, trailing row) and any notice or prompt bars. NULL until the
+     * terminal reports its size — callers then treat lists as unbounded, which
+     * is the historical byte-stable first-frame output (audit K3: the height
+     * was stored but never read, so every list and overlay rendered in full
+     * and appended below each other off the bottom of the screen).
+     */
+    public function listRows(): ?int
+    {
+        if ($this->height === null) {
+            return null;
+        }
+        $used = 3; // header row, help line, trailing row
+        if ($this->error !== null)          { $used++; }
+        if ($this->successMessage !== null) { $used++; }
+        if ($this->collectingCommit)        { $used++; }
+        if ($this->collectingBranchName)    { $used++; }
+        if ($this->collectingMergeTarget)   { $used++; }
+        if ($this->cherryPick !== null && $this->cherryPick->collecting) { $used++; }
+        return max(1, $this->height - $used);
+    }
+
+    /** Whether a full overlay is open and must share the screen with the lists. */
+    public function overlayOpen(): bool
+    {
+        return $this->diffViewer !== null
+            || $this->showHelp === TRUE
+            || $this->showRebaseMenu === TRUE
+            || $this->stashManager !== null
+            || $this->worktrees !== null
+            || $this->interactiveRebase !== null;
+    }
+
+    /** Rows the three list panes get; an open overlay claims the rest. */
+    private function paneArea(): int
+    {
+        $rows = $this->listRows();
+        if ($rows === null) {
+            return PHP_INT_MAX;
+        }
+        if ($this->overlayOpen()) {
+            return max(3, intdiv($rows, 3));
+        }
+        return $rows;
+    }
+
+    /** Visible status-list rows (frame borders excluded). */
+    public function statusBodyRows(): int
+    {
+        $area = $this->paneArea();
+        return $area === PHP_INT_MAX ? PHP_INT_MAX : max(1, $area - 2);
+    }
+
+    /** Visible branch-list rows: the right column stacks branches over log. */
+    public function branchesBodyRows(): int
+    {
+        $area = $this->paneArea();
+        return $area === PHP_INT_MAX ? PHP_INT_MAX : max(1, intdiv($area, 2) - 2);
+    }
+
+    /** Visible log rows: the right-column remainder below branches. */
+    public function logBodyRows(): int
+    {
+        $area = $this->paneArea();
+        if ($area === PHP_INT_MAX) {
+            return PHP_INT_MAX;
+        }
+        return max(1, ($area - intdiv($area, 2)) - 2);
+    }
+
+    /** Rows an open overlay gets; a tiny floor so short screens still show a frame. */
+    public function overlayBodyRows(): int
+    {
+        $rows = $this->listRows();
+        if ($rows === null) {
+            return PHP_INT_MAX;
+        }
+        return max(1, $rows - $this->paneArea());
+    }
+
+    /** Horizontal budget for full-width prompt/notice bars (audit A26). */
+    public function barWidth(): int
+    {
+        return $this->width === null ? PHP_INT_MAX : max(1, $this->width - 2);
     }
 
     /** Status-pane path budget: pane width minus padding (2) and the 3-col "XY " marker. */
@@ -660,6 +767,28 @@ final class App implements Model
                 logCursor: Clamp::int($this->logCursor + $dir, 0, count($this->log) - 1),
             ),
         };
+    }
+
+    /**
+     * PageUp/PageDown jump by one visible page (minus a 2-row overlap for
+     * context), Home snaps to the first row, End to the last — all through the
+     * same clamped moveCursor so an empty list is a no-op (audit K3).
+     */
+    private function viewportKey(KeyType $type): self
+    {
+        if ($type === KeyType::Home) {
+            return $this->moveCursor(-1000000000);
+        }
+        if ($type === KeyType::End) {
+            return $this->moveCursor(1000000000);
+        }
+        $page = match ($this->pane) {
+            Pane::Status   => $this->statusBodyRows(),
+            Pane::Branches => $this->branchesBodyRows(),
+            Pane::Log      => $this->logBodyRows(),
+        };
+        $step = max(1, min($page, 1000000) - 2);
+        return $this->moveCursor($type === KeyType::PageUp ? -$step : +$step);
     }
 
     /** Runs `git restore --worktree -- <path>` via the GitDriver, then refreshes. */

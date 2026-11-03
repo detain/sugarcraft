@@ -29,9 +29,11 @@ candy-git    # run inside any git working tree
 |--------------------------|---------------------------------------------------------|
 | `Tab`                    | Cycle pane focus                                        |
 | `↑/↓` or `k/j`           | Move cursor in active pane                             |
+| `PageUp/PageDown`        | Jump the cursor a paneful in active pane                |
+| `Home/End`               | Jump the cursor to the first / last entry               |
 | `s` (status pane)        | Stage / unstage the highlighted entry                    |
 | `a` (status pane)        | Stage all files                                         |
-| `d` (status pane)        | Discard changes to the highlighted file                  |
+| `d` (status pane)        | Discard changes to the highlighted file (press twice)    |
 | `P` (status pane)        | Open diff viewer for the highlighted file                |
 | `Space` (branches pane)  | Checkout branch                                         |
 | `c`                      | Commit (type message, Enter to confirm, Esc to cancel) |
@@ -39,7 +41,7 @@ candy-git    # run inside any git working tree
 | `n`                      | Create and switch to a new branch                        |
 | `u`                      | Undo last operation                                    |
 | `Ctrl+r`                 | Redo last undone operation                             |
-| `D` (branches pane)      | Delete the selected branch                             |
+| `D` (branches pane)      | Delete the selected branch (press twice)                 |
 | `M`                      | Merge selected branch into current                     |
 | `r`                      | Open rebase menu (continue / abort / skip / cancel)   |
 | `S`                      | Open stash manager (list / apply / drop)                |
@@ -65,6 +67,8 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 |------------------|--------------------------------|
 | `Space`          | Stage current hunk              |
 | `↑/↓` or `k/j`   | Navigate between hunks         |
+| `PageUp/PageDown`| Navigate between hunks         |
+| `Home/End`       | First / last hunk              |
 | `Esc`            | Close diff viewer              |
 
 ## Architecture
