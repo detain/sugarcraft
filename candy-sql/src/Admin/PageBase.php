@@ -8,6 +8,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Style\Style;
+use SugarCraft\Sql\CellValue;
 
 /**
  * Base class for admin dashboard pages.
@@ -60,7 +61,9 @@ abstract class PageBase implements Model
         if ($this->errorMessage === '') {
             return Style::new()->foreground(Color::ansi(8))->render('  No data available yet.');
         }
-        return 'Error: ' . $this->errorMessage;
+        // $errorMessage carries raw driver/server text — neutralize control
+        // bytes before it reaches the terminal.
+        return 'Error: ' . CellValue::sanitize($this->errorMessage);
     }
 
     /**

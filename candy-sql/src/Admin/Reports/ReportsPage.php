@@ -25,6 +25,7 @@ use SugarCraft\Table\Column;
 use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;
 use SugarCraft\Table\Table;
+use SugarCraft\Sql\CellValue;
 
 /**
  * Performance Reports page with left category/report tree and right sortable/exportable grid.
@@ -727,7 +728,8 @@ final class ReportsPage extends PageBase implements RowNavigable
         $lines = [];
         $lines[] = Style::new()->bold()->foreground(Color::hex('#f87171'))->render('Performance Reports Unavailable');
         $lines[] = '';
-        $lines[] = $this->errorMessage;
+        // errorMessage embeds raw driver/server text — neutralize at egress.
+        $lines[] = CellValue::sanitize($this->errorMessage);
         $lines[] = '';
         $lines[] = $muted->render('Ensure MySQL 5.6.6+ with performance_schema=enabled');
         $lines[] = $muted->render('and the sys schema installed.');

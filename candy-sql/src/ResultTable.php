@@ -327,8 +327,9 @@ final class ResultTable
         $cells = [];
         foreach ($this->visibleColumns() as $col) {
             $width = $this->colWidths[$col] ?? 12;
+            // Header names arrive from the result-set wire — sanitize the label.
             $cells[] = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-                ->render($this->pad($col, $width));
+                ->render($this->pad(CellValue::sanitize($col), $width));
         }
         return implode(str_repeat(' ', $this->colSpacing), $cells);
     }
@@ -349,7 +350,7 @@ final class ResultTable
         $cells = [];
         foreach ($this->visibleColumns() as $col) {
             $width = $this->colWidths[$col] ?? 12;
-            $cells[] = $this->pad($col, $width);
+            $cells[] = $this->pad(CellValue::sanitize($col), $width);
         }
         return implode(str_repeat(' ', $this->colSpacing), $cells);
     }
@@ -469,7 +470,8 @@ final class ResultTable
         // Wide values beyond row 25 no longer influence column widths.
         $renderedRows = array_slice($this->rows, 0, self::DEFAULT_PAGE_SIZE);
         foreach ($this->columns as $col) {
-            $max = mb_strlen($col);
+            // Measure the sanitized label so widths match what is painted.
+            $max = mb_strlen(CellValue::sanitize($col));
             foreach ($renderedRows as $row) {
                 $val = $this->formatValuePlain($row[$col] ?? null);
                 $len = mb_strlen($val);

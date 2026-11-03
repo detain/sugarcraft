@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\Connections;
 
+use SugarCraft\Sql\CellValue;
+
 /**
  * Value object holding a single processlist row.
  *
@@ -34,21 +36,42 @@ final class ProcesslistResult
      * @param bool       $isBackground True when thread TYPE is BACKGROUND
      * @param bool       $infoTruncated True when $info was truncated from the original value
      */
+    public readonly string $user;
+    public readonly string $host;
+    public readonly string $database;
+    public readonly string $command;
+    public readonly string $state;
+    public readonly string $info;
+    public readonly string $connectionAttr;
+
     public function __construct(
         public readonly int|string $processId,
         public readonly int|string $threadId,
-        public readonly string $user,
-        public readonly string $host,
-        public readonly string $database,
-        public readonly string $command,
+        string $user,
+        string $host,
+        string $database,
+        string $command,
         public readonly int $time,
-        public readonly string $state,
-        public readonly string $info,
-        public readonly string $connectionAttr,
+        string $state,
+        string $info,
+        string $connectionAttr,
         public readonly bool $isPS,
         public readonly bool $isBackground,
         public readonly bool $infoTruncated,
-    ) {}
+    ) {
+        // Every string field here originates from the server (SHOW PROCESSLIST
+        // / performance_schema) and is displayed in the terminal. A hostile or
+        // misconfigured server can embed ESC/OSC bytes; the egress neutralizer
+        // runs at construction so no display path (table grid, kill prompt,
+        // filters, counters) can ever print raw control bytes.
+        $this->user = CellValue::sanitize($user);
+        $this->host = CellValue::sanitize($host);
+        $this->database = CellValue::sanitize($database);
+        $this->command = CellValue::sanitize($command);
+        $this->state = CellValue::sanitize($state);
+        $this->info = CellValue::sanitize($info);
+        $this->connectionAttr = CellValue::sanitize($connectionAttr);
+    }
 
     /**
      * Create from a performance_schema.threads row.

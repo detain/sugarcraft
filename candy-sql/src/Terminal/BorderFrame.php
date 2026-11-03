@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Cli\Frame;
 use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\App;
+use SugarCraft\Sql\CellValue;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Pane;
 use SugarCraft\Style\Style;
@@ -68,16 +69,18 @@ final class BorderFrame
         // Table count.
         $parts[] = 'Tables: ' . count($a->browse->tables);
 
-        // Connection info (dsn) — only if non-empty.
+        // Connection info (dsn) — only if non-empty. Sanitized: the title bar
+        // is terminal output and every other server-derived string on it is
+        // hostile-capable; a crafted dsn must not inject escape sequences.
         $dsn = $a->connection->db->dsn();
         if ($dsn !== '') {
-            $parts[] = $infoStyle->render($dsn);
+            $parts[] = $infoStyle->render(CellValue::sanitize($dsn));
         }
 
         // Server version from serverContext, or flavor fallback.
         $version = self::serverVersion($a);
         if ($version !== '') {
-            $parts[] = $infoStyle->render($version);
+            $parts[] = $infoStyle->render(CellValue::sanitize($version));
         }
 
         return implode($sepStyle->render(' │ '), $parts);

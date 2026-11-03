@@ -13,6 +13,7 @@ use SugarCraft\Sql\Admin\RowNavigable;
 use SugarCraft\Sql\Admin\QueryLogger;
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Style\Style;
+use SugarCraft\Sql\CellValue;
 
 /**
  * Debug pane displaying the query/action log from QueryLogger.
@@ -250,6 +251,9 @@ final class DebugPage extends PageBase implements RowNavigable
         if (\strlen($sql) > self::MAX_SQL_DISPLAY) {
             $sql = \substr($sql, 0, self::MAX_SQL_DISPLAY - 3) . '...';
         }
+        // Sanitize after byte-truncation so a cut that lands mid-UTF-8 (or an
+        // ESC embedded in the SQL/server echo) never reaches the terminal.
+        $sql = CellValue::sanitize($sql);
         // Use a distinct monospace style for SQL
         $sqlStyled = Style::new()->foreground(Color::hex('#cdd6f4'))->render($sql);
 
@@ -259,7 +263,7 @@ final class DebugPage extends PageBase implements RowNavigable
         // Error indicator
         $errorStr = '';
         if ($entry['error'] !== null) {
-            $errorStr = ' ' . Style::new()->foreground(Color::hex('#f38ba8'))->render("⚠ {$entry['error']}");
+            $errorStr = ' ' . Style::new()->foreground(Color::hex('#f38ba8'))->render('⚠ ' . CellValue::sanitize($entry['error']));
         }
 
         // Build the line - selected entry gets a subtle highlight

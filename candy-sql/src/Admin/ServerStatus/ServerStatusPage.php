@@ -20,6 +20,7 @@ use SugarCraft\Sql\Renderer;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Position;
 use SugarCraft\Style\Style;
+use SugarCraft\Sql\CellValue;
 
 /**
  * Server Status page displaying connection info, features, directories, SSL, replication, and firewall.
@@ -779,8 +780,12 @@ final class ServerStatusPage extends PageBase
                 // flattened one-line reason, same "Error: <msg>" idiom the
                 // other admin pages use (PageBase::errorScreen, PerfSchema).
                 $clone = clone $this;
-                $reason = (string) preg_replace('/\s+/u', ' ', $e->getMessage());
-                $clone->gtidError = 'GTID_MODE = ' . $mode . ': ' . mb_substr(trim($reason), 0, 160);
+                // sanitize() (not a bare whitespace fold): the driver message is
+                // server text — only the control-byte neutralizer removes ESC/OSC
+                // bytes and repairs invalid UTF-8; newlines surface as the ↵ glyph
+                // so the reason stays a single physical line.
+                $reason = trim((string) preg_replace('/\s+/u', ' ', CellValue::sanitize($e->getMessage())));
+                $clone->gtidError = 'GTID_MODE = ' . $mode . ': ' . mb_substr($reason, 0, 160);
                 return [$clone, null];
             }
             $clone = clone $this;

@@ -22,6 +22,7 @@ use SugarCraft\Table\Column;
 use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;
 use SugarCraft\Table\Table;
+use SugarCraft\Sql\CellValue;
 
 /**
  * Variables page displaying SHOW GLOBAL STATUS / SHOW GLOBAL VARIABLES.
@@ -819,9 +820,11 @@ final class VariablesPage extends PageBase implements RowNavigable
                 $value = \substr($value, 0, 20) . '...';
             }
 
+            // Names and values both come from SHOW VARIABLES (server text) —
+            // sanitize the display copy; $varName stays the raw lookup key.
             $rows[] = Row::new(RowData::from([
-                'name' => $varName,
-                'value' => $value,
+                'name' => CellValue::sanitize($varName),
+                'value' => CellValue::sanitize($value),
                 'editable' => $this->isDynamic($varName) ? 'rw' : '',
             ]));
         }

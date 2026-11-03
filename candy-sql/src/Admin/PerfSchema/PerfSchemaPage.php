@@ -23,6 +23,7 @@ use SugarCraft\Table\Column;
 use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;
 use SugarCraft\Table\Table;
+use SugarCraft\Sql\CellValue;
 
 /**
  * Performance Schema configuration page with tabbed interface.
@@ -1044,7 +1045,8 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     {
         $rows = [];
         foreach ($this->actors as $actor) {
-            $rows[] = [$actor->enabled, sprintf('%s/%s/%s', $actor->host, $actor->user, $actor->role)];
+            // Actor identity comes from performance_schema users() — server text.
+            $rows[] = [$actor->enabled, CellValue::sanitize(sprintf('%s/%s/%s', $actor->host, $actor->user, $actor->role))];
         }
 
         return $this->renderToggleList(
@@ -1059,7 +1061,8 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     {
         $rows = [];
         foreach ($this->objects as $object) {
-            $rows[] = [$object->enabled, sprintf('%s:%s.%s', $object->objectType, $object->objectSchema, $object->objectName)];
+            // Object rules come from performance_schema setup_objects — server text.
+            $rows[] = [$object->enabled, CellValue::sanitize(sprintf('%s:%s.%s', $object->objectType, $object->objectSchema, $object->objectName))];
         }
 
         return $this->renderToggleList(

@@ -144,11 +144,13 @@ final class Renderer
                 ->render("1-{$paneCount}  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  quit");
             $status = '';
             if ($a->ui->error !== null) {
+                // Driver/server error text is untrusted for the terminal —
+                // a hostile server can embed ESC sequences in its message.
                 $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                    ->render('error: ' . $a->ui->error);
+                    ->render('error: ' . CellValue::sanitize((string) $a->ui->error));
             } elseif ($a->ui->status !== null) {
                 $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                    ->render($a->ui->status);
+                    ->render(CellValue::sanitize((string) $a->ui->status));
             }
             $content = $admin . "\n" . $query . "\n " . $help . $status;
             return BorderFrame::wrap($a, $content);
@@ -174,10 +176,10 @@ final class Renderer
         $status = '';
         if ($a->ui->error !== null) {
             $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                ->render('error: ' . $a->ui->error);
+                ->render('error: ' . CellValue::sanitize((string) $a->ui->error));
         } elseif ($a->ui->status !== null) {
             $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                ->render($a->ui->status);
+                ->render(CellValue::sanitize((string) $a->ui->status));
         }
 
         $content = $top . "\n" . $query . "\n " . $help . $status;
@@ -217,10 +219,13 @@ final class Renderer
         // the cursor row is rendered reverse-video by the widget.
         $items = [];
         foreach ($a->browse->tables as $name) {
+            // Table names are server-controlled (SHOW TABLES output) — neutralize
+            // control bytes before they enter the frame.
+            $safe = CellValue::sanitize((string) $name);
             $items[] = new StringItem(
                 $name === $a->browse->selectedTable
-                    ? Style::new()->foreground(Color::hex('#fde68a'))->bold()->render($name)
-                    : Style::new()->foreground(Color::hex('#c5b6dd'))->render($name)
+                    ? Style::new()->foreground(Color::hex('#fde68a'))->bold()->render($safe)
+                    : Style::new()->foreground(Color::hex('#c5b6dd'))->render($safe)
             );
         }
         $list = ItemList::new($items, $width, $available)
@@ -242,7 +247,7 @@ final class Renderer
      */
     private static function rowsPane(App $a, int $available = 12, int $terminalCols = 80): string
     {
-        $title = ' rows ' . ($a->browse->selectedTable ? "[{$a->browse->selectedTable}] " : '');
+        $title = ' rows ' . ($a->browse->selectedTable ? '[' . CellValue::sanitize($a->browse->selectedTable) . '] ' : '');
 
         $cols = array_keys($a->browse->rows[0] ?? []);
         $numFields = count($cols);
@@ -279,7 +284,9 @@ final class Renderer
         $colBudget = max(6, (int) floor(($width - 1 - ($numFields - 1)) / max(1, $numFields)));
         $columns = [];
         foreach ($cols as $col) {
-            $columns[] = Column::new((string) $col, (string) $col, $colBudget)
+            // Column labels arrive from the wire (result-set header names) —
+            // sanitize for display; the raw name stays the data key.
+            $columns[] = Column::new((string) $col, CellValue::sanitize((string) $col), $colBudget)
                 ->withAlignLeft()
                 ->withMaxWidth($colBudget);
         }

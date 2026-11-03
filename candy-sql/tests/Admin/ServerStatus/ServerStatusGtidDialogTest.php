@@ -68,9 +68,12 @@ final class ServerStatusGtidDialogTest extends TestCase
         $rendered = self::plain($failed->view());
         // ...the dialog stays open (mode still on screen)...
         $this->assertStringContainsString('GTID_MODE [ON]', $rendered);
-        // ...and the whitespace-flattened reason is visible (never silent).
+        // ...and the sanitized reason is visible (never silent). Fixed 2026-11-03
+        // (D-C8): the newline now surfaces as the ↵ control glyph (the old
+        // invisible whitespace-fold could not be told apart from an injected
+        // sequence) and remaining space runs collapse.
         $this->assertStringContainsString(
-            'Error: GTID_MODE = ON: GTID_MODE change is not permitted while replicas are running',
+            'Error: GTID_MODE = ON: GTID_MODE↵change is not permitted while replicas are running',
             $rendered,
         );
     }

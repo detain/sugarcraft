@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin;
 
+use SugarCraft\Sql\CellValue;
+
 /**
  * Simple query logger for debugging admin pane queries.
  *
@@ -118,8 +120,12 @@ final class QueryLogger
             $time = sprintf('%s.%03d', $ts, $ms);
             $type = str_pad($entry['type'], 10);
             $rows = $entry['rows'] > 0 ? "{$entry['rows']} rows" : '';
-            $error = $entry['error'] !== null ? " ERR: {$entry['error']}" : '';
-            $lines[] = "{$time} {$type} {$entry['sql']} {$rows}{$error}";
+            // $sql is what the user typed AND may echo server text; $error is
+            // the driver/server message — both must be neutralized before they
+            // are painted as terminal rows.
+            $sql = CellValue::sanitize($entry['sql']);
+            $error = $entry['error'] !== null ? " ERR: " . CellValue::sanitize($entry['error']) : '';
+            $lines[] = "{$time} {$type} {$sql} {$rows}{$error}";
         }
         return $lines;
     }
