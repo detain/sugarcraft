@@ -39,6 +39,7 @@ declare(strict_types=1);
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\TtyDetect;
 use SugarCraft\Core\Util\LegacyEnv;
 use SugarCraft\Core\Util\LegacyPaths;
@@ -178,7 +179,7 @@ $sqlite = static function () use ($store, $dbPath): SqliteBackend {
 // a locked or corrupt database surface as an uncaught fatal with exit 255;
 // \Throwable is the honest net here.
 $storageError = static function (\Throwable $e): never {
-    fwrite(STDERR, Lang::t('cli.storage_error', ['message' => $e->getMessage()]) . "\n");
+    fwrite(STDERR, Lang::t('cli.storage_error', ['message' => Sanitize::untrusted($e->getMessage())]) . "\n");
     exit(1);
 };
 
@@ -215,7 +216,7 @@ if ($cmd === 'push') {
         }
     }
     if ($ignore->isIgnored($file)) {
-        fwrite(STDOUT, Lang::t('cli.push_ignored', ['file' => $file]) . "\n");
+        fwrite(STDOUT, Lang::t('cli.push_ignored', ['file' => Sanitize::untrusted($file)]) . "\n");
         exit(0);
     }
 
@@ -223,7 +224,7 @@ if ($cmd === 'push') {
     // records nothing but claims success. Refuse it at the boundary instead.
     $durationRaw = $positional[4] ?? null;
     if ($durationRaw !== null && !ctype_digit($durationRaw)) {
-        fwrite(STDERR, Lang::t('cli.push_invalid_duration', ['value' => $durationRaw]) . "\n");
+        fwrite(STDERR, Lang::t('cli.push_invalid_duration', ['value' => Sanitize::untrusted($durationRaw)]) . "\n");
         exit(1);
     }
     $duration = (int)($durationRaw ?? 60);
@@ -241,8 +242,8 @@ if ($cmd === 'push') {
         $storageError($e);
     }
     fwrite(STDOUT, Lang::t('cli.entry_pushed', [
-        'project'  => $project,
-        'language' => $language,
+        'project'  => Sanitize::untrusted($project),
+        'language' => Sanitize::untrusted($language),
         'duration' => $duration,
     ]) . "\n");
     exit(0);
@@ -266,7 +267,7 @@ if ($cmd === 'milestone') {
         } catch (\Throwable $e) {
             $storageError($e);
         }
-        fwrite(STDOUT, Lang::t('cli.milestone_added', ['name' => $name]) . "\n");
+        fwrite(STDOUT, Lang::t('cli.milestone_added', ['name' => Sanitize::untrusted($name)]) . "\n");
         exit(0);
     }
 
@@ -284,8 +285,8 @@ if ($cmd === 'milestone') {
         foreach ($milestones as $m) {
             fwrite(STDOUT, Lang::t('cli.milestone_entry', [
                 'date'        => date('Y-m-d', $m->time),
-                'name'        => $m->name,
-                'description' => $m->description,
+                'name'        => Sanitize::untrusted($m->name),
+                'description' => Sanitize::untrusted($m->description),
             ]) . "\n");
         }
         exit(0);
@@ -324,7 +325,11 @@ if ($cmd === 'export') {
         'json' => new JsonExporter(),
         'ics' => new IcalExporter(),
     };
-    fwrite(STDOUT, $exporter->export('candy-codetime', $beats));
+    // A stored name is untrusted data: control bytes must not paint the
+    // terminal when the dump is piped to one. JSON already escapes them, so
+    // the sweep is a no-op there; tab/newline survive, so record structure
+    // is untouched.
+    fwrite(STDOUT, Sanitize::untrusted($exporter->export('candy-codetime', $beats)));
     exit(0);
 }
 

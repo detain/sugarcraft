@@ -346,4 +346,42 @@ final class CliTest extends TestCase
         // …a next-day gap must print its own month+day, or the range reads backwards.
         $this->assertStringContainsString(date('M j', strtotime('-1 day 02:00')) . ' 02:00', $res['stdout']);
     }
+
+    public function testStoredControlBytesNeverPaintTheTerminal(): void
+    {
+        // A doctored store (or argv) must not be able to emit escape
+        // sequences through the CLI's own lines. The record at rest keeps
+        // its bytes — only the way out is swept.
+        $dirty = "evil" . chr(27) . "[31mred" . chr(7);
+
+        $push = $this->runCli(['push', $dirty, 'php', 'a.php', '5']);
+        $this->assertSame(0, $push['exit'], $push['stderr']);
+        $this->assertStringNotContainsString(chr(27), $push['stdout'], 'push echo must carry no ESC byte');
+        $this->assertStringNotContainsString(chr(7), $push['stdout'], 'push echo must carry no BEL byte');
+
+        $json = $this->runCli(['export', 'json', '1']);
+        $this->assertSame(0, $json['exit'], $json['stderr']);
+        $this->assertStringNotContainsString(chr(27), $json['stdout'], 'json export must not leak a raw ESC byte');
+        $rows = json_decode($json['stdout'], true);
+        $this->assertSame($dirty, $rows[0]['project'], 'the store keeps the exact bytes for data fidelity');
+
+        $csv = $this->runCli(['export', 'csv', '1']);
+        $this->assertSame(0, $csv['exit'], $csv['stderr']);
+        $this->assertStringNotContainsString(chr(27), $csv['stdout'], 'csv export must not leak a raw ESC byte');
+    }
+
+    public function testMilestoneNamesAreSweptOnTheWayOut(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension unavailable');
+        }
+        $dirty = "v1" . chr(27) . "]0;title" . chr(7);
+        $add = $this->runCli(['--backend', 'sqlite', 'milestone', 'add', $dirty, 'plain desc']);
+        $this->assertSame(0, $add['exit'], $add['stderr']);
+        $this->assertStringNotContainsString(chr(27), $add['stdout']);
+
+        $list = $this->runCli(['--backend', 'sqlite', 'milestone', 'list']);
+        $this->assertSame(0, $list['exit'], $list['stderr']);
+        $this->assertStringNotContainsString(chr(27), $list['stdout'], 'stored milestone names must not carry escapes');
+    }
 }
