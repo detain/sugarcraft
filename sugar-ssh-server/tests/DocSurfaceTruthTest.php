@@ -790,6 +790,26 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertStringContainsString('echo "status=$?"', $readme);
     }
 
+    public function testTheSiteQuickstartExitsTheWayTheLibraryPreaches(): void
+    {
+        $body = $this->siteBody();
+        if ($body === null) {
+            $this->markTestSkipped('no site body in a standalone checkout');
+        }
+
+        // Both fences on the page used to end in a bare ->serve(), which is the
+        // one shape that reports success no matter what the stack decided
+        // (audit NIT 7). The exit() wrapper is the prescription, so the page
+        // has to carry it.
+        self::assertSame(
+            2,
+            \substr_count($body, 'exit(Server::new()'),
+            'both quickstart fences should wrap serve() in exit()',
+        );
+        self::assertStringNotContainsString("use(new Logger('", $body);
+        self::assertStringContainsString('Logger::toFile(', $body);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

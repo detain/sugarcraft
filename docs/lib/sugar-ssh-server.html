@@ -74,8 +74,8 @@ use SugarCraft\SshServer\Server;
 use SugarCraft\SshServer\Middleware\{Logger, Auth, RateLimit, Spawn};
 use SugarCraft\SshServer\Session;
 
-Server::new()
-    -&gt;use(new Logger('/var/log/wish.jsonl'))
+exit(Server::new()
+    -&gt;use(Logger::toFile('/var/log/wish.jsonl'))
     -&gt;use(new Auth(users: ['alice', 'bob']))
     -&gt;use(new Spawn(fn (Session $s) =&gt; [
         'cmd' =&gt; ['/bin/bash', '-l'],
@@ -84,18 +84,18 @@ Server::new()
             'PATH' =&gt; '/usr/local/bin:/usr/bin:/bin',
         ],
     ]))
-    -&gt;serve();</code></pre>
+    -&gt;serve());</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart — host-sshd legacy</h3>
     <pre class="code"><code class="language-php">use SugarCraft\SshServer\Transport\HostSshdTransport;
 use SugarCraft\SshServer\Middleware\BubbleTea;
 
-Server::new()
+exit(Server::new()
     -&gt;withTransport(new HostSshdTransport())
-    -&gt;use(new Logger('/var/log/wish.jsonl'))
+    -&gt;use(Logger::toFile('/var/log/wish.jsonl'))
     -&gt;use(new Auth(users: ['alice', 'bob']))
     -&gt;use(new BubbleTea(fn($session) =&gt; new MyApp($session)))
-    -&gt;serve();</code></pre>
+    -&gt;serve());</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
