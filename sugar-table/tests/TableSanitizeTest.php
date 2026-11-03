@@ -207,4 +207,69 @@ final class TableSanitizeTest extends TestCase
         // But the ESC[2J must be neutralized
         $this->assertStringNotContainsString("\x1b[2J", $view);
     }
+
+    /**
+     * The sugar-mouse zone sentinels (U+E000/U+E001) are well-formed text —
+     * the control-byte sweep cannot see them. A host that zones around the
+     * table must never receive a forged pair from cell data, or an attacker
+     * has registered a click target through the table's own advertised
+     * sanitizer.
+     */
+    public function testStripsForgedZoneSentinels(): void
+    {
+        $forged = "\u{E000}click\u{E001}";
+
+        $this->assertSame('click', Sanitize::value($forged));
+    }
+
+    /**
+     * Every string sink — cell value, column title, missing-value
+     * indicator, multiline cell — must reach View() sentinel-free.
+     */
+    public function testViewCarriesNoForgedZoneSentinels(): void
+    {
+        $open = "\u{E000}";
+        $close = "\u{E001}";
+
+        $t = Table::fromColumns([
+            Column::new('k', "Title{$open}X{$close}", 20),
+        ])
+            ->withMissingIndicator("{$open}-{$close}")
+            ->withRows([
+                Row::new(RowData::from(['k' => "cell{$open}{$close}"])),
+                Row::new(RowData::from(['k' => "multi{$open}line\nnext{$close}"])),
+            ]);
+
+        $view = $t->View();
+
+        $this->assertStringNotContainsString($open, $view);
+        $this->assertStringNotContainsString($close, $view);
+        // The readable payload survives — only the sentinels are swept.
+        $this->assertStringContainsString('cell', $view);
+        $this->assertStringContainsString('multi', $view);
+    }
+
+    /**
+     * Trojan Source defense: bidi overrides and zero-width space reorder or
+     * blank a line a human reads; they must surface as visible markers.
+     */
+    public function testMarksInvisibleAndBidiFormatting(): void
+    {
+        $this->assertStringContainsString('<U+202E>', Sanitize::value("a\u{202E}b"));
+        $this->assertStringContainsString('<U+200B>', Sanitize::value("a\u{200B}b"));
+    }
+
+    /**
+     * The sweep is targeted, not a wrecking ball: a ZWJ inside an emoji
+     * sequence (joiner after non-ASCII) keeps its meaning and must not be
+     * marked, and a plain other-PUA glyph is not a zone sentinel.
+     */
+    public function testKeepsLegitimateJoinersAndOtherPua(): void
+    {
+        $family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+        $this->assertSame($family, Sanitize::value($family));
+
+        // U+E002 is the image-marker band — not a zone sentinel, passes by design.
+        $this->assertSame("\u{E002}", Sanitize::value("\u{E002}"));
+    }
 }
