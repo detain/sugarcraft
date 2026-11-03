@@ -138,4 +138,175 @@ final class PromiseAwaitTest extends TestCase
         $this->assertStringContainsString('timed out after 0.05', $failure->getMessage());
         $this->assertInstanceOf(\React\Promise\Timer\TimeoutException::class, $failure->getPrevious());
     }
+
+    /**
+     * Start a timer chain that keeps the shared loop permanently busy, so it
+     * can never go quiescent on its own — the shape a panel with a listening
+     * socket or a repeating tick presents. The returned closure stops the
+     * chain; callers MUST invoke it in a `finally`.
+     *
+     * @return callable(): void
+     */
+    private function keepLoopBusy(): callable
+    {
+        $loop = \React\EventLoop\Loop::get();
+        $alive = true;
+        $arm = static function () use ($loop, &$arm, &$alive): void {
+            if (!$alive) {
+                return;
+            }
+            $loop->addTimer(0.01, $arm);
+        };
+        $arm();
+
+        return static function () use (&$alive): void {
+            $alive = false;
+        };
+    }
+
+    public function testAnAnsweredAwaitEndsItsSpinEvenWhenTheLoopNeverQuiesces(): void
+    {
+        // Audit K10. The awaited promise settles in a millisecond, but the
+        // loop has a re-arming timer, so "run until quiescent" — what
+        // settle() used to do — is "run forever": the answer arrives, and
+        // unrelated work keeps executing inside somebody's auth hop.
+        $stopPounding = $this->keepLoopBusy();
+        $loop = \React\EventLoop\Loop::get();
+        $pending = new Promise\Promise(static function (callable $resolve) use ($loop): void {
+            $loop->addTimer(0.001, static fn () => $resolve(null));
+        });
+
+        $started = \microtime(true);
+        try {
+            PromiseAwait::settle($pending, 30.0);
+        } finally {
+            $stopPounding();
+        }
+        $elapsed = \microtime(true) - $started;
+
+        $this->assertLessThan(
+            2.0,
+            $elapsed,
+            'a settled await must hand control back instead of spinning on other registrations',
+        );
+    }
+
+    public function testAnUnansweredAwaitHitsItsCeilingEvenWhenTheLoopNeverQuiesces(): void
+    {
+        // Audit K10, other polarity: the ceiling used to be a rejection with
+        // no way out, because the spin it was supposed to end kept running
+        // until the loop went quiet.
+        $stopPounding = $this->keepLoopBusy();
+        $never = new Promise\Promise(static function (): void {
+        });
+
+        $failure = null;
+        $started = \microtime(true);
+        try {
+            PromiseAwait::settle($never, 0.2);
+        } catch (\Throwable $e) {
+            $failure = $e;
+        } finally {
+            $stopPounding();
+        }
+        $elapsed = \microtime(true) - $started;
+
+        $this->assertInstanceOf(\RuntimeException::class, $failure);
+        $this->assertStringContainsString('timed out after 0.2', (string) $failure->getMessage());
+        $this->assertLessThan(2.0, $elapsed, 'the documented ceiling must end the spin');
+    }
+
+    public function testTheCeilingGuardLeavesNothingArmedOnASharedLoop(): void
+    {
+        // The watchdog that guarantees the ceiling is this class' own timer
+        // on a loop it does not own: if it survived the await, the next
+        // owner to run the loop would inherit a 30-second wake-up.
+        $loop = \React\EventLoop\Loop::get();
+        $pending = new Promise\Promise(static function (callable $resolve) use ($loop): void {
+            $loop->addTimer(0.001, static fn () => $resolve(null));
+        });
+        PromiseAwait::settle($pending, 30.0);
+
+        $started = \microtime(true);
+        $loop->run();
+        $this->assertLessThan(
+            1.0,
+            \microtime(true) - $started,
+            'a bare run() right after an await must find nothing left to wait for',
+        );
+    }
+
+    public function testASpinEndedByAnotherOwnerIsRefusedInsteadOfFakingSuccess(): void
+    {
+        // The await ends because somebody else that shares the loop stopped
+        // it. The promise has no answer, so control must come back with an
+        // error: quietly returning would tell the caller its async auth
+        // finished when it never did.
+        $loop = \React\EventLoop\Loop::get();
+        $never = new Promise\Promise(static function (): void {
+        });
+        $loop->addTimer(0.005, static function () use ($loop): void {
+            $loop->stop();
+        });
+
+        $failure = null;
+        $started = \microtime(true);
+        try {
+            PromiseAwait::settle($never, 5.0);
+        } catch (\Throwable $e) {
+            $failure = $e;
+        }
+        $elapsed = \microtime(true) - $started;
+
+        $this->assertInstanceOf(\RuntimeException::class, $failure);
+        $this->assertStringContainsString('timed out after', (string) $failure->getMessage());
+        $this->assertLessThan(
+            1.0,
+            $elapsed,
+            'the five-second ceiling cannot have fired this fast: it is the foreign stop that ended the await',
+        );
+    }
+
+    public function testTheLoopOwnershipLawsAreOnTheClass(): void
+    {
+        // Half-moved-truth guard (audit K10): the ceiling claim is only
+        // honest once the spin ends on the decision, so the class doc must
+        // carry both laws the fix introduced.
+        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Transport/PromiseAwait.php');
+
+        $this->assertStringContainsString('Law 1: this call owns the loop', $source);
+        $this->assertStringContainsString(
+            'Law 2: therefore never await from inside a running loop',
+            $source
+        );
+        $this->assertStringContainsString('$loop->cancelTimer($watchdog)', $source);
+        $this->assertStringNotContainsString(
+            'enforced by the loop instead of a busy spin',
+            $source
+        );
+
+        // ... and the same truth on both doc surfaces, so the class cannot be honest
+        // while the skim surface still advertises a drive-until-quiet wait.
+        $readme = (string) \file_get_contents(\dirname(__DIR__, 2) . '/README.md');
+        $flattened = (string) \preg_replace('/\s+/', ' ', $readme);
+        $this->assertStringContainsString(
+            'Who owns the loop',
+            $flattened,
+            'The README must carry the loop-ownership warning next to the async example.'
+        );
+        $this->assertStringNotContainsString(
+            'drives the promise with the pre-existing 30-second timeout ceiling',
+            $flattened,
+            'The README must not keep the claim that the await simply drives the promise.'
+        );
+
+        $admin = (string) \file_get_contents(
+            \dirname(__DIR__, 3) . '/docs/admin/sugar-ssh-server.md'
+        );
+        $this->assertStringNotContainsString(
+            'it is not a busy spin',
+            (string) \preg_replace('/\s+/', ' ', $admin),
+            'The admin guide must stop asserting that driving the loop until settlement is not a spin.'
+        );
+    }
 }

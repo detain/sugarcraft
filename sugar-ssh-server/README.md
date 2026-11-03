@@ -292,6 +292,10 @@ use React\Promise\PromiseInterface;
 
 final class LdapAuth extends AsyncMiddleware
 {
+    public function __construct(private readonly \LdapConnection $ldap)
+    {
+    }
+
     protected function handleAsync(Context $ctx, Session $session, callable $next): PromiseInterface
     {
         return $this->ldap->verify($session->user)->then(
@@ -302,12 +306,24 @@ final class LdapAuth extends AsyncMiddleware
 }
 ```
 
+Pass it in when you build the chain: `->use(new LdapAuth($connection))`.
+
 The promise returned by `handleAsync()` resolves when async work is
 done and the chain should proceed to `$next`; rejects to short-circuit
 the chain. The transport's single settle point
 (`Transport\DispatchesMiddlewareStack::dispatch()` →
-`PromiseAwait::settle()`) drives the promise with the pre-existing
-30-second timeout ceiling.
+`PromiseAwait::settle()`) drives the loop until that promise is decided,
+then hands control back: the answer, or the 30-second ceiling, ends the
+wait — whichever comes first.
+
+**Who owns the loop.** `settle()` calls `run()` and stops it as soon as
+the await is decided, so exactly one thing drives the loop per phase.
+The transports shipped here build the chain synchronously, so nothing is
+running underneath and awaiting is safe. If *you* run an event loop in
+the same process, do not call `settle()` (or dispatch a stack containing
+async middleware) from inside a loop callback — the stop would end your
+loop. Read `PromiseAwait`'s class docblock before wiring a custom
+transport.
 
 ## Session metadata
 

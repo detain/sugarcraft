@@ -188,11 +188,21 @@ The library's single settle point lives in the transport stack walk
 to settlement before the chain continues. Operational consequences:
 
 - **Timeout ceiling:** `PromiseAwait::settle()` bounds each await with
-  a **30-second** default (enforced through `react/promise-timer` on
-  the event loop — the loop is driven until settlement, it is not a
-  busy spin). A middleware that has not settled in time raises a
+  a **30-second** default. The ceiling is enforced twice over:
+  `react/promise-timer` rejects the promise, and the wait ends its own
+  spin at that decision instead of running the loop until it happens to
+  go quiet. A middleware that has not settled in time raises a
   `RuntimeException` carrying the `transport.async_timeout` message
   and the chain short-circuits.
+- **Who owns the loop:** the settle call *drives* the loop while it
+  waits and stops it as soon as the awaited promise is decided. That is
+  right for the shipped transports, which build the middleware chain
+  synchronously and have no loop running underneath. It also means you
+  must not await from inside your own running loop — the `Loop::stop()`
+  that ends the await would end your application too. The two
+  loop-ownership laws are on the class docblock of
+  `src/Transport/PromiseAwait.php`; read them before wiring a custom
+  transport.
 - **Cooperative cancellation:** the settle entry guard refuses to
   await when the session `Context` is already done — it raises the
   context's error instead of blocking up to the ceiling, so a

@@ -32,6 +32,10 @@ use SugarCraft\SshServer\Session;
  * ```php
  * final class LdapAuth extends AsyncMiddleware
  * {
+ *     public function __construct(private readonly \LdapConnection $ldap)
+ *     {
+ *     }
+ *
  *     protected function handleAsync(Context $ctx, Session $session, callable $next): PromiseInterface
  *     {
  *         return $this->ldap->verify($session->user)->then(
@@ -41,6 +45,9 @@ use SugarCraft\SshServer\Session;
  *     }
  * }
  * ```
+ *
+ * The base class declares no constructor, so a subclass constructor does
+ * not call `parent::__construct()` — there is nothing to call.
  */
 abstract class AsyncMiddleware implements MiddlewareContract
 {
