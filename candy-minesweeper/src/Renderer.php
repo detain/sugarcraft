@@ -145,7 +145,19 @@ final class Renderer
      */
     private static function cellStyleData(Cell $cell, Board $b, int $col, int $row, int $cx, int $cy): array
     {
+        // Post-mortem legibility (M21): once the board is LOST, the overlay
+        // must grade the player's own work. A flag sitting on a safe cell was
+        // wrong — it wears '✗' instead of 'F' so a correct flag (still gold F)
+        // and a wrong one are never the same glyph. Mines the player missed
+        // keep the '*' reveal but light up in the mine red instead of the dim
+        // hidden-dot grey, which on a lost board is information the overlay
+        // owes them. Mid-play nothing changes: flags stay 'F' and hidden
+        // cells stay dots — no spoilers before the boom.
+        $wrongFlag  = $b->exploded && $cell->flagged && !$cell->mine;
+        $missedMine = $b->exploded && $cell->mine && !$cell->flagged && !$cell->revealed;
+
         $glyph = match (true) {
+            $wrongFlag    => '✗',
             $cell->flagged => 'F',
             !$cell->revealed && ($b->exploded || $b->isWon()) && $cell->mine => '*',
             !$cell->revealed => '·',
@@ -161,9 +173,13 @@ final class Renderer
         if ($cell->revealed && $cell->mine) {
             $fg = 0xff5f87;
             $attrs = Style::ATTR_BOLD;
+        } elseif ($wrongFlag) {
+            $fg = 0x7d6e98;
         } elseif ($cell->flagged) {
             $fg = 0xfde68a;
             $attrs = Style::ATTR_BOLD;
+        } elseif ($missedMine) {
+            $fg = 0xff5f87;
         } elseif ($cell->revealed && $cell->adjacent > 0) {
             $fg = self::ADJ_COLORS[$cell->adjacent] ?? 0xffffff;
         } elseif (!$cell->revealed) {
