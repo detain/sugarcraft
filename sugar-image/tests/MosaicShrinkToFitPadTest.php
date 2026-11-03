@@ -76,10 +76,13 @@ final class MosaicShrinkToFitPadTest extends TestCase
         $fit = $this->halfBlock(Scale::Fit)->render($image, 80, 80);
 
         // Fit's documented shape for this pair: full-box red, every cell the
-        // same opaque block — 80 rows × 80 cells, no blanks. (Unchanged by the
-        // fix; pinned so a future Fit rework reds this lane's contrast claim.)
+        // same opaque block — 40 rows × 80 cells, no blanks. 40, not 80,
+        // because render() hands the renderer a null height for Fit and the
+        // 80×80 px resize is 1:1, which the ~2:1 cell box reads as 40 rows
+        // (the square source displays square). (Unchanged by the pad fix;
+        // pinned so a future Fit rework reds this lane's contrast claim.)
         $this->assertSame(
-            implode("\n", array_fill(0, 80, self::redContent(80))),
+            implode("\n", array_fill(0, 40, self::redContent(80))),
             $fit,
         );
 
@@ -141,9 +144,10 @@ final class MosaicShrinkToFitPadTest extends TestCase
         $out = $this->halfBlock(Scale::ShrinkToFit)->render($image, 80, 80);
 
         // factor = min(80/200, 80/40) = 0.4 → 80×16 px; aspect re-derivation
-        // then yields round(80 / 5.0) = 16 cell rows, every one full-width red.
+        // through the ~2:1 cell box then yields round(80 / (5.0·2)) = 8 cell
+        // rows, every one full-width red.
         $rows = explode("\n", $out);
-        $this->assertCount(16, $rows);
+        $this->assertCount(8, $rows);
         foreach ($rows as $row) {
             $this->assertSame(self::redContent(80), $row);
         }

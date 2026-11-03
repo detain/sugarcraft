@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Image\CellGeometry;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
 use SugarCraft\Image\Lang;
@@ -163,7 +164,9 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         // sizing the raw bytes bounds every frame before encoding.
         $chunks    = $this->chunkPayload($payload, $opts->chunkBytes() ?? KittyOptions::DEFAULT_CHUNK_BYTES);
         $total     = count($chunks);
-        $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
+        // Same cell-geometry law as prepareRender(); this path predates the
+        // trait and re-implemented it, so the fix lands in both places.
+        $effectiveHeight = $height ?? CellGeometry::heightCells($width, $image->aspectRatio());
 
         // Transmission is always a=T. Virtual mode keeps that and
         // flags the stored image U=1 (composited UNDER the text), then

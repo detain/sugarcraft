@@ -57,7 +57,9 @@ final class RenderAllocationGuardTest extends TestCase
         $rows = explode("\n", $out);
 
         self::assertSame(10, mb_strlen((string) preg_replace('/\x1b\[[0-9;]*m/', '', $rows[0])));
-        self::assertCount(5, $rows);
+        // 200×100 px is 2:1; in ~2:1 cells a 10-column box is 3 rows deep
+        // (round(10 / (2·2))), never more than the caller asked for.
+        self::assertCount(3, $rows);
     }
 
     public function testScaleNoneKeepsNativeSizeWhenItFits(): void

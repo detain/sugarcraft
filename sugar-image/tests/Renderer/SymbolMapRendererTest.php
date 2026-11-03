@@ -19,6 +19,12 @@ use SugarCraft\Image\Symbol\CanvasMode;
  * fg-only discipline on the terminal's OSC 10/11 default pair (F-08
  * consumer wire). Re-introducing the inverted-paint flip, or scoring
  * truecolor pens under a fixed palette, moves these digests.
+ *
+ * 2026-11-04: the five digests below were re-pinned for the cell-aspect
+ * correctness fix (auto height = width ÷ (aspect · cell aspect), see
+ * {@see \SugarCraft\Image\CellGeometry}); each move was proven geometry-only —
+ * passing the old auto height explicitly still yields the pre-fix bytes. The
+ * inversion/palette-scoring discrimination these pins exist for is unchanged.
  */
 final class SymbolMapRendererTest extends TestCase
 {
@@ -32,7 +38,7 @@ final class SymbolMapRendererTest extends TestCase
     {
         $image = ImageSource::fromFile(self::QB);
 
-        $this->assertSame('24829bdb20ffc08cbd7eb2b09adba5220f7e08ce', sha1((new SymbolMapRenderer())->render($image, 4)));
+        $this->assertSame('374d8345125b75c6debf0d7aaa5307f184a88c23', sha1((new SymbolMapRenderer())->render($image, 4)));
     }
 
     public function testAnsi16ScoresTheQuantizedPensNotTheTruecolorOnes(): void
@@ -44,7 +50,7 @@ final class SymbolMapRendererTest extends TestCase
         $renderer = (new SymbolMapRenderer())->withCanvasMode(CanvasMode::Ansi16);
 
         $out = $renderer->render($image, 4);
-        $this->assertSame('1bdb5b1d57b535a1b5efe1f2849acf89dba25ec2', sha1($out));
+        $this->assertSame('1d1a6532654f348f6476ba48a08dea3cd78f1939', sha1($out));
         $this->assertMatchesRegularExpression('/\e\[(?:3[0-7]|9[0-7])m/', $out);
         $this->assertStringNotContainsString('38;2;', $out);
     }
@@ -60,7 +66,7 @@ final class SymbolMapRendererTest extends TestCase
         $slow = (new SymbolMapRenderer())->withWorkFactor(1.0)->render($image, 4);
 
         $this->assertNotSame($fast, $slow);
-        $this->assertSame('4e4ca0847ee3d4395be1e89d4740e7f11afd2931', sha1($slow));
+        $this->assertSame('f155c819bad3bf6f65571d130f59bec6d2bd2f23', sha1($slow));
     }
 
     public function testSymbolSelectorsReachTheCorpusAndTheCacheFingerprint(): void
@@ -255,9 +261,9 @@ final class SymbolMapRendererTest extends TestCase
     public function testScoringUsesTheQuantizedPensNotTheRawOnPaletteSensitiveContent(): void
     {
         $noise = sha1((new SymbolMapRenderer())->withCanvasMode(CanvasMode::Ansi16)->render(ImageSource::fromFile(self::NOISE), 4));
-        $this->assertSame('198442deee384356bcfc2fc4d1fa2538b99074d7', $noise);
+        $this->assertSame('bdedc061b05ff6fe3532bad8d12aab0aae3d82e9', $noise);
 
         $qb = sha1((new SymbolMapRenderer())->withCanvasMode(CanvasMode::Ansi16)->render(ImageSource::fromFile(self::QB), 2));
-        $this->assertSame('91279786daf9ffc3ea1e2e07b8b433a274e2d152', $qb);
+        $this->assertSame('cc398cef512541661624003e8c4fb3aa6cbad3f7', $qb);
     }
 }

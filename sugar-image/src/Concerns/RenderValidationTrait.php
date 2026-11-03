@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Concerns;
 
+use SugarCraft\Image\CellGeometry;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
 
@@ -42,7 +43,11 @@ trait RenderValidationTrait
             );
         }
 
-        $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
+        // Cells are not square, so an auto height is the source aspect read
+        // through the cell box rather than through a square grid — see
+        // {@see CellGeometry}. Dividing by the aspect alone displayed every
+        // auto-sized frame at half its true aspect.
+        $effectiveHeight = $height ?? CellGeometry::heightCells($width, $image->aspectRatio());
         if ($effectiveHeight <= 0) {
             $effectiveHeight = 1;
         }

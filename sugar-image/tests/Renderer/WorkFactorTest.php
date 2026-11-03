@@ -145,12 +145,20 @@ final class WorkFactorTest extends TestCase
     {
         // If tightening the window never changed a single glyph, the dial
         // would be decorative. On the gradient it must bite.
+        //
+        // Two geometries, not one: at a given box size the tight and wide
+        // candidate windows can coincide by accident (8 columns is now 4 cell
+        // rows since the aspect maths honours the ~2:1 cell, and at that depth
+        // it does coincide), so a single width would let a flattening dial
+        // slip through. 12 and 24 columns each change a glyph.
         $image = ImageSource::fromFile(self::FIXTURE);
 
-        $tight = (new SymbolMapRenderer())->withWorkFactor(0.0)->render($image, 8);
-        $wide = (new SymbolMapRenderer())->withWorkFactor(1.0)->render($image, 8);
+        foreach ([12, 24] as $width) {
+            $tight = (new SymbolMapRenderer())->withWorkFactor(0.0)->render($image, $width);
+            $wide = (new SymbolMapRenderer())->withWorkFactor(1.0)->render($image, $width);
 
-        $this->assertNotSame($tight, $wide);
+            $this->assertNotSame($tight, $wide, "work factor must bite at {$width} columns");
+        }
     }
 
     public function testTheDefaultWindowIsChafaFiveAndFingerprintsEmpty(): void

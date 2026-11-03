@@ -36,10 +36,11 @@ final class KittyRendererTest extends TestCase
         // Begins with APC G (Kitty graphics begin) + the transmit action and
         // width/height params, and the begin frame opens the transaction with
         // m=1 (ANSI audit: the old DCS `ESC P q` header was DECSIXEL and never
-        // activated Kitty graphics).
-        $this->assertStringStartsWith("\x1b_Ga=T,c=8,r=4,f=100,m=1;\x1b\\", $out);
+        // activated Kitty graphics). The 8x4 source is 2:1, so an 8-cell box
+        // is 2 cell rows deep once the ~2:1 cell shape is honoured.
+        $this->assertStringStartsWith("\x1b_Ga=T,c=8,r=2,f=100,m=1;\x1b\\", $out);
         $this->assertStringContainsString('c=8', $out);    // cell columns
-        $this->assertStringContainsString('r=4', $out);    // cell rows
+        $this->assertStringContainsString('r=2', $out);    // cell rows
     }
 
     /**
@@ -100,7 +101,7 @@ final class KittyRendererTest extends TestCase
         $rows   = $this->renderer->renderRows($source, 8);
         $rows->rewind();
 
-        $this->assertStringStartsWith("\x1b_Ga=T,c=8,r=4,f=100,m=1;\x1b\\", $rows->current());
+        $this->assertStringStartsWith("\x1b_Ga=T,c=8,r=2,f=100,m=1;\x1b\\", $rows->current());
         $this->assertSame(implode('', iterator_to_array($this->renderer->renderRows($source, 8), false)), $this->renderer->render($source, 8));
     }
 
@@ -146,11 +147,12 @@ final class KittyRendererTest extends TestCase
     public function testEffectiveHeightComputedFromAspectRatio(): void
     {
         $source = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
-        // Source aspect ratio = 2 (8/4). With width=10, expected height=5.
+        // Source aspect ratio = 2 (8/4); cells are ~2:1 tall, so width=10
+        // derives round(10 / (2·2)) = 3 (rounded up from 2.5) rows.
         $out = $this->renderer->render($source, 10);
 
         $this->assertStringContainsString('c=10', $out);
-        $this->assertStringContainsString('r=5', $out);
+        $this->assertStringContainsString('r=3', $out);
     }
 
     public function testExplicitHeightOverridesComputed(): void

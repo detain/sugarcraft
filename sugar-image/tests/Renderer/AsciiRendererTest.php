@@ -84,9 +84,10 @@ final class AsciiRendererTest extends TestCase
     {
         $renderer = new AsciiRenderer();
 
-        // 4x2 fixture → aspect 2.0, so width=4 derives height=2.
+        // 4x2 fixture → aspect 2.0; with ~2:1 cells, width=4 derives
+        // round(4 / (2·2)) = 1 cell row.
         self::assertSame(
-            $renderer->render($this->fixture(), 4, 2),
+            $renderer->render($this->fixture(), 4, 1),
             $renderer->render($this->fixture(), 4),
         );
     }

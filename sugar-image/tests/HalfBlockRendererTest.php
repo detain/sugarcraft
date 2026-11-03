@@ -30,15 +30,19 @@ final class HalfBlockRendererTest extends TestCase
 
     public function testRendersWidthOnlyAndDerivesHeightFromAspectRatio(): void
     {
-        // 4x2 fixture has aspect ratio 2.0 (4/2). Rendering at width=4 with
-        // no height should auto-derive height=2.
+        // 4x2 fixture has aspect ratio 2.0 (4/2). A terminal cell is ~twice
+        // as tall as it is wide, so a 4-cell-wide box needs round(4 / (2·2))
+        // = 1 cell row to display that 2:1 source without distortion. (The
+        // pre-fix derivation counted cells as square and asked for 2 rows,
+        // which painted the image twice as tall as it is wide.)
         $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
         $outAuto = $this->renderer->render($image, 4);
 
-        // Compare against the explicit (4, 2) call.
-        $outExplicit = $this->renderer->render($image, 4, 2);
+        // Compare against the explicit (4, 1) call.
+        $outExplicit = $this->renderer->render($image, 4, 1);
 
         $this->assertSame($outExplicit, $outAuto);
+        $this->assertCount(1, explode("\n", $outAuto), 'auto height is cell rows, not pixel rows');
     }
 
     public function testNegativeWidthThrows(): void

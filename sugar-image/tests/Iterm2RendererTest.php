@@ -34,15 +34,16 @@ final class Iterm2RendererTest extends TestCase
 
     public function testWidthOnlyDerivesHeightFromAspectRatio(): void
     {
-        // 8x4 fixture has aspect ratio 2.0. Requesting width=8 without
-        // height should auto-derive height=4.
+        // 8x4 fixture has aspect ratio 2.0. Requesting width=8 without height
+        // derives round(8 / (2·2)) = 2 cell rows: 8 columns by 2 rows is an
+        // 8:4 sub-pixel box at half-block density, i.e. the source aspect.
         $image = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
 
         $outAuto = $this->renderer->render($image, 8);
-        $outExplicit = $this->renderer->render($image, 8, 4);
+        $outExplicit = $this->renderer->render($image, 8, 2);
 
         $this->assertSame($outExplicit, $outAuto);
-        $this->assertStringContainsString('height=4', $outAuto);
+        $this->assertStringContainsString('height=2', $outAuto);
     }
 
     public function testBase64EncodedPngBytes(): void

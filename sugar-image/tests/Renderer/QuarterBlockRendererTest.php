@@ -73,12 +73,13 @@ final class QuarterBlockRendererTest extends TestCase
 
     public function testRenderWidthOnlyDerivesHeightFromAspectRatio(): void
     {
-        // 4x4 fixture has aspect ratio 1.0. Rendering at width=4 with no
-        // height should auto-derive height=4.
+        // 4x4 fixture has aspect ratio 1.0. A square source in a square-ish
+        // display box needs round(4 / (1·2)) = 2 cell rows, because each cell
+        // is about twice as tall as it is wide.
         $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/4x4_qb.png');
         $outAuto = $this->renderer->render($image, 4);
 
-        $outExplicit = $this->renderer->render($image, 4, 4);
+        $outExplicit = $this->renderer->render($image, 4, 2);
 
         $this->assertSame($outExplicit, $outAuto);
     }

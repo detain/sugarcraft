@@ -76,10 +76,11 @@ final class SixelRendererTest extends TestCase
 
     public function testEffectiveHeightComputedFromAspectRatio(): void
     {
-        // 8×4 source → aspect 2.0; width=10 cells → height 5 cells → 100×100 px.
+        // 8×4 source → aspect 2.0; width=10 cells → round(10 / (2·2)) = 3 cell
+        // rows → 10×10 px cells give a 100×60 px canvas.
         $out = $this->renderer->render($this->red(), 10);
 
-        $this->assertStringContainsString('"1;1;100;100', $out);
+        $this->assertStringContainsString('"1;1;100;60', $out);
     }
 
     public function testColorIntroducerUsesHashRgbForm(): void

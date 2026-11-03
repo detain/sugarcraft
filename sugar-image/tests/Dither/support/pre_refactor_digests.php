@@ -3,27 +3,37 @@
 // BEFORE the Ditherer extraction (scripts in the lane evidence dir). Committed
 // with tests/Dither/DithererTest.php: every arm re-renders to the same digest
 // post-refactor — the byte-identity proof for the S6.1 carry note.
+//
+// 2026-11-04 RE-PIN (cell-aspect correctness fix, Mosaic auto height): the 25
+// ASCII arms derive their height from the source aspect, and the derivation
+// now divides by (aspect * cell aspect) instead of aspect alone — see
+// SugarCraft\Image\CellGeometry. Every one of those 25 digests was re-verified
+// as GEOMETRY-ONLY: rendering at the old auto-derived height passed EXPLICITLY
+// reproduces the pre-fix literal byte for byte, so dithering, palette and ramp
+// selection are untouched. The half|/quarter| arms pin explicit 8x4 boxes and
+// did not move, and the 493 six| entries are not exercised by this map's
+// non-sixel arm (they ride explicit heights there too).
 return [
-'ascii16|alpha2x2' => '49167a399b053f42f159f408348cfa52470cf483',
-'ascii16|alpha4b' => '6daf9dbb6e256918f18d2ae5312e1a4cdde68afe',
-'ascii16|checker' => 'a34a29014566684285f8eb395bbf3b8fe8f956ef',
-'ascii16|grad' => 'cbb5d8ea5f694b80d81d0d05c8180ee900146b46',
-'ascii16|noise' => 'e11ea321819c6e3aa198adae7355569aa57a9ff3',
-'ascii256|alpha2x2' => '764f2c0c338be6fc68c58941b5019b5939fb8d8c',
-'ascii256|alpha4b' => 'f54faed94d6a49a916d0e3ebefc34211ed4e064b',
-'ascii256|checker' => 'b9ddda06952bb426ffccc37be8c515505b8a9db1',
-'ascii256|grad' => '7c6cf86b22c8f71cd960ff3be9bbd324d11ba06b',
-'ascii256|noise' => '009e71e307277144beba8322968e85396c57127b',
-'asciimono|alpha2x2' => 'ee399a665f16b5585a5c4aed81a761f9c379d347',
-'asciimono|alpha4b' => '9500c79ca8432c53883417f12cee49940b6b0f13',
-'asciimono|checker' => 'd964202ec7ca4caa71501b2d075801b2e276a55e',
-'asciimono|grad' => 'd00bf2b658b85abc627de6ec553618f8d3b20cb1',
-'asciimono|noise' => '44ade8420b81325c88590f0136fe7cc281226448',
-'asciitc|alpha2x2' => 'ee399a665f16b5585a5c4aed81a761f9c379d347',
-'asciitc|alpha4b' => '9500c79ca8432c53883417f12cee49940b6b0f13',
-'asciitc|checker' => 'd964202ec7ca4caa71501b2d075801b2e276a55e',
-'asciitc|grad' => 'd00bf2b658b85abc627de6ec553618f8d3b20cb1',
-'asciitc|noise' => '44ade8420b81325c88590f0136fe7cc281226448',
+'ascii16|alpha2x2' => '0739b893c40b8884bd2e81595572ddef573dff75',
+'ascii16|alpha4b' => 'a443b0bf24d606b977d8780c4f564c0ee2e83ae4',
+'ascii16|checker' => '91f582ae9dd52083eaa639831f54c4e1e9cdc841',
+'ascii16|grad' => 'ba1bd4145137bff88ba2538c31430baa60cbeeb4',
+'ascii16|noise' => '91f582ae9dd52083eaa639831f54c4e1e9cdc841',
+'ascii256|alpha2x2' => '131a8ee30e5ecdbe7b71e9ec89d161a46714f739',
+'ascii256|alpha4b' => '88f4808cd4f890a136d8815840b9fc814be01a23',
+'ascii256|checker' => '24645cd804339fbac2eebbf2f2866902e268b3fd',
+'ascii256|grad' => '8119ffd68eb9bef1e49557f4e28b655697e6de65',
+'ascii256|noise' => '24645cd804339fbac2eebbf2f2866902e268b3fd',
+'asciimono|alpha2x2' => '69a50740d9edc54737218726ab337d0d5d750627',
+'asciimono|alpha4b' => 'c277c168e74e1a2c123503f5bf177e4c10d5dc61',
+'asciimono|checker' => '8f86b7c42a00b19691c31cf86f22245971b6f2bd',
+'asciimono|grad' => '0f0d753b2c72c7073371a7f633eca8af70527344',
+'asciimono|noise' => 'f7acc84a33c93bfbb885ce585991157e904b1f27',
+'asciitc|alpha2x2' => '69a50740d9edc54737218726ab337d0d5d750627',
+'asciitc|alpha4b' => 'c277c168e74e1a2c123503f5bf177e4c10d5dc61',
+'asciitc|checker' => '8f86b7c42a00b19691c31cf86f22245971b6f2bd',
+'asciitc|grad' => '0f0d753b2c72c7073371a7f633eca8af70527344',
+'asciitc|noise' => 'f7acc84a33c93bfbb885ce585991157e904b1f27',
 'half|alpha2x2' => 'bc6c42f9c91485066e0989ce47d165356aec7242',
 'half|alpha4b' => 'e6885e57f664870ef5093df8dd57f5e226e832e3',
 'half|checker' => '87378247b268b858d1111e45c718b1253fe9209f',
@@ -34,11 +44,11 @@ return [
 'quarter|checker' => 'e6b67300cca189b65c42548788107f48c87e0e1c',
 'quarter|grad' => 'e85fdc7d78cb262a7bf881c05689bace1c33d528',
 'quarter|noise' => 'e5bb406a43420ea84edc8af47a319fa18a99eb51',
-'ramp10|alpha2x2' => '17ed73128ebabc61a6af6852cf62b05af6082877',
-'ramp10|alpha4b' => '4a1bfd937b1577cae561ab3fdafdb763d1e5a703',
-'ramp10|checker' => 'd964202ec7ca4caa71501b2d075801b2e276a55e',
-'ramp10|grad' => '3b7a2c3ef275e4d57e80b9af7989d1a74cbe36ad',
-'ramp10|noise' => '71a28088777a5f5b0f44c17d3f3883e672e21fc3',
+'ramp10|alpha2x2' => '9c618835c3fa8ffcea1962dbed65d464e3d205ef',
+'ramp10|alpha4b' => 'd321a930c7c264593a557a93ed43ac89690e2955',
+'ramp10|checker' => '91c0a42e1121804b75e3152defd427d6fd2d722b',
+'ramp10|grad' => '99feeffdc14619d8f5b955425495457617195812',
+'ramp10|noise' => '15f45d5cd4b67c3f5de4504d80d71285e54d3119',
 'six|alpha2x2|atk|s0|i0.5|c16' => '16ce7e26ab310f2cb22095564871d28d19fa802d',
 'six|alpha2x2|atk|s0|i0.5|c2' => '3eafbe2c05a83c94b00439e9437de44e1d5cfde6',
 'six|alpha2x2|atk|s0|i0.5|c256' => '16ce7e26ab310f2cb22095564871d28d19fa802d',

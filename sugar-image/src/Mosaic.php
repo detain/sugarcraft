@@ -57,9 +57,10 @@ final class Mosaic
      * Approximate height:width ratio of a terminal cell (cells are ~twice as
      * tall as they are wide in a typical monospace font). Used by cover scaling
      * to crop to the cell box's true display aspect rather than treating cells
-     * as square.
+     * as square, and — through {@see CellGeometry} — by every auto-height
+     * derivation, so the cover path and the aspect path cannot disagree.
      */
-    private const CELL_ASPECT = 2.0;
+    private const CELL_ASPECT = CellGeometry::DEFAULT_CELL_ASPECT;
 
     /**
      * Height sentinel for {@see poster()}/{@see posterAsync()}/{@see posterFile()}
@@ -646,7 +647,7 @@ final class Mosaic
             // (no letterboxing/scaling).
             // Other modes: compute cell height the same way.
             if ($h === null) {
-                $h = (int) round($w / $image->aspectRatio());
+                $h = CellGeometry::heightCells($w, $image->aspectRatio());
             }
 
             // None: use the source's native size when no explicit height was given —
@@ -657,7 +658,7 @@ final class Mosaic
             // in-budget image into a multi-GB canvas allocation.
             if ($this->scale === Scale::None && $height === null) {
                 $w = min($image->width, $w);
-                $h = $w === $image->width ? $image->height : (int) round($w / $image->aspectRatio());
+                $h = $w === $image->width ? $image->height : CellGeometry::heightCells($w, $image->aspectRatio());
             }
 
             [$image, $boxIsFinal] = $this->applyScale($image, $w, $h);
@@ -917,7 +918,7 @@ final class Mosaic
     {
         return $this->adaptive($image)->precompute(
             $width,
-            $height ?? (int) round($width / $image->aspectRatio()),
+            $height ?? CellGeometry::heightCells($width, $image->aspectRatio()),
         );
     }
 
