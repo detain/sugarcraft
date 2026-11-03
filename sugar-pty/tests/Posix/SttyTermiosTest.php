@@ -51,7 +51,7 @@ final class SttyTermiosTest extends TestCase
             $termios = new SttyTermios($slaveFd);
 
             $saved = $termios->current();
-            $termios->restore();
+            $saved->restore();
 
             $raw = $termios->makeRaw();
             $raw->apply();
@@ -77,7 +77,7 @@ final class SttyTermiosTest extends TestCase
             $this->assertStringContainsString('hello', $captured, 'cat should have echoed input');
             $this->assertStringNotContainsString("\r", $captured, 'raw mode should have no CR from echo');
         } finally {
-            $termios->restore();
+            $saved->restore();
             $libc->close($slaveFd);
             $master->close();
         }
@@ -107,7 +107,7 @@ final class SttyTermiosTest extends TestCase
             $raw = $termios->makeRaw();
             $raw->apply();
 
-            $termios->restore();
+            $original->restore();
 
             $this->assertTrue($termios->isAtty(), 'PTY slave should be a tty');
         } finally {
@@ -183,13 +183,13 @@ final class SttyTermiosTest extends TestCase
 
         try {
             $termios = new SttyTermios($slaveFd);
-            $termios->current();
+            $saved = $termios->current();
             $raw = $termios->makeRaw();
             $raw->apply(SttyTermios::TCSADRAIN);
 
             $this->assertTrue(true, 'apply(TCSADRAIN) must not throw');
         } finally {
-            $termios->restore();
+            $saved->restore();
             $libc->close($slaveFd);
             $master->close();
         }
@@ -214,14 +214,53 @@ final class SttyTermiosTest extends TestCase
 
         try {
             $termios = new SttyTermios($slaveFd);
-            $termios->current();
+            $saved = $termios->current();
             $raw = $termios->makeRaw();
             $raw->apply(SttyTermios::TCSAFLUSH);
 
             $this->assertTrue(true, 'apply(TCSAFLUSH) must not throw');
         } finally {
-            $termios->restore();
+            $saved->restore();
             $libc->close($slaveFd);
+            $master->close();
+        }
+    }
+
+    public function testRestoreWithoutSnapshotRefuses(): void
+    {
+        // The saved-mode string is the only thing restore() can write
+        // back. A silent no-op on a handle that never captured one let
+        // callers believe modes had been restored.
+        $termios = new SttyTermios(0);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('without a captured snapshot');
+
+        $termios->restore();
+    }
+
+    public function testFallbackReadsModeOfCloseOnExecMasterFd(): void
+    {
+        // Every master this lib mints carries FD_CLOEXEC. The retired
+        // `stty -f /dev/fd/<n>` spelling named the descriptor in the
+        // CHILD's table — where an exec-closed fd does not exist — so
+        // the fallback was dead against precisely those handles. The
+        // child-stdin handoff must read and restore a live cloexec
+        // master's mode.
+        $this->requirePtySyscalls();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open();
+        $master = $pair->master();
+
+        try {
+            $termios = new SttyTermios($master->fd());
+            $snapshot = $termios->current();
+            $savedProp = new \ReflectionProperty(SttyTermios::class, 'savedMode');
+            $this->assertNotSame('', $savedProp->getValue($snapshot),
+                'stty -g must read a mode string from a cloexec master fd via the stdin handoff');
+            $snapshot->restore();
+        } finally {
             $master->close();
         }
     }
