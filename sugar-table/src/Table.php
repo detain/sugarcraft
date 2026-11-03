@@ -142,6 +142,9 @@ final class Table
      */
     private array $expandedRows = [];
 
+    /** @var array<string,Style> Parsed-SGR memo, valid for one render pass only. */
+    private array $styleMemo = [];
+
     /** Cached computed column widths from the last render pass. @var array<int, int>|null */
     private ?array $computedColumnWidths = null;
 
@@ -1577,20 +1580,24 @@ final class Table
         // exactly the content width (every line == $visibleWidth cells).
         $bufferWidth = $visibleWidth + ($this->borderless ? 0 : 2);
 
-        $buffer = Buffer::new($bufferWidth, $bufferHeight);
+        // Style parses memoize for the duration of this pass only (audit M1:
+        // the same SGR strings recur on every cell of every row).
+        $this->styleMemo = [];
+
+        $canvas = new RenderCanvas($bufferWidth, $bufferHeight);
         $bufferRow = 0;
 
         // Top border
         if (!$this->borderless) {
-            $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'top');
+            $canvas = $this->fillBorderRow($canvas, $bufferRow, $visibleWidth, 'top');
             $bufferRow++;
         }
 
         // Header
         if ($this->showHeader) {
-            $buffer = $this->fillHeaderRow($buffer, $bufferRow, $visibleWidth, $this->computedColumnWidths);
+            $canvas = $this->fillHeaderRow($canvas, $bufferRow, $visibleWidth, $this->computedColumnWidths, $visibleColumnIndices);
             $bufferRow++;
-            $buffer = $this->fillHeaderSeparatorRow($buffer, $bufferRow, $visibleWidth);
+            $canvas = $this->fillHeaderSeparatorRow($canvas, $bufferRow, $visibleWidth);
             $bufferRow++;
         }
 
@@ -1602,19 +1609,19 @@ final class Table
             // Render no_data message centered in the content area (header, when
             // shown, sits above it — the message is the one empty-state row the
             // height budget reserved).
-            $buffer = $this->fillNoDataRow($buffer, $bufferRow, $visibleWidth);
+            $canvas = $this->fillNoDataRow($canvas, $bufferRow, $visibleWidth);
             $bufferRow++;
         } else {
             foreach ($rows as $ri => $row) {
                 $isSelected = (($pageOffset + $ri + $scroll) === $this->selectedIndex) && $this->selectable;
                 if ($this->isExpandedByRow($row)) {
-                    $buffer = $this->fillExpandedRow($buffer, $bufferRow, $row, $ri, $isSelected, $visibleWidth, $visibleColumnIndices);
+                    $canvas = $this->fillExpandedRow($canvas, $bufferRow, $row, $ri, $isSelected, $visibleWidth, $visibleColumnIndices);
                     $bufferRow++;
                 } elseif ($this->multilineMode) {
-                    $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $visibleWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices);
+                    $canvas = $this->fillDataRowLines($canvas, $bufferRow, $row, $ri, $visibleWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri], $visibleColumnIndices);
                     $bufferRow += $rowHeights[$ri];
                 } else {
-                    $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $isSelected, $this->computedColumnWidths, $visibleColumnIndices);
+                    $canvas = $this->fillDataRow($canvas, $bufferRow, $row, $ri, $isSelected, $this->computedColumnWidths, $visibleColumnIndices);
                     $bufferRow++;
                 }
             }
@@ -1622,16 +1629,16 @@ final class Table
 
         // Footer
         if ($this->showFooter && $this->pageSize > 0) {
-            $buffer = $this->fillFooterRow($buffer, $bufferRow, $visibleWidth);
+            $canvas = $this->fillFooterRow($canvas, $bufferRow, $visibleWidth);
             $bufferRow++;
         }
 
         // Bottom border
         if (!$this->borderless) {
-            $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'bottom');
+            $canvas = $this->fillBorderRow($canvas, $bufferRow, $visibleWidth, 'bottom');
         }
 
-        return $buffer;
+        return $canvas->toBuffer();
     }
 
     /**
@@ -1719,23 +1726,27 @@ final class Table
      * Write a row's left edge. Bordered: the left border glyph at col 0, content
      * starts at col 1. Borderless: nothing, content starts at col 0.
      *
-     * @return array{0: Buffer, 1: int} [buffer, starting content column]
+     * @return array{0: RenderCanvas, 1: int} [canvas, starting content column]
      */
-    private function writeLeftEdge(Buffer $buffer, int $row, ?Style $style): array
+    private function writeLeftEdge(RenderCanvas $canvas, int $row, ?Style $style): array
     {
         if ($this->borderless) {
-            return [$buffer, 0];
+            return [$canvas, 0];
         }
-        return [$buffer->withCellAt(0, $row, new Cell($this->borderLeft(), $style, null, 1)), 1];
+        $canvas->put(0, $row, new Cell($this->borderLeft(), $style, null, 1));
+
+        return [$canvas, 1];
     }
 
     /** Write a row's right edge at $col (no-op in borderless mode). */
-    private function writeRightEdge(Buffer $buffer, int $row, int $col, ?Style $style): Buffer
+    private function writeRightEdge(RenderCanvas $canvas, int $row, int $col, ?Style $style): RenderCanvas
     {
-        if ($this->borderless || $col >= $buffer->width()) {
-            return $buffer;
+        if ($this->borderless || $col >= $canvas->width) {
+            return $canvas;
         }
-        return $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $style, null, 1));
+        $canvas->put($col, $row, new Cell($this->borderRight(), $style, null, 1));
+
+        return $canvas;
     }
 
     /**
@@ -1744,22 +1755,24 @@ final class Table
      * carrying the ROW style so a selected row's reverse highlight stays
      * continuous across the gap.
      *
-     * @return array{0: Buffer, 1: int} [buffer, next column]
+     * @return array{0: RenderCanvas, 1: int} [canvas, next column]
      */
-    private function writeColumnSeparator(Buffer $buffer, int $row, int $col, ?Style $rowStyle, ?Style $borderStyle): array
+    private function writeColumnSeparator(RenderCanvas $canvas, int $row, int $col, ?Style $rowStyle, ?Style $borderStyle): array
     {
-        if ($col >= $buffer->width()) {
-            return [$buffer, $col + 1]; // defensive: too-narrow width, nothing to draw
+        if ($col >= $canvas->width) {
+            return [$canvas, $col + 1]; // defensive: too-narrow width, nothing to draw
         }
         $cell = $this->borderless
             ? new Cell(' ', $rowStyle, null, 1)
             : new Cell($this->borderCenterV(), $borderStyle, null, 1);
-        return [$buffer->withCellAt($col, $row, $cell), $col + 1];
+        $canvas->put($col, $row, $cell);
+
+        return [$canvas, $col + 1];
     }
 
-    private function fillBorderRow(Buffer $buffer, int $row, int $contentWidth, string $type): Buffer
+    private function fillBorderRow(RenderCanvas $canvas, int $row, int $contentWidth, string $type): RenderCanvas
     {
-        $style = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        $style = $this->styleOrNull($this->borderStyle);
         $borderStyle = $type === 'top'
             ? [$this->borderTopLeft(), $this->borderTop(), $this->borderTopRight()]
             : [$this->borderBottomLeft(), $this->borderBottom(), $this->borderBottomRight()];
@@ -1776,22 +1789,20 @@ final class Table
             for ($c = 0; $c < $w; $c++) {
                 $actualWidth = ($c === 0) ? $w : 0;
                 $rune = ($c === 0) ? $cell->rune() : '';
-                $cellToWrite = new Cell($rune, $cell->style(), $cell->link(), $actualWidth);
-                $buffer = $buffer->withCellAt($col, $row, $cellToWrite);
+                $canvas->put($col, $row, new Cell($rune, $cell->style(), $cell->link(), $actualWidth));
                 $col++;
             }
         }
 
-        return $buffer;
+        return $canvas;
     }
 
-    private function fillHeaderRow(Buffer $buffer, int $row, int $_contentWidth, array $computedWidths): Buffer
+    private function fillHeaderRow(RenderCanvas $canvas, int $row, int $_contentWidth, array $computedWidths, array $visibleColumnIndices): RenderCanvas
     {
-        $style = $this->parseAnsiToStyle($this->headerStyle);
-        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
+        $style = $this->styleFor($this->headerStyle);
+        $sepStyle = $this->styleOrNull($this->borderStyle);
+        [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
 
-        $visibleColumnIndices = $this->getVisibleColumnIndices();
         $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);
 
         // Header cells - visible columns laid out contiguously (hidden and
@@ -1804,30 +1815,30 @@ final class Table
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
             $effectiveWidth = \max(1, $effectiveWidth);
             $headerText = $column->renderHeader($effectiveWidth);
-            $buffer = $this->fillCellContent($buffer, $row, $col, $headerText, $colWidth, $style);
+            $canvas = $this->fillCellContent($canvas, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
             if ($ci !== $lastCi) {
-                [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
+                [$canvas, $col] = $this->writeColumnSeparator($canvas, $row, $col, $style, $sepStyle);
             }
         }
 
-        return $this->writeRightEdge($buffer, $row, $col, $sepStyle);
+        return $this->writeRightEdge($canvas, $row, $col, $sepStyle);
     }
 
-    private function fillHeaderSeparatorRow(Buffer $buffer, int $row, int $contentWidth): Buffer
+    private function fillHeaderSeparatorRow(RenderCanvas $canvas, int $row, int $contentWidth): RenderCanvas
     {
-        $style = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
+        $style = $this->styleOrNull($this->borderStyle);
+        [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
 
         // Separator rule spanning the content width.
-        $buffer = $this->fillCellContent($buffer, $row, $col, \str_repeat($this->borderCenterH(), $contentWidth), $contentWidth, $style);
+        $canvas = $this->fillCellContent($canvas, $row, $col, \str_repeat($this->borderCenterH(), $contentWidth), $contentWidth, $style);
         $col += $contentWidth;
 
-        return $this->writeRightEdge($buffer, $row, $col, $style);
+        return $this->writeRightEdge($canvas, $row, $col, $style);
     }
 
-    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, bool $isSelected, array $computedWidths, array $visibleColumnIndices): Buffer
+    private function fillDataRow(RenderCanvas $canvas, int $row, Row $rowData, int $rowIndex, bool $isSelected, array $computedWidths, array $visibleColumnIndices): RenderCanvas
     {
         // Determine row-level style: the row's own style with the zebra
         // stripe COMPOSED underneath it (audit M5: zebra used to clobber the
@@ -1845,9 +1856,9 @@ final class Table
         // each cell composes reverse onto ITS winning style below.
         $bandStyle = $isSelected ? self::mergeStyle($rowStyle, '7') : $rowStyle;
 
-        $style = $bandStyle !== '' ? $this->parseAnsiToStyle($bandStyle) : null;
-        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
+        $style = $bandStyle !== '' ? $this->styleFor($bandStyle) : null;
+        $sepStyle = $this->styleOrNull($this->borderStyle);
+        [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
 
         // Data cells - visible columns laid out contiguously (hidden and
         // scrolled-away columns take no space, audit #4).
@@ -1880,16 +1891,7 @@ final class Table
             }
 
             // styleFunc callback
-            $cellStr = '';
-            if ($val instanceof StyledCell) {
-                $cellStr = \is_object($val->value) && method_exists($val->value, '__toString')
-                    ? (string) $val->value
-                    : (\is_scalar($val->value) ? (string) $val->value : '');
-            } else {
-                $cellStr = \is_object($val) && method_exists($val, '__toString')
-                    ? (string) $val
-                    : (\is_scalar($val) ? (string) $val : '');
-            }
+            $cellStr = self::plainText($val);
 
             // Sanitize before width padding / renderCell / styleFunc
             $cellStr = Sanitize::value($cellStr, false);
@@ -1904,7 +1906,7 @@ final class Table
                 $cellStyle = self::mergeStyle($cellStyle, '7');
             }
 
-            $style = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
+            $style = $cellStyle !== '' ? $this->styleFor($cellStyle) : null;
 
             // Single-line rows clamp to the cell's effective width with an
             // ellipsis (audit #7: WrapMode/ellipsis routing never reached the
@@ -1916,15 +1918,15 @@ final class Table
                 ? Width::padRight($clipped, $effectiveWidth)
                 : Width::padLeft($clipped, $effectiveWidth);
 
-            $buffer = $this->fillCellContent($buffer, $row, $col, $displayText, $colWidth, $style);
+            $canvas = $this->fillCellContent($canvas, $row, $col, $displayText, $colWidth, $style);
             $col += $colWidth;
 
             if ($ci !== $lastCi) {
-                [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
+                [$canvas, $col] = $this->writeColumnSeparator($canvas, $row, $col, $style, $sepStyle);
             }
         }
 
-        return $this->writeRightEdge($buffer, $row, $col, $sepStyle);
+        return $this->writeRightEdge($canvas, $row, $col, $sepStyle);
     }
 
     /**
@@ -1936,7 +1938,7 @@ final class Table
      * (row style, zebra, selection reverse) applies to the whole line; cell
      * styles do not, because the line is no longer cell-structured.
      */
-    private function fillExpandedRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, bool $isSelected, int $contentWidth, array $visibleColumnIndices): Buffer
+    private function fillExpandedRow(RenderCanvas $canvas, int $row, Row $rowData, int $rowIndex, bool $isSelected, int $contentWidth, array $visibleColumnIndices): RenderCanvas
     {
         $rowStyle = '';
         if ($rowData->style !== '') {
@@ -1947,8 +1949,8 @@ final class Table
             $rowStyle = self::mergeStyle($rowStyle, '7');
         } // reverse composes on top (audit M3)
 
-        $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
-        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        $style = $rowStyle !== '' ? $this->styleFor($rowStyle) : null;
+        $sepStyle = $this->styleOrNull($this->borderStyle);
 
         $parts = [];
         foreach ($visibleColumnIndices as $ci) {
@@ -1957,18 +1959,15 @@ final class Table
             if ($val === null) {
                 $val = $this->missingIndicator;
             }
-            $raw = $val instanceof StyledCell ? $val->value : $val;
-            $text = \is_object($raw) && method_exists($raw, '__toString')
-                ? (string) $raw
-                : (\is_scalar($raw) ? (string) $raw : '');
+            $text = self::plainText($val);
             $parts[] = Sanitize::value($text, false);
         }
         $detail = Column::clipToWidth(\implode('  ', $parts), $contentWidth);
 
-        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
-        $buffer = $this->fillCellContent($buffer, $row, $col, $detail, $contentWidth, $style);
+        [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
+        $canvas = $this->fillCellContent($canvas, $row, $col, $detail, $contentWidth, $style);
 
-        return $this->writeRightEdge($buffer, $row, $col + $contentWidth, $sepStyle);
+        return $this->writeRightEdge($canvas, $row, $col + $contentWidth, $sepStyle);
     }
 
     /**
@@ -1989,17 +1988,7 @@ final class Table
             $colWidth = $computedWidths[$ci] ?? $column->width;
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
             $effectiveWidth = \max(1, $effectiveWidth);
-            $val = $row->data->get($column->key);
-            $cellStr = '';
-            if ($val instanceof StyledCell) {
-                $cellStr = \is_object($val->value) && method_exists($val->value, '__toString')
-                    ? (string) $val->value
-                    : (\is_scalar($val->value) ? (string) $val->value : '');
-            } else {
-                $cellStr = \is_object($val) && method_exists($val, '__toString')
-                    ? (string) $val
-                    : (\is_scalar($val) ? (string) $val : '');
-            }
+            $cellStr = self::plainText($row->data->get($column->key));
             // Sanitize before renderCell width measurement
             $cellStr = Sanitize::value($cellStr, true);
 
@@ -2020,7 +2009,7 @@ final class Table
      * all cells). Cells with fewer lines are padded vertically with empty space.
      * Row borders span the full row height.
      */
-    private function fillDataRowLines(Buffer $buffer, int $startRow, Row $row, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices): Buffer
+    private function fillDataRowLines(RenderCanvas $canvas, int $startRow, Row $row, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices): RenderCanvas
     {
         // Determine row-level style: compose row + zebra stripe, with the
         // selection reverse video on top of the band (audit M3/M5 — both
@@ -2033,8 +2022,8 @@ final class Table
 
         $bandStyle = $isSelected ? self::mergeStyle($rowStyle, '7') : $rowStyle;
 
-        $style = $bandStyle !== '' ? $this->parseAnsiToStyle($bandStyle) : null;
-        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        $style = $bandStyle !== '' ? $this->styleFor($bandStyle) : null;
+        $sepStyle = $this->styleOrNull($this->borderStyle);
 
         // Collect cell lines for each column (only visible columns)
         $cellLines = [];
@@ -2063,16 +2052,7 @@ final class Table
                 $cellStyle = $val->style;
             }
 
-            $cellStr = '';
-            if ($val instanceof StyledCell) {
-                $cellStr = \is_object($val->value) && method_exists($val->value, '__toString')
-                    ? (string) $val->value
-                    : (\is_scalar($val->value) ? (string) $val->value : '');
-            } else {
-                $cellStr = \is_object($val) && method_exists($val, '__toString')
-                    ? (string) $val
-                    : (\is_scalar($val) ? (string) $val : '');
-            }
+            $cellStr = self::plainText($val);
 
             // Sanitize before styleFunc (multiline context: preserve \n for explode)
             $cellStr = Sanitize::value($cellStr, true);
@@ -2087,7 +2067,7 @@ final class Table
                 $cellStyle = self::mergeStyle($cellStyle, '7');
             }
 
-            $parsedStyle = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
+            $parsedStyle = $cellStyle !== '' ? $this->styleFor($cellStyle) : null;
 
             // Account for cell padding in content width. Expanded rows never
             // reach here — renderToBuffer routes them to fillExpandedRow.
@@ -2102,7 +2082,7 @@ final class Table
             $bufferRow = $startRow + $lineIdx;
 
             // Left border (full height)
-            [$buffer, $col] = $this->writeLeftEdge($buffer, $bufferRow, $style);
+            [$canvas, $col] = $this->writeLeftEdge($canvas, $bufferRow, $style);
 
             // Render each visible cell, laid out contiguously (audit #4).
             $lastCi = $visibleColumnIndices === [] ? -1 : \end($visibleColumnIndices);
@@ -2122,24 +2102,24 @@ final class Table
                     $displayText = \str_repeat(' ', $effectiveWidth);
                 }
 
-                $buffer = $this->fillCellContent($buffer, $bufferRow, $col, $displayText, $colWidth, $cellStyle);
+                $canvas = $this->fillCellContent($canvas, $bufferRow, $col, $displayText, $colWidth, $cellStyle);
                 $col += $colWidth;
 
                 if ($ci !== $lastCi) {
-                    [$buffer, $col] = $this->writeColumnSeparator($buffer, $bufferRow, $col, $style, $sepStyle);
+                    [$canvas, $col] = $this->writeColumnSeparator($canvas, $bufferRow, $col, $style, $sepStyle);
                 }
             }
 
             // Right border (full height)
-            $buffer = $this->writeRightEdge($buffer, $bufferRow, $col, $sepStyle);
+            $canvas = $this->writeRightEdge($canvas, $bufferRow, $col, $sepStyle);
         }
 
-        return $buffer;
+        return $canvas;
     }
 
-    private function fillFooterRow(Buffer $buffer, int $row, int $contentWidth): Buffer
+    private function fillFooterRow(RenderCanvas $canvas, int $row, int $contentWidth): RenderCanvas
     {
-        $style = $this->parseAnsiToStyle($this->footerStyle);
+        $style = $this->styleFor($this->footerStyle);
 
         $label = match ($this->footerType) {
             FooterType::Page => $this->PageFooter(),
@@ -2149,11 +2129,11 @@ final class Table
 
         $content = $this->centeredLabel($label, $contentWidth);
 
-        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
-        $buffer = $this->fillCellContent($buffer, $row, $col, $content, $contentWidth, $style);
+        [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
+        $canvas = $this->fillCellContent($canvas, $row, $col, $content, $contentWidth, $style);
         $col += $contentWidth;
 
-        return $this->writeRightEdge($buffer, $row, $col, $style);
+        return $this->writeRightEdge($canvas, $row, $col, $style);
     }
 
     /**
@@ -2181,25 +2161,25 @@ final class Table
     /**
      * Render the "no data" empty state message centered in the content area.
      */
-    private function fillNoDataRow(Buffer $buffer, int $row, int $contentWidth): Buffer
+    private function fillNoDataRow(RenderCanvas $canvas, int $row, int $contentWidth): RenderCanvas
     {
-        $style = $this->parseAnsiToStyle($this->footerStyle);
+        $style = $this->styleFor($this->footerStyle);
         $content = $this->centeredLabel(Lang::t('no_data'), $contentWidth);
 
-        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
-        $buffer = $this->fillCellContent($buffer, $row, $col, $content, $contentWidth, $style);
+        [$canvas, $col] = $this->writeLeftEdge($canvas, $row, $style);
+        $canvas = $this->fillCellContent($canvas, $row, $col, $content, $contentWidth, $style);
         $col += $contentWidth;
 
-        return $this->writeRightEdge($buffer, $row, $col, $style);
+        return $this->writeRightEdge($canvas, $row, $col, $style);
     }
 
     /**
      * Fill a region of the buffer with cell content, handling wide characters.
      */
-    private function fillCellContent(Buffer $buffer, int $row, int $startCol, string $text, int $cellWidth, ?Style $style): Buffer
+    private function fillCellContent(RenderCanvas $canvas, int $row, int $startCol, string $text, int $cellWidth, ?Style $style): RenderCanvas
     {
         $clusters = $this->graphemeClusters($text);
-        $bufWidth = $buffer->width();
+        $bufWidth = $canvas->width;
         $col = $startCol;
         $lastCol = null;
         $lastCluster = '';
@@ -2220,11 +2200,7 @@ final class Table
             $gw = Width::of($cluster);
             if ($gw === 0) {
                 if ($lastCol !== null) {
-                    $buffer = $buffer->withCellAt(
-                        $lastCol,
-                        $row,
-                        new Cell($lastCluster . $cluster, $style, null, $lastGw)
-                    );
+                    $canvas->put($lastCol, $row, new Cell($lastCluster . $cluster, $style, null, $lastGw));
                     $lastCluster .= $cluster;
                 }
                 continue;
@@ -2239,7 +2215,7 @@ final class Table
                 break;
             }
 
-            $buffer = $buffer->withCellAt($col, $row, new Cell($cluster, $style, null, $gw));
+            $canvas->put($col, $row, new Cell($cluster, $style, null, $gw));
             $lastCol = $col;
             $lastCluster = $cluster;
             $lastGw = $gw;
@@ -2248,18 +2224,33 @@ final class Table
             // plus a continuation marker at $col + 1 (NOT $col + 2 — advancing by
             // $gw already covers both slots).
             if ($gw === 2 && $col + 1 < $bufWidth) {
-                $buffer = $buffer->withCellAt($col + 1, $row, Cell::continuation());
+                $canvas->put($col + 1, $row, Cell::continuation());
             }
             $col += $gw;
         }
 
         // Fill remaining width with spaces if needed (clamped to the buffer).
         while (($col - $startCol) < $cellWidth && $col < $bufWidth) {
-            $buffer = $buffer->withCellAt($col, $row, new Cell(' ', $style, null, 1));
+            $canvas->put($col, $row, new Cell(' ', $style, null, 1));
             $col++;
         }
 
-        return $buffer;
+        return $canvas;
+    }
+
+    /**
+     * Parse an SGR string once per render pass (audit M1: data rows repeat
+     * the handful of configured style strings across every cell).
+     */
+    private function styleFor(string $codes): Style
+    {
+        return $this->styleMemo[$codes] ??= $this->parseAnsiToStyle($codes);
+    }
+
+    /** Memoized style parse where the empty SGR string means 'no style'. */
+    private function styleOrNull(string $codes): ?Style
+    {
+        return $codes === '' ? null : $this->styleFor($codes);
     }
 
     /**
