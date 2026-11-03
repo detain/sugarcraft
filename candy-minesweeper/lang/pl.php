@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'Zapis odrzucony (nieczytelny lub sfałszowany)',
     'ui.save_failed' => 'Zapis nieudany',
     'ui.resume' => 'Czeka zapis gry — naciśnij L, aby go wczytać',
+    'ui.new_best' => 'NOWY REKORD',
 ];

@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'Opslag geweigerd (onleesbaar of gemanipuleerd)',
     'ui.save_failed' => 'Opslaan mislukt',
     'ui.resume' => 'Er wacht een opgeslagen spel — druk op L om het te laden',
+    'ui.new_best' => 'NIEUW RECORD',
 ];

@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => '已拒绝存档(不可读或被篡改)',
     'ui.save_failed' => '保存失败',
     'ui.resume' => '有存档等待 — 按 L 读取',
+    'ui.new_best' => '新纪录',
 ];

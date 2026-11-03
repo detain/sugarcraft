@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'savegame refused (unreadable or tampered)',
     'ui.save_failed' => 'save failed',
     'ui.resume' => 'a savegame is waiting — press L to load it',
+    'ui.new_best' => 'NEW BEST',
 ];

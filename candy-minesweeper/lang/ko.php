@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => '세이브 거부됨(읽을 수 없거나 변조됨)',
     'ui.save_failed' => '저장 실패',
     'ui.resume' => '세이브가 기다리는 중 — L로 로드',
+    'ui.new_best' => '신기록',
 ];

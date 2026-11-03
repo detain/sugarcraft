@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'セーブデータを拒否しました（読込不能または改ざん）',
     'ui.save_failed' => '保存に失敗しました',
     'ui.resume' => 'セーブデータがあります — L でロード',
+    'ui.new_best' => '新記録',
 ];

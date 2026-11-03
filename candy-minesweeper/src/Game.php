@@ -70,6 +70,12 @@ final class Game implements Model
          * stays readable while the clock pulses.
          */
         public readonly ?string $notice = null,
+        /**
+         * True when the finished game below IS the preset's new best time —
+         * stamped once on the win/lose transition by afterAction() and
+         * rendered as the banner's trailing badge. Losing can never set it.
+         */
+        public readonly bool $newBest = false,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
     }
@@ -241,7 +247,18 @@ final class Game implements Model
         // Freeze the elapsed time at the transition frame — once the board is
         // over, elapsed() reads elapsedSeconds, which recordResult() stamps.
         $elapsed = $next->startedAt !== null ? microtime(true) - $next->startedAt : null;
+        // Best-beat must be judged against the PREVIOUS tally — recordResult()
+        // folds the new time in — and only for preset games (custom boards
+        // tally nothing, so they have no bucket to set a record in).
+        $seconds = $elapsed !== null ? (int) $elapsed : null;
+        $preset  = $next->difficulty();
+        $won     = $next->board->isWon();
+        $prev    = $preset !== null && $next->stats !== null ? $next->stats->bestTime($preset) : null;
+        $isBest  = $preset !== null && $won && $seconds !== null && ($prev === null || $seconds < $prev);
         $recorded = $next->recordResult($elapsed);
+        if ($isBest) {
+            $recorded = $recorded->mutate(['newBest' => true]);
+        }
         $recorded->persistStats();
 
         return $recorded;

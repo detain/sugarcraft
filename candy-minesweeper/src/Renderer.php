@@ -93,7 +93,7 @@ final class Renderer
             ->padding(0, 1)
             ->render($interior);
 
-        $status = self::status($g->board, $g->elapsed());
+        $status = self::status($g);
         // Indent matches INTERIOR_COL_OFFSET — border cell + horizontal
         // padding cell — so status and footer line up under the first
         // interior column. Each footer line carries it, not just the first.
@@ -236,17 +236,29 @@ final class Renderer
         return null;
     }
 
-    private static function status(Board $b, ?float $elapsed): string
+    private static function status(Game $g): string
     {
-        if ($b->exploded) {
-            return SugarStyle::new()->foreground(Color::hex('#ff5f87'))->bold()
-                ->render(Lang::t('ui.boom'));
-        }
-        if ($b->isWon()) {
-            return SugarStyle::new()->foreground(Color::hex('#6ee7b7'))->bold()
-                ->render(Lang::t('ui.cleared'));
+        $b = $g->board;
+        if ($b->exploded || $b->isWon()) {
+            // M06: the verdict line carries the frozen final time — the
+            // clock stops at the transition frame, so elapsedSeconds is the
+            // result — and a preset win that beats the stored best wears a
+            // NEW BEST badge. A board with no frozen time (a hand-built or
+            // loaded-finished fixture predating the stamp) keeps the bare
+            // banner byte-identically.
+            $suffix = '';
+            if ($g->elapsedSeconds !== null) {
+                $suffix .= ' · ' . self::formatTime($g->elapsedSeconds);
+            }
+            if ($b->isWon() && $g->newBest) {
+                $suffix .= ' · ' . Lang::t('ui.new_best');
+            }
+            return SugarStyle::new()
+                ->foreground(Color::hex($b->exploded ? '#ff5f87' : '#6ee7b7'))->bold()
+                ->render(Lang::t($b->exploded ? 'ui.boom' : 'ui.cleared') . $suffix);
         }
         $remaining = max(0, $b->mineCount - $b->flagCount());
+        $elapsed = $g->elapsed();
         $time = $elapsed !== null ? self::formatTime((int) $elapsed) : '0:00';
         return SugarStyle::new()->foreground(Color::hex('#a78bfa'))
             ->render(Lang::t('ui.status', [

@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'Jogo recusado (ilegível ou adulterado)',
     'ui.save_failed' => 'Falha ao guardar',
     'ui.resume' => 'Há um jogo à espera — prima L para o carregar',
+    'ui.new_best' => 'NOVO RECORDE',
 ];

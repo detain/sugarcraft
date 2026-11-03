@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'Spielstand abgelehnt (unlesbar oder manipuliert)',
     'ui.save_failed' => 'Speichern fehlgeschlagen',
     'ui.resume' => 'Ein Spielstand wartet — mit L laden',
+    'ui.new_best' => 'NEUER REKORD',
 ];

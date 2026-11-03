@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'Uložení zamítnuto (nečitelné nebo padělané)',
     'ui.save_failed' => 'Uložení selhalo',
     'ui.resume' => 'Uložená hra čeká — stiskni L pro načtení',
+    'ui.new_best' => 'NOVÝ REKORD',
 ];

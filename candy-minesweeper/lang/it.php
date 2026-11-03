@@ -31,4 +31,5 @@ return [
     'ui.load_refused' => 'Partita rifiutata (illeggibile o manomessa)',
     'ui.save_failed' => 'Salvataggio non riuscito',
     'ui.resume' => 'Una partita ti aspetta — premi L per caricarla',
+    'ui.new_best' => 'NUOVO RECORD',
 ];
