@@ -64,8 +64,10 @@ final class App implements Model
         public readonly bool $collectingMergeTarget = false,
         /** The accumulated merge target branch name. */
         public readonly string $mergeTarget = '',
-        /** Whether the rebase menu overlay is shown. */
+        /** Whether the sequencer menu overlay is shown. */
         public readonly bool $showRebaseMenu = false,
+        /** Which sequencer the overlay is resuming: 'rebase' | 'cherry' | 'merge'. */
+        public readonly string $rebaseMenuKind = 'rebase',
         /** Command history for undo/redo. */
         public readonly ?HistoryManager $history = null,
         /** Stash manager overlay (shown when 'S' is pressed). */
@@ -278,15 +280,16 @@ final class App implements Model
             return [$this, null];
         }
 
-        // Rebase menu: handle c/a/s keys
+        // Sequencer menu: handle c/a/s keys against whichever operation stopped
         if ($this->showRebaseMenu) {
+            $cherry = $this->rebaseMenuKind === 'cherry';
             if ($msg->type === KeyType::Char && $msg->rune === 'c') {
-                return [$this->executeRebaseContinue(), null];
+                return [$cherry ? $this->executeCherryPickContinue() : $this->executeRebaseContinue(), null];
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'a') {
-                return [$this->executeRebaseAbort(), null];
+                return [$cherry ? $this->executeCherryPickAbort() : $this->executeRebaseAbort(), null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune === 's') {
+            if ($msg->type === KeyType::Char && $msg->rune === 's' && !$cherry) {
                 return [$this->executeRebaseSkip(), null];
             }
             return [$this, null];
@@ -592,6 +595,7 @@ final class App implements Model
         bool $collectingMergeTarget = null,
         string $mergeTarget = null,
         bool $showRebaseMenu = null,
+        string $rebaseMenuKind = null,
         ?StashManager $stashManager = null,
         bool $stashManagerSet = false,
         ?CherryPick $cherryPick = null,
@@ -625,6 +629,7 @@ final class App implements Model
             collectingMergeTarget: $collectingMergeTarget ?? $this->collectingMergeTarget,
             mergeTarget: $mergeTarget ?? $this->mergeTarget,
             showRebaseMenu: $showRebaseMenu ?? $this->showRebaseMenu,
+            rebaseMenuKind: $rebaseMenuKind ?? $this->rebaseMenuKind,
             stashManager: $stashManagerSet ? $stashManager : ($stashManager ?? $this->stashManager),
             cherryPick: $cherryPickSet ? $cherryPick : ($cherryPick ?? $this->cherryPick),
             worktrees: $worktreesSet ? $worktrees : ($worktrees ?? $this->worktrees),
@@ -677,7 +682,9 @@ final class App implements Model
             return $this;
         }
         try {
-            $isStaged = ($row['index_status'] ?? ' ') !== ' ';
+            // Conflicted ('U') and untracked ('?') rows stage on the first key:
+        // their index letters are not a staged change to reverse (audit A5/A7).
+        $isStaged = !in_array((string) ($row['index_status'] ?? ' '), [' ', '?', 'U'], true);
             $newHistory = null;
             if ($isStaged) {
                 $this->git->unstage($row['path']);
@@ -1065,7 +1072,13 @@ final class App implements Model
                 ->refresh()
                 ->withAll(successMessage: Lang::t('merge.success', ['branch' => $this->mergeTarget]));
         } catch (\RuntimeException $e) {
-            return $this->withError($e->getMessage());
+            // A conflicted merge leaves rows in the index; refresh so they are
+            // visible, and name the failure in human terms when git reports
+            // conflicts (audit A5/A6).
+            $msg = str_contains($e->getMessage(), 'CONFLICT')
+                ? Lang::t('merge.conflict', ['branch' => $this->mergeTarget])
+                : $e->getMessage();
+            return $this->withMergeCollection(false, '')->refresh()->withError($msg);
         }
     }
 
@@ -1076,8 +1089,15 @@ final class App implements Model
         // error lane like every other operation, not as an uncaught fatal
         // that takes the TUI down (audit K4).
         try {
-            if ($this->git->rebaseInProgress()) {
-                return $this->withRebaseMenu(true);
+            // One menu serves every sequencer stop; 'r' during a conflicted
+            // merge gets an honest hint instead of a lie about rebasing
+            // (audit A5 - cherry-pick continue/abort had no callers at all).
+            $state = $this->git->sequenceState();
+            if ($state === 'rebase' || $state === 'cherry') {
+                return $this->withRebaseMenu(true, $state);
+            }
+            if ($state === 'merge') {
+                return $this->withError(Lang::t('rebase.merge_state'));
             }
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -1085,9 +1105,9 @@ final class App implements Model
         return $this->withError(Lang::t('rebase.no_rebase'));
     }
 
-    private function withRebaseMenu(bool $show): self
+    private function withRebaseMenu(bool $show, string $kind = 'rebase'): self
     {
-        return $this->withAll(showRebaseMenu: $show);
+        return $this->withAll(showRebaseMenu: $show, rebaseMenuKind: $show ? $kind : null);
     }
 
     private function executeRebaseContinue(): self
@@ -1120,6 +1140,30 @@ final class App implements Model
             $this->git->rebaseSkip();
             return $this->withRebaseMenu(false)->refresh()->withAll(
                 successMessage: Lang::t('rebase.success', ['action' => 'skip'])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function executeCherryPickContinue(): self
+    {
+        try {
+            $this->git->cherryPickContinue();
+            return $this->withRebaseMenu(false)->refresh()->withAll(
+                successMessage: Lang::t('rebase.success', ['action' => 'continue'])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function executeCherryPickAbort(): self
+    {
+        try {
+            $this->git->cherryPickAbort();
+            return $this->withRebaseMenu(false)->refresh()->withAll(
+                successMessage: Lang::t('rebase.success', ['action' => 'abort'])
             );
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -1227,7 +1271,11 @@ final class App implements Model
                 successMessage: Lang::t('cherry_pick.success', ['ref' => $cp->commitRef])
             );
         } catch (\RuntimeException $e) {
-            return $this->withError($e->getMessage());
+            // A stopped cherry-pick needs the same continue/abort path a
+            // rebase stop does (audit A5).
+            return $this->withCherryPick(null)->refresh()->withAll(
+                showRebaseMenu: true, rebaseMenuKind: 'cherry', error: $e->getMessage()
+            );
         }
     }
 

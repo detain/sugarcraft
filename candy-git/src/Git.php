@@ -301,12 +301,36 @@ final class Git implements GitDriver
 
     public function rebaseInProgress(): bool
     {
+        return $this->sequenceState() === 'rebase';
+    }
+
+    /**
+     * Which sequencer (if any) is stopped mid-flight waiting for attention.
+     *
+     * Rebase, cherry-pick, and merge conflicts all leave state files in the
+     * git directory and all share the same continue/abort need; the [c]/[a]
+     * menu must know which operation it is resuming (audit A5 — cherryPick-
+     * Continue/Abort had zero callers and conflicted cherry-picks wedged).
+     *
+     * @return string 'rebase' | 'cherry' | 'merge' | ''
+     */
+    public function sequenceState(): string
+    {
         $out = $this->run(['rev-parse', '--absolute-git-dir']);
         $gitDir = $out[0] ?? '';
         if ($gitDir === '' || !is_dir($gitDir)) {
-            return false;
+            return '';
         }
-        return is_dir($gitDir . '/rebase-merge') || is_dir($gitDir . '/rebase-apply');
+        if (is_dir($gitDir . '/rebase-merge') || is_dir($gitDir . '/rebase-apply')) {
+            return 'rebase';
+        }
+        if (is_file($gitDir . '/CHERRY_PICK_HEAD')) {
+            return 'cherry';
+        }
+        if (is_file($gitDir . '/MERGE_HEAD')) {
+            return 'merge';
+        }
+        return '';
     }
 
     /**

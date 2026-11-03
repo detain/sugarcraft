@@ -109,6 +109,7 @@ final class RendererTest extends TestCase
             public function worktreeAdd(string $_path, string $_branch): void {}
             public function worktreeRemove(string $_path): void {}
             public function rebaseInProgress(): bool { return false; }
+            public function sequenceState(): string { return ''; }
         };
         $a = App::start($g);
         $out = Renderer::render($a);
@@ -168,6 +169,7 @@ final class RendererTest extends TestCase
             public function worktreeAdd(string $path, string $branch): void {}
             public function worktreeRemove(string $path): void {}
             public function rebaseInProgress(): bool { return false; }
+            public function sequenceState(): string { return ''; }
         };
         $a = App::start($g);
         $out = Renderer::render($a);
@@ -416,6 +418,7 @@ final class RendererTest extends TestCase
             public function worktreeAdd(string $path, string $branch): void {}
             public function worktreeRemove(string $path): void {}
             public function rebaseInProgress(): bool { return false; }
+            public function sequenceState(): string { return ''; }
         };
         $a = App::start($g);
         $out = Renderer::render($a);

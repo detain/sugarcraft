@@ -361,17 +361,22 @@ final class Renderer
 
     private static function rebaseOverlay(App $a): string
     {
+        $cherry = $a->rebaseMenuKind === 'cherry';
         $lines = [
-            Style::new()->bold()->foreground(Color::hex('#a78bfa'))->render(' rebase '),
+            Style::new()->bold()->foreground(Color::hex('#a78bfa'))
+                ->render($cherry ? ' cherry-pick ' : ' rebase '),
             '',
-            Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('rebase.prompt')),
+            Style::new()->foreground(Color::hex('#c5b6dd'))
+                ->render(Lang::t($cherry ? 'rebase.cherry_prompt' : 'rebase.prompt')),
             '',
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('c') . '  ' . Lang::t('rebase.continue'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('a') . '  ' . Lang::t('rebase.abort'),
-            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('s') . '  ' . Lang::t('rebase.skip'),
-            '',
-            '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . Lang::t('rebase.cancel'),
         ];
+        if (!$cherry) {
+            $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('s') . '  ' . Lang::t('rebase.skip');
+        }
+        $lines[] = '';
+        $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . Lang::t('rebase.cancel');
 
         $border = Border::rounded();
         $box = Style::new()

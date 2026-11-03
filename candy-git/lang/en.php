@@ -96,10 +96,13 @@ return [
     'merge.prompt'           => 'merge: ',
     'merge.empty_target'     => 'merge: target branch required',
     'merge.success'           => 'merged {branch}',
+    'merge.conflict'          => 'could not merge {branch}: unresolved conflicts',
 
     // Rebase
     'rebase.prompt'          => 'rebase: [c]ontinue [a]bort [s]kip',
     'rebase.no_rebase'        => 'no rebase in progress',
+    'rebase.merge_state'      => 'a conflicted merge is in progress - resolve conflicts in the status pane',
+    'rebase.cherry_prompt'    => 'cherry-pick: [c]ontinue [a]bort',
     'rebase.success'         => 'rebase: {action}',
     'rebase.conflict'        => 'rebase: unresolved conflicts',
     'rebase.continue'        => 'continue',

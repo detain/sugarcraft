@@ -139,4 +139,7 @@ interface GitDriver
 
     /** Check if a rebase is currently in progress. */
     public function rebaseInProgress(): bool;
+
+    /** Sequencer stop state: 'rebase' | 'cherry' | 'merge' | '' (none). */
+    public function sequenceState(): string;
 }
