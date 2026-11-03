@@ -36,9 +36,8 @@ final class WriteCommand extends Command
             ->addOption('max-lines',          null, InputOption::VALUE_REQUIRED, 'Max line count (0 = unlimited).', 0)
             ->addOption('prompt',             null, InputOption::VALUE_REQUIRED, 'Static prefix on every line.', '')
             ->addOption('show-line-numbers',  null, InputOption::VALUE_NONE,    'Show 1-based line numbers in a left gutter.')
-            ->addOption('show-cursor-line',   null, InputOption::VALUE_NONE,    'Highlight the line under the cursor (gum compat — no-op until styles wire up).')
             ->addOption('header',             null, InputOption::VALUE_REQUIRED, 'Header text rendered above the editor.', '')
-            ->addOption('end-of-buffer-character', null, InputOption::VALUE_REQUIRED, "Glyph rendered on lines past the buffer end (default ' ').", ' ')
+            ->addOption('end-of-buffer-character', null, InputOption::VALUE_REQUIRED, "Glyph rendered on lines past the buffer end (default '~').")
             ->addOption('cursor-mode',        null, InputOption::VALUE_REQUIRED, 'Cursor mode: blink (default) | static | hidden.', 'blink')
             ->addOption('show-help',          null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
             ->addOption('no-alt-screen',      null, InputOption::VALUE_NONE,     'Render inline instead of the alternate screen (keeps output in scrollback).')
@@ -74,6 +73,9 @@ final class WriteCommand extends Command
             prompt:          (string) $input->getOption('prompt'),
             showLineNumbers: (bool)   $input->getOption('show-line-numbers'),
             header:          (string) $input->getOption('header'),
+            endOfBufferCharacter: $input->getOption('end-of-buffer-character') === null
+                ? null
+                : (string) $input->getOption('end-of-buffer-character'),
         );
         $loop    = \React\EventLoop\Loop::get();
         $options = InteractiveRuntime::programOptions(

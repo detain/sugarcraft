@@ -47,7 +47,7 @@ final class WriteCommandTest extends TestCase
         $this->assertTrue($definition->hasOption('max-lines'));
         $this->assertTrue($definition->hasOption('prompt'));
         $this->assertTrue($definition->hasOption('show-line-numbers'));
-        $this->assertTrue($definition->hasOption('show-cursor-line'));
+        $this->assertFalse($definition->hasOption('show-cursor-line')); // dead knob removed (M7)
         $this->assertTrue($definition->hasOption('header'));
         $this->assertTrue($definition->hasOption('end-of-buffer-character'));
         $this->assertTrue($definition->hasOption('cursor-mode'));
@@ -70,17 +70,16 @@ final class WriteCommandTest extends TestCase
     }
 
     /**
-     * Verify --show-cursor-line is a flag (no value required).
+     * --show-cursor-line was a self-admitted no-op against sugar-forms
+     * TextArea (no cursor-line concept exists): removed, not renamed.
      */
-    public function testShowCursorLineOptionIsFlag(): void
+    public function testShowCursorLineKnobIsGone(): void
     {
         $app = new Application();
         $command = $app->find('write');
         $definition = $command->getDefinition();
 
-        $option = $definition->getOption('show-cursor-line');
-        $this->assertNotNull($option);
-        $this->assertFalse($option->acceptValue());
+        $this->assertFalse($definition->hasOption('show-cursor-line'));
     }
 
 

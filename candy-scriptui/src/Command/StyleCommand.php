@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\ScriptUi\Style\StyleBuilder;
+use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -57,6 +58,20 @@ final class StyleCommand extends Command
         // styling, mirroring gum's behaviour for piped output.
         if ($input->getOption('strip-ansi')) {
             $text = \SugarCraft\Core\Util\Ansi::strip($text);
+        }
+
+        // An unknown border preset used to fall through to a silent
+        // no-border render (exit 0, no decoration) while the sibling
+        // `table` command refuses the same spelling. Refuse loudly now.
+        $borderRaw = strtolower((string) $input->getOption('border'));
+        if ($borderRaw !== '' && !in_array($borderRaw, ['normal', '1', 'rounded', 'thick', 'double', 'block', 'hidden', '0', 'none'], true)) {
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option' => '--border',
+                'value' => (string) $input->getOption('border'),
+                'allowed' => 'normal|rounded|thick|double|block|hidden',
+            ]) . "\n");
+
+            return Command::FAILURE;
         }
 
         $style = StyleBuilder::fromFlags([

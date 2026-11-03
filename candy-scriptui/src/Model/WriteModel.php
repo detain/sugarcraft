@@ -28,6 +28,7 @@ final class WriteModel implements Model
         string $prompt = '',
         bool $showLineNumbers = false,
         string $header = '',
+        ?string $endOfBufferCharacter = null,
     ): self {
         // Untrusted paint (cluster 12).
         $placeholder = \SugarCraft\Core\Util\Sanitize::cellValue($placeholder);
@@ -44,6 +45,9 @@ final class WriteModel implements Model
         if ($maxLines > 0)          { $area = $area->withMaxHeight($maxLines); }
         if ($prompt !== '')         { $area = $area->withPrompt($prompt); }
         if ($showLineNumbers)       { $area = $area->showLineNumbers(true); }
+        if ($endOfBufferCharacter !== null) {
+            $area = $area->withEndOfBufferCharacter(\SugarCraft\Core\Util\Sanitize::cellValue($endOfBufferCharacter));
+        }
         if ($value !== '')          { $area = $area->setValue($value); }
         [$area, ] = $area->focus();
         return new self($area, false, false, $header);
