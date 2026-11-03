@@ -99,7 +99,9 @@ final class StringItemsTest extends TestCase
         $h = $h->type('a');
 
         $this->assertSame(3, $h->allCount());
-        // 'a' matches apple (pos 0, 0*2<5✓) and banana (pos 0, 0*2<6✓); cherry fails anchor check
+        // 'a' matches apple (first occurrence at codepoint 0) and banana (first
+        // occurrence at codepoint 1, still inside the anchored first half).
+        // 'cherry' has no 'a' at all — substring, not the anchor, excludes it.
         $this->assertSame(2, $h->itemCount());
     }
 

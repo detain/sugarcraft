@@ -231,6 +231,17 @@ final class QuickPick
      * instead of the default contiguous-substring/anchor filter, and match
      * highlighting follows the scored indices. The custom filterFn still applies
      * as a predicate. Pass null to restore the default substring behaviour.
+     *
+     * Cost: the ranker re-scores the ENTIRE visible corpus on every keystroke
+     * (distinct values only — duplicates share one scoring pass). Measured on a
+     * 20k-item corpus that is a few hundred milliseconds per key against single
+     * digits for the substring path. On large corpora keep the ranking opt-in
+     * per surface, or debounce key delivery host-side before calling type().
+     *
+     * The anchor bias below doubles as the escape hatch for the substring path:
+     * when it rejects a legitimate late match (needle only occurs in the second
+     * half of a label), setRanker() replaces the whole rule with subsequence
+     * scoring.
      */
     public function setRanker(?FuzzyMatcher $matcher): self
     {
@@ -733,8 +744,12 @@ final class QuickPick
     /**
      * Filter allItems using the configured filter function.
      * When filterText is empty, returns all items.
-     * Otherwise applies both the filterText (substring match with anchor bias)
-     * and the custom filterFn.
+     * Otherwise applies both the filterText (contiguous substring match whose
+     * FIRST occurrence must start in the first half of the label — measured in
+     * Unicode codepoints — the "anchor bias") and the custom filterFn.
+     * Consequence: a needle that occurs only in the second half is rejected
+     * ('ry' misses 'cherry', 'e' misses 'apple'); setRanker() swaps this rule
+     * for full fuzzy subsequence scoring.
      *
      * @return list<Item>
      */
@@ -754,12 +769,17 @@ final class QuickPick
         if ($this->ranker !== null) {
             return $this->applyRankedFilter($this->ranker, $text);
         }
-        $lower = \strtolower($text);
+        // The anchor rule is computed in CODEPOINTS, not bytes: a multibyte
+        // prefix must not push an early match past the halfway line, and the
+        // haystack's folded spelling is measured in the same units as the
+        // needle position (mb_* with an explicit UTF-8 encoding argument —
+        // the ASCII fast path would leave 'ecl' unable to reach 'Éclair').
+        $lower = \mb_strtolower($text, 'UTF-8');
         $filtered = [];
         foreach ($this->allItems as $item) {
-            $value = $item->value();
-            $pos = \strpos(\strtolower($value), $lower);
-            $anchorOk = $pos !== false && $pos * 2 < \strlen($value);
+            $folded  = \mb_strtolower($item->value(), 'UTF-8');
+            $pos     = \mb_strpos($folded, $lower, 0, 'UTF-8');
+            $anchorOk = $pos !== false && $pos * 2 < \mb_strlen($folded, 'UTF-8');
             if ($anchorOk && $fn($item)) {
                 $filtered[] = $item;
             }
@@ -778,26 +798,25 @@ final class QuickPick
     {
         $fn = $this->filterFn;
 
-        // Collect filtered items with their original indices for stable tie-breaking
-        $candidates = [];
-        $itemsByValue = [];
-        $originalOrder = [];
+        // Duplicate values must keep duplicate items: a value-keyed lookup
+        // would alias every repeat of a value onto ONE Item, so the cursor,
+        // selected() and the rendered numbers could all land on the wrong
+        // object. Score each DISTINCT value once (the ranker's work stays
+        // proportional to unique text), then re-expand the hits across every
+        // order that carries that value.
+        $valueOrders = [];
         foreach ($this->allItems as $order => $item) {
             if ($fn($item) === false) {
                 continue;
             }
-            $value = $item->value();
-            $candidates[] = $value;
-            $itemsByValue[$value] = $item;
-            $originalOrder[$value] = $order;
+            $valueOrders[$item->value()][] = $order;
         }
 
-        if ($candidates === []) {
+        if ($valueOrders === []) {
             return [];
         }
 
-        // Use matchAll for batch scoring — aligned with step 15 (sugar-quickpick-15)
-        $results = $ranker->matchAll($text, $candidates);
+        $results = $ranker->matchAll($text, \array_keys($valueOrders));
 
         /** @var list<array{item: Item, score: int, order: int}> $scored */
         $scored = [];
@@ -805,20 +824,19 @@ final class QuickPick
             if ($result === null || $result->isMatched() === false) {
                 continue;
             }
-            $item = $itemsByValue[$result->haystack] ?? null;
-            if ($item === null) {
-                continue;
+            foreach ($valueOrders[$result->haystack] ?? [] as $order) {
+                $scored[] = [
+                    'item'  => $this->allItems[$order],
+                    'score' => $result->score,
+                    'order' => $order,
+                ];
             }
-            $scored[] = [
-                'item' => $item,
-                'score' => $result->score,
-                'order' => $originalOrder[$result->haystack],
-            ];
         }
 
-        // Fallback to per-item match() when matchAll returns empty.
-        // Some rankers (e.g., test mocks) may have inconsistent match/matchAll.
-        // This preserves backward compatibility with the original per-item loop.
+        // Batch-capable rankers return a result per candidate; a ranker whose
+        // matchAll() yields nothing usable still gets filtered through its
+        // per-item match(), which is the only half of the contract that can
+        // answer for every candidate on its own.
         if ($scored === []) {
             foreach ($this->allItems as $order => $item) {
                 if ($fn($item) === false) {
