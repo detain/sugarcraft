@@ -270,7 +270,13 @@ final class Renderer
         // scroll grid with JSON pretty-printing + a styled NULL token); regular
         // table browsing renders through sugar-table.
         if ($a->browse->resultTable !== null) {
-            $body = $a->browse->resultTable->withVisibleWidth($width)->render();
+                        $windowStart = intdiv($a->browse->rowCursor, ResultTable::DEFAULT_PAGE_SIZE) * ResultTable::DEFAULT_PAGE_SIZE;
+            $body = $a->browse->resultTable
+                ->withVisibleWidth($width)
+                // D-C2: the row cursor drives the vertical window so every
+                // row of a long result set is reachable, not just the first 25.
+                ->withRowOffset($windowStart)
+                ->render();
             return self::frame($a, Pane::Rows, $title, $body, $width);
         }
 

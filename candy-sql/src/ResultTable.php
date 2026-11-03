@@ -54,6 +54,9 @@ final class ResultTable
     /** @readonly */
     public readonly int $colSpacing;
 
+    /** First row index of the rendered window (D-C2 vertical paging). */
+    private int $rowOffset = 0;
+
     /** Derived: column names from the first row. */
     private readonly array $columns;
 
@@ -75,6 +78,7 @@ final class ResultTable
         string $nullToken = self::NULL_TOKEN,
         int $colSpacing = 2,
         ?array $precomputedColWidths = null,
+        int $rowOffset = 0,
     ) {
         $this->rows = $rows;
         $this->offset = $offset;
@@ -83,6 +87,7 @@ final class ResultTable
         $this->jsonPretty = $jsonPretty;
         $this->nullToken = $nullToken;
         $this->colSpacing = $colSpacing;
+        $this->rowOffset = max(0, $rowOffset);
 
         // Stringify column names: a numeric column label (e.g. `SELECT 1`)
         // becomes an integer PHP array key, which would break the string ops
@@ -118,6 +123,7 @@ final class ResultTable
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
             precomputedColWidths: $this->colWidths,
+            rowOffset: $this->rowOffset,
         );
     }
 
@@ -134,6 +140,7 @@ final class ResultTable
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
             precomputedColWidths: $this->colWidths,
+            rowOffset: $this->rowOffset,
         );
     }
 
@@ -154,6 +161,26 @@ final class ResultTable
         );
     }
 
+    /**
+     * Move the vertical render window (D-C2). The window always spans at
+     * most DEFAULT_PAGE_SIZE rows; the caller tracks page alignment (the
+     * App derives the offset from the row cursor).
+     */
+    public function withRowOffset(int $rowOffset): self
+    {
+        return new self(
+            rows: $this->rows,
+            offset: $this->offset,
+            visibleWidth: $this->visibleWidth,
+            maxCellWidth: $this->maxCellWidth,
+            jsonPretty: $this->jsonPretty,
+            nullToken: $this->nullToken,
+            colSpacing: $this->colSpacing,
+            precomputedColWidths: $this->colWidths,
+            rowOffset: max(0, $rowOffset),
+        );
+    }
+
     public function withOffset(int $offset): self
     {
         return new self(
@@ -165,6 +192,7 @@ final class ResultTable
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
             precomputedColWidths: $this->colWidths,
+            rowOffset: $this->rowOffset,
         );
     }
 
@@ -179,6 +207,7 @@ final class ResultTable
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
             precomputedColWidths: $this->colWidths,
+            rowOffset: $this->rowOffset,
         );
     }
 
@@ -193,6 +222,7 @@ final class ResultTable
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
             precomputedColWidths: $this->colWidths,
+            rowOffset: $this->rowOffset,
         );
     }
 
@@ -207,6 +237,7 @@ final class ResultTable
             nullToken: $token,
             colSpacing: $this->colSpacing,
             precomputedColWidths: $this->colWidths,
+            rowOffset: $this->rowOffset,
         );
     }
 
@@ -275,7 +306,7 @@ final class ResultTable
         $lines = [];
         $lines[] = $this->renderHeader();
 
-        foreach (array_slice($this->rows, 0, self::DEFAULT_PAGE_SIZE) as $row) {
+        foreach (array_slice($this->rows, $this->rowOffset, self::DEFAULT_PAGE_SIZE) as $row) {
             $lines[] = $this->renderRow($row);
         }
 
@@ -284,9 +315,9 @@ final class ResultTable
         }
 
         $totalRows = count($this->rows);
-        if ($totalRows > self::DEFAULT_PAGE_SIZE) {
-            $start = 1;
-            $end = min(self::DEFAULT_PAGE_SIZE, $totalRows);
+        if ($totalRows > self::DEFAULT_PAGE_SIZE || $this->rowOffset > 0) {
+            $start = $this->rowOffset + 1;
+            $end = min($this->rowOffset + self::DEFAULT_PAGE_SIZE, $totalRows);
             $lines[] = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render("rows {$start}–{$end} of {$totalRows}");
         }
@@ -338,9 +369,8 @@ final class ResultTable
     {
         $cells = [];
         foreach ($this->visibleColumns() as $col) {
-            $val = $this->formatValue($row[$col] ?? null);
             $width = $this->colWidths[$col] ?? 12;
-            $cells[] = $this->pad($val, $width);
+            $cells[] = $this->styledCell($row[$col] ?? null, $width);
         }
         return implode(str_repeat(' ', $this->colSpacing), $cells);
     }
@@ -380,24 +410,27 @@ final class ResultTable
     }
 
     /**
-     * Format a cell value for ANSI display.
+     * Format a cell value for ANSI display: plain text is truncated and
+     * padded to the measured column width FIRST, styling wraps the padded
+     * run (D-C10 — padding the styled string counted the SGR bytes as
+     * cells, so NULL/JSON columns desynced every row below them).
      */
-    private function formatValue(mixed $val): string
+    private function styledCell(mixed $val, int $width): string
     {
         if ($val === null) {
             return Style::new()->foreground(Color::hex('#f9a8d4'))
                 ->italic()
-                ->render($this->nullToken);
+                ->render($this->pad($this->nullToken, $width));
         }
 
         if (is_scalar($val)) {
-            return $this->maybeTruncate(CellValue::sanitize((string) $val));
+            return $this->pad($this->maybeTruncate(CellValue::sanitize((string) $val)), $width);
         }
 
         // Array / object → JSON.
         $encoded = CellValue::sanitize($this->encodeJson($val));
         return Style::new()->foreground(Color::hex('#6ee7b7'))
-            ->render($this->maybeTruncate($encoded));
+            ->render($this->pad($this->maybeTruncate($encoded), $width));
     }
 
     /**
