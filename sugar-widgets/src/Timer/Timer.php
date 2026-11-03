@@ -16,7 +16,8 @@ use SugarCraft\Core\Msg;
  * {@see TimeoutMsg} is dispatched and the timer stops itself.
  *
  * Multiple Timer instances coexist on one event loop because each carries
- * a unique id; ticks for other ids are ignored.
+ * a unique id; ticks for other ids are ignored, and ticks from stopped
+ * generations are refused via the epoch (M12).
  */
 final class Timer implements Model
 {
@@ -27,9 +28,7 @@ final class Timer implements Model
      * This is intentional — stable, predictable IDs aid debugging when
      * tracing tick/timeout routing in a live application.
      *
-     * Test suites that need isolated ID state may call the public
-     * static resetIdCounter() to ensure deterministic ID sequences.
-     */
+     *      */
     private static int $nextId = 0;
 
     public readonly int $id;
@@ -40,21 +39,9 @@ final class Timer implements Model
         public readonly bool $running,
         public readonly bool $timedOut,
         ?int $id = null,
+        public readonly int $epoch = 0,
     ) {
         $this->id = $id ?? ++self::$nextId;
-    }
-
-    /**
-     * Reset the monotonic ID counter to zero.
-     *
-     * Primarily for use in test teardown to ensure test isolation when
-     * many Timer instances are constructed across the test suite.
-     *
-     * @internal
-     */
-    public static function resetIdCounter(): void
-    {
-        self::$nextId = 0;
     }
 
     public static function new(float $duration, float $interval = 1.0): self
@@ -78,13 +65,13 @@ final class Timer implements Model
      */
     public function update(Msg $msg): array
     {
-        if ($msg instanceof TickMsg && $msg->id === $this->id && $this->running) {
+        if ($msg instanceof TickMsg && $msg->id === $this->id && $msg->epoch === $this->epoch && $this->running) {
             $newRemaining = max(0.0, $this->remaining - $this->interval);
             if ($newRemaining <= 0.0) {
-                $next = new self(0.0, $this->interval, false, true, $this->id);
+                $next = new self(0.0, $this->interval, false, true, $this->id, $this->epoch);
                 return [$next, Cmd::send(new TimeoutMsg($this->id))];
             }
-            $next = new self($newRemaining, $this->interval, true, false, $this->id);
+            $next = new self($newRemaining, $this->interval, true, false, $this->id, $this->epoch);
             return [$next, $next->tick()];
         }
         return [$this, null];
@@ -98,7 +85,9 @@ final class Timer implements Model
     /**
      * Set running=true and schedule the first tick. Idempotent — calling
      * start() while the timer is already running is a no-op so duplicate
-     * start events don't spawn parallel tick chains.
+     * start events don't spawn parallel tick chains. Each flip into running
+     * bumps the epoch, so a tick still in flight from a stopped generation
+     * can never count toward the restarted chain (M12).
      *
      * @return array{0:self, 1:?\Closure}
      */
@@ -110,20 +99,20 @@ final class Timer implements Model
         if ($this->remaining <= 0.0) {
             return [$this, Cmd::send(new TimeoutMsg($this->id))];
         }
-        $next = new self($this->remaining, $this->interval, true, false, $this->id);
+        $next = new self($this->remaining, $this->interval, true, false, $this->id, $this->epoch + 1);
         return [$next, $next->tick()];
     }
 
     public function stop(): self
     {
-        return new self($this->remaining, $this->interval, false, $this->timedOut, $this->id);
+        return new self($this->remaining, $this->interval, false, $this->timedOut, $this->id, $this->epoch);
     }
 
     /** Reset to a new duration (or the current one) and stop. */
     public function reset(?float $duration = null): self
     {
         $d = $duration ?? $this->remaining;
-        return new self($d, $this->interval, false, false, $this->id);
+        return new self($d, $this->interval, false, false, $this->id, $this->epoch);
     }
 
     /**
@@ -172,13 +161,14 @@ final class Timer implements Model
         if ($interval <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('timer.interval_positive'));
         }
-        return new self($this->remaining, $interval, $this->running, $this->timedOut, $this->id);
+        return new self($this->remaining, $interval, $this->running, $this->timedOut, $this->id, $this->epoch);
     }
 
     private function tick(): \Closure
     {
         $id = $this->id;
-        return Cmd::tick($this->interval, static fn(): Msg => new TickMsg($id));
+        $epoch = $this->epoch;
+        return Cmd::tick($this->interval, static fn(): Msg => new TickMsg($id, $epoch));
     }
 
     /** Format seconds as "H:MM:SS" / "M:SS" / "0:SS" depending on magnitude. */

@@ -13,7 +13,9 @@ use SugarCraft\Core\Msg;
 /**
  * Count-up stopwatch. Mirror of {@see Timer}: starts at zero, increments
  * elapsed by {@see $interval} every tick. No upper bound. {@see view()}
- * formats elapsed time the same way as Timer.
+ * formats elapsed time the same way as Timer. Ticks carry the owning id and
+ * the generation epoch; update() refuses ticks addressed to other widgets or
+ * to stopped generations (M12).
  */
 final class Stopwatch implements Model
 {
@@ -24,9 +26,7 @@ final class Stopwatch implements Model
      * This is intentional — stable, predictable IDs aid debugging when
      * tracing tick routing in a live application.
      *
-     * Test suites that need isolated ID state may call the public
-     * static resetIdCounter() to ensure deterministic ID sequences.
-     */
+     *      */
     private static int $nextId = 0;
 
     public readonly int $id;
@@ -36,21 +36,9 @@ final class Stopwatch implements Model
         public readonly float $interval,
         public readonly bool $running,
         ?int $id = null,
+        public readonly int $epoch = 0,
     ) {
         $this->id = $id ?? ++self::$nextId;
-    }
-
-    /**
-     * Reset the monotonic ID counter to zero.
-     *
-     * Primarily for use in test teardown to ensure test isolation when
-     * many Stopwatch instances are constructed across the test suite.
-     *
-     * @internal
-     */
-    public static function resetIdCounter(): void
-    {
-        self::$nextId = 0;
     }
 
     public static function new(float $interval = 1.0): self
@@ -71,8 +59,8 @@ final class Stopwatch implements Model
      */
     public function update(Msg $msg): array
     {
-        if ($msg instanceof TickMsg && $msg->id === $this->id && $this->running) {
-            $next = new self($this->elapsed + $this->interval, $this->interval, true, $this->id);
+        if ($msg instanceof TickMsg && $msg->id === $this->id && $msg->epoch === $this->epoch && $this->running) {
+            $next = new self($this->elapsed + $this->interval, $this->interval, true, $this->id, $this->epoch);
             return [$next, $next->tick()];
         }
         return [$this, null];
@@ -86,7 +74,9 @@ final class Stopwatch implements Model
     /**
      * Idempotent — calling start() while the stopwatch is already running
      * is a no-op so duplicate start events don't spawn parallel tick
-     * chains and double-count elapsed time.
+     * chains and double-count elapsed time. Each flip into running bumps
+     * the epoch, so a tick still in flight from a stopped generation can
+     * never count toward the restarted chain (M12).
      *
      * @return array{0:self, 1:?\Closure}
      */
@@ -95,18 +85,18 @@ final class Stopwatch implements Model
         if ($this->running) {
             return [$this, null];
         }
-        $next = new self($this->elapsed, $this->interval, true, $this->id);
+        $next = new self($this->elapsed, $this->interval, true, $this->id, $this->epoch + 1);
         return [$next, $next->tick()];
     }
 
     public function stop(): self
     {
-        return new self($this->elapsed, $this->interval, false, $this->id);
+        return new self($this->elapsed, $this->interval, false, $this->id, $this->epoch);
     }
 
     public function reset(): self
     {
-        return new self(0.0, $this->interval, false, $this->id);
+        return new self(0.0, $this->interval, false, $this->id, $this->epoch);
     }
 
     /**
@@ -128,7 +118,12 @@ final class Stopwatch implements Model
      */
     public function id(): int { return $this->id; }
 
-    /** Elapsed wall-clock seconds since the last reset / new(). */
+    /**
+     * Elapsed seconds as a tick-count accumulator (ticks consumed ×
+     * {@see $interval}) — NOT wall-clock: it advances only while update()
+     * consumes TickMsgs, so a stalled loop or a stopped chain freezes it
+     * regardless of real time passed (M14).
+     */
     public function elapsed(): float { return $this->elapsed; }
 
     /**
@@ -148,13 +143,14 @@ final class Stopwatch implements Model
         if ($interval <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('stopwatch.interval_positive'));
         }
-        return new self($this->elapsed, $interval, $this->running, $this->id);
+        return new self($this->elapsed, $interval, $this->running, $this->id, $this->epoch);
     }
 
     private function tick(): \Closure
     {
         $id = $this->id;
-        return Cmd::tick($this->interval, static fn(): Msg => new TickMsg($id));
+        $epoch = $this->epoch;
+        return Cmd::tick($this->interval, static fn(): Msg => new TickMsg($id, $epoch));
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

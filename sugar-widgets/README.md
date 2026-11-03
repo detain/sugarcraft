@@ -77,12 +77,19 @@ enabled.
 ### Msg routing cheat-sheet
 
 Forward these into your model's `update()` so the embedded component
-can react: `BlinkMsg` (Cursor / TextInput), `Spinner\TickMsg`
-(Spinner), `Timer\TickMsg` + `Timer\TimeoutMsg`, `Stopwatch\TickMsg`,
-`SpringTickMsg` (AnimatedProgress), `StartStopMsg` (Timer / Stopwatch),
-`TextArea\TextAreaEditedMsg` (TextArea's Ctrl+O round-trip).
+can react: `SugarCraft\Widgets\Cursor\BlinkMsg` (Cursor / TextInput,
+deprecated alias of `Forms\Cursor\BlinkMsg`),
+`SugarCraft\Widgets\Spinner\TickMsg` (Spinner),
+`SugarCraft\Widgets\Timer\TickMsg` + `SugarCraft\Widgets\Timer\TimeoutMsg`,
+`SugarCraft\Widgets\Stopwatch\TickMsg`,
+`SugarCraft\Widgets\Progress\SpringTickMsg` (AnimatedProgress),
+`SugarCraft\Widgets\TextArea\TextAreaEditedMsg` (TextArea's Ctrl+O
+round-trip).
 Each component's `update()` filters by its own `id()` so multiple
-instances of the same component coexist on one event loop.
+instances of the same component coexist on one event loop. Timer and
+Stopwatch ticks also carry an `epoch` (generation counter bumped by
+`start()`): a tick armed before a stop/start flip is refused rather than
+double-counted.
 
 ## Quickstart — TextInput with autocomplete
 

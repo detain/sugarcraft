@@ -37,7 +37,7 @@ final class StopwatchTest extends TestCase
     public function testTickIncrements(): void
     {
         [$s, ] = Stopwatch::new()->start();
-        [$next, $cmd] = $s->update(new TickMsg($s->id));
+        [$next, $cmd] = $s->update(new TickMsg($s->id, $s->epoch));
         $this->assertSame(1.0, $next->elapsed);
         $this->assertNotNull($cmd);
     }
@@ -55,7 +55,7 @@ final class StopwatchTest extends TestCase
     {
         [$s, ] = Stopwatch::new()->start();
         $s = $s->stop();
-        [$next, $cmd] = $s->update(new TickMsg($s->id));
+        [$next, $cmd] = $s->update(new TickMsg($s->id, $s->epoch));
         $this->assertSame($s, $next);
         $this->assertNull($cmd);
     }
@@ -63,8 +63,8 @@ final class StopwatchTest extends TestCase
     public function testResetZeros(): void
     {
         [$s, ] = Stopwatch::new()->start();
-        [$s, ] = $s->update(new TickMsg($s->id));
-        [$s, ] = $s->update(new TickMsg($s->id));
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
         $reset = $s->reset();
         $this->assertSame(0.0, $reset->elapsed);
         $this->assertFalse($reset->isRunning());
@@ -73,7 +73,7 @@ final class StopwatchTest extends TestCase
     public function testCustomInterval(): void
     {
         [$s, ] = Stopwatch::new(0.5)->start();
-        [$next, ] = $s->update(new TickMsg($s->id));
+        [$next, ] = $s->update(new TickMsg($s->id, $s->epoch));
         $this->assertSame(0.5, $next->elapsed);
     }
 
@@ -103,7 +103,7 @@ final class StopwatchTest extends TestCase
     {
         $s = Stopwatch::new(0.5);
         [$s, ] = $s->start();
-        [$s, ] = $s->update(new TickMsg($s->id));
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
         $this->assertSame(0.5, $s->elapsed());
     }
 
@@ -156,8 +156,8 @@ final class StopwatchTest extends TestCase
     {
         $s = Stopwatch::new(1.0);
         [$s, ] = $s->start();
-        [$s, ] = $s->update(new TickMsg($s->id));
-        [$s, ] = $s->update(new TickMsg($s->id));
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
+        [$s, ] = $s->update(new TickMsg($s->id, $s->epoch));
         $view = $s->view();
         // After 2 ticks at 1.0 interval = 2.0 seconds elapsed
         $this->assertNotSame('0:00', $view);

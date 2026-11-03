@@ -43,7 +43,7 @@ final class TimerTest extends TestCase
     public function testTickDecrements(): void
     {
         [$t, ] = Timer::new(3.0)->start();
-        [$next, $cmd] = $t->update(new TickMsg($t->id));
+        [$next, $cmd] = $t->update(new TickMsg($t->id, $t->epoch));
         $this->assertSame(2.0, $next->remaining);
         $this->assertTrue($next->isRunning());
         $this->assertNotNull($cmd);
@@ -52,7 +52,7 @@ final class TimerTest extends TestCase
     public function testTimeoutEmitsAndStops(): void
     {
         [$t, ] = Timer::new(1.0, 1.0)->start();
-        [$next, $cmd] = $t->update(new TickMsg($t->id));
+        [$next, $cmd] = $t->update(new TickMsg($t->id, $t->epoch));
         $this->assertSame(0.0, $next->remaining);
         $this->assertFalse($next->isRunning());
         $this->assertTrue($next->timedOut());
@@ -84,7 +84,7 @@ final class TimerTest extends TestCase
         [$t, ] = Timer::new(5.0)->start();
         $t = $t->stop();
         $this->assertFalse($t->isRunning());
-        [$next, $cmd] = $t->update(new TickMsg($t->id));
+        [$next, $cmd] = $t->update(new TickMsg($t->id, $t->epoch));
         $this->assertSame($t, $next);
         $this->assertNull($cmd);
     }
@@ -92,7 +92,7 @@ final class TimerTest extends TestCase
     public function testResetRestoresDuration(): void
     {
         [$t, ] = Timer::new(5.0)->start();
-        [$t, ] = $t->update(new TickMsg($t->id));
+        [$t, ] = $t->update(new TickMsg($t->id, $t->epoch));
         $reset = $t->reset(10.0);
         $this->assertSame(10.0, $reset->remaining);
         $this->assertFalse($reset->isRunning());
