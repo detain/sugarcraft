@@ -34,14 +34,23 @@ store, or manage an inbox.
   credentials are never sent over a plaintext channel
 - **CLI** — one-shot sending with STDIN compose, `--render` for offline MIME preview, and
   translated error messages (the CLI itself; the library is transport-agnostic)
-- **PHP 8.3+** — pure PHP; ext-curl is only needed for the Resend transport,
-  ext-fileinfo improves automatic MIME detection for path attachments (both `suggest`ed)
+- **PHP 8.3+** — pure PHP. `suggest`ed extensions, honestly scoped: `ext-curl` is
+  needed only for the Resend transport, `ext-fileinfo` improves automatic MIME
+  detection for path attachments, and `ext-openssl` is required for TLS — without
+  it the SMTP transport refuses every encrypted connection (STARTTLS and port-465
+  alike); only plain, unencrypted SMTP works without it.
 
 ## Install
 
 ```bash
 composer require sugarcraft/candy-mail
 ```
+
+The `bin/candy-mail` bootstrap walks an autoload candidate ladder (package-local
+`vendor/autoload.php` first, then the consumer project's `../../../autoload.php`), so
+the CLI runs from a standalone clone, a composer install, or a built phar (which reads
+its own bundled vendor). In the monorepo checkout, `php candy-mail/bin/candy-mail`
+works after `scripts/refresh-deps.php`.
 
 ## Quick Start
 
@@ -123,6 +132,19 @@ $email2 = new Email(
 - **Message integrity.** Attachment filenames and MIME types pass the same CR/LF gate as
   subjects and addresses; MIME part parameters are RFC 2045-quoted.
 - **Secret masking.** `__debugInfo()` masks the SMTP password and the Resend API key.
+- **Credentials are unexportable.** Transports refuse `serialize()` and `var_export()`
+  re-import (`__serialize`/`__set_state` throw); construct a credential-holding transport
+  where it is used.
+- **Attachment ceilings.** 25 MiB (`Attachment::MAX_BYTES`) per attachment, regular files
+  only — character devices like `/dev/zero` are refused before any read.
+- **Wire format discipline.** Header lines fold at 998 octets using ≤75-char RFC 2047
+  encoded-words; non-ASCII filenames ride RFC 2231 `filename*`; 8-bit bodies downgrade to
+  quoted-printable when the server lacks 8BITMIME (RFC 6152); documents end with a
+  CRLF-terminated close-delimiter (RFC 2046 §5.1); servers answering EHLO with a 5xx fall
+  back to HELO (RFC 5321 §4.1.4) — 4xx refusals still abort.
+- **Senders are never invented.** The CLI refuses to run without `--from` or
+  `CANDY_MAIL_FROM`; an empty Resend sender list throws instead of fabricating
+  `unknown@localhost`.
 
 ## CLI
 
@@ -137,7 +159,18 @@ candy-mail --to you@example.com --render < message.txt
 
 `--version` prints the package version, `--help` the usage, repeat `--to/--cc/--bcc/--attach`
 to accumulate, and a bare `--` ends option parsing (later addresses are positional recipients).
-Unknown options are rejected loudly.
+Unknown options are rejected loudly, with a did-you-mean hint when a known flag is a
+near miss.
+
+Value switches: `--from/--subject/--body/--reply-to/--html/--helo/--ca-file/--timeout`
+(the last three override their `CANDY_MAIL_SMTP_*` env rows, and the flags win over the
+environment). A value that begins with a dash needs the inline form
+(`--subject=-50% off`) — a switch is never stolen as another switch's value. The CLI
+requires a `--to` recipient: cc/bcc alone ends in a loud refusal (the library itself
+permits cc/bcc-only sends over SMTP; the Resend API needs at least one `to`).
+
+Embedding behind another bin? `require` the bootstrap and call
+`exit(\SugarCraft\Mail\main($argv));` to keep exit codes honest.
 
 Environment variables:
 
@@ -147,11 +180,17 @@ export CANDY_MAIL_SMTP_HOST=smtp.gmail.com    # SMTP host (Resend key wins if bo
 export CANDY_MAIL_SMTP_PORT=587               # SMTP port (default: 587)
 export CANDY_MAIL_SMTP_USERNAME=user          # SMTP username
 export CANDY_MAIL_SMTP_PASSWORD=pass          # SMTP password (app password for Gmail etc.)
-export CANDY_MAIL_SMTP_REQUIRE_TLS=1          # default ON; set 0 only for trusted plaintext networks
-export CANDY_MAIL_SMTP_IMPLICIT_TLS=0         # set 1 for port-465 style direct TLS
-export CANDY_MAIL_FROM=me@example.com         # Pre-fill From address
+export CANDY_MAIL_SMTP_REQUIRE_TLS=1          # default ON; ON words 1/true/yes/on, OFF words 0/false/no/off —
+                                              # anything else is REFUSED, never guessed (a typo'd security
+                                              # switch must not silently downgrade)
+export CANDY_MAIL_SMTP_IMPLICIT_TLS=0         # set 1 for port-465 style direct TLS (same word vocabulary)
+export CANDY_MAIL_SMTP_HELO=mail.example.com  # EHLO/HELO identity (letters, digits, dots, hyphens only)
+export CANDY_MAIL_SMTP_CA_FILE=/path/ca.pem   # custom CA bundle for TLS verification
+export CANDY_MAIL_SMTP_TIMEOUT=30             # per-response seconds budget, 1..3600 (default 30)
+export CANDY_MAIL_FROM=me@example.com         # Sender default — REQUIRED unless --from passed (never fabricated)
 export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to body
-# Pre-rename POP_*/POP_SMTP_* exports are still read, with a deprecation warning. // @rename-keep
+# Pre-rename POP_* exports map onto the 11 known CANDY_MAIL_* names only;
+# off-roster POP_* vars stay silent (their mapped name is read by nothing). // @rename-keep
 ```
 
 Error **messages** follow the standard `LC_ALL`/`LC_MESSAGES`/`LANG` environment (16
@@ -166,7 +205,7 @@ shared `T` registry, namespace `mail`, catalog in `lang/`). English is the defau
 a host application opts in process-wide:
 
 ```php
-\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect()); // LC_ALL → LANG → 'en'
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect()); // LC_ALL → LC_MESSAGES → LANG → 'en'
 ```
 
 The CLI performs this at startup; library embedders decide. Missing keys in an active
