@@ -165,7 +165,7 @@ library auto-plays audio for sources that carry it when an external player
 is present — that is accepted library behaviour, with operator enforcement
 left open.
 
-## Voice input (C-TUI-6.l)
+## Voice input
 
 Microphone dictation rides the same media module as image and video: a local
 recorder child captures a WAV take, and an OpenAI-compatible
@@ -197,7 +197,7 @@ process that exits with a live take cancels it.
 optional `language` — to `rtrim(voice.baseUrl,'/') . '/audio/transcriptions'`
 (a trailing `/v1` is kept, deliberately not Guzzle `base_uri` resolution).
 Requests are connect-bound and stall-bound, never total-timeout-bound
-(E646: a slow-but-live endpoint is allowed to answer). The WAV is deleted
+(a slow-but-live endpoint is allowed to answer). The WAV is deleted
 after the call, on success and on every failure path; audio bytes are never
 written to a log, and the recorder's own stdout/stderr go to `/dev/null`.
 Failure sentences are built from status codes and sanitized endpoint text
@@ -271,7 +271,7 @@ a refusal each send from then on. The budget converts that dead session into a
 named, re-attachable withholding; providers that take no documents at all are
 governed by the capability notice instead, and spend no budget.
 
-### PDFs Read through the tool (C-TOOL-2)
+### PDFs Read through the tool
 
 Read has a second document door. When it opens a PDF it first asks the host
 for a text extractor (`pdftotext -layout`, run through the same captured
@@ -298,10 +298,10 @@ magic before emission and spelled by the one shared `anthropicDocument()`
 encoder, so a PDF entering through either door presents identically. The
 OpenAI-style chat `role: tool` string stays the documented decline, the
 Responses-API sibling carries the same bytes as an `input_file` part on its
-tool row (C-TOOL-2.g), and Gemini/Bedrock carry no tool calls
+tool row, and Gemini/Bedrock carry no tool calls
 to attach to at all.
 
-### Canvas artifacts (C-TOOL-6.f)
+### Canvas artifacts
 
 The `Canvas` tool writes a model-authored, self-contained HTML page into the
 same session store the generated images land in — `~/.candy-code/media/` under
@@ -313,7 +313,7 @@ writer, so nothing lands outside the session directory, and the age sweep of
 session directories retires the artifacts exactly as it retires generated
 media. The bytes are not sanitised at the store door: nothing that renders
 them is ever trusted with the origin either. The web client shows the page
-through the C-TOOL-6.g half: the projection arm emits a ref with
+through the projection arm: it emits a ref with
 `kind: "html"` and `mime: "text/html; charset=utf-8"`, the card mints a
 single-use 60-second link — `POST /api/canvas` (authenticated) answers
 `{url: "/canvas/<token>", expiresInSeconds: 60}` — and the token-scoped page

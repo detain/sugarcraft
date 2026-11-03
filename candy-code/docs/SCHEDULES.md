@@ -64,8 +64,8 @@ relaunch.
 | `nextDue` | no | Unix seconds at which the row next becomes due. A row without it is armed one interval out, so a file you write at midnight does not fire immediately at midnight. |
 | `enabled` | no | `false` parks the row without deleting it. Defaults to `true`. |
 | `timeoutSeconds` | no | Wall-clock ceiling on one fired run, 60 up to 31,622,400 seconds. Absent means the background session's default of 3600. This bounds the daemon's whole run; no timeout anywhere on the schedule path bounds a model request. |
-| `createdBy` | no | The creation tag (C-AGT-5.a). The only spelling a row may carry is `model`, written by the `Schedule` tool; absence means the row arrived by a human hand. The tool's delete guard reads the tag and the binding: it removes its own rows from this project freely, and refuses an untagged row — or its own row bound to another project root — unless the call opts in. A forged or misspelled tag is refused at load by name — the field exists precisely to police that forgery. |
-| `kind` | no | `task` or `heartbeat` (C-AGT-5.c). Absent means `task`: every settled result is announced, as always. A `heartbeat` row watches instead of answers — its fired prompt carries one appended instruction, and the single reply `HEARTBEAT_OK` means silence: no announcement turn, no ring. Anything else it settles with is announced AND rings the `notify` setting. Any other spelling is refused by name, at create and at load. See [The heartbeat kind](#the-heartbeat-kind). |
+| `createdBy` | no | The creation tag. The only spelling a row may carry is `model`, written by the `Schedule` tool; absence means the row arrived by a human hand. The tool's delete guard reads the tag and the binding: it removes its own rows from this project freely, and refuses an untagged row — or its own row bound to another project root — unless the call opts in. A forged or misspelled tag is refused at load by name — the field exists precisely to police that forgery. |
+| `kind` | no | `task` or `heartbeat`. Absent means `task`: every settled result is announced, as always. A `heartbeat` row watches instead of answers — its fired prompt carries one appended instruction, and the single reply `HEARTBEAT_OK` means silence: no announcement turn, no ring. Anything else it settles with is announced AND rings the `notify` setting. Any other spelling is refused by name, at create and at load. See [The heartbeat kind](#the-heartbeat-kind). |
 
 An unknown key is tolerated; a malformed known key is not. A row that fails to
 parse is skipped **by name** while its siblings keep running, and the refusal is
@@ -256,7 +256,7 @@ changes the floor, the ceiling, or the lock discipline described above.
 /schedules delete <name>
 ```
 
-`add` (C-AGT-5.b) goes through the `Schedule` tool's own factory — the same
+`add` goes through the `Schedule` tool's own factory — the same
 bounds, ceiling, mode-settling, per-project model cap and creation tag — so the
 command and the tool cannot drift into two grammars. The interval reads like
 `/loop`'s (`60`, `90s`, `15m`, `2h`, `1d`), the prompt is everything that follows

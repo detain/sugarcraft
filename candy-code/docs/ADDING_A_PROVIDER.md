@@ -19,7 +19,7 @@ before the call is ever built.
 
 Attachments ride `AttachmentEncoding`, so a new provider answers the flags
 against the shape its own body builder produces, not against the model
-vendor's marketing page. C-TOOL-2.e: the native document legs are the
+vendor's marketing page. The native document legs are the
 Anthropic Messages family (base64 `document` block), Bedrock Converse (RAW
 `document` block, name shaved to the Converse charset), Gemini — including
 Vertex's Gemini arm through the same shared encoders — (`application/pdf`
@@ -30,12 +30,12 @@ and Custom servers that speak neither document shape). Answer
 `supportsDocuments()` true only when the body actually carries the part: a
 true flag over a body that never builds the part is a silent drop, a part
 built for a model that cannot read it is a wire error, and either one is the
-bug the never-silent rule exists to refuse. The three C-TOOL-2.e legs fail
+bug the never-silent rule exists to refuse. The three native legs fail
 closed on the bytes themselves: on each of them a forged or oversized PDF (no
 `%PDF-` head, or past `FileMentions::DOCUMENT_MAX_BYTES`) is named in the
 text, never dropped and never inlined — and a leg that outright declines
 documents names every one of them. The Anthropic Messages leg has built its
-base64 `document` block since CTX-2 and trusts the inbound capture's
+base64 `document` block for a long time and trusts the inbound capture's
 magic-number sniff (`FileMentions`) rather than re-reading the bytes at
 encode time.
 
@@ -114,7 +114,7 @@ spelling throws by name when the provider is built, because a value that
 reached the live object would answer neither arm's endpoint.
 
 The converse precedent is a type that reuses an existing wire under its own
-name (C-PRV-2.c): `azure` registers `OpenAIProvider` against the per-resource
+name): `azure` registers `OpenAIProvider` against the per-resource
 Azure host with the key moved to the `api-key` header and the model catalog
 closed (the `/models` shape does not exist there), and `openrouter` registers
 a `CustomProvider` preset carrying the documented base plus the
@@ -131,7 +131,7 @@ shapes its own replay understands, tags them so the list can be shared
 fleet-wide, and every replay seam filters by tag before re-sending. Anthropic
 replays `thinking`/`redacted_thinking` verbatim; the Responses arm re-sends
 its tagged `openai_reasoning_item` entries as `reasoning` items carrying the
-encrypted content the endpoint asked for via `include` (C-PRV-2.b). A block
+encrypted content the endpoint asked for via `include`. A block
 that cannot be replayed is never collected, and a block from another family's
 wire is skipped, not rejected — a store replayed under a different provider
 must degrade to text, not 400.

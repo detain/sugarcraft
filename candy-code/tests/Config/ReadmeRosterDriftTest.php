@@ -123,7 +123,7 @@ final class ReadmeRosterDriftTest extends TestCase
     // ── roster 1: the built-in tool set ──────────────────────────────────
 
     /**
-     * The eleven built-in tools, as the model sees them.
+     * The built-in tools, as the model sees them — count derived live, never spelled here.
      *
      * `Bootstrap::tools()` rather than a `glob()` of `src/Tools/BuiltIn/`: the
      * README's list is of what a launch SHIPS, and the two are not the same

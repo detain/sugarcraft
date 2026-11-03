@@ -609,8 +609,9 @@ CandyCode — 终端 AI 编程助手。
                          不再作为标志解析
 
 环境变量：
-   CANDY_CODE_PROVIDER    使用的提供商：openai、anthropic、claude-code、
-                          sglang、bedrock、vertex、custom
+   CANDY_CODE_PROVIDER    使用的提供商：openai、azure、anthropic、claude-code、
+                          codex、sglang、bedrock、vertex、
+                          gemini、openrouter、custom
    CANDY_CODE_MODEL       模型名称（覆盖提供商默认值；--model 优先）
    CANDY_CODE_PERMISSION_MODE
                           启动时的权限模式，覆盖

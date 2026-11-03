@@ -51,7 +51,7 @@ refused `401` and burns a lockout strike.
 | `--host <ip>` | `127.0.0.1` | Address to bind. `localhost` and `::1` are loopback too. Anything else is refused without `--allow-remote`. |
 | `--port <n>` | `7420` | Port to bind; `0` picks a free one. |
 | `--allow-remote` | off | Permit a non-loopback `--host`. Prints a cleartext warning unless built-in TLS is on (`--tls-cert` + `--tls-key`). On a wildcard bind (`0.0.0.0`, `::`) the server also answers to this machine's own addresses and its sign-in URLs name them ([Remote access](#remote-access)). |
-| `--tls-cert <file>` | none | Built-in TLS (C-WEB-5.a): the PEM certificate the public listener serves with, given together with `--tls-key`. The sign-in URLs then read `https://`, the session cookie carries `Secure`, and a plaintext `http://` client gets no answer at all. A bad, unreadable or half pair refuses startup (exit 2) rather than serving cleartext quietly. |
+| `--tls-cert <file>` | none | Built-in TLS): the PEM certificate the public listener serves with, given together with `--tls-key`. The sign-in URLs then read `https://`, the session cookie carries `Secure`, and a plaintext `http://` client gets no answer at all. A bad, unreadable or half pair refuses startup (exit 2) rather than serving cleartext quietly. |
 | `--tls-key <file>` | none | The PEM private key for `--tls-cert`. It must be a readable file with no group- or world-readable mode bits, and it must match the certificate. |
 | `--allowed-host <list>` | none | Comma-separated extra host names (or `host:port`; an IPv6 address in brackets) the server answers to beside the loopback names and its own addresses — e.g. a DNS name for this machine. Repeats accumulate. |
 | `--allowed-ips <list>` | none — every address | Comma-separated client IPs or CIDR ranges (`1.2.3.4,10.0.0.0/8,2001:db8::/32`) allowed to connect. Any other client is refused `403 ip_refused` before the Host check, sign-in or any credential; loopback is always allowed. Repeats accumulate ([Remote access](#remote-access)). |
@@ -346,7 +346,7 @@ A push payload past the 64 KiB body cap arrives loud: the signed route answers
 never false-strike a legitimate large sender into the lockout (raising the
 per-route cap is a separate change).
 
-Outbound webhooks are wired since C-AGT-5.f: the `webhooksOut` user-tier map
+Outbound webhooks are wired: the `webhooksOut` user-tier map
 (see [SETTINGS.md](SETTINGS.md)) posts signed event deliveries to endpoints the
 operator names. The setting is read once at launch — a malformed endpoint is an
 exit-2 startup refusal, never a silent no-webhooks — and a cloned project can
@@ -527,9 +527,9 @@ it and the two tables below are generated from the code
 | `server.health` | read |  | — | Liveness and load. |
 | `server.hello` | read |  | — | The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots). |
 | `server.info` | read |  | — | What this server offers: providers, agents, commands, tools, permission modes. |
-| `server.logs` | admin |  | — | The tail of the server log, flattened and capped; admin scope is the only door (R13). |
+| `server.logs` | admin |  | — | The tail of the server log, flattened and capped; admin scope is the only door. |
 | `server.shutdown` | admin | yes | — | Stop the server, draining running turns first. |
-| `server.strings` | read |  | — | The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated. |
+| `server.strings` | read |  | — | The web UI chrome strings in one locale: only web.-prefixed keys; server, tool and model text stay untranslated. |
 | `session.archive` | write | yes | `sessionId` | Move a session to the archive tray; it leaves the default listing. |
 | `session.cancel` | write | yes | `sessionId` | Cancel the running turn (hard, or soft at the next step boundary). |
 | `session.close` | write | yes | `sessionId` | Release a session (refused while a turn runs unless force). |
@@ -696,7 +696,7 @@ are refused by name (`images_while_busy`, `documents_while_busy`) — `interrupt
 admits them into the turn it replaces — and a `/command` or `!bang` route,
 which would silently drop them, refuses instead (`images_with_command`,
 `documents_with_command`). Blast radius to know: an uploaded document re-enters
-the model context on EVERY later turn until the planned CTX-2-P1 resend fix,
+the model context on EVERY later turn until the planned document-resend fix,
 so it stays billable for the session; a repository file is better mentioned as
 `@path` (page-capped), and documents larger than the wire budget keep that route.
 
@@ -715,7 +715,7 @@ screen-only ones (`/theme`, `/pane`, the pickers) and those whose logic is
 still the TUI's are listed `runsIn: "client"` and refused `-32030`
 (`ui_only`). A project's or your own command files (`.candy-code/commands/`)
 run on the server exactly as typing `/name args` would. A session's
-user-invocable skills (C-WEB-2.d) are listed with `source: "skill"` and
+user-invocable skills are listed with `source: "skill"` and
 `runsIn: "server"`: selecting one sends the typed `/name args` over
 `session.send`, and the host rewrites it into the `$name` mention the TUI's
 slash door would produce. A skill is never a `command.exec` target, and a
@@ -753,7 +753,7 @@ asked about — the `askId` is a hash of the call's id, tool and arguments.
 - `reject` with `cascade: true` rejects every other open question of the
   session and stops the turn at its next step.
 - `remember: "project"` is refused — permission rules are user-tier only.
-  `remember: "user"` (C-SEC-6.c, the card's **Always (save)**) answers `always`
+  `remember: "user"` (the card's **Always (save)**) answers `always`
   and additionally saves the question's patterns as allow-rules in your user
   config — the same set the TUI's `p` writes — reported back in the answer's
   `saved` notice; saved rules take effect at the next launch, and the gate
@@ -991,7 +991,7 @@ list), so a client follows it live and a reconnecting one replays it.
 
 **Settled-turn memory and commit work.** When a served turn ends in a reply
 and nothing queued takes its place, the session runs the same settle work the
-TUI does (C-CTX-2.c): auto-memory consolidation, the `turn`-mode auto-commit
+TUI does): auto-memory consolidation, the `turn`-mode auto-commit
 and the dream pass, each under the session's own notice sink, each billed to
 the session's spend total and followed by its producer's display-only notice
 row in the session's transcript (`Auto-memory saved …`, `Auto-committed …`,
@@ -1005,7 +1005,7 @@ serve — a session over the wire has no input box to show a ghost prompt in.
 
 A browser that closes its tab stops hearing about the session — unless it
 registers a push subscription first. Three methods cover the lifecycle
-(C-WEB-5.d; the transport behind them is the C-WEB-5.c core: RFC 8291
+(the transport behind them is the web-push core: RFC 8291
 `aes128gcm` encryption, RFC 8292 VAPID, allowlisted dialing):
 
 - `push.vapidKey` (read) answers the server's VAPID public key — the value
@@ -1449,7 +1449,7 @@ refusal.
 
 ## Remote access
 
-The server can speak TLS itself (`--tls-cert` + `--tls-key`, C-WEB-5.a); beside
+The server can speak TLS itself (`--tls-cert` + `--tls-key`); beside
 that there are three ways to reach it from another machine, safest first.
 
 **An SSH tunnel** — nothing new listens on the network. Keep the default

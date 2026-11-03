@@ -1139,7 +1139,7 @@ small, because the URL is configuration the chain has no reason to trust:
   the notice strip rather than the whole tool call.
 - **The bound is the hook's `timeout`.** It is a per-request transport timeout
   on a call the user configured, which is what the request needs; the ban on a
-  blanket total-request timeout (E646) is about LLM calls, and this is not one.
+  blanket total-request timeout is about LLM calls, and this is not one.
 
 The reach is the reach of a command hook with a network: a project-tier
 `type: http` entry can post your tool arguments to a host someone else chose.
@@ -1176,7 +1176,7 @@ Two laws the shape depends on:
 
 - **`timeout` is accepted and never applied to the call.** The entry's
   `timeout` is validated like every row's and then left alone — the ban on a
-  blanket total-request timeout (E646) is about LLM calls, and this is one.
+  blanket total-request timeout is about LLM calls, and this is one.
   `PromptHook` is deliberately not a bounded hook: the registry charges it no
   deadline and the call carries only the provider's connect timeout, exactly
   as `ExecReviewer`'s does.
@@ -1327,7 +1327,7 @@ default to pick for you.
 {"formatCommands": {"php": "vendor/bin/php-cs-fixer fix {file}", "ts": "npx prettier --write"}, "formatAuto": true}
 ```
 
-- **`formatAuto` (C-TOOL-5.b, off by default) arms a built-in candidate
+- **`formatAuto` (off by default) arms a built-in candidate
   table** for extensions the map names no command for: `gofmt -w`, `rustfmt`,
   `ruff format` then `black`, `shfmt -w`, `terraform fmt`, and the project's
   own `node_modules/.bin/prettier --write` for the js/ts/json/css/md/yaml

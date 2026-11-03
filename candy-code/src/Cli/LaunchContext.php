@@ -1681,19 +1681,19 @@ final class LaunchContext
      * runs the real CLI binary.
      *
      * THIS ARRAY IS THE WHOLE MODEL-FACING TOOL SET. Its BUILT-IN half is
-     * TWELVE entries as of this writing — it was ten until {@see LspTool} was
-     * added and eleven until {@see TaskTool} was — and THAT count, not this
-     * array's length, is the domain for every "N built-in tools" figure in
-     * `README.md`. `src/Tools/BuiltIn/` holds
-     * exactly those twelve concrete `Tool` classes.
+     * enumerated by {@see \SugarCraft\Code\Tools\Catalog\ToolCatalog::builtUnconditionally()}
+     * — that wired count, not this array's length, is the domain for every
+     * "N built-in tools" figure in `README.md`, and it grows in-step with the
+     * catalog instead of with this sentence. `src/Tools/BuiltIn/` holds the
+     * concrete `Tool` classes it names.
      *
-     * TWELVE IS THE COUNT OF WIRED TOOLS, NOT OF USABLE ONES, and the two differ
+     * THE WIRED COUNT IS NOT THE USABLE COUNT, and the two differ
      * on a launch with no `lsp` setting: `LspTool` is reachable and answers every
      * call with a "no language server configured" error until the user lists a
-     * server ({@see Bootstrap::lspClient()}). A figure that said "twelve working tools"
+     * server ({@see Bootstrap::lspClient()}). A figure that said "N working tools"
      * would be the wrong claim about this array.
      *
-     * The array is longer than twelve only when the project ships a `.mcp.json` AND
+     * The array is longer than the built-in half only when the project ships a `.mcp.json` AND
      * the user has listed this root under `trustedProjectMcp` — both conditions,
      * see {@see mcpClient()} for why the second one exists. Then one
      * {@see McpToolBridge} per tool the configured MCP servers advertise is

@@ -210,7 +210,7 @@ launch's model), `tools`, `skills`, `disallowedTools`, `maxTurns`,
 `mcpServers`, `memory`, `background`, `effort`, `isolation`, `color`,
 `source`, `sourcePath`, `mode`, and — gated on provenance, alone among them —
 `permissionMode`. `mode` sits inside the count but outside the crossing: the
-C-AGT-4.a presenting filter is read and validated by the registry and travels
+presenting filter is read and validated by the registry and travels
 on the preset, yet never lands on the row — the Agent is constructed only
 after that filter has already chosen which presets ride the bridge at all.
 
@@ -252,13 +252,13 @@ reaches a live path:
 | `model` | Live: see [Which model a delegation runs on](#which-model-a-delegation-runs-on). |
 | `effort` | Live: sent with every request of the run as its reasoning effort (`sglang` only; ignored with a note elsewhere). |
 | `permissionMode` | Live, narrow-only: when stricter than the session's mode, a second gate judges every call ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). |
-| `memory` | Live: selects the agent's own note store (C-AGT-3.b) — that tier's index is appended to the delegated prompt, and the `Memory` tool in the run writes that store (granted automatically when declared). Without the key the agent has no store at all. |
+| `memory` | Live: selects the agent's own note store — that tier's index is appended to the delegated prompt, and the `Memory` tool in the run writes that store (granted automatically when declared). Without the key the agent has no store at all. |
 | `background` | Live: runs the delegation as a background session; the call's own `background` wins (see [What you can actually do with a preset today](#what-you-can-actually-do-with-a-preset-today)). |
 | `isolation` | Live: `worktree` runs the delegation (and a `/bg` session run as this agent) in a git worktree of its own; see [Teams and worktrees](#teams-and-worktrees). |
 | `color` | Live: the agents strip, the Agent View header and activity line, and the dashboard row paint a run whose preset declared a colour this theme renders legibly. |
-| `mode` | Live (C-AGT-4.b): which presets the primary-agent cycle offers — `primary`, `subagent`, or `all` (default when absent). Validated at read (`AgentPresetRegistry::parseAgentMode` refuses a value it cannot spell); Alt+A cycles only the presets whose mode faces it, and the web roster and badge honour the declared value. |
+| `mode` | Live): which presets the primary-agent cycle offers — `primary`, `subagent`, or `all` (default when absent). Validated at read (`AgentPresetRegistry::parseAgentMode` refuses a value it cannot spell); Alt+A cycles only the presets whose mode faces it, and the web roster and badge honour the declared value. |
 
-As of C-AGT-4.b this table has no **Inert** row: every field listed
+As of this release, this table has no **Inert** row: every field listed
 reaches a live path — `mode` was the last to go, with the primary-agent
 cycle and the served roster.
 `InertFrontmatterDocumentationDriftTest` pins that equality against this table
@@ -492,9 +492,12 @@ Be precise about this, because "agent preset" reads like "the model can spawn
 one":
 
 - **`Task` delegates.** candy-code ships forty-four
-  built-in tools and one of them — `Task` — is exactly the delegation seam:
+  built-in tools and one of them — `Task` —
+  is exactly the delegation seam:
   it hands a bounded task to a sub-agent named from the session's agent
-  roster and returns that worker's final text. With no session
+  roster and returns that worker's final text. Thirty-eight of the forty-four
+  ship on every launch; the remainder arrive only behind a setting or a team
+  wiring. With no session
   `AgentManager` bound it refuses rather than fabricating, and a call can
   never widen what the named agent declared. A sub-agent with no `tools:`
   list inherits `Task` and can delegate in turn, down to three levels below

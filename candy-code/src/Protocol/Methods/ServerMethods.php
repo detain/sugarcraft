@@ -45,9 +45,9 @@ final class ServerMethods
         $registry->add(MethodSpec::new(self::HELLO, Scope::Read, 'The handshake: protocol version, features, limits; optionally resume subscriptions (snapshotLimit pages their reset snapshots).', self::hello(...)));
         $registry->add(MethodSpec::new('server.health', Scope::Read, 'Liveness and load.', self::health(...)));
         $registry->add(MethodSpec::new('server.info', Scope::Read, 'What this server offers: providers, agents, commands, tools, permission modes.', self::info(...)));
-        $registry->add(MethodSpec::new('server.strings', Scope::Read, 'The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated.', self::strings(...)));
+        $registry->add(MethodSpec::new('server.strings', Scope::Read, 'The web UI chrome strings in one locale: only web.-prefixed keys; server, tool and model text stay untranslated.', self::strings(...)));
         $registry->add(MethodSpec::new('server.shutdown', Scope::Admin, 'Stop the server, draining running turns first.', self::shutdown(...), true));
-        $registry->add(MethodSpec::new('server.logs', Scope::Admin, 'The tail of the server log, flattened and capped; admin scope is the only door (R13).', self::logs(...)));
+        $registry->add(MethodSpec::new('server.logs', Scope::Admin, 'The tail of the server log, flattened and capped; admin scope is the only door.', self::logs(...)));
         $registry->add(MethodSpec::new('client.viewing', Scope::Read, 'Say which sessions this client shows, and which is in front.', self::viewing(...)));
     }
 

@@ -168,7 +168,7 @@ Then work down this list:
 **My skill loads but its `allowed-tools` / `effort` does nothing.** Correct —
 those fields are parsed and carried but not acted on by the live CLI path. See
 [`SKILLS.md`](SKILLS.md#frontmatter) for the field-by-field table. A
-`context: fork` skill is acted on (C-EXT-2.c): its body runs in a sub-agent
+`context: fork` skill is acted on): its body runs in a sub-agent
 through the Skill tool bound to the turn, instead of being inlined.
 
 ---

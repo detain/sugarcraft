@@ -344,9 +344,9 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `sessions.awayRecap` | `Chat` focus regain → `HandlesRunControl::awayRecapOnFocusBack()` gate → `AwayTracker::recapEnabled()` | yes |
 | `expandToolOutput` | `Renderer::renderToolResults()`, `Chat::isToolOutputExpanded()` → `Renderer::toolOutputExpandedByDefault()` | yes |
 | `maxCheckpoints` | `EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()` | **no** |
-| `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()`; `command:` ids split to `commandFor()` at the top of `App::handleKey()` (C-EXT-5) — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a) | **no** |
-| `vimMode` | `Chat::update()` key dispatch (arm re-sync + operator resolution, TUI-3A) → `ComposerVim` over the sugar-forms `TextArea` Vim layer (w5f) | **no** |
-| `screenReader` | `AgentLiveRegistry::staticSpinner()` → `frameAt()` pins the agent spinner to its first frame (C-TUI-6.i); `ScreenReaderMode::border()` / `glyph()` / `menuRow()` / `cue()` reach the renderer and menus in C-TUI-6.j | **no** |
+| `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()`; `command:` ids split to `commandFor()` at the top of `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` | **no** |
+| `vimMode` | `Chat::update()` key dispatch (arm re-sync + operator resolution) → `ComposerVim` over the sugar-forms `TextArea` Vim layer | **no** |
+| `screenReader` | `AgentLiveRegistry::staticSpinner()` → `frameAt()` pins the agent spinner to its first frame; `ScreenReaderMode::border()` / `glyph()` / `menuRow()` / `cue()` reach the renderer and menus | **no** |
 | `transcriptJsonl` | `Bootstrap::sessionStore()` → `EnhancedSessionStore::withJsonlMirror()` (the store mirror) and the `JsonlTranscriptWriter::enabled()` flag read by `ScriptHook::stdinPayload()` (`transcript_path`) | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 | `formatCommands` | `Bootstrap::hooks()` → `FormatRunner::withCommands()` | **no** |
@@ -385,7 +385,7 @@ default). It is user-tier only, because it is text stamped on every commit
 made under your identity. A non-boolean `includeGitInstructions` or a
 non-string entry is ignored as if unset.
 
-`maxOutputTokens` is the exception that has no exception: it is E707's opt-in
+`maxOutputTokens` is the exception that has no exception: it is the opt-in
 output ceiling, and **unset is not zero** — an absent key sends no `max_tokens`
 override, and every provider keeps the documented default it already ships
 (4096 on the Anthropic-shaped wires; Gemini on `vertex` sends no ceiling at
@@ -417,9 +417,9 @@ fails every request.
 axis. It declares rates — **USD per 1M tokens**, `{"<model>": {"input": 7.5,
 "output": 30}}` — for models the `openai`, `anthropic`, `vertex` or `bedrock`
 provider has no built-in price for, overriding or extending its table. (Vertex
-and Bedrock only started receiving it in audit A15; before that the
+and Bedrock only started receiving it after the pricing audit; before that the
 unpriced-model notice told you to set a key those two never read.) On Vertex,
-Bedrock and the native Anthropic arm (ISS-023) a key may be the raw model id
+Bedrock and the native Anthropic arm a key may be the raw model id
 or its normalised family — `claude-sonnet-4-6` covers
 `us.anthropic.claude-sonnet-4-6-v1:0` too. An optional `"cached"` rate prices
 cache-hit prompt tokens (`prompt_tokens_details.cached_tokens`) on the OpenAI
@@ -450,7 +450,7 @@ naming one would blind the spend cap for every one of those calls. Set them in
 your own `~/.candy-code/settings.json` or `config.json`, or with
 `CANDY_CODE_TITLE_MODEL` / `CANDY_CODE_SUMMARY_MODEL`.
 
-When neither names a model, the two fall back differently (ISS-077). A title,
+When neither names a model, the two fall back differently. A title,
 `/btw` line or goal judgement is a handful of output words, so the titler takes
 the provider type's cheap default from `ProviderFactory::AUXILIARY_MODEL_BY_TYPE`
 (Haiku-class on anthropic, vertex and bedrock, a mini on openai) before it would
@@ -497,7 +497,7 @@ on the OpenAI reasoning family (the `o`-prefixed models and the `gpt-5`
 spellings other than the `-chat` one), `thinkingConfig` on Gemini, and the
 per-provider shapes for Bedrock, Codex and SGLang. Pairs that shape no field —
 `echo`, `custom`, plain chat models like `gpt-4o` — never carried it silently
-by design, and since C-PRV-1.b they still do not: a saved tier landing on such
+by design, and they still do not: a saved tier landing on such
 a pair is left off the engine and the launch says so in one notice row; a
 mid-session switch onto such a pair states it once in the transcript; and
 `/effort` itself refuses per model, naming the pair and persisting nothing.
@@ -567,7 +567,7 @@ same money reason as `maxOutputTokens`.
   `vertex` provider (audit A21): `-1` for dynamic thinking, `0` to turn it off
   (Flash models only; Pro refuses `0`), or a token cap. Unset sends no
   `thinkingConfig`, so the model's own default applies. On the `anthropic`
-  provider the same key switches on extended thinking (CTX-1 §6.3): the
+  provider the same key switches on extended thinking: the
   value becomes the Messages API `thinking.budget_tokens`, whose protocol
   floor is `1024` — anything from `1` to `1023` (and `-1`, Gemini's dynamic
   spelling with no Anthropic meaning) is refused when the provider is built,
@@ -580,7 +580,7 @@ same money reason as `maxOutputTokens`.
   `Bootstrap::toollessBackend()` discard the setting anyway: it is not sent on
   title and auxiliary calls — session titles, `/btw`, goal judgements, commit
   subjects — which are handful-of-words completions that never earn a thinking
-  bill. The summary backend is the one exception by design (C-PRV-5.b): a
+  bill. The summary backend is the one exception by design): a
   compaction summary becomes permanent context, so it keeps the configured
   reasoning. A `thinkingBudget` larger than
   the configured model's family output ceiling — 64000 tokens on the `claude`
@@ -600,8 +600,8 @@ same money reason as `maxOutputTokens`.
   model's own maximum applies (65,535 on Gemini 2.5). Neither change has been
   checked against a live Gemini endpoint yet.
 - **`promptCache`** turns prompt-cache breakpoints on the `vertex`,
-  `bedrock` and native `anthropic` providers on or off (audit A15, with
-  `anthropic` joining from ISS-023). It is on unless set to `false`.
+  `bedrock` and native `anthropic` providers on or off (with
+  `anthropic` joining too). It is on unless set to `false`.
   On the Anthropic Messages wire — Claude models on `vertex` and every
   `anthropic` request — the request marks `cache_control` on the system
   prompt, the last tool and the end of the conversation, re-derived on every
@@ -797,7 +797,7 @@ trusted repository's `.mcp.json` may declare a `claude-mcp` entry — but the
 entry carries the type and nothing else, and the spawn it requests comes
 from this file: `claudeMcpBinary`, an absolute path to an existing,
 executable program, plus optional `claudeMcpArgs` (default `mcp serve`,
-the documented stdio subcommand — ISS-043) and
+the documented stdio subcommand) and
 `claudeMcpEnv` (literal strings, no `${VAR}` interpolation). A project's
 `.candy-code/settings.json` naming them changes nothing: the reader
 consults the user files only. The grant is frozen for the process at the
@@ -849,7 +849,7 @@ payload carries absolute paths of the working directory and project root, the
 same paths the command already runs beside with the inherited environment.
 
 What it costs — stated for a command that runs off the TUI thread, in a
-forked child of its own (ISS-095), so a slow configured command can never stall
+forked child of its own, so a slow configured command can never stall
 the frame or the Ctrl+C read; the result lands as a `StatusLineResultMsg` when
 the child exits:
 `StatusLineCommand::REFRESH_SECONDS` (2.0) between runs, and a hard
@@ -1036,7 +1036,7 @@ The three warnings this paragraph used to name as still-stderr-only — an
 unusable provider, a skipped hook file, a rejected permission pattern — have
 since migrated through the same seam, along with the agent-preset degradations,
 the refused project directories, the skipped skill files, the skipped command
-files (E172), the unreadable memory notes, the instruction files and enabled
+files, the unreadable memory notes, the instruction files and enabled
 skill bodies the system prompt leaves out for budget (audit R1), a nonsense
 `maxToolSteps` or `maxOutputTokens` (audit R12) and the empty tool set — the
 reports that can raise several rows share one call site:
@@ -1573,7 +1573,7 @@ Saved is not applied: see the next section for when each key takes effect.
 |---|---|---|
 | live | At once, in the running session (`Chat::applySettings()`); a key that rebuilds the engine waits for a running turn to end | `provider`, `reasoningEffort`, `maxToolSteps`, `maxCostUsd`, `compaction.reminderPercent`, `compaction.autoPercent`, `compaction.blockPercent`, `compaction.keepRecent`, `compaction.summaryUserChars`, `compaction.summaryAssistantChars`, `compaction.toolOutputChars`, `compaction.reminderTokens`, `compaction.autoTokens`, `compaction.blockTokens`, `compaction.modelTokenCaps`, `compaction.idleOfferSeconds`, `compaction.mode`, `compaction.refillLimit`, `compaction.idleAuto`, `autoReviewScope`, `memory.projectNoteMaxBytes`, `theme`, `statusLine`, `layout`, `queueMode`, `terminalBackground`, `mouse`, `mouseClicks`, `scrollWheelLines`, `doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`, `diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`, `promptSuggestions`, `promptSuggestionHistory`, `sessions.awayRecap`, `expandToolOutput`, `maxCheckpoints`, `vimMode`, `screenReader` |
 | next turn | From the next turn: the engine re-reads the merged settings at every turn start | `maxOutputTokens`, `parallelToolCalls`, `parallelToolDeadlineSeconds`, `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`, `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`, `contextPruning.compress`, `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`, `env.diffMaxBytes`, `contextPruning.mode`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`, `permissions.autoAllowReadOnly`, `redactToolOutput`, `toolOutputCapBytes`, `mcpResultCapBytes`, `readMaxBytes`, `readPageLines`, `readPageBytes`, `toolSpillWindowPercent`, `toolInstructionCapBytes`, `toolSpillCaptureBytes`, `toolSpillMinCapBytes`, `globMaxMatches`, `webFetchMaxBytes`, `webFetchTimeoutSeconds`, `bashInteractiveIdleSeconds`, `bashTimeoutSeconds`, `bashMaxTimeoutSeconds`, `chatToolTimeoutSeconds`, `grepTimeoutSeconds`, `requireReadBeforeWrite`, `sd.timeoutSeconds`, `rules.standingMaxBytes`, `skills.pathNudges`, `memory.promptMaxEntries`, `memory.promptMaxBytes`, `memory.entryMaxBytes`, `memory.userMaxEntries`, `memory.userMaxBytes`, `memory.autoConsolidate`, `memory.dreamIntervalSeconds`, `memory.dreamProposeSkills`, `embeddingModel`, `skills.listingMaxBytes`, `subagentMaxTurns`, `subagentMaxDepth`, `subagentMaxActive`, `turnIdleTimeoutSeconds`, `streamIdleTimeoutSeconds`, `streamHeaderTimeoutSeconds`, `providerRetryAttempts`, `providerRetryBaseBackoffMs`, `temperature` |
-| reload | On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word (plan_comparison TUI-4a) | `keybindings` |
+| reload | On `/keys reload`, or at the next launch: the saved file is re-read and re-applied when you say the word | `keybindings` |
 | restart | At the next launch: read once while the session is built | `models`, `providers`, `titleModel`, `summaryModel`, `advisorModel`, `modelPrices`, `extraBody`, `thinkingBudget`, `serviceTier`, `promptCache`, `promptCache.keepWarm`, `symbolMap.enabled`, `notices.transcriptLimit`, `contextWindow`, `permissionMode`, `permissionRules`, `autoReview`, `autoReviewModel`, `secretEnvAllowlist`, `allowedTools`, `disabledTools`, `references`, `bashSandbox`, `bashSandboxNestedUserns`, `sandboxScope`, `sandboxAllowedDomains`, `testCommand`, `autoTest`, `webSearchMaxResults`, `webSearchTimeoutSeconds`, `webSearchEndpoint`, `webSearchBackend`, `sd.baseUrl`, `sd.apiKey`, `sd.defaultModel`, `ui.imageRenderMode`, `sd.presets`, `ui.mediaDisplayOverrides`, `sd.savePattern`, `voice.baseUrl`, `voice.apiKey`, `voice.model`, `voice.language`, `voice.maxSeconds`, `instructions`, `instructions.walkToRoot`, `instructionsExclude`, `disabledRules`, `disabledSkills`, `enabledSkills`, `pluginPaths`, `subagentModel`, `subagentMaxConcurrent`, `includeGitInstructions`, `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `notify`, `watchFiles`, `sessionRetentionDays`, `transcriptJsonl`, `lintCommands`, `formatCommands`, `formatAuto`, `hooksDefaultTimeoutSeconds`, `disabledMcpServers`, `mcp.enabled`, `mcp.lazySchemaTokens`, `server.host`, `server.port`, `server.allowedOrigins`, `server.allowedHosts`, `server.allowedIps`, `server.trustedProxies`, `server.maxOpenSessions`, `server.maxConcurrentTurns`, `server.askTimeoutSeconds`, `server.drainSeconds`, `server.allowBypass`, `server.dirBrowse`, `server.clientTools`, `server.browseRoot`, `webhooks`, `webhooksOut`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`, `debug.stream` |
 | next launch | At the next launch, and only then: frozen for the life of the process | `trustedProjectHooks`, `trustedProjectMcp`, `trustedProjectCommands`, `trustedProjectSettings`, `trustedBundleCommands`, `mcpPromptShell`, `claudeMcpBinary`, `claudeMcpArgs`, `claudeMcpEnv` |
 
@@ -1703,7 +1703,7 @@ view), then say the word.
   the transcript and the error channel, never a second launch banner.
 
 Two overrides that name the SAME chord are one of those announced rows
-(plan_comparison TUI-4b): the alias table takes exactly one winner per
+): the alias table takes exactly one winner per
 pressed chord, decided by the /keys reference order — the row listed first
 wins, and the loser's override answers no key at all. The outcome is
 deterministic and file-order-independent; it is the silence that was the
@@ -1714,7 +1714,7 @@ mid-turn, `/keys reload` included, so the effective moment is the first idle
 keystroke after the word. And because the launch registers the same setting
 the word re-reads (`Bootstrap::chat()` → `Bootstrap::reloadKeybindings()`),
 a reload you never said still cannot surprise you across a restart — word and
-launch apply one file (plan_comparison TUI-4a).
+launch apply one file.
 
 This is deliberately not a file watcher: nothing reloads silently, the word
 is the door.
@@ -1723,7 +1723,7 @@ is the door.
 
 Alongside the binding ids the reference lists, the map accepts one family of
 ids that name no shipped row: `"command:<name>": "Ctrl+Z"` binds the chord to
-running the slash command `/<name>` (plan_comparison C-EXT-5). `<name>` takes
+running the slash command `/<name>`. `<name>` takes
 the same grammar the command registry itself accepts — letters, digits, `-`
 and `_`, one optional bundle or MCP colon — and the chord takes the same
 spelling as any override: one modifier press or a function key, `null` to
@@ -1755,7 +1755,7 @@ Alt chords (newline on Alt+Enter, plan-mode on Alt+M, the agents strip on
 Alt+Down, agent-view paging on Alt+N and Alt+P) do nothing, and plain letters
 typed with Option arrive as accents instead. On a Mac whose terminal
 announces no Kitty protocol candy-code records a launch hint saying so
-(plan_comparison TUI-5 stage 1) — a notice row, not a refusal; every other
+ — a notice row, not a refusal; every other
 key works.
 
 If you would rather keep Option for composing accents, alias the same
@@ -1782,7 +1782,7 @@ answers, and `Ctrl+Y`/`Ctrl+E` land as exactly those — they answer a live
 prompt as if typed, and elsewhere they type the letter into the draft. The
 earlier preset aliased `agentview.next`/`agentview.prev` instead; their Alt
 targets no longer answer anything at a prompt (a prompt answers unmodified
-runes only — plan_comparison TUI-5), so agent-view paging keeps its shipped
+runes only), so agent-view paging keeps its shipped
 `Alt+N`/`Alt+P` and needs Option-as-Meta or a Kitty-speaking terminal on a Mac,
 like every other Alt chord the preset does not rescue.
 

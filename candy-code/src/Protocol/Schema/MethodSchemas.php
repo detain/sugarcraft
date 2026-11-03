@@ -967,7 +967,7 @@ final class MethodSchemas
                         'p256dh' => Schema::string(256)->describe('base64url of the browser\'s uncompressed P-256 subscription public point (65 octets).'),
                         'auth' => Schema::string(64)->describe('base64url of the 16-octet subscription auth secret.'),
                     ], ['p256dh', 'auth']),
-                    'name' => Schema::boolean()->describe('Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (R13 default).'),
+                    'name' => Schema::boolean()->describe('Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (the default).'),
                 ], ['endpoint', 'keys']),
                 Schema::object([
                     'subscribed' => Schema::boolean()->describe('True only once the row is on disk.'),

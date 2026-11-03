@@ -799,7 +799,7 @@
                         "lastCache",
                         "sessionCache"
                     ],
-                    "description": "The `/context` figures ({@see \\SugarCraft\\Code\\Context\\ContextBreakdown}) — same measurement, same single writer (WEB-3a)."
+                    "description": "The `/context` figures ({@see \\SugarCraft\\Code\\Context\\ContextBreakdown}) — same measurement, same single writer."
                 }
             },
             "required": [
@@ -810,7 +810,7 @@
                 "untrusted",
                 "breakdown"
             ],
-            "description": "WEB-3a: what the session's context is built from — structure for the panel `/context` prints as text."
+            "description": "What the session's context is built from — structure for the panel `/context` prints as text."
         },
         "Error": {
             "type": "object",
@@ -1428,7 +1428,7 @@
                     "enum": [
                         "trust"
                     ],
-                    "description": "WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry)."
+                    "description": "The marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry)."
                 },
                 "target": {
                     "enum": [
@@ -3793,7 +3793,7 @@
                     },
                     "name": {
                         "type": "boolean",
-                        "description": "Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (R13 default)."
+                        "description": "Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (the default)."
                     },
                     "idempotencyKey": {
                         "type": "string",
@@ -4242,7 +4242,7 @@
             }
         },
         "server.logs": {
-            "description": "The tail of the server log, flattened and capped; admin scope is the only door (R13).",
+            "description": "The tail of the server log, flattened and capped; admin scope is the only door.",
             "scope": "admin",
             "idempotent": false,
             "params": {
@@ -4312,7 +4312,7 @@
             }
         },
         "server.strings": {
-            "description": "The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated.",
+            "description": "The web UI chrome strings in one locale: only web.-prefixed keys; server, tool and model text stay untranslated.",
             "scope": "read",
             "idempotent": false,
             "params": {
@@ -7057,7 +7057,7 @@
                                 "enum": [
                                     "trust"
                                 ],
-                                "description": "WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry)."
+                                "description": "The marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry)."
                             },
                             "target": {
                                 "enum": [

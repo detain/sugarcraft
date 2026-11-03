@@ -609,8 +609,9 @@ acp выполняет ходы для редактора, пока редакт
                          никогда не флаг
 
 Переменные окружения:
-   CANDY_CODE_PROVIDER    Провайдер для использования: openai, anthropic, claude-code,
-                          sglang, bedrock, vertex, custom
+   CANDY_CODE_PROVIDER    Провайдер для использования: openai, azure, anthropic, claude-code,
+                          codex, sglang, bedrock, vertex, gemini,
+                          openrouter, custom
    CANDY_CODE_MODEL       Имя модели (переопределяет значение по умолчанию провайдера; --model имеет приоритет)
    CANDY_CODE_PERMISSION_MODE
                           Режим разрешений для старта, переопределяет

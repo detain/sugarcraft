@@ -29,7 +29,7 @@ Three tiers, merged by name, later overriding earlier
 | mcp | a fetched `prompts/get` body ([MCP.md](MCP.md)) | **not by itself — reaches the gate only with the server key in `mcpPromptShell`** |
 | foreign | the other tools' trees (below) | the tier decides: user **yes**, project **only if this root is trusted** |
 
-The foreign floor is what INT-3 added: `~/.claude/commands`,
+The foreign floor is what the import wave added: `~/.claude/commands`,
 `<root>/.claude/commands`, `~/.opencode/{command,commands}`,
 `~/.config/opencode/{command,commands}` and `<root>/.opencode/{command,commands}`
 are read by `ForeignCommandDiscovery` and merged **below** everything native.
@@ -47,7 +47,7 @@ native name.
 and the walk is capped at `CommandLoader::MAX_DEPTH` levels deep — which also
 bounds a symlink cycle inside the directory.
 
-Bundle rows are the exception to bare naming (C-EXT-4.c): a bundle's
+Bundle rows are the exception to bare naming): a bundle's
 `review.md` is `/reviewkit:review` — the bundle name folded into the name
 pattern's charset as a leading segment, and a bundle whose name folds to
 nothing has its files refused with a skip record rather than loaded bare — so
@@ -129,9 +129,9 @@ is a valid command whose body is the whole prompt.
 |---|---|
 | `description` | shown in the "/" popup and `/help`; defaults to `Custom command: <name>` |
 | `argument-hint` | placeholder shown after the name in the popup |
-| `model` | Live since C-EXT-2.e: the expanded prompt goes out on this model for exactly the one turn the command submits, through `TurnController::commandTurnModel()`; a model this server cannot serve falls back to the session's with a notice — the same rule `Task` applies to a requested model |
-| `subtask` | Live since C-EXT-2.e: `true` wraps the expansion in `TurnController::wrapCommandDelegation()`'s fenced delegation directive, so the prompt goes to the `Task` tool naming `agent` (default `coder`) instead of being answered in the conversation |
-| `agent` | Claude Code's command frontmatter, live since C-EXT-2.e: routes the expansion through that same directive and names the agent it delegates to; without `subtask`, `agent` alone still delegates |
+| `model` | Live: the expanded prompt goes out on this model for exactly the one turn the command submits, through `TurnController::commandTurnModel()`; a model this server cannot serve falls back to the session's with a notice — the same rule `Task` applies to a requested model |
+| `subtask` | Live: `true` wraps the expansion in `TurnController::wrapCommandDelegation()`'s fenced delegation directive, so the prompt goes to the `Task` tool naming `agent` (default `coder`) instead of being answered in the conversation |
+| `agent` | Claude Code's command frontmatter, live: routes the expansion through that same directive and names the agent it delegates to; without `subtask`, `agent` alone still delegates |
 | `template` | opencode's prompt body. Consumed only as a substitute for an empty file body; a body wins when both exist |
 | `allowed-tools` / `disallowed-tools` | Claude Code's command frontmatter. Recognised-silent: a file in the imported convention earns no did-you-mean for its own syntax, and this port carries and acts on neither (the silence is ours, not the file's) |
 
@@ -444,7 +444,7 @@ drive the COMPLETE command text (`/pane dock left`) through
 `Chat::handlePaneCommand()`, the handler the real `/pane` row dispatches to.
 The Ctrl+P palette and the draft box are two different surfaces over one
 registry, and a palette row may be a fuller sentence than a slash spelling.
-Since C-EXT-5.b the palette lists EVERY slash-visible command: rows with a
+Since this release the palette lists EVERY slash-visible command: rows with a
 palette action dispatch as before, and every other row is a prefill row —
 running it closes the palette and fills a blank draft with `/<name> `, caret
 at the end, while a draft that already holds text is KEPT and the row answers
@@ -533,15 +533,14 @@ canonical spelling verbatim, so `/KEYS` is prose. And the argument-less
 commands — `exit`, `quit`, `help`, `clear` — fire only when the
 draft is exactly `/name`, because `/help me name this variable` is a request and
 not a command list. `keys` obeys that law for every word but one: `/keys
-reload` re-applies the `keybindings` setting mid-session (plan_comparison
-TUI-4a), and it is the only command with a listed sub-argument — `/keys foo`
+reload` re-applies the `keybindings` setting mid-session, and it is the only command with a listed sub-argument — `/keys foo`
 is still prose. `permissions` sits below that block deliberately despite
 looking like its neighbour, and `rules` too: mis-routing those two is worse than
 answering a question loosely, because `/permissions rules` would ask the model
 about a gate it cannot see and answer plausibly, and `/rules terse` would never
 reach the toggle.
 
-A prose fall-through still has a floor (ISS-037): a first token shaped like a
+A prose fall-through still has a floor): a first token shaped like a
 command — `/[A-Za-z][\w:-]*` — that no built-in spelling and no session command
 file claims is REFUSED with a notice, not dispatched as a prompt, because the
 application owns the command list and knows the word was not addressed to the
@@ -549,7 +548,7 @@ model. The popup's anchored matcher writes the "did you mean" sentence when it
 has a vote. The escape and the survivors are deliberate: `//text` sends the
 line literally, and `/etc/hosts`, `/2fa` and `/exit now` reach the model because
 their names are not command-shaped or are claimed and declined. A word that
-names a user-invocable SKILL dispatches it (VIS-5): the draft is rewritten
+names a user-invocable SKILL dispatches it: the draft is rewritten
 into the live `$name` mention channel, so the skill's body rides the turn
 exactly as if the name had been mentioned. A skill the registry will not
 invoke — disabled, `user-invocable: false`, or no registry in this session —

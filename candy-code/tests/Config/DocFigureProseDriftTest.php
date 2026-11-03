@@ -7486,4 +7486,98 @@ final class DocFigureProseDriftTest extends TestCase
             'the "N checks" sentence of docs/TROUBLESHOOTING.md drifted from the live DoctorChecks::probes() roster'
         );
     }
+
+    /**
+     * M3 (lib-reviews-1103): the Capabilities paragraph, the quick-start
+     * sentence and AGENTS_AUTHORING spelled the built-in tool set in words
+     * while the catalog grew rows — pin every figure live: "N of them ship
+     * on every launch" must spell count(ToolCatalog::builtUnconditionally())
+     * and "carries M more" the conditional remainder of entries(), so a new
+     * tool forces the prose along.
+     */
+    public function testTheCapabilitiesToolCountsSpellTheCatalogLive(): void
+    {
+        $readme = (string) file_get_contents(\dirname(__DIR__, 2) . '/README.md');
+        $uncond = \count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::builtUnconditionally());
+        $entries = \count(\SugarCraft\Code\Tools\Catalog\ToolCatalog::entries());
+        $extra = $entries - $uncond;
+
+        $words = [
+            'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7,
+            'thirty-six' => 36, 'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39,
+            'forty' => 40, 'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44,
+        ];
+        $spelled = \array_flip($words);
+
+        self::assertSame(
+            1,
+            preg_match('/([a-z]+|[a-z]+-[a-z]+) of them ship on every launch/', $readme, $m),
+            'the quick-start sentence no longer carries its spelled count — re-pin this arm with the page'
+        );
+        self::assertArrayHasKey($m[1], $words, "unknown count word '{$m[1]}' — the arm's map needs the new spelling");
+        self::assertSame($uncond, $words[$m[1]], 'README.md quick-start miscounts the tools that ship on every launch');
+
+        self::assertStringContainsString(
+            'all ' . $spelled[$uncond] . ' of them (the set `Bootstrap::tools()`',
+            $readme,
+            'the Capabilities coverage sentence drifted from ToolCatalog::builtUnconditionally()'
+        );
+        self::assertStringContainsString(
+            'carries ' . $spelled[$extra] . ' more',
+            $readme,
+            'the Capabilities coverage sentence miscounts the conditional remainder of the catalog'
+        );
+
+        $authoring = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/AGENTS_AUTHORING.md');
+        self::assertMatchesRegularExpression(
+            '/\b' . \ucfirst($spelled[$uncond]) . ' of the ' . $spelled[$entries] . '\s+ship on every launch/',
+            $authoring,
+            'AGENTS_AUTHORING.md drifted from the live catalog entry count or its launch half'
+        );
+    }
+
+    /**
+     * M4 (lib-reviews-1103): three shipped pages enumerate CANDY_CODE_PROVIDER's
+     * type keys (README, docs/ENVIRONMENT.md, the --help screen's lang/en.php
+     * rows) and two of them silently lost rows as ProviderFactory gained
+     * azure and openrouter. Pin all three enumerations to
+     * ProviderFactory::availableTypes() in factory order, and the spelled
+     * "N type keys" figures with them.
+     */
+    public function testTheProviderTypeKeyEnumerationsMatchTheFactoryLive(): void
+    {
+        $types = (new \SugarCraft\Code\Providers\ProviderFactory())->availableTypes();
+        $backticked = '`' . implode('`, `', \array_slice($types, 0, -1)) . '`, or `' . $types[\count($types) - 1] . '`';
+        $plain = implode(', ', $types);
+        $countWords = ['nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13];
+
+        $readme = (string) file_get_contents(\dirname(__DIR__, 2) . '/README.md');
+        self::assertStringContainsString(
+            'accepts ' . $backticked . ' — ',
+            $readme,
+            'README.md misenumerates the provider type keys (factory order, backticked)'
+        );
+        self::assertSame(
+            1,
+            preg_match('/ — ([a-z]+) type keys/', $readme, $m),
+            'the README provider sentence no longer spells its key count — re-pin this arm with the page'
+        );
+        self::assertArrayHasKey($m[1], $countWords, "unknown count word '{$m[1]}' on the page");
+        self::assertSame(\count($types), $countWords[$m[1]], 'the README "N type keys" figure drifted from ProviderFactory::availableTypes()');
+
+        $env = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ENVIRONMENT.md');
+        self::assertStringContainsString(
+            'Which LLM provider to use: ' . $backticked . ', or any provider name',
+            $env,
+            'docs/ENVIRONMENT.md misenumerates the provider type keys in the CANDY_CODE_PROVIDER cell'
+        );
+
+        $help = (string) preg_replace('/\s+/', ' ', (string) file_get_contents(\dirname(__DIR__, 2) . '/lang/en.php'));
+        self::assertStringContainsString(
+            'Provider to use: ' . $plain,
+            $help,
+            'the --help screen (lang/en.php) misenumerates the provider type keys'
+        );
+    }
 }
+

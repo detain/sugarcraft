@@ -53,7 +53,7 @@ plugin system, and a bundle's content lands at every loader's **lowest
 precedence seat**: a plain `.claude/skills`, `.claude/commands` or
 `.claude/agents` directory always beats a bundle's same-named entry, per tier.
 For slash commands the beat is no longer a shadow: bundle rows are namespaced
-`<bundle>:<cmd>` (C-EXT-4.c), so two bundles shipping the same file both
+`<bundle>:<cmd>`, so two bundles shipping the same file both
 survive, and the flat spelling is admitted only while no other row claims it.
 
 - **Skills** (`skills/<name>/SKILL.md`) load through the same discovery as
@@ -83,7 +83,7 @@ system rows in the transcript:
 
 - **Hooks.** Bundle hook content is never registered — neither the `hooks/`
   directory, nor a `hooks` path declared in the manifest, nor an **inline
-  `hooks` object** inside `plugin.json` (C-EXT-7: the declined-surface
+  `hooks` object** inside `plugin.json` (the declined-surface
   reader answers with the manifest path — `hooksPaths()` names where the
   hooks ride inside it — while the decline notice names the affected
   bundles). Lifecycle hooks execute
@@ -109,13 +109,13 @@ system rows in the transcript:
 - **Shell forms.** A `` !`cmd` `` inside a bundle's command file is refused at
   expansion — in the transcript, not by a launch notice. The tier the bundle
   happens to install under decides nothing, and `trustedProjectCommands` does
-  not unlock it either (C-SEC-3; the [COMMANDS.md](COMMANDS.md) tier table
+  not unlock it either (the [COMMANDS.md](COMMANDS.md) tier table
   carries the row). A per-origin opt-in is the planned follow-up. If those
   surfaces are unacceptable to you, the
   bundle is a stranger; deleting its directory takes it all back.
 - **Script tools.** A bundle cannot contribute script tools at all: there is
   no bundle-side surface for them. A script tool is declared only by the
-  person's own account directory (C-TOOL-6.e, the ruling declined bundles
+  person's own account directory (the ruling declined bundles
   explicitly), so its trust is the same subject the rest of the user tier
   has. No decline notice exists for this one because the surface does not.
 

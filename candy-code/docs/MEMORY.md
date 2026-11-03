@@ -270,7 +270,7 @@ not wired rather than saving silently inert.
 
 An armed intent rides the next matching tool result inside a
 `<system-reminder>` envelope, once per note — the same seam path-scoped rules
-use (`RulePathNudge`, C-CTX-3.f), under its own header so rule reminders and
+use (`RulePathNudge`), under its own header so rule reminders and
 standing intents stay distinguishable, and every byte of the note crosses
 `PromptFence::escape()` like every other note body. The index lists intents
 under their own `## standing intents` heading with the trigger spelled out, and
@@ -283,8 +283,7 @@ live: `MemoryStore` carries the `when:` column of the frontmatter, a saved
 intent's trigger survives the write and re-arms on reload, and the `save`
 reply says the standing-intent sentence. A hand-edited malformed trigger
 de-arms that note instead of unreadabling it — the read door stays lenient
-while the save door keeps refusing loudly. See `lanes/C-CTX-3.f` under
-`prompt_kit/findings/comparison-1026/`.
+while the save door keeps refusing loudly.
 
 Every write goes through `Memory\MemoryWriter`, the router `/memory add` uses
 too, so a note the model saves lands exactly where the user's would: a
@@ -294,7 +293,7 @@ the repository store first, the same precedence the prompt's index gives a
 shared id, so `view`, `str_replace` and `delete` reach the note the index
 shows. The tool cannot write `agent` scope; that scope is for imports. Inside a
 delegation whose preset declares `memory:` the writer is re-bound before any of
-this applies (`MemoryWriter::forAgent()`, C-AGT-3.b): every action then reads
+this applies (`MemoryWriter::forAgent()`): every action then reads
 and writes that agent's own store — nothing the session, the repository or
 another agent can see — and the tool is granted automatically with the
 declaration.
@@ -637,7 +636,7 @@ user still owns.
 
 An agent preset can declare `memory: user`, `memory: project` or
 `memory: local` — the field selects a note store of the agent's own
-(`src/Memory/AgentMemory.php`, C-AGT-3.b). Without the key the agent has no
+(`src/Memory/AgentMemory.php`). Without the key the agent has no
 store at all: no index rides its prompt and no note of its own is kept.
 
 The three spellings are three homes for one layout,
@@ -699,7 +698,7 @@ the spend total either way. `CANDY_CODE_DISABLE_AUTO_MEMORY=1` turns it off
 ([ENVIRONMENT](ENVIRONMENT.md)), and so does `"memory.autoConsolidate": false`
 in `~/.candy-code/config.json` (the environment wins when it is set). The rule
 answers for served sessions too: a turn that settles in a `serve`d session
-schedules the same pass (C-CTX-2.c), and because the throttle lives on disk it
+schedules the same pass, and because the throttle lives on disk it
 is one five-minute budget per project shared by the TUI and every served
 session of that checkout — intended, not an oversight.
 
@@ -803,7 +802,7 @@ pass runs its engine on a fresh prompt memo of its own
 bust nor inherit the session's instruction layers.
 `CANDY_CODE_DISABLE_AUTO_MEMORY=1` or `"memory.autoConsolidate": false` turns it
 off together with auto-memory ([ENVIRONMENT](ENVIRONMENT.md)). A `serve`d
-session runs the pass at its settles too (C-CTX-2.c), and the throttle file is
+session runs the pass at its settles too, and the throttle file is
 shared on disk: the TUI and every served session of one checkout spend the same
 two-hour budget per project.
 

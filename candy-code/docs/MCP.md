@@ -133,7 +133,7 @@ answered here:
   are never honoured — the freeze rule rests on the gate, not on a
   never-re-read mechanism. The `CANDY_CODE_MCP_DISABLE`
   switch answers for both tiers at once.
-- **Where a `stdio` server runs (C-MCP-1).** An entry never inherits whatever
+- **Where a `stdio` server runs.** An entry never inherits whatever
   directory the launch happened to stand in. A project-tier entry spawns at
   the root holding its `.mcp.json` — the same root the pin record is keyed
   to, so an approval made while sitting in `repo/sub` runs the server at
@@ -252,7 +252,7 @@ block of a Claude Code config (`~/.claude.json` is where that block lives) for
 the root `--root` names, defaulting to the working directory — it is a READ
 source, and the verb never writes a foreign file or a project tier.
 
-The verb started life print-only (E710). That law was amended by this
+The verb started life print-only. That law was amended by this
 campaign's ruling: `--write user` is the one allowed exception. With the flag
 the translated entries are appended into `~/.candy-code/mcp.json` — behind the
 same `HomeDirectory::owned()` gate every user-tier write uses, published by
@@ -415,7 +415,7 @@ transport the rest of the way:
   with a newline, comments and non-`message` events are skipped, and the
   message whose `id` matches the request is the answer. A server request or
   `notifications/progress` riding ahead of the answer is no longer passed
-  over (C-MCP-3.c): with an answer desk installed the request is answered by
+  over): with an answer desk installed the request is answered by
   a fresh POST of the JSON-RPC response carrying the `Mcp-Session-Id`, and
   progress rides the call's sink — see "Server requests" below. The reply
   body is read whole, so a server must close the stream once it has
@@ -452,7 +452,7 @@ configured URL the way a browser would resolve it). Then:
   only means the server took the message. The reply arrives on the stream,
   matched by `id`, with the same `data:`-join and non-`message` skipping the
   `http` transport uses (both read one shared `SseLineParser`).
-- **Server requests are answered (C-MCP-3.c).** A `ping`, `roots/list` or
+- **Server requests are answered.** A `ping`, `roots/list` or
   `elicitation/create` riding the stream — during a call or between calls —
   reaches the answer desk, and its JSON-RPC answer is POSTed back over the
   origin-locked endpoint like any other client message;
@@ -817,7 +817,7 @@ Sharing is made safe in the transport:
   lock rather than in one process' memory, and a call that dies mid-exchange
   leaves a marker: the next call terminates any half-written request line and
   skips the fragment of a half-read reply.
-- **Server-initiated traffic on a stdio stream is answered in place (C-MCP-3).**
+- **Server-initiated traffic on a stdio stream is answered in place.**
   A `ping` is answered, `roots/list` names the spawn directory the entry was
   approved for, `elicitation/create` is answered `cancel` unless the caller
   passed per-call answers, `notifications/progress` is absorbed, and any other
@@ -1043,7 +1043,7 @@ under both spellings.
 
 Inside that fence every non-text part is still described rather than dropped —
 an image or audio part contributes its mime type and base64 size, an embedded
-resource its capped text or its blob size — and since C-TOOL-2 two of those
+resource its capped text or its blob size — and two of those
 descriptions also name real bytes riding the result beside the text: the first
 image part whose base64 decodes, stays inside the same tool-side image budget
 `Read` applies, and sniffs as a genuine image goes onto the result's image

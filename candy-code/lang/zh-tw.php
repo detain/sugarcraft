@@ -609,8 +609,9 @@ CandyCode — 終端機 AI 程式碼助理。
                          絕非旗標
 
 環境變數：
-   CANDY_CODE_PROVIDER    使用的供應商：openai、anthropic、claude-code、
-                          sglang、bedrock、vertex、custom
+   CANDY_CODE_PROVIDER    使用的供應商：openai、azure、anthropic、claude-code、
+                          codex、sglang、bedrock、vertex、
+                          gemini、openrouter、custom
    CANDY_CODE_MODEL       模型名稱（覆寫供應商預設值；--model 優先）
    CANDY_CODE_PERMISSION_MODE
                           啟動時的權限模式，覆寫

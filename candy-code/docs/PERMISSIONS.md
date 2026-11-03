@@ -26,7 +26,7 @@ Four places, highest first:
    `--config`), or in `~/.candy-code/settings.json`, which `config.json`
    outranks.
 4. The shipped default, which depends on the path: **`default` in the TUI and
-   for `-p`** (C-SEC-7.a; an unattended `-p` ask is refused with a hint naming
+   for `-p`** (an unattended `-p` ask is refused with a hint naming
    `--permission-mode`), **`bypass-permissions` for locally spawned `/bg`
    sessions**, which have no terminal for the whole life of the run. A daemon
    spawned by `serve` (`bg.spawn` or the host `/bg`) is the exception: it runs in
@@ -161,7 +161,7 @@ first — `$(echo rm) -rf /`, `x=-rf; rm $x /`, `bash -c '…'`, `eval`, aliases
 It fires for `Bash` **and** `PtyRun` alike: `PtyRun` hands its `command` to the same
 `/bin/sh -c`, so `PtyRun{command: "rm -rf ~"}` is refused at step 0 exactly as
 `Bash`'s is — reaching for the interactive driver is not a way around the floor.
-Since C-TOOL-6.k it reaches the typed half too: each decoded line of a `ShellSend`
+It reaches the typed half too: each decoded line of a `ShellSend`
 `keys` template runs the same word-floor check, so `rm -rf /<Enter>` typed into an
 interactive background shell is refused at step 0 like the direct call — and a
 `PtyRun` step already ran it the same way, which is why typing a destructive line
@@ -510,7 +510,7 @@ the system prompt also carries the plan-mode contract
 approves a plan by leaving the mode — so the model is told what the gate
 enforces instead of finding out one denied call at a time. In `plan` the
 advertised tool list is no longer the same list as in every other mode
-(C-SEC-7.c): the request's tool block drops exactly the tools the gate
+): the request's tool block drops exactly the tools the gate
 refuses **by declaration** — `Edit`, `Task`, `ApplyPatch` and every unhinted
 `mcp__*` disappear from what the model is offered — because a tool that can
 never run should not be offered either. `Write`, `Bash` and `PlanExit` stay
@@ -666,7 +666,7 @@ index — `permissionRules[2] ('Write') has no valid 'action' … rule skipped
 rather than coerced`. A `permissionRules` key that is not a list at all loads
 zero rules and says so.
 
-**A trusted project can narrow these rules, never widen them** (C-SEC-6.b).
+**A trusted project can narrow these rules, never widen them**.
 Under `trustedProjectSettings`, the project's own `.candy-code/settings.json`
 is read for `permissionRules` by `Bootstrap::projectNarrowingRules()`: its
 `deny` and `ask` entries load **ahead of yours** — the gate answers
@@ -774,7 +774,7 @@ How the argument half is matched:
 - **Keystroke-typing calls ask every time.** A `PtyRun` step and a `ShellSend` call type into a live terminal — input that can open a shell the
   spawned command never mentions — so the gate treats both as a forced question: every non-bypass mode asks, a session "always" cannot answer it,
   and `auto` neither Allows nor strikes on them. Their rules behave differently because their subjects differ: `PtyRun` stays a shell subject (its
-  decoded steps are judged as extra command text, and an `Allow` must cover the command **and** every step), while `ShellSend` (C-TOOL-6.k) is
+  decoded steps are judged as extra command text, and an `Allow` must cover the command **and** every step), while `ShellSend` is
   deliberately **not** one — that roster means *the argument IS a command line*, and treating typed REPL input as one would let `Allow Bash(git *)`
   answer for typing `git` into whatever program holds the terminal, and let the classifier read keystrokes as shell text it never runs through
   `/bin/sh -c`. What covers a send is its own rule: an explicit `Allow ShellSend` answers for every shell and every key, name-only, because there is

@@ -54,6 +54,9 @@ final class DanglingPlanCitationTest extends TestCase
      */
     private const MIN_WALKED_FILES = 400;
 
+    /** The docs census must see the real manual, not an empty directory. */
+    private const MIN_DOC_FILES = 18;
+
     public function testTheCitationPatternBitesTheSweptAwayShapes(): void
     {
         // Self-proof that the pattern bites: without this leg a broken
@@ -96,5 +99,80 @@ final class DanglingPlanCitationTest extends TestCase
     private static function citationPattern(): string
     {
         return '/crush_(?:code|feat)\\.md/';
+    }
+
+    /**
+     * USER-FACING DOCS CARRY NO CAMPAIGN IDENTIFIERS.
+     *
+     * docs/GLOSSARY.md draws the line: comments and changelogs may carry the
+     * campaigns' item IDs, user-facing prose may not — a reader of a shipped
+     * manual has no way to resolve \"behind C-MCP-3.c\" and every such token
+     * is a sentence that stopped talking to the reader. The 2026-11 sweep
+     * stripped 98 of these citations from README.md and the docs pages
+     * (keeping each sentence intact); this census fails the commit that
+     * lets one back in.
+     *
+     * SCOPE AND EXEMPTIONS: the walk covers README.md plus every docs page,
+     * skipping fenced code blocks (a fence quotes foreign tool output, e.g.
+     * a flake8 error code, and the manual merely transcribes it), and
+     * GLOSSARY.md is exempt by construction — it is the policy page whose
+     * whole job is naming the tokens the rest of the fleet must not ship.
+     * The walk floor is a stated file count so a silently-broken iterator
+     * cannot pass this leg vacuously.
+     */
+    public function testNoShippedDocCitesACampaignIdentifier(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $files = \array_values(\array_filter(
+            \array_merge([$root . '/README.md'], \glob($root . '/docs/*.md') ?: []),
+            static fn (string $path): bool => \basename($path) !== 'GLOSSARY.md'
+        ));
+        self::assertGreaterThanOrEqual(self::MIN_DOC_FILES, \count($files),
+            'the docs walk lost pages — the census would pass vacuously');
+
+        $pattern = self::campaignTokenPattern();
+        $offenders = [];
+        foreach ($files as $path) {
+            $relative = \substr($path, \strlen($root) + 1);
+            $inFence = false;
+            foreach (\explode("\n", (string) \file_get_contents($path)) as $number => $line) {
+                if (\str_starts_with(\ltrim($line), '```')) {
+                    $inFence = !$inFence;
+                    continue;
+                }
+                $prose = \preg_replace('/`[^`]*`/', ' ', $line) ?? ''; // backtick spans quote protocol literals ((b2) markers) — the census polices prose
+                if ($inFence || \preg_match_all($pattern, $prose, $hits) < 1) {
+                    continue;
+                }
+                foreach ($hits[0] as $token) {
+                    $offenders[] = $relative . ':' . ($number + 1) . ':' . $token;
+                }
+            }
+        }
+
+        self::assertSame([], $offenders,
+            'shipped docs cite campaign item IDs — keep the sentence, drop the token '
+            . '(see docs/GLOSSARY.md for the policy the 2026-11 sweep applied)');
+    }
+
+    /**
+     * The token union: cluster IDs (letter-suffixed and dotted steps), the
+     * bare E-number family (guarded so a U+E000 codepoint mention survives),
+     * lane IDs in parentheses, and the plan-file names. The literal carries
+     * parentheses throughout, so the glob-shape corpus cannot ingest it.
+     */
+    private static function campaignTokenPattern(): string
+    {
+        return '/(?<![0-9A-Za-z])(?:'
+            . '[CR]-[A-Z]{2,10}-[0-9]+[a-z]?(?:\.[a-z][0-9a-z]*)*'
+            . '|(?:CTX|AGT|EXT|TOOL|PRV|SEC|SES|MCP|VIS|AUT|DST|OBS|GIT|CMD|PLG|INT|EDT|MOD|TL|SHL)-[0-9]+(?:[a-z](?:\.[a-z][0-9a-z]*)*)?(?:-P[0-9]+)?'
+            . '|ISS-[0-9]{2,3}'
+            . '|(?<!\+)E[0-9]{3}(?![0-9])'
+            . '|WEB-[0-9][a-z]?'
+            . '|TUI-[0-9][a-z]?(?: stage [0-9]+)?'
+            . '|plan_comparison'
+            . '|\((?:[a-z][0-9]+[a-z]?|R[0-9]+)\)'
+            . '|round-[0-9]+(?![0-9])'
+            . ')(?![0-9A-Za-z])/';
     }
 }

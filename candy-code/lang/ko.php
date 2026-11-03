@@ -609,8 +609,9 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          플래그로 해석되지 않음
 
 환경 변수:
-   CANDY_CODE_PROVIDER    사용할 프로바이더: openai, anthropic, claude-code,
-                          sglang, bedrock, vertex, custom
+   CANDY_CODE_PROVIDER    사용할 프로바이더: openai, azure, anthropic, claude-code,
+                          codex, sglang, bedrock, vertex, gemini,
+                          openrouter, custom
    CANDY_CODE_MODEL       모델 이름 (프로바이더 기본값 오버라이드; --model 우선)
    CANDY_CODE_PERMISSION_MODE
                           시작 시 권한 모드, 설정 키를

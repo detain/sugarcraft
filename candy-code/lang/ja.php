@@ -609,8 +609,9 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          フラグではない
 
 環境変数：
-   CANDY_CODE_PROVIDER    使用するプロバイダ：openai, anthropic, claude-code,
-                          sglang, bedrock, vertex, custom
+   CANDY_CODE_PROVIDER    使用するプロバイダ：openai, azure, anthropic, claude-code,
+                          codex, sglang, bedrock, vertex, gemini,
+                          openrouter, custom
    CANDY_CODE_MODEL       モデル名（プロバイダ既定を上書き；--model が優先）
    CANDY_CODE_PERMISSION_MODE
                           起動時の権限モード、permissionMode 設定キーを

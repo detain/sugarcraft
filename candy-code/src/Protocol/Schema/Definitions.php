@@ -118,7 +118,7 @@ final class Definitions
             ], ['askId', 'toolCallId', 'tool', 'arguments', 'options']),
             self::TRUST_PROMPT => Schema::object([
                 'askId' => Schema::string(16),
-                'kind' => Schema::enum(['trust'])->describe('WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn\'s question registry).'),
+                'kind' => Schema::enum(['trust'])->describe('The marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn\'s question registry).'),
                 'target' => Schema::enum(['mcp', 'mcp-pin', 'hooks', 'commands', 'settings'])->describe('C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door\'s `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`).'),
                 'root' => Schema::string(4096)->describe('The project root the prompt is about — the exact string the grant writes into that door\'s trusted list.'),
                 'reason' => Schema::string()->describe('Why the prompt was put, for the panel line.'),
@@ -363,8 +363,8 @@ final class Definitions
                         'count' => Schema::integer(0),
                         'tokens' => Schema::integer(0),
                     ], ['name', 'count', 'tokens']))->nullable()->describe('The `mcp__<server>__*` bridges grouped per server — the MCP half of `toolTokens`, measured in the same single pass; null when the tool list is unknown.'),
-                ], ['window', 'sections', 'toolCount', 'toolTokens', 'historyTokens', 'historyMessages', 'uiOnlyRows', 'largest', 'lastCache', 'sessionCache'])->describe('The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer (WEB-3a).'),
-            ], ['instructionFiles', 'memorySections', 'skills', 'mcp', 'untrusted', 'breakdown'])->describe('WEB-3a: what the session\'s context is built from — structure for the panel `/context` prints as text.'),
+                ], ['window', 'sections', 'toolCount', 'toolTokens', 'historyTokens', 'historyMessages', 'uiOnlyRows', 'largest', 'lastCache', 'sessionCache'])->describe('The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer.'),
+            ], ['instructionFiles', 'memorySections', 'skills', 'mcp', 'untrusted', 'breakdown'])->describe('What the session\'s context is built from — structure for the panel `/context` prints as text.'),
         ];
         \ksort($defs);
 

@@ -609,8 +609,9 @@ Opções:
                          nunca uma flag
 
 Variáveis de ambiente:
-   CANDY_CODE_PROVIDER    Fornecedor a usar: openai, anthropic, claude-code,
-                          sglang, bedrock, vertex, custom
+   CANDY_CODE_PROVIDER    Fornecedor a usar: openai, azure, anthropic, claude-code,
+                          codex, sglang, bedrock, vertex, gemini,
+                          openrouter, custom
    CANDY_CODE_MODEL       Nome do modelo (substitui a predefinição do fornecedor; --model tem precedência)
    CANDY_CODE_PERMISSION_MODE
                           Modo de permissões inicial, substituindo a

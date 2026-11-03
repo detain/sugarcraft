@@ -613,8 +613,9 @@ Options :
                          jamais une option
    CANDY_CODE_MODEL       Nom du modèle (remplace le défaut du fournisseur ; --model gagne)
 Variables d'environnement :
-   CANDY_CODE_PROVIDER    Fournisseur à utiliser : openai, anthropic, claude-code,
-                          sglang, bedrock, vertex, custom
+   CANDY_CODE_PROVIDER    Fournisseur à utiliser : openai, azure, anthropic, claude-code,
+                          codex, sglang, bedrock, vertex, gemini,
+                          openrouter, custom
    CANDY_CODE_MODEL       Nom du modèle (remplace la valeur par défaut du fournisseur ; --model a priorité)
    CANDY_CODE_PERMISSION_MODE
                           Mode de permission initial, remplaçant la clé de

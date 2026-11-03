@@ -945,7 +945,7 @@ its keys and its main argument, and its result is sent as it was.
 ## Providers
 
 `ProviderFactory::availableTypes()` returns **eleven** selectable
-names; most build their own class, and since C-PRV-2.c two more reuse one —
+names; most build their own class, and since the azure and openrouter landings two more reuse one —
 Azure speaks the OpenAI wire on its own host, and OpenRouter is a preset of
 the custom shape. Measured by constructing every one of
 them on this tree:

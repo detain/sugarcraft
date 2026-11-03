@@ -265,20 +265,20 @@ os: [linux, darwin]       # the platform must be listed
 | `user-invocable` | `true` | `SkillRegistry::isUserInvocable()` → `App::userInvocableSkills()` | Live on the App shell's skill picker. `false` hides the skill from the picker while leaving it model-invocable. |
 | `disable-model-invocation` | `false` | `SkillRegistry::isAutoInvocable()` | Live. `true` keeps the skill out of the prompt listing **and** makes `SkillTool` refuse it by name — the check is re-done in the tool so a skill added to a registry by some other route still cannot be reached. |
 | `paths` | `[]` | `SkillRegistry::forPaths()`, `SkillPathNudge` | Live. Glob patterns (see [What a `paths:` glob matches](#what-a-paths-glob-matches) for the semantics — they are not `FNM_PATHNAME`); touching a matching file nudges the skill into view once per session. Read from the Stage-1 manifest, so it costs no body read. The nudge is bounded: at most 8 entries, each at most 300 bytes, and where it is spent depends on the tool: `Grep` and `Glob` subtract it from their own `maxOutputBytes`, so it is spent INSIDE the cap; `Read` takes an eighth BESIDE its cap (hence its stated 1.375x `maxBytes` total, a ceiling: the page `Read` returns is itself at most `maxBytes`, and 50 KiB by default, while the eighth is still figured from `maxBytes`); `Edit` and `Write` have no output cap at all, so the class ceiling of 2,636 bytes is the whole bound there. A `description` too long for an entry is clipped and marked, and a skill held back is announced by a later call rather than dropped. Only model-invocable skills are ever nudged — a `disable-model-invocation: true` skill is filtered out of the nudge, because telling the model to open a skill it may not invoke is a dead instruction. |
-| `allowed-tools` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` and `Chat::gateToolCall()` | **Live** (R-EXT-1). Each comma-separated entry becomes a turn-scoped Allow rule at the permission gate for the rest of the turn — from the invocation to the next real user prompt — matching as written: `Read` pre-approves Reads, `Bash(composer:*)` pre-approves only composer calls. An answer to Ask only: it cannot lift a configured `Deny` or a security question, and it never persists past the turn. **A project-tier skill's list pre-approves nothing until the root carries the `trustedProjectCommands` grant** — the same key that lets its command files shell out ([`PERMISSIONS.md`](PERMISSIONS.md#the-four-trustedproject-keys)); built-in and user tiers are your own files and are honoured in any project. The skill still loads, lists and runs either way; only the pre-approval waits. |
+| `allowed-tools` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` and `Chat::gateToolCall()` | **Live**. Each comma-separated entry becomes a turn-scoped Allow rule at the permission gate for the rest of the turn — from the invocation to the next real user prompt — matching as written: `Read` pre-approves Reads, `Bash(composer:*)` pre-approves only composer calls. An answer to Ask only: it cannot lift a configured `Deny` or a security question, and it never persists past the turn. **A project-tier skill's list pre-approves nothing until the root carries the `trustedProjectCommands` grant** — the same key that lets its command files shell out ([`PERMISSIONS.md`](PERMISSIONS.md#the-four-trustedproject-keys)); built-in and user tiers are your own files and are honoured in any project. The skill still loads, lists and runs either way; only the pre-approval waits. |
 | `disallowed-tools` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` and `Chat::gateToolCall()` | **Live**, same shape as `allowed-tools`, as refusals: a listed tool is refused before the mode gets a say, for the rest of the turn. |
-| `model` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` | **Live** (R-EXT-1). The latest-invoked skill in the turn that declares a `model` swaps it onto the next request from the step loop; absent a declaration the session model stands. (`App::dispatchSkill()` still has no production caller; `ForeignSkillDiscovery` merely copies the value onto the imported object.) |
-| `effort` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` | **Live** (R-EXT-1). The value rides the request's `reasoningEffort`: one of the tier names `/effort` prints buys that thinking budget, anything else falls through to the provider's default handling. A skill that declares nothing leaves the session effort untouched — the old parser default of `medium` no longer masquerades as a declaration. |
+| `model` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` | **Live**. The latest-invoked skill in the turn that declares a `model` swaps it onto the next request from the step loop; absent a declaration the session model stands. (`App::dispatchSkill()` still has no production caller; `ForeignSkillDiscovery` merely copies the value onto the imported object.) |
+| `effort` | `null` | `ActiveSkillEffects::derive()` via `Runtime::run()` | **Live**. The value rides the request's `reasoningEffort`: one of the tier names `/effort` prints buys that thinking budget, anything else falls through to the provider's default handling. A skill that declares nothing leaves the session effort untouched — the old parser default of `medium` no longer masquerades as a declaration. |
 | `requires` | none | `SkillRegistry::unmetRequirements()` via `SkillFrontmatter::fromParsed()` and `SkillRegistry::register()` | Live. An unmet requirement keeps the skill out of the registry, with the reason on `SkillManager::skipped()`. See above. |
 | `os` | any platform | same | Live, same as `requires`. |
-| `context` | `thread` | `SkillRegistry::isContextFork()` via `SkillTool::execute()` (forks on the turn's bound Task), `SkillMentions::resolve()` (attaches the invoke-directive), `EngineBackend::turnTools()` (binds that delegate), `App::applySkillsToSystemPrompt()`, `App::dispatchSkill()` (embedder seam), `App::handleSelectSkill()` | **Live** for `fork` (C-EXT-2.c) (`thread` is the default). A fork skill's body is NOT returned inline by the Skill tool: the composed instructions run in the sub-agent named by `agent:` (default `coder`) on the turn's bound Task, with the skill's `model` and `effort` forwarded, and the sub-agent's result is what the parent sees. Without a bound delegate on the turn the body loads inline with a one-line note instead. The session's standing-body splice still does not consult the field — see below. |
-| `agent` | `coder` when forked | `SkillFork::agentName()` via `TaskTool::runForkedSkill()` | **Live** (C-EXT-2.c). Names the session roster preset the forked skill runs as; unknown or blank falls back to `coder`. Inert unless `context: fork` — a thread skill is instructions, not a run. |
+| `context` | `thread` | `SkillRegistry::isContextFork()` via `SkillTool::execute()` (forks on the turn's bound Task), `SkillMentions::resolve()` (attaches the invoke-directive), `EngineBackend::turnTools()` (binds that delegate), `App::applySkillsToSystemPrompt()`, `App::dispatchSkill()` (embedder seam), `App::handleSelectSkill()` | **Live** for `fork` (`thread` is the default). A fork skill's body is NOT returned inline by the Skill tool: the composed instructions run in the sub-agent named by `agent:` (default `coder`) on the turn's bound Task, with the skill's `model` and `effort` forwarded, and the sub-agent's result is what the parent sees. Without a bound delegate on the turn the body loads inline with a one-line note instead. The session's standing-body splice still does not consult the field — see below. |
+| `agent` | `coder` when forked | `SkillFork::agentName()` via `TaskTool::runForkedSkill()` | **Live**. Names the session roster preset the forked skill runs as; unknown or blank falls back to `coder`. Inert unless `context: fork` — a thread skill is instructions, not a run. |
 
 The **Inert** rows are not a judgement written once and left: they are
 `FrontmatterKeyAudit::INERT`, which `InertFrontmatterDocumentationDriftTest`
 holds this table to, and a launch names every skill that declares one — see
 [Diagnostics](#diagnostics). No field in this table is inert today: the last
-row left the map when C-EXT-2.c wired `context: fork`. Keys other than the
+row left the map when `context: fork` was wired. Keys other than the
 ones above (and the agentskills.io spec's descriptive `name`, `license`,
 `compatibility` and `metadata`) are not read at all.
 
@@ -408,7 +408,7 @@ as soon as the write lands. The name is case-exact, like the row it flips.
 
 ### Reloading discovery without a relaunch
 
-`/skills reload` (C-EXT-3.a) re-runs the boot discovery itself — the same
+`/skills reload` re-runs the boot discovery itself — the same
 `SkillManager::loadAll()` walk over the project root and installed bundles —
 and swaps the result into the live registry in place through
 `SkillRegistry::replaceAll()`. Newly written skill files land, deleted ones
@@ -421,7 +421,7 @@ walk's exactly — same loaders, same requirement doors, same origin badges.
 
 The model is told what moved, not left to notice silently: the roster as of
 the session generation's first assembly is frozen by
-`SkillRosterDiffTracker` (the skill sibling of CTX-3's
+`SkillRosterDiffTracker` (the skill sibling of
 `InstructionDiffTracker`), and from a move onward the `<turn-context>` row
 carries a bounded delta — added skills with their live listing line,
 removals by name, changes with the new description — until a refresh point
@@ -465,7 +465,7 @@ it where an invocation is decided:
 - `EngineBackend::turnTools()` binds every `SkillTool` copy in the turn to that
   turn's bound `TaskTool` copy — so the engine, permission relay, activity
   emitter and spend ledger a fork rides are exactly the ones the Task tool
-  uses (C-EXT-2.c).
+  uses.
 - `SkillTool::execute()` answers an invocation of a fork skill with
   `TaskTool::runForkedSkill()`: the roster preset named by `agent:` (default
   `coder`) receives the composed instructions — heading, base-dir line, body
@@ -570,7 +570,7 @@ roster is cheap:
 3. **Assets** (`loadSkillAsset()`) — one file from `scripts/`, `references/` or
    `assets/` beside the `SKILL.md`. Any other first path component is refused,
    and the resolved path must be contained by the skill directory. The model
-   reaches this stage through the `Skill` tool's `asset` argument (C-EXT-2),
+   reaches this stage through the `Skill` tool's `asset` argument,
    and `listSkillAssets()` enumerates the paths a body result announces —
    names only, sorted, capped at ten (`SkillLoader::ASSET_LIST_LIMIT`), links
    neither listed nor followed.
@@ -623,7 +623,7 @@ snippets that use them. The append is the other deliberate difference from
 custom commands, which send a placeholder-free template unchanged: here the
 arguments come from the model, which passed them for the skill to act on.
 
-Two more body mechanics, both C-EXT-2. `${CLAUDE_SKILL_DIR}` and `${SKILL_DIR}`
+Two more body mechanics, both live. `${CLAUDE_SKILL_DIR}` and `${SKILL_DIR}`
 in a body are replaced with the skill's base directory — the same value the
 header line states — by `SkillTool::substituteSkillDir()`, so a body written for
 Claude Code that tells the model to run `${CLAUDE_SKILL_DIR}/scripts/run.sh`
@@ -801,7 +801,7 @@ planted cannot pass for one the dream proposed.
 
 The drafts above are the *unattended* write path, and they wait. The
 `SkillWorkshop` tool is the *attended* one: under the comparison campaign's
-owner ruling R-EXT-2, a skill the model writes during a live turn goes **live
+owner ruling, a skill the model writes during a live turn goes **live
 immediately, with an announce-and-undo notice** — because the turn itself is
 the review. Three doors make that safe rather than merely fast:
 
