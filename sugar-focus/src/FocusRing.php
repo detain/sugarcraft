@@ -16,8 +16,11 @@ namespace SugarCraft\Focus;
  * reads {@see isFocused()} when drawing.
  *
  * Invariant: a non-empty ring always has exactly one focused region; an empty
- * ring focuses nothing ({@see current()} is null, {@see index()} is -1). Every
- * mutator returns a new instance and leaves the receiver untouched.
+ * ring focuses nothing ({@see current()} is null, {@see index()} is -1). The
+ * focused region MAY be disabled — a parked state that disable() leaves behind
+ * and unregister() falls back to when every survivor is disabled; see
+ * {@see isFocused()} before painting a focus accent. Every mutator returns a
+ * new instance and leaves the receiver untouched.
  *
  * Mirrors the focus-traversal role of charmbracelet/bubbles' focus handling and
  * sugar-dashboard's FocusManager, but as a standalone, dependency-free, ordered ring.
@@ -48,22 +51,35 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         ?array $enabledPositions = null,
     ) {
         // Invariant: empty ring => index -1; non-empty ring => index in [0, count)
-        assert($ids === [] ? $index === -1 : ($index >= 0 && $index < count($ids)), 'FocusRing focus index out of range for ids');
+        assert(
+            $ids === [] ? $index === -1 : ($index >= 0 && $index < count($ids)),
+            sprintf('FocusRing focus index %d is out of range for %d registered region(s)', $index, count($ids)),
+        );
         // Invariant: only registered ids can carry a disabled flag, otherwise the
         // counts, enabledIds()/disabledIds() and jsonSerialize() disagree.
         assert(
             array_diff_key($disabled, array_fill_keys($ids, true)) === [],
-            'FocusRing disabled set names an unregistered id',
+            sprintf(
+                'FocusRing disabled set names unregistered id(s): %s',
+                implode(', ', array_map('strval', array_keys(array_diff_key($disabled, array_fill_keys($ids, true))))),
+            ),
         );
 
         $this->enabledPositions = $enabledPositions ?? self::computeEnabledPositions($ids, $disabled);
 
-        // A supplied enabledPositions is trusted on the hot path (asserts are
-        // stripped in production); in dev/tests this guards every mutator's
-        // incremental maintenance against the freshly-computed truth.
+        // A supplied enabledPositions is trusted on the hot path: released PHP
+        // ships zend.assertions=-1, which compiles every assert() away (and the
+        // setting is INI_SYSTEM — no phpunit.xml can raise it), so this guard
+        // fires only on assertion-enabled builds. The check that holds on every
+        // runtime is assertCacheConsistent() in tests/FocusRingTest.php, run
+        // against each mutator's result.
         assert(
             $this->enabledPositions === self::computeEnabledPositions($ids, $disabled),
-            'FocusRing enabledPositions out of sync with ids/disabled',
+            sprintf(
+                'FocusRing enabledPositions %s disagree with computed %s',
+                json_encode($this->enabledPositions),
+                json_encode(self::computeEnabledPositions($ids, $disabled)),
+            ),
         );
     }
 
@@ -110,6 +126,19 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         return $unique;
     }
 
+    /**
+     * A caller-supplied id made safe to embed in an exception message: control
+     * bytes (ESC, BEL, newlines…) become printable escape sequences and absurd
+     * lengths are clipped, so a hostile id cannot forge terminal output
+     * through an error the host prints verbatim.
+     */
+    private static function describeId(string $id): string
+    {
+        $id = addcslashes($id, "\x00..\x1f\x7f");
+
+        return strlen($id) > 80 ? substr($id, 0, 79) . '...' : $id;
+    }
+
     /** An empty ring with nothing registered or focused. */
     public static function new(): self
     {
@@ -131,9 +160,6 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * A strict variant of {@see of()} that throws on duplicate ids instead of
      * silently dropping them. Useful when callers want to enforce uniqueness.
      *
-     * Mirrors charmbracelet/bubbles focus handling — ofStrict() is the
-     * non-silent-failure companion to of().
-     *
      * @param list<string> $ids region ids in traversal order
      * @throws \InvalidArgumentException when a duplicate id is provided
      */
@@ -142,12 +168,14 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         $unique = self::unique($ids);
         if (count($unique) !== count($ids)) {
             // Name the first id that repeats, so the caller can find the clash.
+            // describeId() keeps that caller-supplied text from smuggling raw
+            // control bytes into the terminal-rendered error.
             $seen = [];
             foreach ($ids as $id) {
                 if (isset($seen[$id])) {
                     throw new \InvalidArgumentException(sprintf(
                         'Duplicate region id "%s" passed to FocusRing::ofStrict()',
-                        $id,
+                        self::describeId($id),
                     ));
                 }
                 $seen[$id] = true;
@@ -175,20 +203,24 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         $ids = $this->ids;
         $ids[] = $id;
 
-        // Drop from disabled map if present (re-registration re-enables)
-        $disabled = $this->disabled;
-        unset($disabled[$id]);
-
+        // No disabled-flag cleanup is needed here: the id is not registered
+        // (guard above) and the constructor invariant confines flags to
+        // registered ids, so no flag for it can exist — a fresh region is
+        // enabled by construction. Re-enabling a dropped region happens via
+        // unregister() then register(), never by re-register alone.
         $enabledPositions = $this->enabledPositions;
         $enabledPositions[] = $newPos;
 
-        return new self($ids, $this->index === -1 ? 0 : $this->index, $disabled, $enabledPositions);
+        return new self($ids, $this->index === -1 ? 0 : $this->index, $this->disabled, $enabledPositions);
     }
 
     /**
      * Remove a region. A no-op if it was not registered. If the removed region
-     * was focused, focus shifts to the region that took its slot (or the new
-     * last region, or nothing when the ring becomes empty); focus otherwise
+     * was focused, focus lands on the nearest ENABLED survivor at or after the
+     * vacated slot (wrapping to the first enabled region at the end) — the wall
+     * that next() skips must not strand the next keystroke. Only when EVERY
+     * survivor is disabled does focus keep the slot (clamped to the new end):
+     * the parked state, which the next traversal carries off. Focus otherwise
      * stays on the same region. The disabled flag for the removed id is cleared.
      */
     public function unregister(string $id): self
@@ -209,9 +241,6 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         if ($pos < $index) {
             // A region before the focused one shifted left by one.
             --$index;
-        } elseif ($pos === $index) {
-            // The focused region went away; keep the slot, clamped to the end.
-            $index = min($index, count($ids) - 1);
         }
 
         // Drop disabled flag for the removed id
@@ -219,13 +248,32 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         unset($disabled[$id]);
 
         // Drop the removed slot from the enabled list and shift everything that
-        // sat after it left by one, mirroring array_splice() on $ids.
+        // sat after it left by one, mirroring array_splice() on $ids. Done
+        // before the landing decision so that reads the survivors' truth.
         $enabledPositions = [];
         foreach ($this->enabledPositions as $p) {
             if ($p < $pos) {
                 $enabledPositions[] = $p;
             } elseif ($p > $pos) {
                 $enabledPositions[] = $p - 1;
+            }
+        }
+
+        if ($pos === $this->index) {
+            // The focused region went away: land on the nearest enabled
+            // survivor at or after the vacated slot, wrapping around; with
+            // nothing enabled left, keep the slot (clamped to the new end).
+            $slot = min($pos, count($ids) - 1);
+            $index = $slot;
+            if ($enabledPositions !== []) {
+                $landing = $enabledPositions[0];
+                foreach ($enabledPositions as $p) {
+                    if ($p >= $slot) {
+                        $landing = $p;
+                        break;
+                    }
+                }
+                $index = $landing;
             }
         }
 
@@ -236,7 +284,7 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * Focus a specific registered, ENABLED region. A no-op if it is not
      * registered, is disabled, or is already focused.
      *
-     * Refusing disabled ids (audit 2026-10-07 ruling) keeps the two ways focus
+     * Refusing disabled ids keeps the two ways focus
      * moves consistent: next()/previous() skip disabled regions, so focus()
      * must not be a teleport past the same wall. Focus stays parkable ON a
      * disabled region the other way round — disable() never moves an existing
@@ -254,17 +302,46 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     }
 
     /**
+     * Focus the first ENABLED region in traversal order — disabled heads are
+     * skipped. A no-op when nothing is enabled, or when focus already sits
+     * there.
+     */
+    public function focusFirst(): self
+    {
+        if ($this->enabledPositions === []) {
+            return $this;
+        }
+
+        return $this->focus($this->ids[$this->enabledPositions[0]]);
+    }
+
+    /**
+     * Focus the last ENABLED region in traversal order — disabled tails are
+     * skipped. A no-op when nothing is enabled, or when focus already sits
+     * there.
+     */
+    public function focusLast(): self
+    {
+        if ($this->enabledPositions === []) {
+            return $this;
+        }
+
+        return $this->focus($this->ids[$this->enabledPositions[count($this->enabledPositions) - 1]]);
+    }
+
+    /**
      * Replace the traversal order while keeping focus on the current region id
      * when it survives the dedupe. Acts as a batch set-replace — ids not
      * previously registered are added; ids missing from the new list are dropped.
      *
      * Semantics:
      * 1. Dedupe incoming ids (first-wins), mirroring of()'s contract.
-     * 2. Empty result = empty ring.
+     * 2. Empty result = empty ring (a no-op returning $this when the ring was
+     *    already empty — every refusal in this class keeps the instance).
      * 3. If current() survives, focus stays on it at its new position. When it
      *    was dropped, focus lands on the first ENABLED survivor in ring order —
      *    the fallback must not teleport onto a disabled head, the same wall
-     *    {@see focus()} refuses (audit 010c58c67). Only when EVERY survivor is
+     *    {@see focus()} refuses. Only when EVERY survivor is
      *    disabled does it park at index 0: a non-empty ring always focuses
      *    exactly one region, and focus-on-a-disabled-region is a legitimate
      *    parked state in this model ({@see disable()} never moves focus).
@@ -283,7 +360,9 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         $unique = self::unique($ids);
 
         if ($unique === []) {
-            return new self([], -1);
+            // Emptying an already-empty ring changes nothing: identity, like
+            // every other no-op in this class.
+            return $this->ids === [] ? $this : new self([], -1);
         }
 
         // Flags carry over for survivors only, computed before the fallback so it
@@ -334,49 +413,96 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     }
 
     /**
+     * Pure query: the id focus would land on stepping forward from $id,
+     * without moving focus. Mirrors next() including its no-op shape — an id
+     * with nowhere enabled to go answers with itself (even when focus parked
+     * on a disabled region). null when the id is not registered.
+     */
+    public function nextOf(string $id): ?string
+    {
+        $pos = array_search($id, $this->ids, true);
+        if ($pos === false) {
+            return null;
+        }
+
+        return $this->ids[$this->landOn($pos, 1)];
+    }
+
+    /**
+     * Pure query: the id focus would land on stepping backward from $id,
+     * without moving focus. Mirrors previous(); see {@see nextOf()}.
+     */
+    public function previousOf(string $id): ?string
+    {
+        $pos = array_search($id, $this->ids, true);
+        if ($pos === false) {
+            return null;
+        }
+
+        return $this->ids[$this->landOn($pos, -1)];
+    }
+
+    /**
      * The single traversal routine behind {@see next()} (+1) and
      * {@see previous()} (-1), so the two directions cannot drift apart.
      */
     private function step(int $direction): self
     {
-        // Enabled positions are maintained incrementally — no per-keystroke rebuild.
+        // The enabled list is maintained incrementally — no per-keystroke
+        // rebuild; locating the focused slot is one linear scan over it, a
+        // handful of entries at real pane counts.
+        $landing = $this->landOn($this->index, $direction);
+
+        return $landing === $this->index ? $this : $this->withIndex($landing);
+    }
+
+    /**
+     * Where traversal stepping by $direction would land if focus sat at
+     * $from. Shared by step() and the pure queries {@see nextOf()} /
+     * {@see previousOf()}; returns $from when there is nowhere to go (no
+     * enabled region, or focus already sits on the only enabled one).
+     */
+    private function landOn(int $from, int $direction): int
+    {
         $enabled = $this->enabledPositions;
         $enabledCount = count($enabled);
 
         if ($enabledCount === 0) {
-            return $this;
+            return $from;
         }
 
-        $at = array_search($this->index, $enabled, true);
+        $at = array_search($from, $enabled, true);
 
         if ($at === false) {
-            // Focus is parked on a disabled region. Any enabled region —
-            // including a sole survivor — is a legitimate landing spot, so this
-            // branch must run before the sole-enabled no-op below.
-            return $this->withIndex($this->nearestEnabled($direction));
+            // $from is parked on a disabled region (or off-list). Any enabled
+            // region — including a sole survivor — is a legitimate landing
+            // spot, so this branch must run before the sole-enabled no-op.
+            return self::nearestEnabledPosition($enabled, $from, $direction);
         }
 
         if ($enabledCount === 1) {
             // Focus already sits on the only enabled region; every other region
             // is disabled, so there is nowhere else to go.
-            return $this;
+            return $from;
         }
 
-        return $this->withIndex($enabled[($at + $direction + $enabledCount) % $enabledCount]);
+        return $enabled[($at + $direction + $enabledCount) % $enabledCount];
     }
 
     /**
      * The first enabled position strictly after (direction +1) or before
-     * (direction -1) the focused one, wrapping. Only called while the focused
-     * region is disabled and at least one region is enabled, so a match exists.
+     * (direction -1) $from, wrapping. Only called with a non-empty $enabled
+     * list, so a match always exists.
+     *
+     * @param list<int> $enabled
      */
-    private function nearestEnabled(int $direction): int
+    private static function nearestEnabledPosition(array $enabled, int $from, int $direction): int
     {
-        $enabled = $this->enabledPositions;
+        assert($enabled !== [], 'FocusRing::nearestEnabledPosition() requires at least one enabled region');
 
         if ($direction > 0) {
             foreach ($enabled as $p) {
-                if ($p > $this->index) {
+                if ($p > $from) {
                     return $p;
                 }
             }
@@ -385,7 +511,7 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         }
 
         for ($i = count($enabled) - 1; $i >= 0; $i--) {
-            if ($enabled[$i] < $this->index) {
+            if ($enabled[$i] < $from) {
                 return $enabled[$i];
             }
         }
@@ -402,7 +528,10 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     /** Disable a region so next()/previous() skip over it. Disabling the currently focused region does not move focus — it is a pure metadata change so disable() never causes surprising focus jumps. */
     public function disable(string $id): self
     {
-        if (!in_array($id, $this->ids, true) || isset($this->disabled[$id])) {
+        // One lookup answers both "registered" and "where"; the old in_array +
+        // array_search pair scanned $ids twice per call.
+        $pos = array_search($id, $this->ids, true);
+        if ($pos === false || isset($this->disabled[$id])) {
             return $this;
         }
 
@@ -411,7 +540,6 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
 
         // The id was registered-and-enabled (guarded above), so its position is
         // in the cache; drop it while preserving ascending order.
-        $pos = array_search($id, $this->ids, true);
         $enabledPositions = array_values(array_filter(
             $this->enabledPositions,
             static fn (int $p): bool => $p !== $pos,
@@ -423,23 +551,35 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     /** Re-enable a previously disabled region. A no-op if the id is not registered or is already enabled. */
     public function enable(string $id): self
     {
-        if (!in_array($id, $this->ids, true) || !isset($this->disabled[$id])) {
+        $pos = array_search($id, $this->ids, true);
+        if ($pos === false || !isset($this->disabled[$id])) {
             return $this;
         }
 
         $disabled = $this->disabled;
         unset($disabled[$id]);
 
-        // Re-insert the newly enabled position, restoring ascending order.
-        $pos = array_search($id, $this->ids, true);
+        // Walk into place: ascending order restored by one backward scan instead
+        // of append + sort. The single array_search above also closes the old
+        // typing hole — registration is proven here, so $pos flows on as the int
+        // leg of array_search()'s int|false return and the false branch can no
+        // longer be pushed into the list<int> cache before sort() erased it.
         $enabledPositions = $this->enabledPositions;
-        $enabledPositions[] = $pos;
-        sort($enabledPositions);
+        $at = count($enabledPositions);
+        while ($at > 0 && $enabledPositions[$at - 1] > $pos) {
+            $at--;
+        }
+        array_splice($enabledPositions, $at, 0, [$pos]);
 
         return new self($this->ids, $this->index, $disabled, $enabledPositions);
     }
 
-    /** @return bool true when the region is registered and not disabled */
+    /**
+     * True when the region is registered and not disabled. False conflates
+     * unregistered with disabled — use {@see has()} to tell them apart.
+     *
+     * @return bool true when the region is registered and not disabled
+     */
     public function isEnabled(string $id): bool
     {
         return in_array($id, $this->ids, true) && !isset($this->disabled[$id]);
@@ -483,20 +623,86 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
 
     /**
      * Snapshot for session persistence: the ids in traversal order, the focused
-     * index, and the disabled ids in traversal order. Disabled ids are read from
-     * $ids rather than from the keys of the disabled set, because PHP coerces a
-     * numeric-string key such as "1" to int(1) — the snapshot must stay a list
-     * of strings so it can be fed straight back into {@see disable()}.
+     * region (as both an id and a position), and the disabled ids in traversal
+     * order. Disabled ids are read from $ids rather than from the keys of the
+     * disabled set, because PHP coerces a numeric-string key such as "1" to
+     * int(1) — the snapshot must stay a list of strings so {@see restore()} can
+     * consume it verbatim.
      *
-     * @return array{ids: list<string>, index: int, disabled: list<string>}
+     * @return array{ids: list<string>, focused: ?string, index: int, disabled: list<string>}
      */
     public function jsonSerialize(): array
     {
         return [
             'ids' => $this->ids,
+            // 'focused' carries the id — restore() prefers it because it stays
+            // correct across a re-ordered survivor set; 'index' remains for
+            // readers that only ever consumed the positional leg.
+            'focused' => $this->current(),
             'index' => $this->index,
             'disabled' => $this->disabledIds(),
         ];
+    }
+
+    /**
+     * Rebuild a ring from a {@see jsonSerialize()} snapshot — the inverse of the
+     * persistence format.
+     *
+     * Nothing here trusts the file: "ids" must be a list of strings (otherwise
+     * InvalidArgumentException), the focus leg is CLAMPED rather than consumed
+     * raw — a stale index from a shorter session can never TypeError the
+     * constructor at startup — and disabled entries that are not strings or not
+     * registered are dropped fail-soft (a region that no longer exists carries
+     * no flag to restore).
+     *
+     * Resolution order for focus: a "focused" id wins (id-keyed, drift-proof);
+     * a legacy snapshot without it falls back to the positional "index" clamped
+     * into range; an unknown focused id or an absent focus leg leaves the first
+     * region focused (or nothing, on an empty ids list).
+     *
+     * @param array<array-key, mixed> $snapshot the decoded shape from json_encode()
+     * @throws \InvalidArgumentException when "ids" is not a list of strings
+     */
+    public static function restore(array $snapshot): self
+    {
+        $rawIds = $snapshot['ids'] ?? [];
+        if (!is_array($rawIds) || !array_is_list($rawIds)) {
+            throw new \InvalidArgumentException('FocusRing::restore() requires "ids" to be a list of strings');
+        }
+
+        foreach ($rawIds as $offset => $id) {
+            if (!is_string($id)) {
+                throw new \InvalidArgumentException(sprintf(
+                    'FocusRing::restore() requires "ids" to be a list of strings, offset %d is %s',
+                    $offset,
+                    get_debug_type($id),
+                ));
+            }
+        }
+
+        $ids = self::unique($rawIds);
+        $count = count($ids);
+
+        $target = $count === 0 ? -1 : 0;
+        $focused = $snapshot['focused'] ?? null;
+        if (is_string($focused)) {
+            $pos = array_search($focused, $ids, true);
+            if ($pos !== false) {
+                $target = $pos;
+            }
+        } elseif ($count > 0 && isset($snapshot['index']) && is_int($snapshot['index'])) {
+            // Legacy positional snapshot: clamp it, never trust it.
+            $target = max(0, min($snapshot['index'], $count - 1));
+        }
+
+        $disabled = [];
+        foreach ($snapshot['disabled'] ?? [] as $id) {
+            if (is_string($id) && in_array($id, $ids, true)) {
+                $disabled[$id] = true;
+            }
+        }
+
+        return new self($ids, $target, $disabled);
     }
 
     /** The focused region id, or null when the ring is empty. */
@@ -505,6 +711,13 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         return $this->ids[$this->index] ?? null;
     }
 
+    /**
+     * Whether $id is the focused member. CAUTION for painters: focus can
+     * legally PARK on a disabled region — disable() never moves an existing
+     * focus, and unregister() lands on the vacated slot when every survivor is
+     * disabled — so draw a focus accent only when
+     * isFocused($id) && isEnabled($id) both hold.
+     */
     public function isFocused(string $id): bool
     {
         return $this->current() === $id;
@@ -515,10 +728,27 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         return in_array($id, $this->ids, true);
     }
 
-    /** The focused position, or -1 when the ring is empty. */
+    /**
+     * The focused position into the REGISTERED ids (disabled regions count
+     * too), or -1 when the ring is empty. For "region k of n" among the
+     * focusable ones use {@see enabledIndex()} with {@see enabledCount()}.
+     */
     public function index(): int
     {
         return $this->index;
+    }
+
+    /**
+     * The focused region's 0-based ordinal into {@see enabledIds()} — the "k"
+     * of "region k of n" for a status line. null when the ring is empty or
+     * focus is parked on a disabled region, cases where index() counts every
+     * registered region and cannot answer.
+     */
+    public function enabledIndex(): ?int
+    {
+        $at = array_search($this->index, $this->enabledPositions, true);
+
+        return $at === false ? null : $at;
     }
 
     /** @return list<string> registered region ids in traversal order */
