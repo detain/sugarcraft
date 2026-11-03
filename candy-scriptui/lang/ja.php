@@ -33,4 +33,7 @@ return [
     'runtime.no_terminal' => '{command} にはインタラクティブな端末が必要です。制御端末を利用できません。',
     'runtime.bad_timeout' => '--timeout の値 \'{value}\' が不正です — 非負の秒数を指定してください (0 で期限無効)。',
     'runtime.unknown_choice' => '{option} の値 \'{value}\' が不正です。使用可能: {allowed}。',
+    'hints.choose' => '↑/↓ 移動 · enter 選択 · esc キャンセル',
+    'hints.filter' => '入力でフィルタ · ↑/↓ 移動 · enter 選択 · esc キャンセル',
+    'hints.pager' => 'space/PgDn ページ 下 · PgUp/b ページ 上 · g 最初 · G 最後 · q 終了',
 ];

@@ -41,6 +41,7 @@ final class FileCommand extends Command
             ->addOption('file',      null, InputOption::VALUE_NONE,     'Allow selecting files (default).')
             ->addOption('show-size', null, InputOption::VALUE_NONE,     'Render the file-size column.')
             ->addOption('show-help', null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, max 86400).', 0);
     }
 
@@ -79,7 +80,10 @@ final class FileCommand extends Command
             showSize:   (bool) $input->getOption('show-size'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        $options = InteractiveRuntime::programOptions(
+            useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
+            hideCursor:   true,
+        );
         if ($options === null) {
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'file']) . "\n");
             return Command::FAILURE;

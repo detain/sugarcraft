@@ -10,7 +10,10 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
  * Read-only pager used by {@see \SugarCraft\ScriptUi\Command\PagerCommand}.
@@ -22,11 +25,19 @@ final class PagerModel implements Model
 {
     public static function fromContent(
         string $content,
-        int $width = 80,
-        int $height = 20,
+        int $width = 0,
+        int $height = 0,
         bool $showLineNumbers = false,
         string $match = '',
     ): self {
+        // A 0 dimension means "use the terminal": resolve it from Geometry
+        // now (the initial WindowSizeMsg then keeps it current on resize);
+        // fall back to the historical 80x20 when nothing is knowable.
+        $rows   = Geometry::rowsOrNull();
+        $width  = $width  > 0 ? $width  : (Geometry::columnsOrNull() ?? 80);
+        // Auto height reserves one row for the hint footer; the historical
+        // 20-row fallback (no knowable size) keeps pinned output stable.
+        $height = $height > 0 ? $height : ($rows !== null ? max(1, $rows - 1) : 20);
         if ($showLineNumbers) {
             $content = self::numberLines($content);
         }
@@ -100,11 +111,28 @@ final class PagerModel implements Model
                 return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c'), Cmd::quit()];
             }
         }
+        if ($msg instanceof WindowSizeMsg) {
+            // Re-fit the viewport to the live terminal size; content that
+            // was pre-wrapped by --soft-wrap at launch keeps its shape.
+            $width  = max(1, $msg->cols);
+            $height = max(1, $msg->rows);
+            if ($width !== $this->viewport->width || $height !== $this->viewport->height) {
+                return [new self($this->viewport->withSize($width, $height), $this->exited, $this->interrupted), null];
+            }
+            return [$this, null];
+        }
         [$next, $cmd] = $this->viewport->update($msg);
         return [new self($next, false), $cmd];
     }
 
-    public function view(): string  { return $this->viewport->view(); }
+    public function view(): string
+    {
+        $body = $this->viewport->view();
+        if (!$this->exited) {
+            $body .= "\n" . Lang::t('hints.pager');
+        }
+        return $body;
+    }
     public function isExited(): bool { return $this->exited; }
     public function isInterrupted(): bool { return $this->interrupted; }
 

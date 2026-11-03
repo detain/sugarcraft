@@ -33,4 +33,7 @@ return [
     'runtime.no_terminal' => '{command} etkileşimli bir uçbirim gerektirir; denetim uçbirimi yok.',
     'runtime.bad_timeout' => 'Geçersiz --timeout değeri \'{value}\' — negatif olmayan bir saniye sayısı bekleniyor (0 son tarihi kapatır).',
     'runtime.unknown_choice' => '{option} için geçersiz değer: \'{value}\'. İzin verilenler: {allowed}.',
+    'hints.choose' => '↑/↓ taşı · enter seç · esc iptal',
+    'hints.filter' => 'filtrelemek için yaz · ↑/↓ taşı · enter seç · esc iptal',
+    'hints.pager' => 'space/PgDn aşağı · PgUp/b yukarı · g baş · G son · q çık',
 ];

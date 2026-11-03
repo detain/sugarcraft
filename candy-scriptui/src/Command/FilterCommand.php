@@ -51,6 +51,7 @@ final class FilterCommand extends Command
             ->addOption('width', null, InputOption::VALUE_REQUIRED, 'Cap rendered width in cells (0 = auto).', 0)
             ->addOption('print-query', null, InputOption::VALUE_NONE, 'Print the final filter text on its own line before the result (gum compat).')
             ->addOption('show-help', null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
+            ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
 
@@ -89,9 +90,13 @@ final class FilterCommand extends Command
             cursorPrefix:     is_string($cursor) ? $cursor : null,
             unselectedPrefix: is_string($unselected) ? $unselected : null,
             fuzzy:            (bool) $input->getOption('fuzzy'),
+            width:            (int) $input->getOption('width'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        $options = InteractiveRuntime::programOptions(
+            useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
+            hideCursor:   true,
+        );
         if ($options === null) {
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'filter']) . "\n");
             return Command::FAILURE;

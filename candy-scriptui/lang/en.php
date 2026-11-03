@@ -48,4 +48,7 @@ return [
     'runtime.no_terminal' => '{command} needs an interactive terminal; no controlling terminal is available.',
     'runtime.bad_timeout' => 'Invalid --timeout value \'{value}\' — expected a non-negative number of seconds (0 disables the deadline).',
     'runtime.unknown_choice' => 'Invalid value for {option}: \'{value}\'. Allowed: {allowed}.',
+    'hints.choose' => '↑/↓ move · enter select · esc cancel',
+    'hints.filter' => 'type to filter · ↑/↓ move · enter select · esc cancel',
+    'hints.pager' => 'space/PgDn down · PgUp/b up · g top · G end · q quit',
 ];

@@ -33,4 +33,7 @@ return [
     'runtime.no_terminal' => '{command} wymaga interaktywnego terminala; brak dostępnego terminala sterującego.',
     'runtime.bad_timeout' => 'Nieprawidłowa wartość --timeout \'{value}\' — oczekowano liczby sekund nieujemnej (0 wyłącza limit).',
     'runtime.unknown_choice' => 'Nieprawidłowa wartość dla {option}: \'{value}\'. Dozwolone: {allowed}.',
+    'hints.choose' => '↑/↓ przejdź · enter wybierz · esc anuluj',
+    'hints.filter' => 'wpisuj aby filtrować · ↑/↓ przejdź · enter wybierz · esc anuluj',
+    'hints.pager' => 'space/PgDn w dół · PgUp/b do góry · g początek · G koniec · q wyjdź',
 ];

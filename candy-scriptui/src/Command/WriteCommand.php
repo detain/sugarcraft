@@ -41,6 +41,7 @@ final class WriteCommand extends Command
             ->addOption('end-of-buffer-character', null, InputOption::VALUE_REQUIRED, "Glyph rendered on lines past the buffer end (default ' ').", ' ')
             ->addOption('cursor-mode',        null, InputOption::VALUE_REQUIRED, 'Cursor mode: blink (default) | static | hidden.', 'blink')
             ->addOption('show-help',          null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
+            ->addOption('no-alt-screen',      null, InputOption::VALUE_NONE,     'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
 
@@ -71,7 +72,10 @@ final class WriteCommand extends Command
             header:          (string) $input->getOption('header'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: CursorMode::hidesCursor($cursorMode));
+        $options = InteractiveRuntime::programOptions(
+            useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
+            hideCursor:   CursorMode::hidesCursor($cursorMode),
+        );
         if ($options === null) {
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'write']) . "\n");
             return Command::FAILURE;

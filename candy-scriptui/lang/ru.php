@@ -33,4 +33,7 @@ return [
     'runtime.no_terminal' => 'команде {command} нужен интерактивный терминал; управляющий терминал недоступен.',
     'runtime.bad_timeout' => 'Недопустимое значение --timeout «{value}» — ожидается неотрицательное число секунд (0 отключает дедлайн).',
     'runtime.unknown_choice' => 'Недопустимое значение для {option}: «{value}». Допустимо: {allowed}.',
+    'hints.choose' => '↑/↓ перемещение · enter выбор · esc отмена',
+    'hints.filter' => 'печатайте для фильтра · ↑/↓ перемещение · enter выбор · esc отмена',
+    'hints.pager' => 'space/PgDn вниз · PgUp/b вверх · g начало · G конец · q выход',
 ];

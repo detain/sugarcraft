@@ -33,4 +33,7 @@ return [
     'runtime.no_terminal' => '{command} 需要交互式终端；没有可用的控制终端。',
     'runtime.bad_timeout' => '--timeout 值“{value}”无效——需要非负秒数（0 表示不限）。',
     'runtime.unknown_choice' => '{option} 的值“{value}”无效。允许：{allowed}。',
+    'hints.choose' => '↑/↓ 移动 · enter 选择 · esc 取消',
+    'hints.filter' => '输入以筛选 · ↑/↓ 移动 · enter 选择 · esc 取消',
+    'hints.pager' => 'space/PgDn 下翻 · PgUp/b 上翻 · g 开头 · G 结尾 · q 退出',
 ];

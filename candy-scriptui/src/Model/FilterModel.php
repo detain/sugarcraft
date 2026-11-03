@@ -16,6 +16,8 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
  * Variant of {@see ChooseModel} that opens directly in filter mode and
@@ -46,9 +48,15 @@ final class FilterModel implements Model
         ?string $unselectedPrefix = null,
         bool $fuzzy = false,
         ?FuzzyMatcher $matcher = null,
+        int $width = 0,
     ): self {
+        // 0 = auto width: terminal columns when knowable, else the
+        // historical 60-cell list (see ChooseModel for the same rule).
+        $auto  = $width <= 0;
+        $cols  = Geometry::columnsOrNull();
+        $width = $auto ? ($cols ?? 60) : min($width, $cols ?? $width);
         $items = array_map(static fn(string $o) => new StringItem($o), $options);
-        $list  = ItemList::new($items, 60, max(1, $height))->withShowDescription(false);
+        $list  = ItemList::new($items, $width, max(1, $height))->withShowDescription(false);
         if ($cursorPrefix !== null) {
             $list = $list->withCursorPrefix($cursorPrefix);
         }
@@ -220,6 +228,9 @@ final class FilterModel implements Model
             $count = count(array_filter($this->checked));
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
             $body .= "\n[" . $count . $cap . " selected]";
+        }
+        if (!$this->submitted && !$this->aborted) {
+            $body .= "\n" . Lang::t('hints.filter');
         }
         return $body;
     }

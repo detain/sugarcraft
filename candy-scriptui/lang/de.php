@@ -46,4 +46,7 @@ return [
     'runtime.no_terminal' => '{command} benötigt ein interaktives Terminal; kein steuerndes Terminal verfügbar.',
     'runtime.bad_timeout' => 'Ungültiger --timeout-Wert \'{value}\' — erwartet wird eine nicht negative Sekundenanzahl (0 deaktiviert die Frist).',
     'runtime.unknown_choice' => 'Ungültiger Wert für {option}: \'{value}\'. Erlaubt: {allowed}.',
+    'hints.choose' => '↑/↓ bewegen · Enter auswählen · Esc abbrechen',
+    'hints.filter' => 'tippen zum Filtern · ↑/↓ bewegen · Enter auswählen · Esc abbrechen',
+    'hints.pager' => 'Space/PgDn abwärts · PgUp/b aufwärts · g Anfang · G Ende · q beenden',
 ];

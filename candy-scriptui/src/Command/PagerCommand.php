@@ -29,12 +29,13 @@ final class PagerCommand extends Command
     {
         $this
             ->addOption('file',               'f',  InputOption::VALUE_REQUIRED, 'Input file. Default: stdin.')
-            ->addOption('width',              null, InputOption::VALUE_REQUIRED, 'Pager width.',  80)
-            ->addOption('height',             null, InputOption::VALUE_REQUIRED, 'Pager height.', 20)
+            ->addOption('width',              null, InputOption::VALUE_REQUIRED, 'Pager width in cells (0 = terminal size).',  0)
+            ->addOption('height',             null, InputOption::VALUE_REQUIRED, 'Pager height in rows (0 = terminal size).', 0)
             ->addOption('show-line-numbers',  null, InputOption::VALUE_NONE,     'Prefix every line with a 1-based line number.')
             ->addOption('match',              null, InputOption::VALUE_REQUIRED, 'Highlight every case-insensitive occurrence of the substring.', '')
             ->addOption('soft-wrap',          null, InputOption::VALUE_NONE,     'Wrap long lines at the pager width instead of clipping.')
             ->addOption('show-help',          null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
+            ->addOption('no-alt-screen',      null, InputOption::VALUE_NONE,     'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',            null, InputOption::VALUE_REQUIRED, 'Auto-exit after N seconds (0 = none).', 0);
     }
 
@@ -64,6 +65,9 @@ final class PagerCommand extends Command
         // without horizontal scroll.
         if ((bool) $input->getOption('soft-wrap')) {
             $width = (int) $input->getOption('width');
+            if ($width <= 0) {
+                $width = \SugarCraft\ScriptUi\Runtime\Geometry::columnsOrNull() ?? 80;
+            }
             $raw = \SugarCraft\Core\Util\Width::wrap($raw, max(1, $width));
         }
 
@@ -75,7 +79,10 @@ final class PagerCommand extends Command
             (string) $input->getOption('match'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        $options = InteractiveRuntime::programOptions(
+            useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
+            hideCursor:   true,
+        );
         if ($options === null) {
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'pager']) . "\n");
             return Command::FAILURE;

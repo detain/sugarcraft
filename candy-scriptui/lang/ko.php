@@ -33,4 +33,7 @@ return [
     'runtime.no_terminal' => '{command}에는 대화형 터미널이 필요합니다. 제어 터미널을 사용할 수 없습니다.',
     'runtime.bad_timeout' => '--timeout 값 \'{value}\'이(가) 잘못되었습니다 — 0 이상의 초 수를 입력하세요 (0이면 제한 없음).',
     'runtime.unknown_choice' => '{option}의 값 \'{value}\'이(가) 잘못되었습니다. 허용: {allowed}.',
+    'hints.choose' => '↑/↓ 이동 · enter 선택 · esc 취소',
+    'hints.filter' => '입력으로 필터 · ↑/↓ 이동 · enter 선택 · esc 취소',
+    'hints.pager' => 'space/PgDn 아래 · PgUp/b 위 · g 처음 · G 끝 · q 종료',
 ];

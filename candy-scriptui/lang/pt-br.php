@@ -33,4 +33,7 @@ return [
     'runtime.no_terminal' => '{command} precisa de um terminal interativo; nenhum terminal de controle disponível.',
     'runtime.bad_timeout' => 'Valor de --timeout inválido \'{value}\' — esperado um número não negativo de segundos (0 desativa o prazo).',
     'runtime.unknown_choice' => 'Valor inválido para {option}: \'{value}\'. Permitidos: {allowed}.',
+    'hints.choose' => '↑/↓ mover · enter selecionar · esc cancelar',
+    'hints.filter' => 'digite para filtrar · ↑/↓ mover · enter selecionar · esc cancelar',
+    'hints.pager' => 'space/PgDn para baixo · PgUp/b para cima · g início · G fim · q sair',
 ];

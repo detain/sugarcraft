@@ -37,12 +37,24 @@ final class InteractiveRuntime
      */
     public static function programOptions(bool $useAltScreen, bool $hideCursor): ?ProgramOptions
     {
+        // Dumb terminals cannot survive the DEC-private modes the renderer
+        // emits for alt-screen and cursor hiding (ColourGate already lowers
+        // COLOUR for TERM=dumb; this is the same posture for the MODES).
+        // Inline mode re-renders in place instead, which every terminal —
+        // including `dumb` — can live with.
+        $dumb = getenv('TERM') === 'dumb';
+        if ($dumb) {
+            $useAltScreen = false;
+            $hideCursor   = false;
+        }
+
         if (self::stdoutIsTerminal()) {
             // Keys via /dev/tty when stdin is a pipe; sugar-core falls back
             // to STDIN/STDOUT itself when /dev/tty is unavailable.
             return new ProgramOptions(
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
+                inlineMode:      $dumb,
                 catchInterrupts: true,
                 openTty:         true,
                 loop:            \React\EventLoop\Loop::get(),
@@ -57,6 +69,7 @@ final class InteractiveRuntime
             return new ProgramOptions(
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
+                inlineMode:      $dumb,
                 catchInterrupts: true,
                 input:           $tty[0],
                 output:          $paint,
@@ -70,6 +83,7 @@ final class InteractiveRuntime
             return new ProgramOptions(
                 useAltScreen:    $useAltScreen,
                 hideCursor:      $hideCursor,
+                inlineMode:      $dumb,
                 catchInterrupts: true,
                 output:          $paint,
                 loop:            \React\EventLoop\Loop::get(),

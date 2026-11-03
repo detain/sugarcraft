@@ -11,6 +11,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\Geometry;
 
 /**
  * Selection chooser used by {@see \SugarCraft\ScriptUi\Command\ChooseCommand}.
@@ -41,9 +43,16 @@ final class ChooseModel implements Model
         bool $ordered = false,
         ?string $cursorPrefix = null,
         ?string $unselectedPrefix = null,
+        int $width = 0,
     ): self {
+        // 0 (and any negative) means auto: take the terminal width when it
+        // is knowable, else keep the historical 60-cell list so piped or
+        // cron contexts render exactly what they always did.
+        $auto  = $width <= 0;
+        $cols  = Geometry::columnsOrNull();
+        $width = $auto ? ($cols ?? 60) : min($width, $cols ?? $width);
         $items = array_map(static fn(string $o) => new StringItem($o), $options);
-        $list  = ItemList::new($items, 60, max(1, $height))->withShowDescription(false);
+        $list  = ItemList::new($items, $width, max(1, $height))->withShowDescription(false);
         if ($cursorPrefix !== null) {
             $list = $list->withCursorPrefix($cursorPrefix);
         }
@@ -116,13 +125,17 @@ final class ChooseModel implements Model
     public function view(): string
     {
         $body = $this->list->view();
-        if (!$this->multi) {
-            return $body;
+        if ($this->multi) {
+            // Append a status line: '(N selected)'.
+            $count = $this->selectedCount();
+            $cap = $this->limit > 0 ? "/{$this->limit}" : '';
+            $body .= "\n[" . $count . $cap . " selected]";
         }
-        // Append a status line: '(N selected)'.
-        $count = $this->selectedCount();
-        $cap = $this->limit > 0 ? "/{$this->limit}" : '';
-        return $body . "\n[" . $count . $cap . " selected]";
+        if (!$this->submitted && !$this->aborted) {
+            // In-app keybinding discoverability (gum's list help line).
+            $body .= "\n" . Lang::t('hints.choose');
+        }
+        return $body;
     }
 
     /** Selected option's title once submitted (single mode). */

@@ -43,6 +43,8 @@ final class ChooseCommand extends Command
             ->addOption('unselected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before non-cursor items.', null)
             ->addOption('show-help', null, InputOption::VALUE_NONE,    'Alias for --help (gum compat).')
             ->addOption('no-selected', null, InputOption::VALUE_REQUIRED, 'Message printed (with a non-zero exit) when the user exits without a selection.', null)
+            ->addOption('width', null, InputOption::VALUE_REQUIRED, 'List width in cells (0 = auto).', 0)
+            ->addOption('no-alt-screen', null, InputOption::VALUE_NONE, 'Render inline instead of the alternate screen (keeps output in scrollback).')
             ->addOption('timeout',   null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
 
@@ -86,9 +88,13 @@ final class ChooseCommand extends Command
             $ordered,
             cursorPrefix:     is_string($cursor) ? $cursor : null,
             unselectedPrefix: is_string($unselected) ? $unselected : null,
+            width:            (int) $input->getOption('width'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        $options = InteractiveRuntime::programOptions(
+            useAltScreen: ! (bool) $input->getOption('no-alt-screen'),
+            hideCursor:   true,
+        );
         if ($options === null) {
             fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'choose']) . "\n");
             return Command::FAILURE;

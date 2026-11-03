@@ -290,6 +290,29 @@ success (`0`) rather than specific non-zero values.
 The key bindings are owned by each `Model`; the table matches their
 doc-comments, and those are exercised by the model tests.
 
+### Sizing, hints, and terminal modes
+
+- Interactive lists and the pager size themselves from the terminal at
+  launch (COLUMNS/LINES, then an ioctl against the controlling stream).
+  An explicit `--width`/`--height` wins; when nothing is knowable the
+  historical literals (lists 60 cells, pager 80×20) keep piped output
+  byte-stable. `choose` gained `--width`; `filter`'s existing `--width`
+  is now honoured; `pager`'s `--width`/`--height` default to `0` = auto.
+- `pager` re-fits live on resize. The list views do not re-flow live
+  (sugar-forms `ItemList` exposes resize, but `--width` is a launch-time
+  cap there — following SIGWINCH would silently widen explicitly-sized
+  lists; see the sugar-forms seam note below).
+- `choose`, `filter`, and `pager` paint a one-line keybinding hint under
+  the live view (removed from the resolved/final frame).
+- `choose` / `filter` / `pager` / `write` / `file` accept
+  `--no-alt-screen` to render inline. Note the flip side: entering the
+  alternate screen (the default) ERASES the rendered frames on exit —
+  pass `--no-alt-screen` when you want the interaction to remain in
+  scrollback.
+- On `TERM=dumb` the runtime forces inline mode, keeps the cursor
+  visible, and `ColourGate` lowers colour — the DEC-private modes the
+  renderer would emit are exactly what such terminals cannot digest.
+
 ## Compatibility with `gum` invocations
 
 Most `gum X` invocations work as `candy-scriptui X` verbatim. Known

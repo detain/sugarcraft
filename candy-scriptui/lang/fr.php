@@ -46,4 +46,7 @@ return [
     'runtime.no_terminal' => '{command} nécessite un terminal interactif ; aucun terminal de contrôle disponible.',
     'runtime.bad_timeout' => 'Valeur de --timeout invalide « {value} » — attendu : un nombre de secondes positif ou nul (0 désactive le délai).',
     'runtime.unknown_choice' => 'Valeur invalide pour {option} : « {value} ». Autorisées : {allowed}.',
+    'hints.choose' => '↑/↓ déplacer · entrée sélectionner · échap annuler',
+    'hints.filter' => ' taper pour filtrer · ↑/↓ déplacer · entrée sélectionner · échap annuler',
+    'hints.pager' => 'space/PgDn bas · PgUp/b haut · g début · G fin · q quitter',
 ];

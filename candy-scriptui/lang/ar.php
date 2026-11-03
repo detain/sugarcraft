@@ -33,4 +33,7 @@ return [
     'runtime.no_terminal' => '{command} يحتاج إلى طرفية تفاعلية؛ لا يوجد طرف تحكّم متاح.',
     'runtime.bad_timeout' => 'قيمة --timeout غير صالحة \'{value}\' — يُتوقَّع عدد ثوانٍ غير سالب (0 يعطّل المهلة).',
     'runtime.unknown_choice' => 'قيمة غير صالحة لـ{option}: \'{value}\'. المسموح: {allowed}.',
+    'hints.choose' => '↑/↓ تحرّك · enter اختيار · esc إلغاء',
+    'hints.filter' => 'اكتب للتصفية · ↑/↓ تحرّك · enter اختيار · esc إلغاء',
+    'hints.pager' => 'space/PgDn نزول · PgUp/b صعود · g بداية · G نهاية · q خروج',
 ];
