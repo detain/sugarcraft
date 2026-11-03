@@ -28,25 +28,72 @@ use SugarCraft\Style\Style;
  */
 final class Renderer
 {
+    /** Text cells a ranking pane asks for; its frame is that plus the border and padding. */
+    private const PANE_TEXT = 26;
+
+    /** Cells of blank gutter between the two ranking panes side by side. */
+    private const PANE_GAP = 2;
+
+    /**
+     * Cells a box consumes around its text: 2 border columns + 2 padding
+     * columns. `Style::width()` sizes the TEXT, so a frame is always
+     * `width + FRAME_CHROME` wide — the number every budget here subtracts.
+     */
+    private const FRAME_CHROME = 4;
+
     public static function render(Dashboard $d): string
     {
         $stats = $d->stats;
 
-        $header = self::header($d);
-        $projects = self::ranking('Top projects',  $stats->perProject(),  '#fde68a', 26);
-        $languages = self::ranking('By language',  $stats->perLanguage(), '#7dd3fc', 26);
+        $header = self::clip(self::header($d), $d->width);
+        $projects = self::ranking('Top projects', $stats->perProject(), '#fde68a', $d->width);
+        $languages = self::ranking('By language', $stats->perLanguage(), '#7dd3fc', $d->width);
 
-        // Stack panes vertically when width is known and below side-by-side threshold (~56)
-        $top = ($d->width !== null && $d->width < 56)
+        // Side by side only once two frames plus the gutter actually fit. The
+        // threshold is derived from the numbers above, because the old literal
+        // 56 was 6 cells short of the geometry it was guarding — the join
+        // landed on terminals that could not hold it and the right pane lost
+        // its border.
+        $sideBySide = (self::PANE_TEXT + self::FRAME_CHROME) * 2 + self::PANE_GAP;
+        $stacked = $d->width !== null && $d->width < $sideBySide;
+        $top = $stacked
             ? $projects . "\n" . $languages
-            : Layout::joinHorizontal(Position::TOP, $projects, '  ', $languages);
+            : Layout::joinHorizontal(Position::TOP, $projects, str_repeat(' ', self::PANE_GAP), $languages);
 
         $timeline = self::timeline($d);
 
-        $help = self::tint(Style::new(), '#7d6e98')
-            ->render('  ←  prev day  ·  →  next day  ·  r  reload  ·  q  quit');
+        $help = self::clip(self::tint(Style::new(), '#7d6e98')
+            ->render('  ←  prev day  ·  →  next day  ·  r  reload  ·  q  quit'), $d->width);
 
-        return $header . "\n" . $top . "\n" . $timeline . "\n" . $help . "\n";
+        return self::clipRows($header . "\n" . $top . "\n" . $timeline . "\n" . $help, $d->width) . "\n";
+    }
+
+    /**
+     * The single place that guarantees no row outgrows the terminal. Each
+     * section sizes itself properly on its own; this is the choke the geometry
+     * pins measure, and it is what sugar-core's renderer will not do for us.
+     */
+    private static function clipRows(string $frame, ?int $width): string
+    {
+        if ($width === null) {
+            return $frame;
+        }
+        return implode("\n", array_map(
+            static fn(string $line): string => self::clip($line, $width),
+            explode("\n", $frame),
+        ));
+    }
+
+    /**
+     * Cut a row down to the terminal. sugar-core's renderer does not clip, so
+     * an over-long line hard-wraps and takes the frame's borders with it.
+     */
+    private static function clip(string $line, ?int $width): string
+    {
+        if ($width === null) {
+            return $line;
+        }
+        return Width::truncateAnsi($line, max(1, $width));
     }
 
     /**
@@ -84,66 +131,216 @@ final class Renderer
         return $title . '  ' . $range . '   total: ' . $tot;
     }
 
-    /** @param array<string,int> $rows */
-    private static function ranking(string $title, array $rows, string $colour, int $width): string
+    /**
+     * One ranking pane: title, up to six `name … duration` rows, and a
+     * "+N more" line when the cap hid something.
+     *
+     * The duration column is right-aligned and the name column takes exactly
+     * what is left of the pane's text cells. Both are derived from a first pass
+     * over the shown rows, because the old shape padded the name to a fixed 14
+     * cells and then added a second, name-length-derived gap — which pushed the
+     * duration past the pane's own text area, where it was cut.
+     *
+     * @param array<string,int> $rows
+     */
+    private static function ranking(string $title, array $rows, string $colour, ?int $terminal): string
     {
-        $lines = [Style::new()->bold()->render($title)];
-        if ($rows === []) {
-            $lines[] = self::tint(Style::new(), '#7d6e98')->render('  (no activity)');
+        // The frame is 4 cells wider than the text box, so shrinking the text
+        // is what keeps a narrow terminal inside itself.
+        $text = $terminal === null
+            ? self::PANE_TEXT
+            : max(6, min(self::PANE_TEXT, $terminal - self::FRAME_CHROME));
+
+        $shown = [];
+        foreach ($rows as $name => $secs) {
+            if (count($shown) >= 6) {
+                break;
+            }
+            $clean = self::clean(Ansi::strip((string) $name));
+            $shown[] = [$clean, Stats::formatHours($secs)];
+        }
+
+        $lines = [Width::truncate($title, $text)];
+        if ($shown === []) {
+            $lines[] = self::tint(Style::new(), '#7d6e98')->render(Width::truncate('  (no activity)', $text));
         } else {
-            $i = 0;
-            foreach ($rows as $name => $secs) {
-                if ($i++ >= 6) break;
-                $duration = Stats::formatHours($secs);
-                $name = Ansi::strip($name);
-                $name = preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u', '', $name) ?? '';
-                $name = Width::truncate($name, 14);
-                $displayWidth = Width::string($name);
+            $durationWidth = 4;
+            foreach ($shown as [, $duration]) {
+                $durationWidth = max($durationWidth, Width::string($duration));
+            }
+            // Two cells of indent, two cells between name and duration.
+            $nameWidth = max(4, min(14, $text - 4 - $durationWidth));
+            foreach ($shown as [$name, $duration]) {
                 $lines[] = sprintf(
-                    '  %s%s  %s',
-                    self::tint(Style::new(), $colour)->render(Width::padRight($name, 14)),
-                    str_repeat(' ', max(0, 16 - $displayWidth)),
-                    Style::new()->bold()->render($duration),
+                    '  %s  %s',
+                    self::tint(Style::new(), $colour)->render(
+                        Width::padRight(Width::truncate($name, $nameWidth), $nameWidth),
+                    ),
+                    Style::new()->bold()->render(Width::padLeft($duration, $durationWidth)),
                 );
             }
             if (count($rows) > 6) {
                 // The hard cap used to hide projects silently; say how many are missing.
                 $lines[] = self::tint(Style::new(), '#7d6e98')
-                    ->render('  +' . (count($rows) - 6) . ' more');
+                    ->render(Width::truncate('  +' . (count($rows) - 6) . ' more', $text));
             }
         }
         return Style::new()
             ->border(Border::rounded())
             ->padding(0, 1)
-            ->width($width)
+            ->width($text)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * Control bytes that survive Ansi::strip (it removes escapes, not C0) would
+     * reach the terminal raw from store data the user never typed.
+     */
+    private static function clean(string $text): string
+    {
+        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u', '', $text) ?? '';
     }
 
     private static function timeline(Dashboard $d): string
     {
         $minutes = array_map(static fn(int $s): int => intdiv($s, 60), $d->stats->timeline());
-        $computedWidth = max(20, count($minutes) * 4);
-        // A terminal narrower than the frame's own borders used to drive
-        // width-4 negative and Sparkline::new() threw — clamp to at least one
-        // cell. On wide terminals the sparkline now stretches to fill the
-        // frame instead of leaving dead space after the 4-cells-per-day floor.
-        $width = ($d->width !== null) ? max(1, $d->width - 4) : $computedWidth;
-        $sparkline = $minutes === []
-            ? '(no data)'
-            : Sparkline::new($minutes, $width)->view();
-        $labels = [];
-        foreach ($d->stats->days as $day) {
-            $labels[] = $day->format('D');
+        $days = $d->stats->days;
+        $count = count($minutes);
+        if ($count === 0) {
+            $days = [];
         }
-        $body = Style::new()->bold()->render(' Daily activity (minutes)') . "\n  "
-            . $sparkline . "\n  "
-            . implode('   ', array_map(
-                static fn($l) => self::tint(Style::new(), '#7d6e98')->render($l),
-                $labels,
-            ));
+
+        // Border + padding on both sides and no row-level indent: every body
+        // line is built inside exactly $area cells, so the frame is never wider
+        // than the terminal that asked for it. (It used to be the terminal plus
+        // two cells at every size, because a 2-cell body indent was added on top
+        // of a sparkline already sized to width - 4.)
+        $area = $d->width === null
+            ? max(1, $count) * 4
+            : max(1, $d->width - self::FRAME_CHROME);
+
+        // The heading is budgeted against the frame's own interior, not the bar
+        // area: an empty window still has to say what it is.
+        $heading = $d->width === null
+            ? max(24, $area)
+            : max(1, $d->width - self::FRAME_CHROME);
+
+        // A window with more days than cells cannot be drawn as one slot per
+        // day; keep the most recent days that fit and say how many were dropped.
+        $shown = $count === 0 ? [] : array_slice($minutes, -$area);
+        $labels = $count === 0 ? [] : array_slice($days, -$area);
+        $hidden = $count - count($shown);
+        $slotWidths = self::slots($area, count($shown));
+        $suffix = $hidden > 0 ? '  +' . $hidden . ' earlier' : '';
+
+        // The heading gives up '(minutes)' before it gives up the count of days
+        // that fell off the left: the count is information, the word is not.
+        $full = ' Daily activity (minutes)' . $suffix;
+        $short = ' Daily activity' . $suffix;
+        $body = Style::new()->bold()->render(
+            self::heading([$full, $short, ' Daily activity'], $heading),
+        );
+
+        if ($shown === []) {
+            return Style::new()->border(Border::rounded())->padding(0, 1)->render($body . "\n(no data)");
+        }
+
+        $flat = max($shown) === 0;
+        $bars = self::bars($shown, $slotWidths, $flat);
+        $weekdays = array_map(
+            static fn(\DateTimeImmutable $day): string => $day->format('D'),
+            $labels,
+        );
+        $marks = self::marks($weekdays, $slotWidths);
+
         return Style::new()
             ->border(Border::rounded())
             ->padding(0, 1)
-            ->render($body);
+            ->render(implode("\n", [$body, $bars, $marks]));
+    }
+
+    /**
+     * The first candidate that fits the heading budget, falling back to a cut of
+     * the plainest one. A terminal too small for any of them still gets a frame.
+     *
+     * @param list<string> $candidates
+     */
+    private static function heading(array $candidates, int $budget): string
+    {
+        foreach ($candidates as $candidate) {
+            if (Width::string($candidate) <= $budget) {
+                return $candidate;
+            }
+        }
+        return Width::truncate((string) end($candidates), $budget);
+    }
+
+    /**
+     * Cell budget per day, left-weighted so the remainder lands on the most
+     * recent days. The bar row and the label row consume the same widths, which
+     * is what keeps each weekday under its own column.
+     *
+     * @return list<int>
+     */
+    private static function slots(int $area, int $days): array
+    {
+        if ($days === 0) {
+            return [];
+        }
+        $base = intdiv($area, $days);
+        $remainder = $area % $days;
+        $slots = [];
+        foreach (range(0, $days - 1) as $index) {
+            // Fill from the right: the newest day is the one being read.
+            $slots[] = $base + ($index >= $days - $remainder ? 1 : 0);
+        }
+        return $slots;
+    }
+
+    /**
+     * One level glyph per day from sugar-charts, stretched to that day's slot.
+     * A week with no recorded minutes renders blank cells: Sparkline maps a
+     * zero-range series onto its middle glyph, which read as steady activity on
+     * an empty account.
+     *
+     * @param list<int> $minutes
+     * @param list<int> $slots
+     */
+    private static function bars(array $minutes, array $slots, bool $flat): string
+    {
+        if ($flat) {
+            return str_repeat(' ', array_sum($slots));
+        }
+        $strip = preg_split('//u', Ansi::strip(Sparkline::new($minutes, count($minutes))->view()), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $line = '';
+        foreach ($slots as $index => $width) {
+            $line .= str_repeat((string) ($strip[$index] ?? ' '), max(1, $width));
+        }
+        return $line;
+    }
+
+    /**
+     * Weekday labels, each inside its day's slot, so the label row and the bar
+     * row share one grid. The old row joined labels with three spaces and left
+     * the sparkline to slide its own window, which matched nothing.
+     *
+     * When slots get too narrow for three letters the row degrades to single
+     * initials rather than 'SatSunMon', which reads as one long word.
+     *
+     * @param list<string> $weekdays
+     * @param list<int> $slots
+     */
+    private static function marks(array $weekdays, array $slots): string
+    {
+        $narrow = $slots !== [] && min($slots) < 4;
+        $line = '';
+        foreach ($slots as $index => $width) {
+            $label = (string) ($weekdays[$index] ?? '');
+            $line .= Width::padRight(
+                Width::truncate($narrow ? substr($label, 0, 1) : $label, $width),
+                $width,
+            );
+        }
+        return self::tint(Style::new(), '#7d6e98')->render($line);
     }
 }

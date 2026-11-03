@@ -92,8 +92,24 @@ final class RendererTest extends TestCase
         $stats = Stats::compute($beats, $end->modify('-6 days'), $end);
         $d = new \SugarCraft\CodeTime\Dashboard(new Store(sys_get_temp_dir()), $end, 7, $stats, 2);
 
+        // Two cells cannot hold words, so what this pin really guards is the
+        // promise it was written for: the frame renders, and nothing outgrows
+        // the box it was asked to fit.
         $out = Renderer::render($d);
-        $this->assertStringContainsString('Daily activity', $out);
+        $this->assertNotSame('', trim(\SugarCraft\Core\Util\Ansi::strip($out)));
+        foreach (explode("\n", $out) as $row) {
+            $this->assertLessThanOrEqual(
+                2,
+                \SugarCraft\Core\Util\Width::string($row),
+                'a row outgrew the 2-cell terminal',
+            );
+        }
+
+        // The heading survives as soon as the frame can hold it.
+        $readable = Renderer::render(new Dashboard(
+            new Store(sys_get_temp_dir()), $end, 7, $stats, 24,
+        ));
+        $this->assertStringContainsString('Daily activity', $readable);
     }
 
     public function testWideTerminalsStretchTheTimeline(): void

@@ -154,7 +154,10 @@ final class DashboardTest extends TestCase
     {
         $store = new Store($this->storeDir);
         $day = new \DateTimeImmutable('2024-06-07');
-        $d = new Dashboard($store, $day, 3, new Stats([], []));
+        // The 62 is load-bearing: shifting used to rebuild the Model without
+        // it, so the first arrow keypress put the dashboard back on an
+        // unknown-width code path and the frame stopped fitting the window.
+        $d = new Dashboard($store, $day, 3, new Stats([], []), 62);
 
         $msg = new KeyMsg(KeyType::Left);
         [$next, $cmd] = $d->update($msg);
@@ -162,6 +165,7 @@ final class DashboardTest extends TestCase
         $this->assertNotSame($d, $next);
         $expected = $day->modify('-1 day');
         $this->assertEquals($expected, $next->endDay);
+        $this->assertSame(62, $next->width, 'a shift must keep the terminal width');
         $this->assertNull($cmd);
     }
 

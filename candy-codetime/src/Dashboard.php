@@ -104,7 +104,10 @@ final class Dashboard implements Model
         if ($next > $today) {
             $next = $today;
         }
-        return (new self($this->source, $next, $this->days))->recompute();
+        // The width has to ride the shift: without it the next frame is laid
+        // out for an unknown terminal and the rows we sized to the window
+        // (panes, timeline) silently stop being clipped.
+        return (new self($this->source, $next, $this->days, $this->stats, $this->width))->recompute();
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

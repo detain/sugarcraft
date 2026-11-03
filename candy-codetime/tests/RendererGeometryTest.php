@@ -1,0 +1,225 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\CodeTime\Tests;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use SugarCraft\CodeTime\Dashboard;
+use SugarCraft\CodeTime\Heartbeat;
+use SugarCraft\CodeTime\Renderer;
+use SugarCraft\CodeTime\Stats;
+use SugarCraft\CodeTime\Store;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
+
+/**
+ * The dashboard's only contract with a terminal is that it fits the terminal.
+ * RendererTest pins the CONTENT of a frame; nothing pinned its GEOMETRY, which
+ * is how a timeline that measured two cells wider than the window, a
+ * side-by-side join that fired six cells too early, and a weekday row that
+ * shared no grid with its bars all shipped green.
+ */
+final class RendererGeometryTest extends TestCase
+{
+    private const END = '2024-06-07';
+
+    /**
+     * Three projects, two of them on the last day: enough to fill both ranking
+     * panes with rows whose durations differ in width.
+     *
+     * @return list<Heartbeat>
+     */
+    private static function busy(): array
+    {
+        $end = new \DateTimeImmutable(self::END);
+        return [
+            new Heartbeat($end->getTimestamp(), 'demo-project-name-very-long', 'php', '/home/user/src/a.php', 600),
+            new Heartbeat($end->getTimestamp(), 'second', 'typescript', '/home/user/src/b.ts', 3600),
+            new Heartbeat($end->modify('-1 day')->getTimestamp(), 'alpha', 'php', '/home/user/src/c.php', 120),
+        ];
+    }
+
+    /** @return list<Heartbeat> */
+    private static function everyDay(): array
+    {
+        $beats = [];
+        for ($i = 0; $i < 7; $i++) {
+            $day = (new \DateTimeImmutable(self::END))->modify("-{$i} days");
+            $beats[] = new Heartbeat($day->getTimestamp(), 'proj', 'php', 'a.php', 600 * ($i + 1));
+        }
+        return $beats;
+    }
+
+    /** @return list<Heartbeat> */
+    private static function quiet(): array
+    {
+        $end = new \DateTimeImmutable(self::END);
+        // Under a minute each, so every day rounds to zero recorded minutes.
+        return [
+            new Heartbeat($end->getTimestamp(), 'p', 'php', 'a.php', 30),
+            new Heartbeat($end->modify('-3 days')->getTimestamp(), 'p', 'php', 'a.php', 20),
+        ];
+    }
+
+    private static function frame(int $width, array $beats, int $days = 7): string
+    {
+        $end = new \DateTimeImmutable(self::END);
+        $stats = Stats::compute($beats, $end->modify('-' . ($days - 1) . ' days'), $end);
+        return Renderer::render(new Dashboard(new Store(sys_get_temp_dir()), $end, $days, $stats, $width));
+    }
+
+    /** @return list<string> */
+    private static function plain(string $frame): array
+    {
+        return array_map(static fn(string $line): string => Ansi::strip($line), preg_split('/\r?\n/', $frame) ?: []);
+    }
+
+    /**
+     * The inside of a frame row, with the border and its padding column cut.
+     * The bars/label rows are built to be exactly this wide. Splitting on the
+     * border rather than slicing by bytes keeps the box-drawing character from
+     * being cut in half (it is three bytes, not one cell).
+     */
+    private static function interior(string $row): string
+    {
+        $parts = preg_split('/│/u', $row);
+        $body = $parts === false || count($parts) < 2 ? '' : $parts[1];
+        // One padding cell on each side, both plain spaces.
+        return strlen($body) >= 2 ? substr($body, 1, -1) : '';
+    }
+
+    /** @return array<string,array{0:list<Heartbeat>,1:int}> */
+    public static function terminalSizes(): array
+    {
+        $rows = [];
+        foreach ([10, 20, 28, 40, 52, 54, 56, 62, 80, 120, 160] as $width) {
+            $rows['busy at ' . $width] = [self::busy(), $width];
+            $rows['every day at ' . $width] = [self::everyDay(), $width];
+            $rows['quiet at ' . $width] = [self::quiet(), $width];
+        }
+        return $rows;
+    }
+
+    #[DataProvider('terminalSizes')]
+    public function testNoRowEverOutgrowsTheTerminal(array $beats, int $width): void
+    {
+        foreach (self::plain(self::frame($width, $beats)) as $index => $row) {
+            $this->assertLessThanOrEqual(
+                $width,
+                Width::string($row),
+                sprintf('row %d outgrew a %d-cell terminal: [%s]', $index, $width, $row),
+            );
+        }
+    }
+
+    public function testTheWidestFrameFillsTheTerminalExactly(): void
+    {
+        // The ranking panes are allowed to be narrower than the window; the
+        // timeline is not, because it is sized FROM the window. A border row
+        // wider than the terminal is the defect this pins: the frame used to be
+        // two cells too wide at every size, so its right border was clipped off
+        // and the box stopped being a box.
+        foreach ([28, 40, 54, 62, 100] as $width) {
+            $widest = 0;
+            $borders = 0;
+            foreach (self::plain(self::frame($width, self::busy())) as $row) {
+                if (!str_starts_with($row, '╭') && !str_starts_with($row, '╰')) {
+                    continue;
+                }
+                $borders++;
+                $widest = max($widest, Width::string($row));
+            }
+            $this->assertGreaterThan(0, $borders, 'no frame border reached the test');
+            $this->assertSame(
+                $width,
+                $widest,
+                sprintf('widest frame border was %d cells in a %d-cell terminal', $widest, $width),
+            );
+        }
+    }
+
+    public function testBothRankingDurationsSurviveTheSideBySideJoin(): void
+    {
+        // The old row padded the name to 14 and then added a name-length-derived
+        // gap, so the second pane's durations fell past the join and vanished.
+        $out = Ansi::strip(self::frame(62, self::busy()));
+        $this->assertStringContainsString('1h 00m', $out);
+        $this->assertStringContainsString('0h 12m', $out, 'the right-hand pane lost its durations');
+        $this->assertStringContainsString('0h 02m', $out);
+    }
+
+    public function testSideBySideStartsWhereTwoFramesActuallyFit(): void
+    {
+        $joined = static fn(int $width): bool => (bool) preg_grep(
+            '/╮\s+╭/',
+            self::plain(self::frame($width, self::busy())),
+        );
+        $this->assertFalse($joined(60), 'two 30-cell frames plus a gutter cannot fit 60 cells');
+        $this->assertTrue($joined(62), 'the layout refuses to join a terminal wide enough to hold it');
+    }
+
+    public function testWeekdayLabelsShareTheBarsGrid(): void
+    {
+        [$bars, $marks] = self::timelineRows(self::frame(54, self::everyDay()));
+
+        $this->assertSame(
+            Width::string($bars),
+            Width::string($marks),
+            'the label row and the bar row are not one grid',
+        );
+        $this->assertSame(50, Width::string($bars), 'the timeline body should fill width - border - padding');
+
+        // Seven days of activity have to start in the first day's own column.
+        // The sparkline used to slide a 50-cell window over 7 points, leaving 43
+        // blanks before any bar appeared, so the 'Mon' under a bar was luck.
+        $this->assertSame(
+            0,
+            strspn($bars, ' '),
+            'the first bar did not start in the first day column',
+        );
+    }
+
+    public function testQuietWeekRendersNoSteadyBars(): void
+    {
+        [$bars] = self::timelineRows(self::frame(54, self::quiet()));
+
+        // Sparkline maps a zero-range series onto its middle glyph, which read
+        // as a flat week of steady work on an account that recorded nothing.
+        $this->assertSame(
+            '',
+            trim($bars),
+            'a week with no recorded minutes must render blank, not mid-height',
+        );
+    }
+
+    public function testEarlierDaysAreDisclosedWhenTheyCannotBeDrawn(): void
+    {
+        // A 44-day window in a 40-cell terminal cannot give every day a column;
+        // the days that fell off the left have to be counted, not skipped in
+        // silence. The heading gives up '(minutes)' to make room for the count.
+        $end = new \DateTimeImmutable(self::END);
+        $out = Ansi::strip(self::frame(40, [
+            new Heartbeat($end->getTimestamp(), 'proj', 'php', 'a.php', 600),
+        ], 44));
+        $this->assertMatchesRegularExpression('/\+8 earlier/', $out);
+    }
+
+    /**
+     * @return array{0:string,1:string} the bars row and the weekday row
+     */
+    private static function timelineRows(string $frame): array
+    {
+        $rows = self::plain($frame);
+        foreach ($rows as $index => $row) {
+            if (str_contains($row, 'Daily activity')) {
+                return [
+                    self::interior($rows[$index + 1] ?? ''),
+                    self::interior($rows[$index + 2] ?? ''),
+                ];
+            }
+        }
+        $this->fail('no timeline heading row in the frame');
+    }
+}
