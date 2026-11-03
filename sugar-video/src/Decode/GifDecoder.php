@@ -158,6 +158,15 @@ final class GifDecoder implements Decoder
      * the playback state without touching the filesystem again. The
      * header-drop notice belongs to the callers — they still have $source.
      */
+    /**
+     * m14: non-null hint when the graphics path will silently degrade because
+     * this PHP has no image extension; null on a normal GD-capable host.
+     */
+    public static function textSampled(): ?string
+    {
+        return function_exists('imagecreatetruecolor') ? null : Lang::t('decoder.text_sampled');
+    }
+
     private function hydrate(int $cellsW, int $cellsH, float $fps, ?Mode $mode, float $startSec): void
     {
         $bytes = $this->bytes;
@@ -197,6 +206,16 @@ final class GifDecoder implements Decoder
         // running product would pass MAX_TOTAL_FRAME_PIXELS: at most one
         // frame's allocation beyond the budget is ever made, then nothing
         // over-budget stays resident and the refusal is loud and typed.
+        // m14: without ext-gd the graphics path silently degrades to the
+        // (much smaller) native-pixel grid upstream. Say so, once per process.
+        if ($mode !== null && $mode->isGraphics()) {
+            static $gdHintAnnounced = false;
+            if (!$gdHintAnnounced && ($hint = self::textSampled()) !== null) {
+                $gdHintAnnounced = true;
+                error_log($hint);
+            }
+        }
+
         $perFrame = max(1, $decodeW * $decodeH);
         $frames = [];
         try {
@@ -210,6 +229,18 @@ final class GifDecoder implements Decoder
                 }
                 $frames[] = $frame;
             }
+        } catch (\RuntimeException $e) {
+            // m13: the upstream grid refusal names its own library and quotes
+            // a raw cell count nobody can act on. Keep its sentence as the
+            // technical detail but answer as sugar-video advice. The budget
+            // refusal raised above passes through untranslated.
+            if (!str_contains($e->getMessage(), 'cell grid product exceeds maximum')) {
+                throw $e;
+            }
+
+            throw new \RuntimeException(Lang::t('decoder.gif_grid', [
+                'detail' => $e->getMessage(),
+            ]));
         } catch (\ValueError $e) {
             throw new \RuntimeException("GIF decode failed: {$e->getMessage()}", 0, $e);
         }

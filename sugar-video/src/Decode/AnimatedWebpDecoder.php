@@ -832,6 +832,10 @@ final class AnimatedWebpDecoder implements Decoder
     }
 
     /** Flatten a box to raw rgb24 (alpha composited over the box background, which is black here). */
+    /**
+     * m9: deliberately un-memoized — caching encoded bytes per box would double
+     * the resident frame budget the gates above police; one box per render pass.
+     */
     private static function rgb24Of(\GdImage $box): string
     {
         $w = imagesx($box);

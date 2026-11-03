@@ -511,4 +511,18 @@ final class GifDecoderTest extends TestCase
             'no call site may keep feeding a sixth argument into a five-parameter method (m2)',
         );
     }
+    /**
+     * @testdox m13/m14: the upstream grid refusal is translated and the gd-less hint exists
+     */
+    public function testTheUpstreamGridRefusalIsTranslated(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Decode/GifDecoder.php');
+        $this->assertStringContainsString("'cell grid product exceeds maximum'", $src, 'the upstream phrase must be recognized');
+        $this->assertStringContainsString("'decoder.gif_grid'", $src, 'and re-thrown as sugar-video advice');
+        $this->assertStringContainsString('self::textSampled()', $src, 'the gd-less hint has a call site');
+        if (function_exists('imagecreatetruecolor')) {
+            $this->assertNull(GifDecoder::textSampled(), 'a GD-capable host never hints');
+        }
+    }
+
 }

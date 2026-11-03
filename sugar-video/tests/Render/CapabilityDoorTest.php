@@ -87,7 +87,7 @@ final class CapabilityDoorTest extends TestCase
             substr_count($src, '= Mosaic::diagnose();'),
             'the live probe is called from exactly one memoized site',
         );
-        $this->assertSame(1, substr_count($src, 'self::supports($mode)'), 'one door, consulted by new()');
+        $this->assertSame(2, substr_count($src, 'self::supports($mode)'), 'one door, consulted by new() and the m16 roster');
 
         $player = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Player.php');
         $this->assertStringNotContainsString(

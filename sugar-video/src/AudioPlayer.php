@@ -7,6 +7,7 @@ namespace SugarCraft\Video;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Video\Source\HttpHeaders;
 use SugarCraft\Video\Source\Probe;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Video\Support\FfmpegCommandBuilder;
 
 /**

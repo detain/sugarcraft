@@ -82,6 +82,16 @@ final class RendererFactory
      * the findings ledger); the auto ladder gates on the same signal, so
      * ladder and door can never disagree.
      */
+    /**
+     * m16: every Mode this terminal can honestly render right now.
+     *
+     * @return list<Mode>
+     */
+    public static function supportedModes(): array
+    {
+        return array_values(array_filter(Mode::cases(), static fn (Mode $mode): bool => self::supports($mode)));
+    }
+
     public static function supports(Mode $mode): bool
     {
         return match ($mode) {
