@@ -74,25 +74,35 @@ final class Greeter implements Model
 }
 ```
 
-Only the *return* of `init()` is optional — the method itself is required, and returning `null` just means "no startup Cmd". `subscriptions()` is likewise required; return `null` when the model needs no subscriptions.
+Only the *return* of `init()` is optional — the method itself is required, and returning `null` just means "no startup Cmd". `subscriptions()` is likewise required; return `null` when the model needs no subscriptions. And note the fence above narrows `view(): string` deliberately: the interface's contract is `string|View` (the `View` value object adds cursor placement and window-title control), so a plain-string app may narrow — but if you ever want those extras your return type must widen back to `string|View`.
 
 The shape follows the MVC-style Model–Update–View architecture. State lives on the value object, transitions are pure functions, side effects (timers, HTTP, file I/O) get *scheduled* as Cmds rather than executed inline. The demo schedules only `Cmd::quit()`; `sugar-core`'s `Cmd` also offers `every()`, `tick()`, `promise()` and friends — return one from `init()` or `update()` and the harness runs it, feeding whatever `Msg` it produces back through `update()`.
 
 `update()` returns the next `Model` — a fresh instance whenever state changes, the current one whenever it doesn't. It never mutates `$this`: that's why the demo declares `public readonly int $n`, and why the "no change" arm can honestly return `$this`.
 
+### Beyond keys
+
+Keys are not the only traffic `update()` sees. The harness also dispatches `WindowSizeMsg` (once at startup, then on every resize) — the demo's one fixed box needs no layout recompute, so it drops them, but any width-aware app must capture that Msg **before** its key filter or resize handling is dead on arrival. Async work you schedule with `Cmd::promise()` reports failure as an `ExceptionMsg`, and only there: a Model that swallows it loses its errors in silence. `src/Counter.php` sketches both arms, commented, at the top of `update()`.
+
+### Trust boundary
+
+`Program` writes whatever `view()` returns to the terminal **unmediated** — the styled frame is the one place your bytes become the user's screen. So render only text you control. Anything from outside — file contents, network responses, another user's input — goes through sugar-core's `Sanitize::untrusted()` first (or `untrustedForMarkedFrames()` when the frame carries image/mouse-zone markers): it strips the terminal-control payload and the private-use U+E000 sentinel arena that forged zone markers would abuse. The demo renders an integer it owns, so it needs none — but the line where your app starts rendering the world is exactly the line this rule bites.
+
 ## Common next steps
 
 | Want to…                          | Reach for…                              |
 |-----------------------------------|-----------------------------------------|
-| Add a text input                  | `sugarcraft/sugar-widgets` — `TextInput` |
-| Show a spinner while loading      | `sugarcraft/sugar-widgets` — `Spinner`   |
+| Add a text input                  | `sugarcraft/sugar-forms` — `TextInput`   |
+| Show a spinner while loading      | `sugarcraft/sugar-forms` — `Spinner`     |
 | Render Markdown help text         | `sugarcraft/sugar-markdown` — `Renderer` |
-| Tail a log into a scrollable pane | `sugarcraft/sugar-widgets` — `Viewport`  |
+| Tail a log into a scrollable pane | `sugarcraft/sugar-forms` — `Viewport`    |
 | Build a multi-page wizard         | `sugarcraft/sugar-forms` — `Group`       |
 | Plot a sparkline                  | `sugarcraft/sugar-charts` — `Sparkline`  |
+| Style the frame (bold, faint, colour) | `sugarcraft/sugar-style` — `Style`, `Theme` (the demo already frames itself with a `Style`) |
+| Translate your UI strings         | `sugarcraft/sugar-core` — `Lang::t()` with `lang/<code>.php` lookup files (see `LOCALES.md`) |
 | Make it `ssh`-accessible          | `sugarcraft/sugar-ssh-server`            |
 
-Add the dep, import its classes, return them from `view()`. They're all pure renderers on the same `Style`-based vocabulary. The demo itself covers the happy path only — one static frame with no loading or empty state — and the rows above are where you take it from there.
+Add the dep, import its classes, return them from `view()`. Most are renderers on the shared `Style`-based vocabulary — but not all of them are pure: `sugar-ssh-server` runs an authenticated server around your Program, and `sugar-core`'s `Lang` reads locale files at boot. Check each package's own README for setup and side effects instead of assuming the render-on-call shape. The demo itself covers the happy path only — one static frame, no colour beyond the border, and no loading or empty state — and the rows above are where you take it from there.
 
 ## Forking checklist
 
@@ -105,7 +115,7 @@ The six things you actually have to change after `create-project`:
 5. Before shipping a real product, pin your sibling deps to a released constraint — the skeleton rides `dev-master` (`sugarcraft/sugar-core`, `sugarcraft/sugar-style`), which is deliberately bleeding-edge so the template never goes stale.
 6. Re-run `vendor/bin/phpunit` (or `composer test` — the skeleton ships that script alias).
 
-The template reads no environment variables — configuration is in code, via `ProgramOptions` (framerate, alt-screen takeover, mouse tracking, raw-mode details; see `sugar-core`). `./bin/start | cat` won't get raw mode because it has no tty; pass `new ProgramOptions(openTty: true)` to make the program grab `/dev/tty` so it still sees keys on piped streams.
+The template reads no environment variables — configuration is in code, via `ProgramOptions` (framerate, alt-screen takeover, mouse tracking, raw-mode details; see `sugar-core`). Nothing is switched on for you: the shipped demo runs inline (`useAltScreen` is off by default) at 60 fps with the cursor hidden, and reaches for mouse tracking or alt-screen only when you pass the options yourself. `./bin/start | cat` won't get raw mode because it has no tty; pass `new ProgramOptions(openTty: true)` to make the program grab `/dev/tty` so it still sees keys on piped streams.
 
 ## Testing
 
@@ -139,6 +149,8 @@ Then uncomment the panic handler block in `bin/start`:
 > { "type": "path", "url": "../sugar-log", "options": { "symlink": true } }
 > ```
 > That block is development scaffolding only — **never ship it**. Remove it before publishing, or before any `composer create-project` of your app: a path repository in a published manifest is a hard fatal for every consumer, who has no `../sugar-log` next to their project.
+
+One more production note about the handler itself: the styled backtrace prints absolute paths and the arguments of every frame — exactly what you want while debugging, and sensitive data if a crash ever renders on a shared or recorded terminal. For shipped apps, configure `sugar-log` to route uncaught errors to a log sink (file, syslog) and reserve on-screen backtraces for debug builds.
 
 ## License
 
