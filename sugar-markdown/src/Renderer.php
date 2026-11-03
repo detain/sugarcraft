@@ -265,7 +265,7 @@ final class Renderer
             throw new \InvalidArgumentException(Lang::t('renderer.stream_invalid'));
         }
         $mode = (string) (stream_get_meta_data($output)['mode'] ?? '');
-        if (!preg_match('/[waxc#]|\\+/', $mode)) {
+        if (!preg_match(StreamSink::WRITABLE_MODE_PATTERN, $mode)) {
             throw new \InvalidArgumentException(Lang::t('renderer.stream_not_writable', ['mode' => $mode]));
         }
         $rendered = $this->render($markdown);
@@ -920,8 +920,14 @@ final class Renderer
         }
         $prev = mb_substitute_character();
         mb_substitute_character(0xFFFD);
-        $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
-        mb_substitute_character($prev);
+        try {
+            $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+        } finally {
+            // The substitute-character mutation is process-global: an
+            // exception from the conversion must not leave the host
+            // application answering U+FFFD where it asked for something else.
+            mb_substitute_character($prev);
+        }
 
         return $s;
     }

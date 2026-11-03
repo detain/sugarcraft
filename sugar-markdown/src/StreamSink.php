@@ -35,6 +35,12 @@ final class StreamSink
     private bool $closed = false;
 
     /** @param resource $stream */
+    /**
+     * Stream open modes that accept writes (single source of truth shared
+     * with {@see \SugarCraft\Markdown\Renderer::write()}).
+     */
+    public const WRITABLE_MODE_PATTERN = '/[waxc#]|\\+/';
+
     private function __construct(mixed $stream, private readonly bool $owned)
     {
         $this->stream = $stream;
@@ -50,7 +56,7 @@ final class StreamSink
             throw new \InvalidArgumentException(Lang::t('renderer.stream_invalid'));
         }
         $mode = (string) (stream_get_meta_data($resource)['mode'] ?? '');
-        if (!preg_match('/[waxc#]|\\+/', $mode)) {
+        if (!preg_match(self::WRITABLE_MODE_PATTERN, $mode)) {
             throw new \InvalidArgumentException(Lang::t('renderer.stream_not_writable', ['mode' => $mode]));
         }
 

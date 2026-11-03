@@ -104,20 +104,39 @@ final class Writer
         }
         $this->closed = true;
 
-        if ($this->deferredSource !== null) {
-            $rendered = $this->renderer->render($this->deferredSource);
-            if ($rendered !== '') {
-                $this->sink->write($rendered);
+        $failed = null;
+        try {
+            if ($this->deferredSource !== null) {
+                $rendered = $this->renderer->render($this->deferredSource);
+                if ($rendered !== '') {
+                    $this->sink->write($rendered);
+                }
+            } else {
+                foreach ($this->sections->finish() as $body) {
+                    $this->emit($body);
+                }
+                // The pending run is dropped, not written: render() rtrims
+                // exactly this trailing newline run at document end.
             }
-        } else {
-            foreach ($this->sections->finish() as $body) {
-                $this->emit($body);
-            }
-            // The pending run is dropped, not written: render() rtrims
-            // exactly this trailing newline run at document end.
+        } catch (\Throwable $e) {
+            $failed = $e;
         }
 
-        $this->sink->close();
+        // The sink is released whatever the closing writes did. A failed
+        // flush must not leak the file handle for a retry that can never
+        // happen (the closed guard above makes close() a no-op the second
+        // time); a secondary close failure only speaks when the body
+        // succeeded — otherwise the original write error is the loud one,
+        // and masking it with a teardown error would blame the wrong door.
+        try {
+            $this->sink->close();
+        } catch (\Throwable $e) {
+            $failed ??= $e;
+        }
+
+        if ($failed !== null) {
+            throw $failed;
+        }
     }
 
     public function isOpen(): bool

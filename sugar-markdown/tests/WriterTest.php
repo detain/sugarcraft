@@ -256,4 +256,37 @@ final class WriterTest extends TestCase
 
         return $stream;
     }
+
+    public function testCloseStillReleasesTheSinkWhenTheClosingWriteFails(): void
+    {
+        $sink = StreamSink::toStream(self::memory());
+        $writer = new Writer(Renderer::plain(), $sink);
+        // An open fence holds the section: nothing is written until close().
+        $writer->feed("```\nbody\n");
+
+        // Swap the adopted handle for a valid-but-read-only one: every write
+        // the final flush makes now fails, exactly like a full disk mid-write.
+        $reflection = new \ReflectionProperty(StreamSink::class, 'stream');
+        $reflection->setAccessible(true);
+        $live = $reflection->getValue($sink);
+        $readable = fopen('php://memory', 'rb');
+        $reflection->setValue($sink, $readable);
+        fclose($live);
+
+        try {
+            $writer->close();
+            self::fail('the failed closing write must still surface loudly');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('failed to write', $e->getMessage());
+        }
+
+        // M15: the sink is released whatever the writes did — under the old
+        // shape the throw skipped sink->close() and the handle stayed ours.
+        self::assertFalse($sink->isOpen(), 'close() abandoned the sink after a failed write');
+        self::assertFalse($writer->isOpen());
+
+        // A second close() is the documented no-op, loud neither way.
+        $writer->close();
+        $sink->close();
+    }
 }
