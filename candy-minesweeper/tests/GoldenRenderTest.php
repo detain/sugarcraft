@@ -157,30 +157,45 @@ final class GoldenRenderTest extends TestCase
     }
 
     /**
-     * Test that resolveClick returns null when a zone is found but its id
-     * does not match the expected "cell:row:col" pattern.
-     * Covers the return null at line 189 of Renderer.php.
+     * The malformed-zone guard in Renderer::resolveClick() (C1 fix,
+     * lib-reviews-1103). The pre-fix version of this test tampered a scanner
+     * it had built itself and then invoked resolveClick WITHOUT it — the
+     * method rescanned a pristine board, so the null it returned came from
+     * the ordinary out-of-zone path and the regex guard never executed.
+     * resolveClick() now takes the scanner as an injection seam, the
+     * tampered zone is genuinely hit, and the guard decides the outcome.
      */
     public function testResolveClickReturnsNullForMalformedZoneId(): void
     {
         $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
-        [$view, $scanner] = Renderer::renderWithScanner($g);
+        [$output, $scanner] = Renderer::renderWithScanner($g);
+        $this->assertNotEmpty($output, 'sanity: the game renders');
 
-        // Manually create a zone with a malformed id that matches no pattern.
-        $reflection = new \ReflectionClass($scanner);
-        $zonesProp = $reflection->getProperty('zones');
-        $zonesProp->setAccessible(true);
+        $zonesProp = new \ReflectionProperty(\SugarCraft\Mouse\Scanner::class, 'zones');
+        /** @var array<string, \SugarCraft\Mouse\Zone> $zones */
         $zones = $zonesProp->getValue($scanner);
-        $zones['malformed-zone-id'] = new \SugarCraft\Mouse\Zone('malformed-zone-id', 0, 0, 0, 0, 0);
+        $this->assertArrayHasKey('cell:0:0', $zones, 'sanity: scanner carries cell zones');
+        $real = $zones['cell:0:0'];
+
+        $positive = Renderer::resolveClick($g, $real->startCol, $real->startRow);
+        $this->assertSame([0, 0], $positive, 'sanity: the click coordinates hit cell (0,0) on a fresh scan');
+
+        // Replace the zone covering that coordinate with one whose id
+        // matches no "cell:r:c" pattern. Without the regex guard the hit
+        // would resolve to a guessed [0, 0] from uninitialized matches —
+        // the null below can only come from the guard.
+        unset($zones['cell:0:0']);
+        $zones['malformed-zone-id'] = new \SugarCraft\Mouse\Zone(
+            'malformed-zone-id',
+            $real->startCol,
+            $real->startRow,
+            $real->endCol,
+            $real->endRow,
+        );
         $zonesProp->setValue($scanner, $zones);
 
-        // Use reflection to inject the modified scanner and call resolveClick.
-        $reflector = new \ReflectionMethod(Renderer::class, 'resolveClick');
-        $reflector->setAccessible(true);
-
-        // Pass col=0, row=0 — will hit the injected malformed zone, then regex-mismatch → null.
-        $result = $reflector->invoke(null, $g, 0, 0);
-        $this->assertNull($result, 'Malformed zone id should cause resolveClick to return null');
+        $result = Renderer::resolveClick($g, $real->startCol, $real->startRow, $scanner);
+        $this->assertNull($result, 'a malformed zone id must resolve to nothing, not a guess');
     }
 
     public function testRenderWithScannerReturnsScanner(): void

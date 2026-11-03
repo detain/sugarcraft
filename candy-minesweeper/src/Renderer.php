@@ -62,7 +62,7 @@ final class Renderer
      *
      * When $mark is true each glyph is wrapped in a {@see Mark::zone()}
      * sentinel for {@see Scanner} hit-testing. Those sentinels embed a
-     * plain-ASCII id ("cell:r:c") that {@see Scan} skips but that the
+     * plain-ASCII id ("cell:r:c") that {@see Scanner} skips but that the
      * Buffer/Width layer would otherwise count as visible width — which
      * leaks the id text on screen and inflates the border box. So the
      * displayed board is always built unmarked; only the throwaway copy
@@ -172,6 +172,17 @@ final class Renderer
     }
 
     /**
+     * Scan a throwaway marked copy of the minefield into a ready-to-hit-test
+     * Scanner. Single derivation point for every consumer ({@see
+     * renderWithScanner()}, {@see resolveClick()}) so the zone layout the
+     * hit-tests run on is always the one the renderer actually emitted.
+     */
+    private static function scanner(Game $g): Scanner
+    {
+        return Scanner::new()->scan(self::interior($g, mark: true));
+    }
+
+    /**
      * Render the minefield view and return a ready-to-use Scanner so
      * callers can hit-test clicks.
      *
@@ -184,24 +195,27 @@ final class Renderer
      */
     public static function renderWithScanner(Game $g): array
     {
-        $scanner = Scanner::new()->scan(self::interior($g, mark: true));
-        $full = self::frame($g, self::interior($g, mark: false));
-
-        return [$full, $scanner];
+        return [self::frame($g, self::interior($g, mark: false)), self::scanner($g)];
     }
 
     /**
      * Resolve a mouse click at (col, row) to a cell coordinate.
      *
-     * Uses Scanner to parse Mark zones from a marked copy of the
-     * minefield. Returns null if the click was outside any cell zone.
+     * Hit-testing runs over {@see scanner()}'s zone map ("cell:$row:$col"
+     * ids). Returns null if the click was outside any cell zone, and — the
+     * defensive half — also when a zone is hit whose id does not match the
+     * cell pattern: a zone id is a string, and a mismatch must resolve to
+     * nothing rather than a guessed coordinate.
+     *
+     * $scanner lets a caller that already holds the scanned board (tests
+     * pinning the id-mismatch guard, integrators reusing one scan across
+     * several clicks) pass it in; null scans a fresh copy.
      *
      * @return array{0:int,1:int}|null col, row of the hit cell
      */
-    public static function resolveClick(Game $g, int $col, int $row): ?array
+    public static function resolveClick(Game $g, int $col, int $row, ?Scanner $scanner = null): ?array
     {
-        $scanner = Scanner::new()->scan(self::interior($g, mark: true));
-        $zone = $scanner->hit($col, $row);
+        $zone = ($scanner ?? self::scanner($g))->hit($col, $row);
 
         if ($zone === null) {
             return null;
