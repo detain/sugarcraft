@@ -588,4 +588,34 @@ final class ScanTest extends TestCase
         // Fast path: no sentinels → byte-identical passthrough.
         self::assertSame("plain \x1b[31mred\x1b[0m", Scan::strip("plain \x1b[31mred\x1b[0m"));
     }
+
+    /**
+     * Trailing blank lines inside the tags paint no cell, so they contribute
+     * no row to the bbox — the same painted-cells-only rule that drops a
+     * zero-paint zone.  'abc\n\n' + close sits at column 1 of row 3, but the
+     * zone owns row 1 only: ending it at row - 1 (the previous formula)
+     * claimed row 2, which it never drew.
+     */
+    public function testTrailingBlankLinesInsideTheTagsDoNotExtendTheBox(): void
+    {
+        $mark  = new Mark();
+        $zones = (new Scan())->parse($mark->wrap('btn', "abc\n\n"));
+        self::assertCount(1, $zones);
+        self::assertSame(1, $zones['btn']->startRow);
+        self::assertSame(1, $zones['btn']->endRow);
+        self::assertSame(3, $zones['btn']->endCol);
+    }
+
+    /**
+     * An interior blank row between two painted rows stays inside the union
+     * rectangle: the rows above and below the gap are the zone's own cells.
+     */
+    public function testInteriorBlankRowsStillUnionPaintedRowsAboveAndBelow(): void
+    {
+        $mark = new Mark();
+        $zone = (new Scan())->parse($mark->wrap('btn', "a\n\nb"))['btn'];
+        self::assertSame(1, $zone->startRow);
+        self::assertSame(3, $zone->endRow);
+        self::assertSame(1, $zone->endCol);
+    }
 }

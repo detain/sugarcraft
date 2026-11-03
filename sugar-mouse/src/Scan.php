@@ -29,6 +29,15 @@ use SugarCraft\Core\Util\Width;
  * forged markup). Image-overlay markers cannot form such a pair: sugar-core
  * moved them to U+E002+, disjoint from this arena by construction.
  *
+ * Decoding is bounded by construction: the walk is single-pass and every
+ * malformed shape costs O(1), so there is no decode-side size cap of its own.
+ * The emit-side caps ({@see Mark::MAX_ID_BYTES}, {@see Mark::MAX_CONTENT_BYTES})
+ * bound what Mark writes, not what parse reads — an unterminated CSI or OSC
+ * run swallows the rest of its frame by design (it may still be streaming
+ * in), so feed parse() frames you expect to be terminal-sized; untrusted
+ * megabyte blobs are the caller's input-trust problem, exactly like
+ * sweeping untrusted text before marking it.
+ *
  * A sentinel that does NOT begin a valid tag — a bare U+E000 whose would-be
  * id contains a space, an escape, a newline, a non-ASCII byte or more than
  * {@see Mark::MAX_ID_BYTES} bytes, or a bare U+E001 — is a *lone sentinel*:
@@ -39,7 +48,7 @@ use SugarCraft\Core\Util\Width;
  *
  * ## Malformed-markup matrix
  *
- * | Input                                   | Behaviour                                |
+ * | Input                                   | Behavior                                 |
  * |-----------------------------------------|------------------------------------------|
  * | duplicate id (re-opened while open, or  | throws \InvalidArgumentException — the   |
  * | re-opened after it already closed)      | id can no longer address one zone        |
@@ -61,7 +70,11 @@ use SugarCraft\Core\Util\Width;
  * returns the cursor to column 1 on the SAME row, as a terminal does; zones
  * still open keep the extent they had already painted — never the cell they
  * opened on unless they painted it — and a zone that paints again after the
- * `\r` widens its bbox to start at column 1.
+ * `\r` widens its bbox to start at column 1. The same painted-cells-only
+ * rule governs rows: a `\n` that ends a row holding no cell of the zone
+ * extends nothing, so `'abc\n\n' + close` stays the one-row box `'abc'
+ * painted` — trailing blank lines inside the tags are content the zone
+ * owns but never drew, and a bbox may not claim undrawn rows.
  *
  * A zone still open at a `\n` that has painted NOTHING yet (its content
  * starts with `\n`, possibly behind SGR) owns no cell of the row being
@@ -122,7 +135,7 @@ final class Scan
          * Zones whose open tag has been seen and whose close has not.
          *
          * startCol/startRow: the cell the open tag sat on.
-         * maxCol/maxRow: furthest extent reached on earlier rows / before a CR.
+         * maxCol/maxRow: furthest extent reached on earlier rows that painted / before a CR.
          * painted: the $painted counter at open — unchanged at close means
          *          the content occupied no cell.
          * segStart: $painted when the current run began — at open, then at
@@ -131,8 +144,12 @@ final class Scan
          * afterCr: the current run began at a lone CR (it starts at column 1).
          * fromCol1: some run that began at a lone CR painted a cell, so the
          *          bbox starts at column 1.
+         * rowPainted: $painted when the current row began — at open, then at
+         *          each \n — so a row ending on \n can tell whether it holds
+         *          any cell of this zone (rows that painted nothing extend
+         *          neither maxCol nor maxRow).
          *
-         * @var array<string, array{startCol:int,startRow:int,maxCol:int,maxRow:int,painted:int,segStart:int,afterCr:bool,fromCol1:bool}> $open
+         * @var array<string, array{startCol:int,startRow:int,maxCol:int,maxRow:int,painted:int,segStart:int,afterCr:bool,fromCol1:bool,rowPainted:int}> $open
          */
         $open = [];
         /** @var array<string, Zone> $zones */
@@ -228,6 +245,7 @@ final class Scan
                         'segStart' => $painted,
                         'afterCr'  => false,
                         'fromCol1' => false,
+                        'rowPainted' => $painted,
                     ];
                     continue;
                 }
@@ -338,11 +356,21 @@ final class Scan
                             'segStart' => $painted,
                             'afterCr'  => false,
                             'fromCol1' => false,
+                            'rowPainted' => $painted,
                         ];
                         continue;
                     }
-                    $bounds['maxCol'] = max($bounds['maxCol'], $colAtEol);
-                    $bounds['maxRow'] = max($bounds['maxRow'], $row);
+                    if ($painted > $bounds['rowPainted']) {
+                        // The row being ended holds at least one cell this
+                        // zone painted — the union rectangle extends over it.
+                        // A row holding none of the zone's own cells claims
+                        // nothing ('abc\n\n' before its close tag stays a
+                        // one-row zone): the same painted-cells-only rule
+                        // that drops a zero-paint zone entirely.
+                        $bounds['maxCol'] = max($bounds['maxCol'], $colAtEol);
+                        $bounds['maxRow'] = max($bounds['maxRow'], $row);
+                    }
+                    $bounds['rowPainted'] = $painted;
                     $open[$id] = $bounds;
                 }
                 $row++;
@@ -400,7 +428,7 @@ final class Scan
      * it was, not only the last one (`"AB\rCD\r"` painted cols 1-2 even
      * though nothing follows the final CR).
      *
-     * @param array{startCol:int,startRow:int,maxCol:int,maxRow:int,painted:int,segStart:int,afterCr:bool,fromCol1:bool} $bounds
+     * @param array{startCol:int,startRow:int,maxCol:int,maxRow:int,painted:int,segStart:int,afterCr:bool,fromCol1:bool,rowPainted:int} $bounds
      */
     private static function closeZone(string $id, array $bounds, int $col, int $row, int $painted, ?int $width): ?Zone
     {
@@ -424,9 +452,11 @@ final class Scan
         $endRow = $row;
         if ($endRow > $startRow && $col === 1) {
             // Closed at the start of a later row (content ended with "\n"):
-            // the zone really ends on the previous row.
+            // the zone really ends on its last PAINTED row — not merely the
+            // row before the close tag, because trailing blank lines inside
+            // the tags own no cell of theirs.
             $endCol = $maxCol;
-            $endRow = $row - 1;
+            $endRow = max($bounds['maxRow'], $startRow);
         } else {
             $endCol = max($endCol, $maxCol);
             $endRow = max($endRow, $bounds['maxRow']);

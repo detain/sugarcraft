@@ -27,7 +27,7 @@ final class Zone
      * @param int    $startCol Leftmost column (1-based).
      * @param int    $startRow Topmost row (1-based).
      * @param int    $endCol   Rightmost column (1-based, inclusive).
-     * @param int    $endRow  Bottommost row (1-based, inclusive).
+     * @param int    $endRow  Lowest row (1-based, inclusive).
      */
     public function __construct(
         public readonly string $id,

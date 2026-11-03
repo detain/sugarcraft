@@ -21,10 +21,17 @@ enum MouseAction: string
     /** Button held and mouse moved — not a click, suppress duplicates. */
     case Drag = 'drag';
 
-    /** Scroll wheel activated — pass-through, not a click. */
+    /** Scroll wheel activated — not a click; the trackers ignore it. */
     case Scroll = 'scroll';
 
-    /** Mouse button constants — mirrors sugar-input convention. */
+    /**
+     * Button numbers as the terminal wire reports them (the X10/SGR `b`
+     * field low bits), kept here so a hand-built {@see MouseEvent} can read
+     * naturally.  This is the PRIMITIVE vocabulary: core owns its own
+     * MouseButton enum, sugar-input a third spelling, and
+     * {@see \SugarCraft\Mouse\Zones\Zone::toMouseEvent()} is the bridge
+     * from the core message types to this one.
+     */
     public const BUTTON_LEFT = 0;
     public const BUTTON_MIDDLE = 1;
     public const BUTTON_RIGHT = 2;

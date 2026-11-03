@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-mouse",
-    "description": "Self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) plus ZoneClickTracker for press/release deduplication. No external Manager wiring needed.",
+    "description": "Mouse support for terminal UIs: sentinel-tagged Mark/Scan/Get hit-testing primitives (ZoneClickTracker press/release dedup, Selection) plus the bubblezone-style Zones Manager layer with hover, drag, and multi-click trackers — both layers in one package.",
     "type": "library",
     "license": "MIT",
     "keywords": [

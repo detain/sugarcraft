@@ -8,7 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
 /**
- * A normalised, inclusive range of cells a mouse text selection covers over a
+ * A normalized, inclusive range of cells a mouse text selection covers over a
  * painted frame — the frozen product of a {@see Selection} gesture.
  *
  * Ported upstream from candy-code's `Tui\TextSelection`: with SGR mouse
@@ -47,7 +47,7 @@ final class SelectionRange
     ) {}
 
     /**
-     * Normalise two cells into a reading-order range.
+     * Normalize two cells into a reading-order range.
      *
      * The two endpoints are interchangeable — a backward drag covers exactly
      * what the same cells covered dragged forward — so ordering is derived

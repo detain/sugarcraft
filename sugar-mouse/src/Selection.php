@@ -185,7 +185,7 @@ final class Selection
     /**
      * The covered cells in reading order, or null when nothing is selected.
      *
-     * The snapshot normalises both drag directions to the same geometry and
+     * The snapshot normalizes both drag directions to the same geometry and
      * carries the region's text column, so its middle rows sweep whole.
      */
     public function range(): ?SelectionRange
