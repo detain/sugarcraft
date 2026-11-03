@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Async;
 
 /**
- * Value-object representing a paused TEA command.
+ * Value-object representing a command paused across update cycles.
  *
  * A Suspended holds a callable that, when invoked, produces a Cmd
  * (a `Closure(): ?Msg`). The runtime stores the Suspended and resumes

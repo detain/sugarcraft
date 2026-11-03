@@ -17,7 +17,8 @@ use function React\Promise\reject;
  * helpers. debounce(), throttle() and singleFlight() return stateful closures
  * that retain mutable timer/cooldown/in-flight state across calls.
  *
- * All timers are bounded \u2014 no real waits >100ms in test fixtures.
+ * Nothing here blocks the caller: every wait is expressed as a promise,
+ * and every timer is armed on a supplied or shared event loop.
  */
 final class AsyncOps
 {
@@ -88,7 +89,7 @@ final class AsyncOps
      * driver's own cancellation cannot perform; a late driver result is
      * dropped, never resurrected.
      *
-     * E646 semantics: a deadline is a bounded I/O ceiling computed on the
+     * Bounded-I/O-ceiling semantics: a deadline is a ceiling computed on the
      * REMAINING budget — the caller decides how much of its allowance is left,
      * mirroring how retry() converts maxTotalSeconds into one absolute cutoff
      * — not a blanket per-request wall-clock killer applied blindly to every
@@ -102,7 +103,7 @@ final class AsyncOps
      * @param LoopInterface $loop
      * @param PromiseInterface $promise
      * @param float $seconds  Deadline in seconds (must be > 0)
-     * @param callable(): void|null $onTimeout  Abort hook, fired once when the
+     * @param null|callable(): void $onTimeout  Abort hook, fired once when the
      *        deadline hits; errors are swallowed so a failed kill cannot mask
      *        the timeout rejection.
      * @return PromiseInterface
@@ -192,7 +193,7 @@ final class AsyncOps
      * @template T
      * @param PromiseInterface<T> $promise  The in-flight operation
      * @param CancellationToken|null $token  Cancel handle; null returns the promise untouched
-     * @param callable(): void|null $onCancel  Underlying-work abort hook (fired once, errors swallowed)
+     * @param null|callable(): void $onCancel  Underlying-work abort hook (fired once, errors swallowed)
      * @return PromiseInterface<T>
      */
     public static function cancellable(
@@ -263,8 +264,9 @@ final class AsyncOps
      * the flight settles, so the next wave starts fresh — this is request
      * coalescing, NOT result caching (for that, see {@see AsyncCache}).
      *
-     * Extracted from the phlix ApiClient refreshInFlight pattern; rides the
-     * same InFlightMap mechanism that backs AsyncCache's loader dedupe.
+     * Rides the same {@see InFlightMap} mechanism that backs AsyncCache's
+     * loader dedupe: the slot is occupied before the worker runs and freed
+     * exactly once when it settles.
      *
      * @param callable(...mixed): string $keyFn  Derives the flight key from the call arguments (must not return '')
      * @param callable(...mixed): PromiseInterface $worker  Starts the backing operation
@@ -288,7 +290,7 @@ final class AsyncOps
             // Drive a Deferred so the in-flight gate is occupied BEFORE the
             // worker can settle (react/promise v3 settles an already-resolved
             // promise synchronously inside then()) and freed exactly once
-            // when it does — the phlix ordering law.
+            // when it does — the in-flight ordering law InFlightMap pins.
             $deferred = new Deferred();
             $flight = $deferred->promise();
             $flights->begin($key, $flight);
@@ -474,7 +476,8 @@ final class AsyncOps
     /**
      * Apply randomized jitter to a backoff delay, spreading retries to avoid a
      * thundering herd. Returns a delay in [$backoff, $backoff * (1 + $jitter)];
-     * with $jitter <= 0.0 the delay is exactly $backoff (BC default).
+     * with $jitter <= 0.0 the delay is exactly $backoff, keeping the
+     * historical no-jitter schedule.
      *
      * Uses random_int() (CSPRNG-backed) rather than mt_rand()/rand() so it does
      * not depend on — or perturb — global mt_srand() seed state.
@@ -489,7 +492,7 @@ final class AsyncOps
     }
 
     /**
-     * Wrap a callable with debounce \u2014 only the last call within the
+     * Wrap a callable with debounce — only the last call within the
      * window fires, and only after $seconds have elapsed since the last call.
      *
      * @param callable(mixed...): void $fn  The function to debounce
@@ -516,7 +519,7 @@ final class AsyncOps
     }
 
     /**
-     * Wrap a callable with throttle \u2014 the function fires at most once
+     * Wrap a callable with throttle — the function fires at most once
      * every $seconds, regardless of call frequency.
      *
      * @param callable(mixed...): void $fn  The function to throttle

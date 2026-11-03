@@ -13,7 +13,7 @@ use function React\Promise\resolve;
  * Promise-library-only async cache-aside primitive: TTL freshness,
  * concurrent-loader dedupe, optional serve-stale-on-error.
  *
- * Extracted from the candy-sql AdminQueryCache pattern. What generalises is
+ * Extracted from the candy-sql AdminQueryCache pattern. What generalizes is
  * the entry machinery; the SQL-string keying, pending-drain queue, and
  * connection/ServerContext memo slots stay app-side. AdminQueryCache needed a
  * pending set + external drain only because its render path could not hang
@@ -30,9 +30,8 @@ use function React\Promise\resolve;
  * No timers are armed here — freshness is judged against microtime() at read
  * time, so this class holds the event loop for exactly as long as the loader's
  * own promise does. To bound a hung loader, wrap the loader's promise with
- * {@see AsyncOps::withDeadline()} — bounded I/O ceiling semantics per the
- * E646 law: pass the remaining budget, never a blanket per-request
- * wall-clock killer.
+ * {@see AsyncOps::withDeadline()} — bounded I/O ceiling semantics: pass
+ * the remaining budget, never a blanket per-request wall-clock killer.
  *
  * Options are immutable in house style: withTtl()/withServeStaleOnError()
  * return NEW handles viewing the SAME store — configure-by-clone never forks
@@ -122,7 +121,7 @@ final class AsyncCache
 
         // The slot is occupied before the loader runs so a synchronously
         // settling loader (react/promise settles an already-resolved inner
-        // inside then()) still coalesces — the phlix in-flight ordering law.
+        // inside then()) still coalesces — the in-flight ordering law InFlightMap pins.
         $deferred = new Deferred();
         $flight = $deferred->promise();
         $this->store->flights->begin($key, $flight);

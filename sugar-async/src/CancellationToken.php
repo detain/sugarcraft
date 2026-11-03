@@ -8,7 +8,7 @@ namespace SugarCraft\Async;
  * Read-only view of a cancellation state.
  *
  * Instances are created by CancellationSource. Consumers receive only the
- * token \u2014 they cannot trigger cancellation, only observe it and register
+ * token — they cannot trigger cancellation, only observe it and register
  * callbacks.
  *
  * Mirrors Go's context.Context.Done channel pattern.
@@ -24,15 +24,12 @@ final class CancellationToken
     private bool $callbacksFired;
 
     /**
-     * @param CancellationSource $source  Minting authority; deliberately NOT retained.
-     *
-     *     Probed before dropping the former promoted property: no src or test
-     *     site ever read it, and the "GC keepalive" reading is dead weight —
-     *     cancellation requires a live CancellationSource handle, and any
-     *     holder of that handle already keeps the source alive. Retaining it
-     *     from the token side only pinned an unreachable source and turned a
-     *     refcount teardown into a cycle-GC candidate. The parameter stays as
-     *     the construction contract: a token is only ever minted for a source.
+     * @param CancellationSource $source  Minting authority; deliberately NOT
+     *     retained. Cancellation requires a live source handle on the caller
+     *     side, so a token-side reference is dead weight that would only turn
+     *     a refcount teardown into a cycle-GC candidate. The parameter stays
+     *     as the construction contract: a token is only ever minted for a
+     *     source.
      */
     public function __construct(
         CancellationSource $source,
@@ -74,7 +71,7 @@ final class CancellationToken
     public function onCancel(callable $callback): void
     {
         if ($this->cancelled) {
-            // Already cancelled \u2014 fire immediately.
+            // Already cancelled — fire immediately.
             $callback();
             return;
         }
@@ -89,11 +86,11 @@ final class CancellationToken
         if ($this->callbacksFired === true) {
             return;
         }
-        // A1 (lane A3a): callbacks fire ONLY as part of a cancellation, so
-        // firing IMPLIES cancelled — clearing the list while leaving
-        // isCancelled() false desynchronised every observer on the direct
-        // (@internal-misuse) call path, and late onCancel() registrations
-        // became ghosts that would never run. The legitimate flow enters
+        // Callbacks fire ONLY as part of a cancellation, so firing IMPLIES
+        // cancelled — clearing the list while leaving isCancelled()
+        // false would desynchronise every observer on the direct
+        // (@internal-misuse) call path and turn late onCancel() registrations
+        // into ghosts that would never run. The legitimate flow enters
         // through acceptCancellationSource(), which has already raised the
         // flag, so external cancel-detection semantics for real cancels
         // are unchanged.

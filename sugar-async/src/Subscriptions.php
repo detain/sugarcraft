@@ -7,9 +7,13 @@ namespace SugarCraft\Async;
 /**
  * Manages multiple subscriptions as a single atomic unit.
  *
- * Used in the TEA model's subscriptions() lifecycle \u2014 when the
- * model returns many subscriptions, they are composed into one handle
- * so the runtime can dispose them all with a single unsubscribe() call.
+ * Composes many subscriptions into one handle so they can be disposed
+ * with a single unsubscribe() call.
+ *
+ * NOTE the name collision: the sugar-core Model–Update–View runtime keeps
+ * its own @internal `SugarCraft\Core\Subscriptions` and does NOT depend on
+ * this library. This class is the standalone, public composition handle for
+ * async consumers.
  *
  * Mirrors RxJS's Subscription group pattern.
  */
@@ -46,7 +50,7 @@ final class Subscriptions implements Subscription
             return;
         }
         if ($this->unsubscribed === true) {
-            // Already disposed \u2014 dispose the new subscription immediately.
+            // Already disposed — dispose the new subscription immediately.
             $subscription->unsubscribe();
             return;
         }

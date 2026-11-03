@@ -11,12 +11,12 @@ use React\Promise\PromiseInterface;
  * {@see AsyncCache}'s concurrent-loader dedupe and {@see AsyncOps::singleFlight()}.
  *
  * WHY a shared mechanism: two independent coalescing maps would each need the
- * same release-ordering law discovered downstream (phlix ApiClient drives the
- * in-flight guard through a Deferred so the slot is occupied BEFORE the worker
- * can settle synchronously, and freed exactly once when it does). One home for
- * that law keeps it pinned once.
+ * same release-ordering law: the guard must drive the worker through a
+ * Deferred so the slot is occupied BEFORE the worker can settle synchronously,
+ * and freed exactly once when it does. One home for that law keeps it
+ * pinned once.
  *
- * Extracted from the candy-sql/phlix pattern.
+ * Extracted from the candy-sql AdminQueryCache pattern.
  *
  * @internal  Library plumbing — not part of the public API.
  */
