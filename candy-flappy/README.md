@@ -18,11 +18,19 @@
 
 candy-flappy — a Flappy-Bird-style game for the terminal, built on the SugarCraft stack, for PHP 8.3+. The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
 
-## Run it
+## Install & run
 
 ```bash
+# From a clone of the monorepo:
 composer install
 ./bin/candy-flappy
+
+# As a library dependency (pre-1.0: the package publishes a dev branch only):
+#   composer require sugarcraft/candy-flappy:@dev
+
+# Standalone executable (rebuilt on every push to master):
+wget https://github.com/detain/sugarcraft/releases/download/candy-flappy/dev/candy-flappy.phar
+php candy-flappy.phar
 ```
 
 ## Keys
@@ -115,8 +123,16 @@ vendor/bin/phpunit
 ## Snapshot tests
 
 Game frame output is pinned via `sugar-testing`'s `assertGoldenAnsi` golden-file
-snapshots. Any change to the ANSI playfield output must be intentional — re-record the
-fixture with `--update-golden` to accept a new canonical render.
+snapshots (`tests/fixtures/*.golden`). Comparison is byte-exact and never
+auto-rewrites: a differing golden fails. Any change to the ANSI playfield must be
+intentional — to accept a new render, delete the fixture and re-run once with the
+create-mode env var (`sugar-testing` only creates a golden when it is missing):
+
+```bash
+rm tests/fixtures/render-alive.golden
+UPDATE_GOLDENS=1 vendor/bin/phpunit --filter GoldenRenderTest   # recreates
+vendor/bin/phpunit --filter GoldenRenderTest                    # must pass with no env
+```
 
 ## Credits & inspiration
 

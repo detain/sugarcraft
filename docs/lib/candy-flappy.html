@@ -47,7 +47,7 @@
           <span class="tag-chip accent">inspired by <a href="https://github.com/kbrgl/flapioca" style="color: inherit;">kbrgl/flapioca</a></span>
           <span class="tag-chip">game</span>
           <span class="tag-chip">flappy</span>
-          <span class="tag-chip">honeybounce</span>
+          <span class="tag-chip">flappy-bird</span>
           <span class="tag-chip">physics</span>
         </div>
       </div>
@@ -75,7 +75,7 @@ use SugarCraft\Flappy\Game;
       <div class="feature"><strong>Pipe spawning</strong><span>A new pipe pair every <code>PIPE_EVERY</code> ticks; the gap row is sampled from the injected PRNG so tests pin layouts deterministically.</span></div>
       <div class="feature"><strong>Tick-driven</strong><span><code>Cmd::tick(0.033, …)</code> ≈ 30 fps. Each tick advances physics + scrolls pipes + checks collision.</span></div>
       <div class="feature"><strong>Per-cell collision</strong><span>Bird's row is rounded to a cell index; collision = bird column matches a pipe column AND the row is outside the open gap.</span></div>
-      <div class="feature"><strong>Restart on crash</strong><span><code>r</code> reseeds the world; <code>q</code> / <code>Esc</code> quits.</span></div>
+      <div class="feature"><strong>Ready card</strong><span>The board opens frozen; the first flap starts the run. <code>r</code> reseeds (mid-flight too); <code>q</code> / <code>Esc</code> / <code>Ctrl+C</code> quit &mdash; a qualifying mid-flight score is settled before the process exits.</span></div>
       <div class="feature"><strong>Score on pass</strong><span>Every tick that moves a pipe past the bird's column bumps the score.</span></div>
       <div class="feature"><strong>Variable difficulty</strong><span>Pipe gap shrinks from 6 cells down to 3 as score increases — every 5 points the gap narrows by 1 cell, making the game progressively harder.</span></div>
     </div>
@@ -93,13 +93,16 @@ use SugarCraft\Flappy\Game;
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Game</td><td>start()</td><td>Initialize game state</td></tr>
-<tr><td>Game</td><td>tick(delta)</td><td>Advance physics one step</td></tr>
-<tr><td>Game</td><td>flap()</td><td>Apply upward velocity kick</td></tr>
-<tr><td>Game</td><td>render()</td><td>Return ANSI frame string</td></tr>
-<tr><td>Program</td><td>new(game, options)</td><td>Create program</td></tr>
-<tr><td>Program</td><td>run()</td><td>Start the event loop</td></tr>
-<tr><td>ProgramOptions</td><td>new(useAltScreen)</td><td>Configure terminal mode</td></tr>
+<tr><td>Game</td><td>start($rand, $configDir)</td><td>Build the ready board (world frozen until the first flap)</td></tr>
+<tr><td>Game</td><td>update($msg)</td><td>TEA reducer: keys/ticks/resize/profile &rarr; [new Game, optional Cmd]</td></tr>
+<tr><td>Game</td><td>view()</td><td>Full ANSI frame (delegates to Renderer::render)</td></tr>
+<tr><td>Game</td><td>subscriptions()</td><td>30 Hz tick subscription; empty when crashed or the terminal cannot play</td></tr>
+<tr><td>Game</td><td>settleOnExit()</td><td>Idempotent process-boundary high-score save (signal-death safety net)</td></tr>
+<tr><td>Bird</td><td>flap() / tick()</td><td>Projectile velocity kick + one physics step (on Bird, not Game)</td></tr>
+<tr><td>Pipe</td><td>collides($row)</td><td>Per-cell test against the open gap band of the pair</td></tr>
+<tr><td>PipeGenerator</td><td>makePipe($score, $rand)</td><td>Spawn a pair; the gap shrinks 6&rarr;3 as score climbs</td></tr>
+<tr><td>Renderer</td><td>render($game)</td><td>Compose a frame for any Game state (static)</td></tr>
+<tr><td>Program</td><td>new($game, $options) / run()</td><td>sugar-core event loop; run() returns the final model</td></tr>
 </table>
   </div>
 </section>

@@ -805,4 +805,52 @@ final class GameTest extends TestCase
         // One glyph on the board (m29) plus the one in the crash hint.
         $this->assertSame(2, substr_count($g->view(), '💥'));
     }
+
+    public function testSettleOnExitSavesALiveQualifyingScore(): void
+    {
+        // The bin-level safety net for signal death (M18): a started,
+        // un-crashed board with a qualifying score must land on disk even
+        // though no quit KeyMsg ever ran.
+        $dir = $this->hermeticConfigDir();
+        $g = new Game(
+            bird: Bird::spawn(0, 9.0),
+            pipes: [],
+            score: 12,
+            started: true,
+            configDir: $dir,
+        );
+        $g->settleOnExit();
+        $file = $dir . '/.candy-flappy/scores.json';
+        self::assertFileExists($file);
+        self::assertSame([12], json_decode((string) file_get_contents($file), true));
+
+        // Idempotent: settling again writes the same bytes, no duplicate.
+        $g->settleOnExit();
+        self::assertSame([12], json_decode((string) file_get_contents($file), true));
+    }
+
+    public function testSettleOnExitIgnoresBoardsWithNothingToSettle(): void
+    {
+        $dir = $this->hermeticConfigDir();
+        $file = $dir . '/.candy-flappy/scores.json';
+
+        // Ready board (never started): nothing earned yet.
+        (new Game(bird: Bird::spawn(0, 9.0), pipes: [], score: 0, configDir: $dir))->settleOnExit();
+        // Zero score started board: nothing qualifies.
+        (new Game(bird: Bird::spawn(0, 9.0), pipes: [], score: 0, started: true, configDir: $dir))->settleOnExit();
+        self::assertFileDoesNotExist($file, 'non-qualifying boards must not create the save');
+
+        // A crashed board already persisted through the crash Cmd; the
+        // safety net must NOT double-dip (guard: crashed short-circuits).
+        $crashed = new Game(
+            bird: Bird::spawn(0, 9.0),
+            pipes: [],
+            score: 9,
+            crashed: true,
+            started: true,
+            configDir: $dir,
+        );
+        $crashed->settleOnExit();
+        self::assertFileDoesNotExist($file, 'crash-path persistence belongs to update(), not settleOnExit()');
+    }
 }

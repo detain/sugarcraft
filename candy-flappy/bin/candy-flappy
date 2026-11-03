@@ -42,18 +42,28 @@ use SugarCraft\Flappy\Support\Version;
 // Diagnostic flags answer before anything else runs — notably before the
 // one-time legacy migration below, which moves directories under $HOME and
 // must never be a side effect of asking a version.
+$usage = "candy-flappy — terminal flappy-bird clone\n\n"
+    . "Usage:\n"
+    . "  candy-flappy            Play\n"
+    . "  candy-flappy --version  Print the version\n"
+    . "  candy-flappy -h, --help Show this help\n";
+
 $flags = array_slice($argv ?? [], 1);
 if (in_array('--version', $flags, true)) {
     fwrite(STDOUT, Version::line());
     exit(0);
 }
 if (in_array('--help', $flags, true) || in_array('-h', $flags, true)) {
-    fwrite(STDOUT, "candy-flappy — terminal flappy-bird clone\n\n"
-        . "Usage:\n"
-        . "  candy-flappy            Play\n"
-        . "  candy-flappy --version  Print the version\n"
-        . "  candy-flappy --help     Show this help\n");
+    fwrite(STDOUT, $usage);
     exit(0);
+}
+// M14: the game takes no arguments at all. Anything unrecognised used to be
+// ignored while the TUI launched, so a typo'd flag "worked" silently (and a
+// CI leg passing --something got an interactive hang instead of an error).
+$unknown = array_values(array_diff($flags, ['--version', '--help', '-h']));
+if ($unknown !== []) {
+    fwrite(STDERR, "candy-flappy: unknown argument(s): " . implode(' ', $unknown) . "\n\n" . $usage);
+    exit(2);
 }
 
 // One-time migration of the pre-rename high-score directory (plan_rename.md R4.4).
@@ -79,4 +89,19 @@ if ($legacyConfigBase !== '') {
     }
 }
 
-(new Program(Game::start(), new ProgramOptions(useAltScreen: true)))->run();
+$program = new Program(Game::start(), new ProgramOptions(useAltScreen: true));
+$final = $program->run();
+// M18: run() hands back the final model on EVERY exit path. Pressing q
+// settles a qualifying mid-flight score inside the Model; a signal death
+// (Ctrl+C) never reaches update(), so settle once more here. The call is
+// idempotent, so the q path's re-write is the same bytes.
+if ($final instanceof Game) {
+    try {
+        $final->settleOnExit();
+    } catch (\Throwable) {
+        // A final save must never replace the game's exit status.
+    }
+}
+// m5: surface a signal death to the shell as the conventional 128+signo.
+$signal = $program->stopSignal();
+exit($signal === null ? 0 : 128 + $signal);

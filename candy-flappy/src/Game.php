@@ -538,6 +538,25 @@ final class Game implements Model
     /** Deferred leaderboard write (M18): the crash path and the settling
      *  quit path share one Cmd shape — run the persist, swallow I/O so a
      *  full disk cannot kill the loop, hand back no Msg. */
+    /**
+     * Process-boundary settle used by bin/candy-flappy after Program::run()
+     * returns. `q`/Esc already settle inside update() via a batched Cmd; the
+     * gap this closes is a signal death (Ctrl+C), where no KeyMsg ever ran
+     * and a live qualifying score would be lost. Idempotent: re-persisting
+     * the same list after `q` writes byte-identical JSON.
+     */
+    public function settleOnExit(): void
+    {
+        if ($this->crashed === true || $this->started === false || $this->score <= 0) {
+            return;
+        }
+        $merged = $this->withHighScore($this->score);
+        if ($merged->newRecord === false) {
+            return;
+        }
+        $merged->persistHighScores();
+    }
+
     private function persistCmd(): \Closure
     {
         $g = $this;
