@@ -133,7 +133,10 @@ sub-cell resolution. `withCanvas()` exists only on the `Chart` base that
 
 The passed canvas works as a **mode flag**: its dimensions are ignored
 and it is never mutated — the chart's own `width` / `height` still drive
-the render, so size the *chart* (not the canvas) below.
+the render, so size the *chart* (not the canvas) below. Reach for
+braille when a pane must carry more samples than it has rows (dense
+telemetry, overlapping series); plain cell mode stays the right default
+for narrow panes and hosts where glyph widths vary.
 
 ```php
 use SugarCraft\Charts\LineChart\LineChart;
@@ -328,6 +331,11 @@ is the text drawn for one of the evenly-spaced *slots* along an axis
 Render cost is linear in width × height. Both canvases are sparse —
 empty cells store nothing — so mostly-blank charts render cheaply, and
 per-sample style lookups are memoized.
+
+Axis tick values come from `Graph::niceNumbers` / `NiceScale`: a
+1/2/5×10ⁿ step ladder picks human-readable bounds and spacing, which is
+why labels read as 0 / 2.5 / 5 rather than raw data extremes. The label
+formatters override only how those ticks render.
 
 ## Shared foundations
 

@@ -98,10 +98,13 @@ final class Sparkline
     }
 
     /**
-     * Disable the implicit `max = max($data)` rescale. With auto-max
-     * off, the configured {@see $max} is used verbatim and values that
-     * exceed it clamp to the top glyph. Mirrors ntcharts'
-     * `WithNoAutoMaxValue`.
+     * Accepts ntcharts' `WithNoAutoMaxValue` for API parity. The
+     * configured {@see $max} is ALWAYS used verbatim when set (and
+     * values exceeding it clamp to the top glyph) whether the toggle
+     * is on or off; without a pin the window's max rescales either
+     * way. The flag therefore changes no rendering — retained as a
+     * no-op shim, not silently removed (removal is breaking).
+     * See {@see view()} for the resolved expression.
      */
     public function withNoAutoMaxValue(bool $disable = true): self
     {
@@ -188,17 +191,13 @@ final class Sparkline
         }
 
         $min = $this->min ?? min($points);
-        // Honour the autoMaxValue toggle: when off and a max was
-        // configured, use it verbatim; otherwise auto-rescale to the
-        // window's max.
-        if ($this->max !== null && !$this->autoMaxValue) {
-            $max = $this->max;
-        } else {
-            $max = $this->max ?? max($points);
-            if (!$this->autoMaxValue) {
-                $max = max((float) $max, (float) max($points));
-            }
-        }
+        // A pinned max is used verbatim; with no pin the window's
+        // max rescales. The autoMaxValue toggle cannot change either
+        // outcome — with a pin it is ignored, without one the inner
+        // guard computes max(points) against itself — so it is kept
+        // purely for ntcharts WithNoAutoMaxValue API parity (its
+        // docblock says so). Behaviour is byte-identical.
+        $max = $this->max ?? max($points);
         $range = $max - $min;
 
         return $this->renderBuffer($w, $points, (float) $min, $range);
@@ -222,7 +221,9 @@ final class Sparkline
             $g = self::glyph((float) $v, $min, $range);
             $gw = BufferHelper::graphemeWidth($g);
             $buffer = $buffer->withCellAt($col, 0, new Cell($g, $bufferStyle, null, $gw));
-            // Wide char continuation cell
+            // Wide-char continuation arm: the block glyphs are
+            // East-Asian *Ambiguous*, so a wide-assumption host can
+            // measure them as 2 cells — the arm is defensive, not dead.
             if ($gw === 2 && $col + 1 < $w) {
                 $buffer = $buffer->withCellAt($col + 1, 0, Cell::continuation());
             }

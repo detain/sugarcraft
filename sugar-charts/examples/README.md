@@ -12,6 +12,7 @@ Each script is self-contained — `php examples/<name>.php` from the
 | `ohlc.php` | `OHLCChart::new` candlestick rendering with body / wick styling. |
 | `picture.php` | `Picture::fromGrid` / `Picture::detect` encoding demo (Sixel / Kitty / iTerm2) — prints labeled hex dumps where the terminal can't paint images, so no Sixel capability is required. |
 | `scatter.php` | XY scatter plot with auto-ranged axes. |
+| `braille.php` | `LineChart` in braille dot-grid mode (`withCanvas` as the mode flag). |
 | `sparkline.php` | Single-row `Sparkline::new` over a synthesized series, plus `withStyle` to color the glyphs. |
 | `timeseries.php` | `TimeSeries::new` with `[\DateTimeImmutable, value]` tuples + `withTimeFormat('H:i')`. |
 

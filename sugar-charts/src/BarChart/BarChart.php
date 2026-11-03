@@ -20,6 +20,9 @@ use SugarCraft\Style\Style;
  * long. Y-axis range is computed from the data unless explicit
  * {@see withMin()} / {@see withMax()} are provided.
  *
+ * Bar colors come from `withBarColor()` / `withBarColorFn()` only;
+ * the legend palette rotation is independent styling for the key.
+ *
  * ```php
  * echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], width: 12, height: 5)->view();
  * ```
@@ -480,20 +483,31 @@ final class BarChart
         }
         $styles = $this->barStyles($bars);
 
+        // Per-column repeat runs are row-invariant — hoist them
+        // out of the per-bar loop (lib-reviews-1103 perf m1; the render
+        // bytes are identical).
+        $fullRun  = str_repeat('█', $colW);
+        $blankRun = str_repeat(' ', $colW);
+        $gapRun   = $gap > 0 ? str_repeat(' ', $gap) : '';
+
         $rows = [];
         for ($row = $bodyHeight; $row >= 1; $row--) {
             $line = $this->showAxis ? '┤' : '';
             foreach ($heights as $i => $h) {
-                $cell = match (true) {
-                    $h >= $row => '█',
-                    $caps[$i] !== '' && $h + 1 === $row => $caps[$i],
-                    default => ' ',
-                };
-                $run = str_repeat($cell, $colW);
+                $fill = null;
+                if ($h >= $row) {
+                    $fill = $fullRun;
+                } elseif ($caps[$i] !== '' && $h + 1 === $row) {
+                    $fill = str_repeat($caps[$i], $colW);
+                }
                 // Blank cells stay unstyled so rtrim() still strips them.
-                $line .= $cell !== ' ' && $styles[$i] !== null ? $styles[$i]->render($run) : $run;
+                $line .= match (true) {
+                    $fill === null => $blankRun,
+                    $styles[$i] === null => $fill,
+                    default => $styles[$i]->render($fill),
+                };
                 if ($i !== $count - 1 && $gap > 0) {
-                    $line .= str_repeat(' ', $gap);
+                    $line .= $gapRun;
                 }
             }
             $rows[] = rtrim($line);

@@ -8,6 +8,8 @@ namespace SugarCraft\Charts\LineChart;
  * Time-series LineChart variant. Wraps {@see LineChart} but accepts
  * `[\DateTimeImmutable, value]` tuples and renders X-axis labels
  * formatted from the timestamps. Useful for live metrics dashboards.
+ * Points that share a timestamp map to the same axis slot — their
+ * markers overlap; pre-aggregate (see Aggregation) to collapse them.
  *
  * Mirrors ntcharts' `linechart/timeseries`.
  */

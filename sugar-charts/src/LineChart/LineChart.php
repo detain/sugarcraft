@@ -32,6 +32,11 @@ use SugarCraft\Style\Theme;
  * `withUnicodeConnectors()` swaps the connector strokes for the `│ ─ ╱ ╲`
  * runes used by {@see Waveline} (ASCII remains the default).
  *
+ * Color resolution order: a `withSeriesColorFn()` resolver wins per
+ * point; otherwise the theme palette slot (per series); the built-in
+ * dataset palette colours only the legend in unthemed cell mode, where
+ * series separate by glyph instead.
+ *
  * ```php
  * $chart = LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)
  *     ->withDataset('trend', [2, 3, 5, 7, 6, 4, 5]);

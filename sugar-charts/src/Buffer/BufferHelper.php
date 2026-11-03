@@ -68,7 +68,7 @@ final class BufferHelper
     }
 
     /**
-     * Convert a Sprinkles\Style to a Buffer\Style.
+     * Convert a sugar-style Style (`SugarCraft\Style\Style`) to a Buffer\Style.
      * Only fg/bg/attrs are transferred; advanced features (borders, padding, etc.) are dropped.
      */
     public static function toBufferStyle(SugarStyle $s): BufferStyle

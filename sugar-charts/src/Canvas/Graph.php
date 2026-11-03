@@ -667,7 +667,7 @@ final class Graph
         }
         if (!is_finite($niceStep) || $niceStep <= 0.0) {
             throw new \InvalidArgumentException(sprintf(
-                'Graph::niceNumbers(%s, %s): range %.3g underflows the step ladder to %s; no finite nice step exists',
+                'Graph::niceNumbers(%s, %s): the range %.3g is too small to resolve any finite tick step (rounded to %s); widen the range or pass explicit labels',
                 (string) $min,
                 (string) $max,
                 $range,

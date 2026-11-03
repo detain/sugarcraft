@@ -17,7 +17,9 @@ use SugarCraft\Style\Style;
  * 2D heatmap rendered onto a {@see Canvas}. Each grid cell becomes one
  * canvas cell whose foreground color is linearly interpolated in RGB
  * between {@see $coldColor} (low values) and {@see $hotColor} (high
- * values).
+ * values). A multi-stop `withPalette()` replaces the blend; the
+ * color space is fixed by `withColorProfile()` with no output
+ * autodetection.
  *
  * ```php
  * echo Heatmap::new([
