@@ -21,13 +21,24 @@ final class CacheStore
     /** @var array<string, mixed> */
     public array $values = [];
 
-    /** @var array<string, float>  microtime(true) stamp per key, never the value's own time. */
+    /** @var array<string, float>  monotonic clock stamp per key, never the value's own time. */
     public array $storedAt = [];
+
+    /**
+     * Monotonic-seconds clock shared by every handle on this store, so stamps
+     * written through one clone are judged by the same clock through another.
+     * hrtime() rather than wall time: a backward NTP step must not be able to
+     * resurrect stale entries or freeze freshness.
+     */
+    public readonly \Closure $clock;
 
     public InFlightMap $flights;
 
-    public function __construct()
+    public function __construct(?callable $clock = null)
     {
+        $this->clock = $clock === null
+            ? static fn(): float => hrtime(true) / 1e9
+            : \Closure::fromCallable($clock);
         $this->flights = new InFlightMap();
     }
 }

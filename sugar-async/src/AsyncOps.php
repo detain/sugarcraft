@@ -35,16 +35,21 @@ final class AsyncOps
      *
      * @param LoopInterface $loop
      * @param PromiseInterface $promise
-     * @param float $seconds  Timeout in seconds (must be > 0)
+     * @param float $seconds  Timeout in seconds (must be > 0 and finite)
+     * @param string|null $label  Operation name woven into the rejection
+     *        message and carried on {@see TimeoutException::label()} — a TUI
+     *        catching one TimeoutException among several wrapped calls needs
+     *        the identity as data, not archaeology through the stack trace.
      * @return PromiseInterface
      */
     public static function withTimeout(
         LoopInterface $loop,
         PromiseInterface $promise,
         float $seconds,
+        ?string $label = null,
     ): PromiseInterface {
-        if ($seconds <= 0) {
-            throw new \InvalidArgumentException('Timeout seconds must be positive');
+        if ($seconds <= 0 || !is_finite($seconds)) {
+            throw new \InvalidArgumentException('Timeout seconds must be a positive finite number');
         }
 
         $settled = false;
@@ -66,13 +71,15 @@ final class AsyncOps
         // full duration. Armed first, the timer is always in hand when the
         // handler runs — pre-settled inners cancel it in the same synchronous
         // pass, and cancelTimer on an already-fired one-shot is a no-op.
-        $timer = $loop->addTimer($seconds, function () use (&$settled, $deferred, $seconds): void {
+        $timer = $loop->addTimer($seconds, function () use (&$settled, $deferred, $seconds, $label): void {
             if ($settled === true) {
                 return; // wait already abandoned or settled — nothing to do
             }
             $settled = true;
             $deferred->reject(new TimeoutException(
-                'Operation timed out after ' . $seconds . ' second(s)',
+                self::timeoutMessage($label, $seconds),
+                seconds: $seconds,
+                label: $label,
             ));
         });
 
@@ -131,10 +138,12 @@ final class AsyncOps
      *
      * @param LoopInterface $loop
      * @param PromiseInterface $promise
-     * @param float $seconds  Deadline in seconds (must be > 0)
+     * @param float $seconds  Deadline in seconds (must be > 0 and finite)
      * @param null|callable(): void $onTimeout  Abort hook, fired once when the
      *        deadline hits; errors are swallowed so a failed kill cannot mask
      *        the timeout rejection.
+     * @param string|null $label  Operation name for the rejection message and
+     *        {@see TimeoutException::label()}; see withTimeout().
      * @return PromiseInterface
      */
     public static function withDeadline(
@@ -142,9 +151,10 @@ final class AsyncOps
         PromiseInterface $promise,
         float $seconds,
         ?callable $onTimeout = null,
+        ?string $label = null,
     ): PromiseInterface {
-        if ($seconds <= 0) {
-            throw new \InvalidArgumentException('Deadline seconds must be positive');
+        if ($seconds <= 0 || !is_finite($seconds)) {
+            throw new \InvalidArgumentException('Deadline seconds must be a positive finite number');
         }
 
         $settled = false;
@@ -172,7 +182,7 @@ final class AsyncOps
             throw new OperationCancelledException('Async operation cancelled');
         });
 
-        $timer = $loop->addTimer($seconds, function () use (&$settled, $deferred, $promise, $seconds, $onTimeout): void {
+        $timer = $loop->addTimer($seconds, function () use (&$settled, $deferred, $promise, $seconds, $onTimeout, $label): void {
             if ($settled === true) {
                 return;
             }
@@ -188,7 +198,9 @@ final class AsyncOps
             }
 
             $deferred->reject(new TimeoutException(
-                'Operation exceeded deadline of ' . $seconds . ' second(s)',
+                self::deadlineMessage($label, $seconds),
+                seconds: $seconds,
+                label: $label,
             ));
 
             // Cancel AFTER settling the caller-facing promise: the caller's
@@ -241,10 +253,10 @@ final class AsyncOps
      *
      * Extracted from the candy-sql CancellableQuery pattern.
      *
-     * Note: {@see CancellationToken} has no callback unregistration, so a
-     * token reused across many operations accumulates one (settled-guarded,
-     * cheap) closure per operation until it fires. Prefer one token per
-     * logical operation.
+     * Note: a token reused across many operations accumulates one
+     * (settled-guarded, cheap) closure per registration until it fires;
+     * onCancel() hands back a removal handle for exactly this reason. Prefer
+     * one token per logical operation.
      *
      * @template T
      * @param PromiseInterface<T> $promise  The in-flight operation
@@ -405,12 +417,20 @@ final class AsyncOps
      * @param float $baseBackoffSeconds  Initial backoff after a failure (seconds)
      * @param CancellationToken|null $token  Optional cancellation token to abort retries
      * @param float|null $maxTotalSeconds  Optional wall-clock budget across all
-     *        attempts; once exceeded, retry aborts with the last failure. Null
-     *        (default) imposes no cap.
+     *        attempts. The budget bounds when a NEW attempt may start: a
+     *        backoff that would overshoot the cutoff is clamped to start
+     *        exactly at it, and once the cutoff passes the cycle stops without
+     *        scheduling — rejecting with a TimeoutException naming the
+     *        exhausted budget (the last failure rides along as `previous`), so
+     *        "gave up after the budget" is distinguishable from "the operation
+     *        keeps failing". Null (default) imposes no cap.
      * @param float $jitter  Fractional randomization of each backoff in
      *        [0, $jitter]; the delay lands in [backoff, backoff*(1+$jitter)].
      *        0.0 (default) means no jitter (exactly the base backoff).
      * @param LoopInterface|null $loop  Optional event loop; uses Loop::get() if null.
+     * @param null|callable(): float $now  Optional monotonic-seconds clock
+     *        (test seam — fake it to drive budget exhaustion without sleeping);
+     *        defaults to hrtime(true)/1e9.
      * @return PromiseInterface
      */
     public static function retry(
@@ -421,18 +441,19 @@ final class AsyncOps
         ?float $maxTotalSeconds = null,
         float $jitter = 0.0,
         ?LoopInterface $loop = null,
+        ?callable $now = null,
     ): PromiseInterface {
         if ($attempts < 1) {
             throw new \InvalidArgumentException('Attempts must be >= 1');
         }
-        if ($baseBackoffSeconds <= 0) {
-            throw new \InvalidArgumentException('Base backoff must be positive');
+        if ($baseBackoffSeconds <= 0 || !is_finite($baseBackoffSeconds)) {
+            throw new \InvalidArgumentException('Base backoff must be a positive finite number');
         }
-        if ($maxTotalSeconds !== null && $maxTotalSeconds <= 0) {
-            throw new \InvalidArgumentException('Max total seconds must be positive when set');
+        if ($maxTotalSeconds !== null && ($maxTotalSeconds <= 0 || !is_finite($maxTotalSeconds))) {
+            throw new \InvalidArgumentException('Max total seconds must be a positive finite number when set');
         }
-        if ($jitter < 0) {
-            throw new \InvalidArgumentException('Jitter must be >= 0');
+        if ($jitter < 0 || !is_finite($jitter)) {
+            throw new \InvalidArgumentException('Jitter must be a finite number >= 0');
         }
 
         // One internal stop source drives every cancellation path: the
@@ -447,9 +468,15 @@ final class AsyncOps
             });
         }
 
-        // Convert the relative budget to an absolute wall-clock deadline once,
-        // so recursive attempts share a single fixed cutoff.
-        $deadline = $maxTotalSeconds !== null ? microtime(true) + $maxTotalSeconds : null;
+        // One monotonic clock for the whole cycle. hrtime() is immune to
+        // wall-clock steps (NTP corrections, manual date changes) that
+        // microtime() happily follows — a backward step used to silently
+        // stretch or skip the budget.
+        $clock = $now ?? static fn(): float => hrtime(true) / 1e9;
+
+        // Convert the relative budget to an absolute cutoff once, so recursive
+        // attempts share a single fixed deadline.
+        $deadline = $maxTotalSeconds !== null ? $clock() + $maxTotalSeconds : null;
 
         $core = self::retryAttempt(
             $operation,
@@ -460,6 +487,8 @@ final class AsyncOps
             $loop,
             $jitter,
             $deadline,
+            $clock,
+            $maxTotalSeconds,
         );
 
         $outer = new Deferred(static function () use ($stop, $core): never {
@@ -486,7 +515,11 @@ final class AsyncOps
      *        Accepting it (mirroring debounce()/throttle()) lets tests drive
      *        retries with a mock loop instead of the global singleton.
      * @param float $jitter  Fractional backoff randomization; see retry().
-     * @param float|null $deadline  Absolute microtime() cutoff, or null for none.
+     * @param float|null $deadline  Absolute monotonic-clock cutoff, or null
+     *        for none.
+     * @param callable(): float $now  Monotonic-seconds clock (see retry()).
+     * @param float|null $maxTotalSeconds  The budget behind $deadline, for the
+     *        exhaustion message.
      */
     private static function retryAttempt(
         callable $operation,
@@ -497,8 +530,11 @@ final class AsyncOps
         ?LoopInterface $loop = null,
         float $jitter = 0.0,
         ?float $deadline = null,
+        ?callable $now = null,
+        ?float $maxTotalSeconds = null,
     ): PromiseInterface {
         $loop ??= \React\EventLoop\Loop::get();
+        $clock = $now ?? static fn(): float => hrtime(true) / 1e9;
 
         if ($token->isCancelled()) {
             return reject(new OperationCancelledException('Retry cancelled before attempt ' . $attempt));
@@ -511,7 +547,7 @@ final class AsyncOps
         }
         return $operationPromise->then(
             static fn ($value) => $value,
-            static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt, $loop, $jitter, $deadline): PromiseInterface {
+            static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt, $loop, $jitter, $deadline, $clock, $maxTotalSeconds): PromiseInterface {
                 if ($token->isCancelled()) {
                     return reject(new OperationCancelledException('Retry cancelled after attempt ' . $attempt));
                 }
@@ -520,16 +556,35 @@ final class AsyncOps
                     return reject($e);
                 }
 
-                // Wall-clock DoS guard: stop retrying once the total budget is
-                // spent, even if attempts remain. Reject with the last failure.
-                if ($deadline !== null && microtime(true) >= $deadline) {
-                    return reject($e);
+                // Wall-clock DoS guard, evaluated BEFORE the next backoff is
+                // armed: once the cutoff has passed, stop scheduling and reject
+                // with a TimeoutException naming the exhausted budget — the
+                // last failure rides along as `previous`, so "gave up after
+                // the budget" is distinguishable from "the operation keeps
+                // failing" without message archaeology. (Rejecting bare $e
+                // here made the two shapes identical.)
+                $remainingBudget = $deadline !== null ? $deadline - $clock() : null;
+                if ($remainingBudget !== null && $remainingBudget <= 0.0) {
+                    return reject(new TimeoutException(
+                        'Retry budget of ' . self::formatSeconds($maxTotalSeconds ?? 0.0)
+                            . ' exhausted after attempt ' . $attempt
+                            . ' (last failure: ' . $e->getMessage() . ')',
+                        previous: $e,
+                        seconds: $maxTotalSeconds,
+                    ));
                 }
 
                 // Schedule the next attempt with a future tick to avoid blocking
                 // the loop. Jitter the delay to avoid a thundering herd; the base
                 // still doubles un-jittered to keep the exponential schedule.
+                // The budget bounds when a NEW attempt may start: a delay that
+                // would overshoot the cutoff is clamped to land exactly on it —
+                // never armed past the cutoff with the stop checked only after
+                // the failure that the overshoot caused.
                 $delay = self::jitteredBackoff($backoff, $jitter);
+                if ($remainingBudget !== null && $delay > $remainingBudget) {
+                    $delay = $remainingBudget;
+                }
                 $deferred = new Deferred();
 
                 // Cancellation must be prompt. Without this wiring a cancel
@@ -558,14 +613,14 @@ final class AsyncOps
 
                 $pending = $loop->addTimer(
                     $delay,
-                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred, $loop, $jitter, $deadline, &$settled, &$pending): void {
+                    static function () use ($operation, $remaining, $backoff, $token, $attempt, $deferred, $loop, $jitter, $deadline, $clock, $maxTotalSeconds, &$settled, &$pending): void {
                         if ($settled === true) {
                             return; // cancelled during backoff; abort already rejected
                         }
                         $settled = true;
                         $pending = null;
                         try {
-                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1, $loop, $jitter, $deadline);
+                            $next = self::retryAttempt($operation, $remaining - 1, $backoff * 2, $token, $attempt + 1, $loop, $jitter, $deadline, $clock, $maxTotalSeconds);
                             $next->then(
                                 static fn ($v) => $deferred->resolve($v),
                                 static fn ($e) => $deferred->reject($e),
@@ -599,6 +654,45 @@ final class AsyncOps
     }
 
     /**
+     * Render a duration for rejection messages: integral seconds print bare
+     * ("5"), fractional ones to at most three decimals with trailing zeros
+     * stripped ("0.05") — never the long float dump a bare concatenation
+     * produces.
+     */
+    private static function formatSeconds(float $seconds): string
+    {
+        if (floor($seconds) === $seconds && abs($seconds) < 1e15) {
+            return (string) (int) $seconds;
+        }
+
+        return rtrim(rtrim(sprintf('%.3F', $seconds), '0'), '.');
+    }
+
+    /** Duration + correct singular/plural unit ("1 second", "0.25 seconds"). */
+    private static function secondsPhrase(float $seconds): string
+    {
+        return self::formatSeconds($seconds) . ($seconds === 1.0 ? ' second' : ' seconds');
+    }
+
+    /** Message subject: named when the caller passed a label, generic otherwise. */
+    private static function subject(?string $label): string
+    {
+        return $label === null ? 'Operation' : 'Operation "' . $label . '"';
+    }
+
+    private static function timeoutMessage(?string $label, float $seconds): string
+    {
+        return self::subject($label) . ' timed out after ' . self::secondsPhrase($seconds);
+    }
+
+    private static function deadlineMessage(?string $label, float $seconds): string
+    {
+        // "N-second deadline": the bound is a point in time the wait gets
+        // (a duration elapses; a deadline is exceeded).
+        return self::subject($label) . ' exceeded its ' . self::formatSeconds($seconds) . '-second deadline';
+    }
+
+    /**
      * Wrap a callable with debounce — only the last call within the
      * window fires, and only after $seconds have elapsed since the last call.
      *
@@ -612,6 +706,9 @@ final class AsyncOps
         float $seconds,
         ?LoopInterface $loop = null,
     ): callable {
+        if ($seconds <= 0 || !is_finite($seconds)) {
+            throw new \InvalidArgumentException('Debounce seconds must be a positive finite number');
+        }
         $loop ??= \React\EventLoop\Loop::get();
         $timer = null;
 
@@ -639,6 +736,9 @@ final class AsyncOps
         float $seconds,
         ?LoopInterface $loop = null,
     ): callable {
+        if ($seconds <= 0 || !is_finite($seconds)) {
+            throw new \InvalidArgumentException('Throttle seconds must be a positive finite number');
+        }
         $loop ??= \React\EventLoop\Loop::get();
         $cooldown = false;
 

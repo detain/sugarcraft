@@ -27,8 +27,8 @@ use function React\Promise\resolve;
  * request time — but is never adopted into the store, because the
  * invalidation is the newer truth.
  *
- * No timers are armed here — freshness is judged against microtime() at read
- * time, so this class holds the event loop for exactly as long as the loader's
+ * No timers are armed here — freshness is judged against a monotonic clock at
+ * read time, so this class holds the event loop for exactly as long as the loader's
  * own promise does. To bound a hung loader, wrap the loader's promise with
  * {@see AsyncOps::withDeadline()} — bounded I/O ceiling semantics: pass
  * the remaining budget, never a blanket per-request wall-clock killer.
@@ -49,14 +49,15 @@ final class AsyncCache
     /**
      * @param float $ttlSeconds        Seconds an entry stays fresh (must be > 0)
      * @param bool $serveStaleOnError  Resolve failed loads with the last known value when one exists
+     * @param null|callable():float $clock  Monotonic-seconds clock seam (defaults to hrtime()/1e9); tests may drive freshness boundaries without sleeping
      */
-    public static function new(float $ttlSeconds = 60.0, bool $serveStaleOnError = false): self
+    public static function new(float $ttlSeconds = 60.0, bool $serveStaleOnError = false, ?callable $clock = null): self
     {
-        if ($ttlSeconds <= 0) {
-            throw new \InvalidArgumentException('TTL seconds must be positive');
+        if ($ttlSeconds <= 0 || !is_finite($ttlSeconds)) {
+            throw new \InvalidArgumentException('TTL seconds must be a positive finite number');
         }
 
-        return new self($ttlSeconds, $serveStaleOnError, new CacheStore());
+        return new self($ttlSeconds, $serveStaleOnError, new CacheStore($clock));
     }
 
     /**
@@ -78,8 +79,8 @@ final class AsyncCache
      */
     public function withTtl(float $ttlSeconds): self
     {
-        if ($ttlSeconds <= 0) {
-            throw new \InvalidArgumentException('TTL seconds must be positive');
+        if ($ttlSeconds <= 0 || !is_finite($ttlSeconds)) {
+            throw new \InvalidArgumentException('TTL seconds must be a positive finite number');
         }
 
         return new self($ttlSeconds, $this->serveStaleOnError, $this->store);
@@ -165,7 +166,7 @@ final class AsyncCache
             return false;
         }
 
-        return (microtime(true) - $this->store->storedAt[$key]) < $this->ttlSeconds;
+        return (($this->store->clock)() - $this->store->storedAt[$key]) < $this->ttlSeconds;
     }
 
     /**
@@ -194,7 +195,7 @@ final class AsyncCache
         // never writes into the store — the invalidation was the newer truth.
         if ($this->store->flights->end($key, $flight) === true) {
             $this->store->values[$key] = $value;
-            $this->store->storedAt[$key] = microtime(true);
+            $this->store->storedAt[$key] = ($this->store->clock)();
         }
 
         $deferred->resolve($value);

@@ -603,12 +603,15 @@ final class AsyncOpsTest extends TestCase
         $this->assertSame([0.2, 0.4], $delays);
     }
 
-    public function testRetryAbortsOnceMaxTotalSecondsExceeded(): void
+    public function testRetryBudgetStopRejectsDistinctly(): void
     {
-        // baseBackoff (30ms) > maxTotalSeconds (20ms): after attempt 1 fails at
-        // t~=0 the budget still has room, so a 30ms backoff is scheduled; when
-        // attempt 2 fails at t~=30ms the budget is spent, so retry aborts with
-        // the last error instead of exhausting all 5 attempts.
+        // baseBackoff (30ms) > maxTotalSeconds (20ms): the budget stop now
+        // CLAMPS the schedule instead of letting it overshoot — attempt 2
+        // starts exactly at the ~20ms cutoff, and when it fails the exhausted
+        // budget rejects with a TimeoutException naming the bound, the last
+        // failure attached as previous ("gave up after budget" is no longer
+        // byte-identical to "the operation keeps failing"). The budget runs on
+        // the monotonic hrtime clock, so no wall-clock step can stretch it.
         //
         // Drives retry() through its ?LoopInterface injection seam, which is
         // what keeps this deadline-sensitive case honest twice over: a private
@@ -645,8 +648,12 @@ final class AsyncOpsTest extends TestCase
         $loop->run();
 
         $this->assertSame(2, $attempts);
-        $this->assertInstanceOf(\RuntimeException::class, $rejected);
-        $this->assertSame('fail 2', $rejected->getMessage());
+        $this->assertInstanceOf(TimeoutException::class, $rejected);
+        $this->assertStringContainsString('Retry budget of 0.02 exhausted after attempt 2', (string) $rejected?->getMessage());
+        $previous = $rejected?->getPrevious();
+        $this->assertInstanceOf(\RuntimeException::class, $previous);
+        $this->assertSame('fail 2', $previous?->getMessage());
+        $this->assertSame(0.02, $rejected?->seconds());
     }
 
     public function testRetryThrowsOnNonPositiveMaxTotalSeconds(): void
