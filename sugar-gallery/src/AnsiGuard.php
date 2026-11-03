@@ -28,6 +28,16 @@ use SugarCraft\Core\Util\Sanitize;
  * (`0x9B`) or its UTF-8 re-encoding (`C2 9B` = U+009B), which mainstream terminals
  * act on as if the `ESC` had been spelled out.
  *
+ * Two wire-semantics notes, measured against the scanner (n13/n14 of the
+ * gallery review): an UNTERMINATED sequence runs to end-of-input and is judged
+ * there — the scanner follows the WHATWG/Unicode "RESTART" pairing convention,
+ * so `sanitize()` drops the absorbed tail and `assertSafe()` names it (a lone
+ * trailing `ESC` is unsafe, never silently kept). And single-shift C1 bytes
+ * (SS2 `0x8E` / SS3 `0x8F`) are stripped one byte at a time: the byte that
+ * followed them survives as plain text, which can only matter to a consumer
+ * that interprets the frame in a non-UTF-8 designation — a UTF-8 screen never
+ * enters that mode.
+ *
  * Two shapes of use, for the two kinds of call site:
  *
  *  - {@see assertSafe()} — fail fast, for a caller that *claims* the bytes are

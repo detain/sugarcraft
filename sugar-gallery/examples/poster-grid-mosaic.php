@@ -7,6 +7,9 @@ declare(strict_types=1);
  *
  *   php examples/poster-grid-mosaic.php
  *
+ * A non-interactive one-shot dump (no key loop — a real app maps its own keys
+ * onto the nav methods) rendered for a truecolour terminal.
+ *
  * The other example in this directory hand-writes its poster ANSI. This one is
  * the actual recipe a media app uses, end to end:
  *
@@ -22,6 +25,16 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/../vendor/autoload.php';
+
+// The mosaic half renders through sugar-image, and sugar-image needs ext-gd.
+// composer's `suggest` entries are advisory and never pull an extension, so
+// refuse cleanly here rather than fataling on the first GD call. The library
+// itself needs zero extensions — only this demo's art generator does.
+if (!extension_loaded('gd')) {
+    fwrite(STDERR, "examples/poster-grid-mosaic.php needs a PHP built with ext-gd "
+        . "(sugar-gallery itself needs no extensions).\n");
+    exit(1);
+}
 
 use SugarCraft\Gallery\AnsiGuard;
 use SugarCraft\Gallery\PosterCard;
@@ -157,7 +170,11 @@ $cachedKey = DiskCache::key((string) $cards[$cachedIndex]->posterUrl, CARD_W, PO
 $cachedBytes = $cache->get($cachedKey);
 
 if (is_string($cachedBytes)) {
-    $grid = $grid->withItem($cachedIndex, $grid->item($cachedIndex)->withPoster($cachedBytes));
+    // Bytes read back from a shared on-disk cache are NOT self-produced any
+    // more — a cache another process (or an older build) wrote is untrusted
+    // input. withSafePoster() sweeps anything that is not SGR styling; art you
+    // rendered yourself this frame may ride withPoster() verbatim (above).
+    $grid = $grid->withItem($cachedIndex, $grid->item($cachedIndex)->withSafePoster($cachedBytes));
 }
 
 heading('  3 · after the per-cell fill — the same grid, painted');

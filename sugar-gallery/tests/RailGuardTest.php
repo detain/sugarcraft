@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\PosterCard;
+use SugarCraft\Gallery\PosterGrid;
 use SugarCraft\Gallery\Rail;
 
 /**
@@ -138,5 +139,34 @@ final class RailGuardTest extends TestCase
         $lines = explode("\n", $frame);
         self::assertStringStartsWith('  ', $lines[1], 'indent is structural, outside the translated value');
         self::assertStringContainsString('(no items)', $lines[1]);
+    }
+
+    public function testTheAmbiguousWidthRosterInTheReadmeMatchesTheRealGlyphs(): void
+    {
+        // m2: the README once taught `▸` and `░` as Ambiguous (they are
+        // neutral in every source) while omitting the two glyphs that
+        // genuinely are — the progress fill and the truncation ellipsis.
+        // The roster is quoted by exact name here, so editing one side
+        // without the other goes red.
+        $readme = (string) file_get_contents(__DIR__ . '/../README.md');
+
+        self::assertStringContainsString('rendered `●`, `○`, `▓` and `…` are', $readme);
+        self::assertStringContainsString('`▸` and `░` are neutral', $readme);
+        self::assertStringNotContainsString('`●`, `○`, `▸` and `░` are', $readme);
+    }
+
+    public function testEveryLocalisedNoticeResolvesUnderAForcedLocale(): void
+    {
+        // n18 (rail.empty's test above only covered that one key): the
+        // failed-card notice and the empty-grid message must switch with the
+        // locale too, or the shipped translations are dead weight.
+        T::setLocale('de');
+        $failed = explode("\n", (new PosterCard('1', 'X'))->withFailed()->render(false, 30, 1));
+        self::assertSame('(nicht verfügbar)', rtrim($failed[0]));
+        self::assertSame('(keine Poster)', PosterGrid::emptyMessage());
+
+        T::setLocale('ja');
+        self::assertSame('(利用不可)', rtrim(explode("\n", (new PosterCard('1', 'X'))->withFailed()->render(false, 30, 1))[0]));
+        self::assertSame('(ポスターなし)', PosterGrid::emptyMessage());
     }
 }

@@ -12,6 +12,9 @@ declare(strict_types=1);
  * the header of the lib's sparse, owner-paged virtualization.
  *
  *   php examples/poster-grid.php
+ *
+ * A non-interactive one-shot dump (no key loop — a real app maps its own keys
+ * onto the nav methods), styled for a truecolour terminal.
  */
 
 require __DIR__ . '/../vendor/autoload.php';
