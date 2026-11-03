@@ -1573,9 +1573,19 @@ final class Toast
      * 1-9/53 on, 22-29/55 off, 30-37/90-97/39 foreground, 40-47/100-107/49
      * background, 38/48 extended colours (index 5 → sugar-core's canonical
      * xterm-256 table, index 2 → packed truecolor). An empty parameter list
-     * means SGR 0 (reset) per spec; a malformed extended-colour payload stops
-     * the walk fail-soft like a real terminal, and unknown codes are skipped
-     * without disturbing the state.
+     * means SGR 0 (reset) per spec; a STRUCTURALLY malformed extended-colour
+     * payload (missing components) stops the walk fail-soft like a real
+     * terminal; an out-of-range component SATURATES to 0-255 in parity with
+     * sugar-cellbuffer's decoder (M16). Unknown codes are skipped without
+     * disturbing the state.
+     *
+     * NOTE (seam row, lib-reviews-1102 M16): this decoder is one of three
+     * fleet forks (here, sugar-cellbuffer styleFromSgr, sugar-overlay
+     * penFromSgr); colour-value parity is pinned against cellbuffer, but the
+     * fleet still owes ONE public decoder boundary (candy-ansi-parser or a
+     * widened cellbuffer ingestion). This surface additionally honours attrs
+     * 22-29 (individual off) and 53/55 (overline) that cellbuffer lacks — a
+     * documented superset, not a silent drift.
      */
     private function applySgr(?Style $base, string $sgr): ?Style
     {
@@ -1699,23 +1709,26 @@ final class Toast
         $selector = $params[$k + 1] ?? null;
         if ($selector === 5) {
             $idx = $params[$k + 2] ?? null;
-            if ($idx === null || $idx < 0 || $idx > 255) {
-                return null;
+            if ($idx === null) {
+                return null; // structurally malformed — fail-soft stop
             }
             $k += 2;
-            return $this->ansi256ToRgb($idx);
+            // Out-of-range saturates into 0-255 exactly like sugar-cellbuffer's
+            // channel() (lib-reviews-1102 M16: the old NULL return BROKE the
+            // decode walk, so the same bytes styled differently depending on
+            // which layer parsed them).
+            return $this->ansi256ToRgb(max(0, min(255, $idx)));
         }
         if ($selector === 2) {
             $r = $params[$k + 2] ?? null;
             $g = $params[$k + 3] ?? null;
             $b = $params[$k + 4] ?? null;
-            foreach ([$r, $g, $b] as $component) {
-                if ($component === null || $component < 0 || $component > 255) {
-                    return null;
-                }
+            if ($r === null || $g === null || $b === null) {
+                return null; // structurally malformed — fail-soft stop
             }
             $k += 4;
-            return ($r << 16) | ($g << 8) | $b;
+            $clamp = static fn(int $c): int => max(0, min(255, $c));
+            return ($clamp($r) << 16) | ($clamp($g) << 8) | $clamp($b);
         }
         return null;
     }
