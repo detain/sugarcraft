@@ -9,6 +9,8 @@ use SugarCraft\Widgets\Key\Binding;
 use SugarCraft\Widgets\Key\KeyMap;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\SgrState;
+use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
@@ -40,6 +42,33 @@ final class Help
         public readonly string $fullSeparator = "\n",
         public readonly ?Styles $styles    = null,
     ) {}
+
+    /**
+     * House factory. The public constructor predates the `::new()` +
+     * private-ctor convention and stays for BC; `::new()` is the
+     * documented entry point and forwards every promoted default.
+     */
+    public static function new(
+        string  $separator     = ' • ',
+        string  $keyDescGap    = ' ',
+        string  $columnGap     = '    ',
+        bool    $showAll       = false,
+        int     $maxWidth      = 0,
+        string  $ellipsis      = '…',
+        string  $fullSeparator = "\n",
+        ?Styles $styles        = null,
+    ): self {
+        return new self(
+            separator:     $separator,
+            keyDescGap:    $keyDescGap,
+            columnGap:     $columnGap,
+            showAll:       $showAll,
+            maxWidth:      $maxWidth,
+            ellipsis:      $ellipsis,
+            fullSeparator: $fullSeparator,
+            styles:        $styles,
+        );
+    }
 
     /**
      * Override the rendered colour / styling of every visible help
@@ -89,6 +118,24 @@ final class Help
             throw new \InvalidArgumentException(Lang::t('help.width_nonneg'));
         }
         return $this->copy(maxWidth: $cells);
+    }
+
+    /** `with`-prefixed alias of {@see width()} matching the family vocabulary. */
+    public function withWidth(int $cells): self
+    {
+        return $this->width($cells);
+    }
+
+    /** Gap rendered between a binding's key column and its description. */
+    public function withKeyDescGap(string $gap): self
+    {
+        return $this->copy(keyDescGap: $gap);
+    }
+
+    /** Gap between columns in the short (grid) help view. */
+    public function withColumnGap(string $gap): self
+    {
+        return $this->copy(columnGap: $gap);
     }
 
     /**
@@ -262,9 +309,12 @@ final class Help
         if ($b->disabled || ($b->help->key === '' && $b->help->desc === '')) {
             return '';
         }
-        // C0 sanitization prevents terminal control sequence injection.
-        $key = Sanitize::controlChars($b->help->key);
-        $desc = Sanitize::controlChars($b->help->desc);
+        // Marked-frame world: hosts may wrap rendered help rows in
+        // mouse zones. controlChars alone passes the U+E000/U+E001 zone
+        // sentinels and 8-bit C1 intros, so forged labels could steal a
+        // zone or open a C1 sequence (C3/M20).
+        $key  = Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($b->help->key));
+        $desc = Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($b->help->desc));
         if ($this->styles === null) {
             return $key . $this->keyDescGap . $desc;
         }
@@ -278,24 +328,31 @@ final class Help
     /**
      * Truncate a rendered short row to {@see $maxWidth} cells, replacing
      * the dropped tail with {@see $ellipsis}. Width is measured via
-     * `Width::string()` so multibyte / wide-cell content rounds correctly.
+     * `Width::truncateAnsi()` so multibyte / wide-cell content rounds
+     * correctly and escape sequences ride the cut instead of being
+     * sliced mid-bytes.
+     *
+     * The kept prefix may end inside an open SGR run (a bold key, an
+     * un-closed colour). Left raw, that state bleeds into the host
+     * scrollback below the help line. So the live state is folded from
+     * the kept prefix and closed once before the ellipsis glyph — the
+     * same balanceSgr contract the TUI renderers use (C5).
      */
     private function truncate(string $rendered): string
     {
-        $eW = Width::string($this->ellipsis);
+        $eW     = Width::string($this->ellipsis);
         $target = max(0, $this->maxWidth - $eW);
-        $kept = '';
-        foreach (preg_split('//u', $rendered, -1, PREG_SPLIT_NO_EMPTY) as $ch) {
-            $next = $kept . $ch;
-            if (Width::string($next) > $target) {
-                break;
-            }
-            $kept = $next;
+        $kept   = Width::truncateAnsi($rendered, $target);
+
+        $state = SgrState::initial();
+        foreach ((new Parser())->parse($kept) as $token) {
+            $state->apply($token);
         }
+
         $glyph = $this->styles !== null
             ? $this->styles->ellipsis->render($this->ellipsis)
             : $this->ellipsis;
-        return $kept . $glyph;
+        return $kept . $state->rowClose() . $glyph;
     }
 
     /**
