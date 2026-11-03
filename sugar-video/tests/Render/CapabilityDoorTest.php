@@ -96,4 +96,16 @@ final class CapabilityDoorTest extends TestCase
             'the mode cycle rides the shared door, not a private re-probe',
         );
     }
+
+    /**
+     * @testdox m34: the graphics door refuses typed when ext-gd is absent
+     */
+    public function testTheGraphicsDoorCarriesTheImageExtensionGate(): void
+    {
+        $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Render/RendererFactory.php');
+
+        $this->assertStringContainsString("function_exists('imagecreatetruecolor')", $src);
+        $this->assertStringContainsString('decoder.gd_missing', $src);
+        $this->assertStringContainsString('isGraphics()', $src);
+    }
 }

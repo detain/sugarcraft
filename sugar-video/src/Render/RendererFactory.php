@@ -197,6 +197,12 @@ final class RendererFactory
      */
     public static function new(Mode $mode, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20): FrameRenderer
     {
+        // m34: the graphics rungs delegate to ext-gd encode paths upstream;
+        // refuse typed here instead of fataling on an undefined GD function.
+        if ($mode->isGraphics() && !function_exists('imagecreatetruecolor')) {
+            throw new \RuntimeException(Lang::t('decoder.gd_missing'));
+        }
+
         if (!self::supports($mode)) {
             throw new \RuntimeException(Lang::t('render.mode_unsupported', [
                 'mode' => $mode->label(),

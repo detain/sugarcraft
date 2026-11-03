@@ -15,6 +15,8 @@ return [
     'subtitle.cue_cap' => 'sugar-video: subtitle track truncated at {max} cues',
     'render.mode_unsupported' => 'sugar-video: the {mode} render mode is not supported on this terminal (its graphics escape bytes would be invisible garbage there) — this seat picks {best}; omit --mode or choose a supported one',
     'decoder.gif_budget' => 'sugar-video: GIF decode budget exceeded at frame {frame} of a {grid}-pixel grid (limit {max} resident pixels) — use a smaller terminal geometry or a shorter clip',
+    'decoder.gd_missing' => 'sugar-video: this PHP has no image extension (ext-gd), so graphics render modes are unavailable',
+    'source.probe_missing' => 'sugar-video: ffprobe was not found on this host — duration, fps, and audio detection are unavailable',
     'decoder.ffmpeg_missing' => 'ffmpeg not found on this host; mp4/avi/webm playback requires ffmpeg',
     'decoder.ffmpeg_exit' => 'sugar-video: ffmpeg exited with code {code} before the stream ended ({source})',
     'source.unparseable' => 'sugar-video: ffprobe could not decode any video stream from {source} (exit code {code}) — the file is corrupt or not a video',

@@ -127,6 +127,14 @@ final class VideoSource
     {
         $ffprobe = Probe::ffprobe();
         if ($ffprobe === null) {
+            // m15: the zeroed default used to be dead silent — hosts could not
+            // tell "no ffprobe" from "no metadata". Announce once per process.
+            static $announced = false;
+            if (!$announced) {
+                $announced = true;
+                error_log(Lang::t('source.probe_missing'));
+            }
+
             return new self($path, 0, 0, 0.0, 0.0, false);
         }
 
