@@ -102,9 +102,66 @@ final class ResponseTest extends TestCase
     public function testFromJsonInvalidJsonThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/Invalid JSON/');
+        $this->expectExceptionMessageMatches('/Invalid plugin JSON/');
 
         Response::fromJson('not valid json');
+    }
+
+    public function testFromJsonRefusesNonStringTypeAsProtocolError(): void
+    {
+        // strict_types would make this a TypeError out of the DTO ctor;
+        // the boundary parse must refuse it as a protocol violation instead.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/"type" must be a string, got int/');
+
+        Response::fromJson('{"type":123}');
+    }
+
+    public function testFromJsonRefusesNonArrayDataAsProtocolError(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/"data" must be an object, got string/');
+
+        Response::fromJson('{"type":"view","data":"nope"}');
+    }
+
+    public function testFromJsonRefusalNeverEchoesRawControlBytes(): void
+    {
+        $hostile = "{\"type\":\x1b[31;1mPWNED\x1b[0m}";
+
+        try {
+            Response::fromJson($hostile);
+            $this->fail('expected InvalidArgumentException for unparsable wire line');
+        } catch (\InvalidArgumentException $e) {
+            $message = $e->getMessage();
+            $this->assertStringNotContainsString("\x1b", $message, 'ESC must not survive into a refusal message');
+            $this->assertSame(0, preg_match('/[^\x20-\x7E]/', $message), 'refusal stays printable');
+            $this->assertLessThanOrEqual(220, strlen($message));
+        }
+    }
+
+    public function testFromJsonClipsOversizedWireLines(): void
+    {
+        $huge = '{"foo":"' . str_repeat('A', 5000);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        try {
+            Response::fromJson($huge);
+        } catch (\InvalidArgumentException $e) {
+            $this->assertLessThanOrEqual(200, strlen($e->getMessage()), 'preview stays bounded');
+            throw $e;
+        }
+    }
+
+    public function testToJsonThrowsOnUnencodablePayload(): void
+    {
+        // JSON_THROW_ON_ERROR: silent false (→ downstream TypeError on a
+        // string return type) is the failure mode being cured.
+        $response = new Response('view', ['content' => "\xB1\x31"]); // invalid UTF-8
+
+        $this->expectException(\JsonException::class);
+        $response->toJson();
     }
 
     public function testToJson(): void

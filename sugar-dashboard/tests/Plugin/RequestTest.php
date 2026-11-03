@@ -85,9 +85,35 @@ final class RequestTest extends TestCase
     public function testFromJsonInvalidJsonThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/Invalid JSON/');
+        $this->expectExceptionMessageMatches('/Invalid plugin JSON/');
 
         Request::fromJson('not valid json');
+    }
+
+    public function testFromJsonRefusesNonStringTypeAsProtocolError(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/"type" must be a string, got int/');
+
+        Request::fromJson('{"type":123}');
+    }
+
+    public function testFromJsonRefusalStaysPrintable(): void
+    {
+        try {
+            Request::fromJson("{\"type\":\x1b]0;evil\x07}");
+            $this->fail('expected InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringNotContainsString("\x1b", $e->getMessage());
+        }
+    }
+
+    public function testToJsonThrowsOnUnencodablePayload(): void
+    {
+        $request = new Request('update', ['state' => "\xB1\x31"]);
+
+        $this->expectException(\JsonException::class);
+        $request->toJson();
     }
 
     public function testToJson(): void

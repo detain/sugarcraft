@@ -14,6 +14,12 @@ use SugarCraft\Core\Util\Sanitize;
  * Spawns the binary via proc_open, communicates using line-delimited JSON
  * over stdin/stdout, and schedules periodic updates if Interval > 0.
  *
+ * Trust boundary: the plugin is a third-party program. Every round-trip is
+ * deadline-bounded (write and read), unparsable or out-of-order wire lines
+ * disable the plugin for the session instead of throwing into the host
+ * loop, disabled panels name themselves and say why, and the child gets a
+ * small environment allow-list rather than the parent's whole env.
+ *
  * Mirrors the lattice ExternalModule pattern.
  *
  * Uses the legacy array-state update pattern kept for backwards compat.
@@ -42,7 +48,21 @@ final class ExternalModule implements LegacyModule
     /** fread() granularity inside a {@see self::STDERR_DRAIN_BYTES_PER_ROUND} round. */
     private const STDERR_DRAIN_CHUNK_BYTES = 8192;
 
+    /** Longest plugin-supplied label allowed into chrome (name header/panel title). */
+    private const MAX_LABEL_BYTES = 64;
+
+    /** Bound on a single stdin write: a plugin that never reads is disabled, not waited on forever. */
+    private const WRITE_TIMEOUT_SECS = 5;
+
     private int $interval = 0;
+
+    /** Why the plugin was disabled this session, if it was (surfaced through view()). */
+    private ?string $lastError = null;
+
+    /** Last rendered view plus the signature (state + dimensions) it was rendered for. */
+    private ?string $viewCache = null;
+
+    private ?string $viewSignature = null;
 
     /** @var resource|null */
     private $stdin = null;
@@ -69,7 +89,7 @@ final class ExternalModule implements LegacyModule
      */
     public function name(): string
     {
-        return $this->name;
+        return self::chromeLabel($this->name);
     }
 
     /**
@@ -78,17 +98,32 @@ final class ExternalModule implements LegacyModule
     public function init(): array
     {
         $this->startProcess();
-        $this->sendRequest(Request::init());
+        if (!$this->sendRequest(Request::init())) {
+            return [
+                'name' => $this->name(),
+                'minSize' => $this->minSize(),
+                'interval' => 0,
+            ];
+        }
         $response = $this->readResponse();
 
         if ($response->type !== 'init') {
-            throw new \RuntimeException("Expected init response, got: {$response->type}");
+            // A plugin that cannot answer its own handshake is disabled for
+            // the session (its panel shows the reason) rather than throwing:
+            // discovery auto-loads everything in the plugin directory, and
+            // one broken binary must not brick the whole dashboard startup.
+            $this->disable("init refused: {$response->type}");
+            return [
+                'name' => $this->name(),
+                'minSize' => $this->minSize(),
+                'interval' => 0,
+            ];
         }
 
         $this->interval = self::clampInterval($response->data['interval'] ?? 0);
 
         return [
-            'name' => $response->data['name'] ?? $this->name,
+            'name' => self::chromeLabel((string) ($response->data['name'] ?? $this->name)),
             'minSize' => self::clampMinSize($response->data['minSize'] ?? null),
             'interval' => $this->interval,
         ];
@@ -103,7 +138,9 @@ final class ExternalModule implements LegacyModule
             return $state;
         }
 
-        $this->sendRequest(Request::update($state));
+        if (!$this->sendRequest(Request::update($state))) {
+            return $state;
+        }
         $response = $this->readResponse();
 
         if ($response->type === 'update') {
@@ -112,9 +149,9 @@ final class ExternalModule implements LegacyModule
 
         // Protocol error: unexpected response type or error from plugin.
         // Disable the plugin so a misbehaving subprocess cannot desync
-        // the dashboard loop. Per Step 8, we surface the error rather
-        // than silently falling back to prior state.
-        $this->running = false;
+        // the dashboard loop; the reason is carried to view() rather than
+        // silently falling back to prior state.
+        $this->disable("unexpected response: {$response->type}");
         return $state;
     }
 
@@ -124,20 +161,45 @@ final class ExternalModule implements LegacyModule
     public function view(array $state, int $width, int $height): string
     {
         if (!$this->running) {
-            return '';
+            // A plugin that started and then died or broke protocol must say
+            // so in its panel — an empty string read as "nothing to show" hid
+            // every failure. Never started (no round trip yet) stays blank.
+            if ($this->lastError === null) {
+                return '';
+            }
+            return Sanitize::untrusted(
+                '[' . self::chromeLabel($this->name) . ' disabled: ' . self::chromeLabel($this->lastError) . ']'
+            );
         }
 
-        $this->sendRequest(Request::view($width, $height, $state));
+        // Render round-trips are bounded to actual change: a full synchronous
+        // plugin exchange inside view() ran on EVERY frame, stalling input
+        // for a healthy-but-slow plugin even when nothing had updated. The
+        // signature covers state and dimensions, so any real refresh (new
+        // state from update(), or a resize) still costs exactly one trip.
+        $signature = $width . 'x' . $height . '|' . self::stateKey($state);
+        if ($this->viewCache !== null && $this->viewSignature === $signature) {
+            return $this->viewCache;
+        }
+
+        if (!$this->sendRequest(Request::view($width, $height, $state))) {
+            return $this->viewCache ?? '';
+        }
         $response = $this->readResponse();
 
         if ($response->type === 'view') {
-            return Sanitize::untrusted($response->data['content'] ?? '');
+            $rendered = Sanitize::untrusted((string) ($response->data['content'] ?? ''));
+            $this->viewCache = $rendered;
+            $this->viewSignature = $signature;
+            return $rendered;
         }
 
-        // Protocol error — disable the plugin rather than returning
-        // stale/empty state silently.
-        $this->running = false;
-        return '';
+        // Protocol error — disable the plugin; the marker below replaces
+        // the stale/empty render so the panel is never silently blank.
+        $this->disable("unexpected response: {$response->type}");
+        return Sanitize::untrusted(
+            '[' . self::chromeLabel($this->name) . ' disabled: ' . self::chromeLabel((string) $this->lastError) . ']'
+        );
     }
 
     /**
@@ -171,7 +233,9 @@ final class ExternalModule implements LegacyModule
                 1 => ['pipe', 'w'],
                 2 => ['pipe', 'w'],
             ],
-            $pipes
+            $pipes,
+            null,
+            self::pluginEnvironment()
         );
 
         if (!is_resource($this->process)) {
@@ -191,20 +255,59 @@ final class ExternalModule implements LegacyModule
     }
 
     /**
-     * Send a request to the plugin.
+     * Send a request to the plugin, bounded by {@see WRITE_TIMEOUT_SECS}.
+     *
+     * A plugin that stops reading its stdin (wedged before its read loop,
+     * say) would otherwise block fwrite forever once the 64 KiB pipe buffer
+     * fills. Returns false — and disables the plugin — when the payload
+     * cannot be handed off within the deadline.
      */
-    private function sendRequest(Request $request): void
+    private function sendRequest(Request $request): bool
     {
         if (!$this->running || $this->stdin === null) {
-            return;
+            return false;
         }
 
-        fwrite($this->stdin, $request->toJson() . "\n");
+        $payload = $request->toJson() . "\n";
+        $length = strlen($payload);
+        $offset = 0;
+        $deadline = hrtime(true) / 1_000_000_000 + self::WRITE_TIMEOUT_SECS;
+
+        while ($offset < $length) {
+            $remaining = $deadline - hrtime(true) / 1_000_000_000;
+            if ($remaining <= 0) {
+                $this->disable('write timeout');
+                return false;
+            }
+
+            $readable = null;
+            $writable = [$this->stdin];
+            $except = null;
+            $ready = @stream_select($readable, $writable, $except, (int) $remaining, (int) (($remaining - (int) $remaining) * 1_000_000));
+            if ($ready === false || $ready === 0) {
+                continue; // interrupted or merely not-ready yet: the deadline governs
+            }
+
+            $written = fwrite($this->stdin, substr($payload, $offset));
+            if ($written === false || $written === 0) {
+                // Zero-write on a writable-selection round means the pipe broke
+                // (child gone); a partial write simply resumes at $offset.
+                $this->disable('write failed: plugin stdin closed');
+                return false;
+            }
+            $offset += $written;
+        }
+
         fflush($this->stdin);
+        return true;
     }
 
     /**
      * Read a response from the plugin.
+     *
+     * Every failure path funnels through {@see self::disable()}: the plugin
+     * stops participating and the reason survives to view() instead of
+     * vanishing into a discarded Response::error().
      */
     private function readResponse(): Response
     {
@@ -229,7 +332,7 @@ final class ExternalModule implements LegacyModule
 
             $remaining = $deadline - hrtime(true) / 1_000_000_000;
             if ($remaining <= 0) {
-                $this->running = false;
+                $this->disable('read timeout');
                 return Response::error('read timeout');
             }
 
@@ -242,33 +345,44 @@ final class ExternalModule implements LegacyModule
             $ready = @stream_select($read, $write, $except, (int) $remaining, (int) (($remaining - (int) $remaining) * 1_000_000));
 
             if ($ready === false) {
-                $this->running = false;
-                return Response::error('read timeout');
+                $this->disable('read failed');
+                return Response::error('read failed');
             }
 
             if (!in_array($this->stdout, $read, true)) {
                 continue; // only stderr moved this round
             }
 
-            $line = fgets($this->stdout, self::MAX_LINE_BYTES);
+            // Ask for one byte more than the cap: fgets delivers at most
+            // length-1, so asking for exactly MAX_LINE_BYTES made the
+            // overflow check below unreachable for the very lines it polices.
+            $line = fgets($this->stdout, self::MAX_LINE_BYTES + 1);
 
             if ($line === false) {
                 $meta = stream_get_meta_data($this->stdout);
-                $this->running = false;
                 if ($meta['timed_out'] ?? false) {
+                    $this->disable('read timeout');
                     return Response::error('read timeout');
                 }
+                $this->disable('EOF from process');
                 return Response::error('EOF from process');
             }
 
             // Enforce the line length cap. A line exceeding MAX_LINE_BYTES without
             // a newline is a protocol violation (runaway plugin); treat as error.
             if (strlen($line) >= self::MAX_LINE_BYTES && strpos($line, "\n") === false) {
-                $this->running = false;
+                $this->disable('protocol error: line exceeds maximum length');
                 return Response::error('protocol error: line exceeds maximum length');
             }
 
-            return Response::fromJson(trim($line));
+            try {
+                return Response::fromJson(trim($line));
+            } catch (\InvalidArgumentException $e) {
+                // Unparsable wire line: a protocol violation, not a host
+                // crash. The typed refusal is already printable-clipped.
+                $this->disable('protocol error: ' . $e->getMessage());
+                return Response::error('protocol error: malformed plugin response');
+            }
         }
     }
 
@@ -305,12 +419,12 @@ final class ExternalModule implements LegacyModule
 
         if ($this->process !== null && is_resource($this->process)) {
             $this->running = false;
-            // The ladder now lives once, upstream, in sugar-core's
-            // BoundedShutdown (f7a579e5b); terminateBounded also performs the
-            // reap (proc_close), so do NOT close again here. The polite EOF
-            // grace rung is caller-side by design there ("budgets stay with
-            // the callers"), so the plugin's own 2 s head-start on exiting
-            // is kept as the pre-rung poll this lib always granted.
+            // The ladder lives upstream, in sugar-core's BoundedShutdown;
+            // terminateBounded also performs the reap (proc_close), so do NOT
+            // close again here. The polite EOF grace rung is caller-side by
+            // design there ("budgets stay with the callers"), so the plugin's
+            // own 2 s head-start on exiting is kept as the pre-rung poll this
+            // lib always granted.
             BoundedShutdown::hasExited($this->process, self::SHUTDOWN_GRACE_SECONDS);
             BoundedShutdown::terminateBounded($this->process);
             $this->process = null;
@@ -331,6 +445,62 @@ final class ExternalModule implements LegacyModule
             fclose($this->stdout);
             $this->stdout = null;
         }
+    }
+
+    /**
+     * Stop trusting this plugin for the session and remember why.
+     */
+    private function disable(string $reason): void
+    {
+        $this->running = false;
+        $this->lastError ??= $reason;
+    }
+
+    /**
+     * Make a plugin-supplied label safe for terminal chrome: control bytes,
+     * CR reflow and zone sentinels stripped, invisible formatting marked,
+     * length clipped. Plugin names and error texts are authored by another
+     * process — they are untrusted input.
+     */
+    private static function chromeLabel(string $label): string
+    {
+        $clean = Sanitize::stripZoneSentinels(Sanitize::untrustedForDisplay($label));
+        if (strlen($clean) > self::MAX_LABEL_BYTES) {
+            $clean = substr($clean, 0, self::MAX_LABEL_BYTES) . '...';
+        }
+        return $clean;
+    }
+
+    /**
+     * Stable short fingerprint of a state array (for the view cache key).
+     *
+     * @param array<string, mixed> $state
+     */
+    private static function stateKey(array $state): string
+    {
+        return md5(serialize($state));
+    }
+
+    /**
+     * The environment a plugin child gets: a small, explicit allow-list.
+     *
+     * The parent dashboard may carry API keys, database passwords and other
+     * session secrets in its environment; a plugin binary is third-party
+     * code and must not be handed them by inheritance. Anything beyond this
+     * set a plugin needs belongs in its own configuration.
+     *
+     * @return array<string, string>
+     */
+    private static function pluginEnvironment(): array
+    {
+        $env = [];
+        foreach (['PATH', 'HOME', 'USER', 'LANG', 'TERM', 'COLORTERM'] as $key) {
+            $value = getenv($key);
+            if (is_string($value) && $value !== '') {
+                $env[$key] = $value;
+            }
+        }
+        return $env;
     }
 
     /**

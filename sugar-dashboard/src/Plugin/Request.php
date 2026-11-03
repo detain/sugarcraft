@@ -57,27 +57,61 @@ final class Request
 
     /**
      * Create from JSON string.
+     *
+     * Parses at the boundary, mirroring {@see Response::fromJson()}:
+     * a mistyped "type" or "data" field is a protocol violation raised as
+     * InvalidArgumentException with a printable clipped preview — never a
+     * PHP TypeError, and never raw hostile bytes inside the message.
+     *
+     * @throws \InvalidArgumentException If the line is not a valid request object.
      */
     public static function fromJson(string $json): self
     {
         $data = json_decode($json, true);
         if (!is_array($data)) {
-            throw new \InvalidArgumentException('Invalid JSON: ' . $json);
+            throw new \InvalidArgumentException('Invalid plugin JSON: ' . self::preview($json));
         }
-        return new self(
-            $data['type'] ?? 'unknown',
-            $data['data'] ?? [],
-        );
+
+        $type = $data['type'] ?? 'unknown';
+        if (!is_string($type)) {
+            throw new \InvalidArgumentException(
+                'Plugin request "type" must be a string, got ' . get_debug_type($type) . ': ' . self::preview($json)
+            );
+        }
+
+        $payload = $data['data'] ?? [];
+        if (!is_array($payload)) {
+            throw new \InvalidArgumentException(
+                'Plugin request "data" must be an object, got ' . get_debug_type($payload) . ': ' . self::preview($json)
+            );
+        }
+
+        return new self($type, $payload);
     }
 
     /**
      * Convert to JSON string.
+     *
+     * @throws \JsonException If the payload cannot be encoded (invalid UTF-8, inf/nan).
      */
     public function toJson(): string
     {
         return json_encode([
             'type' => $this->type,
             'data' => $this->data,
-        ]);
+        ], JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Printable, length-clipped rendering of an unparsable wire line.
+     */
+    private static function preview(string $json): string
+    {
+        $trimmed = trim($json);
+        if (strlen($trimmed) > 120) {
+            $trimmed = substr($trimmed, 0, 120) . '...';
+        }
+
+        return preg_replace('/[^\x20-\x7E]/', '?', $trimmed) ?? '';
     }
 }
