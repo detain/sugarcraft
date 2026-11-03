@@ -32,12 +32,13 @@ final class SyntaxHighlighterTest extends TestCase
      */
     private static function assertKeywordStyled(string $needle, string $haystack): void
     {
-        // Keyword style in ANSI theme: bold + foreground(ansi(13)=magenta).
-        // Output format: \x1b[1m\x1b[95m{keyword}\x1b[0m — Theme::ansi() names
-        // Color::ansi(13) (bright magenta) and a palette SLOT now reaches the
-        // wire as the palette code, so the terminal's own bright magenta is what
-        // paints. The 38;2;255;0;255 form this replaces was the up-conversion.
-        $pattern = '/\x1b\[1m\x1b\[95m' . preg_quote($needle, '/') . '\x1b\[0m/';
+        // Keyword style in ANSI theme: bold + foreground(ansi(13)=magenta),
+        // merged OVER the codeBlock base (faint) so classified tokens keep the
+        // block's pane-wide treatment (M21). Output format:
+        // \x1b[1;2m\x1b[95m{keyword}\x1b[0m — Theme::ansi() names Color::ansi(13)
+        // (bright magenta) and a palette slot reaches the wire as the palette
+        // code, so the terminal's own bright magenta is what paints.
+        $pattern = '/\x1b\[1;2m\x1b\[95m' . preg_quote($needle, '/') . '\x1b\[0m/';
         self::assertMatchesRegularExpression($pattern, $haystack, "Keyword '$needle' should be bold+magenta styled");
     }
 
@@ -47,9 +48,10 @@ final class SyntaxHighlighterTest extends TestCase
      */
     private static function assertStringStyled(string $needle, string $haystack): void
     {
-        // String style in ANSI theme: foreground(ansi(10)=green).
-        // Output format: \x1b[92m{string}\x1b[0m — Color::ansi(10), bright green.
-        $pattern = '/\x1b\[92m' . preg_quote($needle, '/') . '\x1b\[0m/';
+        // String style in ANSI theme: foreground(ansi(10)=green) over the
+        // faint block base (M21). Output format: \x1b[2m\x1b[92m{string}\x1b[0m
+        // — Color::ansi(10), bright green.
+        $pattern = '/\x1b\[2m\x1b\[92m' . preg_quote($needle, '/') . '\x1b\[0m/';
         self::assertMatchesRegularExpression($pattern, $haystack, "String '$needle' should be green styled");
     }
 
@@ -59,9 +61,10 @@ final class SyntaxHighlighterTest extends TestCase
      */
     private static function assertNumberStyled(string $needle, string $haystack): void
     {
-        // Number style in ANSI theme: foreground(ansi(11)=yellow).
-        // Output format: \x1b[93m{number}\x1b[0m — Color::ansi(11), bright yellow.
-        $pattern = '/\x1b\[93m' . preg_quote($needle, '/') . '\x1b\[0m/';
+        // Number style in ANSI theme: foreground(ansi(11)=yellow) over the
+        // faint block base (M21). Output format: \x1b[2m\x1b[93m{number}\x1b[0m
+        // — Color::ansi(11), bright yellow.
+        $pattern = '/\x1b\[2m\x1b\[93m' . preg_quote($needle, '/') . '\x1b\[0m/';
         self::assertMatchesRegularExpression($pattern, $haystack, "Number '$needle' should be yellow styled");
     }
 
@@ -71,10 +74,10 @@ final class SyntaxHighlighterTest extends TestCase
      */
     private static function assertCommentStyled(string $needle, string $haystack): void
     {
-        // Comment style in ANSI theme: italic + foreground(ansi(8)=grey).
-        // Output format: \x1b[3m\x1b[90m{comment}\x1b[0m — Color::ansi(8),
-        // bright black.
-        $pattern = '/\x1b\[3m\x1b\[90m' . preg_quote($needle, '/') . '\x1b\[0m/';
+        // Comment style in ANSI theme: italic + foreground(ansi(8)=grey) over
+        // the faint block base (M21). Output format: \x1b[2;3m\x1b[90m{comment}
+        // \x1b[0m — Color::ansi(8), bright black.
+        $pattern = '/\x1b\[2;3m\x1b\[90m' . preg_quote($needle, '/') . '\x1b\[0m/';
         self::assertMatchesRegularExpression($pattern, $haystack, "Comment '$needle' should be italic+grey styled");
     }
 

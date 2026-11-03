@@ -197,11 +197,11 @@ final class SanitizeTest extends TestCase
     }
 
     /**
-     * Emoji shortcodes expand on the raw source BEFORE parsing; the
-     * sanitizer runs AFTER expansion (not before), so control bytes riding
+     * Emoji shortcodes expand AFTER parsing, in renderText(); the sanitizer
+     * strips control bytes from the text node first, so bytes riding
      * alongside — or, for a future shortcode, produced by — the expansion are
      * stripped rather than carried into the terminal, while the emoji itself
-     * survives. Guards the expand-then-sanitize ordering in render().
+     * survives. Guards the sanitize-then-expand ordering in renderText().
      */
     public function testEmojiExpansionSanitizedAfterExpansion(): void
     {

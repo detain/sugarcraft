@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Markdown;
 
+use SugarCraft\Markdown\Style\StyleCascade;
+
 use SugarCraft\Core\Syntax\RegexHighlighter;
 use SugarCraft\Core\Syntax\TokenKind;
 
@@ -94,7 +96,14 @@ final class SyntaxHighlighter
                 TokenKind::Number      => $theme->number,
                 TokenKind::Plain       => null,
             };
-            $out .= $style?->render($span->text) ?? ($base?->render($span->text) ?? $span->text);
+            if ($style !== null && $base !== null) {
+                // The block base carries the pane-wide background/faint; a
+                // token colour rides on top of it instead of replacing it
+                // (M21 - no patchy band across the highlighted fence).
+                $out .= StyleCascade::merge($base, $style)->render($span->text);
+            } else {
+                $out .= $style?->render($span->text) ?? ($base?->render($span->text) ?? $span->text);
+            }
         }
 
         return $out;

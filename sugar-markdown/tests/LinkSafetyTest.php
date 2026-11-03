@@ -129,4 +129,76 @@ final class LinkSafetyTest extends TestCase
         $this->assertStringContainsString(self::OSC8_OPEN, $out);
         $this->assertStringContainsString('https://docs.example.com/data/report.html', $out);
     }
+    /**
+     * M14: a refused scheme split by an invisible formatting character (raw
+     * UTF-8 bytes, percent spelling, or numeric entity) must never become a
+     * clickable OSC-8 target. CommonMark percent-escapes raw non-ASCII bytes
+     * in destinations, so every form lands on the wire as the same spelled
+     * url; the probes strip the bytes after decoding and after entity
+     * decoding, so all three refuse together.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function invisibleSchemeSplitProvider(): iterable
+    {
+        $forms = [
+            'soft-hyphen'       => "\xC2\xAD",
+            'mongolian-vowel'   => "\xE1\xA0\x8E",
+            'zero-width-space'  => "\xE2\x80\x8B",
+            'word-joiner'       => "\xE2\x81\xA0",
+            'byte-order-mark'   => "\xEF\xBB\xBF",
+            'right-to-left'     => "\xE2\x80\xAE",
+        ];
+        foreach ($forms as $label => $bytes) {
+            yield $label => [
+                '[x](java' . $bytes . 'script:alert(1))',
+                rawurlencode($bytes),
+            ];
+        }
+
+        yield 'percent-form' => ['[x](java%E2%80%8Bscript:alert(1))', '%E2%80%8B'];
+        yield 'entity-form'  => ['[x](java&#8203;script:alert(1))', '%E2%80%8B'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('invisibleSchemeSplitProvider')]
+    public function testARefusedSchemeSplitByInvisiblesNeverOpensAnEnvelope(string $markdown, string $spelling): void
+    {
+        $out = (new Renderer())->render($markdown);
+        $this->assertStringNotContainsString(self::OSC8_OPEN, $out, $markdown . ' must not be clickable');
+
+        $plain = (new Renderer(Theme::plain()))->render($markdown);
+        $this->assertSame('x (java' . $spelling . 'script:alert(1))', $plain);
+    }
+
+    public function testInvisibleBytesBeforeARefusedSchemeStillRefuse(): void
+    {
+        $out = (new Renderer())->render("[x](\xE2\x80\x8Bjavascript:alert(1))");
+        $this->assertStringNotContainsString(self::OSC8_OPEN, $out);
+
+        $out = (new Renderer())->render("[x](\xEF\xBB\xBFjavascript:alert(1))");
+        $this->assertStringNotContainsString(self::OSC8_OPEN, $out);
+
+        $plain = (new Renderer(Theme::plain()))->render("[x](\xE2\x80\x8Bjavascript:alert(1))");
+        $this->assertSame('x (%E2%80%8Bjavascript:alert(1))', $plain);
+    }
+
+    /**
+     * n4: an empty destination is not a target. No OSC-8 envelope, no bare
+     * ' ()' noise; the link text stays visible. A real destination keeps the
+     * suffix (control leg).
+     */
+    public function testAnEmptyDestinationCarriesNoEnvelopeAndNoSuffix(): void
+    {
+        $plain = new Renderer(Theme::plain());
+        $ansi  = new Renderer();
+
+        foreach (['[a]()', '[a](<>)', '[a]( )'] as $md) {
+            $this->assertSame('a', $plain->render($md), $md);
+            $this->assertStringNotContainsString(self::OSC8_OPEN, $ansi->render($md), $md);
+        }
+        $this->assertSame('a', $plain->render('![a]()'));
+        $this->assertSame('[image]', $plain->render('![]()'));
+
+        $this->assertStringContainsString(' (b)', $plain->render('[a](b)'));
+    }
 }

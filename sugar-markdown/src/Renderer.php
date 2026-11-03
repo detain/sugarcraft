@@ -415,7 +415,7 @@ final class Renderer
 
     /**
      * Parse one section, prepared exactly as {@see render()} prepares a whole
-     * document (sanitizing, emoji), with $seed's link reference definitions
+     * document (sanitizing), with $seed's link reference definitions
      * known before the section's own. Every step of that preparation is
      * byte-local and never crosses a newline, so per-section preparation
      * keeps `stream() === render()`.
@@ -428,12 +428,9 @@ final class Renderer
         if ($this->sanitize) {
             $section = self::scrubForParse($section);
         }
-        if ($this->expandEmoji) {
-            $section = self::expandEmojiShortcodes($section);
-            if ($this->sanitize) {
-                $section = self::stripControls($section);
-            }
-        }
+        // Post-parse expansion (renderText) is byte-local to a text run, so
+        // the stream channel and the whole-document channel see the same
+        // nodes and stay byte-identical.
 
         $this->seedReferences = $seed;
         try {
@@ -629,10 +626,12 @@ final class Renderer
     }
 
     /**
-     * Expand `:smile:`-style emoji shortcodes in source Markdown
-     * before parsing. Default off; on, the renderer rewrites every
-     * `:shortcode:` token using the built-in shortcode map. Unknown
-     * shortcodes pass through verbatim.
+     * Expand `:smile:`-style emoji shortcodes in rendered text, AFTER
+     * parsing: code spans, fenced code and link destinations keep the
+     * source bytes (M1). Default off; on, every `:shortcode:` token in
+     * text rewrites through the built-in map. Unknown shortcodes pass
+     * through verbatim. Stream and render channels stay byte-identical
+     * because the substitution is byte-local to a text run.
      *
      * Mirrors glamour's `WithEmoji`.
      */
@@ -713,17 +712,9 @@ final class Renderer
         if ($this->sanitize) {
             $markdown = self::scrubForParse($markdown);
         }
-        if ($this->expandEmoji) {
-            $markdown = self::expandEmojiShortcodes($markdown);
-            // Strip control bytes AFTER expansion (not before), so a shortcode
-            // whose replacement smuggles in C0/ESC bytes cannot slip an escape
-            // sequence past the sanitizer. Gated on $sanitize to honour
-            // withSanitize(false); scoped to the emoji path so ordinary
-            // rendering (default: emoji off) is byte-for-byte unchanged.
-            if ($this->sanitize) {
-                $markdown = self::stripControls($markdown);
-            }
-        }
+        // Expansion runs post-parse in renderText: the parser sees the
+        // source bytes as written, so shortcodes inside code spans, fenced
+        // blocks and link destinations stay literal (M1).
 
         // Fresh block state per render: a reused instance must not keep the
         // previous document's root context (one leaked per call otherwise,
@@ -771,9 +762,12 @@ final class Renderer
     }
 
     /**
-     * Replace `:shortcode:` tokens with their Unicode equivalent
-     * before parsing. Mirrors glamour's `WithEmoji` expansion
-     * (charmbracelet/glamour consults the kyokomi/emoji GitHub table):
+     * Replace `:shortcode:` tokens with their Unicode equivalent. Runs
+     * after parsing, on text node content only (M1): the parser sees the
+     * source exactly as written, so a shortcode inside a code span, a
+     * fenced block or a link destination is never rewritten. Mirrors
+     * glamour's `WithEmoji` expansion (charmbracelet/glamour consults the
+     * kyokomi/emoji GitHub table; ansi/emoji.go expands after code spans):
      * every GitHub code resolves, with {@see self::HOUSE_EMOJI} winning
      * on collisions. Unknown shortcodes pass through verbatim.
      */
@@ -937,6 +931,12 @@ final class Renderer
         if ($this->sanitize) {
             $literal = self::stripControls($literal);
         }
+        if ($this->expandEmoji) {
+            // The parser already decided what is code, what is a destination
+            // and what is text; expansion here rewrites only text (M1), and
+            // the map's values are trusted house constants.
+            $literal = self::expandEmojiShortcodes($literal);
+        }
         if ($this->textCase !== null) {
             $literal = self::applyCase($literal, $this->textCase);
         }
@@ -986,7 +986,10 @@ final class Renderer
             $textStyle = $this->theme->imageText ?? $imageStyle;
             $rendered = $textStyle->render($alt);
         }
-        return $rendered . ' (' . $url . ')';
+        // An empty destination carries no ' ()' noise (n4); the visible
+        // suffix loses the bytes no terminal can render (m3).
+        $visible = $url === '' ? '' : ' (' . str_replace(self::INVISIBLE_URL_BYTES, '', $url) . ')';
+        return $rendered . $visible;
     }
 
     /**
@@ -1005,6 +1008,21 @@ final class Renderer
      */
     private const REFUSED_URL_SCHEMES = ['javascript:', 'data:', 'vbscript:'];
 
+    /**
+     * Codepoints the terminal cannot show and sugar-core marks invisible
+     * (U+00AD soft hyphen, U+180E Mongolian vowel separator, U+200B zero
+     * width space, U+2060 word joiner, U+FEFF byte order mark, U+202E
+     * right-to-left override), spelt as UTF-8 byte strings. A refused
+     * scheme split by one of them (M14) must not survive to an OSC-8
+     * target: a client that strips the character before resolving sees
+     * `javascript:` where a byte-only probe saw `java<script:`. The same
+     * sweep runs over the visible `(url)` suffix (m3) so unrenderable
+     * bytes cannot forge text next to a URL.
+     *
+     * @var list<string>
+     */
+    private const INVISIBLE_URL_BYTES = ["\xC2\xAD", "\xE1\xA0\x8E", "\xE2\x80\x8B", "\xE2\x81\xA0", "\xEF\xBB\xBF", "\xE2\x80\xAE"];
+
     /** True when $url targets a refused executable scheme. */
     private static function refusesUrl(string $url): bool
     {
@@ -1021,9 +1039,9 @@ final class Renderer
 
     /**
      * The lowercase spellings a target can take once a client that strips
-     * invisible characters resolves it: the url as emitted, and its
-     * percent-decoded form with U+FFFD replacements, control bytes and DEL
-     * removed. CommonMark percent-encodes a raw NUL (and the `&#0;` entity
+     * invisible characters or decodes entities resolves it: the url as
+     * emitted, its percent-decoded form with U+FFFD replacements, control
+     * bytes and DEL removed, and that form's HTML-entity decoding. CommonMark percent-encodes a raw NUL (and the `&#0;` entity
      * spelling) into %EF%BF%BD, so checking only the emitted text would let
      * `java%EF%BF%BDscript:` reform into a live scheme inside the opener.
      * Over-refusing exotic percent-escaped schemes (e.g. `%6Aavascript:`)
@@ -1034,13 +1052,24 @@ final class Renderer
      */
     private static function schemeProbes(string $url): array
     {
-        $raw = strtolower(ltrim($url, " \t\n\r\0\x0b\x0c"));
+        $raw = strtolower(str_replace(
+            self::INVISIBLE_URL_BYTES,
+            '',
+            ltrim($url, " \t\n\r\0\x0b\x0c"),
+        ));
 
         $decoded = rawurldecode($url);
         $decoded = preg_replace('/[\x00-\x1f\x7f]/', '', $decoded) ?? '';
+        $decoded = str_replace(self::INVISIBLE_URL_BYTES, '', $decoded);
         $decoded = strtolower(str_replace("\xEF\xBF\xBD", '', $decoded));
 
-        return $raw === $decoded ? [$raw] : [$raw, $decoded];
+        // A client that decodes entities before opening sees this spelling;
+        // probing it over-refuses exotic entity-games, the accepted side of
+        // the trade (fail-closed).
+        $entity = html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5);
+        $entity = strtolower(str_replace(self::INVISIBLE_URL_BYTES, '', $entity));
+
+        return array_values(array_unique([$raw, $decoded, $entity]));
     }
 
     /**
@@ -1454,7 +1483,10 @@ final class Renderer
         $linkText = $this->theme->linkText ?? $this->theme->link;
 
         $insideTable = $this->inTableCell;
+        // An empty destination is no target: no OSC-8 envelope, no
+        // ` ()` noise (n4).
         $hyperlinks  = $this->emitHyperlinks
+            && $url !== ''
             && !self::refusesUrl($url)
             && !($insideTable && !$this->inlineTableLinks);
         $showSuffix  = !$insideTable || $this->inlineTableLinks;
@@ -1497,12 +1529,15 @@ final class Renderer
         }
 
         $styledText = $linkText->render($text);
+        // Refused and accepted targets share one visible spelling, minus the
+        // invisible bytes (m3); empty destinations stay silent (n4).
+        $visible = $url === '' ? '' : ' (' . str_replace(self::INVISIBLE_URL_BYTES, '', $url) . ')';
         if ($hyperlinks) {
             return $showSuffix
-                ? Ansi::hyperlink($url, $styledText) . ' (' . $url . ')'
+                ? Ansi::hyperlink($url, $styledText) . $visible
                 : Ansi::hyperlink($url, $styledText);
         }
-        return $showSuffix ? $styledText . ' (' . $url . ')' : $styledText;
+        return $showSuffix ? $styledText . $visible : $styledText;
     }
 
     /**
@@ -1661,7 +1696,9 @@ final class Renderer
     {
         $body = $this->renderChildren($term);
         $style = $this->theme->definitionTerm ?? Style::new();
-        return $style->render($body);
+        // The term occupies its own line: the description follows on the
+        // next, the two-row shape README advertises (M20).
+        return $style->render($body) . "\n";
     }
 
     private function renderDescription(Description $desc): string
