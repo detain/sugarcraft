@@ -50,7 +50,10 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
      */
     public function columns(string $table): array
     {
-        $safeTable = Identifier::quote($this->flavor, $table);
+        // Value position: table_name is a VARCHAR column, so the comparison must
+        // be a string literal (PDO::quote is charset-authoritative), not the
+        // identifier grammar.
+        $safeTable = $this->db->quote($table);
         $result = $this->db->query(
             "SELECT column_name, column_type, is_nullable, column_key, column_default "
             . "FROM information_schema.columns "
@@ -77,7 +80,7 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
      */
     public function indexes(string $table): array
     {
-        $safeTable = Identifier::quote($this->flavor, $table);
+        $safeTable = $this->db->quote($table);
         $result = $this->db->query(
             "SELECT index_name, column_name, non_unique "
             . "FROM information_schema.statistics "
@@ -112,7 +115,7 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
      */
     public function foreignKeys(string $table): array
     {
-        $safeTable = Identifier::quote($this->flavor, $table);
+        $safeTable = $this->db->quote($table);
         $result = $this->db->query(
             "SELECT constraint_name, column_name, referenced_table_name, referenced_column_name, "
             . "NULL as on_update, NULL as on_delete "

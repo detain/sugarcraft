@@ -62,14 +62,18 @@ final class PreviewQuery
                 'PRAGMA table_info(%s)',
                 Identifier::quote(Flavor::Sqlite, $table),
             ),
+            // table_name here is a value compared against a VARCHAR column: the
+            // string-literal genre, not the identifier one (on PostgreSQL a
+            // double-quoted word parses as a column reference and the query
+            // would fail; see D-C9 fix-wave adjudication).
             Flavor::Postgres => 'SELECT column_name, data_type FROM information_schema.columns '
                 . 'WHERE table_schema = CURRENT_SCHEMA() AND table_name = '
-                . Identifier::quote(Flavor::Postgres, $table)
+                . Identifier::quoteLiteral(Flavor::Postgres, $table)
                 . ' ORDER BY ordinal_position',
             default => 'SELECT column_name, data_type FROM information_schema.columns '
-                . "WHERE table_schema = DATABASE() AND table_name = "
-                . Identifier::quote(Flavor::MySQL, $table)
-                . " ORDER BY ordinal_position",
+                . 'WHERE table_schema = DATABASE() AND table_name = '
+                . Identifier::quoteLiteral(Flavor::MySQL, $table)
+                . ' ORDER BY ordinal_position',
         };
     }
 

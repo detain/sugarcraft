@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Admin\PerfSchema;
 
 use SugarCraft\Sql\Admin\ServerContextInterface;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\Identifier;
 use SugarCraft\Sql\Db\Version;
 
 /**
@@ -242,7 +244,7 @@ final class EasySetup
 
         // Then enable default consumers
         $quotedConsumers = array_map(
-            fn(string $c) => '`' . str_replace('`', '``', $c) . '`',
+            fn(string $c) => Identifier::quote(Flavor::MySQL, $c),
             $defaultConsumers
         );
         $statements[] = sprintf(

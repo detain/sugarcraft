@@ -6,6 +6,8 @@ namespace SugarCraft\Sql\Admin\PerfSchema;
 
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\Identifier;
 use SugarCraft\Sql\Db\Version;
 
 /**

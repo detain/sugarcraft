@@ -6,6 +6,8 @@ namespace SugarCraft\Sql\Admin\Variables;
 
 use SugarCraft\Sql\Admin\ServerContextInterface;
 use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\Identifier;
 
 /**
  * Inline editor for modifying MySQL variables via SET GLOBAL / SET PERSIST.
@@ -57,7 +59,7 @@ final class VariableEditor
         }
 
         // Backtick-escape the variable name (it comes from catalog, not user)
-        $escapedName = '`' . \str_replace('`', '``', $variableName) . '`';
+        $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
 
         // Use prepared statement for the value
         $sql = "SET GLOBAL {$escapedName} = ?";
@@ -98,7 +100,7 @@ final class VariableEditor
         // For safety, we catch errors from older versions gracefully
 
         // Backtick-escape the variable name
-        $escapedName = '`' . \str_replace('`', '``', $variableName) . '`';
+        $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
 
         // Use prepared statement for the value
         $sql = "SET PERSIST {$escapedName} = ?";
@@ -138,7 +140,7 @@ final class VariableEditor
             return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Variable not editable'];
         }
 
-        $escapedName = '`' . \str_replace('`', '``', $variableName) . '`';
+        $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
         $sql = "SET PERSIST {$escapedName} = ?";
 
         try {
@@ -177,7 +179,7 @@ final class VariableEditor
             return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Variable not editable'];
         }
 
-        $escapedName = '`' . \str_replace('`', '``', $variableName) . '`';
+        $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
         $sql = "SET PERSIST_ONLY {$escapedName} = ?";
 
         try {
@@ -214,7 +216,7 @@ final class VariableEditor
         // RESET PERSIST does not require the variable to be editable
         // because it removes the persisted value, not sets it
         $sql = $variableName !== null
-            ? "RESET PERSIST `" . \str_replace('`', '``', $variableName) . "`"
+            ? sprintf('RESET PERSIST %s', Identifier::quote(Flavor::MySQL, $variableName))
             : "RESET PERSIST";
 
         try {
@@ -244,7 +246,7 @@ final class VariableEditor
      */
     public function editPreview(string $variableName, string $newValue, string $mode = 'global'): string
     {
-        $escapedName = '`' . \str_replace('`', '``', $variableName) . '`';
+        $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
         $keyword = match ($mode) {
             'persist' => 'SET PERSIST',
             'persist_only' => 'SET PERSIST_ONLY',
@@ -253,7 +255,7 @@ final class VariableEditor
 
         // Show value with quotes if it looks like it needs them
         $displayValue = $this->needsQuotes($newValue)
-            ? "'" . \str_replace("'", "''", $newValue) . "'"
+            ? Identifier::quoteLiteral(Flavor::MySQL, $newValue)
             : $newValue;
 
         return "{$keyword} {$escapedName} = {$displayValue}";

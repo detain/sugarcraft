@@ -54,8 +54,11 @@ final class PreviewQueryTest extends TestCase
     public function testMysqlColumnsSqlEscapesTableName(): void
     {
         $sql = PreviewQuery::columnsSql(Flavor::MySQL, "o'brien");
-        // Table name uses IDENTIFIER escaping (backtick quoting), not VALUE escaping
-        $this->assertStringContainsString('table_name = `o\'brien`', $sql);
+        // Value position against a VARCHAR column: STRING-LITERAL escaping
+        // (flip dated 2026-11-03, D-C9 fix — the old pin taught the identifier
+        // genre, which is wrong for WHERE comparisons on PostgreSQL and rides
+        // the backslash-escape grammar on MySQL).
+        $this->assertStringContainsString("table_name = 'o''brien'", $sql);
         $this->assertStringContainsString('DATABASE()', $sql);
     }
 

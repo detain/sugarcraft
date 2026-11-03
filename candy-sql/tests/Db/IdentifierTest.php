@@ -124,4 +124,55 @@ final class IdentifierTest extends TestCase
 
         $this->assertSame('"table name"', $result);
     }
+
+    /**
+     * D-C9 keystone (2026-11-03): a name ending in `\` must NOT swallow the
+     * closing backtick. Under MySQL's grammar the backslash is an escape char
+     * inside `` ` ``-quoted identifiers, so pre-fix output `` `x\` `` leaves the
+     * identifier unterminated and everything after it executes. The fix escapes
+     * `\` as `\\`, which the grammar reads back as one literal backslash.
+     */
+    public function testMysqlQuoteNeutralizesTrailingBackslash(): void
+    {
+        $result = Identifier::quote(Flavor::MySQL, 'x\\');
+
+        // Exact bytes: `x\\` — backslash doubled, then a clean closing tick.
+        $this->assertSame('`x\\\\`', $result);
+        // Splice attempt: payload after the swallowed tick never forms a bare
+        // closing backtick pair — count must be even around the doubled escape.
+        $this->assertStringEndsWith('`', $result);
+        $this->assertSame(
+            2,
+            substr_count($result, '`'),
+            'exactly the wrapping pair — no swallowed/swallower tick remains',
+        );
+    }
+
+    public function testMysqlQuoteDoublesBackslashBeforeEscape(): void
+    {
+        // 'a\`b' hostile name: backslash-escaped tick and a literal tick.
+        $result = Identifier::quote(Flavor::MySQL, 'a\\`b');
+
+        $this->assertSame('`a\\\\``b`', $result);
+    }
+
+    public function testMysqlQuoteBackslashAndBacktickByteShape(): void
+    {
+        // Plain backslash mid-name stays escaped.
+        $this->assertSame('`a\\\\b`', Identifier::quote(Flavor::MySQL, 'a\\b'));
+        // Double quote arms: backslash is NOT special — plain doubling kept.
+        $this->assertSame('"a\\b"', Identifier::quote(Flavor::Postgres, 'a\\b'));
+        $this->assertSame('"a\\b"', Identifier::quote(Flavor::Sqlite, 'a\\b'));
+    }
+
+    public function testMysqlQuoteLiteralEscapesBackslashChannel(): void
+    {
+        // A trailing backslash must not eat the closing single quote either.
+        $this->assertSame("'x\\\\'", Identifier::quoteLiteral(Flavor::MySQL, 'x\\'));
+        $this->assertSame("'o''brien'", Identifier::quoteLiteral(Flavor::MySQL, "o'brien"));
+        // PG/SQLite standard literals: quote doubling only, backslash literal.
+        $this->assertSame("'x\\'", Identifier::quoteLiteral(Flavor::Postgres, 'x\\'));
+        $this->assertSame("'o''brien'", Identifier::quoteLiteral(Flavor::Postgres, "o'brien"));
+        $this->assertSame("'x\\'", Identifier::quoteLiteral(Flavor::Sqlite, 'x\\'));
+    }
 }
