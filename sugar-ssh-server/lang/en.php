@@ -15,7 +15,7 @@ return [
     'logger.cannot_open_target'      => 'cannot open log target: {target}',
     'logger.invalid_target'          => 'Logger target must be a path, resource, or null',
     'bubbletea.bad_factory'          => 'BubbleTea factory must return an object with a run() method; got {got}',
-    'bubbletea.requires_host_sshd'   => 'BubbleTea middleware only works under HostSshdTransport — InProcessTransport pumps bytes between supervisor stdio and a sugar-pty master, so mounting a Program inline collides with the pump. Either pass Server::withTransport(new InProcessTransport()) to keep pre-PTY-upgrade behaviour, or migrate to Spawn middleware with a wrapper script (see BubbleTea class doc).',
+    'bubbletea.requires_host_sshd'   => 'BubbleTea middleware only works under HostSshdTransport — InProcessTransport pumps bytes between supervisor stdio and a sugar-pty master, so mounting a Program inline collides with the pump. Either pass Server::withTransport(new HostSshdTransport()) to mount the Program on the supervisor stdio, or migrate to Spawn middleware with a wrapper script (see the BubbleTea class doc).',
     'transport.bad_stdin'            => 'InProcessTransport runChild() requires a valid stdin resource',
     'transport.bad_stdout'           => 'InProcessTransport runChild() requires a valid stdout resource',
     'spawn.no_transport'             => 'Spawn middleware requires an InProcessTransport — set Server::withTransport(new InProcessTransport()) or use BubbleTea under HostSshd',

@@ -15,7 +15,7 @@ return [
     'bubbletea.bad_factory'          => 'La fábrica de BubbleTea debe devolver un objeto con un método run(); obtenido: {got}',
     'middleware.cannot_open_stream'   => 'cannot open {target}',
     'middleware.stream_not_resource'  => '{target} must be a resource',
-    'bubbletea.requires_host_sshd'    => 'BubbleTea middleware only works under HostSshdTransport — InProcessTransport pumps bytes between supervisor stdio and a sugar-pty master, so mounting a Program inline collides with the pump. Either pass Server::withTransport(new InProcessTransport()) to keep pre-PTY-upgrade behaviour, or migrate to Spawn middleware with a wrapper script (see BubbleTea class doc).',
+    'bubbletea.requires_host_sshd'    => 'BubbleTea middleware only works under HostSshdTransport — InProcessTransport pumps bytes between supervisor stdio and a sugar-pty master, so mounting a Program inline collides with the pump. Either pass Server::withTransport(new HostSshdTransport()) to mount the Program on the supervisor stdio, or migrate to Spawn middleware with a wrapper script (see the BubbleTea class doc).',
     'transport.bad_stdin'             => 'InProcessTransport runChild() requires a valid stdin resource',
     'transport.bad_stdout'            => 'InProcessTransport runChild() requires a valid stdout resource',
     'spawn.no_transport'              => 'Spawn middleware requires an InProcessTransport — set Server::withTransport(new InProcessTransport()) or use BubbleTea under HostSshd',
