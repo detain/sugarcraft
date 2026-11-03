@@ -10,7 +10,7 @@ use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Coverage for the Theme element extensions added in audit #9
+ * Coverage for the Theme element extensions added for glamour parity
  * wrap-up: tableHeader / tableCell / tableSeparator, imageText,
  * headingPrefix / headingSuffix, paragraphPrefix / paragraphSuffix,
  * headingCase. Also covers the new top-level

@@ -15,9 +15,9 @@ use SugarCraft\Markdown\Style\StyleSheet;
 use SugarCraft\Style\Style;
 
 /**
- * Coverage-boosting tests for edge cases, error paths, and uncovered branches.
+ * Regression-coverage tests for edge cases, error paths, and uncovered branches.
  */
-final class CoverageBoostTest extends TestCase
+final class RegressionCoverageTest extends TestCase
 {
     // ---- BlockStack -------------------------------------------------------
 

@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => 'JSON inválido no arquivo de tema',
     'theme.json_object'            => 'o JSON do tema tem de descodificar para um objeto',
     'theme.bad_color'              => 'especificação de cor inválida: {spec}',
-    'renderer.unknown_style'       => 'estilo padrão desconhecido: {name}',
+    'renderer.unknown_style'       => 'estilo padrão desconhecido: {name} — {styles}',
     'renderer.stream_invalid'      => 'write() requer um recurso de fluxo',
     'renderer.stream_not_writable' => 'write() requer um fluxo gravável; modo recebido "{mode}"',
     'renderer.write_failed'        => 'falha ao gravar {bytes} bytes no fluxo de saída',

@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => 'nieprawidłowy JSON w pliku motywu',
     'theme.json_object'            => 'JSON motywu musi dekodować się do obiektu',
     'theme.bad_color'              => 'nieprawidłowa specyfikacja koloru: {spec}',
-    'renderer.unknown_style'       => 'nieznany styl standardowy: {name}',
+    'renderer.unknown_style'       => 'nieznany styl standardowy: {name} — {styles}',
     'renderer.stream_invalid'      => 'write() wymaga zasobu strumienia',
     'renderer.stream_not_writable' => 'write() wymaga strumienia możliwego do zapisu; otrzymano tryb "{mode}"',
     'renderer.write_failed'        => 'zapis {bytes} bajtów do strumienia wyjściowego nie powiódł się',

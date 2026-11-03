@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => 'neplatný JSON v souboru motivu',
     'theme.json_object'            => 'téma JSON musí dekódovat do objektu',
     'theme.bad_color'              => 'neplatné zadání barvy: {spec}',
-    'renderer.unknown_style'       => 'neznámý standardní styl: {name}',
+    'renderer.unknown_style'       => 'neznámý standardní styl: {name} — {styles}',
     'renderer.stream_invalid'      => 'write() vyžaduje zdroj proudu',
     'renderer.stream_not_writable' => 'write() vyžaduje zapisovatelný proud; obdržen režim "{mode}"',
     'renderer.write_failed'        => 'zápis {bytes} bajtů do výstupního proudu selhal',

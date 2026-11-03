@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => '主题文件中的 JSON 无效',
     'theme.json_object'            => '主题 JSON 必须解码为对象',
     'theme.bad_color'              => '无效的颜色指定: {spec}',
-    'renderer.unknown_style'       => '未知标准样式：{name}',
+    'renderer.unknown_style'       => '未知标准样式：{name} — {styles}',
     'renderer.stream_invalid'      => 'write() 需要流资源',
     'renderer.stream_not_writable' => 'write() 需要可写的流；获得的模式为 "{mode}"',
     'renderer.write_failed'        => '向输出流写入 {bytes} 字节失败',

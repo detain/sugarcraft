@@ -8,8 +8,8 @@ namespace SugarCraft\Markdown\Render;
  * Stack of block contexts that tracks accumulated indent and margins
  * for computing available width at any nesting depth.
  *
- * Available width = wordWrap - accumulatedIndent - marginCount * 2
- * computed from root on each call, not running subtraction.
+     * Available width = wordWrap - indentTotal - marginCount * 2, where both
+     * totals are running sums maintained incrementally by push()/pop().
  */
 final class BlockStack
 {
@@ -109,7 +109,8 @@ final class BlockStack
     }
 
     /**
-     * Current depth (number of blocks nested, not counting Document root).
+     * Current depth, counted from the Document root frame — a bare
+     * document under the root reads 1.
      */
     public function depth(): int
     {

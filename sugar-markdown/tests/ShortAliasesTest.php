@@ -55,4 +55,30 @@ final class ShortAliasesTest extends TestCase
         $short = (new Renderer(Theme::plain()))->tableWrap(true)->render(self::SAMPLE);
         $this->assertSame($long, $short);
     }
+
+    /**
+     * @return iterable<string, array{0:string, 1:string, mixed, 2:string}>
+     */
+    public static function remainingAliasPairProvider(): iterable
+    {
+        yield 'baseURL' => ['withBaseURL', 'baseURL', 'https://example.com/', "[a](rel)\n"];
+        yield 'inline-table-links' => ['withInlineTableLinks', 'inlineTableLinks', false, "| a | b |\n|---|---|\n| [x](https://e.com) | y |\n"];
+        yield 'table-column-budget' => ['withTableColumnBudget', 'tableColumnBudget', true, "| alpha | beta |\n|-------|------|\n| one   | two  |\n"];
+        yield 'fence-column-budget' => ['withFenceColumnBudget', 'fenceColumnBudget', true, "```\nlong line of code that would overflow a narrow pane\n```\n"];
+        yield 'preserved-new-lines' => ['withPreservedNewLines', 'preservedNewLines', true, "one\n\ntwo\n\n\nthree\n"];
+        yield 'standard-style' => ['withStandardStyle', 'standardStyle', 'dracula', self::SAMPLE];
+        yield 'sanitize' => ['withSanitize', 'sanitize', false, "hi\x1b[31mred\x1b[0m\n"];
+    }
+
+    /**
+     * @dataProvider remainingAliasPairProvider
+     */
+    public function testTheRemainingAliasesMatchTheirLongForms(string $long, string $short, mixed $arg, string $md): void
+    {
+        // The alias must thread the exact same value into copy(); a dropped
+        // or re-typed argument diverges here on rendered bytes.
+        $longOut  = (new Renderer(Theme::plain()))->{$long}($arg)->withWordWrap(30)->render($md);
+        $shortOut = (new Renderer(Theme::plain()))->{$short}($arg)->withWordWrap(30)->render($md);
+        $this->assertSame($longOut, $shortOut, "alias {$short}() diverges from {$long}()");
+    }
 }

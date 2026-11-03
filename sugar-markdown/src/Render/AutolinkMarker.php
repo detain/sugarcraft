@@ -25,7 +25,7 @@ use League\CommonMark\Parser\InlineParserContext;
  */
 final class AutolinkMarker implements InlineParserInterface
 {
-    public const DATA_KEY = 'sugarcraft_shine_autolink';
+    public const DATA_KEY = 'sugarcraft_markdown_autolink';
 
     public function __construct(private readonly InlineParserInterface $inner)
     {

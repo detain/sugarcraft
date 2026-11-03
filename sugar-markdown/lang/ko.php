@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => '테마 파일에 잘못된 JSON입니다',
     'theme.json_object'            => '테마 JSON은 객체로 디코딩되어야 합니다',
     'theme.bad_color'              => '잘못된 색상 지정: {spec}',
-    'renderer.unknown_style'       => '알 수 없는 표준 스타일: {name}',
+    'renderer.unknown_style'       => '알 수 없는 표준 스타일: {name} — {styles}',
     'renderer.stream_invalid'      => 'write()에는 스트림 리소스가 필요합니다',
     'renderer.stream_not_writable' => 'write()에는 기록 가능한 스트림이 필요합니다. 받은 모드: "{mode}"',
     'renderer.write_failed'        => '출력 스트림에 {bytes}바이트 쓰기 실패',

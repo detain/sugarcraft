@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => 'некорректный JSON в файле темы',
     'theme.json_object'            => 'JSON темы должен декодироваться в объект',
     'theme.bad_color'              => 'некорректное описание цвета: {spec}',
-    'renderer.unknown_style'       => 'неизвестный стандартный стиль: {name}',
+    'renderer.unknown_style'       => 'неизвестный стандартный стиль: {name} — {styles}',
     'renderer.stream_invalid'      => 'write() требует ресурс потока',
     'renderer.stream_not_writable' => 'write() требует доступный для записи поток; получен режим "{mode}"',
     'renderer.write_failed'        => 'не удалось записать {bytes} байт в выходной поток',

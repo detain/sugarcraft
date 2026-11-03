@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => 'ungültiges JSON in Theme-Datei',
     'theme.json_object'            => 'Theme-JSON muss zu einem Objekt dekodiert werden',
     'theme.bad_color'              => 'ungültige Farbangabe: {spec}',
-    'renderer.unknown_style'       => 'unbekannter Standardstil: {name}',
+    'renderer.unknown_style'       => 'unbekannter Standardstil: {name} — {styles}',
     'renderer.stream_invalid'      => 'write() benötigt eine Stream-Ressource',
     'renderer.stream_not_writable' => 'write() benötigt einen beschreibbaren Stream, Modus "{mode}" erhalten',
     'renderer.write_failed'        => 'Schreiben von {bytes} Bytes in den Ausgabestream fehlgeschlagen',

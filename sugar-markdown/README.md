@@ -205,9 +205,15 @@ $writer->close();
 - There is no source-size cap: cost is roughly proportional to the
   input. Only syntax highlighting refuses to try — a fenced body over
   1 MB degrades to the plain code-block style instead of tokenising.
+- The thematic break always draws `horizontalRuleLength` cells (default
+  40) regardless of the wrap width, and `withTableWrap(true)` wraps each
+  cell at the *full* wrap width — pair it with `withTableColumnBudget()`
+  to bound the whole table geometry.
 - The streaming channel keeps a section that waits on a link-reference
   definition in memory (source plus first render) until the definition
-  or the end of input arrives; see Streaming above.
+  or the end of input arrives; see Streaming above. A held section is
+  re-rendered on each later definition event, bounded by the document's
+  definition count, not by the number of chunks fed.
 
 ## What it renders
 

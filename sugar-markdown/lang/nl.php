@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => 'ongeldige JSON in thema-bestand',
     'theme.json_object'            => 'thema-JSON moet naar een object decoderen',
     'theme.bad_color'              => 'ongeldige kleurspecificatie: {spec}',
-    'renderer.unknown_style'       => 'onbekende standaardstijl: {name}',
+    'renderer.unknown_style'       => 'onbekende standaardstijl: {name} — {styles}',
     'renderer.stream_invalid'      => 'write() vereist een streambron',
     'renderer.stream_not_writable' => 'write() vereist een beschrijfbare stream; modus "{mode}" ontvangen',
     'renderer.write_failed'        => 'schrijven van {bytes} bytes naar de outputstream mislukt',

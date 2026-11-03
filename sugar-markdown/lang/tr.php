@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => 'tema dosyasında geçersiz JSON',
     'theme.json_object'            => 'tema JSON\'u bir nesneye dönüştürülmelidir',
     'theme.bad_color'              => 'geçersiz renk tanımı: {spec}',
-    'renderer.unknown_style'       => 'bilinmeyen standart stil: {name}',
+    'renderer.unknown_style'       => 'bilinmeyen standart stil: {name} — {styles}',
     'renderer.stream_invalid'      => 'write() bir akış kaynağı gerektirir',
     'renderer.stream_not_writable' => 'write() yazılabilir bir akış gerektirir; "{mode}" kipi alındı',
     'renderer.write_failed'        => 'akışa {bytes} bayt yazılamadı',

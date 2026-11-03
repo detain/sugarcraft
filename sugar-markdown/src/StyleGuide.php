@@ -22,12 +22,11 @@ use SugarCraft\Style\Style;
  * adapter {@see \SugarCraft\MdView\GlamourTheme} (it converts parsed
  * primitives into a sugar-markdown Theme on the consumer side). This class is NOT a
  * re-export of it and cannot be — candy-mdview REQUIRES sugar-markdown, so a
- * sugar-markdown→glow dependency would mint a sibling require-cycle (r88 design
- * ruling, reaffirmed r89): the producer never depends on its consumer. The
+ * sugar-markdown→glow dependency would mint a sibling require-cycle: the
+ * producer never depends on its consumer. The
  * decode vocabulary is therefore duplicated locally; the two families share
  * the schema contract, not the code. Glow's adapter can in time delegate
- * here (consumer→producer is the lawful direction) — deliberately not
- * touched in this lane so the glow suite carries unchanged.
+ * here (consumer→producer is the lawful direction).
  *
  * Being the producer's own decoder, {@see theme()} lands values directly
  * in their native {@see Theme} slots; nothing needs an adapter hop.

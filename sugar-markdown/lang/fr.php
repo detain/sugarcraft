@@ -13,7 +13,7 @@ return [
     'theme.json_invalid'           => 'JSON invalide dans le fichier de thème',
     'theme.json_object'            => 'le thème JSON doit décoder vers un objet',
     'theme.bad_color'              => 'spécification de couleur invalide : {spec}',
-    'renderer.unknown_style'       => 'style standard inconnu : {name}',
+    'renderer.unknown_style'       => 'style standard inconnu : {name} — {styles}',
     'renderer.stream_invalid'      => 'write() exige une ressource de flux',
     'renderer.stream_not_writable' => 'write() exige un flux inscriptible, mode reçu « {mode} »',
     'renderer.write_failed'        => 'échec de l\'écriture de {bytes} octets dans le flux de sortie',

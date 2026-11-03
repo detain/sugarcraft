@@ -54,7 +54,7 @@ final class Theme
         /** Auto-detected URLs (`https://x`) when not wrapped in `[...]`. */
         public readonly ?Style $autolink = null,
 
-        // ---- glamour-element parity (audit #9) ----
+        // ---- glamour-element parity ----
         /**
          * Outer document margin: number of blank lines emitted before
          * the document body. Mirrors glamour's `Document.Margin`.
@@ -347,7 +347,7 @@ final class Theme
     }
 
     /**
-     * Dark-background optimized theme. Bright accents for headings,
+     * Dark-background optimised theme. Bright accents for headings,
      * faint code backdrop, blue underlined links — matches glamour's
      * `Dark` preset visually.
      */
@@ -390,7 +390,7 @@ final class Theme
     }
 
     /**
-     * Light-background optimized theme. Darker accents and a no-bg
+     * Light-background optimised theme. Darker accents and a no-bg
      * code style.
      */
     public static function light(): self
