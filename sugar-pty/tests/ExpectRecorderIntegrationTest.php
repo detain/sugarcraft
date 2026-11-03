@@ -19,10 +19,40 @@ use SugarCraft\Vcr\Recorder;
  * echoes recorded input bytes back as output — simulating what a
  * scripted PTY master would do — so the Player's byte assertion passes.
  *
- * @see https://github.com/sugarcraft/sugarcraft/blob/master/plans/leftover/phase-01-pty-quickwins/step-09-pool-react-multipump-expect.md
  */
 final class ExpectRecorderIntegrationTest extends TestCase
 {
+    /** @var list<string> cassettes created by the running test, swept in tearDown. */
+    private array $cassettes = [];
+
+    /**
+     * Pid- AND nonce-scoped cassette path: a bare /tmp/expect-*.cas name
+     * lets a parallel test run (or a residue of a killed one) collide with
+     * this one's bytes, turning an integration pass into a shared-file
+     * race. tearDown unlinks everything handed out here.
+     */
+    private function cassettePath(string $label): string
+    {
+        $path = \sprintf(
+            '%s/sugar-pty-expect-%d-%s-%s.cas',
+            \sys_get_temp_dir(),
+            \getmypid(),
+            $label,
+            \uniqid('', true),
+        );
+        $this->cassettes[] = $path;
+
+        return $path;
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->cassettes as $path) {
+            @\unlink($path);
+        }
+        $this->cassettes = [];
+    }
+
     /**
      * Record a scripted dialog via Expect::withRecorder(), then verify
      * the cassette is well-formed with both input and output events.
@@ -33,7 +63,7 @@ final class ExpectRecorderIntegrationTest extends TestCase
      */
     public function testExpectRecordsCassetteAndPlayerReplayPasses(): void
     {
-        $cassettePath = '/tmp/expect-recorder-test.cas';
+        $cassettePath = $this->cassettePath('recorder-test');
         $recorder = Recorder::open($cassettePath);
 
         // Scripted master: returns the expected server-side responses.
@@ -141,7 +171,7 @@ final class ExpectRecorderIntegrationTest extends TestCase
     public function testWithRecorderReturnsNewInstanceAndDetachIsSafe(): void
     {
         $master = new FixtureMaster('');
-        $recorder = Recorder::open('/tmp/expect-attach-test.cas');
+        $recorder = Recorder::open($this->cassettePath('attach-test'));
 
         $e0 = Expect::on($master);
         $e1 = $e0->withRecorder($recorder);
@@ -154,7 +184,6 @@ final class ExpectRecorderIntegrationTest extends TestCase
 
         $recorder->recordQuit();
         $recorder->close();
-        @\unlink('/tmp/expect-attach-test.cas');
     }
 
     /**
@@ -163,7 +192,7 @@ final class ExpectRecorderIntegrationTest extends TestCase
      */
     public function testSendAndExpectCallCorrectRecorderMethods(): void
     {
-        $cassettePath = '/tmp/expect-record-methods-test.cas';
+        $cassettePath = $this->cassettePath('record-methods');
         $recorder = Recorder::open($cassettePath);
 
         // Banner followed by login prompt.  After the initial buffer is

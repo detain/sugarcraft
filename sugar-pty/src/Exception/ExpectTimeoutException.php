@@ -29,6 +29,13 @@ final class ExpectTimeoutException extends PtyException
         parent::__construct($message);
     }
 
+    /** Last 80 bytes of the scan buffer, escaped — a timeout verdict is
+     * nearly impossible to debug when the message reports only a count. */
+    private static function tail(string $buffer): string
+    {
+        return '"' . self::escape(\substr($buffer, -80)) . '"';
+    }
+
     /**
      * @param list<string> $needles
      */
@@ -39,10 +46,11 @@ final class ExpectTimeoutException extends PtyException
             : '[' . \implode(', ', \array_map(fn($n) => '"' . self::escape($n) . '"', $needles)) . ']';
         return new self(
             \sprintf(
-                'Expect: timed out after %.3fs waiting for %s (buffer=%d bytes)',
+                'Expect: timed out after %.3fs waiting for %s (buffer=%d bytes, tail=%s)',
                 $timeoutSec,
                 $rendered,
                 \strlen($buffer),
+                self::tail($buffer),
             ),
             $needles,
             $timeoutSec,
@@ -54,10 +62,11 @@ final class ExpectTimeoutException extends PtyException
     {
         return new self(
             \sprintf(
-                'Expect: timed out after %.3fs waiting for pattern %s (buffer=%d bytes)',
+                'Expect: timed out after %.3fs waiting for pattern %s (buffer=%d bytes, tail=%s)',
                 $timeoutSec,
                 $regex,
                 \strlen($buffer),
+                self::tail($buffer),
             ),
             [$regex],
             $timeoutSec,
@@ -69,9 +78,10 @@ final class ExpectTimeoutException extends PtyException
     {
         return new self(
             \sprintf(
-                'Expect: timed out after %.3fs waiting for EOF (buffer=%d bytes)',
+                'Expect: timed out after %.3fs waiting for EOF (buffer=%d bytes, tail=%s)',
                 $timeoutSec,
                 \strlen($buffer),
+                self::tail($buffer),
             ),
             [],
             $timeoutSec,

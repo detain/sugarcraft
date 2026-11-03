@@ -91,7 +91,8 @@ final class SIGINTForwardingTest extends TestCase
             $writeTs = \microtime(true);
             $master->write("\x03");
 
-            // Poll exited() for up to 1 s — the plan-mandated window.
+            // Poll exited() for up to 1 s — generous for the kernel to
+            // queue SIGINT and the child to trip the flag.
             $exitDeadline = $writeTs + 1.0;
             while (\microtime(true) < $exitDeadline && !$child->exited()) {
                 // Drain any noise the slave emitted (TTY may echo "^C"

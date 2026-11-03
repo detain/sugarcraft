@@ -12,16 +12,15 @@ use SugarCraft\Pty\SignalForwarder;
  * Confirms `SignalForwarder::attachSigwinch` does not double-handle the
  * signal when invoked from inside a ReactPHP event loop.
  *
- * Risk #3 of the original P6 (PTY) plan: ReactPHP's loop installs its
- * own signal handling on some backends (ext-event, ext-libev, ext-uv);
- * naive `pcntl_signal` calls can be silently overwritten or fire twice
- * depending on signal-dispatch ordering. The plan called for explicit
- * coverage and never landed it. This test fills that gap.
+ * The hazard this bounds: ReactPHP's loop installs its own signal
+ * handling on some backends (ext-event, ext-libev, ext-uv), and naive
+ * `pcntl_signal` calls can be silently overwritten or fire twice
+ * depending on signal-dispatch ordering. This test pins the actual
+ * combined behavior.
  *
  * Mirrors the watchdog convention from PtyPoolReactLoopTest — the test
  * is hard-bounded by the loop's own timer cap so CI cannot hang.
- *
- * @see plans/leftover/phase-01-pty-quickwins/step-12-signal-forwarder-tests.md
+
  */
 final class SignalForwarderReactLoopTest extends TestCase
 {

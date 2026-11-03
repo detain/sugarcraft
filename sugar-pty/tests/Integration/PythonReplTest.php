@@ -8,12 +8,11 @@ namespace SugarCraft\Pty\Tests\Integration;
  * End-to-end smoke test for `python3 -i` under a real PTY.
  *
  * Mirrors creack/pty integration tests that drive Python's REPL — we
- * cover both a single-statement echo and the plan-mandated heredoc-
- * style multi-line continuation (`for`-loop spread across multiple
- * lines, terminated by a blank line). The REPL's `...` continuation
- * prompt only behaves correctly when stdin is a real tty.
- *
- * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P5.1, P5.2)
+ * cover both a single-statement echo and the multi-line `for`-loop
+ * continuation (spread across lines, terminated by a blank line) —
+ * the shape that exercises the REPL's `...` prompt, which only behaves
+ * correctly when stdin is a real tty.
+
  */
 final class PythonReplTest extends InteractiveShellTestCase
 {

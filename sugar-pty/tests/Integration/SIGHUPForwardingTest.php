@@ -106,7 +106,7 @@ final class SIGHUPForwardingTest extends TestCase
             $closeTs = \microtime(true);
             $master->close();
 
-            // Poll exited() for up to 1 s — the plan-mandated window.
+            // Poll exited() for up to 1 s — generous even under load.
             // tty_hangup() runs synchronously inside the kernel close
             // path, so SIGHUP should be queued for `sleep` almost
             // immediately; the poll only buys time for sleep's signal

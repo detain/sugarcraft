@@ -224,8 +224,7 @@ trait ChildPollTrait
      * Cancelling the returned promise cancels the poll timer for THAT
      * call only (other pending waitAsync() promises keep polling) and
      * rejects with a \RuntimeException. The child itself is not signalled.
-     *
-     * Implements plan item 8.3 (findings/plan_sugar-pty.md).
+
      *
      * @param LoopInterface|null $loop            defaults to the global Loop::get()
      * @param float              $pollIntervalSec exit-probe cadence in seconds

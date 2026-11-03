@@ -14,7 +14,7 @@ no fakes — every test forks a real binary, drives it through a real
 | `DashTest.php`                      | `/usr/bin/dash`    | Strict-POSIX baseline. |
 | `ZshTest.php`                       | `/usr/bin/zsh`     | Skips when zsh is absent. |
 | `FishTest.php`                      | `/usr/bin/fish`    | Marker round-trip only — fish prompt shape is out of scope. |
-| `PythonReplTest.php`                | `/usr/bin/python3` (fallback `/usr/bin/python`) | Single-line `print()` + plan-mandated multi-line `for`-loop continuation. |
+| `PythonReplTest.php`                | `/usr/bin/python3` (fallback `/usr/bin/python`) | Single-line `print()` + multi-line `for`-loop continuation. |
 
 ## Conventions
 

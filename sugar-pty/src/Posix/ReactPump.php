@@ -43,8 +43,7 @@ use SugarCraft\Pty\PumpOptions;
  *
  * Naming follows the house `React*` prefix for event-loop adapters
  * (sugar-input `ReactInputDriver`, candy-sql `ReactMysqlConnection`).
- *
- * Implements plan item 8.1 (findings/plan_sugar-pty.md).
+
  *
  * @see PosixPump   the blocking select-loop pump (unchanged)
  * @see portable-pty.Pump
