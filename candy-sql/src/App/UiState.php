@@ -20,6 +20,11 @@ final class UiState
         public readonly Pane $pane = Pane::Tables,
         public readonly ?string $error = null,
         public readonly ?string $status = null,
+        /**
+         * D-M27: exact SQL of a destructive statement awaiting a second
+         * confirming run-key press; null when nothing is armed.
+         */
+        public readonly ?string $armedDestructive = null,
     ) {}
 
     public static function new(): self
@@ -40,5 +45,10 @@ final class UiState
     public function withStatus(?string $status): self
     {
         return $this->mutate(['status' => $status]);
+    }
+
+    public function withArmedDestructive(?string $sql): self
+    {
+        return $this->mutate(['armedDestructive' => $sql]);
     }
 }

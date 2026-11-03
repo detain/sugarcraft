@@ -75,11 +75,11 @@ above); the explicit string exists as a test seam because `MysqlDatabase` is fin
 | `[p]`              | Pause/resume auto-refresh (global)              |
 | `[r]`              | Reset counters (Dashboard) / Refresh processlist (Connections) |
 | `[j/k]` `[↑/↓]`    | Navigate rows down/up on the row-navigable pages (Variables, Connections, Reports, PerfSchema, Debug) |
-| `[e]`              | Edit selected variable — dynamic vars only (Variables page): type new value, [Enter] confirm → [Enter] execute or [Esc] cancel |
+| `[e]`              | Edit selected variable — dynamic vars only (Variables page): type new value, [Enter] confirm → [Enter] execute or [Esc] cancel. The dialog spells out the three scopes `[p]` cycles: GLOBAL = runtime only (lost on restart), PERSIST = runtime + config file, PERSIST_ONLY = config file only (applies at next restart) |
 | `[w]`              | Toggle read/write filter (Variables page)       |
 | `[s]`              | Focus search input (Variables page)              |
 | `[f]`              | Toggle hide-sleeping filter (Connections page)  |
-| `[c]`              | Commit pending changes (PerfSchema page)        |
+| `[c]`              | Stage commit of pending changes (PerfSchema page); `[y]` fires, any other key cancels |
 | `[c]`              | Toggle column unit formatting (Reports page)    |
 | `[x]`              | Build CSV of the current report into page state — not written to disk (Reports page; see disclosure below) |
 | `[a]`              | Dismiss all pending alerts (Dashboard)          |
@@ -96,7 +96,7 @@ it never touches the filesystem — writing `.csv` files is the separate
 The admin page's own `Tab`/`[1]`/`[2]`/`[3]` detail-tab handlers exist in the page code but are currently unreachable:
 `Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached and kept only for standalone (non-app) use.
 
-> **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, or a pending kill confirmation) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer. On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
+> **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer — except destructive statements (`DROP`/`TRUNCATE`/`DELETE`/`ALTER`/`RENAME`/`GRANT`/`REVOKE`), whose first press only arms a warning; a second consecutive run of the byte-identical SQL confirms, and any edit or other query disarms. On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
 
 > **MySQL / PostgreSQL only** — the Admin pane needs server introspection data. On SQLite, `App::createContext()` falls back to `EmptyServerContext`, whose variable/status/processlist accessors all return empty sets (`connection()` throws and the async fetch path swallows it in a `Throwable` guard); admin pages render empty rather than crashing — run the admin panes against MySQL or PostgreSQL to see live content.
 
@@ -185,7 +185,7 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 | `AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::default()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
 | `AlertNotifier` | Toast notification dispatcher. Mute-safe by default (no factory = all calls no-op). `::withDefaults()` bootstraps a standard factory. `notify(Alert)`, `notifyWarning()`, `notifyCritical()`, `notifyInfo()`, `view()` composites toast over a background viewport. |
 | `AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. Each alert carries a `MetricKind` (`Ratio`, `Seconds`, `Count`) that controls how its value is formatted in toast messages. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
-| `PerfSchemaPage` | Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Version-gated loading: `setup_actors` table skipped on <5.6; `setup_objects.ENABLED` column omitted on <5.6.3; `setup_timers` (mutable) used on <8.0 vs `performance_timers` (read-only) on >=8.0. Threads tab shows `INSTRUMENTED` column from `performance_schema.threads`. `[c]` commits pending changes; `[r]` reverts. |
+| `PerfSchemaPage` | Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Version-gated loading: `setup_actors` table skipped on <5.6; `setup_objects.ENABLED` column omitted on <5.6.3; `setup_timers` (mutable) used on <8.0 vs `performance_timers` (read-only) on >=8.0. Threads tab shows `INSTRUMENTED` column from `performance_schema.threads`. `[c]` stages a commit — the page lists the prepared statements and waits for `[y]`; any other key cancels (destructive-confirmation parity with the kill and SET GLOBAL prompts). `[r]` reverts. |
 | `SetupTimers` | Mutable model for a PS timer entry. On MySQL <8.0, loaded from `performance_schema.setup_timers` and can be modified via `withTimerName()`. `isDirty()` tracks unsaved changes; `commitStatements()` generates `UPDATE setup_timers SET TIMER_NAME=? WHERE NAME=?`. On MySQL >=8.0, loaded from `performance_schema.performance_timers` as clean (read-only) instances. |
 | `SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (wiring deferred to a planned follow-up). |
 | `CommitPlanner` | Generates SQL statements to commit PS configuration changes. All statements are fully parameterized — returns `list<array{sql:string, params:list<mixed>}>` tuples with all values bound as `?` placeholders, not interpolated. Produces anchored `UPDATE ... RLIKE '^name$'` for instruments (regex-escaped via `preg_quote()`), `UPDATE ... IN(?)` for consumers, and `INSERT/UPDATE/DELETE` for actors and objects. SetupTimers/SetupThreads wiring deferred to a planned follow-up. |
@@ -746,6 +746,15 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
     socket. This is genuinely server-side for both explicit cancels and
     timeouts, subject to the usual PostgreSQL caveat that a cancel request is
     advisory — the backend interrupts the statement at its next safe point.
+- **Cancellation is library-level, not a UI key.** All of the above describes
+  the `AsyncConnection` API. The TUI's query pane does not currently thread a
+  token into its dispatch: an in-flight query runs to completion or until the
+  per-query timeout (`QueryTimeout`, default 30 s) rejects its promise, and
+  `Ctrl+C` quits the app rather than cancelling the statement.
+- **Query-pane results are buffered in full.** A `SELECT` executed from the
+  editor materialises every returned row into the in-process result table;
+  only the schema-browse paths cap themselves (`PreviewQuery` appends
+  `LIMIT 100`). Project what you need on huge tables.
 
 The `HistoryRecorder` implements `StatusSnapshotProviderInterface`, so it slots into the existing polling loop without coupling to the UI. The `SqliteHistoryStore` uses WAL mode for safe concurrent reads during writes.
 

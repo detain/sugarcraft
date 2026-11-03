@@ -59,7 +59,7 @@ use SugarCraft\Sql\CellValue;
  *   [j/k] or [↑/↓] - Navigate items
  *   [Space] or [Enter] - Toggle/select item
  *   [Tab] - Switch tabs
- *   [c] - Commit pending changes (when dirty)
+ *   [c] - Stage commit for pending changes (when dirty); [y] fires it
  *   [r] - Revert pending changes
  *   [q] - Quit to previous view
  *
@@ -126,6 +126,20 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
 
     private string $setupState = 'custom';
 
+    /**
+     * D-M27: statements staged by [c] and awaiting an explicit [y]
+     * confirmation. These are UPDATEs against performance_schema (and, from
+     * the variable editor's genre, durable server config) — the commit used
+     * to fire on a single blind keypress while KILL and SET GLOBAL gated
+     * behind prompts. Null when no commit is armed.
+     *
+     * @var list<array{sql:string,params:array<mixed>}>|null
+     */
+    private ?array $pendingCommit = null;
+
+    /** In-page feedback line (commit cancelled / armed), rendered in build(). */
+    private ?string $actionMessage = null;
+
     public function __construct(
         ServerContextInterface $context,
         ?EasySetupDetector $detector = null,
@@ -179,6 +193,24 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         $lines[] = '';
         $lines[] = $this->renderContent();
         $lines[] = '';
+        if ($this->pendingCommit !== null) {
+            // D-M27 confirmation: show exactly what will run, up to five
+            // statements, then the y-or-any-key decision.
+            $lines[] = Style::new()->foreground(Color::hex('#f38ba8'))->render(
+                sprintf('COMMIT %d statement(s) to performance_schema? [y] confirm · any other key cancels', count($this->pendingCommit))
+            );
+            foreach (array_slice($this->pendingCommit, 0, 5) as $stmt) {
+                $sql = (string) $stmt['sql'];
+                if (strlen($sql) > 100) {
+                    $sql = substr($sql, 0, 97) . '...';
+                }
+                $lines[] = '  ' . Style::new()->foreground(Color::hex('#cdd6f4'))->render($sql);
+            }
+            $lines[] = '';
+        } elseif ($this->actionMessage !== null) {
+            $lines[] = Style::new()->foreground(Color::hex('#94a3b8'))->render($this->actionMessage);
+            $lines[] = '';
+        }
         $lines[] = $this->renderFooter();
 
         return implode("\n", $lines);
@@ -202,6 +234,16 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
 
         $ch = $msg->rune ?? '';
         $type = $msg->type;
+
+        // While a commit awaits confirmation, only an explicit y/Y fires it;
+        // ANY other key cancels (fail-safe: a stray keystroke never rewrites
+        // server instrumentation), mirroring the ConnectionsPage kill prompt.
+        if ($this->pendingCommit !== null) {
+            if ($ch === 'y' || $ch === 'Y') {
+                return $this->executeCommit($this->pendingCommit);
+            }
+            return [$this->withClearedCommitPrompt('Commit cancelled'), null];
+        }
 
         // Tab switches tabs
         // NOTE: App consumes Tab for the pane cycle (see VariablesPage) — the
@@ -231,9 +273,9 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             return $this->handleToggle();
         }
 
-        // c commits pending changes
+        // c stages a commit; the statements fire only after [y] confirms.
         if ($ch === 'c' && $this->isDirty()) {
-            return $this->handleCommit();
+            return $this->armCommitConfirm();
         }
 
         // r reverts pending changes
@@ -368,14 +410,59 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         }
     }
 
-    private function handleCommit(): array
+    /**
+     * [c]: compute the exact statement list and arm the confirmation prompt.
+     */
+    private function armCommitConfirm(): array
     {
-        if ($this->commitPlanner === null || !$this->isDirty()) {
+        // Plan from the CURRENT arrays: the stored planner was built during
+        // loadData() and its copied-in arrays predate any later toggles, so
+        // reusing it here would stage zero statements off a dirty page (the
+        // old blind-commit path had the same staleness — toggled changes
+        // silently evaporated instead of running).
+        $planner = new CommitPlanner(
+            $this->instruments,
+            $this->consumers,
+            $this->actors,
+            $this->objects,
+        );
+
+        try {
+            $statements = $planner->commitAll();
+        } catch (\Throwable $e) {
+            $this->errorMessage = 'Commit planning failed: ' . $e->getMessage();
             return [$this, null];
         }
 
+        if ($statements === []) {
+            return [$this->withClearedCommitPrompt('Nothing to commit'), null];
+        }
+
+        $clone = clone $this;
+        $clone->pendingCommit = $statements;
+        $clone->actionMessage = null;
+        $clone->errorMessage = '';
+        return [$clone, null];
+    }
+
+    /** Clear the armed commit prompt, optionally leaving a feedback line. */
+    private function withClearedCommitPrompt(?string $message): self
+    {
+        $clone = clone $this;
+        $clone->pendingCommit = null;
+        $clone->actionMessage = $message;
+        return $clone;
+    }
+
+    /**
+     * Execute a confirmed statement batch, then reload (was handleCommit()).
+     *
+     * @param list<array{sql:string,params:array<mixed>}> $statements
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function executeCommit(array $statements): array
+    {
         try {
-            $statements = $this->commitPlanner->commitAll();
             $db = $this->context->connection();
 
             foreach ($statements as $stmt) {
@@ -392,6 +479,8 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
 
             // Reload data after commit
             $clone = clone $this;
+            $clone->pendingCommit = null;
+            $clone->actionMessage = sprintf('Committed %d statement%s', count($statements), count($statements) === 1 ? '' : 's');
             $clone->loadData();
             if ($clone->changeTracker !== null) {
                 $clone->changeTracker->commit();
@@ -399,9 +488,16 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
 
             return [$clone, null];
         } catch (\PDOException $e) {
-            $this->errorMessage = 'Commit failed: ' . $e->getMessage();
-            return [$this, null];
+            $clone = clone $this;
+            $clone->pendingCommit = null;
+            $clone->errorMessage = 'Commit failed: ' . $e->getMessage();
+            return [$clone, null];
         }
+    }
+
+    public function isModal(): bool
+    {
+        return $this->pendingCommit !== null;
     }
 
     /**
@@ -1218,7 +1314,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     private function renderFooter(): string
     {
         $navHint = '[j/k] nav  [Space] toggle';
-        $actionHint = $this->isDirty() ? '  [c] commit  [r] revert' : '';
+        $actionHint = $this->isDirty() ? '  [c] stage commit ([y] to fire)  [r] revert' : '';
         $quitHint = '  [q] back';
         $base = Style::new()->foreground(Color::hex('#6b7280'))->render($navHint . $actionHint . $quitHint);
 

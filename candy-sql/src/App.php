@@ -502,6 +502,17 @@ final class App implements Model
     }
 
     /**
+     * Statements that destroy data or privileges irreversibly (D-M27). The
+     * match is anchored on the leading keyword of the trimmed statement; a
+     * multi-statement script that hides a DROP behind a leading SELECT is
+     * outside this gate (the editor runs single statements in practice).
+     */
+    private static function isDestructiveStatement(string $sql): bool
+    {
+        return preg_match('/^(DROP|TRUNCATE|DELETE|ALTER|RENAME|GRANT|REVOKE)\b/i', $sql) === 1;
+    }
+
+    /**
      * Begin executing a query, either synchronously (SQLite) or asynchronously
      * (MySQL/Postgres).
      *
@@ -519,6 +530,39 @@ final class App implements Model
         if ($trimmed === '') {
             return [$this, null];
         }
+
+        // D-M27: the editor's run keys used to fire DROP/TRUNCATE/… with zero
+        // confirmation while KILL and SET GLOBAL gated behind prompts. First
+        // press on a destructive statement only WARNS and arms; a second
+        // consecutive press with byte-identical SQL confirms. Any other query
+        // run, or an edit to the statement, disarms.
+        if (self::isDestructiveStatement($trimmed)) {
+            if ($this->ui->armedDestructive !== $trimmed) {
+                return [$this->mutate(['ui' => $this->ui
+                    ->withArmedDestructive($trimmed)
+                    ->withError(null)
+                    ->withStatus('⚠ destructive statement — ctrl+r again (unmodified) to confirm')]), null];
+            }
+            return $this->mutate(['ui' => $this->ui->withArmedDestructive(null)])->dispatchRunQuery();
+        }
+        if ($this->ui->armedDestructive !== null) {
+            // A different (safe) statement ran — the armed one is stale.
+            return $this->mutate(['ui' => $this->ui->withArmedDestructive(null)])->dispatchRunQuery();
+        }
+        return $this->dispatchRunQuery();
+    }
+
+    /**
+     * The actual run dispatch, split out of beginRunQuery() so the D-M27
+     * confirm arm can be consumed on a fresh model (PHP forbids rebinding
+     * $this inside a method).
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function dispatchRunQuery(): array
+    {
+        $sql = $this->editor()->value();
+        $trimmed = trim($sql);
 
         // Record in history immediately (front = newest), de-duping consecutive repeats.
         $history = $this->query->history;
@@ -1317,8 +1361,18 @@ final class App implements Model
 
     private function withAdminCachedData(array $statusVars, array $serverVars, float $ts): self
     {
+        // D-M3 stale-serving: every failure/stand-down arm of the admin fetch
+        // resolves AdminDataLoadedMsg with EMPTY arrays, and SHOW GLOBAL
+        // STATUS/VARIABLES never come back legitimately empty from a live
+        // server — so an empty leg always means "this fetch produced nothing
+        // usable". Overwriting the cache with it wiped a healthy dashboard on
+        // one transient hiccup. Keep the previous leg instead (candy-query's
+        // AsyncCachingServerContext lesson); the new timestamp still advances
+        // the fetch cooldown, so retry cadence is unchanged.
+        $status = $statusVars !== [] ? $statusVars : ($this->admin->cachedStatusVars ?? []);
+        $server = $serverVars !== [] ? $serverVars : ($this->admin->cachedServerVars ?? []);
         return $this->mutate([
-            'admin' => $this->admin->withCachedData($statusVars, $serverVars, $ts),
+            'admin' => $this->admin->withCachedData($status, $server, $ts),
         ]);
     }
 
