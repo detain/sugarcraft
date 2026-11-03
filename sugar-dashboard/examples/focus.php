@@ -1,13 +1,28 @@
 <?php
+
 declare(strict_types=1);
+
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\Focus;
-use SugarCraft\Dashboard\Layout\Grid\ChartDataPoint;
-use SugarCraft\Dashboard\Layout\Grid\Options;
-use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use SugarCraft\Dashboard\Layout\FocusManager;
 
-// Focus highlight
-$component = Focus::new(Text::new("Focused Element"));
-$component->setSize(60, 15);
-echo $component->render();
+/**
+ * Keyboard focus rotation via FocusManager.
+ *
+ * This example previously referenced Layout\Grid\Focus — a class that has
+ * never existed in this library (it came from a mis-templated generator).
+ * FocusManager is the real home of panel rotation (dashboard-live uses it).
+ */
+$focus = new FocusManager('root');
+foreach (['clock', 'system', 'weather'] as $id) {
+    $focus = $focus->register($id);
+}
+
+echo "initial focus: ", var_export($focus->focusedId(), true), "\n";
+$focus = $focus->focusNext();
+echo "after Tab:     ", var_export($focus->focusedId(), true), "\n";
+$focus = $focus->focusNext();
+echo "after Tab:     ", var_export($focus->focusedId(), true), "\n";
+$focus = $focus->focusPrevious();
+echo "after Shift+Tab:", var_export($focus->focusedId(), true), "\n";
+echo "isFocused(system): ", var_export($focus->isFocused('system'), true), "\n";

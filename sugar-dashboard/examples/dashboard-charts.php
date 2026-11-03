@@ -2,12 +2,14 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\ChartDataPoint;
-use SugarCraft\Dashboard\Layout\Grid\Sparkline;
-use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options, ItemOptions};
-use SugarCraft\Dashboard\Plot\Chart\{Donut, AreaChart, Chart, ChartType, FunnelChart};
-use SugarCraft\Dashboard\Layout\{VStack, HStack, Frame};
-use SugarCraft\Dashboard\Components\Card\{Text, Card};
+use SugarCraft\Dashboard\Plot\Chart\ChartDataPoint;
+use SugarCraft\Dashboard\Plot\Chart\SparklineBar as Sparkline;
+use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
+use SugarCraft\Dashboard\Layout\Grid\Options;
+use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use SugarCraft\Dashboard\Plot\Chart\{Donut,AreaChart,Chart,ChartType,FunnelChart};
+use SugarCraft\Dashboard\Layout\{VStack,HStack,Frame};
+use SugarCraft\Dashboard\Components\Card\{Text,Card};
 
 /**
  * Charts Dashboard - showcasing all chart types

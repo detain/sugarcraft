@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Components\GridTable\{GridTable, Column, Row};
+use SugarCraft\Dashboard\Components\GridTable\{GridTable,Column,Row};
 
 /**
  * gridtable-demo.php — Full-featured GridTable demo with sort, filter, pagination.

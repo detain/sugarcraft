@@ -4,7 +4,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Dashboard\Components\Card\Card;
 use SugarCraft\Dashboard\Components\Card\Text;
-use SugarCraft\Dashboard\Layout\Grid\ChartDataPoint;
+use SugarCraft\Dashboard\Plot\Chart\ChartDataPoint;
 use SugarCraft\Dashboard\Layout\Grid\Options;
 use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
 

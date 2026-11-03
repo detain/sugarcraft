@@ -2,16 +2,18 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options, ItemOptions};
-use SugarCraft\Dashboard\Plot\Chart\{Progress, ProgressRing, Gauge};
-use SugarCraft\Dashboard\Layout\{VStack, HStack, Frame};
-use SugarCraft\Dashboard\Components\Card\{Text, Card};
-use SugarCraft\Dashboard\Components\Feedback\{Spinner, Skeleton};
-use SugarCraft\Dashboard\Components\System\{NProgress, ProgressBar};
+use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
+use SugarCraft\Dashboard\Layout\Grid\Options;
+use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use SugarCraft\Dashboard\Plot\Chart\{Progress,ProgressRing,Gauge};
+use SugarCraft\Dashboard\Layout\{VStack,HStack,Frame};
+use SugarCraft\Dashboard\Components\Card\{Text,Card};
+use SugarCraft\Dashboard\Components\Feedback\{Spinner,Skeleton};
+use SugarCraft\Dashboard\Components\System\{NProgress,ProgressBar};
 use SugarCraft\Dashboard\Components\Toast\Toast;
 use SugarCraft\Dashboard\Components\Toast\Notification;
 use SugarCraft\Dashboard\Components\Toast\NotificationQueue;
-use SugarCraft\Dashboard\Components\Modal\{Alert, Notification as ModalNotification};
+use SugarCraft\Dashboard\Components\Modal\{Alert,Notification as ModalNotification};
 
 /**
  * Dashboard Status - showcasing status and feedback components

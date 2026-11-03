@@ -5,5 +5,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Dashboard\Components\Card\Code;
 
 // Inline code display
-$component = Code::new("echo \"Hello\";")->setSize(60, 15);
+$component = Code::new("Demo", null);
+$component->setSize(60, 15);
 echo $component->render();

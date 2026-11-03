@@ -2,9 +2,19 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options, ItemOptions, GaugeChart, AreaChart, Chart, ChartType, ChartDataPoint, Donut, Sparkline, AvatarGroup};
-use SugarCraft\Dashboard\Layout\{VStack, HStack, Frame, HAlign};
-use SugarCraft\Dashboard\Components\Card\{Text, Card, MetricsGrid, MetricCard};
+use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
+use SugarCraft\Dashboard\Layout\Grid\Options;
+use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use SugarCraft\Dashboard\Plot\Chart\GaugeChart;
+use SugarCraft\Dashboard\Plot\Chart\AreaChart;
+use SugarCraft\Dashboard\Plot\Chart\Chart;
+use SugarCraft\Dashboard\Plot\Chart\ChartType;
+use SugarCraft\Dashboard\Plot\Chart\ChartDataPoint;
+use SugarCraft\Dashboard\Plot\Chart\Donut;
+use SugarCraft\Dashboard\Plot\Chart\SparklineBar as Sparkline;
+use SugarCraft\Dashboard\Components\Media\AvatarGroup;
+use SugarCraft\Dashboard\Layout\{VStack,HStack,Frame,HAlign};
+use SugarCraft\Dashboard\Components\Card\{Text,Card,MetricsGrid,MetricCard};
 use SugarCraft\Dashboard\Components\Nav\Breadcrumb;
 use SugarCraft\Dashboard\Components\Tree\Timeline;
 use SugarCraft\Core\Util\Color;

@@ -2,9 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\Emoji;
+use SugarCraft\Dashboard\Components\Media\Emoji;
 
-// Emoji display - thumbs up
-$component = Emoji::thumbsUp();
+// Emoji display
+$component = new Emoji("Demo", null, 3, null, true);
 $component->setSize(60, 15);
 echo $component->render();

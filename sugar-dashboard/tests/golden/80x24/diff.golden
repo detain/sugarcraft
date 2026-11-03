@@ -1,8 +1,5 @@
-PHP 8.3.6 (cli) (built: May 25 2026 13:12:06) (NTS)
+PHP 8.3.6 (cli) (built: Oct 19 2026 15:16:58) (NTS)
 # dimensions: 80x24 (80x24)
 # example: diff
 ---
-   1    1   Line 1
-[38;2;239;68;68m   2      - Line 2[0m
-[38;2;34;197;94m        2 + Modified Line 2[0m
-   3    3   Line 3
+   1    1   Demo

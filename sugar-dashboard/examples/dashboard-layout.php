@@ -2,9 +2,11 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options, ItemOptions};
-use SugarCraft\Dashboard\Layout\{VStack, HStack, ZStack, Frame};
-use SugarCraft\Dashboard\Components\Card\{Text, Card};
+use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
+use SugarCraft\Dashboard\Layout\Grid\Options;
+use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use SugarCraft\Dashboard\Layout\{VStack,HStack,ZStack,Frame};
+use SugarCraft\Dashboard\Components\Card\{Text,Card};
 
 /**
  * Dashboard Layout - showcasing layout components

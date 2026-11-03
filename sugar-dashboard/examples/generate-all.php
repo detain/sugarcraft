@@ -173,12 +173,47 @@ $components = [
 ];
 
 /**
+ * Candidate namespaces a demoable component can live in. The earlier version
+ * of this script hard-coded Layout\Grid for EVERY component, which generated
+ * examples importing classes that never existed (phantom FQNs fatal at first
+ * use). Resolution now walks the real namespace roster instead.
+ */
+const CANDIDATE_NAMESPACES = [
+    'SugarCraft\\Dashboard\\Components\\Media',
+    'SugarCraft\\Dashboard\\Components\\Card',
+    'SugarCraft\\Dashboard\\Components\\Form',
+    'SugarCraft\\Dashboard\\Components\\StatusBar',
+    'SugarCraft\\Dashboard\\Components\\List',
+    'SugarCraft\\Dashboard\\Components',
+    'SugarCraft\\Dashboard\\Plot\\Chart',
+    'SugarCraft\\Dashboard\\Plot',
+    'SugarCraft\\Dashboard\\Layout\\Grid',
+    'SugarCraft\\Dashboard\\Layout',
+    'SugarCraft\\Dashboard\\Foundation',
+];
+
+/**
+ * Resolve a component's real fully-qualified class name, or null when no
+ * candidate namespace declares it.
+ */
+function componentClass(string $className): ?string
+{
+    foreach (CANDIDATE_NAMESPACES as $namespace) {
+        $fullClass = $namespace . '\\' . $className;
+        if (class_exists($fullClass) || interface_exists($fullClass)) {
+            return $fullClass;
+        }
+    }
+
+    return null;
+}
+
+/**
  * Check if a component class exists.
  */
 function componentExists(string $className): bool
 {
-    $fullClass = "SugarCraft\\Dashboard\\Grid\\$className";
-    return class_exists($fullClass);
+    return componentClass($className) !== null;
 }
 
 /**
@@ -186,27 +221,196 @@ function componentExists(string $className): bool
  */
 function generateExample(string $className, string $description, string $argumentCode): string
 {
-    $slug = lcfirst($className);
-    $filename = __DIR__ . "/{$slug}.php";
+    $fullClass = componentClass($className);
+    if ($fullClass === null) {
+        throw new RuntimeException("Cannot generate an example for unknown class $className");
+    }
+
+    // The table's argumentCode column predates several API changes and was
+    // never validated, so the generator now synthesises constructor arguments
+    // from the class' REAL signature via reflection. Demo values come from
+    // heuristic defaults below; the column remains as documentation intent.
+    $args = synthesizeArguments($fullClass);
+    if ($args === null) {
+        throw new RuntimeException("Cannot synthesise constructor arguments for $fullClass");
+    }
+
+    $entry = new ReflectionClass($fullClass);
+    $factoryCall = method_exists($fullClass, 'new')
+        ? $className . '::new(' . implode(', ', $args) . ')'
+        : 'new ' . $className . '(' . implode(', ', $args) . ')';
+
+    $setSizeLine = method_exists($fullClass, 'setSize')
+        ? '$component->setSize(60, 15);'
+        : '// ' . $className . ' takes no size; it renders at its natural size.';
 
     $content = <<<PHP
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\\$className;
-use SugarCraft\Dashboard\Layout\Grid\ChartDataPoint;
-use SugarCraft\Dashboard\Layout\Grid\Options;
-use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use $fullClass;
 
 // $description
-\$component = $argumentCode;
-\$component->setSize(60, 15);
+\$component = $factoryCall;
+$setSizeLine
 echo \$component->render();
 
 PHP;
 
     return $content;
+}
+
+/**
+ * Synthesise a demo argument list for a class' factory/constructor by
+ * reflecting its parameter types. Returns PHP expression strings using fully
+ * qualified names so generated files need no extra imports, or null when a
+ * parameter type cannot be filled.
+ *
+ * @return list<string>|null
+ */
+function synthesizeArguments(string $fullClass, int $depth = 0): ?array
+{
+    if ($depth > 2) {
+        return null;
+    }
+
+    $entry = new ReflectionClass($fullClass);
+    $target = $entry->hasMethod('new') ? $entry->getMethod('new')
+        : ($entry->hasMethod('__construct') ? $entry->getMethod('__construct') : null);
+
+    $args = [];
+    if ($target !== null) {
+        foreach ($target->getParameters() as $param) {
+            $value = synthesizeParameter($param, $depth);
+            if ($value === null) {
+                if ($param->isDefaultValueAvailable()) {
+                    break; // remaining parameters are optional
+                }
+                return null;
+            }
+            $args[] = $value;
+        }
+    }
+
+    return $args;
+}
+
+/** Fill one reflected parameter with a demo expression, or null. */
+function synthesizeParameter(ReflectionParameter $param, int $depth): ?string
+{
+    $type = $param->getType();
+    $name = strtolower($param->getName());
+
+    if ($type === null) {
+        // Untyped: give strings to name-shaped params, else skip to defaults.
+        return in_array($name, ['text', 'label', 'value', 'title', 'content', 'message', 'name', 'caption'], true)
+            ? '"Demo"'
+            : null;
+    }
+
+    if ($type instanceof ReflectionNamedType) {
+        return synthesizeNamed($type, $name, $depth);
+    }
+
+    // Union/intersection types: pick the first member that can be filled
+    // (Item|string lands on the string demo; Color|string|null-style params
+    // take their default when no member is synthesizable).
+    foreach ($type->getTypes() as $member) {
+        if ($member instanceof ReflectionNamedType) {
+            $filled = synthesizeNamed($member, $name, $depth);
+            if ($filled !== null) {
+                return $filled;
+            }
+        }
+    }
+
+    return null;
+}
+
+/** Demo expression for one named type. */
+function synthesizeNamed(ReflectionNamedType $type, string $paramName, int $depth): ?string
+{
+    $builtin = $type->getName();
+
+    if ($type->allowsNull() && !$type->isBuiltin()) {
+        return 'null';
+    }
+    if ($type->allowsNull() && $paramName !== 'value' && $paramName !== 'text') {
+        return 'null';
+    }
+
+    switch ($builtin) {
+        case 'string':
+            if (str_contains($paramName, 'url') || str_contains($paramName, 'src') || str_contains($paramName, 'path')) {
+                return '"https://example.com/demo.png"';
+            }
+            return '"Demo"';
+        case 'int':
+            if (str_contains($paramName, 'width')) {
+                return '40';
+            }
+            if (str_contains($paramName, 'height')) {
+                return '12';
+            }
+            if (str_contains($paramName, 'max') || str_contains($paramName, 'count')) {
+                return '5';
+            }
+            return '3';
+        case 'float':
+            return str_contains($paramName, 'max') ? '100.0' : '42.5';
+        case 'bool':
+            return 'true';
+        case 'array':
+        case 'iterable':
+        case 'callable':
+            if ($builtin === 'callable') {
+                return 'static fn(): string => "Demo"';
+            }
+            return synthesizeList($paramName);
+        case 'null':
+            return 'null';
+    }
+
+    // Class types: recursion via the candidate roster (Media/Card/Form/Chart).
+    // Plain interfaces (Item, Drawable, ...) have no demo construction here;
+    // callers reaching them go through a union's string member or a default.
+    if (class_exists($builtin)) {
+        if (is_a($builtin, \SugarCraft\Core\Util\Color::class, true) || $builtin === \SugarCraft\Core\Util\Color::class) {
+            return '\SugarCraft\Core\Util\Color::hex("#874BFD")';
+        }
+        if (enum_exists($builtin)) {
+            $cases = $builtin::cases();
+            return '\\' . $builtin . '::' . $cases[0]->name;
+        }
+        $inner = synthesizeArguments($builtin, $depth + 1);
+        if ($inner !== null) {
+            $innerCall = (new ReflectionClass($builtin))->hasMethod('new') ? '::new(' : '__construct(';
+            if ($innerCall === '__construct(') {
+                return 'new \\' . $builtin . '(' . implode(', ', $inner) . ')';
+            }
+
+            return '\\' . $builtin . '::new(' . implode(', ', $inner) . ')';
+        }
+    }
+
+    return null;
+}
+
+/** Demo lists keyed by parameter name. */
+function synthesizeList(string $paramName): string
+{
+    if (str_contains($paramName, 'point') || str_contains($paramName, 'series')) {
+        return '[\SugarCraft\Dashboard\Plot\Chart\ChartDataPoint::new("Jan", 10), \SugarCraft\Dashboard\Plot\Chart\ChartDataPoint::new("Feb", 25), \SugarCraft\Dashboard\Plot\Chart\ChartDataPoint::new("Mar", 18)]';
+    }
+    if (str_contains($paramName, 'key')) {
+        return '["ctrl", "s"]';
+    }
+    if (str_contains($paramName, 'star')) {
+        return '4';
+    }
+
+    return '["Alpha", "Beta", "Gamma"]';
 }
 
 // Generate examples for all components
@@ -228,6 +432,15 @@ foreach ($components as $component) {
     try {
         $slug = lcfirst($className);
         $filename = "{$slug}.php";
+
+        // Hand-tuned demos are the norm here; regeneration must never clobber
+        // an existing example unless --force is passed explicitly.
+        if (!in_array('--force', $argv, true) && file_exists(__DIR__ . "/$filename")) {
+            $skipped++;
+            echo "SKIPPED (exists; pass --force to regenerate): $filename\n";
+            continue;
+        }
+
         $content = generateExample($className, $description, $argumentCode);
         file_put_contents(__DIR__ . "/$filename", $content);
         $generated++;

@@ -5,5 +5,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Dashboard\Components\Card\Metric;
 
 // Metric display
-$component = Metric::new(12345.0, "Revenue")->setSize(60, 15);
+$component = Metric::new(42.5, null);
+$component->setSize(60, 15);
 echo $component->render();

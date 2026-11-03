@@ -2,12 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\Audio;
-use SugarCraft\Dashboard\Layout\Grid\ChartDataPoint;
-use SugarCraft\Dashboard\Layout\Grid\Options;
-use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use SugarCraft\Dashboard\Components\Media\Audio;
 
 // Audio player
-$component = Audio::new("audio.mp3");
+$component = Audio::new();
 $component->setSize(60, 15);
 echo $component->render();

@@ -53,13 +53,16 @@ use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use SugarCraft\Dashboard\Foundation\Theme;
 use SugarCraft\Dashboard\Layout\Boxer\Boxer;
 use SugarCraft\Dashboard\Layout\Boxer\Node;
 use SugarCraft\Dashboard\Layout\FocusManager;
-use SugarCraft\Dashboard\Modules\Clock\{ClockModule, TickMsg as ClockTickMsg};
-use SugarCraft\Dashboard\Modules\System\{SystemModule, RefreshMsg as SystemRefreshMsg};
-use SugarCraft\Dashboard\Modules\Weather\{WeatherModule as RealWeatherModule, TickMsg as WeatherTickMsg, WttrInClient};
+use SugarCraft\Dashboard\Modules\Clock\ClockModule;
+use SugarCraft\Dashboard\Modules\Weather\TickMsg as ClockTickMsg;
+use SugarCraft\Dashboard\Modules\System\{SystemModule,RefreshMsg as SystemRefreshMsg};
+use SugarCraft\Dashboard\Modules\Weather\{WeatherModule as RealWeatherModule,TickMsg as WeatherTickMsg,WttrInClient};
 
 /**
  * Read an env var regardless of `variables_order`: PHP's default GPCS build
@@ -105,6 +108,9 @@ interface Module
 
     /** Render the module to a string. */
     public function view(): string;
+
+    /** Custom event subscriptions (null = Program defaults). */
+    public function subscriptions(): ?Subscriptions;
 
     /** Minimum [width, height] in cells needed to render meaningfully. */
     public function minSize(): array;
@@ -156,6 +162,10 @@ final class DashboardModel implements Model
 
     /** Current theme for the dashboard. */
     private Theme $theme;
+
+    /** Live terminal size from WindowSizeMsg; null until the host reports one. */
+    private ?int $termCols = null;
+    private ?int $termRows = null;
 
     public function __construct(string $weatherLocation = 'auto')
     {
@@ -247,6 +257,12 @@ final class DashboardModel implements Model
 
         // ── Focus / Keyboard ─────────────────────────────────────────────
         if ($msg instanceof KeyMsg) {
+            // 'q' quits. It used to be advertised but dead: handleKey
+            // returned false hoping for a QuitMsg nobody minted.
+            if ($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl) {
+                return [$this, Cmd::quit()];
+            }
+
             $handled = $this->handleKey($msg);
             if ($handled) {
                 return [$this, null];
@@ -255,8 +271,10 @@ final class DashboardModel implements Model
 
         // ── Window resize — propagate to Boxer and re-render ────────────
         if ($msg instanceof WindowSizeMsg) {
-            // Boxer will pick up the new size via setSize() in view().
-            // No model state change needed.
+            // Live SIGWINCH dimensions win over the startup env guesses;
+            // view() reads them on the very next frame.
+            $this->termCols = $msg->cols;
+            $this->termRows = $msg->rows;
             return [$this, null];
         }
 
@@ -287,14 +305,8 @@ final class DashboardModel implements Model
      */
     private function handleKey(KeyMsg $msg): bool
     {
-        // Quit on q or Ctrl-C
-        if ($msg->type === KeyType::Char && $msg->rune === 'q') {
-            return false; // Let update() handle QuitMsg
-        }
-
-        if ($msg->ctrl && $msg->type === KeyType::Char && $msg->rune === 'c') {
-            return false; // Let update() handle InterruptMsg
-        }
+        // Ctrl-C arrives as InterruptMsg (catchInterrupts) or as a Ctrl-key
+        // chord; update() owns quitting, and 'q' is handled above it now.
 
         // Ctrl-T → toggle between dark and light themes
         if ($msg->ctrl && $msg->type === KeyType::Char && $msg->rune === 't') {
@@ -346,6 +358,12 @@ final class DashboardModel implements Model
         };
     }
 
+    /** Keys and ticks flow through Program defaults; no custom subscriptions. */
+    public function subscriptions(): ?Subscriptions
+    {
+        return null;
+    }
+
     /** @inheritDoc */
     public function view(): string
     {
@@ -353,11 +371,11 @@ final class DashboardModel implements Model
         $items = [];
         foreach ($this->modules as $addr => $module) {
             $view = $module->view();
-            $focused = $this->focus->isFocused($addr);
+            $focused = $this->focus->isFocused((string) $addr); // '0' array keys cast to int
 
             // Render the panel with a focus indicator border.
             // When focused, show a bright border. Otherwise a dim border.
-            $items[$addr] = new FocusedPanel($addr, $view, $focused, $module->minSize(), $this->theme);
+            $items[$addr] = new FocusedPanel((string) $addr, $view, $focused, $module->minSize(), $this->theme);
         }
 
         // Rebuild the boxer with fresh content + proper sizing.
@@ -369,10 +387,11 @@ final class DashboardModel implements Model
         );
 
         $boxer = Boxer::tree($root, $items);
-        // Width can be overridden via COLUMNS env var for responsive testing.
-        // Convention: 80 = narrow (collapses to single column), 120 = wide.
-        $columns = (int) dashboardLiveEnv('COLUMNS', '120');
-        $boxer = $boxer->setSize($columns, 30);
+        // Live resize (WindowSizeMsg) wins; COLUMNS/LINES env are the
+        // pre-first-resize guess for responsive testing (80 = narrow).
+        $columns = $this->termCols ?? (int) dashboardLiveEnv('COLUMNS', '120');
+        $rows = $this->termRows ?? (int) dashboardLiveEnv('LINES', '30');
+        $boxer = $boxer->setSize(max(20, $columns), max(10, $rows));
 
         // Apply theme to boxer for theme propagation to children
         $boxer = $boxer->withTheme($this->theme);
@@ -403,11 +422,12 @@ final class FocusedPanel implements \SugarCraft\Dashboard\Foundation\Item
     public function render(): string
     {
         $lines = explode("\n", $this->content);
-        $width = $this->minSize()[0] ?? 20;
+        $width = $this->minSize[0] ?? 20;
 
         // Use theme colors for focus indication
         $focusColor = $this->theme->primary();
-        $dimColor = $this->focused ? '' : $this->theme->foreground()->withAlpha(0.4)->toFg();
+        // Color has no withAlpha(); unfocused panels just skip the colour layer.
+        $dimColor = $this->focused ? '' : $this->theme->foreground()->toFg(ColorMode::profile());
 
         $output = '';
         foreach ($lines as $line) {
@@ -417,7 +437,7 @@ final class FocusedPanel implements \SugarCraft\Dashboard\Foundation\Item
                 : $line . str_repeat(' ', $width - mb_strlen($line));
 
             if ($this->focused) {
-                $output .= $focusColor->toFg() . "▓ " . $display . " ▓\x1b[0m\n";
+                $output .= $focusColor->toFg(ColorMode::profile()) . "▓ " . $display . " ▓\x1b[0m\n";
             } else {
                 $output .= $dimColor . "  " . $display . "  \x1b[0m\n";
             }
@@ -428,13 +448,13 @@ final class FocusedPanel implements \SugarCraft\Dashboard\Foundation\Item
 
     public function getWidth(): int
     {
-        return $this->minSize()[0] ?? 20;
+        return $this->minSize[0] ?? 20;
     }
 
     public function getHeight(): int
     {
         $lines = explode("\n", $this->content);
-        return max(count($lines), $this->minSize()[1] ?? 3);
+        return max(count($lines), $this->minSize[1] ?? 3);
     }
 }
 

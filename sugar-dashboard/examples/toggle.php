@@ -5,5 +5,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Dashboard\Components\Form\Toggle;
 
 // Toggle switch
-$component = Toggle::on()->setSize(60, 15);
+$component = Toggle::new(true);
+$component->setSize(60, 15);
 echo $component->render();

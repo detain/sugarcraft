@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\Avatar;
+use SugarCraft\Dashboard\Components\Media\Avatar;
 
 // User avatar showing initials
 $component = Avatar::fromName("JD");

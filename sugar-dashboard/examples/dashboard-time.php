@@ -2,11 +2,14 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options, ItemOptions, Heatmap};
-use SugarCraft\Dashboard\Layout\{VStack, HStack, Frame};
-use SugarCraft\Dashboard\Components\Card\{Text, Card};
-use SugarCraft\Dashboard\Components\Calendar\{Calendar};
-use SugarCraft\Dashboard\Components\System\{Clock, Timer, Stopwatch};
+use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
+use SugarCraft\Dashboard\Layout\Grid\Options;
+use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use SugarCraft\Dashboard\Plot\Chart\Heatmap;
+use SugarCraft\Dashboard\Layout\{VStack,HStack,Frame};
+use SugarCraft\Dashboard\Components\Card\{Text,Card};
+use SugarCraft\Dashboard\Components\Calendar\Calendar;
+use SugarCraft\Dashboard\Components\System\{Clock,Timer,Stopwatch};
 
 /**
  * Dashboard Time - showcasing time and date components

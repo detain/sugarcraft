@@ -5,5 +5,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Dashboard\Components\Form\Rating;
 
 // Star rating
-$component = Rating::of(4.5)->setSize(60, 15);
+$component = Rating::new(5, 42.5);
+$component->setSize(60, 15);
 echo $component->render();

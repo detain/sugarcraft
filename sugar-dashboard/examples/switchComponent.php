@@ -5,5 +5,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Dashboard\Components\Form\SwitchComponent;
 
 // Switch component
-$component = SwitchComponent::on()->setSize(60, 15);
+$component = SwitchComponent::new(true);
+$component->setSize(60, 15);
 echo $component->render();

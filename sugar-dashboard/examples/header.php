@@ -5,5 +5,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Dashboard\Components\Card\Header;
 
 // Header
-$component = Header::new("Dashboard")->setSize(60, 15);
+$component = Header::new("Demo");
+$component->setSize(60, 15);
 echo $component->render();

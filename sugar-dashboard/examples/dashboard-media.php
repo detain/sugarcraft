@@ -2,9 +2,14 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options, ItemOptions, QRCode, Barcode, Pictogram};
-use SugarCraft\Dashboard\Layout\{VStack, HStack, Frame};
-use SugarCraft\Dashboard\Components\Card\{Text, Card};
+use SugarCraft\Dashboard\Layout\Grid\StackedGrid;
+use SugarCraft\Dashboard\Layout\Grid\Options;
+use SugarCraft\Dashboard\Layout\Grid\ItemOptions;
+use SugarCraft\Dashboard\Components\Media\QRCode;
+use SugarCraft\Dashboard\Components\Media\Barcode;
+use SugarCraft\Dashboard\Components\Media\Pictogram;
+use SugarCraft\Dashboard\Layout\{VStack,HStack,Frame};
+use SugarCraft\Dashboard\Components\Card\{Text,Card};
 
 /**
  * Dashboard Media - showcasing media components
