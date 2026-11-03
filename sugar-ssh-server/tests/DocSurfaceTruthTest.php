@@ -690,6 +690,44 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('it was never flipped', $transport);
     }
 
+    /**
+     * Audit NIT 6, NIT 10, NIT 11, NIT 13 and MINOR 12: five places where the
+     * small print was wrong, thinner than the claim, or missing. All are
+     * comment-level, so each is pinned as a presence assertion on the file
+     * that carries it - the point is that a later smoothing-over of the
+     * honesty reddens here.
+     */
+    public function testTheSmallPrintMatchesWhatTheCodeActuallyDoes(): void
+    {
+        $auth = $this->prose((string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware/Auth.php'));
+        self::assertStringContainsString('one line built from the `auth.unauthorized` message', $auth, 'Auth still promises a bare "Unauthorized." rather than the reason-carrying line');
+        self::assertStringContainsString('There is no disconnect packet to send', $auth, 'the rejection note must stop implying an SSH-level close');
+
+        $handler = $this->prose((string) \file_get_contents(\dirname(__DIR__) . '/src/Channel/DefaultChannelHandler.php'));
+        self::assertStringContainsString('do nothing with it', $handler, 'handleBreak() needs the reason it is empty');
+        self::assertStringContainsString('a literal is reached only where no extension defines', $handler, 'the numeric signal fallbacks need their platform stated');
+
+        $transport = $this->prose((string) \file_get_contents(\dirname(__DIR__) . '/src/Transport/InProcessTransport.php'));
+        self::assertStringContainsString('The broad `\Throwable` catch is not sloppiness', $transport, 'the resize probe must explain why its failure path is quiet');
+
+        $contract = $this->prose((string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware.php'));
+        self::assertStringContainsString('May return void (synchronous) or a', $contract, 'the untyped handle() return is a promise channel and has to say so');
+    }
+
+    /**
+     * Flatten a source or markdown surface into one comparable line: runs of
+     * whitespace collapse, docblock ` * ` continuations disappear (they survive
+     * a plain whitespace fold and silently break phrase needles, which cost
+     * this file a false red once), and em dashes become hyphens so a needle can
+     * be typed without fighting the file's typography.
+     */
+    private function prose(string $text): string
+    {
+        $text = (string) \preg_replace('/\s+/', ' ', $text);
+
+        return str_replace([' * ', "\u{2014}"], [' ', '-'], $text);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

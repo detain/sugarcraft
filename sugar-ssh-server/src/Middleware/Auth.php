@@ -49,8 +49,13 @@ use SugarCraft\SshServer\StreamHelper;
  * over the whole list rather than `in_array()`, so a miss costs the same
  * time whatever the position and no early-out leaks which entry matched.
  *
- * On rejection writes a one-line `Unauthorized.` to STDERR and
- * returns without invoking `$next` — the connection ends cleanly.
+ * On rejection writes one line built from the `auth.unauthorized`
+ * message — `Unauthorized. (<reason>)`, sanitized as described below — to the
+ * stream this gate was built with (by default `php://stderr`, which under
+ * ForceCommand is the connecting peer, not the operator), marks the session
+ * refused so the process exits `Server::EXIT_DENIED` rather than `0`, and
+ * returns without invoking `$next`: the chain simply stops. There is no
+ * disconnect packet to send, because this library speaks no SSH.
  *
  * Rejection messages sanitize user-controlled values (username,
  * fingerprint) to strip ANSI escape sequences and C0/C1 control

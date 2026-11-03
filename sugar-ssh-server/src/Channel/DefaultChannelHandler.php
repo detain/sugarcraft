@@ -303,6 +303,11 @@ final class DefaultChannelHandler implements ChannelHandler
         // would fatal exactly on the pcntl-less hosts this map must
         // degrade on. The literal numbers are the POSIX values used
         // as the transport-side fallback where the extension is absent.
+        // Those numbers are the Linux and BSD values — `WINCH` is 28 on both
+        // — which is exactly why each name is probed through \defined() first:
+        // a platform that numbers a signal differently resolves to its own
+        // constant, and a literal is reached only where no extension defines
+        // the name at all (audit NIT 10).
         $map = [
             'INT'   => \defined('SIGINT') ? \SIGINT : 2,
             'TERM'  => \defined('SIGTERM') ? \SIGTERM : 15,
@@ -325,6 +330,18 @@ final class DefaultChannelHandler implements ChannelHandler
         $this->envVars[$msg->name] = $msg->value;
     }
 
+    /**
+     * Receive the RFC 4254 `break` signal — and do nothing with it.
+     *
+     * A break is a line-state event on the SSH channel (think a physical
+     * terminal's BREAK key). Nothing reaches a PTY child through it: the byte
+     * stream stays untouched, the child's terminal state stays as it was, and
+     * the only faithful local action would be to invent an event the child
+     * never asked for. Silence is the correct handler, so this method is empty
+     * on purpose (audit NIT 13). It stays rather than disappearing because
+     * {@see ChannelHandler} is the seam a wire decoder feeds, and a decoder
+     * needs every message named.
+     */
     public function handleBreak(BreakMsg $msg, Session $session): void
     {
     }

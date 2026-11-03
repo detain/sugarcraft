@@ -439,6 +439,14 @@ final class InProcessTransport implements Transport, ChildSpawner
      * returns ENOTTY there and we don't want to surface that as a
      * "size went to 0" event.
      *
+     * The broad `\Throwable` catch is not sloppiness (audit MINOR 12). The
+     * ioctl request code is resolved per platform, and a libc binding that
+     * cannot answer it raises rather than returns — and it would raise on
+     * every idle tick, not once at boot. A resize probe is a bonus on top of
+     * the spawn-time size, so this path is deliberately quiet and returns the
+     * size we already had. A caller who wants failures loud owns the question
+     * through {@see withSizeProvider()} and may throw from inside it.
+     *
      * @param resource $stdin
      * @return array{cols:int, rows:int}
      */
