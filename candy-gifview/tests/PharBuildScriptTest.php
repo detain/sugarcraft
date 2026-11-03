@@ -56,6 +56,8 @@ final class PharBuildScriptTest extends TestCase
         self::assertStringNotContainsString('.phar/vendor', $bin);
         // The shim still delegates every branch to the testable Cli::main().
         self::assertStringContainsString('GifView\\Cli::main(', $bin);
+        // Locale lands before the first message is formatted (DM3 wiring).
+        self::assertStringContainsString('T::setLocale(\SugarCraft\Core\I18n\T::detect());', $bin);
     }
 
     public function testTheBuildScriptRefusesUnknownOptionsBeforeBuilding(): void
@@ -85,6 +87,17 @@ final class PharBuildScriptTest extends TestCase
         self::assertStringContainsString("metadata['version']", $reader);
         self::assertStringContainsString('fromPharMetadata', $reader);
         self::assertStringContainsString("CURRENT = '0.1.0'", $reader);
+        // ...and knows its two vocabularies: a comparable release, or an
+        // honest dev stamp ('dev-' + short sha from the builder, 'dev-build'
+        // when git cannot answer). Without the DEV leg an untagged build
+        // would silently impersonate CURRENT — a release number it is not.
+        self::assertStringContainsString("'dev-' .", $build);
+        self::assertStringContainsString('self::DEV', $reader);
+        self::assertStringContainsString('dev-(?:[0-9a-f]{7,40}|build)', $reader);
+        // The artifact lands in dist/, which the lib .gitignore keeps out of
+        // git — phar builds are disposable, never committed bytes.
+        self::assertStringContainsString('/dist/candy-gifview.phar', $build);
+        self::assertStringContainsString('/dist/', $this->readAppFile('.gitignore'));
         // ...and the front end routes --version through the resolver.
         self::assertStringContainsString('Support\\Version::resolve', $cli);
         self::assertStringContainsString("token === '--version'", $cli);

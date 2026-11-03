@@ -8,7 +8,7 @@ namespace SugarCraft\GifView\Support;
  * Single source of truth for the printed version.
  *
  * `candy-gifview --version` renders CURRENT — unless the run happens inside a
- * phar archive whose metadata carries a build stamp (lane PHE / DST-1): a
+ * phar archive whose metadata carries a build stamp: a
  * self-contained .phar freezes vendor/, so Composer's InstalledVersions
  * reports the build root's dev guess and only the stamp the builder wrote
  * tells the truth. The stamp wins when present; CURRENT is the fallback
@@ -24,6 +24,14 @@ final class Version
 
     /** A bare, comparable release once TAG_PREFIX and `v` are removed. */
     private const COMPARABLE = '/^\d+\.\d+\.\d+$/';
+
+    /**
+     * A development stamp: the CI dev channel writes 'dev-<shortsha>' and a local
+     * build writes 'dev-<sha7>' ('dev-build' when git cannot answer). These are NOT
+     * releases — they must self-report verbatim so a dev phar never silently
+     * impersonates the stable version CURRENT would print.
+     */
+    private const DEV = '/^dev-(?:[0-9a-f]{7,40}|build)$/';
 
     private function __construct()
     {
@@ -73,6 +81,10 @@ final class Version
             $stamped = substr($stamped, 1);
         }
 
-        return preg_match(self::COMPARABLE, $stamped) === 1 ? $stamped : null;
+        if (preg_match(self::COMPARABLE, $stamped) === 1) {
+            return $stamped;
+        }
+
+        return preg_match(self::DEV, $stamped) === 1 ? $stamped : null;
     }
 }

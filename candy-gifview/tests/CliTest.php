@@ -95,6 +95,21 @@ final class CliTest extends TestCase
         $this->assertSame('', self::drain($stdout));
     }
 
+    public function testTheVersionResolverFallsBackOffAnyNonPharPath(): void
+    {
+        // No archive, a missing path, and an existing-but-not-a-phar file all
+        // answer with the compiled constant — never a throw (corrupt archives
+        // must not crash --version).
+        $this->assertSame(\SugarCraft\GifView\Support\Version::CURRENT, \SugarCraft\GifView\Support\Version::resolve(''));
+        $this->assertSame(\SugarCraft\GifView\Support\Version::CURRENT, \SugarCraft\GifView\Support\Version::resolve('/definitely/not/a/phar/' . \uniqid('sc_gifview_', true)));
+
+        $plain = (string) tempnam(sys_get_temp_dir(), 'sc_gifview_notphar_');
+        $this->artifacts[] = $plain;
+        \file_put_contents($plain, 'not a phar at all');
+
+        $this->assertSame(\SugarCraft\GifView\Support\Version::CURRENT, \SugarCraft\GifView\Support\Version::resolve($plain));
+    }
+
     #[DataProvider('presetTokens')]
     public function testWiredPlayerCarriesRequestedPreset(array $extraArgs, string $expectedPreset): void
     {

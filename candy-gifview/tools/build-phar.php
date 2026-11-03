@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * tools/build-phar.php — builds the single-file candy-gifview PHAR.
  *
- * Mirrors candy-top/tools/build-phar.php (the DST-1 program); the guard
- * structure, refusal wording shape, stamp fields, and stub law are the port.
+ * Mirrors the sibling apps' phar builders; the guard structure, refusal
+ * wording shape, stamp fields, and stub law are the shared house pattern.
  *
  * Run it as:
  *   php -d phar.readonly=0 tools/build-phar.php [--out dist/candy-gifview.phar] [--gz]
@@ -21,7 +21,7 @@ declare(strict_types=1);
  * rebuilds agree byte-wise on this field). Unset, the wall clock answers. The
  * version stamp itself is read back at runtime by
  * `SugarCraft\GifView\Support\Version::fromPharMetadata()` — candy-code's
- * DST-1 lesson: the frozen vendor/ inside the artifact makes Composer's
+ * The frozen vendor/ inside the artifact makes Composer's
  * InstalledVersions report the build root's dev guess, so a stamp NOTHING
  * consumes means `--version` lies. PharBuildScriptTest pins the stamp field
  * and its reader agree.
@@ -227,10 +227,13 @@ if ($version === null) {
     // Namespace-filtered: this monorepo's tag stream is shared by every lib,
     // so an unfiltered `describe --tags` would stamp some other package's tag
     // onto a candy-gifview artifact. No candy-gifview tag reachable =>
-    // dev-build, which Version::fromPharMetadata() refuses to read as a
-    // version.
+    // untagged state stamps an honest dev identity, which Version reads
+    // verbatim (see its DEV stamp grammar).
     $described = @shell_exec('git -C ' . escapeshellarg($package) . ' describe --tags --abbrev=0 --match ' . escapeshellarg('candy-gifview/v*') . ' 2>/dev/null');
-    $version = is_string($described) && trim($described) !== '' ? trim($described) : 'dev-build';
+    $head = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse HEAD 2>/dev/null'));
+    $version = is_string($described) && trim($described) !== ''
+        ? trim($described)
+        : 'dev-' . ($head !== '' ? substr($head, 0, 7) : 'build');
 }
 $commit = trim((string) @shell_exec('git -C ' . escapeshellarg($package) . ' rev-parse HEAD 2>/dev/null'));
 

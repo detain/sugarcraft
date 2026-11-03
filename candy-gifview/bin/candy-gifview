@@ -36,6 +36,10 @@ declare(strict_types=1);
     exit(1);
 })();
 
-// Two-line shim by design: every branch lives in Cli::main() so the argv
+// Locale before the first message is formatted — app AND engine Lang::t calls land
+// in the user's language (sugar-core documents T::setLocale(T::detect()) at startup).
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
+// Thin shim by design: every branch lives in Cli::main() so the argv
 // handling, decode failures, and viewport sizing are testable in-process.
 exit(\SugarCraft\GifView\Cli::main($argv ?? [], STDOUT, STDERR));
