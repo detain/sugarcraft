@@ -40,29 +40,62 @@ final class SmtpTransportErrorTest extends TestCase
         // quit() should be safe to call when not connected
         $this->invokePrivate($transport, 'quit');
 
-        // If we get here without exception, the test passes
-        $this->assertTrue(true);
+        // Reaching here is the assertion; pin it honestly: no socket was
+        // conjured up by the early-return path (m11: was assertTrue(true)).
+        $socket = new \ReflectionProperty($transport, 'socket');
+        $socket->setAccessible(true);
+        $this->assertNull($socket->getValue($transport));
     }
 
     public function testQuitSendsQuitAndDisconnects(): void
     {
-        // This tests the quit() path when socket IS connected
-        // We can't easily test the connected path without a real server
-        // but we can verify quit() doesn't throw when socket is null
-        $transport = new SmtpTransport('smtp.example.com', 587);
-        $this->invokePrivate($transport, 'quit');
-        $this->assertTrue(true);
+        // Connected-path quit() over a socketpair pre-loaded with the server's
+        // 221 farewell: the goodbye is written, the reply is consumed, and the
+        // socket is released. (m11: was assertTrue(true) on a not-connected
+        // duplicate of the test above.)
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        [$client, $server] = $pair;
+
+        try {
+            \fwrite($server, "221 bye\r\n");
+            $transport = new SmtpTransport('smtp.example.com', 587);
+
+            $socketProp = new \ReflectionProperty($transport, 'socket');
+            $socketProp->setAccessible(true);
+            $socketProp->setValue($transport, $client);
+
+            $this->invokePrivate($transport, 'quit');
+
+            $this->assertNull($socketProp->getValue($transport), 'quit() must release the socket');
+            $this->assertSame("QUIT\r\n", \fgets($server), 'quit() must bid farewell over the wire');
+        } finally {
+            // quit() already fclose()d the client handle.
+            if (\is_resource($client)) {
+                @\fclose($client);
+            }
+            @\fclose($server);
+        }
     }
 
     public function testDisconnectIsIdempotent(): void
     {
         $transport = new SmtpTransport('smtp.example.com', 587);
+        $sock      = \fopen('php://memory', 'r+');
 
-        // Calling disconnect twice should not throw
+        $socketProp = new \ReflectionProperty($transport, 'socket');
+        $socketProp->setAccessible(true);
+        $socketProp->setValue($transport, $sock);
+
+        // Calling disconnect twice should not throw — and the second call sees
+        // the nulled socket (belt-braces: encryption belief dies with it).
         $this->invokePrivate($transport, 'disconnect');
+        $this->assertNull($socketProp->getValue($transport));
         $this->invokePrivate($transport, 'disconnect');
 
-        $this->assertTrue(true);
+        $encrypted = new \ReflectionProperty($transport, 'encrypted');
+        $encrypted->setAccessible(true);
+        $this->assertFalse($encrypted->getValue($transport));
     }
 
     public function testConnectTargetWithImplicitTls(): void
@@ -93,10 +126,14 @@ final class SmtpTransportErrorTest extends TestCase
     {
         $transport = new SmtpTransport('smtp.example.com', 587, '', '');
 
-        // Should not throw, just return
+        // Should not throw, just return — and prove it touched no wire: any
+        // fall-through would have hit sendRaw with a null socket and thrown
+        // (m11: was assertTrue(true)).
         $this->invokePrivate($transport, 'authenticateIfNeeded');
 
-        $this->assertTrue(true);
+        $socket = new \ReflectionProperty($transport, 'socket');
+        $socket->setAccessible(true);
+        $this->assertNull($socket->getValue($transport));
     }
 
     public function testAuthenticateIfNeededSkipsWhenNoUsername(): void
@@ -105,7 +142,9 @@ final class SmtpTransportErrorTest extends TestCase
 
         $this->invokePrivate($transport, 'authenticateIfNeeded');
 
-        $this->assertTrue(true);
+        $socket = new \ReflectionProperty($transport, 'socket');
+        $socket->setAccessible(true);
+        $this->assertNull($socket->getValue($transport));
     }
 
     public function testAuthenticateIfNeededSkipsWhenNoPassword(): void
@@ -114,7 +153,9 @@ final class SmtpTransportErrorTest extends TestCase
 
         $this->invokePrivate($transport, 'authenticateIfNeeded');
 
-        $this->assertTrue(true);
+        $socket = new \ReflectionProperty($transport, 'socket');
+        $socket->setAccessible(true);
+        $this->assertNull($socket->getValue($transport));
     }
 
     public function testStartTlsIfNeededSkipsWhenAlreadyEncrypted(): void
@@ -127,10 +168,15 @@ final class SmtpTransportErrorTest extends TestCase
         $prop->setAccessible(true);
         $prop->setValue($transport, true);
 
-        // Should return early without trying STARTTLS
+        // Should return early without trying STARTTLS: the flag must survive
+        // untouched and no sendRaw may fire (a socketless fall-through would
+        // have thrown). (m11: was assertTrue(true).)
         $this->invokePrivate($transport, 'startTlsIfNeeded');
 
-        $this->assertTrue(true);
+        $this->assertTrue($prop->getValue($transport));
+        $socket = new \ReflectionProperty($transport, 'socket');
+        $socket->setAccessible(true);
+        $this->assertNull($socket->getValue($transport));
     }
 
     public function testStartTlsIfNeededSkipsWhenStarttlsNotAvailable(): void
@@ -143,10 +189,16 @@ final class SmtpTransportErrorTest extends TestCase
         $prop->setValue($transport, "220 server ready\r\n250-foo\r\n250 HELP\r\n");
 
         // TLS was explicitly waived (default is requireTls=true since S-1),
-        // so the missing STARTTLS is a no-op, not a throw.
+        // so the missing STARTTLS is a no-op, not a throw — and the channel
+        // stays plaintext (no encrypted=true lie). (m11: was assertTrue(true).)
         $this->invokePrivate($transport, 'startTlsIfNeeded');
 
-        $this->assertTrue(true);
+        $encrypted = new \ReflectionProperty($transport, 'encrypted');
+        $encrypted->setAccessible(true);
+        $this->assertFalse($encrypted->getValue($transport));
+        $socket = new \ReflectionProperty($transport, 'socket');
+        $socket->setAccessible(true);
+        $this->assertNull($socket->getValue($transport));
     }
 
     public function testStartTlsIfNeededThrowsWhenTlsRequiredButStarttlsNotAvailable(): void

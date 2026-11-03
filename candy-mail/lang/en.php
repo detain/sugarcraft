@@ -28,6 +28,9 @@ return [
     'smtp.write_error'           => 'Failed to write to SMTP server',
     'smtp.incomplete_write'      => 'Incomplete write to SMTP server',
     'smtp.invalid_helo_host'     => 'HELO host {helo} is not a valid hostname (letters, digits, dots and hyphens only)',
+    'smtp.auth_unavailable'        => 'The SMTP server {host} did not advertise AUTH; refusing to relay unauthenticated while credentials are configured',
+    'smtp.response_too_long'       => 'SMTP server response exceeded the size limit',
+    'smtp.response_timeout'        => 'SMTP server response exceeded the time budget',
     'transport.not_serializable' => 'A transport holding credentials cannot be serialized or re-imported; construct it where it is used',
 
     // Email.php

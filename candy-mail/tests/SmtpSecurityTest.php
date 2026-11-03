@@ -353,6 +353,160 @@ final class SmtpSecurityTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // lib-reviews-1102 B4a — protocol hardening regressions (M-A/M-D/M-E/M-H)
+    // -------------------------------------------------------------------------
+
+    public function testReconnectClearsTheStaleEncryptionFlag(): void
+    {
+        // M-A: a transport that previously believed itself encrypted must not
+        // skip STARTTLS on its next plaintext connection. With the sticky flag
+        // (pre-fix) startTlsIfNeeded() early-returned and the send continued
+        // naked; post-fix connect() derives the flag from the fresh socket.
+        $this->requireFork();
+        [$port, $pid, $log] = $this->forkFakeServer(advertiseStartTls: true);
+        try {
+            $transport = new SmtpTransport('127.0.0.1', $port);
+            $encrypted = new \ReflectionProperty($transport, 'encrypted');
+            $encrypted->setAccessible(true);
+            $encrypted->setValue($transport, true); // stale belief from a prior send
+
+            $this->invokePrivate($transport, 'connect');
+            $this->assertFalse($encrypted->getValue($transport), 'a plaintext connect must not inherit encrypted=true');
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('unexpected response');
+            // The fake server answers STARTTLS with its generic "250 OK", so the
+            // 220 expectation fails — but only BECAUSE the client actually sent
+            // STARTTLS, which is the point of the pin.
+            $this->invokePrivate($transport, 'startTlsIfNeeded');
+        } finally {
+            $this->reap($pid);
+            @\unlink($log);
+        }
+    }
+
+    public function testAuthenticateRefusedWhenServerOmitsAuthAdvertisement(): void
+    {
+        // M-H: encrypted channel + configured credentials + an EHLO without
+        // AUTH used to fall through to an ANONYMOUS send. The caller thinks it
+        // authenticated; the relay never checked. Fail loud.
+        $transport = new SmtpTransport('smtp.example.com', 587, 'user@example.com', 's3cret');
+
+        $encrypted = new \ReflectionProperty($transport, 'encrypted');
+        $encrypted->setAccessible(true);
+        $encrypted->setValue($transport, true);
+
+        $last = new \ReflectionProperty($transport, 'lastResponse');
+        $last->setAccessible(true);
+        $last->setValue($transport, "250-fake greets you\r\n250 HELP");
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('did not advertise AUTH');
+        $this->invokePrivate($transport, 'authenticateIfNeeded');
+    }
+
+    public function testQuitSurvivesASilentServerFarewell(): void
+    {
+        // M-D: after DATA was accepted (250 queued) the message is delivered
+        // from the client's perspective. A server that swallows QUIT without
+        // answering must not latch a false send_failed. The peer side of the
+        // pair stays open but silent; the 1s stream timeout makes the read
+        // return empty (empty_response) — pre-fix that exception escaped quit()
+        // and send() would have reported failure for a queued message.
+        $pair = \stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
+        $this->assertIsArray($pair);
+        [$client, $server] = $pair;
+
+        try {
+            \stream_set_timeout($client, 1);
+            $transport = new SmtpTransport('smtp.example.com', 587);
+
+            $socketProp = new \ReflectionProperty($transport, 'socket');
+            $socketProp->setAccessible(true);
+            $socketProp->setValue($transport, $client);
+
+            $this->invokePrivate($transport, 'quit'); // must NOT throw
+
+            $this->assertNull($socketProp->getValue($transport), 'quit() must tear the socket down');
+            $seen = \fgets($server);
+            $this->assertSame("QUIT\r\n", $seen, 'quit() must still bid farewell before giving up');
+        } finally {
+            // quit() already fclose()d the client handle it owned.
+            if (\is_resource($client)) {
+                @\fclose($client);
+            }
+            @\fclose($server);
+        }
+    }
+
+    public function testOversizedResponseLineIsRefused(): void
+    {
+        // M-E: one reply line may not exceed the cap; a hostile server that
+        // streams a giant unterminated "line" is stopped at 4096 bytes.
+        $transport = new SmtpTransport('smtp.example.com', 587);
+        $sock      = \fopen('php://memory', 'r+');
+        \fwrite($sock, '250-' . \str_repeat('A', 5000) . "\r\n");
+        \rewind($sock);
+
+        $socketProp = new \ReflectionProperty($transport, 'socket');
+        $socketProp->setAccessible(true);
+        $socketProp->setValue($transport, $sock);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('size limit');
+            $this->invokePrivate($transport, 'readResponse', [250]);
+        } finally {
+            @\fclose($sock);
+        }
+    }
+
+    public function testDrippedContinuationBurstIsRefused(): void
+    {
+        // M-E: 150 continuation lines never trip a per-read timeout but would
+        // grow memory unboundedly under the old loop. The reply is capped.
+        $transport = new SmtpTransport('smtp.example.com', 587);
+        $sock      = \fopen('php://memory', 'r+');
+        \fwrite($sock, \str_repeat("250-drip\r\n", 150));
+        \rewind($sock);
+
+        $socketProp = new \ReflectionProperty($transport, 'socket');
+        $socketProp->setAccessible(true);
+        $socketProp->setValue($transport, $sock);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('size limit');
+            $this->invokePrivate($transport, 'readResponse', [250]);
+        } finally {
+            @\fclose($sock);
+        }
+    }
+
+    public function testResponseDeadlineBreachesLoudlyEvenWithValidBytes(): void
+    {
+        // M-E: the whole reply is bounded by the configured timeout, not just
+        // each read. timeout=0 makes the deadline already-passed, so even a
+        // perfectly-formed greeting must abort instead of lulling the client.
+        $transport = new SmtpTransport('smtp.example.com', 587, '', '', 0);
+        $sock      = \fopen('php://memory', 'r+');
+        \fwrite($sock, "220 fake ESMTP ready\r\n");
+        \rewind($sock);
+
+        $socketProp = new \ReflectionProperty($transport, 'socket');
+        $socketProp->setAccessible(true);
+        $socketProp->setValue($transport, $sock);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('time budget');
+            $this->invokePrivate($transport, 'readResponse', [220]);
+        } finally {
+            @\fclose($sock);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -475,11 +629,11 @@ final class SmtpSecurityTest extends TestCase
         \pcntl_waitpid($pid, $status);
     }
 
-    private function invokePrivate(object $obj, string $method): mixed
+    private function invokePrivate(object $obj, string $method, array $args = []): mixed
     {
         $ref = new \ReflectionMethod($obj, $method);
         $ref->setAccessible(true);
-        return $ref->invoke($obj);
+        return $ref->invokeArgs($obj, $args);
     }
 
     private function readProperty(object $obj, string $property): mixed

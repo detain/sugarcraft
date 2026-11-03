@@ -280,12 +280,14 @@ final class SmtpTransport implements Transport
         $this->socket = $socket;
         \stream_set_timeout($this->socket, $this->timeout);
 
-        // On implicit-TLS ports (SMTPS/465) the TLS handshake already completed
-        // during stream_socket_client(): the greeting and every byte after it
-        // travel over TLS. Mark the channel encrypted so STARTTLS is never sent.
-        if ($this->implicitTls) {
-            $this->encrypted = true;
-        }
+        // M-A (lib-reviews-1102): the encrypted flag used to be set once and
+        // never cleared — a second send() on the same instance skipped its
+        // STARTTLS negotiation because the stale flag claimed the fresh
+        // (plaintext) socket was already encrypted. Derive the flag from
+        // THIS connection's mode on every connect; on implicit-TLS ports
+        // (SMTPS/465) the handshake already completed inside
+        // stream_socket_client(), so the channel is encrypted from byte one.
+        $this->encrypted = $this->implicitTls;
 
         $this->readResponse(220);
 
@@ -387,7 +389,13 @@ final class SmtpTransport implements Transport
         }
 
         if (!$this->hasExtension('AUTH')) {
-            return; // No auth available; try anyway without
+            // M-H (lib-reviews-1102): the old branch returned silently and sent
+            // the message ANONYMOUSLY — a server (or MITM) that strips the AUTH
+            // advertisement got an unauthenticated relay while the caller
+            // believed it had logged in. Fail loud instead; RFC 5321 §2.3.1
+            // makes AUTH an optional extension, so its absence is a policy
+            // decision the transport must not make on the caller's behalf.
+            throw new \RuntimeException(Lang::t('smtp.auth_unavailable', ['host' => $this->host]));
         }
 
         $this->sendRaw("AUTH LOGIN\r\n");
@@ -403,9 +411,11 @@ final class SmtpTransport implements Transport
     private function disconnect(): void
     {
         if ($this->socket !== null) {
-           @\fclose($this->socket);
+            @\fclose($this->socket);
             $this->socket = null;
         }
+        // Belt-braces for M-A: a closed channel is never an encrypted one.
+        $this->encrypted = false;
     }
 
     private function quit(): void
@@ -413,8 +423,20 @@ final class SmtpTransport implements Transport
         if ($this->socket === null) {
             return;
         }
-        $this->sendRaw("QUIT\r\n");
-        @$this->readResponse(221);
+
+        // M-D (lib-reviews-1102): by the time send() reaches quit() the message
+        // is already queued (DATA answered 250). A protocol blip during the
+        // farewell — server closes without 221, write to a half-closed socket —
+        // used to propagate and latch a FALSE smtp.send_failed over a
+        // successful delivery. QUIT is best-effort teardown; swallow its
+        // errors and let the disconnect below be authoritative.
+        try {
+            $this->sendRaw("QUIT\r\n");
+            $this->readResponse(221);
+        } catch (\Throwable) {
+            // deliberate: the message was accepted; the goodbye is optional
+        }
+
         $this->disconnect();
     }
 
@@ -629,21 +651,46 @@ final class SmtpTransport implements Transport
      * "<code> text". All lines are captured into {@see $lastResponse} (joined by
      * "\n") so {@see hasExtension()} can inspect the full EHLO keyword list —
      * reading only the first line would hide advertised extensions like STARTTLS.
+     *
+     * M-E (lib-reviews-1102): every reply is bounded — one line cannot exceed
+     * RESPONSE_LINE_MAX bytes, one reply cannot exceed RESPONSE_MAX_LINES
+     * continuation lines, and the whole exchange must finish inside the
+     * configured timeout. The bare fgets() this replaces grew an arbitrarily
+     * long "line" in memory, and a slow 250- drip never tripped the per-read
+     * stream timeout, so a hostile server could hold a send() open forever.
+     * Each breach fails loud.
      */
+    private const RESPONSE_LINE_MAX = 4096;
+    private const RESPONSE_MAX_LINES = 100;
+
     private function readResponse(int $expectedCode): void
     {
         if ($this->socket === null) {
             throw new \RuntimeException(Lang::t('smtp.not_connected'));
         }
 
-        $lines = [];
+        $deadline = \microtime(true) + (float) $this->timeout;
+        $lines    = [];
         do {
-            $line = \fgets($this->socket);
+            // >= so a zero-length budget trips on the first iteration even when
+            // the two clock reads round to the same float (~0.2 µs granularity).
+            if (\microtime(true) >= $deadline) {
+                throw new \RuntimeException(Lang::t('smtp.response_timeout'));
+            }
+            if (\count($lines) >= self::RESPONSE_MAX_LINES) {
+                throw new \RuntimeException(Lang::t('smtp.response_too_long'));
+            }
+            // Ask for one byte over the cap: a full window without a newline
+            // proves the line is longer than RESPONSE_LINE_MAX.
+            $line = \stream_get_line($this->socket, self::RESPONSE_LINE_MAX + 1, "\n");
             if ($line === false) {
                 throw new \RuntimeException(Lang::t('smtp.no_response'));
             }
             if ($line === '') {
                 throw new \RuntimeException(Lang::t('smtp.empty_response'));
+            }
+            if (\strlen($line) > self::RESPONSE_LINE_MAX) {
+                throw new \RuntimeException(Lang::t('smtp.response_too_long'));
             }
             $line     = \rtrim($line, "\r\n");
             $lines[]  = $line;
