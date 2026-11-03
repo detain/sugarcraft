@@ -77,6 +77,19 @@ final class Git implements GitDriver
         return $r['exit'] === 0 && trim($r['stdout']) !== '';
     }
 
+    /**
+     * Bare repos answer `rev-parse --is-bare-repository` with `true`. They
+     * have no work tree, so every status-pane verb (stage, discard, stash)
+     * is meaningless here — the launcher refuses one instead of booting a
+     * TUI whose whole first pane would error.
+     */
+    public static function isBareRepository(string $cwd): bool
+    {
+        $r = Process::run(['git', '-C', $cwd, 'rev-parse', '--is-bare-repository'], null, self::DEFAULT_TIMEOUT);
+
+        return $r['exit'] === 0 && trim($r['stdout']) === 'true';
+    }
+
     public function branches(): array
     {
         $out = $this->run([

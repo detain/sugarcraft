@@ -38,6 +38,8 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Git\App;
 use SugarCraft\Git\Git;
 use SugarCraft\Git\Lang;
+use SugarCraft\Git\Process;
+use SugarCraft\Git\Support\GitRequirement;
 use SugarCraft\Git\Support\Version;
 
 // Answered before the repository probe: a packaging script or a bug report
@@ -55,12 +57,62 @@ if (in_array('--help', $flags, true) || in_array('-h', $flags, true)) {
         . "  candy-git --help     Show this help\n");
     exit(0);
 }
+// Any leftover argument is one we do not serve — exiting 2 (the usage
+// convention) beats silently booting a TUI that ignored what it was given.
+foreach ($flags as $stray) {
+    fwrite(STDERR, Lang::t('cli.unknown_flag', ['flag' => (string) $stray]) . "\n");
+    fwrite(STDERR, "candy-git: try --help\n");
+    exit(2);
+}
+
+// Preflight the binary itself: a missing or ancient git must surface as one
+// readable sentence here, not as a stack trace from the first repository
+// probe (or, worse, mid-operation failures on verbs like `git restore`).
+try {
+    $probe = Process::run(['git', '--version'], null, 10.0);
+} catch (\RuntimeException) {
+    fwrite(STDERR, Lang::t('cli.no_git') . "\n");
+    exit(1);
+}
+$gitVersion = $probe['exit'] === 0 ? GitRequirement::parse((string) $probe['stdout']) : null;
+if ($gitVersion === null) {
+    fwrite(STDERR, Lang::t('cli.no_git') . "\n");
+    exit(1);
+}
+if (!GitRequirement::satisfies($gitVersion)) {
+    fwrite(STDERR, Lang::t('cli.old_git', [
+        'version' => $gitVersion,
+        'min'     => GitRequirement::MINIMUM,
+    ]) . "\n");
+    exit(1);
+}
 
 $cwd = getcwd();
 // Probe via git itself rather than is_dir("$cwd/.git") so we launch inside a
 // LINKED worktree too, where `.git` is a file (gitdir pointer), not a dir.
-if ($cwd === false || !Git::isRepository($cwd)) {
+try {
+    $inRepository = $cwd !== false && Git::isRepository($cwd);
+} catch (\RuntimeException) {
+    fwrite(STDERR, Lang::t('cli.no_git') . "\n");
+    exit(1);
+}
+if (!$inRepository) {
     fwrite(STDERR, Lang::t('cli.not_a_repo', ['cwd' => (string) $cwd]) . "\n");
+    exit(1);
+}
+try {
+    $bare = Git::isBareRepository($cwd);
+} catch (\RuntimeException) {
+    $bare = false; // probe hiccup must not refuse a good work tree
+}
+if ($bare) {
+    fwrite(STDERR, Lang::t('cli.bare_repo', ['cwd' => (string) $cwd]) . "\n");
+    exit(1);
+}
+// The UI is a full-screen alt-buffer program; piping its output would emit
+// unlabelled escape-sequence soup and then block on a stdin it cannot read.
+if (!stream_isatty(STDOUT)) {
+    fwrite(STDERR, Lang::t('cli.needs_tty') . "\n");
     exit(1);
 }
 (new Program(App::start(new Git($cwd)), new ProgramOptions(useAltScreen: true)))->run();

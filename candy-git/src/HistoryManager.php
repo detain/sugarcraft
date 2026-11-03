@@ -15,6 +15,15 @@ namespace SugarCraft\Git;
 final readonly class HistoryManager
 {
     /**
+     * Longest undo lane kept. Each entry holds plain strings (paths, refs,
+     * messages), but a session that stages and switches for eight hours must
+     * still cost bounded memory — the oldest operation is also the one least
+     * likely to be undone, so dropping from the tail of the stack is cheap
+     * in every sense.
+     */
+    public const MAX_HISTORY = 100;
+
+    /**
      * @param list<HistoryEntry> $undoStack
      * @param list<HistoryEntry> $redoStack
      */
@@ -25,12 +34,13 @@ final readonly class HistoryManager
 
     /**
      * Push a new entry onto the history. Clears the redo stack.
-     * Returns a NEW HistoryManager with the entry added.
+     * Returns a NEW HistoryManager with the entry added, oldest-dropped
+     * once the lane exceeds MAX_HISTORY.
      */
     public function push(HistoryEntry $entry): self
     {
         return new self(
-            undoStack: [...$this->undoStack, $entry],
+            undoStack: self::trimmed([...$this->undoStack, $entry]),
             redoStack: [],
         );
     }
@@ -51,7 +61,7 @@ final readonly class HistoryManager
         $entry = $this->undoStack[$idx];
         $newManager = new self(
             undoStack: array_slice($this->undoStack, 0, -1),
-            redoStack: [...$this->redoStack, $entry],
+            redoStack: self::trimmed([...$this->redoStack, $entry]),
         );
         return ['entry' => $entry, 'manager' => $newManager];
     }
@@ -71,10 +81,24 @@ final readonly class HistoryManager
         $idx = array_key_last($this->redoStack);
         $entry = $this->redoStack[$idx];
         $newManager = new self(
-            undoStack: [...$this->undoStack, $entry],
+            undoStack: self::trimmed([...$this->undoStack, $entry]),
             redoStack: array_slice($this->redoStack, 0, -1),
         );
         return ['entry' => $entry, 'manager' => $newManager];
+    }
+
+    /**
+     * Keep a stack within MAX_HISTORY by dropping its OLDEST entries; the
+     * tail of each list is the newest, most-reachable end for the UI.
+     *
+     * @param list<HistoryEntry> $stack
+     * @return list<HistoryEntry>
+     */
+    private static function trimmed(array $stack): array
+    {
+        return count($stack) > self::MAX_HISTORY
+            ? array_slice($stack, -self::MAX_HISTORY)
+            : $stack;
     }
 
     /**

@@ -20,8 +20,27 @@ candy-git — a three-pane git TUI for PHP 8.3+, built on the SugarCraft stack. 
 
 ```bash
 composer require sugarcraft/candy-git
-candy-git    # run inside any git working tree
+vendor/bin/candy-git    # run inside any git working tree
 ```
+
+From a clone of this repository, `php candy-git/bin/candy-git` works too, and
+release users can grab the `candy-git.phar` from the GitHub release and run
+`php candy-git.phar`. `--version` and `--help` answer anywhere; any other
+argument exits 2 with a usage line rather than being silently ignored.
+
+## Requirements
+
+- PHP 8.3+
+- git **2.23 or newer** — the floor for `git restore` and the `--porcelain=v1`
+  status engine. candy-git checks `git --version` at launch and refuses older
+  binaries (or a missing git) with one readable sentence, exit code 1.
+- An interactive terminal: the UI is a full-screen alt-buffer program, so a
+  piped stdout is refused instead of rendering escape-sequence soup.
+- A checked-out work tree — bare repositories have no status pane to show and
+  are refused at launch.
+
+See **Trust boundary** below for what candy-git disables inside a repository's
+own git config.
 
 ## Keys
 
@@ -77,6 +96,14 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | `Git`             | Concrete `git` shell-out — `status --porcelain=v1 -b`, `for-each-ref`, `log --pretty=format:…`, `add`, `restore --staged`. Throws `RuntimeException` on non-zero exit. |
 | `GitDriver`        | Interface for all git operations. Tests inject a fixture-backed driver so transition correctness is asserted without staging a real repo. |
+| `Process`          | The ONLY proc_open site — bounded drain loop, pinned child env (`GIT_TERMINAL_PROMPT=0`, pagers and editors neutered), stdin isolated from the UI tty, TERM->grace->KILL teardown. |
+| `HistoryEntry`     | One undoable operation with its forward args and inverse (or a `refuse` marker when undo would lie — discard, amend, merge). |
+| `HistoryManager`   | Bounded undo/redo stacks (`MAX_HISTORY`); a new operation clears the redo lane. |
+| `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `stagePatch()` turns the selection into an `apply --cached` patch. |
+| `DiffHighlighter`  | Per-line hunk-header/old/new token spans for the diff overlay. |
+| `Lang`             | i18n lookup over `lang/*.php` (16 locales) on the core `T` registry, namespace `git`. |
+| `Support\\Version`  | `--version` line + phar build stamping (dev-build detection mirrors candy-top's DST-1 shape). |
+| `Support\\GitRequirement` | The git-version floor (`MINIMUM = '2.23'`) as pure parse/compare so launcher and tests share one authority. |
 | `Pane`            | Enum — `Status`, `Branches`, `Log` — with `next()` for Tab cycling.                                                               |
 | `App` (Model)     | Owns the three lists + cursors + focus + overlays (stash/cherry-pick/worktrees/interactive-rebase). Pure-state — every key returns a fresh App. |
 | `Renderer`        | Pure view function — three `Style::border(rounded)` panes joined horizontally / vertically; the focused pane gets a brighter accent. |
@@ -89,7 +116,7 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 | `RebaseCommit`      | Immutable rebase todo entry — `sha`, `subject`, `action` + `withAction()` / `displayLine()`.                                      |
 | `InteractiveRebase` | Immutable interactive-rebase state — `commits` todo list, `cursor`, `selectingN`/`countInput`, `cycleAction()`, `dropCurrent()`.    |
 
-`CandyGit` shells out to `git` directly via the system, so users keep their existing aliases, hooks, and signing config.
+`CandyGit` shells out to `git` directly via the system, so users keep their existing commit hooks and signing config — while the repo-controlled executable hooks that could fire unasked (`core.fsmonitor`, `diff.external`) are switched off, per **Trust boundary**.
 
 **Note:** All git operations are synchronous and block the event loop. This is by design for v1 — a TTY application naturally runs synchronously at the terminal. Async git operations are planned for v2 (see `GitDriver` interface for deprecation notes).
 

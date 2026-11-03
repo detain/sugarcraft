@@ -17,6 +17,11 @@ return [
 
     // CLI errors
     'cli.not_a_repo'   => 'candy-git: not a git repository: {cwd}',
+    'cli.unknown_flag' => 'candy-git: unknown argument: {flag}',
+    'cli.no_git'       => 'candy-git: git is unavailable -- install git and make sure it is on PATH',
+    'cli.old_git'      => 'candy-git: git {version} is too old -- version {min} or newer is required',
+    'cli.bare_repo'    => 'candy-git: {cwd} is a bare repository without a work tree -- run candy-git from a checked-out working directory',
+    'cli.needs_tty'    => 'candy-git: needs an interactive terminal (stdout is not a tty)',
 
     // UI labels
     'ui.error_prefix'  => 'error: ',

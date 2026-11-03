@@ -188,6 +188,33 @@ final class HistoryManagerTest extends TestCase
         $this->assertSame([$entry], $newManager->undoStack);
     }
 
+    public function testAPushPastTheLaneCapDropsTheOldestEntry(): void
+    {
+        $manager = new HistoryManager();
+        for ($i = 0; $i < HistoryManager::MAX_HISTORY + 25; $i++) {
+            $manager = $manager->push(HistoryEntry::stage('file-' . $i . '.txt'));
+        }
+
+        $this->assertCount(HistoryManager::MAX_HISTORY, $manager->undoStack);
+        $paths = array_map(static fn (HistoryEntry $e): string => $e->args['path'] ?? '', $manager->undoStack);
+        $this->assertSame('file-25.txt', $paths[0], 'the 25 oldest are gone');
+        $this->assertSame('file-124.txt', $paths[count($paths) - 1], 'the newest survives');
+    }
+
+    public function testTheRedoLaneIsCappedWhileUndoing(): void
+    {
+        $manager = new HistoryManager();
+        for ($i = 0; $i < HistoryManager::MAX_HISTORY + 10; $i++) {
+            $manager = $manager->push(HistoryEntry::stage('f' . $i));
+        }
+        $manager = new HistoryManager($manager->undoStack); // push already trimmed to MAX
+        for ($i = 0; $i < HistoryManager::MAX_HISTORY; $i++) {
+            $manager = $manager->undo()['manager'];
+        }
+        $this->assertCount(HistoryManager::MAX_HISTORY, $manager->redoStack, 'undoing the whole lane cannot exceed the cap');
+        $this->assertSame([], $manager->undoStack);
+    }
+
     public function testConstructorWithInitialStacks(): void
     {
         $entry1 = HistoryEntry::stage('file1.txt');
