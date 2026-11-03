@@ -865,7 +865,7 @@ final class RenderCommandTest extends TestCase
 
     public function testPagerFileWatchIsWiredIntoTheExecuteBranch(): void
     {
-        // E735 step 10.25 CLI half: execute() must hoist the file argument
+        // CLI half of the auto-reload wiring: execute() must hoist the file argument
         // and arm the pump ONLY for a file pager — stdin has nothing to
         // watch. Source-scan pin (house idiom): the wiring is a Program
         // branch that cannot be unit-invoked without blocking on run().

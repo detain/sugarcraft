@@ -9,20 +9,20 @@ namespace SugarCraft\MdView;
  *
  * Mirrors charmbracelet/glow's file watching behaviour.
  *
- * Poll contract (E714, round 82): watch() is a pump — the CALLER owns its
+ * Poll contract: watch() is a pump — the CALLER owns its
  * lifetime bound. The generator advances lazily: no stat sweep and no sleep
  * runs until the consumer pulls, so breaking out of the foreach (or simply
  * dropping the generator) halts the watcher at the next sweep boundary,
  * within one idle delay. There is deliberately no wall-clock kill inside the
- * loop (E646 law: an idle bound, never a request deadline) and no stop()
+ * loop (an idle bound, never a request deadline) and no stop()
  * flag to forget — cancellation is inherent in not pulling.
  *
- * Idle cost is bounded the same way sugar-readline's input pump is
- * (E713 shape): sweeps back off exponentially from IDLE_POLL_MIN_MICROSECONDS
+ * Idle cost is bounded the same way sugar-readline's input pump is:
+ * sweeps back off exponentially from IDLE_POLL_MIN_MICROSECONDS
  * (1ms) doubling per consecutive no-change sweep, capped at the caller's
  * $intervalMs, and snap back to the floor whenever a change batch is seen.
  * A fully idle watcher therefore never polls more often than the requested
- * interval — the pre-E714 fixed-cadence behaviour — while bursts of edits
+ * interval — the old fixed-cadence behaviour — while bursts of edits
  * are tracked at millisecond latency.
  */
 final class FileWatcher
@@ -62,9 +62,9 @@ final class FileWatcher
      * Current (mtime, size) fingerprint of a file, or null when the path is
      * not a readable regular file. Baseline for {@see pollTuple()}.
      *
-     * E735 step 10.25: the pager's auto-reload sweep takes one snapshot per
+     * The pager's auto-reload sweep takes one snapshot per
      * tick without sleeping — unlike {@see watch()}, this is a single-shot
-     * probe, so the E714 pump contract has nothing to bound here.
+     * probe, so the pump contract has nothing to bound here.
      *
      * @return array{0:int, 1:int}|null
      */
@@ -88,7 +88,7 @@ final class FileWatcher
      * appeared where it was absent — baseline [0, 0]), null when unchanged
      * or still missing. This is the same tuple law {@see watch()} runs on
      * every sweep, exposed for callers that poll from a tick pump instead
-     * of driving a Generator (the pager's auto-reload, E735 step 10.25).
+     * of driving a Generator (the pager's auto-reload).
      *
      * @param int $lastMtime baseline mtime (0 = "file assumed absent")
      * @param int $lastSize  baseline size in bytes (0 pairs with mtime 0)
@@ -106,7 +106,7 @@ final class FileWatcher
 
     /**
      * Sleep duration in microseconds for the Nth consecutive no-change sweep:
-     * 1ms floor, doubling per sweep, capped at $capMicroseconds (E714 ladder).
+     * 1ms floor, doubling per sweep, capped at $capMicroseconds.
      *
      * Pure and static so the ladder is pinned without wall-clock timing.
      * Counts below 1 coerce to the floor; absurd counts stay capped — the
@@ -143,7 +143,7 @@ final class FileWatcher
      *           consumer's context, so a foreach that never breaks blocks
      *           the event loop forever. The loop itself carries no deadline
      *           by contract — the consumer bounds it by stopping the pull
-     *           (see class poll contract, E714).
+     *           (see class poll contract).
      * @see \SugarCraft\MdView\FileWatcher::watch() — CALIBER_LEARNINGS.md pattern:glow
      *
      * @param string        $path        Path to watch
@@ -172,7 +172,7 @@ final class FileWatcher
         $consecutiveIdleSweeps = 0;
 
         while (true) {
-            // No change yet this pass. Back off along the E714 ladder instead
+            // No change yet this pass. Back off along the ladder instead
             // of a fixed-cadence spin; the sleeper seam lets tests pin the
             // schedule without wall-clock time.
             $consecutiveIdleSweeps++;

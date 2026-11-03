@@ -11,7 +11,7 @@ $autoloadCandidates = [
     __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
 ];
 
-// DST-1 (guard shape ported from candy-code/candy-top, measured on PHP 8.3.6):
+// Measured on PHP 8.3.6 (guard shape shared with candy-code and candy-top):
 // when `php candy-mdview.phar` runs, THIS file is the archive's stub and
 // Phar::running() answers '' here; a bare '/x.phar/entry' path fails
 // file_exists()/require for every caller, so both archive identities are

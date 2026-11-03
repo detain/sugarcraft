@@ -11,9 +11,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * E735 step 10.25 — glamour STYLE JSON parsing + the sugar-markdown adapter,
+ * Glamour STYLE JSON parsing + the sugar-markdown adapter,
  * including the live `--theme-config` route that keeps the adapter from
- * rotting into dead code again (audit W11 deleted the first, unwired
+ * rotting into dead code again (an earlier audit deleted the first, unwired
  * incarnation for exactly that reason).
  *
  * @covers \SugarCraft\MdView\GlamourTheme
@@ -255,7 +255,7 @@ final class GlamourThemeTest extends TestCase
 
     public function testThemeConfigFileWithGlamourSchemaReachesLivePath(): void
     {
-        // The W11 anti-dead-code pin: a glamour-shaped --theme-config is
+        // The anti-dead-code pin: a glamour-shaped --theme-config is
         // consumed by RenderCommand, not just parseable in isolation. The
         // document block affixes must show up in the rendered output.
         $md = tempnam(sys_get_temp_dir(), 'mdview-t4-md-');

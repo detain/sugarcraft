@@ -9,9 +9,9 @@ use SugarCraft\Core\Msg;
 /**
  * Timer tick that drives the pager's file-watch pump.
  *
- * E735 step 10.25: armed by {@see MdViewModel::init()} /
+ * Armed by {@see MdViewModel::init()} /
  * {@see MdViewModel::update()} via `Cmd::tick()` — the same one-shot-re-arm
- * chain sugar-widgets' Stopwatch runs (TickMsg + id routing). The message
+ * chain sugar-core's Stopwatch pattern runs (TickMsg + id routing). The message
  * carries no payload; the sweep decision lives in the Model so tests can
  * drive it by dispatching the Msg directly, with no wall-clock in play.
  *

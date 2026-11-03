@@ -11,11 +11,11 @@ use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
 
 /**
- * E735 step 10.25 — width half of the original leftover spec.
+ * Width plumbing pins: the pager must measure with the canonical helper.
  *
  * The step file names a `WidthHelper` (CJK/emoji-aware widths via
- * mb_strwidth); that class shipped in ad4de43a4 and was DELETED in
- * af5c4aefc once {@see Width} became the canonical single source. This
+ * mb_strwidth); that class was DELETED once {@see Width} became the canonical single
+ * source. This
  * suite is the contract pin that the replacement actually holds
  * end-to-end through the viewer's live render path — wide glyphs cost 2 cells
  * in the Core measurer, the sugar-markdown word-wrap never lets a physical row
@@ -75,7 +75,7 @@ final class WidthPlumbingTest extends TestCase
 
     public function testNoMdViewLocalWidthHelperIsResurrected(): void
     {
-        // af5c4aefc deleted candy-mdview's WidthHelper in favour of Core.
+        // candy-mdview once had a local WidthHelper; Core\Util\Width replaced it.
         // A class_alias or re-implementation under the MdView namespace would
         // silently fork the width tables again; guard its absence.
         self::assertFalse(

@@ -9,7 +9,7 @@ use SugarCraft\Markdown\Theme;
 use SugarCraft\Style\Style;
 
 /**
- * Parser + adapter for Glamour STYLE JSON documents (E735 step 10.25).
+ * Parser + adapter for Glamour STYLE JSON documents.
  *
  * Mirrors charmbracelet/glamour's style-file schema: a top-level object of
  * element blocks (`document`, `h1`…`h6`, `paragraph`, `block_quote`,
@@ -19,10 +19,10 @@ use SugarCraft\Style\Style;
  * `chroma` block mapping chroma token names (`Keyword`, `LiteralString`,
  * `Comment`, `LiteralNumber`, …) to their own primitives.
  *
- * HISTORY, and the rule this class exists to obey: round-4's original
- * `GlamourTheme` (ad4de43a4) parsed a FLAT one-level shape nothing upstream
+ * HISTORY, and the rule this class exists to obey: the original
+ * `GlamourTheme` parsed a FLAT one-level shape nothing upstream
  * emitted, was never wired into the live CLI path, and was deleted as dead
- * by audit W11 (d729c789d). This rewrite keeps the parsed primitives
+ * code. This rewrite keeps the parsed primitives
  * addressable, converts them to a sugar-markdown {@see Theme} via
  * {@see toMarkdownTheme()}, and IS consumed: {@see RenderCommand::loadThemeConfig()}
  * sniffs the `document` signature and routes glamour-shaped

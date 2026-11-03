@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\MdView\FileWatcher;
 
 /**
- * E714 (round 82, lane q13): idle backoff ladder, snap-back, and sleeper-seam
+ * Idle backoff ladder, snap-back, and sleeper-seam
  * pins for FileWatcher::watch(). All timing-free — every test drives the pump
  * through the injectable $idleSleeper seam and NEVER relies on wall-clock
  * sleeps. Scripted drivers carry a sweep budget whose breach THROWS, so a

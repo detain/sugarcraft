@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\MdView\Application;
 
 /**
- * Structural pins for the phar build surface (DST-1 program, phf lane).
+ * Structural pins for the phar build surface.
  *
  * LIGHT by design — the suite never mints an archive (build + smoke live in
  * the lane report). Pinned here:
