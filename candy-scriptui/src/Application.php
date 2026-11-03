@@ -64,6 +64,15 @@ final class Application extends SymfonyApplication
      */
     private const ARRAY_PARAMETERS_PROPERTY = 'parameters';
 
+    /**
+     * option name => backed enum class, per command name — supplied by the
+     * CommandScanner from `#[Flag(enum: ...)]` and enforced in
+     * {@see doRunCommand()} before the command's execute() ever sees input.
+     *
+     * @var array<string, array<string, class-string>>
+     */
+    private array $enumConstraints = [];
+
     public function __construct()
     {
         parent::__construct('candy-scriptui', self::versionString());
@@ -302,7 +311,7 @@ final class Application extends SymfonyApplication
         // @var array<string,string> env-backed value options as name => value;
         //      injected as tokens when possible, else applied best-effort.
         $valueOptions = [];
-        $definition = $command->getDefinition();
+        $definition = clone $command->getDefinition();
         foreach ($definition->getOptions() as $option) {
             // Explicit CLI flag always wins over env var.
             if ($input->hasParameterOption('--' . $option->getName(), true)) {
@@ -410,5 +419,103 @@ final class Application extends SymfonyApplication
         }
 
         throw new CommandNotFoundException(sprintf('Command "%s" not found.', $name));
+    }
+
+    /**
+     * Register a value constraint discovered by the CommandScanner from
+     * `#[Flag(enum: SomeType::class)]` (review 2026-11-02 M10 — the seam
+     * existed as documentation only and `--format=pineapple` sailed through).
+     *
+     * @param class-string $enumClass
+     */
+    public function addEnumConstraint(string $commandName, string $option, string $enumClass): void
+    {
+        $this->enumConstraints[$commandName][$option] = $enumClass;
+    }
+
+    /**
+     * Validate every scanned enum-constrained option BEFORE the command
+     * executes. Bad values exit 2 (Symfony's invalid-argument convention)
+     * with the allowed set named on stderr — an exit-code-gating script
+     * must never watch a nonsense value flow into business logic.
+     */
+    protected function doRunCommand(Command $command, InputInterface $input, OutputInterface $output): int
+    {
+        $constraints = $this->enumConstraints[$command->getName()] ?? [];
+        if ($constraints !== []) {
+            // Symfony binds INSIDE parent::doRunCommand, so nothing has
+            // parsed the options yet at this point. Bind a throwaway clone
+            // against a FULLY MERGED definition (the input's own definition
+            // is null until Command::run binds it, so our bind is the first
+            // and the merge is ours to do); reading the merged stream through
+            // an argument-less definition would fatal with
+            // 'The "command" argument does not exist'. A bind failure means
+            // the parent will raise the same error, louder, moments later.
+            try {
+                $definition = clone $command->getDefinition();
+                if (!$definition->hasArgument('command')) {
+                    $definition->addArgument(new \Symfony\Component\Console\Input\InputArgument(
+                        'command',
+                        \Symfony\Component\Console\Input\InputArgument::OPTIONAL,
+                    ));
+                }
+                $probe = clone $input;
+                $probe->bind($definition);
+            } catch (\Throwable) {
+                return parent::doRunCommand($command, $input, $output);
+            }
+            foreach ($constraints as $option => $enumClass) {
+                if (!$probe->hasOption($option)) {
+                    continue;
+                }
+                $value = $probe->getOption($option);
+                if (!is_string($value) && !is_int($value)) {
+                    // Unset (null), flag-shaped (bool) or list-shaped values
+                    // are not this check's business; the command owns those.
+                    continue;
+                }
+                $message = self::enumViolation($option, (string) $value, $enumClass);
+                if ($message !== null) {
+                    $target = method_exists($output, 'getErrorOutput')
+                        ? $output->getErrorOutput()
+                        : $output;
+                    $target->writeln("<error>candy-scriptui: {$message}</error>");
+                    return Command::INVALID;
+                }
+            }
+        }
+
+        return parent::doRunCommand($command, $input, $output);
+    }
+
+    /**
+     * The one violation message shape, shared so wording cannot drift:
+     * mirrors {@see Attribute\ValueEnum::validate()}'s text exactly.
+     */
+    private static function enumViolation(string $option, string $value, string $enumClass): ?string
+    {
+        if (!enum_exists($enumClass)) {
+            return null;
+        }
+        $reflection = new \ReflectionEnum($enumClass);
+        if (!$reflection->isBacked()) {
+            return null;
+        }
+
+        $allowed = [];
+        foreach ($reflection->getCases() as $case) {
+            /** @var \ReflectionEnumBackedCase $case */
+            $allowed[] = (string) $case->getValue()->value;
+        }
+        if (in_array($value, $allowed, true)) {
+            return null;
+        }
+
+        return sprintf(
+            "Invalid value for --%s: '%s'. Allowed: %s.",
+            $option,
+            $value,
+            implode('|', $allowed),
+        );
     }
 }

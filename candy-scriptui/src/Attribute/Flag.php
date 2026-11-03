@@ -18,9 +18,13 @@ use Attribute;
  *   #[Flag(name: 'verbose', short: 'v')]
  *   #[Flag(name: 'format', short: 'f', enum: FormatType::class)]
  *
- * The `enum:` part documents the allowed set; the scanner does not
- * enforce it at runtime (see {@see ValueEnum} for the shipped,
- * call-it-yourself validator).
+ * The `enum:` part is ENFORCED at runtime for scans into a
+ * {@see \SugarCraft\ScriptUi\Application}: the scanner registers the
+ * constraint and the application refuses invalid values with exit code 2
+ * before the command executes. Commands run outside that application
+ * (e.g. through CommandTester) should still call
+ * {@see ValueEnum::validate()} in their own execute() — that shipped
+ * call-it-yourself validator remains available.
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
 final class Flag

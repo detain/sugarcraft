@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Discovery;
 
 use ReflectionClass;
+use SugarCraft\ScriptUi\Application as ScriptUiApplication;
 use SugarCraft\ScriptUi\Attribute\Alias;
 use SugarCraft\ScriptUi\Attribute\Command;
 use SugarCraft\ScriptUi\Attribute\Example;
@@ -44,7 +45,23 @@ final class CommandScanner
         $discovered = [];
         $this->skipped = [];
 
+        $classes = [];
         foreach ($this->findClassesInNamespace($namespace) as $class) {
+            $classes[] = $class;
+        }
+        if ($classes === []) {
+            // A scan that matches zero classes is how the README's trailing-
+            // separator quickstart used to silently register nothing (review
+            // 2026-11-02 CC5). The prefix is normalised now, so the remaining
+            // ways to land here are a typo'd or empty namespace — all of them
+            // deserve a loud word rather than a vacuum.
+            fwrite(STDERR, sprintf(
+                "candy-scriptui: no classes found under namespace '%s'; nothing registered (check the spelling, or autoload the classes before scan()).\n",
+                $namespace
+            ));
+        }
+
+        foreach ($classes as $class) {
             $ref = new ReflectionClass($class);
 
             $commandAttr = $ref->getAttributes(Command::class)[0] ?? null;
@@ -73,6 +90,7 @@ final class CommandScanner
                     /** @var Flag */
                     $flag = $flagAttr->newInstance();
                     $this->applyFlag($instance, $flag);
+                    $this->registerEnumConstraint($application, $instance, $flag);
                 }
 
                 $aliasAttrs = $ref->getAttributes(Alias::class);
@@ -102,11 +120,52 @@ final class CommandScanner
     private array $loadedLater = [];
 
     /**
+     * Pass a `#[Flag(enum: SomeType::class)]` to the application for runtime
+     * enforcement (review 2026-11-02 M10: the seam was documented but never
+     * wired, so `--format=pineapple` sailed through). Enforcement lives in
+     * {@see ScriptUiApplication::doRunCommand()} because option definitions
+     * are built before any input is parsed — the validate-on-run moment is
+     * the earliest point that can see the value.
+     */
+    private function registerEnumConstraint(Application $application, SymfonyCommand $command, Flag $flag): void
+    {
+        if ($flag->isFlag || $flag->enum === null) {
+            return;
+        }
+        if (!$application instanceof ScriptUiApplication) {
+            return;
+        }
+
+        if (!enum_exists($flag->enum)) {
+            fwrite(STDERR, sprintf(
+                "candy-scriptui: --%s declares enum '%s' but no such enum exists; values are not enforced.\n",
+                $flag->name,
+                $flag->enum
+            ));
+            return;
+        }
+
+        $commandName = $command->getName();
+        if ($commandName === null) {
+            return;
+        }
+        $application->addEnumConstraint($commandName, $flag->name, $flag->enum);
+    }
+
+    /**
      * @return iterable<class-string>
      */
     private function findClassesInNamespace(string $namespace): iterable
     {
-        $prefix = ltrim($namespace, '\\') . '\\';
+        // Normalise: trim separators from BOTH ends, then append exactly one.
+        // The README quickstart passes a trailing-backslash form, and the
+        // old `ltrim(...) . '\\'` turned it into a double separator matching
+        // zero declared classes — a silent no-op (review 2026-11-02 CC5).
+        $normalized = trim($namespace, '\\');
+        if ($normalized === '') {
+            return;
+        }
+        $prefix = $normalized . '\\';
         $len = strlen($prefix);
 
         $this->loadedLater = [];
@@ -155,26 +214,36 @@ final class CommandScanner
             return $rc->newInstance();
         }
 
-        $params = $ctor->getParameters();
-        if ($ctor->getNumberOfRequiredParameters() === 0) {
+        // Only REQUIRED parameters get filled. The old loop walked every
+        // parameter and pushed type-zero values, clobbering the author's own
+        // defaults on optional parameters (review 2026-11-02 senior m-3).
+        $required = $ctor->getNumberOfRequiredParameters();
+        if ($required === 0) {
             return $rc->newInstance();
         }
 
         $args = [];
-        foreach ($params as $param) {
+        foreach (array_slice($ctor->getParameters(), 0, $required) as $param) {
+            // A required-nullable parameter gets null — a legal value the
+            // author's body already handles. The old code injected null here
+            // and then rejected its own injection via an in_array(null) sweep
+            // (m-3 over-reject), silently skipping constructible commands.
             if ($param->allowsNull()) {
                 $args[] = null;
                 continue;
             }
 
             $type = $param->getType();
-            if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
+            if (!$type instanceof \ReflectionNamedType) {
+                // Union/intersection types: we cannot guess a value.
+                return false;
+            }
+            if (!$type->isBuiltin()) {
                 // Non-builtin type (e.g. a class) — we cannot instantiate safely.
                 return false;
             }
 
-            $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : null;
-            $args[] = match ($typeName) {
+            $fill = match ($type->getName()) {
                 'string' => '',
                 'int'    => 0,
                 'float'  => 0.0,
@@ -182,12 +251,10 @@ final class CommandScanner
                 'array'  => [],
                 default  => null,
             };
-        }
-
-        // If any required param has a type we couldn't fill (e.g. union types,
-        // external class types), skip this class.
-        if (in_array(null, $args, true)) {
-            return false;
+            if ($fill === null) {
+                return false;
+            }
+            $args[] = $fill;
         }
 
         return $rc->newInstanceArgs($args);

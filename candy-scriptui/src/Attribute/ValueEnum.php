@@ -19,12 +19,13 @@ use Attribute;
  *       case Toml  = 'toml';
  *   }
  *
- * NOTE: the scanner currently registers `enum:` as documentation only —
- * it does NOT validate provided values at runtime (validating there is
- * impossible: the scanner builds the option definition before any input
- * is parsed). Commands that want enforcement call
- * {@see ValueEnum::validate()} in their own execute() with the parsed
- * value; this class ships that check.
+ * NOTE: scans into a {@see \SugarCraft\ScriptUi\Application} now enforce
+ * `enum:` at runtime — the application validates the parsed value in
+ * doRunCommand() before execute() runs (review 2026-11-02 M10 close).
+ * This class still ships the call-it-yourself check for commands driven
+ * outside that application (CommandTester harnesses, custom runners),
+ * and {@see self::validate()} is the wording authority the runtime
+ * refusal mirrors.
  */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
 final class ValueEnum
