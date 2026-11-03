@@ -17,8 +17,9 @@ namespace SugarCraft\GitServer;
  * Port shape: charmbracelet/soft-serve persists accounts in a database; this
  * scaffold deliberately uses a single JSON file (no PDO/SQLite exists in this
  * package — see README "Known gaps"). Writes are atomic: payload goes to a
- * 0600 temp file in the same directory, fsync'd, then renamed over the target,
- * so a crash can never leave a half-written accounts file behind.
+ * 0600 temp file in the same directory, flushed, fsync'd, then renamed over
+ * the target, so a crash (not merely a process exit) can never leave a
+ * half-written accounts file behind.
  */
 final class UserStore
 {
@@ -115,6 +116,9 @@ final class UserStore
                 throw new \RuntimeException('cannot write user store payload');
             }
             \fflush($handle);
+            if (\fsync($handle) === false) {
+                throw new \RuntimeException('cannot sync user store payload to disk');
+            }
         } finally {
             \fclose($handle);
         }

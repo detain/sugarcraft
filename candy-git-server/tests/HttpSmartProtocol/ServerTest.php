@@ -275,9 +275,9 @@ final class ServerTest extends TestCase
 
     public function testHandleRequestRoutesToGitReceivePack(): void
     {
-        // Changed 2026-10-24 (the smart-HTTP transport round): POST
-        // git-receive-pack is a loud phase-2 refusal (501), not a pass to the
-        // access layer — push stays unwired while the read path lands.
+        // Changed 2026-11-03 (push wired): POST git-receive-pack is no
+        // longer a stub — an anonymous client meets the auth challenge at
+        // the gate, before the body is examined at all.
         $result = $this->server->handleRequest(
             'POST',
             '/testrepo.git/git-receive-pack',

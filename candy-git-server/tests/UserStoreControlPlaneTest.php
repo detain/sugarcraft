@@ -101,6 +101,39 @@ final class UserStoreControlPlaneTest extends TestCase
         }
     }
 
+    public function testSaveSettlesThePayloadWithFsyncBeforeThePublishRename(): void
+    {
+        // The class docblock promises "flushed, fsync'd, then renamed" — the
+        // only durable ordering. Pinned structurally on the method source:
+        // every functional save still passes when the fsync is removed, so
+        // a behavior test here would be vacuous by construction.
+        $reflection = new \ReflectionMethod(UserStore::class, 'save');
+        $lines = \file((string) $reflection->getFileName());
+        $body = \implode('', \array_slice(
+            (array) $lines,
+            (int) $reflection->getStartLine() - 1,
+            (int) $reflection->getEndLine() - (int) $reflection->getStartLine() + 1
+        ));
+
+        $this->assertSame(1, \substr_count($body, 'fsync('), 'exactly one settle point for the payload');
+
+        $write  = \strpos($body, 'fwrite(');
+        $flush  = \strpos($body, 'fflush(');
+        $sync   = \strpos($body, 'fsync(');
+        $close  = \strpos($body, 'fclose(');
+        $rename = \strpos($body, 'rename(');
+        foreach (['fwrite', 'fflush', 'fsync', 'fclose', 'rename'] as $i => $step) {
+            $this->assertIsInt(
+                [$write, $flush, $sync, $close, $rename][$i],
+                "save() must contain the {$step} step of the durable publish chain"
+            );
+        }
+        $this->assertLessThan((int) $flush, (int) $write, 'payload lands before the flush');
+        $this->assertLessThan((int) $sync, (int) $flush, 'flush precedes the settle');
+        $this->assertLessThan((int) $close, (int) $sync, 'the settle happens on the open handle');
+        $this->assertLessThan((int) $rename, (int) $close, 'nothing is still in flight when the name flips');
+    }
+
     public function testCorruptStoreFailsLoudInsteadOfReadingAsEmpty(): void
     {
         $path = $this->tmpDir . '/users.json';

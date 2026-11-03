@@ -177,11 +177,10 @@ final class SmartHttpCloneTest extends TestCase
     {
         // An authenticated-but-ungranted push meets 403 at the advertisement
         // gate (canWrite is fail-closed for non-collaborators); an
-        // anonymous one meets the 401 challenge first. Either way push is
-        // dead on this wire: the 501 phase-2 refusal behind the auth gate is
-        // pinned at the router level in ServerTest and the
-        // ChildProcessLifetimeCensus refusal arm. Here we pin the wire
-        // outcome real git reports: a non-zero push.
+        // anonymous one meets the 401 challenge first. Push itself is
+        // wired (HttpPushTest lands a real one); here we pin the wire
+        // outcome real git reports for an unauthorized attempt: a
+        // non-zero push.
         $clonePath = $this->tmpDir . '/clone';
         [$rc, , $err] = $this->runChild(
             ['git', 'clone', $this->baseUrl() . '/fixture.git', $clonePath]
@@ -201,7 +200,7 @@ final class SmartHttpCloneTest extends TestCase
             ['git', '-C', $clonePath, 'push', $this->baseUrl() . '/fixture.git', 'main'],
             ['env' => $this->writeAskPass('bob', 'correct horse')]
         );
-        self::assertNotSame(0, $pushRc, 'push must not succeed in phase 1');
+        self::assertNotSame(0, $pushRc, 'an ungranted push must not succeed');
         self::assertStringContainsString('403', $pushErr);
     }
 

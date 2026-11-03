@@ -105,6 +105,82 @@ final class SSHServerTest extends TestCase
         $this->assertSame(1, $result);
     }
 
+    public function testLogSafeNeutralizesControlCharactersClipsAndStaysIdentityOnRealNames(): void
+    {
+        /** @var callable(string): string $logSafe */
+        $logSafe = \Closure::bind(
+            static fn (string $token): string => SSHServer::logSafe($token),
+            null,
+            SSHServer::class
+        );
+
+        // A CR/LF inside a client-claimed name must not be able to forge a
+        // second operator-log line: controls collapse to spaces.
+        $forged = "alice\r\nFeb  3 00:00:00 host sshd[1]: forged line";
+        $neutralized = $logSafe($forged);
+        $this->assertStringNotContainsString("\n", $neutralized);
+        $this->assertStringNotContainsString("\r", $neutralized);
+        $this->assertLessThanOrEqual(64, \strlen($neutralized), 'the byte clip bounds every emitted token');
+
+        // NUL and the rest of the C0 block plus DEL are all stripped.
+        $this->assertSame(
+            0,
+            \preg_match('/[\x00-\x1F\x7F]/', $logSafe("a\x00b\x01c\x1bd\x7f")),
+            'no control byte may survive into the log token'
+        );
+
+        // Unbounded names are clipped to the 64-byte budget.
+        $this->assertSame(\str_repeat('x', 64), $logSafe(\str_repeat('x', 500)));
+
+        // Identity on legitimate names: accounts are looked up RAW, so the
+        // sanitizer must not rewrite a name that could exist.
+        $this->assertSame('alice', $logSafe('alice'));
+
+        // An all-control token stays visible in the log rather than vanishing.
+        $this->assertSame('<empty>', $logSafe("\n"));
+    }
+
+    public function testHandleConnectionStderrLinesNeverInterpolateTheRawClientClaimedTokens(): void
+    {
+        // Structural guard for the same class as the behavioral pin: the
+        // emission sites live in handleConnection, and a regression to
+        // "Authentication failed for {$username}" there would re-open the
+        // log-forgery hole while every behavioral test still passed.
+        $reflection = new \ReflectionMethod(SSHServer::class, 'handleConnection');
+        $lines = \file((string) $reflection->getFileName());
+        $window = \implode('', \array_slice(
+            (array) $lines,
+            (int) $reflection->getStartLine(),
+            (int) $reflection->getEndLine() - (int) $reflection->getStartLine()
+        ));
+
+        $emissions = [];
+        foreach (\explode("\n", $window) as $line) {
+            if (\str_contains($line, 'fwrite') && \str_contains($line, 'STDERR')) {
+                $emissions[] = $line;
+            }
+        }
+
+        $this->assertNotCount(0, $emissions, 'the call-site scan would be vacuous without emissions');
+        foreach ($emissions as $line) {
+            if (\str_contains($line, '$username') || \str_contains($line, '$command')) {
+                $this->assertStringContainsString(
+                    'logSafe(',
+                    $line,
+                    'every STDERR emission of a client-claimed token must route through logSafe: ' . \trim($line)
+                );
+            }
+        }
+
+        // The username reaches exactly two emissions (deactivated + auth
+        // failure) — a third raw path would dodge the per-line arms above.
+        $this->assertSame(
+            2,
+            \substr_count($window, 'self::logSafe($username)'),
+            'both STDERR paths that name the claimed user must sanitize'
+        );
+    }
+
     public function testHandleConnectionRejectsWrongPresentedKey(): void
     {
         $authorized = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL6m3B1t3xK7qVQ5JxF9kE3xM8qFV2hG4pR9e2mY3xLk alice@host';

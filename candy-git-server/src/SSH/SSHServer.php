@@ -95,13 +95,13 @@ final class SSHServer
         $user = $this->users[$username] ?? null;
 
         if ($user !== null && !$user->isActive) {
-            \fwrite(\STDERR, "User {$username} is deactivated\n");
+            \fwrite(\STDERR, "User " . self::logSafe($username) . " is deactivated\n");
             return 1;
         }
 
         // Handle public key auth
         if (!$this->authenticate($stream, $user, $publicKey)) {
-            \fwrite(\STDERR, "Authentication failed for {$username}\n");
+            \fwrite(\STDERR, "Authentication failed for " . self::logSafe($username) . "\n");
             return 1;
         }
 
@@ -109,7 +109,7 @@ final class SSHServer
 
         // Parse git command
         if (!\preg_match('/^(git-upload-pack|git-receive-pack)\s+["\']?(\/[^"\'\s]+)["\']?/', $command, $m)) {
-            \fwrite(\STDERR, "Unknown command: {$command}\n");
+            \fwrite(\STDERR, "Unknown command: " . self::logSafe($command) . "\n");
             return 1;
         }
 
@@ -122,7 +122,7 @@ final class SSHServer
         // parent of the repos root (and creating repos there on push).
         // isJailSafeName rejects the all-dots names that the charset allows.
         if (!Repo::isJailSafeName($repoName)) {
-            \fwrite(\STDERR, "Invalid repo name: {$repoName}\n");
+            \fwrite(\STDERR, "Invalid repo name: " . self::logSafe($repoName) . "\n");
             return 1;
         }
 
@@ -151,6 +151,28 @@ final class SSHServer
         // One connection, both directions: the delegated git child speaks to
         // this stream, so the bytes never touch the process constants here.
         return $handler->serve($stream, $stream);
+    }
+
+    /**
+     * Neutralize a client-claimed token for the operator log. The username
+     * (and the refused command/repo shapes) arrive straight from the peer:
+     * a CR/LF inside a claimed name forges additional STDERR lines, and an
+     * unbounded one floods the log. Strip C0 controls and DEL, collapse
+     * whitespace runs, and clip. Identity on any legitimate name — the
+     * account lookup above still uses the raw token, so sanitizing here
+     * cannot alias a real account.
+     */
+    private static function logSafe(string $token): string
+    {
+        $clean = \preg_replace('/[\x00-\x1F\x7F]+/', ' ', $token) ?? '';
+        $clean = \trim($clean);
+        if (\strlen($clean) > 64) {
+            // Byte clip, no marker: ext-mbstring is not a declared
+            // dependency, and appending an ellipsis could split a
+            // multi-byte sequence already inside the kept prefix.
+            $clean = \substr($clean, 0, 64);
+        }
+        return $clean === '' ? '<empty>' : $clean;
     }
 
     /**

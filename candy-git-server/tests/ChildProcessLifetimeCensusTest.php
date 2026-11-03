@@ -404,11 +404,12 @@ final class ChildProcessLifetimeCensusTest extends TestCase
     }
 
     /**
-     * Changed 2026-10-24 (the smart-HTTP transport round): POST
-     * git-receive-pack is a phase-2 refusal (501) and spawns nothing through
-     * the router anymore. The refusal itself is pinned here; the receive-pack
-     * CHILD-LIFETIME story moves to the direct StatelessRpc::negotiate() arm
-     * below, so the shared code path stays census-honest for when push lands.
+     * Changed 2026-11-03 (push wired): POST git-receive-pack answers the
+     * pre-auth 401 challenge and spawns nothing for an anonymous client,
+     * so the router-side census arm below pins the challenge-and-refuse
+     * shape. The receive-pack CHILD-LIFETIME story for the wired push path
+     * lives in the direct StatelessRpc::negotiate() arm below, keeping the
+     * shared spawn code census-honest now that push is live.
      */
     public function testHttpPostReceivePackRefusesWithoutSpawning(): void
     {

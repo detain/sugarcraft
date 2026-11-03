@@ -126,7 +126,7 @@ candy-git-server/
 │   │   └── ReceivePack.php         git-receive-pack handler (daemon/CGI shape)
 │   ├── HttpSmartProtocol/
 │   │   ├── HttpListener.php        HTTP/1.1 socket server (serve --http hosts the router)
-│   │   └── Server.php              Smart-HTTP + LFS router (read path live; push 501)
+│   │   └── Server.php              Smart-HTTP + LFS router (clone, fetch, push and LFS live)
 │   ├── Clipboard/
 │   │   └── Osc52.php               OSC 52 encoder (orphan: no TUI consumes it)
 │   ├── LFS/
@@ -246,7 +246,7 @@ SSH wire protocol itself. Their auth models differ deliberately: candy-git-serve
 does its own SSH public-key matching (`SSH\SSHServer` + `User`), while sugar-ssh-server trusts
 sshd and allowlists by username + key fingerprint.
 
-## HTTP Smart Protocol (read path live behind `serve --http`)
+## HTTP Smart Protocol (clone, fetch, push and LFS live behind `serve --http`)
 
 `HttpSmartProtocol\Server` routes the Git smart-HTTP flow and the LFS
 batch API; `HttpSmartProtocol\HttpListener` feeds it real sockets when you
