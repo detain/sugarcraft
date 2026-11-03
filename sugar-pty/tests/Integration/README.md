@@ -26,6 +26,10 @@ no fakes — every test forks a real binary, drives it through a real
   installed.
 - **5 s wallclock budget per test** (`PythonReplTest`'s multi-line case
   bumps to 7 s — the REPL takes longer to drain through `...` prompts).
+- The suite-wide HangWatchdog bounds every test at ~90 s and SIGKILLs
+  the runner with a forensic dump, so a hung PTY spawn fails loudly
+  instead of freezing CI; the 5 s budgets above are the *expected* shape,
+  the watchdog is the backstop.
 - Every spawn is wrapped in `try/finally` that calls
   `kill(SIGKILL) → wait() → master->close()` so no test leaks a
   zombie child or open fd, even on assertion failure.

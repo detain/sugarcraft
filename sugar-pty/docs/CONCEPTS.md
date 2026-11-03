@@ -297,7 +297,9 @@ contracts for the same reason: a `MockPump` in tests, an
 
 Only two top-level `src/` classes are deprecated: the `Pty` facade
 (a `MasterPty` adapter over the same `PosixPtySystem` path) and the
-`Child` class (a backward-compatible alias for `PosixChild`). Both will
+`Child` class (a backward-compatibility shim that `PosixChild` still *extends* —
+not a pure alias: it carries the promoted constructor and the public `$pid`
+property, which is why the removal has a dependency to unwind). Both will
 go away at v2.0, and consumers on the old shape keep working until
 then. The alias removal has one dependency to unwind first: `PosixChild`
 currently *extends* `Child` to inherit its promoted constructor (which

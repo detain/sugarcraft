@@ -97,6 +97,11 @@ deprecated facade object from `Pty::open()` — its rows are marked
 *(facade)*. Contract users go through `$pair->slave()->spawn(...)`
 and `$pair->master()`, not `$pty`.
 
+Names below are relative to `SugarCraft\Pty`: contracts in `SugarCraft\Pty\Contract`,
+POSIX machinery in `SugarCraft\Pty\Posix`, the Windows backend in
+`SugarCraft\Pty\Windows`, codecs in `SugarCraft\Pty\Input` / `SugarCraft\Pty\Output`,
+exceptions at the package root.
+
 | Call | What it does |
 |---|---|
 | `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet on -1; on Linux `posix_openpt + grantpt + unlockpt + ptsname_r`. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open. Returns a `PtyPair` exposing `master()` (readonly fd + slavePath) and `slave()`. A `0 x 0` request is kernel-legal and yields an actual 0x0 geometry until something resizes it — children that query the size then see zeros, so pass real dimensions (or `resize()` once known). The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
@@ -107,6 +112,10 @@ and `$pair->master()`, not `$pty`.
 | `$pty->setBlocking(bool $blocking): void` *(facade)* | Toggles non-blocking mode on the master fd. Contract users hold the same lever through the sanctioned `stream_set_blocking($master->stream(), $blocking)` toggle — `MasterPty::stream()` exposes the cached `php://fd/` resource. The pumps save and restore this mode around their own temporary flips, so your setting stands outside a `PosixPump`/`ReactPump` run. |
 | `$pty->resize(int $cols, int $rows): void` | TIOCSWINSZ on the master fd. |
 | `$pty->size(): array{rows,cols,xpix,ypix}` | TIOCGWINSZ readback. |
+| `$master->fd(): int` | The raw OS descriptor, for direct `ioctl`/FFI use. Throws `PtyException` once the master is closed — probe with `isClosed()` first when a soft answer beats an exception. |
+| `$master->isClosed(): bool` | Soft close state; never throws. |
+| `$system->capabilities(): array` | Per-backend boolean key sets — POSIX answers `pty` / `termios` / `signal`; ConPTY answers `conpty` / `controllingTerminal` / `signals` / `fd`. There is deliberately NO shared key alphabet across backends: probe the keys you need with `?? false`. |
+| `SignalForwarder::pcntlReady(): bool` | False without ext-pcntl; `attachSigwinch()` / `attach()` then decline (return false) instead of failing, so check this before wiring signals. |
 | `$pty->stream(): resource` | Cached `php://fd/` wrapper around the master fd for direct PHP-stream use. |
 | `$pty->close(): void` | Idempotent. `fclose`s the `stream()` wrapper if one was materialised, then always `close(2)`s the original master fd via FFI. Throws `PtyException` if that `close(2)` fails (on either path) or if the `fclose` failed — in the latter case only after the master fd itself was released. |
 | `$child->pid(): int` | OS process id. Contract-typed children (`Contract\Child`) declare the *method* only. The `public readonly int $pid` *property* exists on the concrete `PosixChild`/`Child` classes (inherited from the `Child` alias's promoted constructor), but do not rely on it behind a contract type — calling `$child->pid` on a `Contract\Child` fatals. |
@@ -206,6 +215,11 @@ that, and each one has cost someone an afternoon:
 - **Line buffering.** Cooked output is flushed per line (or when the
   child flushes); a child printing without a trailing newline can
   hold those bytes in its stdio buffer indefinitely.
+- **Geometry is delivered, not polled.** The child learns the window size
+  from the winsize struct plus the SIGWINCH the kernel fires on
+  `TIOCSWINSZ`; a caching TUI that never re-reads its size will drift.
+  Forward host resizes with `SignalForwarder::attachSigwinch($master, ...)`
+  (see the resize recipe) and make the child handle SIGWINCH.
 
 Accessibility note: assistive tooling consuming PTY output sees this
 cooked stream — echo on, CRLFs present. Decide and document which
