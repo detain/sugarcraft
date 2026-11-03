@@ -17,7 +17,7 @@ namespace SugarCraft\ColorProfile\Probe;
  * may loosen toward `is_file()` alone without the other following in
  * the same change.
  *
- * The result is memoised per process — the filesystem layout a probe sees
+ * The result is memoized per process — the filesystem layout a probe sees
  * at first call is the layout every later call reports. {@see reset()}
  * clears the memo (test isolation only).
  */
@@ -54,7 +54,7 @@ final class InfocmpBinary
     }
 
     /**
-     * Clear the memoised answer (for testing only).
+     * Clear the memoized answer (for testing only).
      *
      * @internal
      */

@@ -8,21 +8,24 @@ namespace SugarCraft\ColorProfile;
  * True nearest-color matching against fixed (or arbitrary) palettes.
  *
  * Unlike {@see Color::toAnsi256Index()} — which *rounds* each channel into the
- * 6×6×6 cube with a greyscale special case — this matcher searches the palette
+ * 6×6×6 cube with a grayscale special case — this matcher searches the palette
  * for the minimum-distance entry under a pluggable {@see ColorDistance}
  * strategy. The default strategy is EUCLIDEAN in sRGB; the CIE strategies are
  * opt-in perceptual upgrades.
  *
  * Cost control: L*a*b* values for the full 256-entry ANSI palette (the 16
- * standard colors, the 6×6×6 cube and the grey ramp) are computed once per
- * process and memoized statically — a CIEDE2000 match otherwise pays 256
- * conversions per call, and media clients quantize palettes per frame. Measured
- * on PHP 8.3 (see NearestColorTest): a warm CIEDE2000 search over all 256
- * entries costs about 1 ms; re-converting the palette would add ~40 % on top.
+ * standard colors, the 6×6×6 cube and the gray ramp) are memoized statically,
+ * keyed on a fingerprint of the mutable {@see StandardColors} slots — while the
+ * slots are untouched each table stays the same instance (the hot-loop guard a
+ * CIEDE2000 match needs: it otherwise pays 256 conversions per call, and media
+ * clients quantize palettes per frame), and a redefinition lands on the next
+ * call instead of hiding behind a frozen memo. Measured on PHP 8.3 (see
+ * NearestColorTest): a warm CIEDE2000 search over all 256 entries costs about
+ * 1 ms; re-converting the palette would add ~40 % on top.
  *
  * Palette table: indices 0-15 are the {@see StandardColors} ANSI-16 set;
  * 16-231 the canonical xterm 6×6×6 cube (channel levels 0, 95, 135, 175, 215,
- * 255 — {@see Color::CUBE_LEVELS}); 232-255 the 8+10n grey ramp. The table is
+ * 255 — {@see Color::CUBE_LEVELS}); 232-255 the 8+10n gray ramp. The table is
  * built straight from {@see Color::fromAnsi256Index()} so the matcher's
  * palette, the encoder's rounding targets, and sugar-core's Util\Color::ansi256
  * share ONE source of truth (a cross-library pin guards this — the old local
@@ -33,14 +36,32 @@ namespace SugarCraft\ColorProfile;
  */
 final class NearestColor
 {
-    /** @var list<Color>|null Memoized ANSI-256 palette (index == palette key). */
+    /** @var list<Color>|null Memoized ANSI-256 palette (index == palette key), valid while {@see self::$ansi256PaletteKey} matches. */
     private static ?array $ansi256Palette = null;
 
-    /** @var list<array{l: float, a: float, b: float}>|null Memoized Lab of {@see self::$ansi256Palette}. */
+    /** @var string|null Fingerprint of the ANSI-16 slots {@see self::$ansi256Palette} was built from. */
+    private static ?string $ansi256PaletteKey = null;
+
+    /** @var list<array{l: float, a: float, b: float}>|null Memoized Lab of {@see self::$ansi256Palette}, same key guard. */
     private static ?array $ansi256PaletteLab = null;
 
-    /** @var list<array{l: float, a: float, b: float}>|null Memoized Lab of the ANSI-16 palette. */
+    /** @var string|null Fingerprint of the ANSI-16 slots {@see self::$ansi256PaletteLab} was built from. */
+    private static ?string $ansi256PaletteLabKey = null;
+
+    /** @var list<array{l: float, a: float, b: float}>|null Memoized Lab of the ANSI-16 palette, same key guard. */
     private static ?array $ansi16PaletteLab = null;
+
+    /** @var string|null Fingerprint of the ANSI-16 slots {@see self::$ansi16PaletteLab} was built from. */
+    private static ?string $ansi16PaletteLabKey = null;
+
+    /**
+     * The 256-color decoder tail (indices 16-255). Frozen by the xterm-256
+     * color cube definition — unlike the ANSI-16 slots it can never be
+     * redefined, so it is built once and shared across palette rebuilds.
+     *
+     * @var list<Color>|null
+     */
+    private static ?array $ansi256Tail = null;
 
     /** Damping applied to the stored error before it pushes the query, per chafa chafa-palette.c:1170. */
     private const ERROR_DAMPING = 0.9;
@@ -207,33 +228,51 @@ final class NearestColor
     }
 
     /**
-     * The 256-color palette as Colors — computed once, memoized statically.
+     * The 256-color palette as Colors — memoized, keyed on the live
+     * {@see StandardColors} slots (indices 0-15) so a redefinition rebuilds it.
      *
      * @return list<Color>
      */
     public static function palette256(): array
     {
-        if (self::$ansi256Palette !== null) {
+        $key = self::slotFingerprint();
+
+        if (self::$ansi256Palette !== null && self::$ansi256PaletteKey === $key) {
             return self::$ansi256Palette;
         }
 
-        $palette = StandardColors::all();
-        for ($index = 16; $index < 256; $index++) {
-            $palette[] = Color::fromAnsi256Index($index);
+        if (self::$ansi256Tail === null) {
+            $tail = [];
+            for ($index = 16; $index < 256; $index++) {
+                $tail[] = Color::fromAnsi256Index($index);
+            }
+
+            self::$ansi256Tail = $tail;
         }
 
-        return self::$ansi256Palette = $palette;
+        $palette = StandardColors::all();
+        foreach (self::$ansi256Tail as $entry) {
+            $palette[] = $entry;
+        }
+
+        self::$ansi256Palette = $palette;
+        self::$ansi256PaletteKey = $key;
+
+        return $palette;
     }
 
     /**
-     * L*a*b* of {@see self::palette256()}, computed once and memoized — the
-     * hot-loop guard that makes CIEDE2000 nearest matching affordable.
+     * L*a*b* of {@see self::palette256()}, memoized behind the same slot
+     * fingerprint — the hot-loop guard that makes CIEDE2000 nearest matching
+     * affordable while the ANSI-16 slots stay untouched.
      *
      * @return list<array{l: float, a: float, b: float}>
      */
     public static function palette256Lab(): array
     {
-        if (self::$ansi256PaletteLab !== null) {
+        $key = self::slotFingerprint();
+
+        if (self::$ansi256PaletteLab !== null && self::$ansi256PaletteLabKey === $key) {
             return self::$ansi256PaletteLab;
         }
 
@@ -242,17 +281,23 @@ final class NearestColor
             $labs[] = ColorMath::toLab($entry->r, $entry->g, $entry->b);
         }
 
-        return self::$ansi256PaletteLab = $labs;
+        self::$ansi256PaletteLab = $labs;
+        self::$ansi256PaletteLabKey = $key;
+
+        return $labs;
     }
 
     /**
-     * L*a*b* of the ANSI-16 palette, computed once and memoized.
+     * L*a*b* of the ANSI-16 palette, memoized behind the slot fingerprint so a
+     * {@see StandardColors} reassignment lands on the next call.
      *
      * @return list<array{l: float, a: float, b: float}>
      */
     public static function palette16Lab(): array
     {
-        if (self::$ansi16PaletteLab !== null) {
+        $key = self::slotFingerprint();
+
+        if (self::$ansi16PaletteLab !== null && self::$ansi16PaletteLabKey === $key) {
             return self::$ansi16PaletteLab;
         }
 
@@ -261,7 +306,23 @@ final class NearestColor
             $labs[] = ColorMath::toLab($entry->r, $entry->g, $entry->b);
         }
 
-        return self::$ansi16PaletteLab = $labs;
+        self::$ansi16PaletteLab = $labs;
+        self::$ansi16PaletteLabKey = $key;
+
+        return $labs;
+    }
+
+    /**
+     * Fingerprint of the mutable ANSI-16 slots — the guard key every palette
+     * memo is validated against. The 256-index decoder tail needs no key: it
+     * is frozen by the xterm-256 definition.
+     */
+    private static function slotFingerprint(): string
+    {
+        return implode('|', array_map(
+            static fn (Color $color): string => $color->toHex(),
+            StandardColors::all(),
+        ));
     }
 
     /**

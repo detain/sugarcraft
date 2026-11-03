@@ -63,7 +63,7 @@ final class StandardColors
     public static Color $white;
 
     /** @deprecated Mutable process-global static; read fromIndex(8)/all()[8] instead. REMOVED-IN: 2.0.0 */
-    public static Color $brightBlack;   // grey
+    public static Color $brightBlack;   // gray
     /** @deprecated Mutable process-global static; read fromIndex(9)/all()[9] instead. REMOVED-IN: 2.0.0 */
     public static Color $brightRed;
     /** @deprecated Mutable process-global static; read fromIndex(10)/all()[10] instead. REMOVED-IN: 2.0.0 */

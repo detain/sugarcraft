@@ -8,7 +8,7 @@ namespace SugarCraft\ColorProfile;
  * Distance-metric strategy for nearest-color matching.
  *
  * `EUCLIDEAN` is the legacy behavior: raw Euclidean distance in sRGB space,
- * cheap but perceptually skewed (it mis-ranks blues/greens and near-greys).
+ * cheap but perceptually skewed (it mis-ranks blues/greens and near-grays).
  * The CIE strategies convert to L*a*b* via {@see ColorMath} and are opt-in —
  * pair them with {@see NearestColor}'s memoized palette Lab values to keep
  * per-frame matching affordable.

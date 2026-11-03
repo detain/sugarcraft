@@ -74,7 +74,7 @@ final class Color
      * Convert this color to the closest approximation representable in $profile.
      *
      * - TrueColor: returns a copy unchanged (already at max fidelity)
-     * - Ansi256:  rounds to the nearest 216-color cube or 24-step grey ramp
+     * - Ansi256:  rounds to the nearest 216-color cube or 24-step gray ramp
      * - Ansi240:  same quantiser — it lands exclusively on slots 16-255 by
      *             construction, which IS the chafa INDEXED_240 promise)
      * - Ansi:     rounds to one of 16 standard terminal colors
@@ -130,14 +130,14 @@ final class Color
      *
      * The property this table always relied on is preserved: slots 0-15 are
      * THEMEABLE (a terminal owner's config, not these bytes, decides what the
-     * user sees; the 16-colour writers emit only the SGR index for them — see
+     * user sees; the 16-color writers emit only the SGR index for them — see
      * the writer-scope note below), so these values serve distance maths and
      * slot decoding alone. Within this
-     * lib the 16-COLOUR chain is exact — the SAME table feeds decode
+     * lib the 16-COLOR chain is exact — the SAME table feeds decode
      * (fromAnsi256Index), quantise (toAnsi16Index) and render
      * (toAnsi16Foreground/toAnsi16Background) — so every slot 0-15 round-trips
      * back to its own index through it and no byte disagrees with another
-     * 16-colour API. Composing with the 256-COLOUR path is, however, LOSSY by
+     * 16-color API. Composing with the 256-COLOR path is, however, LOSSY by
      * construction for the slots that do not lie on the fixed 6×6×6 cube
      * (indices 16-231 over {@see CUBE_LEVELS}): slots 1-8 and 12 are off-cube,
      * e.g. slot 4 #0000EE → toAnsi256Index() 21 → fromAnsi256Index(21)
@@ -145,7 +145,7 @@ final class Color
      * — precisely those whose R,G,B are all members of CUBE_LEVELS — survive a
      * 256 round-trip byte-exact; the move of slot 12 from #0000FF (exactly cube
      * index 21) to xterm's #5C5CFF made that slot newly lossy on this path. It
-     * does not affect what a user sees FOR THE 16-COLOUR WRITERS: those emit
+     * does not affect what a user sees FOR THE 16-COLOR WRITERS: those emit
      * the 4-bit SGR index ({@see toAnsi16Foreground()}/
      * toAnsi16Background() — slot 4 renders as `ESC [ 34 m`), so the terminal
      * supplies its own theme for slots 0-15. Use the wider writers knowing what
@@ -179,10 +179,10 @@ final class Color
      * Convert to 256-color ANSI palette index (0-255).
      *
      * 16-231 : 6×6×6 color cube (216 colors, axes R·36 + G·6 + B)
-     * 232-255: 24-step grey ramp (8, 18, …, 238)
+     * 232-255: 24-step gray ramp (8, 18, …, 238)
      *
      * Picks whichever of the two candidates is nearer in squared RGB, the
-     * same rule sugar-core's Color::nearest256() uses, so the cube/grey
+     * same rule sugar-core's Color::nearest256() uses, so the cube/gray
      * overlap region is stable across the monorepo. Truecolor red maps to
      * 196, not to the themeable basic slot 1: RGB is only ever quantised
      * onto the fixed part of the palette (16-255).
@@ -195,7 +195,7 @@ final class Color
             + 6 * self::nearestCubeLevel($this->g)
             + self::nearestCubeLevel($this->b);
 
-        // Greyscale candidates (232-255): levels 8, 18, …, 238. The mean
+        // Grayscale candidates (232-255): levels 8, 18, …, 238. The mean
         // bin alone can land one slot off on an exact ramp midpoint
         // (avg = 13, 23, …, 233), so probe bin-1, bin, bin+1 in ascending
         // order and keep the first strict minimum — at a tie that is the
@@ -356,7 +356,7 @@ final class Color
      * Slots 0-15 resolve to the terminal's palette entries (xterm defaults
      * here — the 16 basic/bright slots are themeable, so any RGB this library
      * produces for them is a reference value, never what the user sees).
-     * 16-231 is the fixed 6×6×6 cube, 232-255 the grey ramp; indices below 0
+     * 16-231 is the fixed 6×6×6 cube, 232-255 the gray ramp; indices below 0
      * or above 255 clamp.
      *
      * @see https://github.com/charmbracelet/colorprofile — Color.FromANSI256Index
@@ -439,7 +439,7 @@ final class Color
 
     /**
      * Squared RGB distance from $c to the palette color at fixed-range
-     * index $idx (16-255 — the non-themeable cube + grey ramp).
+     * index $idx (16-255 — the non-themeable cube + gray ramp).
      */
     private static function distToCubeIndex(self $c, int $idx): int
     {

@@ -50,7 +50,7 @@ enum ColorProfile: string
     /** Full 24-bit TrueColor (16.7 million colors). */
     case TrueColor = 'truecolor';
 
-    /** 256-color ANSI (216 cube + 24 greyscale + 16 standard). */
+    /** 256-color ANSI (216 cube + 24 grayscale + 16 standard). */
     case Ansi256 = 'ansi256';
 
     /** 240 fixed palette colors (slots 16-255; the themeable 16 excluded). */

@@ -78,6 +78,31 @@ final class NearestColorTest extends TestCase
         self::assertSame(ColorDistance::Euclidean, (new NearestColor())->metric());
     }
 
+    public function testTheLabMemosTrackStandardColorReassignments(): void
+    {
+        $original = StandardColors::$red;
+        $warm = NearestColor::palette16Lab();
+        self::assertSame($warm, NearestColor::palette16Lab());
+
+        $sentinel = new Color(0x12, 0x34, 0x56);
+        try {
+            StandardColors::$red = $sentinel;
+
+            $mutated = NearestColor::palette16Lab();
+            self::assertNotSame($warm, $mutated, 'a redefined slot must not hide behind the frozen memo');
+            self::assertSame(ColorMath::toLab(0x12, 0x34, 0x56), $mutated[1]);
+            // The 256-entry table leads with the same mutable slots — same guarantee there.
+            self::assertSame(ColorMath::toLab(0x12, 0x34, 0x56), NearestColor::palette256Lab()[1]);
+            // CIE ANSI-16 matching honors the sentinel without any manual rebuild.
+            self::assertSame(1, (new NearestColor(ColorDistance::Cie76))->ansi16(new Color(0x12, 0x34, 0x56)));
+        } finally {
+            StandardColors::$red = $original;
+        }
+
+        $restored = NearestColor::palette16Lab();
+        self::assertSame($warm[1], $restored[1], 'restoring the slot restores the original table contents');
+    }
+
     public function testEuclideanAnsi256SnapsToExactCubeAndRampNodes(): void
     {
         $matcher = new NearestColor();

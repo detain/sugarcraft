@@ -248,8 +248,8 @@ final class Palette
      */
     private function rewriteSgr(string $params, ColorProfile $target): string
     {
-        // Fast path: no extended-colour introducer → byte-identical passthrough.
-        // (Leading zeros are valid ECMA-48 padding: `038` introduces colour 38.)
+        // Fast path: no extended-color introducer → byte-identical passthrough.
+        // (Leading zeros are valid ECMA-48 padding: `038` introduces color 38.)
         // Absurdly long parameter lists also pass through untouched — real SGR
         // lists fit in a few hundred bytes, and walking a megabyte-scale one
         // would multiply memory for no benefit on hostile input.
@@ -286,7 +286,7 @@ final class Palette
                 ? $this->parseColonColor(\array_slice($subs, 1))
                 : $this->parseSemicolonColor($groups, $i, $consumed);
             if ($spec === null) {
-                // Not a colour spec we understand (e.g. `38;3` CMY) — pass through.
+                // Not a color spec we understand (e.g. `38;3` CMY) — pass through.
                 $out[] = $groups[$i];
                 continue;
             }
@@ -300,7 +300,7 @@ final class Palette
 
     /**
      * Parse `…;5;n` / `…;2;r;g;b` (and missing-argument defaults) following a
-     * lone 38/48/58 group. ECMA-48 defaults absent colour ids/components to 0.
+     * lone 38/48/58 group. ECMA-48 defaults absent color ids/components to 0.
      *
      * @param list<string> $groups
      * @param-out int      $consumed following groups taken by the spec
@@ -311,7 +311,7 @@ final class Palette
     {
         $consumed = 0;
         if (!isset($groups[$i + 1])) {
-            // Trailing `38` with no spec: xterm defaults the colour to slot 0.
+            // Trailing `38` with no spec: xterm defaults the color to slot 0.
             return [5, [0]];
         }
         $subs = \explode(':', $groups[$i + 1]);
@@ -333,7 +333,7 @@ final class Palette
                 static fn (string $v): bool => $v !== '',
             ));
             if (\count($tail) >= 3) {
-                // Colon sub-parameters may carry a colour-space id / tolerance
+                // Colon sub-parameters may carry a color-space id / tolerance
                 // before the components (`38;2:1:tol;r:g:b`-style continuations);
                 // the components are always the LAST three values. Known edge:
                 // for a hybrid form that packs ≥4 sub-parameters into the
@@ -359,7 +359,7 @@ final class Palette
 
     /**
      * Parse the sub-parameter list of a colon-form spec (`5:196`, `2:r:g:b`,
-     * `2:tol:r:g:b` — colour-space/tolerance fields precede the trailing three
+     * `2:tol:r:g:b` — color-space/tolerance fields precede the trailing three
      * components; an empty tolerance sub-parameter is skipped). Missing
      * components default to 0, matching the semicolon path and xterm.
      *
@@ -403,7 +403,7 @@ final class Palette
     /**
      * Cast an SGR numeric literal, capping absurd magnitudes at 999 instead of
      * letting a >19-digit run overflow the int cast through INF (where a
-     * "huge red" would silently come out as 0/black). Colour components clamp
+     * "huge red" would silently come out as 0/black). Color components clamp
      * to 255 downstream, so 999 saturates identically to PHP_INT_MAX.
      */
     private static function sgrInt(string $digits): int
@@ -416,17 +416,17 @@ final class Palette
     }
 
     /**
-     * Render the parsed colour as replacement SGR parameters for $target.
+     * Render the parsed color as replacement SGR parameters for $target.
      *
      * At ANSI256 an in-range slot is already exactly addressable, so it is
      * passed through as the slot the theme picked — decoding to RGB and
      * re-quantising could knock a themeable basic slot (0-15) onto the fixed
      * cube and strip the user's palette. At ANSI240 (chafa's
      * INDEXED_240) that mercy does not extend to slots 0-15: those vary with
-     * the user's theme and the 240-colour promise excludes them, so a
+     * the user's theme and the 240-color promise excludes them, so a
      * `38;5;k` with k < 16 is decoded and re-quantised onto the fixed range
-     * instead of passed through. 38/48 at 16-colour depth collapse to
-     * the 4-bit SGR; 58 keeps its introducer (underlines need a colour id a
+     * instead of passed through. 38/48 at 16-color depth collapse to
+     * the 4-bit SGR; 58 keeps its introducer (underlines need a color id a
      * 4-bit code cannot carry) pinned to the nearest of the 16 palette slots.
      *
      * @param list<int> $values

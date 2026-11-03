@@ -197,7 +197,7 @@ final class DetectionChain
             $level === 1 => self::LEVEL_ANSI,
             // Chalk's convention is level 0 = "no color support", but this
             // lib's floor is Ascii: 4-bit SGR stripped to decoration only,
-            // which is what "disable colour, keep the rest" renders as here.
+            // which is what "disable color, keep the rest" renders as here.
             default => self::LEVEL_ASCII,
         };
     }
