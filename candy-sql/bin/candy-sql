@@ -44,6 +44,7 @@ use SugarCraft\Sql\Admin\History\HistoryRecorder;
 use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\App\AppBuilder;
+use SugarCraft\Sql\CellValue;
 use SugarCraft\Sql\Db\ConnectionFactory;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
@@ -61,41 +62,54 @@ if ($exit !== null) {
     exit($exit);
 }
 
-$historyPath = resolveHistoryPath($argv);
-$argv = stripHistoryFlags($argv);
+try {
+    // D-C11: everything that can reject the connection lives between here
+    // and the event loop — an unsupported driver, an unparseable DSN, bad
+    // credentials, an unwritable history store. Uncaught, each of those
+    // died with a raw PHP fatal trace (exit 255), a wall of stack frames
+    // burying the one sentence the user needs. Report that sentence,
+    // control-byte-free and single-line, and exit 2 — a usage/launch
+    // failure, distinct from the autoload refusal's exit 1 above.
+    $historyPath = resolveHistoryPath($argv);
+    $argv = stripHistoryFlags($argv);
 
-$database = buildDatabase($argv);
+    $database = buildDatabase($argv);
 
-// Extract flavor from database type
-$flavor = match (true) {
-    $database instanceof MysqlDatabase => Flavor::MySQL,
-    $database instanceof PostgresDatabase => Flavor::Postgres,
-    $database instanceof SqliteDatabase => Flavor::Sqlite,
-    default => Flavor::Sqlite,
-};
+    // Extract flavor from database type
+    $flavor = match (true) {
+        $database instanceof MysqlDatabase => Flavor::MySQL,
+        $database instanceof PostgresDatabase => Flavor::Postgres,
+        $database instanceof SqliteDatabase => Flavor::Sqlite,
+        default => Flavor::Sqlite,
+    };
 
-$historyRecorder = null;
-if ($historyPath !== null) {
-    $historyRecorder = new HistoryRecorder(new SqliteHistoryStore($historyPath));
+    $historyRecorder = null;
+    if ($historyPath !== null) {
+        $historyRecorder = new HistoryRecorder(new SqliteHistoryStore($historyPath));
+    }
+
+    // One-time loud notice BEFORE the alt screen swallows the shell: a
+    // TLS-verifying ssl-mode refuses the plaintext-capable React transport,
+    // so admin live-refresh stands down and queries run synchronously
+    // (App::asyncTransportRefusedByTls(); the in-app status line keeps the
+    // state visible for the whole session).
+    if ($database instanceof MysqlDatabase && MysqlDatabase::requiresVerifiedTls($database->sslMode())) {
+        fwrite(STDERR, sprintf(
+            "candy-sql: ssl-mode '%s' demands verified TLS — the ReactPHP admin transport cannot honour it,"
+            . " so admin live-refresh is DISABLED and queries/table loads run synchronously over the TLS connection.\n",
+            $database->sslMode(),
+        ));
+    }
+
+    (new Program(
+        App::start($database, $flavor, $historyRecorder),
+        new ProgramOptions(useAltScreen: true),
+    ))->run();
+} catch (\Throwable $e) {
+    $reason = $e->getMessage() !== '' ? $e->getMessage() : $e::class;
+    fwrite(STDERR, sprintf("candy-sql: %s\n", CellValue::sanitize($reason)));
+    exit(2);
 }
-
-// One-time loud notice BEFORE the alt screen swallows the shell: a
-// TLS-verifying ssl-mode refuses the plaintext-capable React transport,
-// so admin live-refresh stands down and queries run synchronously
-// (App::asyncTransportRefusedByTls(); the in-app status line keeps the
-// state visible for the whole session).
-if ($database instanceof MysqlDatabase && MysqlDatabase::requiresVerifiedTls($database->sslMode())) {
-    fwrite(STDERR, sprintf(
-        "candy-sql: ssl-mode '%s' demands verified TLS — the ReactPHP admin transport cannot honour it,"
-        . " so admin live-refresh is DISABLED and queries/table loads run synchronously over the TLS connection.\n",
-        $database->sslMode(),
-    ));
-}
-
-(new Program(
-    App::start($database, $flavor, $historyRecorder),
-    new ProgramOptions(useAltScreen: true),
-))->run();
 
 /**
  * Print help or handle version flag, return exit code or null to continue.

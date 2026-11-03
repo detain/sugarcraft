@@ -70,4 +70,42 @@ final class BinWiringTest extends TestCase
             'a script-only namespace was never loadable and misled the docs'
         );
     }
+
+    /**
+     * D-C11: launch-time refusals (bad driver, unparseable DSN, unwritable
+     * history) used to die as raw PHP fatal traces — seven lines of stack
+     * frames and exit 255. They now print one sanitized sentence to stderr
+     * and exit 2. The pin drives the real launcher as a child process; an
+     * unsupported driver fails at parse time, before any socket is opened,
+     * so this stays hermetic (no live connection anywhere).
+     */
+    public function testLaunchFailureIsASingleLineAndExitCodeTwo(): void
+    {
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $process = \proc_open(
+            [\PHP_BINARY, self::BIN_PATH, 'oracle://nobody@localhost/none'],
+            $descriptors,
+            $pipes,
+            \dirname(self::BIN_PATH),
+        );
+        $this->assertIsResource($process);
+        \fclose($pipes[0]);
+        $stdout = (string) \stream_get_contents($pipes[1]);
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        $exit = \proc_close($process);
+
+        $this->assertSame(2, $exit, 'launch refusals exit 2, never a 255 fatal');
+        $this->assertSame('', $stdout);
+        $this->assertStringContainsString('Unsupported driver', $stderr);
+        $this->assertStringNotContainsString('Stack trace', $stderr);
+        $this->assertStringNotContainsString('Fatal error', $stderr);
+        // Exactly one line: the sanitized sentence, nothing else.
+        $this->assertSame(1, \substr_count($stderr, "\n"));
+    }
 }
