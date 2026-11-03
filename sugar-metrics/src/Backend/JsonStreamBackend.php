@@ -7,6 +7,7 @@ namespace SugarCraft\Metrics\Backend;
 use SugarCraft\Metrics\Lang;
 use SugarCraft\Metrics\Backend;
 use SugarCraft\Metrics\Descriptor;
+use SugarCraft\Metrics\Util;
 
 /**
  * Newline-delimited JSON emitter. Every metric event gets a fresh
@@ -39,7 +40,7 @@ final class JsonStreamBackend implements Backend
             $dir = dirname($target);
             $stream = is_dir($dir) && is_writable($dir) ? fopen($target, 'a') : false;
             if ($stream === false) {
-                throw new \RuntimeException(Lang::t('jsonstream.cannot_open_target', ['target' => $target]));
+                throw new \RuntimeException(Lang::t('jsonstream.cannot_open_target', ['target' => Util::displaySafe($target)]));
             }
             $this->stream = $stream;
             $this->owns = true;
@@ -70,10 +71,10 @@ final class JsonStreamBackend implements Backend
         }
     }
 
-    public function counter(string $name, float $value, array $tags = []): void       { $this->emit('counter',        $name, $value, $tags); }
-    public function gauge(string $name, float $value, array $tags = []): void         { $this->emit('gauge',          $name, $value, $tags); }
+    public function counter(string $name, float $value, array $tags = []): void       { $this->emit('counter',         $name, $value, $tags); }
+    public function gauge(string $name, float $value, array $tags = []): void         { $this->emit('gauge',           $name, $value, $tags); }
     public function histogram(string $name, float $value, array $tags = []): void       { $this->emit('histogram',       $name, $value, $tags); }
-    public function upDownCounter(string $name, float $amount, array $tags = []): void { $this->emit('updowncounter',  $name, $amount, $tags); }
+    public function upDownCounter(string $name, float $amount, array $tags = []): void { $this->emit('up_down_counter', $name, $amount, $tags); }
     public function asyncCounter(string $name, float $value, array $tags = []): void      { $this->emit('async_counter',  $name, $value, $tags); }
     public function asyncGauge(string $name, float $value, array $tags = []): void        { $this->emit('async_gauge',    $name, $value, $tags); }
 
@@ -84,10 +85,12 @@ final class JsonStreamBackend implements Backend
     }
 
     // Flush ensures the stream buffer is drained to the underlying resource.
+    // In throwOnError mode a failed fflush is reported like a failed write —
+    // the old bare call could not throw despite the class contract.
     public function flush(): void
     {
-        if (is_resource($this->stream)) {
-            fflush($this->stream);
+        if (is_resource($this->stream) && @fflush($this->stream) === false && $this->throwOnError) {
+            throw new \RuntimeException(Lang::t('jsonstream.flush_failed'));
         }
     }
 
@@ -120,17 +123,27 @@ final class JsonStreamBackend implements Backend
             'ts'    => gmdate('c'),
             'kind'  => $kind,
             'name'  => $name,
-            'value' => $value,
+            // JSON has no literal for ±Inf/NaN — json_encode() returns false
+            // for those floats. Render them as the canonical string tokens so
+            // one poisoned reading cannot silently swallow the record.
+            'value' => Util::nonFiniteToken($value) ?? $value,
             'tags'  => (object) $tags,
         ];
         $line = json_encode($record, JSON_UNESCAPED_SLASHES);
         if ($line === false) {
+            // Remaining encode failures are hostile-input territory
+            // (non-UTF-8 names/tags): the throwOnError contract says a
+            // dropped record must be visible, so loud mode throws here too
+            // instead of returning before the write check.
+            if ($this->throwOnError) {
+                throw new \RuntimeException(Lang::t('jsonstream.encode_failed', ['name' => Util::displaySafe($name)]));
+            }
             return;
         }
         $written = @fwrite($this->stream, $line . "\n");
         if ($written === false || $written < strlen($line) + 1) {
             if ($this->throwOnError) {
-                throw new \RuntimeException(Lang::t('jsonstream.write_failed', ['name' => $name]));
+                throw new \RuntimeException(Lang::t('jsonstream.write_failed', ['name' => Util::displaySafe($name)]));
             }
             return;
         }

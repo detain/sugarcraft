@@ -31,9 +31,9 @@ final class SessionMetricsTest extends TestCase
 
         $this->assertSame(
             1.0,
-            $b->counterValue('wish.session.connect', ['user' => 'alice', 'term' => 'xterm-256color']),
+            $b->counterValue('ssh.session.connect', ['user' => 'alice', 'term' => 'xterm-256color']),
         );
-        $samples = $b->histogramValues('wish.session.duration', ['user' => 'alice', 'term' => 'xterm-256color']);
+        $samples = $b->histogramValues('ssh.session.duration', ['user' => 'alice', 'term' => 'xterm-256color']);
         $this->assertCount(1, $samples);
         $this->assertGreaterThan(0.0, $samples[0]);
     }
@@ -51,12 +51,12 @@ final class SessionMetricsTest extends TestCase
         } catch (\RuntimeException) {
             // expected
         }
-        $errs = $b->counterValue('wish.session.error', [
+        $errs = $b->counterValue('ssh.session.error', [
             'user' => 'alice', 'term' => 'xterm-256color', 'exception' => \RuntimeException::class,
         ]);
         $this->assertSame(1.0, $errs);
         // Connect counter still incremented before the throw.
-        $this->assertSame(1.0, $b->counterValue('wish.session.connect', ['user' => 'alice', 'term' => 'xterm-256color']));
+        $this->assertSame(1.0, $b->counterValue('ssh.session.connect', ['user' => 'alice', 'term' => 'xterm-256color']));
     }
 
     public function testHostileSessionTagsAreCappedAndSanitized(): void
@@ -74,7 +74,7 @@ final class SessionMetricsTest extends TestCase
         $mw->handle(Context::background(), $this->session($hostileUser, $hostileTerm), fn() => null);
 
         // The raw hostile values are never recorded verbatim.
-        $this->assertSame(0.0, $b->counterValue('wish.session.connect', [
+        $this->assertSame(0.0, $b->counterValue('ssh.session.connect', [
             'user' => $hostileUser, 'term' => $hostileTerm,
         ]));
 
@@ -82,14 +82,14 @@ final class SessionMetricsTest extends TestCase
         // bounded and free of separator/injection bytes.
         $connectKeys = array_values(array_filter(
             array_keys($b->counters()),
-            static fn(string $k): bool => str_starts_with($k, 'wish.session.connect'),
+            static fn(string $k): bool => str_starts_with($k, 'ssh.session.connect'),
         ));
         $this->assertCount(1, $connectKeys);
         $key = $connectKeys[0];
         $this->assertDoesNotMatchRegularExpression('/[\r\n\t ]/', $key, 'no control/whitespace bytes may survive');
 
         // Pull the user=<value> and term=<value> segments out of the storage key
-        // (format: wish.session.connect|term=<...>|user=<...>) and assert each
+        // (format: ssh.session.connect|term=<...>|user=<...>) and assert each
         // value is charset-clamped and length-capped to 64.
         foreach (['user', 'term'] as $tag) {
             $matched = preg_match('/(?:^|\|)' . $tag . '=([^|]*)/', $key, $m);
@@ -108,7 +108,7 @@ final class SessionMetricsTest extends TestCase
 
         $this->assertSame(
             1.0,
-            $b->counterValue('wish.session.connect', [
+            $b->counterValue('ssh.session.connect', [
                 'user' => 'alice', 'term' => 'xterm-256color', 'client_subnet' => '127.0.0.0/24',
             ]),
         );
@@ -123,7 +123,7 @@ final class SessionMetricsTest extends TestCase
 
         $this->assertSame(
             1.0,
-            $b->counterValue('wish.session.connect', [
+            $b->counterValue('ssh.session.connect', [
                 'user' => 'alice', 'term' => 'xterm-256color',
             ]),
         );
@@ -142,7 +142,7 @@ final class SessionMetricsTest extends TestCase
 
         $keys = array_values(array_filter(
             array_keys($b->counters()),
-            static fn(string $k): bool => str_starts_with($k, 'wish.session.connect'),
+            static fn(string $k): bool => str_starts_with($k, 'ssh.session.connect'),
         ));
         $this->assertCount(1, $keys);
         $this->assertStringContainsString('user=' . $exactUser, $keys[0]);
@@ -161,7 +161,7 @@ final class SessionMetricsTest extends TestCase
 
         $keys = array_values(array_filter(
             array_keys($b->counters()),
-            static fn(string $k): bool => str_starts_with($k, 'wish.session.connect'),
+            static fn(string $k): bool => str_starts_with($k, 'ssh.session.connect'),
         ));
         $this->assertCount(1, $keys);
         $this->assertStringContainsString('user=' . str_repeat('b', 64), $keys[0]);
@@ -177,11 +177,35 @@ final class SessionMetricsTest extends TestCase
             usleep(5000); // 5ms
         });
 
-        $samples = $b->histogramValues('wish.session.duration', [
+        $samples = $b->histogramValues('ssh.session.duration', [
             'user' => 'alice', 'term' => 'xterm-256color',
         ]);
         $this->assertCount(1, $samples);
         $this->assertGreaterThanOrEqual(0.005, $samples[0]);
+    }
+
+    public function testExceptionTagCannotBeShadowedByExtraTags(): void
+    {
+        // n3: the error counter's `exception` tag must report the REAL
+        // throwable class even when the extraTags callable supplies its own
+        // `exception` key — annotation, not impersonation.
+        $b = new InMemoryBackend();
+        $r = new Registry($b);
+        $mw = new SessionMetrics($r, fn(Session $_s): array => ['exception' => 'forged']);
+        try {
+            $mw->handle(Context::background(), $this->session(), function (): void {
+                throw new \RuntimeException('boom');
+            });
+            $this->fail('expected exception to propagate');
+        } catch (\RuntimeException) {
+            // expected
+        }
+        $this->assertSame(1.0, $b->counterValue('ssh.session.error', [
+            'user' => 'alice', 'term' => 'xterm-256color', 'exception' => 'RuntimeException',
+        ]));
+        $this->assertSame(0.0, $b->counterValue('ssh.session.error', [
+            'user' => 'alice', 'term' => 'xterm-256color', 'exception' => 'forged',
+        ]));
     }
 
     public function testCounterFailureIsSwallowedAndSessionContinues(): void

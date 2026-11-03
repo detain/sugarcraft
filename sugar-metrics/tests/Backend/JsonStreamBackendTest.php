@@ -163,7 +163,7 @@ final class JsonStreamBackendTest extends TestCase
         $contents = (string) stream_get_contents($stream);
         $lines = array_filter(explode("\n", $contents));
         $decoded = json_decode((string) $lines[0], true);
-        $this->assertSame('updowncounter', $decoded['kind']);
+        $this->assertSame('up_down_counter', $decoded['kind']);
         $this->assertSame('conns', $decoded['name']);
         $this->assertEqualsWithDelta(3.0, $decoded['value'], 0.001);
         fclose($stream);

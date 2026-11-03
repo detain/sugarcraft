@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Metrics\Backend;
 
+use SugarCraft\Metrics\Lang;
 use SugarCraft\Metrics\Backend;
 use SugarCraft\Metrics\Descriptor;
 
@@ -19,6 +20,9 @@ use SugarCraft\Metrics\Descriptor;
  * mode where every child receives the emit even if others throw;
  * failures are collected and rethrown as an aggregated exception
  * after all children have been attempted.
+ *
+ * The rule holds for every operation, including the idempotent
+ * remove/clear cleanup: nothing is silently swallowed in either mode.
  */
 final class MultiBackend implements Backend
 {
@@ -30,6 +34,11 @@ final class MultiBackend implements Backend
 
     public function __construct(Backend ...$children)
     {
+        if ($children === []) {
+            // A zero-child fanout swallows every emit silently — worse than
+            // a loud failure at the wiring site where the mistake happened.
+            throw new \InvalidArgumentException(Lang::t('multibackend.no_children'));
+        }
         $this->children = array_values($children);
         $this->continueOnError = false;
     }
@@ -86,12 +95,12 @@ final class MultiBackend implements Backend
 
     public function remove(string $name, array $tags = []): void
     {
-        $this->safeFanout(fn(Backend $b) => $b->remove($name, $tags));
+        $this->fanout(fn(Backend $b) => $b->remove($name, $tags));
     }
 
     public function clear(): void
     {
-        $this->safeFanout(fn(Backend $b) => $b->clear());
+        $this->fanout(fn(Backend $b) => $b->clear());
     }
 
     public function flush(): void
@@ -123,24 +132,6 @@ final class MultiBackend implements Backend
         }
         if ($errors !== []) {
             throw new MultiBackendException($errors);
-        }
-    }
-
-    /**
-     * Fan out an idempotent operation (remove/clear) to all children,
-     * silently swallowing all errors. Use for operations where partial
-     * failure is acceptable (idempotent cleanup).
-     *
-     * @param callable(Backend): void $op
-     */
-    private function safeFanout(callable $op): void
-    {
-        foreach ($this->children as $b) {
-            try {
-                $op($b);
-            } catch (\Throwable) {
-                // Silently ignore: remove/clear are idempotent.
-            }
         }
     }
 }

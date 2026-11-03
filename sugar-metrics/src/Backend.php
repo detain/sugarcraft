@@ -13,18 +13,22 @@ namespace SugarCraft\Metrics;
  * stream, in-memory for tests, etc.).
  *
  * `tags` is an associative array of dimensional labels. Backends
- * that don't support labels (StatsD legacy mode) flatten them
- * into the metric name; backends that do (Prometheus, DogStatsD)
- * pass them through.
+ * that don't support labels (StatsD legacy mode) DROP them —
+ * there is no name-flattening, so dimensions are simply lost; use
+ * DogStatsD (or a Prometheus backend) when tags matter. Backends
+ * that do (Prometheus, DogStatsD) pass them through.
  *
  * Trust boundary: names and tags are treated as potentially hostile.
  * The Registry's cardinality keys backslash-escape the `|` and `=`
  * separators ({@see Util::tagKey()}) so lookalike tag sets never
  * collapse, and line-oriented backends (StatsD, Prometheus textfile)
- * normalise control bytes at their emit chokepoints. Callers should
- * still bound cardinality at the source — see
- * {@see SessionMetrics::normalizeTag()} and the Registry's
- * `cardinalityLimit`.
+ * normalise control bytes at their emit chokepoints. The textfile
+ * backend additionally refuses inputs that SANITIZE to the same
+ * exposition name or label set rather than silently merging them —
+ * a fold is many-to-one, and merging would make remove()/eviction
+ * ambiguous (see PrometheusFileBackend). Callers should still bound
+ * cardinality at the source — see {@see SessionMetrics::normalizeTag()}
+ * and the Registry's `cardinalityLimit`.
  */
 interface Backend
 {

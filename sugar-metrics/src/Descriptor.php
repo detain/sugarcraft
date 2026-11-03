@@ -8,8 +8,12 @@ namespace SugarCraft\Metrics;
  * Registration DTO for metric descriptors.
  *
  * Descriptors allow backends to pre-emit TYPE and HELP lines
- * before any samples are recorded, which is required by the
- * Prometheus textfile collector for uninitialized metrics.
+ * before any samples are recorded. The Prometheus textfile
+ * collector does NOT require them — a family that only ever
+ * appears with samples is valid exposition — so descriptors are
+ * metadata + declaration: they give a family its HELP text, and
+ * they announce families that are currently idle so a dashboard
+ * distinguishes "zero" from "never wired up".
  *
  * @readonly
  */
@@ -29,17 +33,26 @@ final class Descriptor
         public readonly array $labelKeys = [],
     ) {
         if ($name === '') {
-            throw new \InvalidArgumentException('Descriptor name must be non-empty');
+            throw new \InvalidArgumentException(Lang::t('descriptor.name_empty'));
+        }
+        // The name rides the exposition line unescaped; without this
+        // charset check a help/name built from user input could inject
+        // a whole second TYPE line.
+        if (preg_match('/^[a-zA-Z_:][a-zA-Z0-9_:]*$/', $name) !== 1) {
+            throw new \InvalidArgumentException(Lang::t('descriptor.name_invalid', ['name' => Util::displaySafe($name)]));
         }
         if ($help === '') {
-            throw new \InvalidArgumentException('Descriptor help must be non-empty');
+            throw new \InvalidArgumentException(Lang::t('descriptor.help_empty'));
+        }
+        if (preg_match('/[\x00-\x1F\x7F]/', $help) === 1) {
+            throw new \InvalidArgumentException(Lang::t('descriptor.help_invalid'));
         }
         if (in_array($type, ['counter', 'gauge', 'histogram', 'summary'], true) === false) {
-            throw new \InvalidArgumentException("Descriptor type must be one of: counter, gauge, histogram, summary; got '{$type}'");
+            throw new \InvalidArgumentException(Lang::t('descriptor.type_invalid', ['type' => Util::displaySafe($type)]));
         }
         foreach ($labelKeys as $k) {
-            if ($k === '') {
-                throw new \InvalidArgumentException('Descriptor label keys must be non-empty strings');
+            if (is_string($k) === false || $k === '') {
+                throw new \InvalidArgumentException(Lang::t('descriptor.label_empty'));
             }
         }
     }

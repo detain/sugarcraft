@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Metrics\Backend;
 
 use SugarCraft\Metrics\Lang;
+use SugarCraft\Metrics\Util;
 
 /**
  * Thrown by {@see MultiBackend} when multiple child backends fail
@@ -22,10 +23,13 @@ final class MultiBackendException extends \RuntimeException
         string $message = '',
     ) {
         if ($message === '') {
+            // Child messages can carry untrusted bytes (a third-party
+            // backend may interpolate a raw metric name or path). The
+            // aggregate joins them into one displayable string — sweep it.
             $messages = array_map(fn(\Throwable $e) => $e->getMessage(), $this->errors);
             $message = Lang::t('multibackend.aggregate', [
                 'count' => count($this->errors),
-                'errors' => implode('; ', $messages),
+                'errors' => Util::displaySafe(implode('; ', $messages)),
             ]);
         }
         parent::__construct($message, previous: $this->errors[0] ?? null);

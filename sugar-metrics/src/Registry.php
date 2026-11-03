@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Metrics;
 
+use SugarCraft\Metrics\Instrument\AsyncCounter;
+use SugarCraft\Metrics\Instrument\AsyncGauge;
+use SugarCraft\Metrics\Instrument\UpDownCounter;
+
 /**
  * Application-facing facade. Hand a {@see Backend} in, then call
  * {@see counter()} / {@see gauge()} / {@see histogram()} from
@@ -21,7 +25,9 @@ namespace SugarCraft\Metrics;
  * `withTags()` returns a new registry whose every emit is
  * pre-tagged — useful for SSH session middleware that wants to
  * stamp every metric with `user`/`client_addr` without threading
- * those tags through every call site.
+ * those tags through every call site. A child carries its OWN
+ * cardinality budget and does not inherit registered descriptors
+ * (register on each instance whose emissions need the TYPE/HELP).
  *
  * When a metric accumulates too many unique label-value
  * combinations (cardinality explosion), the oldest combination
@@ -29,12 +35,16 @@ namespace SugarCraft\Metrics;
  * series is also removed from the backend, so the bounded cache
  * keeps the (otherwise unbounded) backend from growing without
  * limit under a tag flood.
+ *
+ * What the limit does NOT bound: the SET OF METRIC NAMES (every
+ * distinct name is unbounded memory in the cache and the backend —
+ * never interpolate raw user input into a metric name), and a
+ * `withTags()` child gets its own full per-name budget rather than
+ * sharing the parent's. The backend may additionally bound series
+ * per family (PrometheusFileBackend::maxSeriesPerFamily) and
+ * samples per series (InMemoryBackend::maxSamplesPerKey); StatsD
+ * holds no local state at all.
  */
-
-use SugarCraft\Metrics\Instrument\AsyncCounter;
-use SugarCraft\Metrics\Instrument\AsyncGauge;
-use SugarCraft\Metrics\Instrument\UpDownCounter;
-
 final class Registry
 {
     /** @var array<string,string> */
@@ -74,19 +84,55 @@ final class Registry
         array $defaultTags = [],
         int $cardinalityLimit = 10000,
     ) {
+        if ($cardinalityLimit < 1) {
+            // A limit of 0 or less would evict every series the moment it
+            // is created: trackCardinality() inserts, sees count > limit,
+            // and drops the entry (plus its backend reclaim) on each emit —
+            // the registry would silently record nothing. Refuse at the door.
+            throw new \InvalidArgumentException(Lang::t('registry.cardinality_limit', ['limit' => (string) $cardinalityLimit]));
+        }
         $this->defaultTags = $defaultTags;
         $this->defaultTagsKey = Util::tagKey($defaultTags);
         $this->cardinalityLimit = $cardinalityLimit;
     }
 
+    /** The per-metric label-combination budget (constructor argument). */
+    public function cardinalityLimit(): int
+    {
+        return $this->cardinalityLimit;
+    }
+
+    /**
+     * Publish the backend's current state (no-op for stream/socket
+     * backends that emit as you record). Long-lived servers driving a
+     * textfile backend MUST call this on a schedule — the file is only
+     * rewritten inside flush(), and nothing in the library arms a timer
+     * on the host's event loop.
+     */
+    public function flush(): void
+    {
+        $this->backend->flush();
+    }
+
     /**
      * Register a metric descriptor for early TYPE/HELP emission.
-     * Idempotent: a second registration with the same name is a no-op.
+     * Re-registering the identical (name, type, help) is a no-op; a
+     * SECOND, DIFFERENT descriptor for the same name throws — silently
+     * keeping the first would let a copy-pasted registration pin stale
+     * TYPE/HELP onto an evolving metric.
      */
     public function register(Descriptor $descriptor): void
     {
-        if (isset($this->descriptors[$descriptor->name])) {
-            return;
+        $existing = $this->descriptors[$descriptor->name] ?? null;
+        if ($existing !== null) {
+            if ($existing->type === $descriptor->type && $existing->help === $descriptor->help) {
+                return;
+            }
+            throw new \RuntimeException(Lang::t('registry.register_conflict', [
+                'name'     => Util::displaySafe($descriptor->name),
+                'existing' => Util::displaySafe($existing->type . ': ' . $existing->help),
+                'incoming' => Util::displaySafe($descriptor->type . ': ' . $descriptor->help),
+            ]));
         }
         $this->descriptors[$descriptor->name] = $descriptor;
         $this->backend->describe($descriptor);
@@ -94,6 +140,10 @@ final class Registry
 
     public function counter(string $name, float $value = 1.0, array $tags = []): void
     {
+        // A monotonic counter only accumulates: a negative add would drive
+        // the stored total backwards and (on the textfile backend) emit a
+        // COUNTER sample that violates its own TYPE. Refuse the misuse.
+        $this->refuseNegative($name, $value, 'counter');
         $this->backend->counter($name, $value, $this->mergeTags($tags));
         $this->trackCardinality($name, $tags);
     }
@@ -106,8 +156,27 @@ final class Registry
 
     public function histogram(string $name, float $value, array $tags = []): void
     {
+        // Histogram observations feed cumulative `le` bucket counts; a
+        // negative sample lands below every classic (non-negative) bucket
+        // boundary and would be counted ONLY by +Inf — a sum that moves
+        // while no visible bucket does. Refuse at the door.
+        $this->refuseNegative($name, $value, 'histogram');
         $this->backend->histogram($name, $value, $this->mergeTags($tags));
         $this->trackCardinality($name, $tags);
+    }
+
+    /**
+     * @param array<string,string> $tags
+     */
+    private function refuseNegative(string $name, float $value, string $kind): void
+    {
+        if ($value < 0) {
+            throw new \RuntimeException(Lang::t('registry.negative_monotonic', [
+                'name'  => Util::displaySafe($name),
+                'value' => Util::displaySafe((string) $value),
+                'kind'  => $kind,
+            ]));
+        }
     }
 
     /**
@@ -154,9 +223,11 @@ final class Registry
     }
 
     /**
-     * Factory: create a new AsyncCounter instrument whose value is observed at collection time.
+     * Factory: create a new AsyncCounter instrument. Nothing collects on a
+     * schedule — call $instrument->observe() yourself (typically from your
+     * own periodic tick or a shutdown hook) to sample the callback now.
      *
-     * @param \Closure(): float $callback Called at observe() time to obtain the current value.
+     * @param \Closure(): float $callback Called on every observe() to obtain the current value.
      * @param array<string,string> $tags Static tags attached to observations.
      */
     public function newAsyncCounter(string $name, string $help, \Closure $callback, array $tags = []): Instrument\AsyncCounter
@@ -165,9 +236,11 @@ final class Registry
     }
 
     /**
-     * Factory: create a new AsyncGauge instrument whose value is observed at collection time.
+     * Factory: create a new AsyncGauge instrument. Nothing collects on a
+     * schedule — call $instrument->observe() yourself to sample the
+     * callback (an exporter's scrape cadence lives in the host, not here).
      *
-     * @param \Closure(): float $callback Called at observe() time to obtain the current value.
+     * @param \Closure(): float $callback Called on every observe() to obtain the current value.
      * @param array<string,string> $tags Static tags attached to observations.
      */
     public function newAsyncGauge(string $name, string $help, \Closure $callback, array $tags = []): Instrument\AsyncGauge
@@ -192,15 +265,23 @@ final class Registry
      * try { ... } finally { $stop(); }
      * ```
      *
+     * The recording is exactly-once: a second invocation (success path
+     * plus a `finally` that also fires) returns the elapsed seconds but
+     * does NOT sample the histogram again.
+     *
      * @param array<string,string> $tags
      * @return callable(): float
      */
     public function time(string $name, array $tags = []): callable
     {
         $start = microtime(true);
-        return function () use ($name, $tags, $start): float {
+        $done = false;
+        return function () use ($name, $tags, $start, &$done): float {
             $elapsed = microtime(true) - $start;
-            $this->histogram($name, $elapsed, $tags);
+            if ($done === false) {
+                $done = true;
+                $this->histogram($name, $elapsed, $tags);
+            }
             return $elapsed;
         };
     }

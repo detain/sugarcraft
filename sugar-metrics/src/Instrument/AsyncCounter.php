@@ -8,19 +8,24 @@ use SugarCraft\Metrics\Registry;
 
 /**
  * An asynchronous instrument that reports a monotonically
- * increasing sum — observed at collection time by calling
- * the supplied callback.
+ * increasing sum. The supplied callback is invoked when you
+ * call {@see observe()} — the library arms no collection
+ * timer of its own, so a periodic tick (or your scrape/mirror
+ * loop) is what samples the external value.
  *
  * Use this when the metric value is owned by an external
- * system (e.g., DB connection pool size, JVM garbage collection
- * counts) that is updated independently of the metrics library.
+ * system that is updated independently of the metrics library
+ * and only ever rises — JVM garbage collection counts, bytes
+ * served, a process' cumulative CPU time. Values that can fall
+ * (a DB connection pool size, queue depth) belong on
+ * {@see AsyncGauge}.
  *
  * Mirrors opentelemetry.io/api/metrics#AsyncCounter.
  */
 final class AsyncCounter
 {
     /**
-     * @param \Closure(): float $callback Called at collection time to obtain the observed value.
+     * @param \Closure(): float $callback Called by each observe() to obtain the sampled value.
      * @param array<string,string>     $tags Static tags attached to this instrument.
      */
     public function __construct(
@@ -32,12 +37,21 @@ final class AsyncCounter
     ) {}
 
     /**
-     * Observe the current value by invoking the callback and
-     * recording the returned sum.
+     * Sample the callback once and record the returned sum.
+     *
+     * Per-call tags merge over the instrument's static tags
+     * (a same-key per-call value wins), so one instrument can
+     * stamp observation-site detail without cloning.
+     *
+     * @param array<string,string> $tags
      */
-    public function observe(): void
+    public function observe(array $tags = []): void
     {
-        $this->registry->asyncCounter($this->name, ($this->callback)(), $this->tags);
+        $this->registry->asyncCounter(
+            $this->name,
+            ($this->callback)(),
+            $tags === [] ? $this->tags : array_merge($this->tags, $tags),
+        );
     }
 
     public function name(): string

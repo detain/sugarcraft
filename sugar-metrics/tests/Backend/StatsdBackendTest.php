@@ -74,11 +74,14 @@ final class StatsdBackendTest extends TestCase
         $payload = (string) stream_get_contents($sock);
         fclose($sock);
 
-        // One line, no smuggled separators: control bytes and inner `|` are
-        // flattened, leaving only the line's own structural pipes.
+        // One line, no smuggled separators: control bytes, inner `|`, commas
+        // and spaces are all flattened in the name, and pair tokens carry no
+        // comma/space/pipe/control either — a tag value can never forge a
+        // second `key:value` pair inside the first. Colons inside values
+        // survive (Datadog allows them once pair structure is guaranteed).
         $this->assertStringNotContainsString("\n", $payload);
         $this->assertSame(2, substr_count($payload, '|'), 'only the :value|kind and |# tags separators may survive');
-        $this->assertSame('ev_il:x_steal:1|c|#route:/a_b,k_2:v_3', $payload);
+        $this->assertSame('ev_il_x_steal:1|c|#route:/a_b,k_2:v_3', $payload);
     }
 
     public function testColonInTagKeyCannotForgeSecondPair(): void
@@ -136,14 +139,18 @@ final class StatsdBackendTest extends TestCase
         fclose($sock);
     }
 
-    public function testAsyncCounterEmitsCounter(): void
+    public function testAsyncCounterEmitsGaugeWithAbsoluteValue(): void
     {
+        // A5: the absolute cumulative total rides `|g`, not `|c` — replaying
+        // an asyncCounter sample as a |c delta quadratically inflates the
+        // server-side aggregate. Absolute means no forced +/- sign either.
         $sock = fopen('php://memory', 'w+');
         $b = new StatsdBackend(existingSocket: $sock);
         $b->asyncCounter('jvm_gc_count', 1.0, ['gen' => 'young']);
         rewind($sock);
         $payload = (string) stream_get_contents($sock);
-        $this->assertStringStartsWith('jvm_gc_count:1|c', $payload);
+        $this->assertStringStartsWith('jvm_gc_count:1|g', $payload);
+        $this->assertStringNotContainsString('+', $payload);
         $this->assertStringContainsString('|#', $payload);
         fclose($sock);
     }

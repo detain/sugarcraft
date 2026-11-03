@@ -39,12 +39,64 @@ final class Util
     }
 
     /**
-     * Escape the cardinality-key separators (backslash, pipe, equals)
+     * Escape the cardinality-key separators (backslash, pipe, equals, NUL)
      * inside one tag key or value. Backslash is replaced first so the
-     * escapes themselves stay unambiguous.
+     * escapes themselves stay unambiguous. NUL is included because
+     * PrometheusFileBackend uses it as its name/label storage separator —
+     * an escaped tagKey that never carries a raw NUL cannot forge a split
+     * if it ever rides a NUL-delimited path.
      */
     private static function escapeTagToken(string $token): string
     {
-        return \str_replace(['\\', '|', '='], ['\\\\', '\\|', '\\='], $token);
+        return \str_replace(['\\', '|', '=', "\0"], ['\\\\', '\\|', '\\=', '\\0'], $token);
+    }
+
+    /**
+     * Canonical exposition spellings for non-finite readings.
+     *
+     * `sprintf('%.6f', -INF)` renders "INF" — the sign silently flips and
+     * the byte is not what Prometheus/OpenMetrics parsers accept. Both
+     * line-oriented backends route every value through this table first so
+     * a divide-by-zero rate publishes `-Inf` rather than a wrong-signed
+     * or parser-rejecting token.
+     *
+     * @return '+Inf'|'-Inf'|'NaN'|null null when the value is finite
+     */
+    public static function nonFiniteToken(float $value): ?string
+    {
+        if (is_nan($value)) {
+            return 'NaN';
+        }
+        if ($value === \INF) {
+            return '+Inf';
+        }
+        if ($value === -\INF) {
+            return '-Inf';
+        }
+        return null;
+    }
+
+    /**
+     * True when the fixed six-decimal rendering would lie: magnitudes
+     * beyond the integer-precision band print noise, and non-zero values
+     * below 1e-6 collapse to "0.000000" (a sub-microsecond timed() span
+     * reporting a zero sum). Exponent form keeps both honest.
+     */
+    public static function needsExponentForm(float $value): bool
+    {
+        $abs = abs($value);
+        return $abs >= 1e15 || ($value != 0.0 && $abs < 1e-6);
+    }
+
+    /**
+     * Sweep terminal-control bytes out of a string that is about to be
+     * interpolated into an exception message. TUI hosts print throwable
+     * messages verbatim, and metric names/paths are operator- (or in the
+     * SSH middleware, attacker-) controlled — delegating to the shared
+     * sugar-core display sanitizer keeps the sweep consistent fleet-wide.
+     */
+    public static function displaySafe(string $text): string
+    {
+        return \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($text);
     }
 }

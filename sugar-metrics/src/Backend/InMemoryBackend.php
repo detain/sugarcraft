@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Metrics\Backend;
 
+use SugarCraft\Metrics\Lang;
 use SugarCraft\Metrics\Backend;
 use SugarCraft\Metrics\Descriptor;
 use SugarCraft\Metrics\Util;
@@ -18,11 +19,17 @@ use SugarCraft\Metrics\Util;
  * by key, so identical (name, tags) tuples accumulate into the
  * same bucket regardless of caller insertion order.
  *
- * Histograms are bounded per series by {@see $maxSamplesPerKey} via
- * reservoir sampling (Algorithm R): a flood of `histogram()` calls on
- * one key can never grow memory past the cap, closing an unbounded
- * memory (DoS) hole while keeping a statistically representative
- * sample of the full stream for quantile estimation.
+ * Two independent memory bounds exist, and neither is complete alone:
+ *
+ * - {@see $maxSamplesPerKey} caps retained histogram SAMPLES per series
+ *   via reservoir sampling (Algorithm R): a flood of `histogram()`
+ *   calls on one key can never grow that series' memory past the cap,
+ *   while keeping a uniform random sample of the whole stream.
+ * - {@see $maxSeries} caps the NUMBER of distinct series (0 = unbounded,
+ *   the default). Tag-key cardinality — not sample volume — is what
+ *   grows unboundedly under hostile input, and the reservoir alone does
+ *   not bound it. Set the cap here, or route writes through a
+ *   Registry cardinality limit, to keep the total footprint bounded.
  */
 final class InMemoryBackend implements Backend
 {
@@ -45,32 +52,87 @@ final class InMemoryBackend implements Backend
     private array $asyncCounters = [];
     /** @var array<string,float> */
     private array $asyncGauges = [];
+    /**
+     * Insertion-ordered set of every series key currently held (key => true).
+     * Drives {@see $maxSeries} eviction: `array_key_first` is O(1) oldest.
+     *
+     * @var array<string,true>
+     */
+    private array $seriesOrder = [];
 
     /**
      * @param int $maxSamplesPerKey Upper bound on retained histogram samples
      *                              per (name, tags) series. Must be >= 1.
+     * @param int $maxSeries          Upper bound on distinct series across all
+     *                              accumulators; oldest evicted first. 0 (the
+     *                              default) means unbounded.
      */
-    public function __construct(private readonly int $maxSamplesPerKey = 4096)
-    {
+    public function __construct(
+        private readonly int $maxSamplesPerKey = 4096,
+        private readonly int $maxSeries = 0,
+    ) {
         if ($this->maxSamplesPerKey < 1) {
-            throw new \InvalidArgumentException('maxSamplesPerKey must be >= 1, got ' . $this->maxSamplesPerKey);
+            throw new \InvalidArgumentException(Lang::t('memory.max_samples', ['value' => (string) $this->maxSamplesPerKey]));
         }
+        if ($this->maxSeries < 0) {
+            throw new \InvalidArgumentException(Lang::t('memory.max_series', ['value' => (string) $this->maxSeries]));
+        }
+    }
+
+    /**
+     * Register a series key for cardinality accounting and evict the
+     * oldest series while the configured cap is exceeded. Reads
+     * (counterValue & friends) never call this — only writes create
+     * series.
+     */
+    private function retainSeries(string $key): void
+    {
+        if (isset($this->seriesOrder[$key])) {
+            return; // Existing series keeps its original insertion rank.
+        }
+        $this->seriesOrder[$key] = true;
+        if ($this->maxSeries === 0) {
+            return;
+        }
+        while (count($this->seriesOrder) > $this->maxSeries) {
+            $oldest = array_key_first($this->seriesOrder);
+            /** @var string $oldest — non-empty array, so array_key_first is int|string; keys here are strings */
+            $this->dropSeries((string) $oldest);
+        }
+    }
+
+    private function dropSeries(string $key): void
+    {
+        unset(
+            $this->counters[$key],
+            $this->gauges[$key],
+            $this->histograms[$key],
+            $this->histogramSeen[$key],
+            $this->upDownCounters[$key],
+            $this->asyncCounters[$key],
+            $this->asyncGauges[$key],
+            $this->seriesOrder[$key],
+        );
     }
 
     public function counter(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        $this->retainSeries($key);
         $this->counters[$key] = ($this->counters[$key] ?? 0.0) + $value;
     }
 
     public function gauge(string $name, float $value, array $tags = []): void
     {
-        $this->gauges[$this->key($name, $tags)] = $value;
+        $key = $this->key($name, $tags);
+        $this->retainSeries($key);
+        $this->gauges[$key] = $value;
     }
 
     public function histogram(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        $this->retainSeries($key);
         $seen = ($this->histogramSeen[$key] ?? 0) + 1;
         $this->histogramSeen[$key] = $seen;
 
@@ -93,17 +155,22 @@ final class InMemoryBackend implements Backend
     public function upDownCounter(string $name, float $amount, array $tags = []): void
     {
         $key = $this->key($name, $tags);
+        $this->retainSeries($key);
         $this->upDownCounters[$key] = ($this->upDownCounters[$key] ?? 0.0) + $amount;
     }
 
     public function asyncCounter(string $name, float $value, array $tags = []): void
     {
-        $this->asyncCounters[$this->key($name, $tags)] = $value;
+        $key = $this->key($name, $tags);
+        $this->retainSeries($key);
+        $this->asyncCounters[$key] = $value;
     }
 
     public function asyncGauge(string $name, float $value, array $tags = []): void
     {
-        $this->asyncGauges[$this->key($name, $tags)] = $value;
+        $key = $this->key($name, $tags);
+        $this->retainSeries($key);
+        $this->asyncGauges[$key] = $value;
     }
 
     // In-memory backend has no concept of pre-emitted metadata.
@@ -175,12 +242,25 @@ final class InMemoryBackend implements Backend
         $this->upDownCounters = [];
         $this->asyncCounters = [];
         $this->asyncGauges = [];
+        $this->seriesOrder = [];
     }
 
     /** Configured upper bound on retained histogram samples per series. */
     public function maxSamplesPerKey(): int
     {
         return $this->maxSamplesPerKey;
+    }
+
+    /** Configured upper bound on distinct series (0 = unbounded). */
+    public function maxSeries(): int
+    {
+        return $this->maxSeries;
+    }
+
+    /** Current number of distinct series held. */
+    public function seriesCount(): int
+    {
+        return count($this->seriesOrder);
     }
 
     /**
@@ -191,16 +271,7 @@ final class InMemoryBackend implements Backend
      */
     public function remove(string $name, array $tags = []): void
     {
-        $key = $this->key($name, $tags);
-        unset(
-            $this->counters[$key],
-            $this->gauges[$key],
-            $this->histograms[$key],
-            $this->histogramSeen[$key],
-            $this->upDownCounters[$key],
-            $this->asyncCounters[$key],
-            $this->asyncGauges[$key],
-        );
+        $this->dropSeries($this->key($name, $tags));
     }
 
     /**

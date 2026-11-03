@@ -48,14 +48,14 @@ final class DescriptorTest extends TestCase
     public function testEmptyNameThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('non-empty');
+        $this->expectExceptionMessage('descriptor name must not be empty');
         new Descriptor('', 'help', 'counter');
     }
 
     public function testEmptyHelpThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('non-empty');
+        $this->expectExceptionMessage('descriptor help must not be empty');
         new Descriptor('name', '', 'counter');
     }
 

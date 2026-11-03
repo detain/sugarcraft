@@ -89,23 +89,15 @@ final class RegistryTest extends TestCase
     {
         $r = new Registry(new InMemoryBackend());
         $d1 = new Descriptor('conns', 'Active connections', 'gauge');
-        $d2 = new Descriptor('conns', 'Different help text', 'gauge'); // same name, diff help
+        $same = new Descriptor('conns', 'Active connections', 'gauge'); // identical re-register
 
         $r->register($d1);
-        // The second registration with the same name must be a no-op (idempotent).
-        // After the fix, $this->descriptors['conns'] is already set, so the guard returns early.
-        $r->register($d2);
+        // An identical descriptor (same name, type and help) is a no-op.
+        $r->register($same);
 
         // Register a different descriptor to confirm it was stored (not overwritten).
         $r->register(new Descriptor('requests', 'Total requests', 'counter'));
 
-        // Re-reading from registry's private state is not possible directly.
-        // Instead, verify idempotency by checking that registering the same name twice
-        // does NOT cause describe() to be called twice on the backend.
-        // We verify indirectly: after idempotent fix, d1's help is preserved.
-        // (d2's different help text is NOT passed to the backend).
-        // The InMemoryBackend.describe() is a no-op, so we check registry descriptors directly
-        // via reflection to confirm d1's help is intact.
         $ref = new \ReflectionClass(Registry::class);
         $prop = $ref->getProperty('descriptors');
         $prop->setAccessible(true);
@@ -114,6 +106,19 @@ final class RegistryTest extends TestCase
         $this->assertArrayHasKey('conns', $descriptors);
         $this->assertSame('Active connections', $descriptors['conns']->help);
         $this->assertArrayHasKey('requests', $descriptors);
+    }
+
+    public function testRegisterConflictThrows(): void
+    {
+        // n7: a re-registration that CHANGES type or help used to be a
+        // silent first-wins no-op — the second call site believed its
+        // metadata shipped. Now it fails loud.
+        $r = new Registry(new InMemoryBackend());
+        $r->register(new Descriptor('conns', 'Active connections', 'gauge'));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('already registered');
+        $r->register(new Descriptor('conns', 'Different help text', 'gauge'));
     }
 
     public function testInstrumentFactoriesReturnInstruments(): void

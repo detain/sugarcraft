@@ -6,6 +6,7 @@ namespace SugarCraft\Metrics\Tests\Backend;
 
 use SugarCraft\Metrics\Backend\InMemoryBackend;
 use SugarCraft\Metrics\Backend\MultiBackend;
+use SugarCraft\Metrics\Backend\MultiBackendException;
 use SugarCraft\Metrics\Descriptor;
 use PHPUnit\Framework\TestCase;
 
@@ -69,16 +70,16 @@ final class MultiBackendTest extends TestCase
         }
     }
 
-    public function testEmptyMultiIsHarmless(): void
+    public function testZeroChildrenThrow(): void
     {
-        $multi = new MultiBackend();
-        $multi->counter('hits', 1);
-        $multi->gauge('q', 4);
-        $multi->histogram('lat', 0.1);
-        $this->assertTrue(true);
+        // A zero-child fanout would swallow every emit in silence; the
+        // wiring mistake must fail loud at construction.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('at least one child backend');
+        new MultiBackend();
     }
 
-    public function testRemoveIsForwardedToAllChildrenAndSwallowsErrors(): void
+    public function testRemovePropagatesChildErrorsByDefault(): void
     {
         $throwing = new class implements \SugarCraft\Metrics\Backend {
             public bool $removeCalled = false;
@@ -97,13 +98,56 @@ final class MultiBackendTest extends TestCase
         $inMemory = new InMemoryBackend();
         $multi = new MultiBackend($throwing, $inMemory);
 
-        // remove() must not throw even though the throwing child throws.
-        // safeFanout silently swallows errors for idempotent operations.
-        $multi->remove('any_metric', ['a' => 'b']);
+        // Default (fail-fast) mode: a throwing child propagates — the old
+        // swallow-regardless-of-mode behavior is gone.
+        try {
+            $multi->remove('any_metric', ['a' => 'b']);
+            $this->fail('expected the child failure to propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('remove fails', $e->getMessage());
+        }
         $this->assertTrue($throwing->removeCalled);
     }
 
-    public function testClearIsForwardedToAllChildrenAndSwallowsErrors(): void
+    public function testRemoveWithContinueOnErrorTriesAllChildrenAndAggregates(): void
+    {
+        $throwing = new class implements \SugarCraft\Metrics\Backend {
+            public function counter(string $name, float $value, array $tags = []): void {}
+            public function gauge(string $name, float $value, array $tags = []): void {}
+            public function histogram(string $name, float $value, array $tags = []): void {}
+            public function upDownCounter(string $name, float $amount, array $tags = []): void {}
+            public function asyncCounter(string $name, float $value, array $tags = []): void {}
+            public function asyncGauge(string $name, float $value, array $tags = []): void {}
+            public function describe(Descriptor $descriptor): void {}
+            public function flush(): void {}
+            public function remove(string $name, array $tags = []): void { throw new \RuntimeException('remove fails'); }
+            public function clear(): void {}
+        };
+        $witness = new class implements \SugarCraft\Metrics\Backend {
+            public bool $removeCalled = false;
+            public function counter(string $name, float $value, array $tags = []): void {}
+            public function gauge(string $name, float $value, array $tags = []): void {}
+            public function histogram(string $name, float $value, array $tags = []): void {}
+            public function upDownCounter(string $name, float $amount, array $tags = []): void {}
+            public function asyncCounter(string $name, float $value, array $tags = []): void {}
+            public function asyncGauge(string $name, float $value, array $tags = []): void {}
+            public function describe(Descriptor $descriptor): void {}
+            public function flush(): void {}
+            public function remove(string $name, array $tags = []): void { $this->removeCalled = true; }
+            public function clear(): void {}
+        };
+
+        $multi = MultiBackend::withContinueOnError($throwing, $witness);
+        try {
+            $multi->remove('any_metric');
+            $this->fail('expected an aggregated failure');
+        } catch (MultiBackendException $e) {
+            $this->assertStringContainsString('remove fails', $e->getMessage());
+        }
+        $this->assertTrue($witness->removeCalled, 'every child must be attempted in isolating mode');
+    }
+
+    public function testClearPropagatesChildErrorsByDefault(): void
     {
         $throwing = new class implements \SugarCraft\Metrics\Backend {
             public bool $clearCalled = false;
@@ -122,8 +166,13 @@ final class MultiBackendTest extends TestCase
         $inMemory = new InMemoryBackend();
         $multi = new MultiBackend($throwing, $inMemory);
 
-        // clear() must not throw even though the throwing child throws.
-        $multi->clear();
+        // Default (fail-fast) mode: clear() propagates too.
+        try {
+            $multi->clear();
+            $this->fail('expected the child failure to propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('clear fails', $e->getMessage());
+        }
         $this->assertTrue($throwing->clearCalled);
     }
 

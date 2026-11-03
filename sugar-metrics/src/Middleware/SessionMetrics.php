@@ -14,11 +14,12 @@ use SugarCraft\SshServer\Session;
  *
  * Per session:
  *
- *   - `wish.session.connect`    counter — total connect attempts
- *   - `wish.session.duration`   histogram — seconds the session was open
- *   - `wish.session.error`      counter — incremented if `\$next` threw
+ *   - `ssh.session.connect`    counter — total connect attempts
+ *   - `ssh.session.duration`   histogram — seconds the session was open
+ *   - `ssh.session.error`      counter — incremented if `\$next` threw
  *
- * Tags on every emit: `user`, `term`. Add more by passing
+ * Tags on every emit: `user`, `term`; the error emit also carries
+ * `exception` (the thrown class, normalized). Add more by passing
  * `extraTags` as a callable that receives the {@see Session} —
  * useful for stamping client subnet, geo, build version, etc.
  *
@@ -58,14 +59,14 @@ final class SessionMetrics implements Middleware
         }
 
         try {
-            $this->registry->counter('wish.session.connect', 1.0, $tags);
+            $this->registry->counter('ssh.session.connect', 1.0, $tags);
         } catch (\Throwable) {
             // Registry failures must not prevent session handling.
         }
 
         $stop = null;
         try {
-            $stop = $this->registry->time('wish.session.duration', $tags);
+            $stop = $this->registry->time('ssh.session.duration', $tags);
         } catch (\Throwable) {
             // Registry failures must not prevent session handling.
         }
@@ -74,7 +75,12 @@ final class SessionMetrics implements Middleware
             $next($ctx, $session);
         } catch (\Throwable $e) {
             try {
-                $this->registry->counter('wish.session.error', 1.0, $tags + ['exception' => $e::class]);
+                // Assigned, not unioned: a caller-supplied extraTags entry
+                // for 'exception' must never shadow the real thrown class.
+                // normalizeTag folds namespace backslashes to underscores.
+                $errorTags = $tags;
+                $errorTags['exception'] = self::normalizeTag($e::class);
+                $this->registry->counter('ssh.session.error', 1.0, $errorTags);
             } catch (\Throwable) {
                 // Registry failures must not suppress the original exception.
             }
