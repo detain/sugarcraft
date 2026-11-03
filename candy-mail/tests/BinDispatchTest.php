@@ -40,7 +40,14 @@ final class BinDispatchTest extends TestCase
      * @param string|null                       $binOverride  alternate bin path (layout pins)
      * @return array{status: int, out: string, err: string}
      */
-    private function runCli(array $args, string $stdin = '', array $env = [], ?string $binOverride = null): array
+    /**
+     * @param array<string,string> $extraEnv verbatim child-env additions for
+     *                                       names outside NEUTRAL_ENV (plain
+     *                                       ASCII only: control-byte NAME
+     *                                       delivery is impossible through
+     *                                       PHP's env layer, B3 discovery)
+     */
+    private function runCli(array $args, string $stdin = '', array $env = [], ?string $binOverride = null, array $extraEnv = []): array
     {
         $bin = $binOverride ?? \realpath(__DIR__ . '/../bin/candy-mail');
         $this->assertIsString($bin);
@@ -60,6 +67,9 @@ final class BinDispatchTest extends TestCase
             }
         }
         $childEnv['PATH'] = (string) (\getenv('PATH') ?: '/usr/bin:/bin');
+        foreach ($extraEnv as $extraName => $extraValue) {
+            $childEnv[(string) $extraName] = (string) $extraValue;
+        }
 
         $descriptors = [
             0 => ['pipe', 'r'],
@@ -589,6 +599,27 @@ final class BinDispatchTest extends TestCase
         $this->assertSame(1, $result['status']);
         $this->assertStringContainsString('No --to recipient', $result['err']);
         $this->assertStringNotContainsString('CandyMail CLI', $result['out']);
+    }
+
+    public function testOnRosterLegacyVarStillAnnouncesItself(): void
+    {
+        // The POP_* -> CANDY_MAIL_* bridge keeps working for one release and
+        // says so — but only for vars the program actually consumes (N1).
+        $result = $this->runCli(['--version'], extraEnv: ['POP_SMTP_HOST' => 'smtp.example.test']);
+
+        $this->assertSame(0, $result['status']);
+        $this->assertStringContainsString('POP_SMTP_HOST is deprecated', $result['err']);
+    }
+
+    public function testOffRosterLegacyVarStaysSilent(): void
+    {
+        // POP_KERNEL_PANIC maps to a CANDY_MAIL_KERNEL_PANIC nothing ever
+        // reads; the old code printed a warning inventing a migration target.
+        // Silence is the honest behavior for an inert import.
+        $result = $this->runCli(['--version'], extraEnv: ['POP_KERNEL_PANIC' => '1']);
+
+        $this->assertSame(0, $result['status']);
+        $this->assertStringNotContainsString('KERNEL_PANIC', $result['err']);
     }
 
     private function reapHostileServer(int $pid): void

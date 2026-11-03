@@ -250,6 +250,28 @@ final class CliTest extends TestCase
         \SugarCraft\Mail\parseArgs(['candy-mail', '--to', 'a@b.c', '--attach']);
     }
 
+    public function testUnknownOptionSuggestsTheClosestFlag(): void
+    {
+        // B8: naming the closest known flag turns a stall into a fix.
+        try {
+            \SugarCraft\Mail\parseArgs(['candy-mail', '--subjct', 'x']);
+            $this->fail('expected InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Unknown option: --subjct', $e->getMessage());
+            $this->assertStringContainsString('Did you mean --subject?', $e->getMessage());
+        }
+    }
+
+    public function testDistantUnknownOptionCarriesNoGuess(): void
+    {
+        try {
+            \SugarCraft\Mail\parseArgs(['candy-mail', '--zzzzzzzzzzz']);
+            $this->fail('expected InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringNotContainsString('Did you mean', $e->getMessage());
+        }
+    }
+
     public function testParseArgsInlineFormCarriesDashLeadingValues(): void
     {
         // The documented escape hatch: a value that begins with a dash rides

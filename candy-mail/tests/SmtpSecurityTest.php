@@ -6,6 +6,7 @@ namespace SugarCraft\Mail\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mail\Email;
+use SugarCraft\Mail\Attachment;
 use SugarCraft\Mail\SmtpTransport;
 
 /**
@@ -504,6 +505,155 @@ final class SmtpSecurityTest extends TestCase
         } finally {
             @\fclose($sock);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Legacy EHLO refusal (B8, RFC 5321 section 4.1.4)
+    // -------------------------------------------------------------------------
+
+    public function testLegacyServerThatRejectsEhloIsGreetedWithHelo(): void
+    {
+        if (!\function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl_fork unavailable');
+        }
+
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertIsResource($server, "listen failed: $errstr");
+        $name = \stream_socket_get_name($server, false);
+        $port = (int) \substr((string) \strrchr((string) $name, ':'), 1);
+        $log = \tempnam(\sys_get_temp_dir(), 'helo-dialogue-');
+
+        $pid = \pcntl_fork();
+        $this->assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            // The pre-EHLO server: 5xx every EHLO (a PERMANENT rejection is
+            // the only class HELO may answer for, RFC 5321 4.1.4), 250 HELO.
+            $conn = \stream_socket_accept($server, 10.0);
+            $captured = '';
+            if (\is_resource($conn)) {
+                \stream_set_timeout($conn, 5);
+                \fwrite($conn, "220 legacy.example\r\n");
+                while (($line = (string) \fgets($conn)) !== '') {
+                    $captured .= $line;
+                    if (\str_starts_with($line, 'EHLO')) {
+                        \fwrite($conn, "500 5.5.1 Unrecognized command\r\n");
+                    } elseif (\str_starts_with($line, 'HELO')) {
+                        \fwrite($conn, "250 legacy.example\r\n");
+                    } elseif (\str_starts_with($line, 'QUIT')) {
+                        \fwrite($conn, "221 bye\r\n");
+                        break;
+                    }
+                }
+                \fclose($conn);
+            }
+            \file_put_contents($log, $captured);
+            if (\function_exists('posix_kill')) {
+                \posix_kill(\getmypid(), \SIGKILL);
+            }
+            exit(0); // never run parent shutdown hooks
+        }
+
+        \fclose($server);
+        $transport = (new SmtpTransport('127.0.0.1', $port, timeout: 5))->withRequireTls(false);
+        try {
+            $this->invokePrivate($transport, 'connect');
+            $dialogue = '';
+            for ($i = 0; $i < 250 && $dialogue === ''; $i++) {
+                \usleep(20000);
+                $dialogue = (string) \file_get_contents($log);
+            }
+            $this->assertStringContainsString('EHLO', $dialogue);
+            $this->assertStringContainsString('HELO', $dialogue);
+            // A HELO session advertises no extensions (RFC 5321 4.1.4): the
+            // 8BITMIME snapshot must read false, never a stale EHLO answer.
+            $this->assertFalse($this->readProperty($transport, 'serverSupports8Bit'));
+            $this->invokePrivate($transport, 'disconnect');
+        } finally {
+            $this->reap($pid);
+            @\unlink($log);
+        }
+    }
+
+    public function testTransientEhloFailureNeverFallsBackToHelo(): void
+    {
+        // 4xx means "try again" (RFC 5321 4.2.1); answering it with HELO
+        // would mask a real outage as a legacy server and silently lose
+        // STARTTLS/AUTH capability discovery mid-incident. 5xx only.
+        if (!\function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl_fork unavailable');
+        }
+
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        $this->assertIsResource($server, "listen failed: $errstr");
+        $name = \stream_socket_get_name($server, false);
+        $port = (int) \substr((string) \strrchr((string) $name, ':'), 1);
+        $log = \tempnam(\sys_get_temp_dir(), 'transient-dialogue-');
+
+        $pid = \pcntl_fork();
+        $this->assertGreaterThanOrEqual(0, $pid);
+        if ($pid === 0) {
+            $conn = \stream_socket_accept($server, 10.0);
+            $captured = '';
+            if (\is_resource($conn)) {
+                \stream_set_timeout($conn, 5);
+                \fwrite($conn, "220 legacy.example\r\n");
+                while (($line = (string) \fgets($conn)) !== '') {
+                    $captured .= $line;
+                    if (\str_starts_with($line, 'EHLO')) {
+                        \fwrite($conn, "421 4.3.0 Temporarily unavailable\r\n");
+                    }
+                    // No HELO answer on purpose: if the client wrongly falls
+                    // back after a transient refusal, the dialogue records it.
+                }
+                \fclose($conn);
+            }
+            \file_put_contents($log, $captured);
+            if (\function_exists('posix_kill')) {
+                \posix_kill(\getmypid(), \SIGKILL);
+            }
+            exit(0);
+        }
+
+        \fclose($server);
+        $transport = (new SmtpTransport('127.0.0.1', $port, timeout: 5))->withRequireTls(false);
+        try {
+            $thrown = null;
+            try {
+                $this->invokePrivate($transport, 'connect');
+            } catch (\RuntimeException $e) {
+                $thrown = $e;
+            }
+            // connect() does not self-close on throw; release the socket so the
+            // child sees EOF, writes its dialogue log, and exits.
+            $this->invokePrivate($transport, 'disconnect');
+            $this->assertNotNull($thrown, 'a transient EHLO refusal must abort connect()');
+            $dialogue = '';
+            for ($i = 0; $i < 250 && $dialogue === ''; $i++) {
+                \usleep(20000);
+                $dialogue = (string) \file_get_contents($log);
+            }
+            $dialogue = (string) \file_get_contents($log);
+            $this->assertStringContainsString('EHLO', $dialogue);
+            $this->assertStringNotContainsString('HELO', $dialogue);
+        } finally {
+            $this->reap($pid);
+            @\unlink($log);
+        }
+    }
+
+    public function testAttachmentDebugInfoHidesThePayloadBytes(): void
+    {
+        // C4 doctrine: payloads are not credentials, but a 25 MiB blob echoed
+        // into a var_dump or backtrace is its own hazard. __debugInfo covers
+        // var_dump/print_r; serialize stays legal (payload, not secret).
+        $att = Attachment::fromContent('TOPSECRET-BLOB-DO-NOT-ECHO', 'x.txt');
+
+        \ob_start();
+        \var_dump($att);
+        $dump = (string) \ob_get_clean();
+
+        $this->assertStringNotContainsString('TOPSECRET-BLOB', $dump);
+        $this->assertStringContainsString('bytes hidden', $dump);
     }
 
     // -------------------------------------------------------------------------

@@ -110,14 +110,28 @@ function main(array $argv): int
     // notice is plain English by design (help() too): error MESSAGES are
     // translated via Lang; the CLI's own usage text is not locale-routed.
     // Import any old-prefix exports under the new CANDY_MAIL_* name (new
-    // name always wins), then warn once per var.
+    // name always wins), then warn once per var. N1 (lib-reviews-1102):
+    // only warn for vars whose renamed counterpart this program actually
+    // reads — an off-roster POP_ANYTHING maps to a CANDY_MAIL_ANYTHING
+    // that nothing consumes, and warning about it invented a migration
+    // target that does not exist. The import itself stays whole-prefix
+    // (LegacyEnv semantics): those extras are simply inert.
+    $mailEnvRoster = [ // suffixes of CANDY_MAIL_* read by envString()/envFlag()
+        'FROM', 'SIGNATURE', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME',
+        'SMTP_PASSWORD', 'SMTP_REQUIRE_TLS', 'SMTP_IMPLICIT_TLS',
+        'SMTP_HELO', 'SMTP_CA_FILE', 'SMTP_TIMEOUT',
+    ];
     foreach (\SugarCraft\Core\Util\LegacyEnv::import([
         'POP_' => 'CANDY_MAIL_', // @rename-keep
     ]) as $legacyVar) {
+        $suffix = \substr($legacyVar, \strlen('POP_')); // @rename-keep
+        if (!\in_array($suffix, $mailEnvRoster, true)) {
+            continue;
+        }
         // C5 (lib-reviews-1102): env var NAMES are attacker-settable in any
         // process environment — an OSC/BEL-bearing name would ride this
         // warning raw to the terminal. Sweep at the egress choke.
-        fwrite(STDERR, Sanitize::untrusted(sprintf("candy-mail: %s is deprecated; set CANDY_MAIL_%s instead.\n", $legacyVar, substr($legacyVar, strlen('POP_'))))); // @rename-keep
+        fwrite(STDERR, Sanitize::untrusted(sprintf("candy-mail: %s is deprecated; set CANDY_MAIL_%s instead.\n", $legacyVar, $suffix))); // @rename-keep
     }
 
     try {
@@ -282,7 +296,26 @@ function parseArgs(array $argv): array
 
         if ($name === null) {
             if (\str_starts_with($arg, '-')) {
-                throw new \InvalidArgumentException(Lang::t('cli.unknown_option', ['option' => $arg]));
+                // did-you-mean: nearest known long flag (B8 minor). Only for
+                // plain-ASCII probes — levenshtein() is byte-based and would
+                // score UTF-8 noise meaninglessly.
+                $probe   = \preg_replace('/^-+/', '', $arg) ?? '';
+                $hint    = '';
+                $best    = null;
+                $bestDx  = 4; // accept distance <= 3
+                if ($probe !== '' && \preg_match('/^[A-Za-z][A-Za-z-]*$/', $probe) === 1) {
+                    foreach (\array_merge(\array_keys($listFlags), \array_keys($boolFlags), \array_keys($scalarFlags)) as $cand) {
+                        $dx = \levenshtein($probe, $cand);
+                        if ($dx < $bestDx) {
+                            $bestDx = $dx;
+                            $best   = $cand;
+                        }
+                    }
+                }
+                if ($best !== null) {
+                    $hint = ' ' . Lang::t('cli.did_you_mean', ['suggestion' => '--' . $best]);
+                }
+                throw new \InvalidArgumentException(Lang::t('cli.unknown_option', ['option' => $arg]) . $hint);
             }
             $positional[] = $arg;
             $i++;

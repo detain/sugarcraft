@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mail;
 
-use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationToken;
 
 /**
@@ -301,15 +300,38 @@ final class SmtpTransport implements Transport
 
         $this->readResponse(220);
 
-        // Identify with EHLO
+        // Identify with EHLO; fall back to HELO only if the server does not
+        // know EHLO at all (RFC 5321 §4.1.4 — a legacy server answers HELO
+        // with 250 and simply has no extension list). A HELO-only session
+        // advertises nothing: STARTTLS and AUTH stay unavailable, so the
+        // fail-closed REQUIRE_TLS / AUTH floors still refuse rather than
+        // silently downgrade.
         $this->sendRaw("EHLO {$this->getHeloHost()}\r\n");
-        $this->readResponse(250);
+        try {
+            $this->readResponse(250);
+        } catch (\RuntimeException $e) {
+            if (!$this->lastResponseIsPermanentRejection()) {
+                throw $e; // 4yz transient / timeout etc. — report honestly
+            }
+            $this->sendRaw("HELO {$this->getHeloHost()}\r\n");
+            $this->readResponse(250);
+        }
 
         // M-DD (lib-reviews-1102): snapshot the 8BITMIME advertisement NOW
         // (RFC 6152). lastResponse is overwritten by the AUTH reply and by
         // later responses, so a capability read at MAIL FROM time would
-        // inspect the wrong server text.
+        // inspect the wrong server text. (A HELO session has no extension
+        // list; the snapshot just stays false.)
         $this->serverSupports8Bit = $this->hasExtension('8BITMIME');
+    }
+
+    /**
+     * True when the last server reply is a 5xx permanent error — the one
+     * case in which retrying the greeting as HELO is correct (RFC 5321 §4.1.4).
+     */
+    private function lastResponseIsPermanentRejection(): bool
+    {
+        return \preg_match('/^5[0-9][0-9]([ -])/', $this->lastResponse) === 1;
     }
 
     /**

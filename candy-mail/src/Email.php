@@ -31,7 +31,7 @@ final class Email
     public readonly ?string $replyTo;
     /** @var list<Attachment> File attachments. */
     public readonly array $attachments;
-    /** @var string|null Signature appended to body. */
+    /** @var string|null Signature appended to the plain-text body (HTML-only mails ignore it — see bodyWithSignature()). */
     public readonly ?string $signature;
 
     /**
@@ -284,6 +284,13 @@ final class Email
 
     /**
      * Body text with signature appended (if set).
+     *
+     * m8 (lib-reviews-1102): the signature joins the PLAIN-TEXT body only.
+     * An HTML-only mail returns null here and the renderer emits the HTML
+     * part verbatim — appending raw text to markup would corrupt it, and
+     * auto-wrapping the signature in <p> + escaping is a product decision
+     * this library deliberately does not make silently. If you send
+     * HTML-only with a signature, include the signature in $htmlBody.
      */
     public function bodyWithSignature(): ?string
     {
@@ -299,15 +306,16 @@ final class Email
     /**
      * All recipients combined (to + cc + bcc) for SMTP "RCPT TO" routing.
      *
+     * m7 (lib-reviews-1102): dedupe uses the SAME key as the address-list
+     * merge (local part verbatim, domain lower-cased — RFC 5321 §2.3.3 makes
+     * the domain case-insensitive). The old raw array_unique let a to:
+     * A@Example.com plus cc: a@example.com pair deliver twice.
+     *
      * @return list<string>
      */
     public function allRecipients(): array
     {
-        return \array_values(\array_unique(\array_merge(
-            $this->to,
-            $this->cc,
-            $this->bcc,
-        )));
+        return self::mergeAddressList(self::mergeAddressList($this->to, $this->cc), $this->bcc);
     }
 
     // -------------------------------------------------------------------------

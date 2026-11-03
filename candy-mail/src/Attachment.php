@@ -159,6 +159,22 @@ final class Attachment
         );
     }
 
+    /**
+     * Debug-output shape (C4 doctrine, lib-reviews-1102): var_dump()/print_r()
+     * of an Attachment used to spill up to MAX_BYTES raw payload bytes onto
+     * the terminal. Identity stays inspectable; the bytes do not.
+     *
+     * @return array<string,mixed>
+     */
+    public function __debugInfo(): array
+    {
+        $info             = \get_object_vars($this);
+        $info['content']  = $this->content === null
+            ? null
+            : \sprintf('[%d bytes hidden — read via content()]', \strlen($this->content));
+        return $info;
+    }
+
     private function __construct(
         string $filename,
         ?string $path,

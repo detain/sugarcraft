@@ -154,6 +154,26 @@ final class EmailTest extends TestCase
         $this->assertCount(1, $all);
     }
 
+    public function testAllRecipientsDeduplicatesAcrossListsByDomainCase(): void
+    {
+        // m7 (lib-reviews-1102): the old raw array_unique compared byte-wise,
+        // so A@Example.COM in To and A@example.com in Cc became two RCPTs.
+        // The dedupe now follows the list-merge key law: local verbatim (case
+        // is technically significant), domain case-insensitive; the first
+        // occurrence is kept verbatim.
+        $email = new Email(
+            from: ['me@example.com'],
+            to:   ['A@Example.COM'],
+            cc:   ['A@example.com', 'c@d.example'],
+            bcc:  ['c@D.EXAMPLE'],
+        );
+
+        $this->assertSame(
+            ['A@Example.COM', 'c@d.example'],
+            \array_values($email->allRecipients()),
+        );
+    }
+
     public function testRejectsCrlfInSubject(): void
     {
         $this->expectException(\InvalidArgumentException::class);
