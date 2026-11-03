@@ -429,6 +429,21 @@ final class Terminal
         return $events;
     }
 
+    /**
+     * Number of bell characters (BEL 0x07) the stream has produced.
+     *
+     * Emulator path only: the renderer facade discards BEL inside
+     * sugar-ansi-parser's HandlerAdapter before any sink can count it.
+     * The counter is monotonic for the terminal's lifetime and is NOT
+     * cleared by RIS — a bell is a cue about the stream, not screen
+     * state. BEL characters that terminate an OSC string are routed to
+     * the OSC dispatcher and do not count.
+     */
+    public function bells(): int
+    {
+        return $this->handler->bells;
+    }
+
     public function resize(int $cols, int $rows): void
     {
         if ($cols < 1 || $rows < 1) {

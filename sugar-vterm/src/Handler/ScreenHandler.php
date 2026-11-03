@@ -59,6 +59,20 @@ final class ScreenHandler implements SubparamsAwareHandler
     public array $focusEvents = [];
 
     /**
+     * Bell characters (BEL 0x07) seen since construction.
+     *
+     * The emulator swallows no bytes silently any more than it must — a
+     * terminal application's attention cue was disappearing down a black
+     * hole with no affordance for an embedder to surface it. This is a
+     * monotonic session-level counter, deliberately NOT reset by RIS:
+     * a bell is a UI cue about the stream, not screen state, and a
+     * full-screen reset must not retro-erase a cue that was already owed
+     * to the user. (Emulator path only — the renderer discards BEL inside
+     * sugar-ansi-parser's HandlerAdapter before any sink sees it.)
+     */
+    public int $bells = 0;
+
+    /**
      * Optional live-notification sink for focus events (findings #30) —
      * invoked with the SAME message instance that was appended to
      * {@see self::$focusEvents}, immediately after the append. Null by
@@ -412,6 +426,7 @@ final class ScreenHandler implements SubparamsAwareHandler
     public function execute(int $byte): void
     {
         match ($byte) {
+            0x07 => $this->bells++,         // BEL — counted, not printed
             0x08 => $this->backspace(),
             0x09 => $this->horizontalTab(),
             // SO (LS1) / SI (LS0): shift G1 / G0 into GL. ECMA-48 NISO/LS0;
