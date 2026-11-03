@@ -166,9 +166,13 @@ final class StdioMcpServerRoundTripTest extends TestCase
             $server->callTool('shout', [])['content'][0]['text'],
             'the stream must stay in step: the second call gets its own reply',
         );
+        // Pin flipped 2026-11-04 (fix wave, review M1): the bare
+        // 'Tool call failed' collapsed every cause into three words. The
+        // broken envelope still fails the call; the payload now names the
+        // cause (answered neither result nor error).
         self::assertSame(
-            ['error' => 'Tool call failed'],
-            $server->callTool('broken', []),
+            'Tool call failed: the server answered neither result nor error',
+            $server->callTool('broken', [])['error'],
             'an envelope carrying our id but no result/error is the (broken) answer, not noise to skip',
         );
         self::assertSame(

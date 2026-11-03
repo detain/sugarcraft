@@ -227,6 +227,25 @@ final class StdioMcpServer implements McpServer
 
     private bool $stderrOpen = false;
 
+    /**
+     * True once the stderr capture actually dropped bytes at the cap — the
+     * honest truncation flag (the tail's LENGTH cannot tell an exactly-full
+     * capture from a trimmed one). Cleared at start(), never at stop(): like
+     * the tail itself it is post-mortem evidence.
+     */
+    private bool $stderrTruncated = false;
+
+    /**
+     * Why the IN-FLIGHT exchange did not answer, set at the reader's give-up
+     * sites (EOF, dead select, write refusal, lock loss, malformed reply,
+     * refused frame, handler failure) and reset per call. It distinguishes a
+     * timeout from a death that merely raced the deadline, and names the
+     * cause inside the callTool error payload instead of collapsing every
+     * failure into one string. Process-local like {@see $onWait} — never
+     * shared across the fork.
+     */
+    private ?string $lastFailureCause = null;
+
     /** Identity this client advertises in the initialize handshake. */
     private const DEFAULT_CLIENT_INFO = ['name' => 'sugar-mcp-client', 'version' => '0.1.0'];
 
@@ -235,9 +254,9 @@ final class StdioMcpServer implements McpServer
 
     /**
      * Client capabilities advertised in the initialize handshake
-     * (C-MCP-3). A configured map; sent as a JSON OBJECT whatever it
-     * holds — the MCP-1 shape law survives configuration. [] means
-     * "none" and still encodes as {}.
+     * (the server-request law). A configured map; sent as a JSON OBJECT
+     * whatever it holds — the object-vs-array wire shape law survives
+     * configuration. [] means "none" and still encodes as {}.
      *
      * @var array<string,mixed>
      */
@@ -436,7 +455,32 @@ final class StdioMcpServer implements McpServer
         return $plan;
     }
 
-    public function start(): void
+    /**
+     * Renders server- or OS-supplied text safely for embedding into OUR
+     * messages: control characters (C0/C1 — escape sequences, NUL, bare CR)
+     * never survive, so a hostile or buggy child cannot splice terminal
+     * redraws, OSC-8 hyperlinks, or newlines into a diagnostic this client
+     * throws or returns. The result is STILL untrusted content: consumers
+     * rendering it into a terminal should route it through
+     * {@see \SugarCraft\Core\Sanitize::untrusted()} as they would for any
+     * server output.
+     */
+    private static function printableDiagnostic(string $text): string
+    {
+        return preg_replace('/[\x00-\x1F\x7F-\x9F]+/u', ' ', $text) ?? '';
+    }
+
+    /**
+     * Begin the session: spawn, then run initialize →
+     * notifications/initialized → tools/list under one deadline.
+     *
+     * @param \Closure|null $onWait called at least once a second for as long
+     *        as the handshake waits, so an embedder whose watchdog measures
+     *        silence can tell a slow cold `npx` fetch from a hang. Same
+     *        contract as callTool's beat; the whole 60-second window is now
+     *        beat-covered, not just tool calls.
+     */
+    public function start(?\Closure $onWait = null): void
     {
         // Fail fast on re-entry: overwriting $this->process would drop the
         // handle to the live child, orphaning it until this object dies —
@@ -454,11 +498,11 @@ final class StdioMcpServer implements McpServer
         // with safely is not started at all.
         $this->lock = ExchangeLock::new($this->name);
 
-        // FIX #5: a forked child may not take over the id space while its
-        // parent — the current owner — is still live and exchanging on this
-        // very connection; two live owners would mint identical ids. The
-        // child's own calls mint nonce ids either way, and a claim after the
-        // owner's death still succeeds (the restart path).
+        // Fork ownership (measured): a forked child may not take over the id
+        // space while its parent — the current owner — is still live and
+        // exchanging on this very connection; two live owners would mint
+        // identical ids. The child's own calls mint nonce ids either way, and
+        // a claim after the owner's death still succeeds (the restart path).
         if (!$this->ids->claim()) {
             $liveOwner = $this->ids->ownerPid();
             $this->lock->destroy();
@@ -487,11 +531,22 @@ final class StdioMcpServer implements McpServer
         );
 
         if (!is_resource($this->process)) {
+            // The spawn failed; error_get_last() holds the OS answer proc_open
+            // raised on the way to false (posix_spawn/execve text), and the
+            // program name is the fact a reader can act on — a missing `npx`
+            // is THE most common MCP setup error, and naming only the
+            // user-chosen alias made it invisible.
+            $osCause = (string) (error_get_last()['message'] ?? '');
             $this->process = null;
             $this->lock->destroy();
             $this->lock = null;
 
-            throw new \RuntimeException("Failed to start MCP server: {$this->name}");
+            throw new \RuntimeException(sprintf(
+                'Failed to start MCP server: %s — could not execute %s%s',
+                $this->name,
+                $spawnCommand[0],
+                $osCause === '' ? '' : ' (' . self::printableDiagnostic($osCause) . ')',
+            ));
         }
 
         $this->serverPid = (int) proc_get_status($this->process)['pid'];
@@ -505,15 +560,20 @@ final class StdioMcpServer implements McpServer
         stream_set_blocking($this->pipes[2], false);
         $this->stderrOpen = true;
         $this->stderrTail = '';
+        $this->stderrTruncated = false;
+        $this->lastFailureCause = null;
 
         $deadline = self::nowSeconds() + $this->startTimeoutSeconds;
 
+        $previousBeat = $this->onWait;
+        $this->onWait = $onWait;
+
         try {
-            // capabilities is a JSON object in the schema; PHP's `[]` encodes as
-            // a JSON array, which the official SDK servers answer with an
-            // "expected object, received array" error (audit MCP-1). The
-            // configured map (C-MCP-3) rides through the same (object) cast,
-            // so the default [] still lands as {} byte-for-byte.
+            // capabilities is a JSON object in the schema; PHP's `[]` encodes
+            // as a JSON array, which the official SDK servers answer with an
+            // "expected object, received array" error. The configured map (the
+            // server-request law) rides through the same (object) cast, so the
+            // default [] still lands as {} byte-for-byte.
             $response = $this->request('initialize', [
                 'protocolVersion' => self::PROTOCOL_VERSION,
                 'capabilities' => (object) $this->capabilities,
@@ -535,6 +595,26 @@ final class StdioMcpServer implements McpServer
                 $this->stop();
 
                 throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $refusal . $diagnostics);
+            }
+
+            // Protocol negotiation (MCP requires the server to echo the
+            // revision it will speak). A reply naming a DIFFERENT revision
+            // means the pair holds diverging assumptions about every frame
+            // after this — refuse at the one place that still knows, instead
+            // of letting the mismatch surface later as an unexplainable call
+            // failure. A server that omits the field (pre-negotiation builds)
+            // proceeds: absence is not a counter-offer.
+            $negotiated = $response->result['protocolVersion'] ?? null;
+            if (is_string($negotiated) && $negotiated !== self::PROTOCOL_VERSION) {
+                $diagnostics = $this->stderrTailForDiagnostics();
+                $this->stop();
+
+                throw new \RuntimeException(sprintf(
+                    'Failed to start MCP server: %s — protocol mismatch: this client speaks %s, the server answered %s',
+                    $this->name,
+                    self::PROTOCOL_VERSION,
+                    self::printableDiagnostic($negotiated),
+                ) . $diagnostics);
             }
 
             // The spec's method name. A bare `initialized` is ignored by the TS
@@ -568,6 +648,10 @@ final class StdioMcpServer implements McpServer
             $this->stop();
 
             throw $failure;
+        } finally {
+            // The handshake beat lives exactly as long as the handshake —
+            // the same one-call lifetime law as the per-call beat.
+            $this->onWait = $previousBeat;
         }
     }
 
@@ -619,8 +703,24 @@ final class StdioMcpServer implements McpServer
         $this->serverPid = 0;
         $this->serverStartTicks = 0;
         $this->readBuffer = '';
-        $this->stderrTail = '';
         $this->stderrOpen = false;
+        // The roster belongs to the connection that just died: isUp() is
+        // false while listTools() served a table of dead tools.
+        $this->tools = [];
+        // stderrTail/stderrTruncated/lastFailureCause deliberately SURVIVE
+        // stop() — the captured evidence is exactly what a post-mortem of
+        // the server you just lost needs. start() clears them afresh.
+    }
+
+    /**
+     * The captured stderr tail, control characters swept. Survives stop() on
+     * purpose: a server that died is the one whose logs you want. The TEXT
+     * is server-authored and remains UNTRUSTED — render it through a
+     * sanitizer before terminal-facing display.
+     */
+    public function stderrTail(): string
+    {
+        return self::printableDiagnostic(trim($this->stderrTail));
     }
 
     /** Is this the process that started the server (or nothing is started)? */
@@ -766,18 +866,29 @@ final class StdioMcpServer implements McpServer
      *
      * A failed call answers as an error payload, never a throw: unencodable
      * arguments, a blown deadline, and this client's refusals of a
-     * non-conforming reply stream (an oversized frame, FIX #4) all arrive as
+     * non-conforming reply stream (an oversized frame) all arrive as
      * `['error' => ...]`. Refusing a frame drops the read buffer — the
      * framing reset — and leaves the connection up for the next exchange.
+     * The payload names the CAUSE: the server's JSON-RPC error code and
+     * message when it answered with an error, and the reader's reason for
+     * giving up (dead child, write failure, lost lock, refused frame) when
+     * it never got an answer at all — never a bare "Tool call failed".
      *
-     * @param array<string,mixed> $args
+     * The parameter names match the `McpServer` interface exactly, so a
+     * `callTool(name: ..., arguments: ...)` call written against the
+     * contract binds on this class too. The three trailing opt-ins
+     * (`onWait:`, `timeoutSeconds:`, `onServerMessage:`) exist on this
+     * concrete class only — the interface carries the two required
+     * parameters, and code typed to the interface cannot pass them.
+     *
+     * @param array<string,mixed> $arguments
      * @param (\Closure(): void)|null $onWait
      * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $onServerMessage
      *        per-call override of the connection's server-request handler
-     *        (C-MCP-3); null keeps the configured one in force.
+     *        (the server-request law); null keeps the configured one in force.
      * @return array<string,mixed>
      */
-    public function callTool(string $toolName, array $args, ?\Closure $onWait = null, ?float $timeoutSeconds = null, ?\Closure $onServerMessage = null): array
+    public function callTool(string $name, array $arguments, ?\Closure $onWait = null, ?float $timeoutSeconds = null, ?\Closure $onServerMessage = null): array
     {
         $previous = $this->onWait;
         $this->onWait = $onWait;
@@ -785,7 +896,7 @@ final class StdioMcpServer implements McpServer
         $this->callServerMessage = $onServerMessage;
 
         try {
-            return $this->callToolWaiting($toolName, $args, $timeoutSeconds);
+            return $this->callToolWaiting($name, $arguments, $timeoutSeconds);
         } finally {
             $this->onWait = $previous;
             $this->callServerMessage = $previousHandler;
@@ -793,25 +904,26 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * @param array<string,mixed> $args
+     * @param array<string,mixed> $arguments
      * @return array<string,mixed>
      */
-    private function callToolWaiting(string $toolName, array $args, ?float $timeoutSeconds): array
+    private function callToolWaiting(string $name, array $arguments, ?float $timeoutSeconds): array
     {
         $bounded = $timeoutSeconds !== null && is_finite($timeoutSeconds) && $timeoutSeconds > 0.0;
         $deadline = $bounded ? self::nowSeconds() + $timeoutSeconds : null;
         $id = (string) $this->ids->next();
+        $this->lastFailureCause = null;
 
         try {
             $response = $this->requestAs($id, 'tools/call', [
-                'name' => $toolName,
+                'name' => $name,
                 // An argument-less call arrives as PHP `[]`, which would encode as a
                 // JSON array; `arguments` is a JSON object in the schema and the SDK
                 // servers reject the array form ("expected record, received array").
                 // The same loss one level down (`{"filter":{}}` decoded assoc to
-                // `['filter' => []]`, audit MCP-9) is undone against the tool's
-                // own inputSchema — see ArgumentShape.
-                'arguments' => $args === [] ? new \stdClass() : ArgumentShape::conform($args, $this->inputSchemaOf($toolName)),
+                // `['filter' => []]`, the nested-object wire audit) is undone
+                // against the tool's own inputSchema — see ArgumentShape.
+                'arguments' => $arguments === [] ? new \stdClass() : ArgumentShape::conform($arguments, $this->inputSchemaOf($name)),
             ], $deadline);
         } catch (\InvalidArgumentException $unencodable) {
             // Arguments JSON cannot carry (a model's `1e999` decodes to INF):
@@ -819,7 +931,7 @@ final class StdioMcpServer implements McpServer
             // call as a payload the transcript can show, never as a throw.
             return ['error' => 'Tool call failed: ' . $unencodable->getMessage()];
         } catch (\RuntimeException $frameRefusal) {
-            // FIX #4: the RuntimeExceptions reachable from requestAs are this
+            // The RuntimeExceptions reachable from requestAs are this
             // client's refusals of a non-conforming stream — the frame-cap
             // drop (refuseAnOversizedFrame) and any later conformance tripwire.
             // The McpServer contract (see the interface docblock)
@@ -838,17 +950,42 @@ final class StdioMcpServer implements McpServer
             return ['error' => 'Tool call failed: ' . $frameRefusal->getMessage()];
         }
 
-        if ($response === null && $deadline !== null && self::nowSeconds() >= $deadline) {
+        if ($response === null && $deadline !== null && $this->lastFailureCause === null && self::nowSeconds() >= $deadline) {
+            // A TIMED-OUT wait is null with no other story to tell. If the
+            // reader gave up for a concrete reason (dead child, refused
+            // frame, failed write) that reason IS the answer — calling it a
+            // timeout would send debugging at the wrong door, and the
+            // server-request leg's deadline extension can otherwise make a
+            // fast EOF look like a blown budget.
             $this->cancelAbandoned($id);
 
             return ['error' => sprintf(
-                'Tool call timed out after %ss (toolTimeout) and was cancelled; the server may still finish the work',
+                'Tool call timed out after %ss and was cancelled; the server may still finish the work',
                 rtrim(rtrim(sprintf('%.3F', $timeoutSeconds), '0'), '.'),
             )];
         }
 
-        if ($response === null || !$response->resultSet) {
-            return ['error' => 'Tool call failed'];
+        if ($response === null) {
+            // No answer, and a cause to name: set by whichever reader rail
+            // gave up (write failure, lost lock/deadline, dead child, select
+            // storm, refused frame). Absent one, the wait simply ended.
+            $cause = $this->lastFailureCause ?? 'no reply arrived before the wait ended';
+
+            return ['error' => 'Tool call failed: ' . $cause . $this->stderrTailForDiagnostics()];
+        }
+
+        if ($response->error !== null) {
+            // JSON-RPC 2.0 forbids a reply carrying BOTH result and error;
+            // the error is checked FIRST so a broken or hostile server can
+            // never fake transcript success. The start() legs already judge
+            // error before result — the call leg must not be the exception.
+            // Server-authored bytes are printableDiagnostic-swept inside
+            // describeError and remain UNTRUSTED for the consumer.
+            return ['error' => 'Tool call failed' . $this->describeError('tools/call', $response) . $this->stderrTailForDiagnostics()];
+        }
+
+        if (!$response->resultSet) {
+            return ['error' => 'Tool call failed: the server answered neither result nor error'];
         }
 
         if (!is_array($response->result)) {
@@ -887,7 +1024,7 @@ final class StdioMcpServer implements McpServer
         try {
             $this->notify('notifications/cancelled', [
                 'requestId' => $id,
-                'reason' => 'client timeout (toolTimeout)',
+                'reason' => 'client timeout',
             ], self::nowSeconds() + self::CANCEL_NOTICE_SECONDS);
         } finally {
             $this->onWait = $previous;
@@ -896,7 +1033,10 @@ final class StdioMcpServer implements McpServer
 
     /**
      * The inputSchema the tool advertised at start(), or `[]` for a name the
-     * table does not hold (ArgumentShape then converts nothing).
+     * table does not hold (ArgumentShape then converts nothing). `[]` is
+     * deliberately shared between "unknown tool" and "tool that schema-types
+     * nothing": both mean "no shape information to act on", and a wrong name
+     * is the server's error to report, not this lookup's.
      *
      * @return array<array-key,mixed>
      */
@@ -918,14 +1058,28 @@ final class StdioMcpServer implements McpServer
      * implements none of it either.
      *
      * @param array<string,mixed>|null $params
+     * @param float|null $deadline an ABSOLUTE monotonic instant on the
+     *        hrtime basis {@see self::nowSeconds()} returns — NOT a
+     *        duration, NOT wall clock. Guessing wrong fails quietly: a past
+     *        instant returns null having written nothing; a `microtime(true)`
+     *        magnitude (~1.8e9 vs the boot-relative ~1e4 of a real instant)
+     *        can never be reached and the bounded wait degenerates to an
+     *        unbounded one on a silent server. The magnitude is therefore
+     *        refused outright (below), and legitimate instants up to ~31
+     *        years of uptime still pass. Compute one as
+     *        `StdioMcpServer::monotonicNow() + $seconds`.
      * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $onServerMessage
      *        per-call override of the connection's server-request handler
-     *        (C-MCP-3), live for this round trip only.
+     *        (the server-request law), live for this round trip only.
      * @throws \InvalidArgumentException when $params cannot be encoded as JSON
-     *         (see McpMessage::toJson()); nothing is written in that case
+     *         (see McpMessage::toJson()), or when $deadline carries the
+     *         wall-clock magnitude this seam refuses; nothing is written in
+     *         either case
      */
     public function request(string $method, ?array $params = null, ?float $deadline = null, ?\Closure $onServerMessage = null): ?McpMessage
     {
+        self::refuseImplausibleDeadline($deadline);
+
         $previousHandler = $this->callServerMessage;
         $this->callServerMessage = $onServerMessage;
 
@@ -948,12 +1102,16 @@ final class StdioMcpServer implements McpServer
 
         return $this->exchange($deadline, true, function (string $prefix) use ($json, $id, $deadline): ?McpMessage {
             if (!$this->writeLine($prefix . $json, $deadline)) {
+                $this->lastFailureCause = 'the request could not be written to the server';
+
                 return null;
             }
 
             // Same law as the W mark in exchange(): an unrecorded R would let
             // the next holder trust a stdout this one may die half-way into.
             if (!($this->lock?->markPhase(ExchangeLock::PHASE_READING) ?? false)) {
+                $this->lastFailureCause = 'the read phase marker could not be saved';
+
                 return null;
             }
 
@@ -972,6 +1130,8 @@ final class StdioMcpServer implements McpServer
      */
     public function notify(string $method, ?array $params = null, ?float $deadline = null): bool
     {
+        self::refuseImplausibleDeadline($deadline);
+
         $json = McpMessage::notification($method, $params)->toJson();
 
         return $this->exchange($deadline, false, fn (string $prefix): ?bool => $this->writeLine($prefix . $json, $deadline) ? true : null) === true;
@@ -996,6 +1156,8 @@ final class StdioMcpServer implements McpServer
     {
         $lock = $this->lock;
         if ($lock === null || !is_resource($this->process) || $this->pipes === null) {
+            $this->lastFailureCause = 'the server is not started';
+
             return null;
         }
 
@@ -1007,6 +1169,8 @@ final class StdioMcpServer implements McpServer
 
             return $this->serverIsRunning();
         })) {
+            $this->lastFailureCause = 'the exchange lock was unavailable (deadline passed or the server died while another process held it)';
+
             return null;
         }
 
@@ -1026,6 +1190,8 @@ final class StdioMcpServer implements McpServer
             // marker exists to close, so a failed mark fails the exchange.
             if ($lock->markPhase(ExchangeLock::PHASE_WRITING)) {
                 $result = $body($phase === ExchangeLock::PHASE_WRITING ? "\n" : '');
+            } else {
+                $this->lastFailureCause = 'the exchange phase marker could not be saved';
             }
         } finally {
             // A store that fails leaves the file reading as dirty (see
@@ -1074,6 +1240,36 @@ final class StdioMcpServer implements McpServer
      * with NTP/manual date changes; a handshake bound must ride a clock that
      * only moves forward, matching sugar-core BoundedShutdown's own hrtime basis.
      */
+    /**
+     * The clock every `$deadline` in this class is measured on: monotonic
+     * seconds since an arbitrary boot-relative origin (`hrtime`), never wall
+     * clock, never rewound by an NTP step. Public so embedders can compute
+     * `StdioMcpServer::monotonicNow() + $seconds` instead of guessing the
+     * basis of the deadline parameters on {@see self::request()} and
+     * {@see self::notify()}.
+     */
+    public static function monotonicNow(): float
+    {
+        return self::nowSeconds();
+    }
+
+    /**
+     * A wall-clock `microtime(true)` passed where a monotonic instant belongs
+     * is the one deadline mistake whose consequence is invisible (the bound
+     * simply never fires), so the implausible magnitude is refused loudly.
+     * The threshold sits far above any real uptime (1e9 monotonic seconds is
+     * ~31 years) and far below wall-clock seconds (~1.76e9 today).
+     */
+    private static function refuseImplausibleDeadline(?float $deadline): void
+    {
+        if ($deadline !== null && is_finite($deadline) && $deadline > 1.0e9) {
+            throw new \InvalidArgumentException(sprintf(
+                'MCP deadline %.6F is not a monotonic instant (hrtime clocks stay under 1e9 seconds ~ 31 years of uptime); this looks like wall-clock seconds. Compute it as StdioMcpServer::monotonicNow() + the seconds to wait, or pass null for no bound.',
+                $deadline,
+            ));
+        }
+    }
+
     private static function nowSeconds(): float
     {
         return hrtime(true) / 1_000_000_000.0;
@@ -1216,24 +1412,27 @@ final class StdioMcpServer implements McpServer
      * it is broken — the call fails now instead of waiting on a deadline-less
      * callTool() waiting on a reply that already came.
      *
-     * FIX #6 bounds the OTHER silence-shaped hole: a server that keeps the
-     * pipe busy with frames no exchange can ever be attributed to — blank-
-     * id result/error pushes, batches, unparseable chatter answering nothing.
-     * Skipping those without end is a deadline-less hang on a non-conforming
-     * server, so each read counts them and refuses the exchange after
-     * {@see UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL}; the refusal throws and
-     * callTool() reports it as an error payload (FIX #4 rail), while the
-     * handshake legs fail the start loudly.
+     * The strike law bounds the OTHER silence-shaped hole: a server that
+     * keeps the pipe busy with frames no exchange can ever be attributed to
+     * — blank-id result pushes, batches, unparseable chatter answering
+     * nothing. Skipping those without end is a deadline-less hang on a
+     * non-conforming server, so each read counts them and refuses the
+     * exchange after {@see UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL}; the
+     * refusal throws and callTool() reports it as an error payload (the call
+     * error rails), while the handshake legs fail the start loudly.
      *
-     * $deadline is taken by reference because C-MCP-3 pauses it: the wall
-     * clock a server-request handler spends is added back, so an answerer
-     * that waits (an elicitation held for a human) does not consume the
-     * bounded call's budget — the wait this client owes is not the server
-     * being slow.
+     * $deadline is taken by reference because answering a server request
+     * pauses it: the wall clock a server-request handler spends is added
+     * back, so an answerer that waits (an elicitation held for a human) does
+     * not consume the bounded call's budget — the wait this client owes is
+     * not the server being slow. A leg that DIES by exception grants no
+     * credit: the throw itself ends the bounded wait, so an extension is
+     * meaningless and the honest story is told by the error payload instead.
      */
     private function readResponse(string $id, ?float &$deadline = null): ?McpMessage
     {
         $unattributable = 0;
+        $blanks = 0;
 
         while (true) {
             if ($deadline !== null && self::nowSeconds() >= $deadline) {
@@ -1248,20 +1447,38 @@ final class StdioMcpServer implements McpServer
             $message = McpMessage::parse($line);
             if ($message === null) {
                 if (self::isMalformedReplyTo($line, $id)) {
+                    // The envelope answers OUR id while carrying neither
+                    // result nor error: that is the (broken) reply, not noise
+                    // to skip. Name it so callTool's payload says WHAT ended
+                    // the wait instead of the generic no-reply wording.
+                    $this->lastFailureCause = 'the server answered neither result nor error';
+
                     return null;
                 }
 
-                // FIX #6 strike: a NON-BLANK frame that is not even JSON-RPC
-                // (banner, batch array, garbage). Blank lines are exempt —
-                // the documented keep-alive shape below.
+                // Strike: a NON-BLANK frame that is not even JSON-RPC
+                // (banner, batch array, garbage). Blank lines do not join
+                // the strike bucket — they are the documented keep-alive
+                // shape — but they get their OWN, far higher ceiling: an
+                // endless stream of bare newlines used to hold a
+                // deadline-less callTool() forever, reopening exactly the
+                // starvation class the strike law closed.
                 if ($line !== '') {
                     $this->refuseAfterUnattributableFrames($id, ++$unattributable);
+                } elseif (++$blanks >= self::MAX_BLANK_FRAMES_BEFORE_REFUSAL) {
+                    throw new \RuntimeException(sprintf(
+                        'MCP server %s held the reply to request %s behind %d blank frames',
+                        $this->name,
+                        $id,
+                        $blanks,
+                    ));
                 }
 
                 continue;
             }
 
-            // C-MCP-3: a frame carrying a METHOD is the server speaking —
+            // The server-request law: a frame carrying a METHOD is the
+            // server speaking —
             // its own request (ping, roots/list, elicitation/create) or a
             // notification (progress). Answer it inline, under the exchange
             // lock this read already holds, then keep waiting for the
@@ -1274,22 +1491,40 @@ final class StdioMcpServer implements McpServer
             }
 
             // Strict match: only a genuine response (no method) whose id is
-            // byte-equal to ours answers the request. An id-less broadcast —
-            // a server spontaneously pushing `result`/`error` with no id, or
-            // one whose id was un-coercible (float/nested) so parse() stored
-            // null — must never be mistaken for OUR response (probe P7: the
-            // old `id !== null &&` guard let exactly that shape through).
+            // byte-equal to ours answers the request. An id-less broadcast
+            // — a server spontaneously pushing `result`/`error` with no
+            // id, or one whose id was un-coercible (float/nested) so
+            // parse() stored null — must never be mistaken for OUR
+            // response: the measured probe showed a looser guard let
+            // exactly that shape through.
             if (!$message->isResponse() || $message->id !== $id) {
-                // FIX #6 strike: a payload-shaped frame (result and/or error,
-                // no method) carrying NO id at all — the answer-is-coming
-                // forever shape, including ids parse() could not coerce
-                // (float, nested, explicit null). A foreign response WITH an
-                // id stays exempt: it is a late answer to somebody else's
-                // (often this client's own abandoned) call, and skipping it
-                // without blame is the whole point of strict id matching.
-                // Method-bearing frames no longer reach this strike check:
-                // the C-MCP-3 interception above answers them first.
-                if ($message->id === null && $message->method === null && ($message->resultSet || $message->error !== null)) {
+                // Strike: a payload-shaped frame (result, no method)
+                // carrying NO id at all — the answer-is-coming-forever
+                // shape. A foreign response WITH an id stays exempt: it is a
+                // late answer to somebody else's (often this client's own
+                // abandoned) call, and skipping it without blame is the
+                // whole point of strict id matching. Method-bearing frames
+                // no longer reach this check: the server-request
+                // interception above answers them first.
+                if ($message->id === null && $message->method === null && $message->error !== null) {
+                    // The exception that proves the rule: JSON-RPC mandates
+                    // a NULL id on parse-error (-32700) and invalid-request
+                    // (-32600) replies, and this client PROVOKE exactly that
+                    // shape whenever the dead-holder repair prefixed "\n"
+                    // onto our write. Such a frame answers OUR malformed
+                    // request; a strict id matcher can never consume it, so
+                    // striking it let a deadline-less callTool() wait
+                    // forever on a reply that had already come. Name the
+                    // cause and end the wait.
+                    $this->lastFailureCause = sprintf(
+                        'the server refused an unparseable frame (error code %s)',
+                        $message->errorCode() ?? 'unknown',
+                    );
+
+                    return null;
+                }
+
+                if ($message->id === null && $message->method === null && $message->resultSet) {
                     $this->refuseAfterUnattributableFrames($id, ++$unattributable);
                 }
 
@@ -1301,7 +1536,7 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * C-MCP-3: answer one method-bearing frame while an exchange awaits its
+     * Answer one method-bearing frame while an exchange awaits its
      * response. Notifications fire the handler (return ignored, nothing is
      * written back); requests consult the handler and fall back to the
      * built-in default — acknowledge `ping` with the empty-object result the
@@ -1311,26 +1546,37 @@ final class StdioMcpServer implements McpServer
      * handler spent is added back to $deadline so a waiting answerer never
      * eats the bounded call's budget.
      *
-     * A handler exception propagates: a broken answerer should surface as
-     * this client's loud refusal (callToolWaiting's FIX #4 rails convert it
-     * to an error payload) rather than a silently wrong reply.
+     * A handler exception propagates from this method — a broken answerer
+     * should surface loudly rather than as a silently wrong reply — and
+     * callTool()'s error rails convert it into an `['error' => ...]` payload
+     * that NAMES the handler class and message, never a mislabelled
+     * argument-encoding failure and never an exception escaping into the
+     * caller's tool loop.
      *
      * @param (\Closure(string, ?array<string,mixed>, bool): ?array)|null $handler
      */
     private function answerServerMessage(McpMessage $message, string $line, ?\Closure $handler, ?float &$deadline): void
     {
         $startedAt = self::nowSeconds();
-        $paused = false;
 
-        try {
-            if ($message->isNotification) {
+        if ($message->isNotification) {
+            // A notification is answered by the handler alone; the time it
+            // spends is still a wait this client owes, so it earns the
+            // pause credit whether it completes or dies on the way out.
+            try {
                 if ($handler !== null) {
                     $handler($message->method, $message->params, true);
                 }
-
-                return;
+            } finally {
+                if ($deadline !== null) {
+                    $deadline += self::nowSeconds() - $startedAt;
+                }
             }
 
+            return;
+        }
+
+        {
             $answer = $handler !== null ? $handler($message->method, $message->params, false) : null;
 
             if ($answer === null) {
@@ -1361,18 +1607,20 @@ final class StdioMcpServer implements McpServer
             }
 
             // Bill the handler's thinking back to the call BEFORE the answer
-            // is written — the pause is worth nothing if the write itself is
-            // refused against the un-extended deadline.
+            // is written — the pause is worth nothing if the write itself
+            // is refused against the un-extended deadline. A leg that threw
+            // on its way here granted nothing: its exception ends the
+            // bounded wait outright (see the docblock).
             if ($deadline !== null) {
                 $deadline += self::nowSeconds() - $startedAt;
             }
 
-            $paused = true;
-
-            $this->writeLine($response->toJson(), $deadline);
-        } finally {
-            if (!$paused && $deadline !== null) {
-                $deadline += self::nowSeconds() - $startedAt;
+            if (!$this->writeLine($response->toJson(), $deadline)) {
+                // m3: under back-pressure or a dead stdin the server's
+                // request goes silently unanswered. The awaited response
+                // may still arrive; if the wait then ends empty, this is
+                // the reason the payload names.
+                $this->lastFailureCause = 'could not deliver the reply to the server request ' . (string) $message->method;
             }
         }
     }
@@ -1409,6 +1657,19 @@ final class StdioMcpServer implements McpServer
      * read.
      */
     private const UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL = 8;
+
+    /**
+     * How many BLANK frames one exchange tolerates before refusing it.
+     * Newlines are the documented keep-alive shape, so they never join the
+     * strike bucket — but a server holding the real reply behind an endless
+     * stream of blanks used to make that exemption an unbounded wait on a
+     * deadline-less callTool(). The ceiling sits far above any honest
+     * keep-alive rate (16 bytes of newline per line, a 64 KiB frame fits
+     * 65536 of them — one burst of frame-sized keep-alive still passes,
+     * a permanent flood refuses) so the fix closes the starvation class
+     * without accusing a server that merely heartbeats.
+     */
+    private const MAX_BLANK_FRAMES_BEFORE_REFUSAL = 1024;
 
     /**
      * Refuse the outstanding exchange once $count of its skipped frames could
@@ -1471,6 +1732,7 @@ final class StdioMcpServer implements McpServer
     {
         $scannedFrom = 0;
         $livenessCheckedAt = self::nowSeconds();
+        $selectFailures = 0;
 
         while (($newline = strpos($this->readBuffer, "\n", $scannedFrom)) === false) {
             $this->beat();
@@ -1504,11 +1766,28 @@ final class StdioMcpServer implements McpServer
                     return $this->readBuffer === '' ? null : $this->drainBuffer();
                 }
 
-                // EINTR with a live stream: brief yield, then re-poll.
+                // Bounded retry, mirroring writeLine: EINTR with a live
+                // stream yields briefly and re-polls — but a select that
+                // keeps failing against a dead server used to livelock
+                // forever here, because the liveness probe only rode the
+                // ready===0 branch, unreachable while select kept failing.
+                ++$selectFailures;
+                $alive = $this->serverIsRunning();
+
+                if (!$alive || $selectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
+                    $this->lastFailureCause = $alive
+                        ? sprintf('the read pipe failed %d consecutive selects (EINTR storm?)', $selectFailures)
+                        : 'the server process exited';
+
+                    return $this->readBuffer === '' ? null : $this->drainBuffer();
+                }
+
                 usleep(1000);
 
                 continue;
             }
+
+            $selectFailures = 0;
 
             if ($ready === 0) {
                 // An idle poll is the liveness check (see the class docblock):
@@ -1518,6 +1797,8 @@ final class StdioMcpServer implements McpServer
                 // has nothing more to say — whatever a surviving helper might
                 // write is not an answer from the server we spawned.
                 if (!$this->serverIsRunning()) {
+                    $this->lastFailureCause = 'the server process exited';
+
                     return $this->frameLeftByAnExitedServer();
                 }
                 $livenessCheckedAt = self::nowSeconds();
@@ -1538,6 +1819,8 @@ final class StdioMcpServer implements McpServer
                 // chatty LIVE server costs no proc_get_status per log line.
                 if (self::nowSeconds() - $livenessCheckedAt >= self::READ_POLL_SECONDS) {
                     if (!$this->serverIsRunning()) {
+                        $this->lastFailureCause = 'the server process exited';
+
                         return $this->frameLeftByAnExitedServer();
                     }
                     $livenessCheckedAt = self::nowSeconds();
@@ -1630,6 +1913,7 @@ final class StdioMcpServer implements McpServer
 
         if (strlen($this->stderrTail) > self::MAX_STDERR_BYTES) {
             $this->stderrTail = substr($this->stderrTail, -self::MAX_STDERR_BYTES);
+            $this->stderrTruncated = true;
         }
     }
 
@@ -1645,7 +1929,11 @@ final class StdioMcpServer implements McpServer
             $code === null ? '' : " ({$code})",
             // Partial output: a decoded error may carry INF (a `1e999` on the
             // wire), and an unencodable diagnosis must still say something.
-            $message === null || $message === '' ? (string) json_encode($response->error, JSON_PARTIAL_OUTPUT_ON_ERROR) : $message,
+            // The bytes are the SERVER's — control characters are swept so a
+            // naive printer is not injected with, but the TEXT remains
+            // UNTRUSTED: render through Sanitize::untrusted for anything
+            // terminal-facing.
+            self::printableDiagnostic($message === null || $message === '' ? (string) json_encode($response->error, JSON_PARTIAL_OUTPUT_ON_ERROR) : $message),
         );
     }
 
@@ -1658,9 +1946,11 @@ final class StdioMcpServer implements McpServer
             return '';
         }
 
-        return strlen($this->stderrTail) >= self::MAX_STDERR_BYTES
-            ? ' [stderr truncated] ' . $tail
-            : ' stderr: ' . $tail;
+        // The flag is set where bytes were ACTUALLY dropped (an exactly-
+        // full tail is not "truncated"); the tail is server-authored bytes,
+        // swept here for the same terminal-injection reason describeError
+        // sweeps error messages, and still UNTRUSTED text.
+        return ($this->stderrTruncated ? ' [stderr truncated] ' : ' stderr: ') . self::printableDiagnostic($tail);
     }
 
     /**
@@ -1822,24 +2112,47 @@ final class StdioMcpServer implements McpServer
      */
     private function parseTools(array $response): array
     {
-        $tools = [];
         $toolDefs = $response['result']['tools'] ?? [];
 
         if (!is_array($toolDefs)) {
-            $toolDefs = [];
+            // A wrong-typed tools value is a LYING roster, not an empty one.
+            // Booting "connected, 0 tools" is the exact defect the
+            // tools/list gate exists to prevent; refuse the start loudly.
+            throw new \RuntimeException(sprintf(
+                'MCP server %s answered tools/list with tools as %s, expected a list of tool definitions',
+                $this->name,
+                get_debug_type($toolDefs),
+            ));
         }
 
-        foreach ($toolDefs as $def) {
-            if (!is_array($def)) {
-                continue;
-            }
+        $tools = [];
+        $dropped = [];
 
-            $tool = McpTool::tryFromArray($def, $this->name);
-            if ($tool !== null) {
+        foreach ($toolDefs as $def) {
+            $tool = is_array($def) ? McpTool::tryFromArray($def, $this->name) : null;
+
+            if ($tool === null) {
+                // Counted, never silently vanished: "advertised 3 malformed
+                // definitions" is diagnosable; a shorter tool list than the
+                // server promised is not.
+                $dropped[] = is_array($def) && isset($def['name']) && is_string($def['name'])
+                    ? $def['name']
+                    : get_debug_type($def);
+            } else {
                 $tools[] = $tool;
             }
         }
 
+        if ($dropped !== []) {
+            throw new \RuntimeException(sprintf(
+                'MCP server %s advertised %d malformed tool definition(s) in tools/list (first: %s) — refusing to boot a half-trusted roster',
+                $this->name,
+                count($dropped),
+                implode(', ', array_slice($dropped, 0, 5)),
+            ));
+        }
+
+        // A LEGAL empty roster stays legal: a server with no tools is real.
         return $tools;
     }
 }

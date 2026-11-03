@@ -2,18 +2,25 @@
 
 declare(strict_types=1);
 
-// Failure-gates fixture for FIX #6: handshakes correctly, then on the FIRST
-// tools/call floods the stream with frames no request can be attributed to —
-// float ids (un-coercible, stored null), explicit null-id pushes, a batch
-// array, a bare garbage line — and never answers. A deadline-less callTool()
-// against the pre-fix reader hung forever on exactly this server.
+// Failure-gates fixture for the strike law: handshakes correctly, then on
+// the FIRST tools/call floods the stream with frames no request can be
+// attributed to — float ids (un-coercible, stored null), a missing-id
+// result push, a batch array, a bare garbage line — and never answers. A
+// deadline-less callTool() against the pre-fix reader hung forever on
+// exactly this server.
 //
 // With --recovers it emits ONE FRAME FEW than the refusal threshold
-// (7 strikes) and then answers properly: the under-threshold side of the pin,
-// proving sloppy-but-eventually-honest servers keep working and any genuine
-// reply resets the count (the counter lives per read).
+// (7 strikes) and then answers properly: the under-threshold side of the
+// pin, proving sloppy-but-eventually-honest servers keep working and any
+// genuine reply resets the count (the counter lives per read).
+//
+// With --parse-error it emits a single NULL-ID ERROR frame instead — the
+// JSON-RPC parse-refusal shape. Since review M8 that is attributed to the
+// awaiting exchange (it answers our possibly-malformed write) and must end
+// the wait at once, not join the strike bucket.
 
 $recovers = in_array('--recovers', $argv, true);
+$parseError = in_array('--parse-error', $argv, true);
 $strikes = $recovers ? 7 : 9; // threshold is 8; 9 crosses it, 7 stays under
 
 $write = static function (array|string $payload): void {
@@ -60,11 +67,18 @@ while (($line = fgets(STDIN)) !== false) {
             }
             $poisoned = true;
 
-            // All five shapes below are unattributable by construction; they
+            if ($parseError) {
+                $write('{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"parse error"}}');
+                break; // then alive, listening, silent
+            }
+
+            // All four shapes below are unattributable by construction; they
             // cycle so the pin covers both strike branches of readResponse.
+            // A null-id ERROR is deliberately absent: that frame is a
+            // refusal of OUR write, fast-failed by name (review M8), not a
+            // strike.
             $shapes = [
                 '{"jsonrpc":"2.0","id":1.5,"result":{"late":true}}',          // float id -> null
-                '{"jsonrpc":"2.0","id":null,"error":{"code":-1,"message":"orphan"}}', // explicit null id
                 '[{"jsonrpc":"2.0","id":"1","result":{}}]',                   // batch -> parse null
                 'not json-rpc at all',                                        // garbage -> parse null
                 '{"jsonrpc":"2.0","result":{"broadcast":true}}',              // missing id member

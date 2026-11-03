@@ -79,7 +79,11 @@ final class StdioMcpServerNestedArgumentsWireTest extends TestCase
         // empty top level still leaves as {} (audit MCP-1).
         $server = $this->started();
 
-        self::assertSame(['error' => 'Tool call failed'], $server->callTool('not-advertised', ['filter' => []]));
+        // Pin flipped 2026-11-04 (fix wave, review M1): the SDK server's
+        // -32602 refusal now travels in full instead of three words.
+        $error = (string) ($server->callTool('not-advertised', ['filter' => []])['error'] ?? '');
+        self::assertStringContainsString('tools/call refused (-32602)', $error);
+        self::assertStringContainsString('expected object, received array', $error);
         self::assertSame('{}', $server->callTool('not-advertised', [])['content'][0]['text'] ?? null);
     }
 }

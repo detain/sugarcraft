@@ -221,7 +221,15 @@ final class StdioMcpServerFailureGatesTest extends TestCase
 
             self::assertGreaterThan(0, $helper, 'the fixture never forked its helper');
             self::assertTrue(posix_kill($helper, 0), 'the helper died early — a pipe closing, not liveness, ended the exchange');
-            self::assertSame(['error' => 'Tool call failed'], $result);
+            // Pin flipped 2026-11-04 (fix wave, review M1): the payload now
+            // NAMES the cause instead of collapsing to three words — death
+            // noticed on the read wait, write failure on the stdin variant.
+            $error = (string) ($result['error'] ?? '');
+            self::assertStringStartsWith('Tool call failed: ', $error);
+            self::assertTrue(
+                str_contains($error, 'the server process exited') || str_contains($error, 'could not be written to the server'),
+                'the failure payload named no death/write cause: ' . $error,
+            );
             self::assertLessThan(
                 self::BOUND_SECONDS,
                 $elapsed,
@@ -308,7 +316,14 @@ final class StdioMcpServerFailureGatesTest extends TestCase
 
             self::assertGreaterThan(0, $helper, 'the fixture never forked its helper');
             self::assertTrue(posix_kill($helper, 0), 'the helper died early — a pipe closing, not liveness, ended the exchange');
-            self::assertSame(['error' => 'Tool call failed'], $outcome['result']);
+            // Pin flipped 2026-11-04 (fix wave, review M1): named cause —
+            // either the read-wait death story or the write-wait EPIPE one.
+            $error = (string) ($outcome['result']['error'] ?? '');
+            self::assertStringStartsWith('Tool call failed: ', $error);
+            self::assertTrue(
+                str_contains($error, 'the server process exited') || str_contains($error, 'could not be written to the server'),
+                'the forked payload named no death/write cause: ' . $error,
+            );
             self::assertLessThan(
                 self::BOUND_SECONDS,
                 (float) $outcome['elapsed'],
@@ -426,6 +441,9 @@ final class StdioMcpServerFailureGatesTest extends TestCase
 
         self::assertArrayHasKey('error', $reply, 'the unattributable flood left callTool() hanging or throwing');
         self::assertStringStartsWith('Tool call failed: ', $reply['error']);
+        // Pin flipped 2026-11-04 (fix wave, review M8): the flood fixture's
+        // shapes are now strike-only (null-id errors got their own honest
+        // fast-fail mode); the strike refusal text itself is unchanged.
         self::assertStringContainsString('attributable to no request', $reply['error']);
         self::assertStringContainsString('probe', $reply['error'], 'the refusal did not name the server');
         self::assertLessThan(self::BOUND_SECONDS, $elapsed);
@@ -453,5 +471,31 @@ final class StdioMcpServerFailureGatesTest extends TestCase
 
         self::assertArrayNotHasKey('error', $reply, 'a server that answered under the threshold was refused');
         self::assertSame([['type' => 'text', 'text' => 'recovered']], $reply['content'] ?? $reply);
+    }
+
+    /**
+     * Review M8: a NULL-id ERROR frame is not anonymous noise — JSON-RPC
+     * sends it to reply to a request it could not parse, and this client
+     * provokes that shape with its dead-holder newline repair. The wait must
+     * END NOW with a payload naming the server's error code, not strike
+     * toward the (then never-reached, on a deadline-less call) ceiling.
+     */
+    public function testANullIdErrorFrameFailsTheWaitFastWithItsCode(): void
+    {
+        $server = $this->spawn('unattributable_server.php', ['--parse-error']);
+        $server->start();
+
+        $startedAt = microtime(true);
+        $reply = $server->callTool('echo', ['raw' => 'first']);
+        $elapsed = microtime(true) - $startedAt;
+
+        self::assertStringContainsString('the server refused an unparseable frame (error code -32700)', (string) ($reply['error'] ?? ''));
+        self::assertLessThan(self::BOUND_SECONDS, $elapsed, 'the parse refusal struck instead of ending the wait');
+        self::assertTrue($server->isUp(), 'a refusal of one frame must not stop a live server');
+
+        // And the story stays distinct from a timeout: a second bounded call
+        // against the now-silent server times out with the timeout text.
+        $second = $server->callTool('echo', ['raw' => 'second'], timeoutSeconds: 1.0);
+        self::assertStringContainsString('Tool call timed out', (string) ($second['error'] ?? ''));
     }
 }

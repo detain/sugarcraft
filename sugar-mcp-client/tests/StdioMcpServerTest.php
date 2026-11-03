@@ -61,7 +61,12 @@ final class StdioMcpServerTest extends TestCase
 
     public function testCallToolOnAColdServerReportsTheFailureShape(): void
     {
-        self::assertSame(['error' => 'Tool call failed'], self::server()->callTool('ping', []));
+        // Pin flipped 2026-11-04 (fix wave, review M1): a cold server is now
+        // named as the cause rather than flattened into "Tool call failed".
+        self::assertSame(
+            ['error' => 'Tool call failed: the server is not started'],
+            self::server()->callTool('ping', []),
+        );
     }
 
     public function testPumpStderrIsANoOpBeforeStart(): void
@@ -156,8 +161,12 @@ final class StdioMcpServerTest extends TestCase
             'empty tools' => ['probe', ['result' => ['tools' => []]], []],
             'missing result' => ['probe', [], []],
             'missing tools key' => ['probe', ['result' => []], []],
-            'non-array tools container' => ['probe', ['result' => ['tools' => 'nope']], []],
-            'malformed entries skipped, neighbours survive' => ['probe', [
+            // Flip 2026-11-04 (fix wave, review M7): wrong-typed containers
+            // and dropped definitions are REFUSALS now — "connected, 0
+            // tools" was the defect this shape defends against. $expected
+            // null means parseTools must throw.
+            'non-array tools container refused' => ['probe', ['result' => ['tools' => 'nope']], null],
+            'malformed entries refuse the boot' => ['probe', [
                 'result' => ['tools' => [
                     ['name' => 'a', 'description' => '', 'inputSchema' => []],
                     'garbage-string',
@@ -165,30 +174,48 @@ final class StdioMcpServerTest extends TestCase
                     7,
                     ['name' => 'b', 'description' => '', 'inputSchema' => []],
                 ]],
-            ], ['a', 'b']],
-            'wrong-typed name skipped' => ['probe', [
+            ], null],
+            'wrong-typed name refuses' => ['probe', [
                 'result' => ['tools' => [['name' => 5], ['name' => 'ok', 'description' => '', 'inputSchema' => []]]],
-            ], ['ok']],
-            // Review probe P8: definitions with no usable name must be skipped,
-            // not minted as phantom tools the router cannot address.
-            'nameless and empty-named definitions skipped' => ['probe', [
+            ], null],
+            // Review probe P8 (re-graded by review M7): definitions with no
+            // usable name must be refused LOUDLY, not silently dropped — a
+            // vanished tool is exactly the "looks connected, exposes less"
+            // defect the tools/list gate exists to prevent.
+            'nameless and empty-named definitions refuse' => ['probe', [
                 'result' => ['tools' => [
                     ['description' => 'no name at all'],
                     ['name' => '', 'description' => 'empty name'],
                     ['name' => null, 'description' => 'null name'],
                     ['name' => 'keeper', 'description' => '', 'inputSchema' => []],
                 ]],
-            ], ['keeper']],
+            ], null],
         ];
     }
 
     /** @dataProvider toolListShapes */
-    public function testParseToolsGuardsEveryNestedShape(string $name, array $response, array $expected): void
+    public function testParseToolsGuardsEveryNestedShape(string $name, array $response, ?array $expected): void
     {
         $server = new StdioMcpServer($name, '/bin/true');
 
         $parse = new \ReflectionMethod(StdioMcpServer::class, 'parseTools');
         $parse->setAccessible(true);
+
+        if ($expected === null) {
+            $thrown = null;
+
+            try {
+                $parse->invoke($server, $response);
+            } catch (\RuntimeException $refusal) {
+                $thrown = $refusal->getMessage();
+            }
+
+            self::assertIsString($thrown, 'a lying or half-broken tools/list booted silently');
+            self::assertStringContainsString($name, $thrown, 'the refusal did not name the server');
+
+            return;
+        }
+
         /** @var list<\SugarCraft\McpClient\McpTool> $tools */
         $tools = $parse->invoke($server, $response);
 
