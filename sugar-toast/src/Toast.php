@@ -46,6 +46,26 @@ final class Toast
      */
     public const MAX_VIEWPORT_DIMENSION = 10000;
 
+    /**
+     * Display-cell ceiling for a single alert message (lib-reviews-1102 M6).
+     * The README used to sell "arbitrary length, word-wrapped" and the queue
+     * caveat only bounded alert COUNT — a remote string 100x longer than any
+     * viewport was an amplifier for the (now-linear) renderer and for the
+     * stack geometry. Over the cap the message truncates with a visible
+     * '[truncated]' marker; the full text still rides the Alert into
+     * history(). 8192 cells ≈ 170 wrapped rows at the default width — past
+     * any readable notification, far below any hostile budget.
+     */
+    public const MAX_MESSAGE_CELLS = 8192;
+
+    /**
+     * Action buttons rendered per alert (lib-reviews-1102 M6 family). Extra
+     * buttons fold into a visible '+N more' row instead of growing the box
+     * without bound; hidden actions stay reachable via the Alert in
+     * history()/activeAlerts(), just not clickable.
+     */
+    public const MAX_ACTIONS_PER_ALERT = 64;
+
     // Configuration
     private int $maxWidth   = 50;
     private int $minWidth   = 0;
@@ -835,12 +855,16 @@ final class Toast
             $boxWidth = $placed['buffer']->width();
             $boxHeight = $placed['buffer']->height();
             $inner = \max(1, $boxWidth - 2);
-            foreach ($alert->actions as $actionIndex => $action) {
+            $visible = $this->visibleActions($alert);
+            $count = \count($visible); // folded buttons are not rects
+            foreach ($visible as $actionIndex => $action) {
                 // renderAlert() lays actions on the final rows before the
-                // closing border, one action per row, in list order. The
-                // clickable span is the LABEL's own cells — the padding
-                // after it is background, not button.
-                $row = $placed['y'] + $boxHeight - 1 - $count + $actionIndex;
+                // closing border (plus a '+N more' fold row when buttons
+                // overflow MAX_ACTIONS_PER_ALERT), one action per row, in
+                // list order. The clickable span is the LABEL's own cells —
+                // the padding after it is background, not button.
+                $foldRow = \count($alert->actions) > $count ? 1 : 0;
+                $row = $placed['y'] + $boxHeight - 1 - $foldRow - $count + $actionIndex;
                 $shown = Ansi::strip(Width::truncateAnsi('[' . $action->label . ']', $inner));
                 $rects[] = [
                     'action' => $action,
@@ -935,10 +959,20 @@ final class Toast
      */
     private function fillViewportFromString(Buffer $buf, array $lines): Buffer
     {
-        for ($row = 0; $row < \count($lines) && $row < $buf->height(); $row++) {
-            $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row], hostFrame: true);
+        // M6: the host frame arrives as one flat grid built from single
+        // scanLine passes — the old row-by-row place chain was the same
+        // cell-clone amplifier as the alert box.
+        $width = $buf->width();
+        $height = $buf->height();
+        $grid = [];
+        $blank = Cell::new();
+        for ($row = 0; $row < $height; $row++) {
+            $cells = $row < \count($lines) ? $this->scanLine($lines[$row], $width, true) : [];
+            for ($col = 0; $col < $width; $col++) {
+                $grid[] = $cells[$col] ?? $blank;
+            }
         }
-        return $buf;
+        return Buffer::fromGrid($width, $height, $grid);
     }
 
     // -------------------------------------------------------------------------
@@ -957,7 +991,11 @@ final class Toast
         // Null message renders as empty string — the width probe coalesces it
         // too, because under strict_types Width::string(null) would fatal
         // before any `?? ''` in the same statement could rescue it.
-        $width = $this->resolveWidth(Width::string($alert->message ?? ''), $capWidth);
+        $message = $this->boundMessage($alert->message);
+        $actions = $this->visibleActions($alert);
+        $hiddenActions = \count($alert->actions) - \count($actions);
+
+        $width = $this->resolveWidth(Width::string($message ?? ''), $capWidth);
         $icon  = $alert->type->icon($this->symbols);
         $color = $alert->type->color();
 
@@ -988,7 +1026,7 @@ final class Toast
             $prefix = '';
             $iconCells = 0;
         }
-        $headerWrap = $this->wordWrap($alert->message ?? '', \max(1, $inner - $iconCells));
+        $headerWrap = $this->wordWrap($message ?? '', \max(1, $inner - $iconCells));
         $firstWord  = \array_shift($headerWrap) ?? '';
         $headerBody = $prefix . $firstWord;
         $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($headerBody, $inner), $inner) . '│';
@@ -1008,7 +1046,7 @@ final class Toast
         }
 
         // Render action buttons if any
-        foreach ($alert->actions as $action) {
+        foreach ($actions as $action) {
             $label = '[' . $action->label . ']';
             if (Width::string(Ansi::strip($label)) > $inner) {
                 // Same ellipsize-never-delete law as the header (M4): a
@@ -1020,9 +1058,47 @@ final class Toast
                 $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($label, $inner), $inner) . '│';
             }
         }
+        if ($hiddenActions > 0) {
+            // Folded buttons stay on the Alert (history()/activeAlerts());
+            // the frame says so instead of growing a row per button.
+            $more = '[+' . $hiddenActions . ' more]';
+            $middleLines[] = '│' . Width::padRight(
+                Width::truncateMiddle(Ansi::strip($more), $inner),
+                $inner
+            ) . '│';
+        }
 
         $lines = [$top, ...$middleLines, $bottom];
         return \implode("\n", $lines);
+    }
+
+    /**
+     * Truncate an over-long message to {@see MAX_MESSAGE_CELLS} display cells
+     * with a visible marker (M6). The Alert itself keeps the full text —
+     * history()/activeAlerts() hosts never lose data to a render-time budget.
+     */
+    private function boundMessage(?string $message): ?string
+    {
+        if ($message === null || Width::string($message) <= self::MAX_MESSAGE_CELLS) {
+            return $message;
+        }
+        $marker = ' …[truncated]';
+        $cut = Width::truncateAnsi($message, self::MAX_MESSAGE_CELLS - Width::string($marker));
+        // truncateAnsi may leave inline styling open; close it before the
+        // marker so '[truncated]' never inherits hostile colour.
+        return $cut . Ansi::reset() . $marker;
+    }
+
+    /**
+     * The actions {@see renderAlert()} and {@see actionRects()} render — the
+     * FIRST {@see MAX_ACTIONS_PER_ALERT} of the alert's list, so the painted
+     * buttons and the hit-map agree by construction (one source of truth).
+     *
+     * @return list<Action>
+     */
+    private function visibleActions(Alert $alert): array
+    {
+        return \array_slice($alert->actions, 0, self::MAX_ACTIONS_PER_ALERT);
     }
 
     /**
@@ -1046,9 +1122,15 @@ final class Toast
         $height = \count($lines);
         $boxWidth = max(1, Width::string($lines[0] ?? ''));
 
-        $buf = Buffer::new($boxWidth, $height);
-        for ($row = 0; $row < $height; $row++) {
-            $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row]);
+        // M6: one scanLine pass per row into a flat grid, ONE immutable
+        // build — no per-cell clone anywhere on the production path.
+        $grid = [];
+        $blank = Cell::new();
+        foreach ($lines as $line) {
+            $cells = $this->scanLine($line, $boxWidth);
+            for ($col = 0; $col < $boxWidth; $col++) {
+                $grid[] = $cells[$col] ?? $blank;
+            }
         }
 
         // Additive: overlay optional per-alert bg/fg/border colours. When
@@ -1057,10 +1139,10 @@ final class Toast
         if ($alert->backgroundColor !== null
             || $alert->foregroundColor !== null
             || $alert->borderColor !== null) {
-            $buf = $this->applyAlertColors($buf, $alert, $lines);
+            $grid = $this->colorAlertGrid($grid, $boxWidth, $alert, $lines);
         }
 
-        return $buf;
+        return Buffer::fromGrid($boxWidth, $height, $grid);
     }
 
     /**
@@ -1080,20 +1162,38 @@ final class Toast
      */
     private function applyAlertColors(Buffer $buf, Alert $alert, array $lines): Buffer
     {
+        $grid = [];
+        for ($r = 0; $r < $buf->height(); $r++) {
+            for ($c = 0; $c < $buf->width(); $c++) {
+                $grid[] = $buf->cellAt($c, $r);
+            }
+        }
+        return Buffer::fromGrid($buf->width(), $buf->height(), $this->colorAlertGrid($grid, $buf->width(), $alert, $lines));
+    }
+
+    /**
+     * Grid-native colour pass (M6) — the single truth the production build
+     * calls directly; the Buffer-shaped method above keeps the
+     * reflection-pinned seam.
+     *
+     * @param list<Cell> $grid
+     * @return list<Cell>
+     */
+    private function colorAlertGrid(array $grid, int $bufWidth, Alert $alert, array $lines): array
+    {
         static $borderGlyphs = ['╭' => true, '─' => true, '╮' => true, '│' => true, '╰' => true, '╯' => true];
 
         $bg     = $alert->backgroundColor !== null ? $this->colorToRgb($alert->backgroundColor) : null;
         $fg     = $alert->foregroundColor !== null ? $this->colorToRgb($alert->foregroundColor) : null;
         $border = $alert->borderColor !== null ? $this->colorToRgb($alert->borderColor) : null;
 
-        $height   = $buf->height();
-        $bufWidth = $buf->width();
+        $height   = (int) (\count($grid) / max(1, $bufWidth));
         $lineCount = \count($lines);
 
         for ($row = 0; $row < $height && $row < $lineCount; $row++) {
             $cols = \min($bufWidth, Width::string($lines[$row]));
             for ($col = 0; $col < $cols; $col++) {
-                $cell = $buf->cellAt($col, $row);
+                $cell = $grid[$row * $bufWidth + $col];
                 if ($cell->width === 0) {
                     continue;  // wide-char continuation — toAnsi() skips it
                 }
@@ -1114,15 +1214,12 @@ final class Toast
 
                 $newBg = $bg ?? $existing?->bg();
 
-                $buf = $buf->withCellAt(
-                    $col,
-                    $row,
-                    new Cell($cell->rune(), new Style($newFg, $newBg, $attrs), $cell->link(), $cell->width),
-                );
+                $grid[$row * $bufWidth + $col] =
+                    new Cell($cell->rune(), new Style($newFg, $newBg, $attrs), $cell->link(), $cell->width);
             }
         }
 
-        return $buf;
+        return $grid;
     }
 
     /**
@@ -1138,8 +1235,23 @@ final class Toast
      * Place an ANSI-encoded string into the buffer at (col, row), parsing
      * SGR sequences and applying corresponding Buffer Style objects.
      */
-    private function placeAnsiStringAt(Buffer $buf, int $col, int $row, string $s, bool $hostFrame = false): Buffer
+    /**
+     * Scan one string into its sequence of display cells (the M6 linear
+     * build path: rows are scanned once into a flat grid and committed with
+     * a single Buffer::fromGrid, instead of the old one immutable
+     * withCellAt clone PER CELL — O(cells²) on the whole frame, which made a
+     * 32KB hostile message kill the process past 120s (security MAJOR-2)).
+     *
+     * The walker itself is unchanged in semantics: OSC/DCS/2-char escapes
+     * consumed (links honoured only on the host-frame path), CSI-SGR folded
+     * cumulatively, wide runes paired with a continuation cell, and the row
+     * stops at $maxCols cells.
+     *
+     * @return list<Cell>
+     */
+    private function scanLine(string $s, int $maxCols, bool $hostFrame = false): array
     {
+        $cells = [];
         $len = \strlen($s);
         $i = 0;
         $currentStyle = null;
@@ -1206,25 +1318,53 @@ final class Toast
                 continue;
             }
 
-            if ($col >= $buf->width()) {
+            if (\count($cells) >= $maxCols) {
                 break;
             }
 
-            $buf = $buf->withCellAt($col, $row, new Cell($cluster, $currentStyle, $currentLink, $gw));
-            if ($gw === 2 && $col + 1 < $buf->width()) {
-                $buf = $buf->withCellAt($col + 1, $row, Cell::continuation());
+            $cells[] = new Cell($cluster, $currentStyle, $currentLink, $gw);
+            if ($gw === 2 && \count($cells) < $maxCols) {
+                $cells[] = Cell::continuation();
             }
-            $col += $gw;
             $i += \strlen($cluster);
         }
 
-        return $buf;
+        return $cells;
     }
 
     /**
-     * Extract the next UTF-8 grapheme cluster from string $s at position $i.
-     *
-     * Delegates to sugar-core's canonical {@see Width::nextCluster()}. This
+     * Single-row placement kept as the reflection-pinned seam the renderer
+     * tests drive directly (malformed-walk pins). Production paths compose
+     * through scanLine() + one Buffer::fromGrid per surface; this wrapper
+     * rebuilds the grid in ONE pass (O(w*h) reads, O(1) per cell) instead of
+     * the historical cell-by-cell clone chain.
+     */
+    private function placeAnsiStringAt(Buffer $buf, int $col, int $row, string $s, bool $hostFrame = false): Buffer
+    {
+        $width = $buf->width();
+        $height = $buf->height();
+        if ($row < 0 || $row >= $height || $col >= $width) {
+            return $buf;
+        }
+
+        $replaced = $this->scanLine($s, $width - max(0, $col), $hostFrame);
+
+        $grid = [];
+        for ($r = 0; $r < $height; $r++) {
+            for ($c = 0; $c < $width; $c++) {
+                if ($r === $row && $c >= $col && ($c - $col) < \count($replaced)) {
+                    $grid[] = $replaced[$c - $col];
+                } else {
+                    $grid[] = $buf->cellAt($c, $r);
+                }
+            }
+        }
+        return Buffer::fromGrid($width, $height, $grid);
+    }
+
+    /**
+     * Extract the next UTF-8 grapheme cluster
+     * Extract the next UTF-8 grapheme cluster from string    * Delegates to sugar-core's canonical {@see Width::nextCluster()}. This
      * used to be a sanctioned verbatim fork (kept because the core splitter
      * was private); the duplicated body is deleted now that core promotes it
      * to a public entry point, so both invalid-UTF-8 guards (ICU position

@@ -117,6 +117,15 @@ Control the maximum number of concurrent alerts with `withMaxConcurrent(int|null
 
 When the cap is reached, the configured `Overflow` strategy determines behaviour.
 
+Per-alert SIZE is bounded too (lib-reviews-1102 M6: one hostile 32 KB string
+measured 14 s inside `view()`): `Toast::MAX_MESSAGE_CELLS` (default 8192)
+truncates an over-long message with a visible `" …[truncated]"` marker, and
+`Toast::MAX_ACTIONS_PER_ALERT` (default 64) paints only the first 64 buttons
+— the rest fold into a visible `"[+N more]"` row. The caps bind the RENDER
+only: the full message text and the complete action list still ride the
+`Alert` into history and `activeAlerts()`, so nothing is silently lost to a
+host that reads the data instead of the pixels.
+
 ## Persistent Alerts
 
 
