@@ -11,6 +11,14 @@ namespace SugarCraft\Table;
  * pagination, sorting, filtering, frozen columns, horizontal scroll,
  * zebra striping, missing data indicators, border styling.
  *
+ * Cell values are read as plain display text: objects with __toString are
+ * stringified, StyledCell contributes its inner value (never its SGR
+ * wrapper), and non-scalar values without __toString read as empty text —
+ * one stdClass cell costs that cell's matchability, not the pane. The
+ * component itself never wires terminal input: it exposes handleKey() and
+ * cursor APIs for a host to call from its own keyboard loop, and it has no
+ * mouse handling at all.
+ *
  * Port of Evertras/bubble-table.
  *
  * @see https://github.com/Evertras/bubble-table
@@ -1094,8 +1102,7 @@ final class Table
                             continue; // column not filterable — skip (no-op filter)
                         }
                         $val = $row->data->get($key);
-                        $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) ($val ?? '');
-                        if (\stripos($str, $text) === false) {
+                        if (\stripos(self::plainText($val), $text) === false) {
                             return false;
                         }
                     }
@@ -1115,8 +1122,7 @@ final class Table
                         if ($val === null) {
                             continue;
                         }
-                        $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) $val;
-                        if (\stripos(\strtolower($str), $searchLower) !== false) {
+                        if (\stripos(\strtolower(self::plainText($val)), $searchLower) !== false) {
                             return true;
                         }
                     }
@@ -1135,8 +1141,8 @@ final class Table
                     $va = $a->data->get($key);
                     $vb = $b->data->get($key);
 
-                    $sa = \is_object($va) && method_exists($va, '__toString') ? (string) $va : (string) ($va ?? '');
-                    $sb = \is_object($vb) && method_exists($vb, '__toString') ? (string) $vb : (string) ($vb ?? '');
+                    $sa = self::plainText($va);
+                    $sb = self::plainText($vb);
 
                     // Numeric sort
                     if (\is_numeric($sa) && \is_numeric($sb)) {
@@ -1395,11 +1401,8 @@ final class Table
             if ($val === null) {
                 continue;
             }
-            $str = \is_object($val) && method_exists($val, '__toString')
-                ? (string) $val
-                : (\is_scalar($val) ? (string) $val : '');
-            // Sanitize before width measurement
-            $str = Sanitize::value($str, false);
+            // StyledCell measures its display value, never its SGR wrapper.
+            $str = Sanitize::value(self::plainText($val), false);
             $len = Width::of($str);
             if ($len > $maxLen) {
                 $maxLen = $len;
@@ -2209,6 +2212,34 @@ final class Table
             return $result;
         }
         return $fallback;
+    }
+
+    /**
+     * The plain display text of a raw cell value — the same reading rules
+     * the render path uses (see the class docblock): a StyledCell matches
+     * and sorts by its value, never by its SGR wrapper; anything without a
+     * safe string reading contributes empty text instead of throwing.
+     */
+    private static function plainText(mixed $val): string
+    {
+        if ($val instanceof StyledCell) {
+            $val = $val->value;
+        }
+
+        return self::scalarText($val);
+    }
+
+    /**
+     * Stringify one value with the guarded reading rules; no throwing on
+     * non-scalar input.
+     */
+    private static function scalarText(mixed $val): string
+    {
+        if (\is_object($val) && \method_exists($val, '__toString')) {
+            return (string) $val;
+        }
+
+        return \is_scalar($val) ? (string) $val : '';
     }
 
     /**
