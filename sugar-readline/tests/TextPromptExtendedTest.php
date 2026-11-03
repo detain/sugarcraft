@@ -302,4 +302,231 @@ final class TextPromptExtendedTest extends TestCase
         $p = TextPrompt::new('> ')->withAutoSuggest(false);
         $this->assertFalse($p->isSearching());
     }
+
+    // =========================================================================
+    // Control bytes are keys, never content (multi-line forgery door)
+    // =========================================================================
+
+    public function testControlBytesTypedIntoTheBufferAreDropped(): void
+    {
+        $p = TextPrompt::new('> ')->handleChar('a')->handleChar("\n")->handleChar("\x00")
+            ->handleChar("\x1b")->handleChar("\x7f")->handleChar('b');
+        $this->assertSame('ab', $p->value());
+    }
+
+    // =========================================================================
+    // insertPastedText — mode-agnostic literal insertion
+    // =========================================================================
+
+    public function testInsertPastedTextStripsControlsAndMovesCursor(): void
+    {
+        $p = TextPrompt::new('> ')->handleChar('x')->insertPastedText("ab\nc\x01d");
+        $this->assertSame('xabcd', $p->value());
+        $this->assertSame(5, $p->cursor());
+    }
+
+    public function testInsertPastedTextHonoursCharLimit(): void
+    {
+        $p = TextPrompt::new('> ')->withCharLimit(4)->insertPastedText('abcdef');
+        $this->assertSame('abcd', $p->value());
+        $this->assertSame(4, $p->cursor());
+    }
+
+    public function testInsertPastedTextRespectsModeAndSubmitStates(): void
+    {
+        $done = TextPrompt::new('> ')->handleChar('x')->submit();
+        $this->assertSame('x', $done->insertPastedText('yz')->value());
+    }
+
+    // =========================================================================
+    // Space arrives as the symbolic name 'space' (reserved by isPrintable)
+    // =========================================================================
+
+    public function testSpaceKeyInsertsARealSpace(): void
+    {
+        $p = TextPrompt::new('> ')->handleChar('a')->handleKey('space')->handleChar('b');
+        $this->assertSame('a b', $p->value());
+    }
+
+    public function testSpaceSymbolicNameMatchesNormalize(): void
+    {
+        $this->assertSame(Key::Space, Key::normalize(' '));
+    }
+
+    // =========================================================================
+    // Ctrl+H erase, Ctrl+Z undo, Ctrl+Y redo — the historic chords
+    // =========================================================================
+
+    public function testCtrlHErasesBeforeTheCursor(): void
+    {
+        $p = TextPrompt::new('> ')->handleChar('a')->handleChar('b')->handleKey('ctrl_h');
+        $this->assertSame('a', $p->value());
+    }
+
+    public function testCtrlZUndoesTypedRun(): void
+    {
+        $p = TextPrompt::new('> ')
+            ->withUndoManager(new UndoManager())
+            ->handleChar('a')->handleChar('b');
+        $this->assertSame('ab', $p->value());
+
+        $p = $p->handleKey('ctrl_z');
+        $this->assertSame('', $p->value());
+
+        $p = $p->handleKey('ctrl_y');
+        $this->assertSame('ab', $p->value());
+    }
+
+    public function testConsecutiveTypingSharesOneUndoSnapshot(): void
+    {
+        $p = TextPrompt::new('> ')
+            ->withUndoManager(new UndoManager())
+            ->handleChar('a')->handleChar('b')->handleChar('c');
+        $p = $p->handleKey('ctrl_z');
+        $this->assertSame('', $p->value(), 'typing a word is one undo step, not three');
+    }
+
+    public function testTypingAfterACaretJumpStartsAFreshUndoRun(): void
+    {
+        $p = TextPrompt::new('> ')
+            ->withUndoManager(new UndoManager())
+            ->handleChar('a')->handleChar('b');       // run 1
+        $p = $p->handleKey(Key::Left);                  // caret jump closes it
+        $p = $p->handleChar('X');                       // run 2
+        $p = $p->handleKey('ctrl_z');
+        $this->assertSame('ab', $p->value()); // undoes only the post-jump 'X' run
+    }
+
+    // =========================================================================
+    // Hidden prompts leak nothing: no autosuggest row, no hint row, no undo
+    // =========================================================================
+
+    public function testHiddenPromptNeverPaintsAutoSuggest(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('topsecret-plan');
+        $p = TextPrompt::new('Password: ')
+            ->withHistory($history)
+            ->withHidden(true)
+            ->handleChar('t');
+        $this->assertStringNotContainsString('opsecret-plan', $p->view());
+        $this->assertStringNotContainsString('opsecret', $p->view());
+    }
+
+    public function testHiddenPromptNeverPaintsCompletionHintTail(): void
+    {
+        $p = TextPrompt::new('Secret: ')
+            ->withCompletions(['topsecret-value'])
+            ->withHidden(true)
+            ->handleChar('t');
+        $this->assertStringNotContainsString('opsecret-value', $p->view());
+    }
+
+    public function testHiddenPromptStaysOutOfTheUndoChain(): void
+    {
+        $p = TextPrompt::new('Password: ')
+            ->withHidden(true)
+            ->withUndoManager(new UndoManager())
+            ->handleChar('s')->handleChar('e');
+        $this->assertSame('se', $p->value());
+        $p = $p->handleKey('ctrl_z');
+        $this->assertSame('se', $p->value(), 'hidden input never snapshots into undo state');
+    }
+
+    // =========================================================================
+    // Display viewport (M8/M11) — the renderer is no longer width-blind
+    // =========================================================================
+
+    public function testLongBufferIsClippedToTheDisplayViewport(): void
+    {
+        $p = TextPrompt::new('> ')->withDisplayWidth(20)->insertPastedText(str_repeat('x', 200));
+        $view = $p->view();
+        $this->assertStringNotContainsString(str_repeat('x', 25), $view);
+        $this->assertStringContainsString('…', $view, 'clipped edge carries a marker');
+
+        $body = preg_replace('/\x1b\[[0-9;]*m/', '', $view) ?? '';
+        foreach (explode("\n", $body) as $line) {
+            $this->assertLessThanOrEqual(20, \SugarCraft\Core\Util\Width::of($line));
+        }
+    }
+
+    public function testViewportKeepsTheCursorVisible(): void
+    {
+        $p = TextPrompt::new('> ')->withDisplayWidth(20)->insertPastedText(str_repeat('x', 200));
+        // Jump to BOL, then paint: the window must follow the caret.
+        $p = $p->handleKey(Key::Home);
+        $view = preg_replace('/\x1b\[[0-9;]*m/', '', $p->view()) ?? '';
+        $firstLine = explode("\n", $view)[0];
+        $this->assertStringStartsWith('> x', $firstLine);
+        $this->assertStringNotContainsString(str_repeat('x', 25), $firstLine);
+    }
+
+    public function testViewportCountsCellsNotCodepoints(): void
+    {
+        // CJK glyphs take two cells each — a naive codepoint budget overruns.
+        $p = TextPrompt::new('> ')->withDisplayWidth(20)->insertPastedText(str_repeat('漢', 60));
+        $body = preg_replace('/\x1b\[[0-9;]*m/', '', $p->view()) ?? '';
+        foreach (explode("\n", $body) as $line) {
+            $this->assertLessThanOrEqual(20, \SugarCraft\Core\Util\Width::of($line));
+        }
+    }
+
+    public function testZeroDisplayWidthMeansUnbounded(): void
+    {
+        $p = TextPrompt::new('> ')->insertPastedText(str_repeat('y', 300));
+        $this->assertSame(0, $p->displayWidth());
+        $this->assertStringContainsString(str_repeat('y', 300), $p->view());
+    }
+
+    // =========================================================================
+    // Tab completion — common prefix then cycling (classic readline)
+    // =========================================================================
+
+    public function testTabCompletesToCommonPrefixThenCycles(): void
+    {
+        $p = TextPrompt::new('> ')->withCompletions(['apple', 'apricot'])->handleChar('a');
+        $p = $p->handleKey(Key::Tab);
+        $this->assertSame('ap', $p->value(), 'first Tab stops at the ambiguity point');
+        $p = $p->handleKey(Key::Tab);
+        $this->assertSame('apple', $p->value());
+        $p = $p->handleKey(Key::Tab);
+        $this->assertSame('apricot', $p->value(), 'Tab cycles instead of dead-ending');
+        $p = $p->handleKey(Key::Tab);
+        $this->assertSame('apple', $p->value(), 'the ring wraps');
+    }
+
+    public function testTabIgnoresWhenNoCompletionMatches(): void
+    {
+        $p = TextPrompt::new('> ')->withCompletions(['banana'])->handleChar('z');
+        $this->assertSame('z', $p->handleKey(Key::Tab)->value());
+    }
+
+    public function testCompletionHintTailSlicesCodepointsNotBytes(): void
+    {
+        $p = TextPrompt::new('> ')
+            ->withCompletions(['héllo-wörld'])
+            ->handleChar('h');
+        // 'h' matches; the tail 'éllo-wörld' must render as valid UTF-8.
+        $view = $p->view();
+        $this->assertStringContainsString('éllo-wörld', $view);
+        $this->assertStringNotContainsString("\xEF\xBF\xBD", $view);
+    }
+
+    // =========================================================================
+    // Search mutators are pure (clone-returning), never mutate a live prompt
+    // =========================================================================
+
+    public function testSearchStateMutatorsDoNotTouchTheReceiver(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('target-entry');
+        $p = TextPrompt::new('> ')->withHistory($history)->handleChar('k');
+        $searching = $p->startHistorySearch();
+        $searching = $searching->handleChar('t');
+        $this->assertSame('t', $searching->searchQuery());
+        $this->assertSame('target-entry', $searching->value());
+        // The pre-search prompt is untouched by what the search clone did.
+        $this->assertFalse($p->isSearching());
+        $this->assertSame('k', $p->value());
+    }
 }

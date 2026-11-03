@@ -48,6 +48,42 @@ final class TextPromptSearchTest extends TestCase
         $this->assertTrue($p->isSearching());
     }
 
+    public function testRawControlBytesStillCommandWhileSearching(): void
+    {
+        // refineSearch forwards RAW control bytes to handleSearchKey — the
+        // byte \x12 (Ctrl+R) that enters search here later steps it, \x7f
+        // erases query characters, and \x03 (Ctrl+C) cancels. handleKey can
+        // never exercise this route: it normalizes before the search
+        // branch, so only the handleChar path reaches raw bytes.
+        $history = $this->history('grep things', 'git ls remote', 'ls -la');
+        $start = TextPrompt::new('> ')->withHistory($history);
+
+        $stepped = $start
+            ->handleKey("\x12")          // enter search
+            ->handleChar('l')            // query "l" → matches 'ls -la'
+            ->handleChar("\x12");         // step older → 'git ls remote'
+        $this->assertTrue($stepped->isSearching());
+        $this->assertSame('git ls remote', $stepped->value());
+
+        $erased = $stepped->handleChar("\x7f"); // erase query char
+        $this->assertTrue($erased->isSearching());
+        $this->assertSame('', $erased->searchQuery());
+
+        $cancelled = $start
+            ->handleKey("\x12")
+            ->handleChar('l')
+            ->handleChar("\x03");        // Ctrl+C cancels, restores buffer
+        $this->assertFalse($cancelled->isSearching());
+        $this->assertSame('', $cancelled->value());
+
+        $gCancelled = $start
+            ->handleKey("\x12")
+            ->handleChar('l')
+            ->handleChar("\x07");        // Ctrl+G cancels too (readline)
+        $this->assertFalse($gCancelled->isSearching());
+        $this->assertSame('', $gCancelled->value());
+    }
+
     public function testCtrlRWithoutHistoryIsNoOp(): void
     {
         $p = TextPrompt::new('> ')->handleChar('x')->handleKey(Key::CtrlR);

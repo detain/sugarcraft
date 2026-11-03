@@ -57,6 +57,8 @@ final class Key
      *   actually produce: 0x08 (Ctrl+H) and 0x7F both mean backspace,
      *   0x09 is tab, 0x0A/0x0D are enter.
      * - 0x1B → 'esc' (also what Ctrl+[ produces — GNU binds C-[ to ESC).
+     * - 0x20 → 'space' (the name prompts bind; raw-text space insertion goes
+     *   through handleChar(), which does not normalize).
      * - The name 'escape' (once emitted by older docs) → 'esc'.
      */
     public static function normalize(string $key): string
@@ -86,6 +88,10 @@ final class Key
 
         if ($ord === 127) {
             return self::Backspace;
+        }
+
+        if ($ord === 32) {
+            return self::Space; // raw space ≡ the named key every prompt binds
         }
 
         return $key;

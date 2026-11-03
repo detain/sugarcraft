@@ -59,8 +59,27 @@ final class Readline
     private int $lastPaintedRows = 0;
 
     /**
-     * @param InputDriver|null $input       Null (default) opens a pump over php://stdin
-     *                                      inside run(); that pump is EOF-aware (see run()).
+     * The STDIN pump this instance owns when constructed without an injected
+     * driver. It is created lazily on the first run() and REUSED by every
+     * later run() on the same instance: the stream decoder buffers whole
+     * reads, so throwing the driver away at a submit would discard the bytes
+     * that followed the Enter (piped multi-line sessions executed only the
+     * first line).
+     *
+     * @var resource|null
+     */
+    private $ownedStream = null;
+
+    private ?StreamInputDriver $ownedDriver = null;
+
+    /** Once the owned pump has reported EOF, later nulls are final. */
+    private bool $ownedEofDelivered = false;
+
+    /**
+     * @param InputDriver|null $input       Null (default) opens a pump over
+     *                                      php://stdin inside run(); that pump is
+     *                                      EOF-aware (see run()) and stays owned by
+     *                                      this instance across successive run() calls.
      * @param callable|null    $idleSleeper Test seam invoked with the computed idle-poll
      *                                      delay in microseconds; defaults to usleep().
      */
@@ -232,9 +251,15 @@ final class Readline
      * (default) TTY the line discipline owns Enter/Backspace/arrows and
      * echoes typed characters itself, so multi-key chords (arrows, Ctrl
      * combos, vi/emacs bindings) only work on a real terminal after the
-     * CALLER puts the TTY in raw mode — e.g. `stty -icanon -echo min 1
-     * time 0`, restoring `stty sane` (or the saved `stty -g` state) on
-     * exit. examples/interactive.php shows the guarded recipe, and
+     * CALLER puts the TTY in raw mode — the switch is
+     * `stty -icanon -echo -isig min 1 time 0`: `-isig` MUST be off,
+     * otherwise Ctrl+C (and Ctrl+\\ / Ctrl+Z) are intercepted by the
+     * discipline as signals BEFORE the library ever sees them, a SIGINT
+     * death skips the caller's restore, and the shell is left in a broken
+     * cooked state. With ISIG off, ctrl_c arrives as a key the prompt
+     * handles as an abort. Restore the saved state on EVERY exit path —
+     * capture `$saved=$(stty -g)` before the switch and run `stty "$saved"`
+     * in a finally block. examples/interactive.php shows the guarded recipe, and
      * sugar-core\Util\RawMode / sugar-pty offer turnkey versions. Piped or
      * socket input (tests, scripted drives) needs no such setup — there is
      * no discipline to fight.
@@ -250,18 +275,29 @@ final class Readline
      * from IDLE_POLL_MIN_MICROSECONDS (1ms) doubling per consecutive empty
      * read up to the IDLE_POLL_MAX_MICROSECONDS cap (20ms), and snap back to
      * the floor on any activity; a fully idle pump costs at most 50 wake-ups
-     * per second. The wait itself is bounded by stop(): the loop checks the
-     * ceiling flag on every pass, so run() returns within one idle poll of
-     * the call. When the loop ends via stop() the current prompt state is
-     * returned untouched — neither submitted nor aborted; inspect
-     * isSubmitted()/isAborted() to learn how the exchange ended. Note this
-     * is an input-side idle bound, not a wall-clock timeout on any operation.
+     * per second. The wait is bounded by stop(): the loop checks the ceiling
+     * flag on every pass. How fast that pass comes depends on the driver:
+     * with the documented non-blocking recipe (`min 1 time 0`) or an
+     * injected driver, a pending byte still wakes the read, so stop() lands
+     * within one idle poll; with a BLOCKING read (a TTY without the `time 0`
+     * timeout, or a pipe with no writer left to time out), the read holds
+     * until the next byte or EOF arrives — stop() then takes effect at the
+     * first loop pass after that wake-up, not before. When the loop ends via
+     * stop() the current prompt state is returned untouched — neither
+     * submitted nor aborted; inspect isSubmitted()/isAborted() to learn how
+     * the exchange ended. Note this is an input-side idle bound, not a
+     * wall-clock timeout on any operation.
      *
      * EOF: when the pump owns its stream (input null / fromStdin()), a
      * true end-of-file — STDIN redirected from a finished pipe or
      * /dev/null — ends the loop the same way: run() returns the current
      * prompt state, neither submitted nor aborted, instead of spinning on
-     * the idle ladder forever. An INJECTED driver cannot be distinguished:
+     * the idle ladder forever. The owned pump is per-INSTANCE, not per-run:
+     * a submit leaves already-decoded trailing events queued in the driver
+     * and a successive run() on the same Readline continues draining them
+     * (this is what makes `printf 'a\nb\n' | php app.php` feed both prompts);
+     * once EOF has been observed, later run() calls see it immediately.
+     * An INJECTED driver cannot be distinguished:
      * the sugar-input InputDriver contract reports null for both EOF and
      * momentarily-live-empty reads, so an injected stream at EOF keeps the
      * pump idling until stop() or an abort key. Pass a driver you control,
@@ -276,6 +312,7 @@ final class Readline
      */
     public function run(object $prompt, $output = null): object
     {
+        $prompt = $this->fitPromptToWidth($prompt);
         $bracketedPaste = $this->enableBracketedPaste($output);
         try {
             return $this->runLoop($prompt, $output);
@@ -287,16 +324,39 @@ final class Readline
     }
 
     /**
+     * Give width-aware prompts a display viewport when the caller has not
+     * set one and the environment reports a terminal width. This is what
+     * keeps a long single-line buffer from wrapping the repaint into a
+     * staircase (see repaint()); explicit withDisplayWidth() values always
+     * win, and 0 (no COLUMNS, custom prompt shapes) leaves the view
+     * unbounded exactly as before.
+     */
+    private function fitPromptToWidth(object $prompt): object
+    {
+        if (!is_callable([$prompt, 'withDisplayWidth'])
+            || !is_callable([$prompt, 'displayWidth'])
+            || $prompt->displayWidth() !== 0) {
+            return $prompt;
+        }
+
+        $columns = (int) (getenv('COLUMNS') ?: 0);
+
+        return $columns > 0 ? $prompt->withDisplayWidth($columns) : $prompt;
+    }
+
+    /**
      * @param object        $prompt
      * @param resource|null $output
      */
     private function runLoop(object $prompt, $output): object
     {
-        $ownStream = null;
-        $eofDelivered = false;
         if ($this->input === null) {
-            $ownStream = fopen('php://stdin', 'r');
-            $driver = new StreamInputDriver($ownStream);
+            // Open the STDIN pump once per instance — see $ownedDriver.
+            if ($this->ownedDriver === null) {
+                $this->ownedStream = fopen('php://stdin', 'r');
+                $this->ownedDriver = new StreamInputDriver($this->ownedStream);
+            }
+            $driver = $this->ownedDriver;
         } else {
             $driver = $this->input;
         }
@@ -321,11 +381,12 @@ final class Readline
                 // a null after a delivered EOF is final — no data can follow.
                 // An injected driver reports null for EOF and live-empty
                 // alike, so it cannot be judged here.
-                if ($ownStream !== null && ($eofDelivered || feof($ownStream))) {
+                if ($this->ownedStream !== null
+                    && ($this->ownedEofDelivered || feof($this->ownedStream))) {
                     return $prompt;
                 }
-                if ($ownStream !== null && feof($ownStream)) {
-                    $eofDelivered = true;
+                if ($this->ownedStream !== null && feof($this->ownedStream)) {
+                    $this->ownedEofDelivered = true;
                 }
 
                 // No data this pass. Back off along the idle ladder instead
@@ -341,6 +402,13 @@ final class Readline
 
             if ($event instanceof KeyEvent) {
                 $keyName = $this->symbolicKey($event);
+                if ($keyName === 'ctrl_l') {
+                    // Ctrl+L is the display's reset (README binding table):
+                    // wipe the screen, home the cursor, and forget how many
+                    // rows the previous frame painted so the next repaint
+                    // cannot scroll-erase above ground truth.
+                    $this->clearDisplay($output);
+                }
                 $result = $this->dispatchKey($event, $keyName, $prompt);
                 if ($result['stop']) {
                     return $result['prompt'];
@@ -368,9 +436,27 @@ final class Readline
                 if ($this->pasteHandler !== null) {
                     ($this->pasteHandler)($event);
                 }
-                // Also feed pasted text into the prompt when it accepts characters
-                if (is_callable([$prompt, 'handleChar']) && $event->content !== '') {
-                    foreach (mb_str_split($event->content, 1, 'UTF-8') as $char) {
+                // Feed pasted text into the prompt when it accepts text. The
+                // dedicated insertPastedText() seam is REQUIRED, not char-by-
+                // char handleChar(): replaying controls one at a time let a
+                // pasted "\n" forge a submit (multi-command injection) and a
+                // vi-normal mode treat every pasted letter as a command.
+                if ($event->content !== '' && is_callable([$prompt, 'insertPastedText'])) {
+                    $next = $prompt->insertPastedText($event->content);
+                    if (is_callable([$next, 'isSubmitted']) && $next->isSubmitted()) {
+                        return $next;
+                    }
+                    if (is_callable([$next, 'isAborted']) && $next->isAborted()) {
+                        return $next;
+                    }
+                    $prompt = $next;
+                    $this->repaint($prompt, $output);
+                } elseif ($event->content !== '' && is_callable([$prompt, 'handleChar'])) {
+                    // Prompts without the seam (custom callers): insert the
+                    // pasted run as plain text, never as keystrokes —
+                    // control bytes stripped so the paste cannot forge keys.
+                    $sanitized = preg_replace('/[\x00-\x08\x0b-\x1f\x7f]/', '', $event->content) ?? '';
+                    foreach (mb_str_split($sanitized, 1, 'UTF-8') as $char) {
                         $next = $prompt->handleChar($char);
                         if (is_callable([$next, 'isSubmitted']) && $next->isSubmitted()) {
                             return $next;
@@ -410,7 +496,11 @@ final class Readline
      * decoder turns into PasteEvents.
      *
      * Guarded to real TTYs only: tests write to memory streams and pipes,
-     * which must not receive stray control sequences.
+     * which must not receive stray control sequences. The gate consults the
+     * OUTPUT stream (the only one this class writes to); the terminal that
+     * honors `?2004h` is the one the input arrives from, so a session with
+     * piped STDIN behind a TTY stdout may still deliver pastes as plain
+     * keystrokes — they take the ordinary handleChar path.
      *
      * @return bool True when the mode was enabled (caller must disable on exit).
      */
@@ -432,7 +522,9 @@ final class Readline
      * cursor to end of screen — so multi-row views (suggestions, search
      * rows) refresh in place instead of leaving a staircase. The view is
      * assumed to fit the terminal width; wrapping rows would confuse any
-     * row-count-based repaint.
+     * row-count-based repaint, so long single-line buffers must be bounded
+     * with TextPrompt::withDisplayWidth() (which clips the visible window
+     * instead of letting the row wrap).
      */
     private function repaint(object $prompt, mixed $output): void
     {
@@ -453,6 +545,20 @@ final class Readline
         $sequence .= "\x1b[0J" . $view . "\n";
         $this->lastPaintedRows = substr_count($view, "\n") + 1;
         fwrite($output, $sequence);
+    }
+
+    /**
+     * Wipe the screen and home the cursor (Ctrl+L), then forget the painted
+     * row count so the next repaint() positions from the true top of the
+     * frame buffer rather than scrolling up into cleared history.
+     */
+    private function clearDisplay(mixed $output): void
+    {
+        $this->lastPaintedRows = 0;
+        if (!\is_resource($output)) {
+            return;
+        }
+        fwrite($output, "\x1b[2J\x1b[H");
     }
 
     /**

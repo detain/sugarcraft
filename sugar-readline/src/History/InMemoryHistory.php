@@ -12,6 +12,10 @@ namespace SugarCraft\Readline\History;
  * deeper into history (toward older entries); next() moves back toward the
  * live buffer.  push() prepends to the array (newest-first), then resets
  * position to -1.
+ *
+ * Duplicate policy: push() skips an entry equal to the one just before it —
+ * the adjacent-only collapse GNU/zsh HIST_IGNORE_DUPS describes. FileHistory
+ * layers the stricter any-entry rule (HIST_IGNORE_ALL_DUPS) on top.
  */
 class InMemoryHistory implements HistoryInterface
 {
@@ -24,8 +28,12 @@ class InMemoryHistory implements HistoryInterface
      */
     private int $position = -1;
 
-    /** Maximum number of history entries to retain. 0 = unlimited. */
-    private int $maxHistory;
+    /**
+     * Maximum number of history entries to retain. 0 = unlimited.
+     * Protected so FileHistory can consult the same cap when bounding its
+     * on-disk rewrite — one source of truth for the limit.
+     */
+    protected int $maxHistory;
 
     public function __construct(int $maxHistory = 0)
     {

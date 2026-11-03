@@ -18,7 +18,9 @@ use SugarCraft\Readline\TextPrompt;
  *
  * Submodes:
  * - insert: default; ESC enters normal mode; typing inserts characters via TextPrompt
- * - normal: h/l/0/$/b/w move cursor; i/a/A switch to insert mode; dd deletes line;
+ * - normal: h/l/0/$/b/w move cursor; j/k step history; i/a/A/I switch to
+ *   insert mode; x deletes and p puts via the unnamed register; u undoes;
+ *   Enter submits; dd deletes line; yy yanks it;
  *   text objects c/d/y + i/a + target (ci" di( da{ yiw ...) via sugar-forms TextObject
  * - visual: v from normal; movement keys reposition the cursor, but the
  *   selection itself is neither rendered nor operated on yet (motion-only
@@ -42,6 +44,9 @@ final class ViMode implements ModeInterface
 
     /** Set when a pending operator was followed by i/a — waiting for the text-object target key. */
     private ?TextObjectScope $pendingScope = null;
+
+    /** Vi's unnamed register: the last text deleted or yanked in normal mode. */
+    private string $register = '';
 
     public function __construct()
     {
@@ -119,6 +124,21 @@ final class ViMode implements ModeInterface
             return $this->resolvePendingMotion($prompt, $key);
         }
 
+        // Enter in normal mode is readline's RET: submit. VimKeyHandler maps
+        // no Enter, so without this arm a vi user could never finish the
+        // exchange from the keyboard.
+        if ($key === Key::Enter) {
+            return $this->withViMode(self::VI_MODE_NORMAL)
+                ->attachTo($prompt->handleKeyDirect(Key::Enter));
+        }
+
+        // Incremental search starts in ANY mode (documented contract): vi
+        // normal routes Ctrl+R / Ctrl+S straight to the prompt's search arms.
+        if ($key === Key::CtrlR || $key === Key::CtrlS) {
+            return $this->withViMode(self::VI_MODE_NORMAL)
+                ->attachTo($prompt->handleKeyDirect($key));
+        }
+
         // Normalize key for VimKeyHandler
         $normalizedKey = $this->normalizeKey($key);
         if ($normalizedKey === null) {
@@ -171,6 +191,7 @@ final class ViMode implements ModeInterface
             Key::Down      => ['down', false],
             Key::Home      => ['0', false],     // 0 = beginning of line
             Key::End       => ['$', false],      // $ = end of line
+            Key::Space     => ['right', false],  // bare space moves right, like 'l'
             default        => null,
         };
     }
@@ -227,6 +248,29 @@ final class ViMode implements ModeInterface
                 => $this->withViMode(self::VI_MODE_NORMAL)
                     ->attachTo($prompt->handleKeyDirect(Key::Down)),
 
+            // j/k — on a single-line prompt vim's line-down/up have no other
+            // meaning, so they walk history exactly like the arrow keys.
+            $action === VimAction::CursorDown
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::Down)),
+
+            $action === VimAction::CursorUp
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::Up)),
+
+            // x — delete the character under the cursor into the register.
+            $action === VimAction::DeleteChar
+                => $this->deleteChar($prompt),
+
+            // u — undo the most recent buffer change.
+            $action === VimAction::Undo
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::Undo)),
+
+            // p — put the register after the cursor.
+            $action === VimAction::Paste
+                => $this->putRegister($prompt),
+
             // Delete motions
             $action === VimAction::DeleteLine
                 => $this->withViMode(self::VI_MODE_NORMAL)
@@ -252,24 +296,56 @@ final class ViMode implements ModeInterface
      */
     private function handleEnterInsertMode(TextPrompt $prompt, string $originalKey): TextPrompt
     {
-        // Normalize the key for comparison
-        $normKey = strlen($originalKey) === 1 ? strtolower($originalKey) : $originalKey;
-
-        // 'a' = append (move cursor right before entering insert mode)
-        if ($normKey === 'a') {
-            $prompt = $prompt->handleKeyDirect(Key::Right);
-        }
-        // 'A' = append at end of line
-        elseif ($normKey === 'A') {
+        // A and I are distinct commands — compare the ORIGINAL key before any
+        // case folding. VimKeyHandler lowercases when it maps a/A/i/I all to
+        // EnterInsertMode, so the caller's key is the only signal left; the
+        // old pre-comparison strtolower made the A/I branches dead code.
+        if ($originalKey === 'A') {
             $prompt = $prompt->handleKeyDirect(Key::End);
-        }
-        // 'I' = insert at beginning of line
-        elseif ($normKey === 'I') {
+        } elseif ($originalKey === 'I') {
             $prompt = $prompt->handleKeyDirect(Key::Home);
+        } elseif ($originalKey === 'a') {
+            // 'a' = append (move cursor right before entering insert mode)
+            $prompt = $prompt->handleKeyDirect(Key::Right);
         }
         // 'i' = just enter insert mode at current position
 
         return $this->withViMode(self::VI_MODE_INSERT)->attachTo($prompt);
+    }
+
+    /** x: delete the character under the cursor, storing it in the register. */
+    private function deleteChar(TextPrompt $prompt): TextPrompt
+    {
+        $value = $prompt->value();
+        $cursor = $prompt->cursor();
+        if ($cursor >= mb_strlen($value, 'UTF-8')) {
+            // Nothing under the cursor (past EOL): vim beeps, we stay put.
+            return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+        }
+
+        $deleted = mb_substr($value, $cursor, 1, 'UTF-8');
+        $after = $prompt
+            ->handleKeyDirect(Key::Right)
+            ->handleKeyDirect(Key::Backspace);
+
+        return $this
+            ->withRegister($deleted)
+            ->withViMode(self::VI_MODE_NORMAL)
+            ->attachTo($after);
+    }
+
+    /** p: put the register after the cursor as literal text. */
+    private function putRegister(TextPrompt $prompt): TextPrompt
+    {
+        if ($this->register === '') {
+            return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+        }
+
+        $after = $prompt
+            ->handleKeyDirect(Key::Right)
+            ->insertPastedText($this->register);
+
+        return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($after);
     }
 
     // -------------------------------------------------------------------------
@@ -350,21 +426,29 @@ final class ViMode implements ModeInterface
         }
 
         $nextMode = self::VI_MODE_NORMAL;
+        $register = $this->register;
 
         if ($motion === 'd' && $key === 'd') {
-            // dd — delete entire line; stay in normal mode
+            // dd — delete entire line (into the register), stay in normal mode
+            $register = $prompt->value();
             $prompt = $this->deleteLine($prompt);
         } elseif ($motion === 'c' && $key === 'c') {
-            // cc — change entire line: clear it and enter insert mode
+            // cc — change entire line: clear it (into the register) and type
+            $register = $prompt->value();
             $prompt = $this->deleteLine($prompt);
             $nextMode = self::VI_MODE_INSERT;
         } elseif ($motion === 'y' && $key === 'y') {
-            // yy — yank line (stored in internal buffer, not yet exposed); stay in normal mode
+            // yy — copy the whole line into the unnamed register; stay normal
+            $register = $prompt->value();
         }
         // Other motion combinations: not implemented, fall through
         // $nextMode stays VI_MODE_NORMAL
 
-        return $this->withViMode($nextMode)->withPendingMotion(null)->attachTo($prompt);
+        return $this
+            ->withRegister($register)
+            ->withViMode($nextMode)
+            ->withPendingMotion(null)
+            ->attachTo($prompt);
     }
 
     /**
@@ -395,21 +479,29 @@ final class ViMode implements ModeInterface
             return $cleared->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
         }
 
+        $rangeText = mb_substr(
+            $prompt->value(),
+            $range->start,
+            max(0, $range->end - $range->start),
+            'UTF-8',
+        );
+
         return match ($action) {
-            // diw / di( / da" ... — remove the range, cursor rests at its start
+            // diw / di( / da" ... — remove the range (into the register),
+            // cursor rests at its start
             VimAction::DeleteTextObject
-                => $cleared->withViMode(self::VI_MODE_NORMAL)
+                => $cleared->withRegister($rangeText)->withViMode(self::VI_MODE_NORMAL)
                     ->attachTo($this->clampToLastChar($this->deleteRange($prompt, $range))),
 
-            // ciw / ci" ... — remove the range and type in its place
+            // ciw / ci" ... — remove the range (into the register) and type in its place
             VimAction::ChangeTextObject
-                => $cleared->withViMode(self::VI_MODE_INSERT)
+                => $cleared->withRegister($rangeText)->withViMode(self::VI_MODE_INSERT)
                     ->attachTo($this->deleteRange($prompt, $range)),
 
-            // yiw / ya( ... — buffer untouched; cursor moves to the object's
-            // start per vim. No register yet, matching existing yy behavior.
+            // yiw / ya( ... — copy the object into the unnamed register and
+            // move the cursor to its start, per vim. The buffer is untouched.
             VimAction::YankTextObject
-                => $cleared->withViMode(self::VI_MODE_NORMAL)
+                => $cleared->withRegister($rangeText)->withViMode(self::VI_MODE_NORMAL)
                     ->attachTo($this->moveCursorTo($prompt, $range->start)),
 
             default
@@ -567,6 +659,16 @@ final class ViMode implements ModeInterface
         return $clone;
     }
 
+    private function withRegister(string $register): self
+    {
+        if ($register === $this->register) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->register = $register;
+        return $clone;
+    }
+
     /**
      * Attach this mode to the given prompt, returning a new prompt with the mode set.
      */
@@ -583,5 +685,11 @@ final class ViMode implements ModeInterface
     public function viMode(): string
     {
         return $this->viMode;
+    }
+
+    /** Vi's unnamed register: the last text deleted or yanked in normal mode. */
+    public function register(): string
+    {
+        return $this->register;
     }
 }

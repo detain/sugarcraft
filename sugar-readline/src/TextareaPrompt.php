@@ -8,9 +8,11 @@ namespace SugarCraft\Readline;
  * Multi-line text input with per-line cursor navigation, optional max-line cap,
  * and a default initial value.
  *
- * Newlines are entered with {@see Key::Enter}; submission is via {@see submit()}
- * or by feeding {@see Key::CtrlC} (abort) / external trigger. Up / Down move
- * between lines; Home / End jump within the current line.
+ * Keyboard contract (a conversation must be completable without the mouse or
+ * a programmatic call): Enter submits, Shift+Enter and Ctrl+J insert a new
+ * line, Escape / Ctrl+C abort, Ctrl+U kills the text before the cursor on the
+ * current line. Up / Down move between lines; Home / End jump within the
+ * current line.
  */
 final class TextareaPrompt
 {
@@ -70,6 +72,12 @@ final class TextareaPrompt
         if ($char === '' || self::charCount($char) !== 1) {
             return $this;
         }
+        // Control bytes are keys, not content: the Readline pump never routes
+        // them here (they decode to symbolic names), but direct callers could.
+        // Dropping them keeps an embedded LF from forging an extra line.
+        if (\ord($char) < 32 || \ord($char) === 127) {
+            return $this;
+        }
 
         $clone = clone $this;
         $current = $clone->lines[$clone->line];
@@ -78,6 +86,45 @@ final class TextareaPrompt
                                     . self::sliceChars($current, $clone->col);
         $clone->col++;
         return $clone;
+    }
+
+    /**
+     * Insert pasted text as literal content: control bytes are stripped (they
+     * could forge submits/aborts through the char-by-char path) and newlines
+     * split into lines. Mode-agnostic by design — a paste is text, never a
+     * stream of keystrokes.
+     */
+    public function insertPastedText(string $text): self
+    {
+        $clean = \preg_replace('/[\x00-\x08\x0b-\x1f\x7f]/u', '', $text) ?? '';
+        if ($clean === '') {
+            return $this;
+        }
+        if ($this->submitted || $this->aborted) {
+            return $this;
+        }
+
+        $prompt = $this;
+        $chunks = \explode("\n", $clean);
+        foreach ($chunks as $index => $chunk) {
+            if ($index > 0) {
+                $prompt = $prompt->insertNewline();
+            }
+            if ($chunk !== '') {
+                $prompt = $prompt->appendLiteral($chunk);
+            }
+        }
+        return $prompt;
+    }
+
+    /** Insert a control-free run of characters at the cursor. */
+    private function appendLiteral(string $text): self
+    {
+        $prompt = $this;
+        foreach (\mb_str_split($text, 1, 'UTF-8') as $char) {
+            $prompt = $prompt->handleChar($char);
+        }
+        return $prompt;
     }
 
     public function handleKey(string $key): self
@@ -101,7 +148,12 @@ final class TextareaPrompt
             Key::End       => $this->moveColTo(self::charCount($this->lines[$this->line])),
             Key::Backspace => $this->deleteBeforeCursor(),
             Key::Delete    => $this->deleteUnderCursor(),
-            Key::Enter     => $this->insertNewline(),
+            // Enter submits the conversation (a keyboard must be able to
+            // finish it); a newline is an explicit chord.
+            Key::Enter     => $this->submit(),
+            'shift_enter', 'ctrl_j' => $this->insertNewline(),
+            'ctrl_u'       => $this->killBeforeCursor(),
+            Key::Space     => $this->handleChar(' '),
             Key::Escape, Key::CtrlC => $this->abort(),
             default        => $this,
         };
@@ -221,6 +273,18 @@ final class TextareaPrompt
         array_splice($clone->lines, $clone->line, 1);
         $clone->line--;
         $clone->col = self::charCount($prev);
+        return $clone;
+    }
+
+    /** Ctrl+U: erase everything before the cursor on the current line. */
+    private function killBeforeCursor(): self
+    {
+        if ($this->col === 0) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->lines[$clone->line] = self::sliceChars($clone->lines[$clone->line], $clone->col);
+        $clone->col = 0;
         return $clone;
     }
 

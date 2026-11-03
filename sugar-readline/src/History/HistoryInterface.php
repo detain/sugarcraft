@@ -7,9 +7,8 @@ namespace SugarCraft\Readline\History;
 /**
  * Contracts for readline history navigation.
  *
- * Accessor-deprecation era (2026-10-24, ruling 3b): the legacy
- * `getPrevious()`/`getNext()` spellings left this contract — the bare
- * {@see self::previous()}/{@see self::next()} pair is canonical.
+ * The legacy `getPrevious()`/`getNext()` spellings left this contract — the
+ * bare {@see self::previous()}/{@see self::next()} pair is canonical.
  * {@see InMemoryHistory} (and so FileHistory by inheritance) keeps the
  * old names as `@deprecated` BC forwarders until v2.0.0.
  */

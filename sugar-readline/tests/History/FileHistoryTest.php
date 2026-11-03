@@ -600,4 +600,122 @@ final class FileHistoryTest extends TestCase
         // lock-neutering mutation reddens.
         $this->assertGreaterThanOrEqual(0.25, $pushElapsed, 'push child did not wait on the write lock');
     }
+
+    // =========================================================================
+    // On-disk escaping, disk bounding, and the symlink refusal
+    // =========================================================================
+
+    public function testEmbeddedNewlineSurvivesRoundTripAsOneEntry(): void
+    {
+        // A pasted or vi-recalled entry can carry raw LFs. Written unescaped
+        // it split into TWO entries on reload — forging commands into a
+        // shell's history replay. The store now writes bash-style escapes.
+        $h = new FileHistory($this->historyFile);
+        $h->push("ls\nrm -rf /");
+
+        $raw = (string) file_get_contents($this->historyFile);
+        $this->assertStringNotContainsString("ls\nrm", $raw, 'the raw LF must not reach the file');
+        $this->assertStringContainsString('ls\\nrm -rf /', $raw);
+
+        $reloaded = new FileHistory($this->historyFile);
+        $this->assertSame("ls\nrm -rf /", $reloaded->getPrevious());
+        $this->assertNull($reloaded->getPrevious(), 'the entry must reload as exactly one line');
+    }
+
+    public function testBackslashRoundTripKeepsEntriesByteExact(): void
+    {
+        $h = new FileHistory($this->historyFile);
+        $h->push('path\\to\\file');
+        $h->push('literal \\n two chars');
+        $h->push("carriage\rreturn");
+
+        $reloaded = new FileHistory($this->historyFile);
+        $this->assertSame("carriage\rreturn", $reloaded->getPrevious());
+        $this->assertSame('literal \\n two chars', $reloaded->getPrevious());
+        $this->assertSame('path\\to\\file', $reloaded->getPrevious());
+    }
+
+    public function testMaxHistoryBoundsTheFileNotJustMemory(): void
+    {
+        // The cap used to evict only the in-memory list; the file grew
+        // without bound because every push appended before eviction.
+        $h = new FileHistory($this->historyFile, 3);
+        foreach (['e1', 'e2', 'e3', 'e4', 'e5', 'e6'] as $entry) {
+            $h->push($entry);
+        }
+
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $this->assertSame(['e4', 'e5', 'e6'], $lines, 'file keeps exactly the newest cap entries, oldest-first');
+
+        $reloaded = new FileHistory($this->historyFile, 3);
+        $this->assertSame('e6', $reloaded->getPrevious());
+        $this->assertSame('e5', $reloaded->getPrevious());
+        $this->assertSame('e4', $reloaded->getPrevious());
+        $this->assertNull($reloaded->getPrevious());
+    }
+
+    public function testDeferredWritesFlushHonoursTheDiskCap(): void
+    {
+        $h = new FileHistory($this->historyFile, 2, '', true);
+        $h->push('d1');
+        $h->push('d2');
+        $h->push('d3');
+        $h->flush();
+
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $this->assertSame(['d2', 'd3'], $lines);
+    }
+
+    public function testBoundedCapMergesForeignEntriesAlreadyOnDisk(): void
+    {
+        // Another shell appended entries this process never saw. The
+        // bounded rewrite must merge (oldest-first) and keep the newest
+        // cap entries, not just what memory holds.
+        file_put_contents($this->historyFile, "shared-a\nshared-b\n");
+        $h = new FileHistory($this->historyFile, 2);
+        $h->push('mine');
+
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->historyFile)), static fn ($l) => $l !== ''));
+        $this->assertSame(['shared-b', 'mine'], $lines);
+    }
+
+    public function testRefusesSymlinkedHistoryFileAtConstruction(): void
+    {
+        // A planted ~/.shell_history -> ~/.bashrc symlink turned every push
+        // into an append into the victim, and the 0600 chmod into a victim
+        // permission rewrite. The store must refuse before touching it.
+        $victim = $this->tmpDir . '/victim';
+        file_put_contents($victim, "original victim content\n");
+        symlink($victim, $this->historyFile);
+
+        $threw = false;
+        try {
+            new FileHistory($this->historyFile);
+        } catch (\RuntimeException $e) {
+            $threw = true;
+            $this->assertStringContainsString('symlink', $e->getMessage());
+        }
+        $this->assertTrue($threw, 'construction must refuse a symlinked history path');
+        $this->assertSame("original victim content\n", file_get_contents($victim), 'the victim must stay untouched');
+    }
+
+    public function testRefusesSymlinkPlantedAfterConstruction(): void
+    {
+        $h = new FileHistory($this->historyFile);
+        $h->push('before');
+
+        $victim = $this->tmpDir . '/victim2';
+        file_put_contents($victim, "innocent\n");
+        unlink($this->historyFile);
+        symlink($victim, $this->historyFile);
+
+        $threw = false;
+        try {
+            $h->push('after');
+        } catch (\RuntimeException $e) {
+            $threw = true;
+        }
+        $this->assertTrue($threw, 'writes must re-check the symlink under the lock');
+        $this->assertSame("innocent\n", file_get_contents($victim));
+    }
 }

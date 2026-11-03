@@ -7,9 +7,9 @@ namespace SugarCraft\Readline;
 /**
  * Yes / No confirmation prompt.
  *
- * Selection and submission are decoupled: y / n / left / right / tab change
- * the selected value but do NOT auto-submit. Call {@see submit()} (or feed
- * {@see Key::Enter}) to commit. {@see result()} is meaningful only after
+ * Selection and submission are decoupled: y / n / left / right / tab / space
+ * change the selected value but do NOT auto-submit. Call {@see submit()} (or
+ * feed {@see Key::Enter}) to commit. {@see result()} is meaningful only after
  * {@see isSubmitted()} returns true.
  */
 final class ConfirmationPrompt
@@ -78,7 +78,7 @@ final class ConfirmationPrompt
         return match ($key) {
             'y', 'Y', Key::Left  => $this->select(true),
             'n', 'N', Key::Right => $this->select(false),
-            Key::Tab             => $this->select(!$this->value),
+            Key::Tab, Key::Space => $this->select(!$this->value),
             Key::Enter           => $this->submit(),
             Key::Escape, Key::CtrlC => $this->abort(),
             default              => $this,

@@ -285,13 +285,34 @@ final class ReadlineTest extends TestCase
         $p = TextPrompt::new('> ')->withHistory($history)
             ->handleChar('l')->handleChar('i')->handleChar('v')->handleChar('e');
 
-        $p = $p->handleKey(Key::Up);   // to 'second'
-        $p = $p->handleKey(Key::Up);   // to 'first'
+        $p = $p->handleKey(Key::Up);   // to 'second' (newest)
+        $this->assertSame('second', $p->value());
+        $p = $p->handleKey(Key::Up);   // to 'first' (one older)
+        $this->assertSame('first', $p->value());
         $p = $p->handleKey(Key::Down); // back to 'second'
-        $p = $p->handleKey(Key::Down); // back to 'first'
-        $p = $p->handleKey(Key::Down); // back to 'live'
-
+        $this->assertSame('second', $p->value());
+        $p = $p->handleKey(Key::Down); // past the newest entry: saved buffer
         $this->assertSame('live', $p->value());
+        $p = $p->handleKey(Key::Down); // at the live buffer — no-op
+        $this->assertSame('live', $p->value());
+    }
+
+    public function testUpUpThenEnterSubmitsTheSecondOldestEntry(): void
+    {
+        // The C1 regression: navigateHistory used to clone AND reset the
+        // store on every keypress, so the store cursor was pinned at the
+        // newest entry and the second Up re-recalled the same command.
+        $history = new InMemoryHistory();
+        $history->push('older');
+        $history->push('newest');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleKey(Key::Up)
+            ->handleKey(Key::Up)
+            ->submit();
+
+        $this->assertTrue($p->isSubmitted());
+        $this->assertSame('older', $p->value());
     }
 
     public function testTextPromptTypingResetsHistoryNavigation(): void
@@ -605,6 +626,16 @@ final class ReadlineTest extends TestCase
         $this->assertTrue($p->currentValue());
     }
 
+    public function testConfirmationSpaceTogglesLikeTab(): void
+    {
+        // N5: Space was a silent dead key; it now flips the choice like Tab.
+        $p = ConfirmationPrompt::new('Sure?', true);
+        $p = $p->handleKey(Key::Space);
+        $this->assertFalse($p->currentValue());
+        $p = $p->handleKey(' ');
+        $this->assertTrue($p->currentValue());
+    }
+
     public function testConfirmationChangeMindAfterN(): void
     {
         // n selects No, then left switches back to Yes, then submit.
@@ -671,12 +702,23 @@ final class ReadlineTest extends TestCase
         $this->assertSame(2, $p->cursorCol());
     }
 
-    public function testTextareaEnterStartsNewLine(): void
+    public function testTextareaEnterSubmitsAndExplicitChordsBreakLines(): void
     {
-        $p = TextareaPrompt::new('> ')->handleChar('A')->handleKey(Key::Enter)->handleChar('B');
-        $this->assertSame("A\nB", $p->value());
-        $this->assertSame(1, $p->cursorLine());
-        $this->assertSame(1, $p->cursorCol());
+        // Keyboard contract: Enter submits the exchange (it must be
+        // completable without a programmatic submit()); newline is an
+        // explicit chord — Shift+Enter or Ctrl+J.
+        $p = TextareaPrompt::new('> ')->handleChar('A')->handleKey(Key::Enter);
+        $this->assertTrue($p->isSubmitted());
+        $this->assertFalse($p->isAborted());
+        $this->assertSame('A', $p->value());
+
+        $shift = TextareaPrompt::new('> ')->handleChar('A')->handleKey('shift_enter')->handleChar('B');
+        $this->assertSame("A\nB", $shift->value());
+        $this->assertSame(1, $shift->cursorLine());
+        $this->assertSame(1, $shift->cursorCol());
+
+        $ctrlJ = TextareaPrompt::new('> ')->handleChar('A')->handleKey('ctrl_j')->handleChar('B');
+        $this->assertSame("A\nB", $ctrlJ->value());
     }
 
     public function testTextareaArrowMovesBetweenLines(): void
@@ -698,7 +740,7 @@ final class ReadlineTest extends TestCase
 
     public function testTextareaBackspaceMergesLines(): void
     {
-        $p = TextareaPrompt::new('> ')->handleChar('A')->handleKey(Key::Enter)
+        $p = TextareaPrompt::new('> ')->handleChar('A')->handleKey('shift_enter')
             ->handleChar('B')->handleKey(Key::Home)->handleKey(Key::Backspace);
         $this->assertSame('AB', $p->value());
         $this->assertSame(0, $p->cursorLine());
@@ -708,7 +750,7 @@ final class ReadlineTest extends TestCase
     public function testTextareaMaxLinesEnforced(): void
     {
         $p = TextareaPrompt::new('> ')->withMaxLines(2)
-            ->handleKey(Key::Enter)->handleKey(Key::Enter);
+            ->handleKey('shift_enter')->handleKey('shift_enter');
         $this->assertSame(2, $p->lineCount());
     }
 
@@ -733,6 +775,61 @@ final class ReadlineTest extends TestCase
         $this->assertStringContainsString('Notes:', $view);
         $this->assertStringContainsString('h', $view);
         $this->assertStringContainsString('i', $view);
+    }
+
+    public function testTextareaCtrlUKillsBeforeCursorOnCurrentLine(): void
+    {
+        // README promises Ctrl+U on the textarea; it kills the current line's
+        // head only (never the whole buffer across lines).
+        $p = TextareaPrompt::new('> ')
+            ->handleChar('a')
+            ->handleKey('shift_enter')
+            ->handleChar('b')
+            ->handleChar('c')
+            ->handleKey(Key::CtrlU);
+        $this->assertSame("a\n", $p->value());
+        $this->assertSame(0, $p->cursorCol());
+        // Column 0 already: Ctrl+U is a no-op, not a second-line wipe.
+        $q = $p->handleKey(Key::CtrlU);
+        $this->assertSame("a\n", $q->value());
+    }
+
+    public function testTextareaSpaceKeyInsertsARealSpace(): void
+    {
+        // 'space' is a reserved symbolic name (never reaches handleChar as a
+        // printable), so the textarea needs its own arm.
+        $p = TextareaPrompt::new('> ')->handleChar('a')->handleKey(Key::Space)->handleChar('b');
+        $this->assertSame('a b', $p->value());
+    }
+
+    public function testTextareaPasteSplitsOnNewlinesAndDropsOtherControls(): void
+    {
+        $p = TextareaPrompt::new('> ')
+            ->handleChar('x')
+            ->insertPastedText("y\nz\x01\x7fw");
+        $this->assertSame("xy\nzw", $p->value());
+        $this->assertSame(1, $p->cursorLine());
+        $this->assertSame(2, $p->cursorCol());
+    }
+
+    public function testTextareaPasteRespectsMaxLines(): void
+    {
+        // insertNewline is capped; once at the ceiling the remaining pasted
+        // chunks concatenate onto the last allowed line (documented behaviour).
+        $p = TextareaPrompt::new('> ')->withMaxLines(2)->insertPastedText("a\nb\nc");
+        $this->assertSame("a\nbc", $p->value());
+    }
+
+    public function testTextareaDropsTypedControlBytes(): void
+    {
+        // C4: raw control bytes are keys, never content.
+        $p = TextareaPrompt::new('> ')
+            ->handleChar('a')
+            ->handleChar("\x00")
+            ->handleChar("\x1b")
+            ->handleChar("\x7f")
+            ->handleChar('b');
+        $this->assertSame('ab', $p->value());
     }
 
     // =========================================================================
@@ -1199,7 +1296,7 @@ final class ReadlineTest extends TestCase
     {
         $prompt = TextareaPrompt::new('> ')
             ->handleChar('a')->handleChar('l')->handleChar('i')->handleChar('c')->handleChar('e')
-            ->handleKey(Key::Enter)
+            ->handleKey('shift_enter')
             ->handleChar('b')->handleChar('o')->handleChar('b');
 
         // Move cursor to end of first line (after 'alice')

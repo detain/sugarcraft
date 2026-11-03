@@ -192,6 +192,55 @@ final class ReadlineChordDispatchTest extends TestCase
         $this->assertSame('older-entry', $final->value());
     }
 
+    public function testCtrlPThroughThePumpReachesTheSecondOldestEntry(): void
+    {
+        // C1 end-to-end: the store cursor was reset on every keypress, so
+        // the second Ctrl+P re-returned the NEWEST entry and the walk
+        // stopped after one step. Three entries make that latent — one
+        // entry cannot distinguish 'walked' from 're-started'.
+        // submit() persists into the store passed to withHistory(), so each
+        // walk needs its own seed — a shared $history would replay earlier
+        // submits into later drives.
+        $seed = static fn (): InMemoryHistory => (static function (InMemoryHistory $h): InMemoryHistory {
+            $h->push('oldest');
+            $h->push('middle');
+            $h->push('newest');
+            return $h;
+        })(new InMemoryHistory());
+
+        $one = $this->drive("\x10" . "\r", TextPrompt::new('> ')->withHistory($seed()));
+        $this->assertSame('newest', $one->value());
+
+        $two = $this->drive("\x10\x10" . "\r", TextPrompt::new('> ')->withHistory($seed()));
+        $this->assertSame('middle', $two->value());
+
+        $three = $this->drive("\x10\x10\x10" . "\r", TextPrompt::new('> ')->withHistory($seed()));
+        $this->assertSame('oldest', $three->value());
+
+        // Fourth Up falls off the end (stays put at 'oldest'); Ctrl+N
+        // (\x0e — N is the 14th letter; \x12 is Ctrl+R and would start a
+        // search) walks back toward the newest entry through the pump.
+        $back = $this->drive("\x10\x10\x10\x10\x0e\x0e" . "\r", TextPrompt::new('> ')->withHistory($seed()));
+        $this->assertSame('newest', $back->value());
+    }
+
+    public function testRawCtrlCByteCancelsIncrementalSearchThroughThePump(): void
+    {
+        // handleSearchKey used to match raw bytes beside symbolic names
+        // WITHOUT normalizing its input — refineSearch forwards the RAW
+        // control byte the pump saw, so Ctrl+C/Ctrl+G during a search fell
+        // to the default arm and the search never released the keyboard.
+        $history = new InMemoryHistory();
+        $history->push('ls -la');
+        $prompt = TextPrompt::new('> ')->withHistory($history);
+        // Ctrl+R starts the search, 'ls' narrows it, Ctrl+C cancels, Enter
+        // submits the restored live buffer (empty).
+        $final = $this->drive("\x12" . 'ls' . "\x03" . "\r", $prompt);
+        $this->assertFalse($final->isSearching());
+        $this->assertSame('', $final->value());
+        $this->assertTrue($final->isSubmitted());
+    }
+
     // =========================================================================
     // onKey() registration — symbolic normalization at the registration edge
     // =========================================================================

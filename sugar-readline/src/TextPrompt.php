@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Readline;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Readline\History\HistoryInterface;
 use SugarCraft\Readline\Mode\ModeInterface;
 
@@ -66,7 +67,33 @@ final class TextPrompt
     private string $completionStyle = '90';     // bright black
     private string $hideMask        = '*';
 
-    /** History store for ↑/↓ navigation (cloned per-operation for independent state). */
+    /**
+     * Visible width in terminal CELLS for view()'s single-line buffer row
+     * (0 = unbounded). Readline::run() adopts COLUMNS when this is left
+     * unset; explicit values always win. Clipping keeps the cursor inside
+     * the window and marks clipped edges with '…'.
+     */
+    private int $displayWidth = 0;
+
+    /**
+     * Buffer index where the current consecutive-insert run ends, or -1 when
+     * no run is open. Consecutive handleChar() calls that keep advancing the
+     * caret share ONE undo snapshot (one undo cancels a typed word, vim-style)
+     * instead of flooding the stack with single-character states.
+     */
+    private int $undoRunEnd = -1;
+
+    /** @var list<string> Candidates offered by the last Tab, empty if not cycling. */
+    private array $completionRing = [];
+
+    /** Index into {@see $completionRing} the buffer currently holds. */
+    private int $completionRingIndex = -1;
+
+    /**
+     * History store consulted by ↑/↓ navigation. Navigation state lives on
+     * the prompt ({@see $_historyPosition}), never in the store's own cursor,
+     * so clones may share the store without drifting.
+     */
     private ?HistoryInterface $history = null;
 
     /**
@@ -175,10 +202,20 @@ final class TextPrompt
         return $clone;
     }
 
+    /**
+     * Attach a history store.
+     *
+     * The store handed in is the PERSISTENT one: submit() pushes recalled or
+     * newly typed lines into it directly. Navigation and search never move
+     * the store's own cursor (they use the read-only search() window with
+     * indices kept on the prompt), so navigation state is per-prompt by
+     * construction. A private copy backs those reads as isolation —
+     * FileHistory::__clone deliberately drops the pending-write queue, so
+     * prompt-side reads can never observe or flush a deferred write twice.
+     */
     public function withHistory(HistoryInterface $history): self
     {
         $clone = clone $this;
-        // Clone the history so each TextPrompt instance has independent navigation state.
         $clone->history = clone $history;
         // Keep reference to the original history for persistence (push) operations.
         $clone->historyOriginal = $history;
@@ -206,6 +243,35 @@ final class TextPrompt
         return $clone;
     }
 
+    /**
+     * Bound the buffer row to $cells terminal columns (0 = unbounded).
+     * Prevents the repaint staircase: a wrapped row breaks the row-count
+     * bookkeeping repaint() relies on, so long values are windowed around
+     * the cursor instead. Cells (not chars) — CJK/emoji widths are honored.
+     */
+    public function withDisplayWidth(int $cells): self
+    {
+        $clone = clone $this;
+        $clone->displayWidth = max(0, $cells);
+        return $clone;
+    }
+
+    /** Current display viewport width in cells; 0 = unbounded. */
+    public function displayWidth(): int
+    {
+        return $this->displayWidth;
+    }
+
+    /**
+     * The attached editing mode, or null for the default keymap. Queryable
+     * so callers can render their own mode indicator — view() itself never
+     * paints mode state.
+     */
+    public function mode(): ?ModeInterface
+    {
+        return $this->mode;
+    }
+
     // -------------------------------------------------------------------------
     // Input
     // -------------------------------------------------------------------------
@@ -230,25 +296,85 @@ final class TextPrompt
         if ($this->mode !== null && $this->mode->consumesCharacters()) {
             return $this->mode->handleKey($this, $char);
         }
+        // Past the searching/mode claim points, only plain text belongs in
+        // the buffer. Control bytes (including \n, \r, NUL, DEL) are keys,
+        // never content: force-fed through this door they used to forge
+        // multi-line values that corrupted newline-delimited history files.
+        if (\ord($char) < 32 || \ord($char) === 127) {
+            return $this;
+        }
         if ($this->charLimit > 0 && self::charCount($this->buffer) >= $this->charLimit) {
             return $this;
         }
 
         $clone = clone $this;
-        // Clone history so each TextPrompt instance has independent navigation state.
-        if ($clone->history !== null) {
-            $clone->history = clone $clone->history;
-        }
-        // Push current state to undo manager before modification.
-        if ($clone->undoManager !== null) {
-            $clone->undoManager = $clone->undoManager->push($clone->buffer);
-        }
+        // The history store is shared across clones on purpose: navigation
+        // state lives in $_historyPosition and search() is read-only, so
+        // there is nothing per-instance to isolate here (cloning the store
+        // on every keystroke only threw away its write-side caches).
+        // Consecutive inserts share ONE undo snapshot (pushUndoOn folds the
+        // run); skipped on hidden prompts so secrets never enter undo state.
+        $this->pushUndoOn($clone, true);
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor)
                        . $char
                        . self::sliceChars($clone->buffer, $clone->cursor);
         $clone->cursor++;
+        // The caret now sits at the end of the open insert run; the next
+        // handleChar that lands here folds into the same undo snapshot.
+        $clone->undoRunEnd = $clone->cursor;
         $clone->error = '';
         // Reset history navigation so ↑ goes back to the start of history.
+        $clone->_historyPosition = -1;
+        $clone->_bufferBeforeHistory = null;
+        return $clone;
+    }
+
+    /**
+     * Insert a run of pasted text at the cursor as PLAIN text.
+     *
+     * Unlike repeated handleChar() calls this bypasses the active mode (a
+     * vi-normal-mode paste must not execute letters as commands) and drops
+     * control bytes (a pasted newline must not forge a submit). The Readline
+     * pump routes bracketed PasteEvents through here whenever a prompt
+     * exposes it.
+     */
+    public function insertPastedText(string $text): self
+    {
+        // Single-line prompt: drop every control byte except TAB — including
+        // newlines, which would otherwise forge a multi-line value.
+        $clean = preg_replace('/[\x00-\x08\x0a-\x1f\x7f]/u', '', $text) ?? '';
+        if ($clean === '') {
+            return $this;
+        }
+
+        if ($this->searching) {
+            // Paste while searching refines the query, char by char — the
+            // buffer must not be touched mid-search.
+            $prompt = $this;
+            foreach (mb_str_split($clean, 1, 'UTF-8') as $char) {
+                $prompt = $prompt->refineSearch($char);
+            }
+            return $prompt;
+        }
+
+        if ($this->submitted || $this->aborted) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        if ($clone->charLimit > 0) {
+            $room = $clone->charLimit - self::charCount($clone->buffer);
+            if ($room <= 0) {
+                return $this;
+            }
+            $clean = self::sliceChars($clean, 0, $room);
+        }
+        $this->pushUndoOn($clone);
+        $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor)
+                       . $clean
+                       . self::sliceChars($clone->buffer, $clone->cursor);
+        $clone->cursor += self::charCount($clean);
+        $clone->error = '';
         $clone->_historyPosition = -1;
         $clone->_bufferBeforeHistory = null;
         return $clone;
@@ -307,16 +433,30 @@ final class TextPrompt
         return match ($key) {
             Key::Left      => $this->moveCursor(-1),
             Key::Right     => $this->moveCursor(1),
+            // Space is a printable character, but the symbolic name is
+            // reserved (isPrintable() routes real space keys here, not to
+            // handleChar), so it must have its own arm or it vanishes.
+            Key::Space     => $this->handleChar(' '),
             Key::Home      => $this->moveCursorTo(0),
             Key::End       => $this->moveCursorTo(self::charCount($this->buffer)),
             Key::Backspace => $this->deleteBeforeCursor(),
+            // Ctrl+H is the historic terminal erase key (many terminals
+            // send it for the Backspace key itself; sugar-input hands the
+            // raw byte through Key::normalize as 'backspace', while an
+            // explicit Ctrl+H arrives symbolically).
+            'ctrl_h', 'ctrl_backspace' => $this->deleteBeforeCursor(),
             Key::Delete    => $this->deleteUnderCursor(),
             Key::CtrlU     => $this->deleteAllBeforeCursor(),
             Key::CtrlK     => $this->deleteAllAfterCursor(),
             Key::Tab       => $this->applyCompletion(),
             Key::Enter     => $this->submit(),
-            Key::CtrlR, "\x12" => $this->startHistorySearch(self::SEARCH_REVERSE),
-            Key::CtrlS, "\x13" => $this->startHistorySearch(self::SEARCH_FORWARD),
+            'ctrl_r' => $this->startHistorySearch(self::SEARCH_REVERSE),
+            'ctrl_s' => $this->startHistorySearch(self::SEARCH_FORWARD),
+            // Ctrl+Z / Ctrl+Y are the keyboard doors to the undo stack —
+            // the Key::Undo/Key::Redo names below stay available for
+            // callers that produce them programmatically.
+            'ctrl_z'      => $this->undo(),
+            'ctrl_y'      => $this->redo(),
             // Ctrl+D mirrors GNU readline's delete-char-or-eof: it deletes
             // the character under the cursor, and on an empty line it acts
             // as end-of-input (abort).
@@ -377,6 +517,7 @@ final class TextPrompt
         $clone->undoManager = $newManager;
         $clone->buffer = $restored;
         $clone->cursor = self::charCount($restored);
+        $clone->undoRunEnd = -1;
         $clone->error = '';
         return $clone;
     }
@@ -394,6 +535,7 @@ final class TextPrompt
         $clone->undoManager = $newManager;
         $clone->buffer = $restored;
         $clone->cursor = self::charCount($restored);
+        $clone->undoRunEnd = -1;
         $clone->error = '';
         return $clone;
     }
@@ -404,6 +546,13 @@ final class TextPrompt
 
     /**
      * Navigate history with ↑ (previous) or ↓ (next) keys.
+     *
+     * $_historyPosition is the authoritative index into the newest-first
+     * entry list (-1 = live buffer). The store is consulted through the
+     * read-only search() with an empty query — it never uses the store's
+     * own cursor, and the store is never cloned/reset per keystroke (that
+     * made every ↑ re-return the newest entry, so 2nd-older history was
+     * unreachable).
      */
     private function navigateHistory(string $key): self
     {
@@ -412,53 +561,45 @@ final class TextPrompt
         }
 
         $clone = clone $this;
-        // Clone history so each TextPrompt instance has independent navigation state.
-        if ($clone->history !== null) {
-            $clone->history = clone $clone->history;
-            // Reset history object's position so previous() fetches from newest.
-            $clone->history->reset();
-        }
+        // Recalled entries are not part of any typing run.
+        $clone->undoRunEnd = -1;
 
         if ($key === Key::Up) {
-            if ($clone->_historyPosition === -1) {
-                // Starting history navigation: save current buffer.
-                if ($clone->buffer !== '') {
-                    $clone->_bufferBeforeHistory = $clone->buffer;
-                }
-                $entry = $clone->history->previous();
-                if ($entry !== null) {
-                    $clone->_historyPosition = 0;
-                    $clone->buffer = $entry;
-                    $clone->cursor = self::charCount($entry);
-                }
-            } else {
-                $entry = $clone->history->previous();
-                if ($entry !== null) {
-                    $clone->_historyPosition++;
-                    $clone->buffer = $entry;
-                    $clone->cursor = self::charCount($entry);
-                }
+            $target = $clone->_historyPosition === -1 ? 0 : $clone->_historyPosition + 1;
+            if ($clone->_historyPosition === -1 && $clone->buffer !== '') {
+                // Starting navigation from a live buffer: remember it so ↓
+                // at the newest entry can restore what was typed.
+                $clone->_bufferBeforeHistory = $clone->buffer;
             }
-        } else {
-            // Key::Down
-            if ($clone->_historyPosition === -1) {
-                // Already at live buffer — nothing to navigate.
+            $found = $clone->history->search('', $target, self::SEARCH_REVERSE);
+            if ($found === null) {
+                // Already at the oldest entry — stay put, like GNU readline.
                 return $clone;
             }
-            $entry = $clone->history->next();
-            if ($entry === null) {
-                // Exhausted history; restore saved buffer.
-                $clone->buffer = $clone->_bufferBeforeHistory ?? '';
-                $clone->cursor = self::charCount($clone->buffer);
-                $clone->_historyPosition = -1;
-                $clone->_bufferBeforeHistory = null;
-            } else {
-                $clone->_historyPosition--;
-                $clone->buffer = $entry;
-                $clone->cursor = self::charCount($entry);
-            }
+            $clone->_historyPosition = $target;
+            $clone->buffer = $found['entry'];
+            $clone->cursor = self::charCount($found['entry']);
+            return $clone;
         }
 
+        // Key::Down
+        if ($clone->_historyPosition === -1) {
+            // Already at live buffer — nothing to navigate.
+            return $clone;
+        }
+        $target = $clone->_historyPosition - 1;
+        $found = $target >= 0 ? $clone->history->search('', $target, self::SEARCH_FORWARD) : null;
+        if ($found === null) {
+            // Stepping past the newest entry returns the saved buffer.
+            $clone->buffer = $clone->_bufferBeforeHistory ?? '';
+            $clone->cursor = self::charCount($clone->buffer);
+            $clone->_historyPosition = -1;
+            $clone->_bufferBeforeHistory = null;
+        } else {
+            $clone->_historyPosition = $target;
+            $clone->buffer = $found['entry'];
+            $clone->cursor = self::charCount($found['entry']);
+        }
         return $clone;
     }
 
@@ -497,14 +638,19 @@ final class TextPrompt
 
     private function handleSearchKey(string $key): self
     {
+        // refineSearch forwards RAW control bytes; normalize at the entry so
+        // every command below is reachable whether it arrives symbolically
+        // (handleKey path) or as a raw keystroke byte (pump path).
+        $key = Key::normalize($key);
+
         return match ($key) {
             // Repeated Ctrl+R / Ctrl+S step past the current match.
-            Key::CtrlR, "\x12" => $this->stepSearch(self::SEARCH_REVERSE),
-            Key::CtrlS, "\x13" => $this->stepSearch(self::SEARCH_FORWARD),
+            'ctrl_r' => $this->stepSearch(self::SEARCH_REVERSE),
+            'ctrl_s' => $this->stepSearch(self::SEARCH_FORWARD),
             Key::Enter         => $this->acceptSearch(),
-            Key::Escape, Key::CtrlG, "\x07", Key::CtrlC, "\x03"
+            Key::Escape, Key::CtrlG, Key::CtrlC
                                => $this->cancelSearch(),
-            Key::Backspace, "\x7f" => $this->eraseSearchChar(),
+            Key::Backspace     => $this->eraseSearchChar(),
             // Anything else is swallowed: search mode owns the keyboard until
             // it is accepted or cancelled (matches readline-lite behavior).
             default            => $this,
@@ -585,30 +731,41 @@ final class TextPrompt
         return $clone->clearSearchState();
     }
 
-    /** @param array{index: int, entry: string}|null $match */
+    /**
+     * Paint a search hit onto the buffer. Pure: mutates a fresh copy of the
+     * receiver (callers already pass their working clone, which carries the
+     * updated query/direction state into it).
+     *
+     * @param array{index: int, entry: string}|null $match
+     */
     private function applySearchResult(?array $match): self
     {
+        $clone = clone $this;
         if ($match === null) {
             // Keep the last successful match visible; only flag the failure.
-            $this->searchFailed = true;
-            return $this;
+            $clone->searchFailed = true;
+            return $clone;
         }
-        $this->searchFailed = false;
-        $this->searchIndex = $match['index'];
-        $this->buffer = $match['entry'];
-        $this->cursor = self::charCount($match['entry']);
-        return $this;
+        $clone->searchFailed = false;
+        $clone->searchIndex = $match['index'];
+        $clone->buffer = $match['entry'];
+        $clone->cursor = self::charCount($match['entry']);
+        $clone->undoRunEnd = -1;
+        return $clone;
     }
 
+    /** Leave search mode, dropping all query state. Pure (returns a copy). */
     private function clearSearchState(): self
     {
-        $this->searching = false;
-        $this->searchQuery = '';
-        $this->searchIndex = -1;
-        $this->searchFailed = false;
-        $this->bufferBeforeSearch = null;
-        $this->cursorBeforeSearch = 0;
-        return $this;
+        $clone = clone $this;
+        $clone->searching = false;
+        $clone->searchQuery = '';
+        $clone->searchIndex = -1;
+        $clone->searchFailed = false;
+        $clone->bufferBeforeSearch = null;
+        $clone->cursorBeforeSearch = 0;
+        $clone->undoRunEnd = -1;
+        return $clone;
     }
 
     /**
@@ -689,13 +846,20 @@ final class TextPrompt
             ? str_repeat($this->hideMask, self::charCount($this->buffer))
             : Ansi::sanitize($this->buffer);
 
-        $before = self::sliceChars($display, 0, $this->cursor);
-        $under  = self::sliceChars($display, $this->cursor, 1);
-        $after  = self::sliceChars($display, $this->cursor + 1);
+        // Window the buffer into the display viewport when one is set
+        // (Readline adopts COLUMNS; explicit withDisplayWidth wins).
+        [$display, $viewCursor] = $this->fitToDisplay($display, $this->cursor);
 
-        // Compute fish-style autosuggestion from history.
+        $before = self::sliceChars($display, 0, $viewCursor);
+        $under  = self::sliceChars($display, $viewCursor, 1);
+        $after  = self::sliceChars($display, $viewCursor + 1);
+
+        // Compute fish-style autosuggestion from history. A hidden prompt
+        // is excluded twice over: nothing is computed from the secret, and
+        // no suggestion can echo context around it.
         $autoSuggestText = '';
-        if ($this->autoSuggestEnabled && $this->historyOriginal !== null && $this->buffer !== '') {
+        if ($this->autoSuggestEnabled && !$this->hidden
+            && $this->historyOriginal !== null && $this->buffer !== '') {
             $autoSuggestText = Ansi::sanitize($this->computeAutoSuggest());
         }
 
@@ -711,15 +875,16 @@ final class TextPrompt
         }
 
         $hint = $this->suggestion();
-        if ($hint !== null && $hint !== $this->buffer) {
-            $tail = substr($hint, strlen($this->buffer));
-            $lines[] = str_repeat(' ', self::charCount($this->label) + $this->cursor)
+        if (!$this->hidden && $hint !== null && $hint !== $this->buffer) {
+            // Character-aware tail (substr/strlen would split UTF-8).
+            $tail = self::sliceChars($hint, self::charCount($this->buffer));
+            $lines[] = str_repeat(' ', self::charCount($this->label) + $viewCursor)
                      . Ansi::wrap(Ansi::sanitize($tail), $this->completionStyle);
         }
 
         // Render fish-style autosuggestion in dim gray.
         if ($autoSuggestText !== '') {
-            $lines[] = str_repeat(' ', self::charCount($this->label) + $this->cursor)
+            $lines[] = str_repeat(' ', self::charCount($this->label) + $viewCursor)
                      . Ansi::wrap($autoSuggestText, '2'); // dim style
         }
 
@@ -748,6 +913,89 @@ final class TextPrompt
     // Internal
     // -------------------------------------------------------------------------
 
+    /**
+     * Record the pre-edit buffer on the undo stack — suppressed entirely on
+     * hidden prompts so secrets never enter undo state (and through it,
+     * snapshots of the prompt object).
+     *
+     * Passing $insertRun folds a consecutive typing run into ONE snapshot:
+     * while the caret sits exactly where the previous inserted character
+     * landed, the run is open and nothing new is pushed; any other mutation
+     * (delete, paste, navigation) pushes and closes the run.
+     */
+    private function pushUndoOn(self $clone, bool $insertRun = false): void
+    {
+        if ($clone->undoManager === null || $clone->hidden) {
+            return;
+        }
+        if ($insertRun && $this->undoRunEnd === $clone->cursor) {
+            return; // run already snapshotted at its start
+        }
+        $clone->undoManager = $clone->undoManager->push($clone->buffer);
+        $clone->undoRunEnd = -1;
+    }
+
+    /**
+     * Clip $display to the display viewport, keeping the character under
+     * $cursor visible. Returns [window, windowCursor] in characters; clipped
+     * edges carry a '…' marker that costs one of the two cells reserved for
+     * it below, so the worst case never wraps.
+     *
+     * @return array{0: string, 1: int}
+     */
+    private function fitToDisplay(string $display, int $cursor): array
+    {
+        if ($this->displayWidth <= 0) {
+            return [$display, $cursor];
+        }
+        // Label cells + one cell under the cursor + two edge markers.
+        $budget = $this->displayWidth - Width::of(Ansi::sanitize($this->label)) - 3;
+        if ($budget < 1) {
+            $budget = 1;
+        }
+        if (Width::of($display) <= $budget) {
+            return [$display, $cursor];
+        }
+
+        $chars  = mb_str_split($display, 1, 'UTF-8');
+        $count  = count($chars);
+        if ($count === 0) {
+            return ['', 0];
+        }
+        $widths = array_map(static fn (string $c): int => max(1, Width::of($c)), $chars);
+        // The caret may sit one past the last character; the window must
+        // still contain the character preceding it.
+        $at = max(0, min($cursor, $count - 1));
+
+        // Grow right from the cursor first (ahead-of-caret context is what
+        // users read while typing), then spend what remains growing left.
+        $left  = $at;
+        $right = $at;
+        $used  = $widths[$at];
+        while ($right + 1 < $count && $used + $widths[$right + 1] <= $budget) {
+            $right++;
+            $used += $widths[$right];
+        }
+        while ($left - 1 >= 0 && $used + $widths[$left - 1] <= $budget) {
+            $left--;
+            $used += $widths[$left];
+        }
+
+        $marker = $left > 0 ? 1 : 0;
+        $window = implode('', array_slice($chars, $left, $right - $left + 1));
+        if ($marker === 1) {
+            $window = '…' . $window;
+        }
+        if ($right < $count - 1) {
+            $window .= '…';
+        }
+
+        $clamped      = max($left, min($cursor, $right + 1));
+        $windowCursor = $clamped - $left + $marker;
+
+        return [$window, $windowCursor];
+    }
+
     private function moveCursor(int $delta): self
     {
         $target = $this->cursor + $delta;
@@ -762,6 +1010,9 @@ final class TextPrompt
         }
         $clone = clone $this;
         $clone->cursor = $clamped;
+        // A caret jump closes any open insert run: typing after it starts a
+        // fresh undo segment rather than folding into the previous run.
+        $clone->undoRunEnd = -1;
         return $clone;
     }
 
@@ -771,9 +1022,7 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
-        if ($clone->undoManager !== null) {
-            $clone->undoManager = $clone->undoManager->push($clone->buffer);
-        }
+        $this->pushUndoOn($clone);
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor - 1)
                        . self::sliceChars($clone->buffer, $clone->cursor);
         $clone->cursor--;
@@ -787,9 +1036,7 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
-        if ($clone->undoManager !== null) {
-            $clone->undoManager = $clone->undoManager->push($clone->buffer);
-        }
+        $this->pushUndoOn($clone);
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor)
                        . self::sliceChars($clone->buffer, $clone->cursor + 1);
         $clone->error = '';
@@ -802,9 +1049,7 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
-        if ($clone->undoManager !== null) {
-            $clone->undoManager = $clone->undoManager->push($clone->buffer);
-        }
+        $this->pushUndoOn($clone);
         $clone->buffer = self::sliceChars($clone->buffer, $clone->cursor);
         $clone->cursor = 0;
         $clone->error  = '';
@@ -817,9 +1062,7 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
-        if ($clone->undoManager !== null) {
-            $clone->undoManager = $clone->undoManager->push($clone->buffer);
-        }
+        $this->pushUndoOn($clone);
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor);
         $clone->error  = '';
         return $clone;
@@ -854,9 +1097,7 @@ final class TextPrompt
         }
 
         $clone = clone $this;
-        if ($clone->undoManager !== null) {
-            $clone->undoManager = $clone->undoManager->push($clone->buffer);
-        }
+        $this->pushUndoOn($clone);
         $clone->buffer = self::sliceChars($buffer, 0, $start)
                        . self::sliceChars($buffer, $cursor);
         $clone->cursor = $start;
@@ -872,15 +1113,67 @@ final class TextPrompt
 
     private function applyCompletion(): self
     {
-        $hint = $this->suggestion();
-        if ($hint === null || $hint === $this->buffer) {
+        // Cycling: the buffer currently holds one of the candidates offered
+        // by the last Tab, so Tab walks to the next one (classic readline
+        // behavior — repeated Tab cycles the match list instead of no-op'ing).
+        if (
+            $this->completionRing !== []
+            && $this->buffer === ($this->completionRing[$this->completionRingIndex] ?? null)
+        ) {
+            $clone = clone $this;
+            $next = ($this->completionRingIndex + 1) % count($this->completionRing);
+            $clone->buffer = $this->completionRing[$next];
+            $clone->cursor = self::charCount($clone->buffer);
+            $clone->completionRingIndex = $next;
+            $clone->error = '';
+            return $clone;
+        }
+
+        $prefix = $this->buffer;
+        $candidates = array_values(array_filter(
+            $this->completions,
+            static fn(string $c): bool => str_starts_with($c, $prefix),
+        ));
+        if ($candidates === []) {
             return $this;
         }
+
         $clone = clone $this;
-        $clone->buffer = $hint;
-        $clone->cursor = self::charCount($hint);
-        $clone->error  = '';
+        $clone->completionRing = $candidates;
+        $common = self::longestCommonPrefix($candidates);
+        if ($common !== $prefix) {
+            // Ambiguous: complete to the longest common prefix; the next Tab
+            // will move from the prefix into the first full candidate.
+            $clone->buffer = $common;
+            $clone->cursor = self::charCount($common);
+            $clone->completionRingIndex = -1;
+        } else {
+            $clone->buffer = $candidates[0];
+            $clone->cursor = self::charCount($clone->buffer);
+            $clone->completionRingIndex = 0;
+        }
+        $clone->error = '';
+        $clone->undoRunEnd = -1;
         return $clone;
+    }
+
+    /** @param list<string> $candidates @return string */
+    private static function longestCommonPrefix(array $candidates): string
+    {
+        if ($candidates === []) {
+            return '';
+        }
+        $common = $candidates[0];
+        foreach ($candidates as $c) {
+            $chars = mb_str_split($common, 1, 'UTF-8');
+            $other = mb_str_split($c, 1, 'UTF-8');
+            $i = 0;
+            while ($i < count($chars) && $i < count($other) && $chars[$i] === $other[$i]) {
+                $i++;
+            }
+            $common = implode('', array_slice($chars, 0, $i));
+        }
+        return $common;
     }
 
     private static function charCount(string $s): int
