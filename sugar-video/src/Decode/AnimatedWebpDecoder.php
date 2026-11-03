@@ -69,7 +69,7 @@ final class AnimatedWebpDecoder implements Decoder
 
     /**
      * Byte ceiling for the pre-parse source read, mirroring the GifDecoder
-     * fx61b capture gate on the WebP side: files above the ceiling are
+     * Capture gate on the WebP side: files above the ceiling are
      * refused BEFORE being slurped into memory (the stat leg), with a
      * cap+1 over-read and a strlen refusal as the backstop for sources
      * whose size stat cannot see. A file exactly AT the cap is accepted:
@@ -231,7 +231,7 @@ final class AnimatedWebpDecoder implements Decoder
             throw new \RuntimeException("video source not found: {$source}");
         }
 
-        // fx61b sibling gate: refuse above-ceiling sources before the read.
+        // Sibling capture gate: refuse above-ceiling sources before the read.
         // The stat leg is the pre-read refusal; when a wrapper hides the
         // size (@stat false) the capped read + strlen leg below still fails
         // closed, so the file is never fully slurped either way.

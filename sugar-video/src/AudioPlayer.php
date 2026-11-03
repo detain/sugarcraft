@@ -45,7 +45,7 @@ class AudioPlayer
      *                            keyword as a property type.
      * @param array<array-key, string> $headers HTTP request headers for a remote
      *                            http(s) source — the same credentials the video
-     *                            decoder presents (findings #52: a signed stream
+     *                            decoder presents (a signed stream
      *                            used to play video with audio muted-by-401).
      *                            Validated here, at the boundary, exactly as
      *                            {@see \SugarCraft\Video\Decode\FfmpegDecoder::open()}

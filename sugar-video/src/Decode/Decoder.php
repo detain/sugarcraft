@@ -53,7 +53,7 @@ interface Decoder
      * A null is not necessarily EOF: the bundled ffmpeg decoder reads the pipe
      * with a bounded, resumable wait, so mid-stream it may report "no frame
      * right now" and yield the same frame successfully on a later call.
-     * (This supersedes the round-82 E722 "null means END OF STREAM" wording,
+     * (This supersedes the earlier "null means END OF STREAM" wording,
      * which was true of the pre-timeout blocking reads the pump contract
      * documented; w4-reel replaced them with {@see FfmpegDecoder::READ_TIMEOUT_SEC}
      * fill deadlines.)

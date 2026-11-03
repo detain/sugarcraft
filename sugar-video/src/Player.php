@@ -63,13 +63,13 @@ use SugarCraft\Video\Subtitle\WebVtt;
 final class Player implements Model
 {
     /** Minimum and maximum terminal column/row bounds for resize clamping. */
-    private const MIN_COLS = 10;
-    private const MAX_COLS = 200;
-    private const MIN_ROWS = 5;
-    private const MAX_ROWS = 80;
+    public const MIN_COLS = 10;
+    public const MAX_COLS = 200;
+    public const MIN_ROWS = 5;
+    public const MAX_ROWS = 80;
 
     /**
-     * Debounce window for applying a pending resize (finding #52), in seconds.
+     * Debounce window for applying a pending resize, in seconds.
      *
      * Sized to comfortably exceed a manual drag-resize's inter-reflow gap (a
      * terminal reflows on each character-cell change, so events arrive milliseconds
@@ -103,7 +103,7 @@ final class Player implements Model
      * @param FrameRenderer|null          $renderer     Cached renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256)
      * @param array<array-key, string>    $headers      HTTP request headers for a remote source, re-presented on every decoder rebuild
      * @param float                       $frameBudgetMs Wall-clock budget for one tick's decode+skip work before catch-up bails (0 = unbounded); enforced between frames, never mid-decode
-     * @param WindowSizeMsg|null          $pendingResize Clamped geometry received from a `WindowSizeMsg` whose decoder rebuild is still deferred by the resize debounce (finding #52); null when nothing is pending
+     * @param WindowSizeMsg|null          $pendingResize Clamped geometry received from a `WindowSizeMsg` whose decoder rebuild is still deferred by the resize debounce; null when nothing is pending
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -144,7 +144,7 @@ final class Player implements Model
      * every test helper assembles. mutate() copies it forward deliberately: a derived
      * instance owns the SAME decoder and audio companion that stop() already closed, so
      * nothing that happens after teardown may respawn them. That includes the debounce
-     * timer added for finding #52, which is armed before the resize lands and would
+     * debounce timer, which is armed before the resize lands and would
      * otherwise spawn a fresh ffmpeg child onto a player the host has already torn down
      * — a leak the static child-lifetime roster cannot see, since the spawn site itself
      * is accounted for.
@@ -218,7 +218,7 @@ final class Player implements Model
 
         // Audio companion factory: creates AudioPlayer on demand. The factory
         // is threaded through the Player so tests can inject a spy subclass.
-        // It takes the header map (finding #52) because ffplay/mpv fetch the
+        // It takes the header map because ffplay/mpv fetch the
         // audio track from the SAME remote URL as the video: a signed stream
         // whose token rides in the request headers is playable for video and
         // 403-silent for audio unless the headers are re-presented here too.
@@ -322,8 +322,7 @@ final class Player implements Model
             throw new \InvalidArgumentException('fps must be greater than zero');
         }
 
-        // The header map is validated HERE, at this public boundary (finding #52
-        // review m6): every other entry point — Reel::open/openUrl, the ffmpeg
+        // The header map is validated HERE, at this public boundary: every other entry point — Reel::open/openUrl, the ffmpeg
         // decoder's open() — parses before trusting, and the deferred
         // rebuildAudio() would otherwise let a malformed map throw mid-`update()`
         // from deep inside the companion factory, escaping the TEA pipeline.
@@ -475,7 +474,7 @@ final class Player implements Model
             return $this->updateResize($msg->cols, $msg->rows);
         }
 
-        // Finding #52: the debounce window armed by updateResize() elapsed.
+        // Why this message exists: the debounce window armed by updateResize() elapsed.
         if ($msg instanceof ResizeRebuildMsg) {
             return $this->applyPendingResize();
         }
@@ -492,8 +491,7 @@ final class Player implements Model
     private function updateTick(): array
     {
         if ($this->stopped) {
-            // Same owner rule as applyPendingResize() (round-1 M2, extended per
-            // round-3 R3-1): stop() closed the decoder child this instance owned;
+            // Same owner rule as applyPendingResize(): stop() closed the decoder child this instance owned;
             // no in-flight tick — least of all a looping player's end-of-stream
             // reopen — may spawn a replacement with no one left to reap it.
             return [$this, null];
@@ -530,7 +528,7 @@ final class Player implements Model
             // Behind by more than the skip limit — discard intermediate frames,
             // keeping only the last one decoded, to catch up without lag.
             //
-            // FINDINGS #44: this decode-forward was unbounded, so a big catch-up
+            // Why bounded now: the decode-forward was once unbounded, so a big catch-up
             // (a long seek, or stalling decode) blocked the whole TEA update
             // inside fread() until ffmpeg caught up — freezing input and redraw.
             // The loop now watches the wall clock and stops at $frameBudgetMs,
@@ -591,7 +589,7 @@ final class Player implements Model
      * Handle a WindowSizeMsg: clamp, no-op if unchanged, otherwise record the
      * geometry and DEFER the decoder rebuild behind a debounce timer.
      *
-     * WHY deferred (finding #52): a rebuild closes the running ffmpeg child and
+     * Why deferred: a rebuild closes the running ffmpeg child and
      * spawns another at the new resolution, then decodes forward to the current
      * playhead — the single most expensive thing this model does, and on master it
      * ran synchronously inside `update()`. SIGWINCH does not arrive once per resize,
@@ -605,7 +603,7 @@ final class Player implements Model
      * inside `update()` when the deferred message arrives, so the event loop still
      * stalls for the length of one spawn. The win is cost, not concurrency — N reflows
      * in a burst collapse to 1 stall instead of N. Off-loop decoding is the remaining
-     * half of finding #52 and is still open.
+     * half of the resize-cost fix and is still open.
      *
      * @return array{0:Player, 1:?Closure}
      */
@@ -1080,7 +1078,7 @@ final class Player implements Model
             // that is NEVER reached by the Player runtime — only by direct
             // factory use / tests.
             //
-            // Why the duplicate survives (finding #9, deliberately NOT deleted):
+            // Why the duplicate survives (deliberately NOT deleted):
             // it is the only executable specification of the mosaic contract this
             // renderer must keep, and the two paths do NOT emit identical bytes —
             // Buffer::toAnsi() writes one combined `0;38;2;r;g;b;48;2;r;g;bm` run
@@ -1254,7 +1252,7 @@ final class Player implements Model
      *
      * Packing delegates to {@see Color::pack()} — the same helper `RgbFrame::toGd()`
      * uses — so the terminal path and the GD export path can never drift on how
-     * three bytes become one int (finding #44).
+     * three bytes become one int.
      *
      * @return int|null 0xRRGGBB color for TrueColor/HalfBlock, null for Ascii
      */
@@ -1542,9 +1540,9 @@ final class Player implements Model
      * The stock audio-companion factory: builds the real {@see AudioPlayer} for a
      * path, seek offset and header map.
      *
-     * One definition rather than three copies of the same closure (finding #44's
-     * duplication pattern applied to Player itself): `open()`, `fromDecoder()` and
-     * `rebuildAudio()` all defaulted to this exact shape, so the #52 header
+     * One definition rather than three copies of the same closure — the duplication pattern
+     * applied to Player itself: `open()`, `fromDecoder()` and
+     * `rebuildAudio()` all defaulted to this exact shape, so the headers
      * parameter had to be edited in three places at once — the precise drift the
      * audit keeps flagging.
      *
@@ -1562,10 +1560,11 @@ final class Player implements Model
      * once. A host screen calls this when leaving the player so no audio/video
      * subprocess leaks across play → back.
      *
-     * The stop latch is per object tree (round-2 NEW-4): it is copied forward by
+     * The stop latch is per object tree: it lives on the instance the host
+     * holds, and it is copied forward by
      * `mutate()`, so the three paths that can self-reschedule work — the resize
      * arming path, the deferred debounce apply, and every playback tick — all
-     * resolve to identity on a stopped instance (round-3 R3-1). Host-driven
+     * resolve to identity on a stopped instance. Host-driven
      * one-shot APIs (an explicit seek, a mode keypress) still act, exactly as
      * before the latch existed; a host has no reason to keep feeding input to a
      * torn-down player. To play again, construct a FRESH Player (or `open()` a
@@ -1664,7 +1663,7 @@ final class Player implements Model
         }
         $this->audioPlayer->stop();
         $factory = $this->audioFactory ?? self::defaultAudioFactory();
-        // Re-present the source headers on the respawned companion (finding #52):
+        // Re-present the source headers on the respawned companion:
         // every seek/loop/mode rebuild used to drop them, so audio worked only
         // on an unauthenticated URL.
         $newAudio = $factory($this->videoPath, $startMs, $this->headers);
@@ -1699,7 +1698,7 @@ final class Player implements Model
     /**
      * Generic mutable-update helper: create a new Player with changed fields.
      *
-     * WHY `array_key_exists()` and not `??` (finding #8). The old implementation
+     * WHY `array_key_exists()` and not `??` . The old implementation
      * read `$changes['ended'] ?? $this->ended`, which reads as "fall back when the
      * caller gave me nothing" but actually means "fall back when the caller gave
      * me *null*". Two real consequences, both silent:

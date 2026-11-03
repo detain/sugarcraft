@@ -165,7 +165,7 @@ final class VideoSource
         // Only descriptor 1 (stdout) is a pipe; descriptors 0 and 2 are
         // file-backed (/dev/null) and are NOT present in $pipes.
         //
-        // FINDINGS #46 (fail-closed probe): stream_get_contents() would block
+        // Why the probe is fail-closed: stream_get_contents() would block
         // until ffprobe closes stdout. On a stalled remote URL, a corrupt file
         // that keeps ffprobe probing, or a hung network mount, that never
         // happens — and Player::open() calls probe() synchronously, so the whole
@@ -209,7 +209,7 @@ final class VideoSource
             // yields no usable video stream is a hard input error — the old
             // zeroed default sent Player::open() into a blank "playing nothing"
             // session. Fail loud and typed instead. A timeout (stdout null)
-            // keeps the degrade-to-default contract pinned by FINDINGS #46;
+            // keeps the degrade-to-default contract pinned by the probe tests;
             // an exit-0 partial JSON with a usable video stream keeps playing
             // (salvageable damage is ffmpeg's own judgment, not ours).
             if ($stdout !== null && $exitCode !== 0 && is_file($path)) {

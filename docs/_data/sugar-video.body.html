@@ -5,7 +5,8 @@
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">php examples/play.php video.mp4           # play a video
-php examples/play.php                    # synthetic test pattern (no file needed)</code></pre>
+php examples/play.php                    # synthetic test pattern (no file needed)
+SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php   # explicit size</code></pre>
     <pre class="code"><code class="language-php">// Programmatic (mode auto-detects terminal capability):
 use SugarCraft\Video\Player;
 $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm decode through ffmpeg
@@ -48,11 +49,11 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
       <div class="feature"><strong>Auto terminal resize</strong><span>SIGWINCH handler re-scales video to fit the new terminal dimensions without restarting playback.</span></div>
       <div class="feature"><strong>Seek + speed control</strong><span>Keyboard-driven seek (arrows, 0-9) and speed control ([ / ]) with frame-skip resync; ffmpeg input seeking (<code>-ss</code> before <code>-i</code>) for instant jumps on long streams.</span></div>
       <div class="feature"><strong>WebVTT subtitles</strong><span><code>Reel::withSubtitles('clip.vtt')</code> parses WebVTT (lenient enough for most SRT files) and paints the active cue as one caption line under the frame in every mode.</span></div>
-      <div class="feature"><strong>Audio companion</strong><span>AudioPlayer shells out to ffplay or mpv as the audio master clock; pausing terminates and re-spawns the companion so no silent zombie burns CPU, and degrades gracefully when no audio track is present.</span></div>
-      <div class="feature"><strong>Remote sources with headers</strong><span><code>Reel::openUrl()</code> forwards an SSRF guard (host allowlist, credentials in the URL refused) and rides request headers onto ffmpeg for signed CDN URLs; audio re-presents the same headers.</span></div>
+      <div class="feature"><strong>Audio companion</strong><span>AudioPlayer shells out to ffplay or mpv as the audio output companion (the Player keeps the master clock); pausing terminates and re-spawns the companion so no silent zombie burns CPU, and degrades gracefully when no audio track is present.</span></div>
+      <div class="feature"><strong>Remote sources with headers</strong><span><code>Reel::openUrl()</code> forwards an SSRF guard (<code>allowedHosts</code>; a bare URL logs a warning and allows any host) and redacts URL credentials from every log and error; request headers ride onto ffmpeg for signed CDN URLs, and audio re-presents the same headers.</span></div>
       <div class="feature"><strong>Loop playback</strong><span>Reel::new()-&gt;withLoop(true)-&gt;play() loops from end back to start automatically.</span></div>
       <div class="feature"><strong>Delta repaint</strong><span>Only changed cells are re-rendered each frame, dramatically reducing output for static scenes.</span></div>
-      <div class="feature"><strong>SGR run-length coalescing</strong><span>AsciiRenderer emits color SGR codes only on color transitions (~60% output reduction for typical frames).</span></div>
+      <div class="feature"><strong>SGR run-length coalescing</strong><span>AsciiRenderer emits color SGR codes only on color transitions, collapsing runs on static-ish scenes.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -87,7 +88,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
 <tr><td>Player</td><td>::openForTest(decoder, fps, totalFrames, cellsW, cellsH, &#x2026;)</td><td>Deprecated alias of ::fromDecoder() for HalfBlock test wiring</td></tr>
 <tr><td>WebVtt</td><td>::parse(text)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES</td></tr>
 <tr><td>WebVtt</td><td>cueAt(seconds)</td><td>Binary-search the active caption for a timeline position</td></tr>
-<tr><td>Synthetic</td><td>::generate(path, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1&#215;1 GIF without ext-gd</td></tr>
+<tr><td>Synthetic</td><td>::generate(path, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1&#215;1 GIF stands in when ext-gd is absent.</td></tr>
 <tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
 <tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
 </table>
@@ -102,7 +103,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-video/.vhs/play.gif" alt="Play">
                 <h3>Play</h3>
-                <span class="demo-caption">Synthetic rainbow-gradient GIF rendered in all modes.</span>
+                <span class="demo-caption">Synthetic rainbow-gradient GIF used by the playback demos.</span>
             </div>
         </div>
     </div>

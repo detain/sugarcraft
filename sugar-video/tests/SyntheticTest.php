@@ -249,7 +249,8 @@ final class SyntheticTest extends TestCase
 
         $this->assertStringNotContainsString('Warning:', $stderr);
         $this->assertStringNotContainsString('Undefined array key', $stderr);
-        $this->assertSame(1, $exit, 'help should exit with code 1');
+        // m28, flipped in-step: --help is a success path, not an error.
+        $this->assertSame(0, $exit, 'help should exit with code 0');
     }
 
     /**

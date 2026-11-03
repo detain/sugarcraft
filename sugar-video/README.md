@@ -32,7 +32,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
 
 > **Status:** complete — full implementation with ffmpeg decode pipe,
 > pure-PHP GIF fallback, all rendering modes (ascii/ansi256/truecolor/
-> half-block/sixel/kitty/iTerm2), delta repaint, seek, speed control,
+> half-block/quarter-block/sixel/kitty/iTerm2), delta repaint, seek, speed control,
 > and a runnable example.
 
 ## Install
@@ -85,7 +85,7 @@ SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php synthetic
 | `auto` | Probe terminal, pick best available (default) | — |
 
 Auto mode probes the terminal using `Mosaic::diagnose()` (for sixel/kitty/
-iTerm2) and falls back to `ColorProfile::detect()` for ANSI modes.
+iTerm2) and falls back to `Probe::colorProfile()` for ANSI modes.
 
 ### Luminance ramp selection
 
@@ -318,7 +318,7 @@ video file (mp4/gif/avi/webm)
 - **Decode:** `FfmpegDecoder` shells out to `ffmpeg` for raw RGB frames (pre-scaled to cell dimensions). `GifDecoder` wraps sugar-animation's pure-PHP GIF decoder.
 - **Render:** Delegates to sugar-image for sixel/kitty/iTerm2. Uses sugar-colorprofile for color mapping. Delta repaint via sugar-cellbuffer.
 - **Pace:** `Cmd::tick()` wall-clock alignment via `Sync`, no busy-waiting.
-- **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio master clock.
+- **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio output companion; the Player's own wall clock stays master (audio may drift; it is never the pacing source).
 
 ## Prior art
 
@@ -342,7 +342,7 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 - **GIF playback fills the terminal in HalfBlock mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
 
-- **Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired once `candy-image` shipped as the chafa frontend, leaving sugar-image as the single sixel encoder in the ecosystem. Frames are decoded at full cell-resolution pixels, so the pure-PHP encoder needs no upscaling and the DCS output is protocol-identical; the trade-off is PHP time per large sixel frame, and no child process is ever spawned from the video render path.
+- **Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired once `candy-image` shipped as the chafa frontend, leaving sugar-image as the single sixel encoder in the ecosystem. Frames are decoded at the pixel grid each mode asks for (graphics modes at cells·cellPx, text modes at the mode cell grid), so the pure-PHP encoder needs no upscaling and the DCS output is protocol-identical; the trade-off is PHP time per large sixel frame, and no child process is ever spawned from the video render path.
 
 - **Seek is fast, slightly less frame-exact (keyframe snap).** `seekToSeconds()`
   uses ffmpeg *input* seeking (`-ss` placed before `-i`), which decodes from the

@@ -11,9 +11,9 @@ use SugarCraft\Video\Source\HttpHeaders;
  *
  * No single upstream — extracted from the ffmpeg/ffplay/mpv argv assembly in
  * `Decode/FfmpegDecoder::buildCommand()` and `AudioPlayer::buildCommand()`
- * (findings #45); the flags themselves mirror those binaries' own CLI docs.
+ * the flags themselves mirror those binaries' own CLI docs.
  *
- * WHY THIS CLASS EXISTS (findings #45). The library drives three separate
+ * WHY THIS CLASS EXISTS. The library drives three separate
  * binaries — `ffmpeg` (decode), `ffplay` and `mpv` (audio companion) — and each
  * one used to build its own argument list inline. The pieces that are genuinely
  * the same knowledge (which sources are network sources, which reconnect options

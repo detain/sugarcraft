@@ -21,7 +21,20 @@ declare(strict_types=1);
  *   q / Esc    — quit
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',      // lib vendor (linked or installed)
+    __DIR__ . '/../../vendor/autoload.php',   // monorepo root fallback
+];
+foreach ($autoloadCandidates as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+if (!class_exists(\SugarCraft\Video\Reel::class)) {
+    fwrite(STDERR, "autoload not found: run composer install (or use the monorepo root vendor)\n");
+    exit(1);
+}
 
 use SugarCraft\Video\Reel;
 use SugarCraft\Video\Render\Mode;
@@ -77,12 +90,18 @@ $prog = $argv[0] ?? 'play.php';
 $arg1 = $argv[1] ?? '';
 $arg2 = $argv[2] ?? '';
 
-if ($arg1 === '--help' || $arg1 === '-h' || $arg1 === '') {
+if ($arg1 === '--help' || $arg1 === '-h') {
     help($prog);
-    exit(1);
+    exit(0);
 }
 
-$pathArg = $arg1;
+// A bare invocation runs the built-in synthetic pattern; --help exits 0 (m28).
+$pathArg = $arg1 === '' ? 'synthetic' : $arg1;
+
+if (str_starts_with($pathArg, '-')) {
+    fwrite(STDERR, "unknown option: {$pathArg}\n");
+    exit(1);
+}
 $modeArg = $arg2 === '' ? 'auto' : $arg2;
 
 if (!in_array($modeArg, ['auto', 'ascii', 'ansi256', 'truecolor', 'halfblock', 'quarterblock', 'sixel', 'kitty', 'iterm2'], true)) {
@@ -116,7 +135,7 @@ if ($pathArg === 'synthetic') {
 
 // ── Run the player via the Reel facade ─────────────────────────────────────────
 
-fwrite(STDERR, "SugarVideo — Space=play  q=quit  m=mode  ? for help\n");
+fwrite(STDERR, "SugarVideo — Space=play  q=quit  m=mode  [/] speed  0-9 seek\n");
 
 // The synthetic source is an animated GIF that should loop by default.
 $reel = Reel::open($path)
@@ -126,6 +145,11 @@ $reel = Reel::open($path)
 // Apply mode override if explicitly requested via CLI.
 if ($mode !== null) {
     $reel = $reel->withMode($mode);
+
+if (!stream_isatty(STDOUT)) {
+    fwrite(STDERR, "playback needs a terminal (TTY) on stdout; piping renders nothing useful\n");
+    exit(1);
+}
 }
 
 $reel->play();

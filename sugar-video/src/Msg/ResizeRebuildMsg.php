@@ -7,7 +7,7 @@ namespace SugarCraft\Video\Msg;
 use SugarCraft\Core\Msg;
 
 /**
- * Deferred apply of a pending terminal resize (finding #52).
+ * Deferred apply of a pending terminal resize .
  *
  * A `WindowSizeMsg` (SIGWINCH) is not one event but a burst: dragging a terminal
  * mouse-resize reflows per character cell, so a single gesture delivers dozens of

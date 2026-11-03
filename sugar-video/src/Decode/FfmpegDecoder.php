@@ -40,13 +40,13 @@ use SugarCraft\Video\Support\FfmpegCommandBuilder;
  * the tail of that stderr, so the diagnostic ffmpeg already produced reaches
  * the user instead of evaporating (M3/M12). The file is unlinked in close().
  *
- * READS ARE BOUNDED, RESUMABLE — PUMP CONTRACT (E722, round 82;
+ * READS ARE BOUNDED, RESUMABLE — PUMP CONTRACT (
  * re-shaped same day by w4-reel). {@see next()} and {@see nextPng()} fill a
  * frame from the ffmpeg stdout pipe under a per-frame-FILL deadline
  * ({@see READ_TIMEOUT_SEC}): a stalled or silent stream returns null with
  * the partial bytes buffered, and the NEXT call resumes the same frame —
  * null therefore means "no frame right now" as well as EOF, and a mid-frame
- * null NEVER desyncs the forward-only pipe. The E722 law it satisfies is
+ * null NEVER desyncs the forward-only pipe. The law it satisfies is
  * unchanged: no single call parks the loop forever (the pre-timeout plain
  * fread it documented could). THE CALLER still owns the latency budget
  * (the r69 pump law, same shape as sugar-pty's PosixPump): repeated nulls
@@ -433,7 +433,7 @@ final class FfmpegDecoder implements Decoder
     /**
      * @inheritDoc
      *
-     * E722 (post w4-reel): fills one rawvideo frame under the per-call FILL
+     * Why bounded: fills one rawvideo frame under the per-call FILL
      * deadline — see the class pump-contract paragraph. Null means the
      * stream ended cleanly OR the fill deadline expired mid-frame (partial
      * bytes stay buffered; the next call resumes the same frame). M12: a
@@ -452,7 +452,7 @@ final class FfmpegDecoder implements Decoder
         }
 
         // Fill the frame from the persistent partial buffer, then top it up from
-        // the pipe with BOUNDED reads (findings #45/#50: a bare fread() blocks
+        // the pipe with BOUNDED reads (a bare fread() blocks
         // forever on a stalled stream and freezes the whole UI loop). The bound
         // is a per-frame-FILL deadline, not a per-read one: every read inside
         // this fill races the same clock, so a trickle that dribbles bytes just
@@ -556,7 +556,7 @@ final class FfmpegDecoder implements Decoder
      * {@see $pngBuffer}), and return it as a PNG-payload RgbFrame. On EOF without a
      * complete frame the partial tail is discarded (matching the rawvideo path).
      *
-     * E722: like the rawvideo path the fill is deadline-bounded and
+     * Like the rawvideo path the fill is deadline-bounded and
      * resumable — a live-but-silent ffmpeg yields null with the partial PNG
      * buffered until close() takes the child down (class pump contract). The {@see MAX_PNG_BUFFER} ceiling bounds MEMORY against a
      * malicious/huge-frame stream, not latency; tripping it is a fail-closed

@@ -22,7 +22,7 @@ namespace SugarCraft\Video\Source;
  * ffmpeg installed mid-session (the dev editing their PATH while a long
  * reel runs) is picked up inside a minute. TTL is a compromise value —
  * sugar-image's Detect.php carries the same ask un-implemented (its own
- * lane owns that cache; recorded as a seam in the S7.4 report). Subclass
+ * lane owns that cache; recorded as a seam upstream). Subclass
  * overrides of which() bypass the memo entirely (they replace the lookup,
  * not its cache); PATH-flipping test concerns clear it via
  * {@see clearBinaryCacheForTesting()}.

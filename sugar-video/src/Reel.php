@@ -140,8 +140,9 @@ final class Reel
      *               CR/LF/NUL in a name or value is request smuggling and throws);
      *               re-presented on every decoder rebuild so a resize or seek
      *               never drops the credentials mid-playback. Passed to ffmpeg via
-     *               `-headers`/`-user_agent`; the audio companion does NOT receive
-     *               them (see README "Known limitations"). A non-network source
+     *               `-headers`/`-user_agent`; the audio companion re-presents the
+     *               same headers so a signed stream authenticates for audio too
+     *               (a 403 there would be silent-mute). A non-network source
      *               drops them with a logged notice.
      * @param list<string>|null $allowedHosts Case-insensitive host allowlist, or
      *               null to allow any host (logs an SSRF-surface warning).
@@ -456,7 +457,7 @@ final class Reel
      * HOST CONTRACT (what the embedding program is responsible for):
      *  - RESIZE: forward a `WindowSizeMsg` on SIGWINCH. The Player clamps columns
      *    to 10..200 and rows to 5..80 and no-ops when unchanged. The decoder rebuild
-     *    that follows is DEBOUNCED (finding #52): the message handler only records
+     *    that follows is DEBOUNCED: the message handler only records
      *    the target and returns a short one-shot command, and the rebuild — which
      *    re-opens ffmpeg — happens once the burst settles, so a dragged terminal edge
      *    costs one spawn rather than one per reflow. The consequence for the host is
