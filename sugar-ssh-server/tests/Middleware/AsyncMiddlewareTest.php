@@ -80,7 +80,7 @@ final class AsyncMiddlewareTest extends TestCase
                 return \React\Promise\reject(new \RuntimeException('async auth failed'));
             }
         };
-        // E730: handle() is a pure async adapter — it must NOT throw and must
+        // Contract: handle() is a pure async adapter — it must NOT throw and must
         // NOT await; the rejection surfaces where the single settle point
         // drives the promise (transport dispatch, or an explicit settle).
         $result = $middleware->handle(Context::background(), $this->session(), function (Context $c, Session $s) use (&$reachedNext): void {
@@ -182,7 +182,7 @@ final class AsyncMiddlewareTest extends TestCase
         $result = $middleware->handle(Context::background(), $this->session(), function (Context $c, Session $s) use (&$chainDone): void {
             $chainDone = true;
         });
-        // E730: a genuinely pending promise comes back untouched — handle()
+        // A genuinely pending promise comes back untouched — handle()
         // no longer runs the event loop on the caller's behalf.
         $this->assertFalse($chainDone);
         // The awaiting layer (the transport's single settle point in real
@@ -193,7 +193,7 @@ final class AsyncMiddlewareTest extends TestCase
 
     public function testHandlePassesTheChainNextCallableThroughUntouched(): void
     {
-        // LOW-14 (audit round): the pre-E730 identity wrapper is gone —
+        // The identity wrapper the old adapter carried is gone —
         // handleAsync receives the very callable handle() got.
         $seen = null;
         $middleware = new class($seen) extends AsyncMiddleware {

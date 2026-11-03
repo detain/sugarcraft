@@ -400,8 +400,7 @@ final class RateLimit implements Middleware
         // AtomicJsonFile sets 0600 on the temp inode BEFORE the payload and
         // before the publishing rename (sugar-core a32c4faae), so the bucket
         // map — which reveals who has been connecting — is never briefly
-        // world/group readable the way chmod-after-write allowed (audit
-        // LOW-19). Mutual exclusion is this class's sidecar lock, held by the
+        // world/group readable the way chmod-after-write allowed. Mutual exclusion is this class's sidecar lock, held by the
         // caller across the read that produced $data.
         try {
             $this->store()->withPermissions(0600)->write($data);

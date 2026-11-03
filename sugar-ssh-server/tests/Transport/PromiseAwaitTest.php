@@ -14,7 +14,7 @@ use SugarCraft\SshServer\Transport\PromiseAwait;
 
 /**
  * Direct pins for the cooperative-cancellation entry guard added to
- * {@see PromiseAwait::settle()} by E730 (round 83): a context that is
+ * {@see PromiseAwait::settle()} by the single-settle rule: a context that is
  * already done when the await is entered must refuse the await and
  * raise its own error, never enter the loop.
  *
@@ -73,7 +73,7 @@ final class PromiseAwaitTest extends TestCase
 
     public function testACancelledAncestorRefusesTheAwaitThroughAValueHop(): void
     {
-        // MEDIUM-1 unlock pin: the settle entry guard must see an
+        // Unlock pin: the settle entry guard must see an
         // ancestor cancellation through the derived hop — otherwise a
         // context-DERIVING middleware makes the guard invisible
         // downstream and the await blocks on work whose caller is gone.
@@ -121,7 +121,7 @@ final class PromiseAwaitTest extends TestCase
 
     public function testTheTimeoutCeilingRaisesTheLocalisedMessageWrappingTheTimerError(): void
     {
-        // LOW-16b adoption pin: the react/promise-timer breach surfaces as
+        // Adoption pin: the react/promise-timer breach surfaces as
         // the project's transport.async_timeout text with the original
         // TimeoutException preserved as previous.
         $never = new Promise\Promise(static function (): void {

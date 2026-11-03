@@ -591,6 +591,56 @@ if ($ctx->done()) {
 }
 ```
 
+## Embedding this library
+
+Four constraints that are invisible from the class list, learned from the
+audit, and worth knowing before you wire this into a long-lived process.
+
+**One session per process.** `Session::fromEnvironment()` reads
+`getenv()`/`$_SERVER`, and that is where the peer's identity, the tty and any
+injected credential live. Nothing in the stack carries those values through a
+parameter, so a second concurrent session inside the same PHP process would
+authenticate against the first one's environment. Run one process per
+connection -- which is what a `ForceCommand` line gives you for free -- and
+do not put this behind a worker pool that reuses a process across peers.
+
+**Geometry arrives from `SIGWINCH`, or from you.** `runChild()` reads the
+size once from the stream it is given and then follows `SIGWINCH`. There is
+no live-resize call to make: if a resize reaches your process some other way
+(a control message, a panel tick), supply a provider with
+`withSizeProvider(callable $provider): self` and it will be polled at the
+same points the signal path uses. The provider is consulted per pump idle
+tick, not cached, so a stale closure is a live bug rather than a frozen one.
+
+**The pump's knobs are not reachable from here.** `runChild()` builds
+`PumpOptions::sshDefault()->withOnIdle($onIdle)` internally. sugar-pty's
+options carry the real recorder, chunk size and `withPumpDeadline()` -- the
+only true bound a pump can honour -- and this transport never exposes them,
+so a session that needs one has to fork the pump loop itself. That is why the
+admin guide's failure table says a hanging child hangs here, and why the
+`Context::withDeadline()` in the section above is a value you carry, not an
+enforcement: `done()` is consulted when the stack walks in, never inside the
+byte loop.
+
+**`ChildSpawner` is narrower than the class behind it.** The interface
+`Spawn` type-hints is:
+
+```php
+public function runChild(Session $session, array $cmd, ?array $env = null): int;
+```
+
+`InProcessTransport::runChild()` accepts two more arguments -- `$stdin` and
+`$stdout` -- and they are what make a testable, stream-injecting middleware
+possible. Code holding the interface cannot pass them, so anything that wants
+to redirect the child's streams must `instanceof InProcessTransport` and
+narrow, or take the concrete class in its own constructor. Widening the
+contract is a deliberate no for now: the fake in `SpawnTest` implements the
+three-parameter form, and the interface exists so that fake needs no PTY.
+`TransportAware` is the other half of the same story -- the transport calls
+`setTransport()` on every aware middleware at walk time, before the first
+`handle()`, and implementations must tolerate being called twice because a
+`Server` object is reused across sessions.
+
 ## Exceptions
 
 | Exception | When it's thrown |

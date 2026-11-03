@@ -104,7 +104,7 @@ final class DefaultChannelHandler implements ChannelHandler
     /**
      * Last-resort interpreter for shell requests when neither an explicit
      * configured shell nor a `SHELL` environment variable is available
-     * (E727, round 82). `/bin/sh` is the POSIX-guaranteed path — unlike
+     * `/bin/sh` is the POSIX-guaranteed path — unlike
      * the historical hard-coded `/bin/bash` it exists on every host this
      * library claims to run on; systems whose login shell is bash reach
      * it earlier in the resolution order (sshd exports `SHELL`).
@@ -352,13 +352,13 @@ final class DefaultChannelHandler implements ChannelHandler
         $effectiveRows = $session->rows > 0 ? $session->rows : $fallbackRows;
         // Carry protocol metadata (sessionId/authMethod/versions) that
         // InProcessTransport::run attached — only geometry is re-derived
-        // here, never the handshake fields (audit LOW-18).
+        // here, never the protocol fields.
         $effectiveSession = $session->withSize($effectiveCols, $effectiveRows);
         $this->spawner->runChild($effectiveSession, [$this->resolveShell(), '-l'], $env);
     }
 
     /**
-     * Resolve the login shell to spawn (E727, round 82).
+     * Resolve the login shell to spawn.
      *
      * Order: explicit configured shell → the server-side process's
      * `SHELL` variable (under sshd ForceCommand that is the

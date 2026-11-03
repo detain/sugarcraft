@@ -7,7 +7,7 @@ namespace SugarCraft\SshServer\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Roster guard for the i18n locale files (audit LOW-16).
+ * Roster guard for the i18n locale files (audit MAJOR 15).
  *
  * Every non-en locale must carry EXACTLY the key set of lang/en.php —
  * missing keys silently fall back to English (harmless at runtime but
@@ -108,7 +108,7 @@ final class LangRosterTest extends TestCase
 
     public function testNoEnglishKeyIsDeadInSource(): void
     {
-        // LOW-16b discipline: keys without a Lang::t producer drift
+        // Discipline: keys without a Lang::t producer drift
         // unnoticed. Scan src/ for every literal key referenced via
         // Lang::t('…') and demand the en roster contains nothing else.
         $en = include \dirname(__DIR__) . '/lang/en.php';

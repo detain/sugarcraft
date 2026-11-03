@@ -543,6 +543,79 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('| `SSH_SERVER_LOG` |', $guide);
     }
 
+    public function testTheEmbeddingConstraintsAreWrittenDown(): void
+    {
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+
+        $this->assertStringContainsString('## Embedding this library', $readme);
+
+        $readme = (string) \preg_replace('/\s+/', ' ', $readme);
+        foreach ([
+            'One session per process.',
+            'would authenticate against the first one\'s environment',
+            'withSizeProvider(callable $provider): self',
+            'withPumpDeadline()',
+            'is a value you carry, not an',
+            '`ChildSpawner` is narrower than the class behind it',
+            '`TransportAware` is the other half',
+        ] as $needle) {
+            $this->assertStringContainsString($needle, $readme, 'README lost an embedding constraint: ' . $needle);
+        }
+
+        $spawner = (string) \preg_replace(
+            '/\s+/',
+            ' ',
+            (string) \file_get_contents(\dirname(__DIR__) . '/src/Transport/ChildSpawner.php'),
+        );
+        $this->assertStringContainsString('deliberately narrower than the class behind it', $spawner);
+        $this->assertStringContainsString('instanceof', $spawner);
+        $this->assertStringNotContainsString('PR3', $spawner);
+    }
+
+    public function testTheShippedCommentsCiteTheReviewNotAPrivateLedger(): void
+    {
+        // Campaign-internal identifiers - 'E730 (round 83)', 'LOW-15', the
+        // 'audit MEDIUM-2' family, 'PR3', 'step-29' and citations of plan
+        // files that never shipped - are unresolvable to anyone who was not
+        // in the loop. The public form this library cites instead is
+        // 'audit MAJOR 9' / 'audit K2', which points at a review record in
+        // the monorepo. The sweep covers what a reader of the package sees:
+        // src/, examples/, the README and the library's own learning file.
+        // (audit m28)
+        $forbidden = ['E727', 'E730', 'E734', 'LOW-', 'MEDIUM-', 'HIGH-', 'step-29', 'plans/'];
+
+        $files = ['README.md', 'CALIBER_LEARNINGS.md'];
+        $root = \dirname(__DIR__);
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src'));
+        foreach ($walk as $f) {
+            if ($f->isFile() && $f->getExtension() === 'php') {
+                $files[] = 'src/' . \substr($f->getPathname(), \strlen($root) + 5);
+            }
+        }
+        foreach (\scandir($root . '/examples') ?: [] as $entry) {
+            if (\str_ends_with($entry, '.php')) {
+                $files[] = 'examples/' . $entry;
+            }
+        }
+
+        $seen = 0;
+        foreach ($files as $relative) {
+            $path = $root . '/' . $relative;
+            if (!\is_file($path)) {
+                continue;
+            }
+            ++$seen;
+            $text = (string) \file_get_contents($path);
+            foreach ($forbidden as $id) {
+                $this->assertStringNotContainsString($id, $text, $relative);
+            }
+        }
+        self::assertGreaterThan(20, $seen, 'the sweep should have read most of src/ plus both docs');
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

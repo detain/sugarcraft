@@ -84,7 +84,7 @@ final class ServerTest extends TestCase
 
     public function testServeReturnsTheTransportExitStatus(): void
     {
-        // MEDIUM-2 seam pin: serve() hands the transport's status to
+        // Seam pin: serve() hands the transport's status to
         // the ForceCommand script, which exits with it so the SSH
         // client sees the child's real failure code.
         $transport = new class implements \SugarCraft\SshServer\Transport {
@@ -159,7 +159,7 @@ final class ServerTest extends TestCase
 
     public function testWithKeepaliveReturnsANewInstance(): void
     {
-        // LOW-12 (audit round): with* builders clone — the receiver
+        // The with* builders clone: the receiver — the receiver
         // keeps its own stack untouched, so a shared base Server can
         // be branched per route.
         $server = Server::new();
@@ -190,7 +190,7 @@ final class ServerTest extends TestCase
 
     public function testServeThreadsTheInjectedContext(): void
     {
-        // LOW-12 seam: serve() exposes a Context injection point, so
+        // Seam pin: serve() exposes a Context injection point, so
         // the M1 cancel-propagation machinery is reachable through the
         // public API instead of only via transport->run() directly.
         $captured = null;

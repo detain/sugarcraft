@@ -322,7 +322,7 @@ final class KeyboardInteractiveTest extends TestCase
 
     public function testConstructorRefusesANonResourceStdinAtTheBoundary(): void
     {
-        // LOW-15 (audit round): injected streams are validated in the
+        // Injected streams are validated in the
         // constructor — a bad stdin fails fast here, not deep inside
         // the first fgets().
         $this->expectException(\InvalidArgumentException::class);

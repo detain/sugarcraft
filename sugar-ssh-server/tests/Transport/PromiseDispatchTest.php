@@ -161,7 +161,7 @@ final class PromiseDispatchTest extends TestCase
             $failure = $e;
         }
 
-        // E730: the single settle point consults the live context — the await
+        // The single settle point consults the live context — the await
         // is refused with the context error instead of completing the chain.
         $this->assertInstanceOf(CancellationException::class, $failure);
         $this->assertContains('async-pre', $log);
@@ -170,7 +170,7 @@ final class PromiseDispatchTest extends TestCase
 
     public function testRootCancellationSeenThroughAValueHopStopsTheNextDispatchHop(): void
     {
-        // MEDIUM-1 unlock pin: the per-hop done() guard in the stack walk
+        // Unlock pin: the per-hop done() guard in the stack walk
         // only becomes load-bearing once cancellation propagates parent→
         // derived. Middleware 1 derives a withValue hop (the exact shape
         // AuthMethods/KeyboardInteractive use), the root is cancelled
@@ -208,7 +208,7 @@ final class PromiseDispatchTest extends TestCase
 
     public function testTheSourceCarriesExactlyOneSettleCallSite(): void
     {
-        // E730 single-settle-point census: PromiseAwait::settle() must be
+        // Single-settle-point census: PromiseAwait::settle() must be
         // invoked from exactly one place in src/ — the shared stack walk.
         // Before the restructure it was awaited twice per promise (once in
         // AsyncMiddleware::handle, once at dispatch); findings #43/#48.

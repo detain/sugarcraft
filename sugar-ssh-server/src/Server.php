@@ -161,7 +161,7 @@ final class Server
      * used by both transports) settles it through the single canonical
      * await point {@see \SugarCraft\SshServer\Transport\PromiseAwait::settle()}
      * — the timeout-wrapped loop drive pinned by the one-settle-call-site
-     * census — before continuing the chain. Since the E730 restructure
+     * census — before continuing the chain. Since the single-settle restructure
      * there is no per-transport integration point and no `->wait()` on
      * the chain path.
      *

@@ -20,7 +20,7 @@ use SugarCraft\SshServer\Session;
  * to `$next`. If the Promise rejects, the rejection propagates up
  * and the chain short-circuits.
  *
- * E730 (round 83): this class is a PURE async adapter — `handle()`
+ * The contract here: this class is a PURE async adapter — `handle()`
  * hands the promise back untouched and never awaits it. The single
  * settle point lives in the transport stack walk
  * ({@see \SugarCraft\SshServer\Transport\DispatchesMiddlewareStack}), which

@@ -136,7 +136,7 @@ final class ContextTest extends TestCase
 
     public function testParentCancellationCascadesToDerivedContexts(): void
     {
-        // MEDIUM-1 fix pin: Go parent→child semantics — cancelling a
+        // Fix pin: Go parent→child semantics — cancelling a
         // cancelable context marks every context derived from it (also
         // through withValue/withCancel hops) done, and the ancestor's
         // cancellation reason rides through the chain.

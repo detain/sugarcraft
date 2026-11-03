@@ -85,7 +85,7 @@ final class HostSshdTransportTest extends TestCase
 
     public function testRunReportsZeroStatusBecauseNoChildEverExists(): void
     {
-        // MEDIUM-2 seam pin: under the inline transport the chain
+        // Seam pin: under the inline transport the chain
         // completing without a raise IS success — there is no child
         // whose code could surface.
         $ran = false;

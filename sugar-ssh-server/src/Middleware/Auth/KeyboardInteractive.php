@@ -30,7 +30,7 @@ use SugarCraft\SshServer\StreamHelper;
  *   2. Reads newline-delimited responses from STDIN until all
  *      prompts have been answered. The read blocks by contract —
  *      see {@see readResponses()} for the per-connection-process
- *      reasoning and the EOF guarantee (E727, round 82).
+ *      reasoning and the EOF guarantee.
  *   3. Optionally validates the responses via a callback. An EOF
  *      that leaves any prompt unanswered rejects the session before
  *      the validator runs; a short exchange never authenticates. So does
@@ -134,7 +134,7 @@ final class KeyboardInteractive implements Middleware
         $this->name = $name;
         $this->instruction = $instruction;
         // Fail-fast validation of injected streams happens at the
-        // boundary (audit LOW-15): a bad stdin now throws here, not
+        // boundary: a bad stdin now throws here, not
         // deep inside the first fgets().
         $this->stdout = StreamHelper::openOrValidate($stdout, 'php://stdout');
         $this->stdin = StreamHelper::openOrValidate($stdin, 'php://stdin', 'r');
@@ -184,7 +184,7 @@ final class KeyboardInteractive implements Middleware
         if (\count($responses) !== \count($this->challenges)) {
             // EOF before the exchange finished: the client hung up mid-
             // prompt. An incomplete exchange is a failed authentication,
-            // never a passed one (E727, round 82) — reject without ever
+            // never a passed one — reject without ever
             // consulting a validator, which would face a short list.
             $session->markRefused();
             fwrite($this->stderr, Lang::t('keyboardinteractive.auth_failed') . "\n");
@@ -230,7 +230,7 @@ final class KeyboardInteractive implements Middleware
     /**
      * Read exactly `$count` lines from stdin.
      *
-     * **Blocking by contract (E727, round 82).** This middleware runs in
+     * **Blocking by contract.** This middleware runs in
      * the dedicated per-connection PHP process that `sshd` forks under
      * the ForceCommand model (see {@see \SugarCraft\SshServer\Server}), and
      * the transport walks the middleware chain synchronously *before*

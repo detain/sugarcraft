@@ -12,7 +12,7 @@ use SugarCraft\SshServer\Session;
 /**
  * Shared middleware-stack walk owning the library's single promise settle point.
  *
- * E730 (round 83) restructure: before this, every AsyncMiddleware promise was
+ * The single-settle restructure: before this, every AsyncMiddleware promise was
  * awaited TWICE — once synchronously inside AsyncMiddleware::handle() and again
  * by the transport dispatch hop that received it (findings #43/#48). The
  * middleware chain is now pure async composition: a middleware hands back its

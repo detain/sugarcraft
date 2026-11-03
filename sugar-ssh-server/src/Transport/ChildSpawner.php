@@ -13,12 +13,22 @@ use SugarCraft\SshServer\Session;
  * Currently only {@see InProcessTransport} implements it; the
  * {@see HostSshdTransport} legacy mode runs middleware inline
  * against sshd's own PTY and has no notion of "spawning a child"
- * — middleware that depend on this seam (the PR3 `Spawn`) will
+ * — middleware that depend on this seam (the shipped `Spawn`) will
  * throw at `handle()` time when running under HostSshd because no
  * spawner was injected.
  *
  * The interface lets the `Spawn` middleware unit-test against a
  * fake without needing a real PTY.
+ *
+ * It is deliberately narrower than the class behind it (audit MAJOR 18).
+ * `InProcessTransport::runChild()` takes two more parameters -- `$stdin`
+ * and `$stdout` -- because injecting streams is what makes the transport
+ * testable at all. They are not part of this contract, so a caller holding
+ * a `ChildSpawner` cannot reach them: narrow with `instanceof
+ * InProcessTransport` or accept the concrete class. Widening the interface
+ * would leave every fake in the suite implementing parameters it ignores,
+ * which is the trade this file keeps making, in writing, rather than by
+ * surprise.
  */
 interface ChildSpawner
 {
@@ -26,6 +36,10 @@ interface ChildSpawner
      * Spawn `$cmd` inside a fresh PTY and pump bytes between the
      * supervisor's STDIN/STDOUT and the master fd until the child
      * exits, returns the exit code.
+     *
+     * The streams are fixed to `STDIN`/`STDOUT` for callers of this
+     * signature; see the class note for the concrete transport's wider
+     * form.
      *
      * @param list<string>              $cmd
      * @param array<string,string>|null $env  null inherits parent env

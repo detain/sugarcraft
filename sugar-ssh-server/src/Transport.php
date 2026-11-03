@@ -25,7 +25,8 @@ namespace SugarCraft\SshServer;
  *
  * Both transports still depend on host sshd as the SSH wire-protocol
  * front-end. A full PHP SSH server is a separate effort tracked
- * under `plans/x-xpty.md`'s deferred Option A.
+ * deliberately out of scope here (it would own a transport layer, not a
+ * middleware seam).
  *
  * Both transports share one middleware walk, so the status rules above
  * hold identically on either; what differs is only what happens after the

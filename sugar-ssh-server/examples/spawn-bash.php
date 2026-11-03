@@ -34,7 +34,7 @@ use SugarCraft\SshServer\Server;
 use SugarCraft\SshServer\Session;
 
 exit(Server::new()
-    // InProcessTransport is the default in PR1+ — explicit
+    // InProcessTransport is the default — explicit
     // ->withTransport() is unnecessary but documents the choice.
     ->use(Logger::auto())
     ->use(new Spawn(fn (Session $s) => [

@@ -38,9 +38,10 @@ use SugarCraft\SshServer\Lang;
  * await lands. The synchronous `Middleware::handle()` contract used by
  * this library's own transports has no loop running underneath it, which
  * is why the stack walk can await here safely; the ceiling is pre-existing
- * and bounds an await of already-issued work (E730 deliberately keeps it).
+ * and bounds an await of already-issued work, which the single-settle rule
+ * deliberately keeps.
  *
- * E730 (round 83): this is invoked from exactly one place — the
+ * One settle point: this is invoked from exactly one place — the
  * transport stack walk ({@see DispatchesMiddlewareStack}) — and now
  * consults the session Context cooperatively: a context that is
  * already done when the await is entered never gets to block the
@@ -86,7 +87,7 @@ final class PromiseAwait
      */
     public static function settle(PromiseInterface $promise, float $timeout = 30.0, ?Context $ctx = null): void
     {
-        // Cooperative cancellation (E730): never enter the await for work
+        // Cooperative cancellation: never enter the await for work
         // whose caller is already gone — abort with the context error
         // instead of blocking up to the timeout ceiling on it.
         $abort = $ctx?->done() === true ? $ctx->err() : null;

@@ -195,7 +195,7 @@ final class DefaultChannelHandlerTest extends TestCase
 
     public function testHandleSignalForwardsEveryMappedNameAsItsPosixNumber(): void
     {
-        // MEDIUM-17 pin: the map must resolve through \defined() —
+        // Pin: the map must resolve through \defined() —
         // reading an undefined \SIG* constant throws before `??` can
         // fall back, fataling on pcntl-less hosts. Expected values are
         // derived (constant when defined, documented POSIX fallback
@@ -519,7 +519,7 @@ final class DefaultChannelHandlerTest extends TestCase
     }
 
     /**
-     * E734: `SHELL=...` set-but-EMPTY is not a shell — the blank-coercion
+     * `SHELL=...` set-but-EMPTY is not a shell — the blank-coercion
      * leg in resolveShell() must reject it and land on the fallback.
      * Distinct from the unset leg (getenv() returns '' here, not false),
      * which is what the `is_string()` arm alone would let through.
@@ -533,7 +533,7 @@ final class DefaultChannelHandlerTest extends TestCase
     }
 
     /**
-     * E734: whitespace-only `SHELL` is just as blank as '' — this is the
+     * Whitespace-only `SHELL` is just as blank as '' — this is the
      * leg that pins the trim() coercion itself (a bare `!== ''` compare
      * would sail past '   ' and exec a garbage argv).
      */
@@ -546,7 +546,7 @@ final class DefaultChannelHandlerTest extends TestCase
     }
 
     /**
-     * LOW-18 (audit round): spawnShell must re-derive ONLY geometry —
+     * spawnShell must re-derive ONLY geometry —
      * the protocol metadata InProcessTransport::run attached via
      * withProtocolMetadata rides into the child session untouched.
      */

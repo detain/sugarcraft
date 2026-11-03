@@ -11,9 +11,9 @@ use SugarCraft\SshServer\Session;
 use SugarCraft\SshServer\Transport\InProcessTransport;
 
 /**
- * PR1 stub-coverage: until PR2 lands the PTY allocation + bytes
+ * Inline-walk coverage: before the PTY allocation + byte pump
  * pump, the InProcess transport walks the middleware stack inline
- * exactly like HostSshd does. These tests pin that PR1 contract so
+ * exactly like HostSshd does. These tests pin that contract so
  * downstream callers can rely on Logger / RateLimit / Auth running
  * the same way under either transport.
  */
