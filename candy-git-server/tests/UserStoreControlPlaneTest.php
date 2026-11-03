@@ -21,196 +21,196 @@ use SugarCraft\GitServer\User;
  */
 final class UserStoreControlPlaneTest extends TestCase
 {
- private string $tmpDir;
+    private string $tmpDir;
 
- /** A base64 blob long enough to pass the ed25519 minimum (68 chars). */
- private const ED25519_KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOkFq0Z4T1CkPMWStQ8kQ0kM0kFq0Z4T1CkPMWStQ8kT pin@candy-git-server';
+    /** A base64 blob long enough to pass the ed25519 minimum (68 chars). */
+    private const ED25519_KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOkFq0Z4T1CkPMWStQ8kQ0kM0kFq0Z4T1CkPMWStQ8kT pin@candy-git-server';
 
- protected function setUp(): void
- {
- parent::setUp();
- $this->tmpDir = \sys_get_temp_dir() . '/gitserver-userstore-' . \uniqid();
- \mkdir($this->tmpDir, 0700, true);
- }
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->tmpDir = \sys_get_temp_dir() . '/gitserver-userstore-' . \uniqid();
+        \mkdir($this->tmpDir, 0700, true);
+    }
 
- protected function tearDown(): void
- {
- foreach (\glob($this->tmpDir . '/**/*') ?: [] as $f) {
- if (\is_file($f)) {
- @\unlink($f);
- }
- }
- foreach (\array_reverse(\glob($this->tmpDir . '/*') ?: []) as $d) {
- if (\is_dir($d)) {
- @\rmdir($d);
- }
- }
- @\rmdir($this->tmpDir);
- parent::tearDown();
- }
+    protected function tearDown(): void
+    {
+        foreach (\glob($this->tmpDir . '/**/*') ?: [] as $f) {
+            if (\is_file($f)) {
+                @\unlink($f);
+            }
+        }
+        foreach (\array_reverse(\glob($this->tmpDir . '/*') ?: []) as $d) {
+            if (\is_dir($d)) {
+                @\rmdir($d);
+            }
+        }
+        @\rmdir($this->tmpDir);
+        parent::tearDown();
+    }
 
- // -------------------------------------------------------------------------
- // Store unit contract
- // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Store unit contract
+    // -------------------------------------------------------------------------
 
- public function testAddedUserRoundTripsThroughDiskWithKeysAndFlags(): void
- {
- $path = $this->tmpDir . '/users.json';
- $store = new UserStore($path);
- $this->assertTrue($store->add(User::new('alice')->withAdmin(true)->addAuthorizedKey(self::ED25519_KEY)));
- $store->save();
+    public function testAddedUserRoundTripsThroughDiskWithKeysAndFlags(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        $store = new UserStore($path);
+        $this->assertTrue($store->add(User::new('alice')->withAdmin(true)->addAuthorizedKey(self::ED25519_KEY)));
+        $store->save();
 
- $reread = new UserStore($path);
- $alice = $reread->find('alice');
- $this->assertNotNull($alice, 'a saved account MUST be visible to the next store instance');
- $this->assertTrue($alice->isAdmin);
- $this->assertTrue($alice->isActive);
- $this->assertSame([self::ED25519_KEY], $alice->authorizedKeysList());
- }
+        $reread = new UserStore($path);
+        $alice = $reread->find('alice');
+        $this->assertNotNull($alice, 'a saved account MUST be visible to the next store instance');
+        $this->assertTrue($alice->isAdmin);
+        $this->assertTrue($alice->isActive);
+        $this->assertSame([self::ED25519_KEY], $alice->authorizedKeysList());
+    }
 
- public function testAddRefusesDuplicateAndChangesNothing(): void
- {
- $store = new UserStore($this->tmpDir . '/users.json');
- $this->assertTrue($store->add(User::new('bob')->withAdmin(true)));
- $this->assertFalse($store->add(User::new('bob')->withAdmin(false)), 'duplicate username must be refused, never silently overwritten');
- $this->assertTrue($store->find('bob')->isAdmin, 'the refused add must not have mutated the stored row');
- }
+    public function testAddRefusesDuplicateAndChangesNothing(): void
+    {
+        $store = new UserStore($this->tmpDir . '/users.json');
+        $this->assertTrue($store->add(User::new('bob')->withAdmin(true)));
+        $this->assertFalse($store->add(User::new('bob')->withAdmin(false)), 'duplicate username must be refused, never silently overwritten');
+        $this->assertTrue($store->find('bob')->isAdmin, 'the refused add must not have mutated the stored row');
+    }
 
- public function testStoreFileNeverContainsCleartextPassword(): void
- {
- $path = $this->tmpDir . '/users.json';
- $store = new UserStore($path);
- $store->add(User::new('carol')->withPassword('hunter2')->withPasswordHash(\password_hash('hunter2', PASSWORD_DEFAULT)));
- $store->save();
+    public function testStoreFileNeverContainsCleartextPassword(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        $store = new UserStore($path);
+        $store->add(User::new('carol')->withPassword('hunter2')->withPasswordHash(\password_hash('hunter2', PASSWORD_DEFAULT)));
+        $store->save();
 
- $raw = (string) \file_get_contents($path);
- $this->assertStringNotContainsString('hunter2', $raw, 'the on-disk form stores digests only');
- $this->assertStringContainsString('$', $raw);
- }
+        $raw = (string) \file_get_contents($path);
+        $this->assertStringNotContainsString('hunter2', $raw, 'the on-disk form stores digests only');
+        $this->assertStringContainsString('$', $raw);
+    }
 
- public function testSaveIsAtomicLeavesNoTempResidueAndCarriesZeroSixZeroZero(): void
- {
- $path = $this->tmpDir . '/users.json';
- $store = new UserStore($path);
- $store->add(User::new('dave'));
- $store->save();
+    public function testSaveIsAtomicLeavesNoTempResidueAndCarriesZeroSixZeroZero(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        $store = new UserStore($path);
+        $store->add(User::new('dave'));
+        $store->save();
 
- $this->assertSame([], \glob(\dirname($path) . '/users.json.*.tmp'), 'atomic publish must not strand temp files');
- if (\DIRECTORY_SEPARATOR === '/') {
- $this->assertSame(0600, \fileperms($path) & 0777, 'accounts file holds authentication material');
- }
- }
+        $this->assertSame([], \glob(\dirname($path) . '/users.json.*.tmp'), 'atomic publish must not strand temp files');
+        if (\DIRECTORY_SEPARATOR === '/') {
+            $this->assertSame(0600, \fileperms($path) & 0777, 'accounts file holds authentication material');
+        }
+    }
 
- public function testCorruptStoreFailsLoudInsteadOfReadingAsEmpty(): void
- {
- $path = $this->tmpDir . '/users.json';
- \file_put_contents($path, '{not json');
+    public function testCorruptStoreFailsLoudInsteadOfReadingAsEmpty(): void
+    {
+        $path = $this->tmpDir . '/users.json';
+        \file_put_contents($path, '{not json');
 
- $this->expectException(\RuntimeException::class);
- new UserStore($path);
- }
+        $this->expectException(\RuntimeException::class);
+        new UserStore($path);
+    }
 
- public function testMissingStoreIsAnEmptyStoreNotAnError(): void
- {
- $store = UserStore::forDataPath($this->tmpDir);
- $this->assertSame([], $store->all());
- }
+    public function testMissingStoreIsAnEmptyStoreNotAnError(): void
+    {
+        $store = UserStore::forDataPath($this->tmpDir);
+        $this->assertSame([], $store->all());
+    }
 
- // -------------------------------------------------------------------------
- // Whole-CLI cross-process pins (the anti-theater keystone)
- // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Whole-CLI cross-process pins (the anti-theater keystone)
+    // -------------------------------------------------------------------------
 
- /**
- * @param array<string, string> $env
- *
- * @return array{rc: int, out: string, err: string}
- */
- private function runBin(array $args, array $env = []): array
- {
- $bin = (string) \realpath(__DIR__ . '/../bin/candy-git-server');
- $proc = \proc_open(
- ['timeout', '-s', 'KILL', '15', \PHP_BINARY, $bin, ...$args],
- [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
- $pipes,
- \dirname(__DIR__),
- $env + ['PATH' => \getenv('PATH') ?: '/usr/bin:/bin']
- );
- $this->assertIsResource($proc);
- $out = (string) \stream_get_contents($pipes[1]);
- \fclose($pipes[1]);
- $err = (string) \stream_get_contents($pipes[2]);
- \fclose($pipes[2]);
+    /**
+     * @param array<string, string> $env
+     *
+     * @return array{rc: int, out: string, err: string}
+     */
+    private function runBin(array $args, array $env = []): array
+    {
+        $bin = (string) \realpath(__DIR__ . '/../bin/candy-git-server');
+        $proc = \proc_open(
+            ['timeout', '-s', 'KILL', '15', \PHP_BINARY, $bin, ...$args],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname(__DIR__),
+            $env + ['PATH' => \getenv('PATH') ?: '/usr/bin:/bin']
+        );
+        $this->assertIsResource($proc);
+        $out = (string) \stream_get_contents($pipes[1]);
+        \fclose($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[2]);
 
- return ['rc' => \proc_close($proc), 'out' => $out, 'err' => $err];
- }
+        return ['rc' => \proc_close($proc), 'out' => $out, 'err' => $err];
+    }
 
- public function testUserAddInOneProcessIsVisibleInAFreshProcess(): void
- {
- $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
- $add = $this->runBin(['user', 'add', 'alice'], $env);
- $this->assertSame(0, $add['rc'], $add['err']);
- $this->assertFileExists($this->tmpDir . '/users.json', 'user add must write the store');
+    public function testUserAddInOneProcessIsVisibleInAFreshProcess(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $add = $this->runBin(['user', 'add', 'alice'], $env);
+        $this->assertSame(0, $add['rc'], $add['err']);
+        $this->assertFileExists($this->tmpDir . '/users.json', 'user add must write the store');
 
- // A brand-new process — the pre-fix theater died exactly here.
- $list = $this->runBin(['user', 'list'], $env);
- $this->assertSame(0, $list['rc']);
- $this->assertStringContainsString('alice', $list['out']);
- $this->assertStringNotContainsString('No users registered', $list['out']);
- }
+        // A brand-new process — the pre-fix theater died exactly here.
+        $list = $this->runBin(['user', 'list'], $env);
+        $this->assertSame(0, $list['rc']);
+        $this->assertStringContainsString('alice', $list['out']);
+        $this->assertStringNotContainsString('No users registered', $list['out']);
+    }
 
- public function testDuplicateUserAddRefusesWithNonZeroExit(): void
- {
- $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
- $this->assertSame(0, $this->runBin(['user', 'add', 'bob'], $env)['rc']);
- $again = $this->runBin(['user', 'add', 'bob'], $env);
- $this->assertSame(1, $again['rc']);
- $this->assertStringContainsString('already exists', $again['err']);
- }
+    public function testDuplicateUserAddRefusesWithNonZeroExit(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $this->assertSame(0, $this->runBin(['user', 'add', 'bob'], $env)['rc']);
+        $again = $this->runBin(['user', 'add', 'bob'], $env);
+        $this->assertSame(1, $again['rc']);
+        $this->assertStringContainsString('already exists', $again['err']);
+    }
 
- public function testDotDotUsernameIsRefused(): void
- {
- $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
- $r = $this->runBin(['user', 'add', '..'], $env);
- $this->assertSame(1, $r['rc'], 'the C-05 gate shape must not be reachable via usernames');
- $this->assertFileDoesNotExist($this->tmpDir . '/users.json');
- }
+    public function testDotDotUsernameIsRefused(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $r = $this->runBin(['user', 'add', '..'], $env);
+        $this->assertSame(1, $r['rc'], 'the C-05 gate shape must not be reachable via usernames');
+        $this->assertFileDoesNotExist($this->tmpDir . '/users.json');
+    }
 
- public function testUserKeyPersistsToTheStoredAccountAndRejectsUnknownUsers(): void
- {
- $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
- $keyFile = $this->tmpDir . '/alice.pub';
- \file_put_contents($keyFile, self::ED25519_KEY . "\n");
+    public function testUserKeyPersistsToTheStoredAccountAndRejectsUnknownUsers(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $keyFile = $this->tmpDir . '/alice.pub';
+        \file_put_contents($keyFile, self::ED25519_KEY . "\n");
 
- $orphan = $this->runBin(['user', 'key', 'ghost', $keyFile], $env);
- $this->assertSame(1, $orphan['rc'], 'keys for nonexistent accounts must be refused loudly');
+        $orphan = $this->runBin(['user', 'key', 'ghost', $keyFile], $env);
+        $this->assertSame(1, $orphan['rc'], 'keys for nonexistent accounts must be refused loudly');
 
- $this->assertSame(0, $this->runBin(['user', 'add', 'alice'], $env)['rc']);
- $key = $this->runBin(['user', 'key', 'alice', $keyFile], $env);
- $this->assertSame(0, $key['rc'], $key['err']);
+        $this->assertSame(0, $this->runBin(['user', 'add', 'alice'], $env)['rc']);
+        $key = $this->runBin(['user', 'key', 'alice', $keyFile], $env);
+        $this->assertSame(0, $key['rc'], $key['err']);
 
- $alice = (new UserStore($this->tmpDir . '/users.json'))->find('alice');
- $this->assertNotNull($alice);
- $this->assertSame([self::ED25519_KEY], $alice->authorizedKeysList(), 'the key must live on the STORED account, not a throwaway');
- }
+        $alice = (new UserStore($this->tmpDir . '/users.json'))->find('alice');
+        $this->assertNotNull($alice);
+        $this->assertSame([self::ED25519_KEY], $alice->authorizedKeysList(), 'the key must live on the STORED account, not a throwaway');
+    }
 
- public function testUserKeyWithInvalidKeyFailsCleanlyWithoutFatalTrace(): void
- {
- $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
- $this->assertSame(0, $this->runBin(['user', 'add', 'dave'], $env)['rc']);
- $badKeyFile = $this->tmpDir . '/bad.pub';
- \file_put_contents($badKeyFile, "not-a-key\n");
+    public function testUserKeyWithInvalidKeyFailsCleanlyWithoutFatalTrace(): void
+    {
+        $env = ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir];
+        $this->assertSame(0, $this->runBin(['user', 'add', 'dave'], $env)['rc']);
+        $badKeyFile = $this->tmpDir . '/bad.pub';
+        \file_put_contents($badKeyFile, "not-a-key\n");
 
- $r = $this->runBin(['user', 'key', 'dave', $badKeyFile], $env);
- $this->assertSame(1, $r['rc']);
- $this->assertStringNotContainsString('Fatal error', $r['err'], 'invalid input is a refusal, not a stack trace');
- $this->assertStringContainsString('Invalid SSH public key', $r['err']);
- }
+        $r = $this->runBin(['user', 'key', 'dave', $badKeyFile], $env);
+        $this->assertSame(1, $r['rc']);
+        $this->assertStringNotContainsString('Fatal error', $r['err'], 'invalid input is a refusal, not a stack trace');
+        $this->assertStringContainsString('Invalid SSH public key', $r['err']);
+    }
 
- public function testListRefusesLoudlyOnCorruptStore(): void
- {
- \file_put_contents($this->tmpDir . '/users.json', 'garbage');
- $r = $this->runBin(['user', 'list'], ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir]);
- $this->assertSame(1, $r['rc']);
- $this->assertStringContainsString('corrupt', $r['err']);
- }
+    public function testListRefusesLoudlyOnCorruptStore(): void
+    {
+        \file_put_contents($this->tmpDir . '/users.json', 'garbage');
+        $r = $this->runBin(['user', 'list'], ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir]);
+        $this->assertSame(1, $r['rc']);
+        $this->assertStringContainsString('corrupt', $r['err']);
+    }
 }

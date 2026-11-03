@@ -28,121 +28,121 @@ use SugarCraft\GitServer\Repo;
  */
 final class RepoJailContainmentTest extends TestCase
 {
- private string $tmpDir;
+    private string $tmpDir;
 
- protected function setUp(): void
- {
- parent::setUp();
- $this->tmpDir = \sys_get_temp_dir() . '/git-jail-test-' . \uniqid();
- \mkdir($this->tmpDir, 0700, true);
- }
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->tmpDir = \sys_get_temp_dir() . '/git-jail-test-' . \uniqid();
+        \mkdir($this->tmpDir, 0700, true);
+    }
 
- protected function tearDown(): void
- {
- $this->removeDirectory($this->tmpDir);
- parent::tearDown();
- }
+    protected function tearDown(): void
+    {
+        $this->removeDirectory($this->tmpDir);
+        parent::tearDown();
+    }
 
- private function removeDirectory(string $dir): void
- {
- if (!\is_dir($dir)) {
- return;
- }
- $items = new \RecursiveIteratorIterator(
- new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
- \RecursiveIteratorIterator::CHILD_FIRST
- );
- foreach ($items as $item) {
- if ($item->isDir()) {
- @\rmdir($item->getPathname());
- } else {
- @\unlink($item->getPathname());
- }
- }
- @\rmdir($dir);
- }
+    private function removeDirectory(string $dir): void
+    {
+        if (!\is_dir($dir)) {
+            return;
+        }
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            if ($item->isDir()) {
+                @\rmdir($item->getPathname());
+            } else {
+                @\unlink($item->getPathname());
+            }
+        }
+        @\rmdir($dir);
+    }
 
- // -------------------------------------------------------------------------
- // Name validator table
- // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Name validator table
+    // -------------------------------------------------------------------------
 
- public function testJailSafeNameTable(): void
- {
- foreach (['foo', 'foo.git', 'a-b_c.1', 'a..b'] as $ok) {
- $this->assertTrue(Repo::isJailSafeName($ok), "$ok must be accepted");
- }
- foreach (['', '.', '..', '...', './x', '../x', 'a/b', 'a b', "a\nb", '-x'] as $bad) {
- $this->assertFalse(Repo::isJailSafeName($bad), \var_export($bad, true) . ' must be refused');
- }
- }
+    public function testJailSafeNameTable(): void
+    {
+        foreach (['foo', 'foo.git', 'a-b_c.1', 'a..b'] as $ok) {
+            $this->assertTrue(Repo::isJailSafeName($ok), "$ok must be accepted");
+        }
+        foreach (['', '.', '..', '...', './x', '../x', 'a/b', 'a b', "a\nb", '-x'] as $bad) {
+            $this->assertFalse(Repo::isJailSafeName($bad), \var_export($bad, true) . ' must be refused');
+        }
+    }
 
- // -------------------------------------------------------------------------
- // Daemon dispatch gate
- // -------------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Daemon dispatch gate
+    // -------------------------------------------------------------------------
 
- /**
- * @return array{0: string, 1: array<int>} packet bytes written + remaining clients
- */
- private function driveDispatch(GitDaemon $daemon, string $buffer): array
- {
- $outFile = $this->tmpDir . '/wire-' . \uniqid();
- $socket = \fopen('file://' . $outFile, 'wb');
- $this->assertIsResource($socket);
+    /**
+     * @return array{0: string, 1: array<int>} packet bytes written + remaining clients
+     */
+    private function driveDispatch(GitDaemon $daemon, string $buffer): array
+    {
+        $outFile = $this->tmpDir . '/wire-' . \uniqid();
+        $socket = \fopen('file://' . $outFile, 'wb');
+        $this->assertIsResource($socket);
 
- $clients = new \ReflectionProperty(GitDaemon::class, 'clients');
- $clients->setAccessible(true);
- $clients->setValue($daemon, [
- 0 => [
- 'socket' => $socket,
- 'connected_at' => \time(),
- 'last_activity' => \time(),
- 'buffer' => $buffer,
- 'handled' => false,
- ],
- ]);
+        $clients = new \ReflectionProperty(GitDaemon::class, 'clients');
+        $clients->setAccessible(true);
+        $clients->setValue($daemon, [
+            0 => [
+                'socket' => $socket,
+                'connected_at' => \time(),
+                'last_activity' => \time(),
+                'buffer' => $buffer,
+                'handled' => false,
+            ],
+        ]);
 
- $dispatch = new \ReflectionMethod($daemon, 'dispatchClientRequest');
- $dispatch->setAccessible(true);
- $dispatch->invoke($daemon, 0);
+        $dispatch = new \ReflectionMethod($daemon, 'dispatchClientRequest');
+        $dispatch->setAccessible(true);
+        $dispatch->invoke($daemon, 0);
 
- /** @var array<int, array<string, mixed>> $after */
- $after = $clients->getValue($daemon);
- \clearstatcache();
+        /** @var array<int, array<string, mixed>> $after */
+        $after = $clients->getValue($daemon);
+        \clearstatcache();
 
- return [(string) \file_get_contents($outFile), \array_keys($after)];
- }
+        return [(string) \file_get_contents($outFile), \array_keys($after)];
+    }
 
- public function testDaemonRefusesReceivePackWithNoSideEffects(): void
- {
- $daemon = new GitDaemon(Config::fromDefaults());
+    public function testDaemonRefusesReceivePackWithNoSideEffects(): void
+    {
+        $daemon = new GitDaemon(Config::fromDefaults());
 
- [$bytes, $remaining] = $this->driveDispatch(
- $daemon,
- "git-receive-pack /dest\n" . \str_repeat('0', 40) . ' ' . \str_repeat('a', 40) . " refs/heads/master\n"
- );
+        [$bytes, $remaining] = $this->driveDispatch(
+            $daemon,
+            "git-receive-pack /dest\n" . \str_repeat('0', 40) . ' ' . \str_repeat('a', 40) . " refs/heads/master\n"
+        );
 
- $this->assertStringContainsString('git-receive-pack is not served over the anonymous daemon', $bytes);
- $this->assertSame([], $remaining, 'refused client must be closed');
- }
+        $this->assertStringContainsString('git-receive-pack is not served over the anonymous daemon', $bytes);
+        $this->assertSame([], $remaining, 'refused client must be closed');
+    }
 
- public function testDaemonRefusesTraversalRepoNameBeforeAnyLookup(): void
- {
- $daemon = new GitDaemon(Config::fromDefaults());
+    public function testDaemonRefusesTraversalRepoNameBeforeAnyLookup(): void
+    {
+        $daemon = new GitDaemon(Config::fromDefaults());
 
- [$bytes, $remaining] = $this->driveDispatch($daemon, "git-upload-pack /..\n");
+        [$bytes, $remaining] = $this->driveDispatch($daemon, "git-upload-pack /..\n");
 
- $this->assertStringContainsString('Invalid repository name', $bytes);
- $this->assertSame([], $remaining);
- }
+        $this->assertStringContainsString('Invalid repository name', $bytes);
+        $this->assertSame([], $remaining);
+    }
 
- public function testDaemonRefusesDotRepoName(): void
- {
- $daemon = new GitDaemon(Config::fromDefaults());
+    public function testDaemonRefusesDotRepoName(): void
+    {
+        $daemon = new GitDaemon(Config::fromDefaults());
 
- [$bytes, $remaining] = $this->driveDispatch($daemon, "git-upload-pack /.\n");
+        [$bytes, $remaining] = $this->driveDispatch($daemon, "git-upload-pack /.\n");
 
- $this->assertStringContainsString('Invalid repository name', $bytes);
- $this->assertSame([], $remaining);
- }
+        $this->assertStringContainsString('Invalid repository name', $bytes);
+        $this->assertSame([], $remaining);
+    }
 
 }
