@@ -1467,6 +1467,154 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('', $this->decoder->remainder());
     }
 
+    // ─── C2: cap force-close must never re-inject leftover bytes as keys ──────
+
+    public function testOversizedSequenceTailBytesAreNeverKeys(): void
+    {
+        // One read: ESC [ + 200 param bytes + 'A' (the ECMA-48 final byte)
+        // + 'BC'. 'A' terminates the dead sequence and is consumed with it;
+        // only genuine fresh traffic ('BC') may surface as keys.
+        $wire = "\x1b[" . str_repeat('9', 200) . "ABC";
+        $oneRead = $this->decoder->decode($wire);
+        $this->assertSame(['B', 'C'], array_map(static fn ($e) => $e instanceof KeyEvent ? $e->key : null, $oneRead));
+        $this->assertSame(1, $this->decoder->droppedUnknownCount());
+
+        // Split reads (the attacker's chunking lever): the same bytes arriving
+        // across three reads must produce the SAME events — the pre-fix code
+        // turned the continuation '999…A' into typed keys on the next read.
+        $split = new EscapeDecoder();
+        $events = [];
+        $events = array_merge($events, $split->decode("\x1b[" . str_repeat('9', 200)));
+        $this->assertSame([], $events, 'no events while the dead sequence is still open');
+        $events = array_merge($events, $split->decode("A"));
+        $this->assertSame([], $events, "the final byte is consumed by the discard, never keyed");
+        $events = array_merge($events, $split->decode("BC"));
+        $this->assertSame(['B', 'C'], array_map(static fn ($e) => $e instanceof KeyEvent ? $e->key : null, $events));
+        $this->assertSame(1, $split->droppedUnknownCount());
+
+        // 8192-chunk drip (a real TTY read shape): across every split the
+        // hostile sequence contributes NO digit keystroke. (The junk's ':'
+        // stays in the parameter range 0x30-0x3F; 'n' of "nested" is the first
+        // final byte and closes the dead sequence there.)
+        $drip = new EscapeDecoder();
+        $all = [];
+        $stream = "\x1b[" . str_repeat('9', 10_000) . ":nested\x1b" . "ABC";
+        foreach (str_split($stream, 8192) as $chunk) {
+            $all = array_merge($all, $drip->decode($chunk));
+        }
+        foreach ($all as $event) {
+            if ($event instanceof KeyEvent) {
+                $this->assertNotSame('9', $event->key, 'overflowed parameter byte surfaced as a keystroke');
+            }
+        }
+    }
+
+    public function testOversizedSequenceResyncsOnEmbeddedEscape(): void
+    {
+        // A bare ESC inside parameter traffic resynchronizes the parser: the
+        // ESC starts a NEW sequence that decodes normally, and it is not
+        // swallowed forever (liveness: a hostile open sequence cannot mute the
+        // keyboard for the rest of the session).
+        $decoder = new EscapeDecoder();
+        $this->assertSame([], $decoder->decode("\x1b[" . str_repeat('9', 200)));
+        $events = $decoder->decode("\x1b[A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame(1, $decoder->droppedUnknownCount(), 'ESC resync does not re-count the drop');
+    }
+
+    public function testForgedPasteTailCannotBecomeKeys(): void
+    {
+        // 1 MiB + 600 filler arriving WITHOUT a terminator in the pass (the
+        // old force-close hole): announce once, then an attacker-shaped
+        // command tail, then the real terminator in later reads. Expect
+        // exactly ONE truncated PasteEvent and ZERO keystrokes from the
+        // tail; traffic after the 201~ is live.
+        $tail = "rm -rf /\nABC";
+        $events = $this->decoder->decode("\x1b[200~" . str_repeat('x', PasteEvent::MAX_SIZE + 600));
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(PasteEvent::class, $events[0]);
+        $this->assertTrue($events[0]->truncated);
+        $this->assertSame(600, $this->decoder->discardedPasteBytes(), 'the cap-straddle overshoot is counted');
+
+        $this->assertSame([], $this->decoder->decode($tail), 'the command tail became nothing, not keys');
+        $this->assertSame(600 + strlen($tail), $this->decoder->discardedPasteBytes());
+
+        $events = $this->decoder->decode("\x1b[201~A");
+        $this->assertCount(1, $events);
+        $this->assertSame('A', $events[0]->key, 'only the post-terminator A is a key');
+    }
+
+    public function testForgedPasteWithoutTerminatorStaysOpenUntilReset(): void
+    {
+        // Safety direction: a forged paste whose 201~ never arrives keeps the
+        // paste open and discards everything — keystrokes are muted (loud via
+        // the announce + counter), never fabricated. reset() is the recovery
+        // lever, unlocked for hosts through the driver seam.
+        $decoder = new EscapeDecoder();
+        $events = $decoder->decode("\x1b[200~" . str_repeat('y', PasteEvent::MAX_SIZE + 100));
+        $this->assertCount(1, $events);
+        $this->assertInstanceOf(PasteEvent::class, $events[0]);
+
+        $this->assertSame([], $decoder->decode("ABC\n"), 'post-cap body must not become keys');
+        $this->assertSame([], $decoder->decode("\x1b[A"), 'even arrows are swallowed while open');
+        $this->assertGreaterThanOrEqual(5, $decoder->discardedPasteBytes());
+
+        $this->assertSame([], $decoder->decode("\x1b[201~"), 'the real terminator closes quietly');
+        $events = $decoder->decode("A");
+        $this->assertCount(1, $events);
+        $this->assertSame('A', $events[0]->key, 'keyboard live again after the close');
+
+        // And reset() recovers from the never-terminated state directly.
+        $stuck = new EscapeDecoder();
+        $stuck->decode("\x1b[200~" . str_repeat('z', PasteEvent::MAX_SIZE + 1));
+        $this->assertSame([], $stuck->decode("dangerous\n"));
+        $stuck->reset();
+        $events = $stuck->decode("A");
+        $this->assertCount(1, $events);
+        $this->assertSame('A', $events[0]->key);
+        $this->assertSame(0, $stuck->discardedPasteBytes(), 'reset clears the discard ledger');
+    }
+
+    public function testPasteOverflowAnnouncesOnceAcrossChunkedBody(): void
+    {
+        // Same forged paste dripped in 8192-byte reads (the tmux pipe-pane
+        // shape): still exactly ONE announce, ZERO keystrokes from the body,
+        // close on the real terminator.
+        $decoder = new EscapeDecoder();
+        $all = [];
+        $body = "\x1b[200~" . str_repeat('w', 3 * 1024 * 1024) . "evil-key\x1b[201~";
+        foreach (str_split($body, 8192) as $chunk) {
+            $all = array_merge($all, $decoder->decode($chunk));
+        }
+        $pastes = array_filter($all, static fn ($e) => $e instanceof PasteEvent);
+        $keys = array_filter($all, static fn ($e) => $e instanceof KeyEvent);
+        $this->assertCount(1, $pastes, '3 MiB past the cap announces exactly once');
+        $this->assertTrue(array_values($pastes)[0]->truncated);
+        $this->assertSame([], $keys, 'no body byte, however key-shaped, is promoted');
+        // Everything past the 1 MiB clip — the whole rest of the body before
+        // the terminator — is accounted as discarded, not re-typed.
+        $this->assertSame(3 * 1024 * 1024 - PasteEvent::MAX_SIZE + 8, $decoder->discardedPasteBytes());
+        // And the keyboard is live after the close:
+        $events = $decoder->decode("A");
+        $this->assertCount(1, $events);
+        $this->assertSame('A', $events[0]->key);
+    }
+
+    public function testSequenceDiscardStateSurvivesAndIsClearedByReset(): void
+    {
+        $decoder = new EscapeDecoder();
+        $decoder->decode("\x1b[" . str_repeat('9', 200));
+        // Bytes keep being swallowed while open…
+        $this->assertSame([], $decoder->decode("99999"));
+        // …but reset() drops the discard state too: a fresh ESC-sequence decodes.
+        $decoder->reset();
+        $this->assertSame(0, $decoder->droppedUnknownCount(), 'reset zeroes the counters');
+        $events = $decoder->decode("\x1b[A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+    }
+
     // ─── Perf regression guard (O(n) not O(n²)) ───────────────────────────────
 
     public function testLargeAsciiPasteIsLinear(): void

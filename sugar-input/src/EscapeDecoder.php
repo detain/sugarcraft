@@ -155,6 +155,15 @@ final class EscapeDecoder
     /** Whether we are currently inside a bracketed paste */
     private bool $inPaste = false;
 
+    /** True while a paste body is being discarded after its one-time truncated announce */
+    private bool $pasteOverflowDiscarding = false;
+
+    /** True while bytes are swallowed until an overflowed sequence's final byte */
+    private bool $discardUntilSequenceEnd = false;
+
+    /** Paste-body bytes swallowed past the cap while awaiting the real 201~ terminator */
+    private int $discardedPasteBytes = 0;
+
     /** Whether we are mid OSC/DCS/APC/PM string (payload accumulates in $stringBuffer) */
     private bool $inString = false;
 
@@ -201,6 +210,14 @@ final class EscapeDecoder
      */
     public function decode(string $bytes): array
     {
+        // An oversized sequence is still open: its bytes are parameter
+        // traffic, never keystrokes — swallow them until its final byte or a
+        // fresh ESC resync (C2a). This runs before everything so split-chunk
+        // input decodes identically to one big read.
+        if ($this->discardUntilSequenceEnd) {
+            $bytes = $this->consumeOverflowedSequence($bytes);
+        }
+
         if ($bytes === '' && $this->remainder === '' && !$this->inPaste) {
             return [];
         }
@@ -405,11 +422,58 @@ final class EscapeDecoder
      * Buffer an incomplete trailing sequence for the next decode() call,
      * bounding $remainder so a never-terminating sequence cannot grow it
      * without limit (a DoS vector — see MAX_SEQUENCE_LENGTH). Oversized tails
-     * are dropped; whatever events were already decoded are still returned.
+     * park no bytes but keep the sequence OPEN in the discard state (see
+     * consumeOverflowedSequence()); whatever events were already decoded are
+     * still returned.
      */
     private function bufferRemainder(string $tail): void
     {
-        $this->remainder = strlen($tail) > self::MAX_SEQUENCE_LENGTH ? '' : $tail;
+        if (strlen($tail) > self::MAX_SEQUENCE_LENGTH) {
+            // Cap hit: park nothing — but the sequence is STILL open. Its
+            // continuation bytes are parameter traffic, not keystrokes, so
+            // record the drop once and swallow forward until the final byte
+            // (C2a: wiping the buffer and carrying on let the leftover bytes
+            // surface as synthetic keys in the next read).
+            $this->remainder = '';
+            $this->discardUntilSequenceEnd = true;
+            $this->droppedUnknownCount++;
+
+            return;
+        }
+
+        $this->remainder = $tail;
+    }
+
+    /**
+     * While an oversized sequence is still open, consume stream bytes until its
+     * ECMA-48 final byte (0x40-0x7E — consumed, the sequence ends there) or a
+     * fresh ESC (NOT consumed — a new sequence begins). Returns the still-live
+     * suffix; '' when the whole chunk belonged to the dead sequence.
+     *
+     * This makes a split hostile read decode IDENTICALLY to one big read.
+     */
+    private function consumeOverflowedSequence(string $stream): string
+    {
+        $len = strlen($stream);
+        for ($i = 0; $i < $len; $i++) {
+            $ord = ord($stream[$i]);
+            if ($ord >= 0x40 && $ord <= 0x7E) {
+                $this->discardUntilSequenceEnd = false;
+
+                return substr($stream, $i + 1);
+            }
+            if ($ord === 0x1B) {
+                // ESC inside parameter traffic is a parser desync a real
+                // terminal can also hit: resynchronize on it (leave the ESC
+                // for the escape handlers) instead of swallowing every later
+                // keystroke forever.
+                $this->discardUntilSequenceEnd = false;
+
+                return substr($stream, $i);
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -1151,22 +1215,52 @@ final class EscapeDecoder
                 $stream = substr($stream, 0, -$partial);
             }
 
-            // Not complete — accumulate
+            // Not complete — accumulate (unless the paste is already past its
+            // cap and discarding: those bytes belong to the announced event).
             if ($stream !== '') {
+                if ($this->pasteOverflowDiscarding) {
+                    $this->discardedPasteBytes += strlen($stream);
+
+                    return ['events' => [], 'remaining' => ''];
+                }
                 $this->pasteBuffer .= $stream;
             }
-            if (strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
-                // Force-close on oversized paste. Leave any held-back partial end
-                // marker in $remainder untouched — wiping it would turn the
-                // marker split across the overflow boundary into literal keys.
+            if (!$this->pasteOverflowDiscarding && strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
+                // Cap hit: announce ONCE with the truncated PasteEvent, but do
+                // NOT close the paste (C2b). Closing let every byte that
+                // followed — through the real 201~ terminator — decode as
+                // synthetic keystrokes: attacker-controlled pipe content was
+                // promoted to key traffic, the exact tmux send-keys shape the
+                // README threat model names. The paste stays open and discards
+                // body bytes until the genuine end marker arrives; reset() is
+                // the recovery lever if a forged paste never sends one. Leave
+                // any held-back partial end marker in $remainder untouched —
+                // wiping it would turn the marker split across the overflow
+                // boundary into literal keys.
                 $event = PasteEvent::truncate($this->pasteBuffer);
+                $this->discardedPasteBytes += strlen($this->pasteBuffer) - PasteEvent::MAX_SIZE;
                 $this->pasteBuffer = '';
-                $this->inPaste = false;
+                $this->pasteOverflowDiscarding = true;
 
                 return ['events' => [$event], 'remaining' => ''];
             }
 
             return ['events' => [], 'remaining' => ''];
+        }
+
+        if ($this->pasteOverflowDiscarding) {
+            // Terminator found while discarding: close quietly — the truncate
+            // announce already told the whole truth, and a second event would
+            // hand the attacker a keystroke-shaped echo of their own tail.
+            $this->discardedPasteBytes += $pasteEndPos;
+            $this->pasteBuffer = '';
+            $this->inPaste = false;
+            $this->pasteOverflowDiscarding = false;
+
+            return [
+                'events' => [],
+                'remaining' => substr($stream, $pasteEndPos + strlen(self::PASTE_END)),
+            ];
         }
 
         $pasteContent = $this->pasteBuffer . substr($stream, 0, $pasteEndPos);
@@ -1201,11 +1295,13 @@ final class EscapeDecoder
             }
             $this->pasteBuffer .= $afterStart;
             if (strlen($this->pasteBuffer) > PasteEvent::MAX_SIZE) {
-                // Same oversized force-close as handlePastePass(); a held-back
-                // partial end marker in $remainder survives untouched.
+                // Same one-time-announce + keep-discarding law as
+                // handlePastePass() (C2b); a held-back partial end marker in
+                // $remainder survives untouched.
                 $event = PasteEvent::truncate($this->pasteBuffer);
+                $this->discardedPasteBytes += strlen($this->pasteBuffer) - PasteEvent::MAX_SIZE;
                 $this->pasteBuffer = '';
-                $this->inPaste = false;
+                $this->pasteOverflowDiscarding = true;
 
                 return ['events' => [$event], 'remaining' => ''];
             }
@@ -1733,6 +1829,19 @@ final class EscapeDecoder
     }
 
     /**
+     * Bytes of paste body swallowed past the 1 MiB cap while waiting for the
+     * paste's real 201~ terminator (the truncated PasteEvent announce fires
+     * once, at the cap). A forged paste that never sends the terminator keeps
+     * discarding — this counter grows monotonically and is the visible proof
+     * the tail became nothing rather than keys. reset() clears it along with
+     * the state.
+     */
+    public function discardedPasteBytes(): int
+    {
+        return $this->discardedPasteBytes;
+    }
+
+    /**
      * Resolve a lone trailing ESC deferred by the `deferTrailingEscape` option
      * into the Escape key it (probably) was. Call from an application timer once
      * no more input arrives within the escape-timeout window; if the buffered
@@ -1760,13 +1869,19 @@ final class EscapeDecoder
     }
 
     /**
-     * Clear the partial-sequence buffer, paste/string state, and reply counters.
+     * Clear the partial-sequence buffer, paste/string state, overflow-discard
+     * states, and reply counters. This is the operator's recovery lever for a
+     * forged paste whose 201~ terminator never arrives (the decoder otherwise
+     * keeps discarding, by design, so no attacker byte can become a key).
      */
     public function reset(): void
     {
         $this->remainder = '';
         $this->pasteBuffer = '';
         $this->inPaste = false;
+        $this->discardUntilSequenceEnd = false;
+        $this->pasteOverflowDiscarding = false;
+        $this->discardedPasteBytes = 0;
         $this->inString = false;
         $this->stringIntroducer = '';
         $this->stringBuffer = '';
