@@ -85,7 +85,7 @@ Server::new()
 <tr><td>AsyncMiddleware</td><td>extends Middleware</td><td>Abstract base for promise-returning middleware — override handleAsync() to perform async I/O (LDAP, OAuth, database auth); 30-second timeout enforced via await()</td></tr>
 <tr><td>Spawn</td><td>new(callable)</td><td>Terminal middleware for subprocess spawning (InProcess only)</td></tr>
 <tr><td>BubbleTea</td><td>new(callable)</td><td>Terminal middleware for Program mount (HostSshd only)</td></tr>
-<tr><td>Auth</td><td>new(array $users, array $keyFingerprints)</td><td>Username and/or key allowlist middleware</td></tr>
+<tr><td>Auth</td><td>new(array $users, array $keyFingerprints, ?resource $stderr, ?callable $fingerprintValidator, array $userKeys)</td><td>Allowlist gate. <code>users</code> and <code>keyFingerprints</code> are independent (a cross product, not a pairing) — bob with alice's key is admitted as alice. <code>userKeys</code> (name =&gt; that name's keys, or <code>[Auth::ANY_KEY]</code>) is the authoritative pairing. Empty lists arm nothing.</td></tr>
 <tr><td>PasswordAuth</td><td>new(callable, ?resource)</td><td>Validates (user, password) against callback; reads `SSH_PASSWORD` env var</td></tr>
 <tr><td>CertificateAuth</td><td>new(callable, bool $required, ?resource)</td><td>Validates X.509 cert from `SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars</td></tr>
 <tr><td>AuthMethods</td><td>new(list&lt;string&gt;, ?resource)</td><td>Advertises auth methods via `SSH_AUTH_METHODS` STDOUT banner; stores list in Context</td></tr>

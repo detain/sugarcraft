@@ -235,4 +235,154 @@ final class AuthTest extends TestCase
         });
         $this->assertFalse($reached, 'validator-only mode must deny when the validator refuses');
     }
+
+    // ---- audit K4: the two flat lists are a cross product, userKeys pairs ----
+
+    public function testFlatListsAdmitTheCrossProductThisIsTheAuditedShape(): void
+    {
+        // DOCUMENTATION-BEARING PIN (K4): with `users` and
+        // `keyFingerprints` as independent flat lists, bob holding alice's
+        // key IS admitted, because neither list encodes whose key it is.
+        // This test exists so the shape cannot be "fixed" silently, and so
+        // the pairing test below is meaningful by contrast.
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:alices-key';
+        [$err] = $this->stderr();
+        $a = new Auth(['alice', 'bob'], ['SHA256:alices-key', 'SHA256:bobs-key'], $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('bob'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached, 'flat lists are uncorrelated by design — see the class docblock');
+    }
+
+    public function testUserKeysRefusesOneUsersKeyForAnotherName(): void
+    {
+        // The cure: alice's key, presented by bob, is refused.
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:alices-key';
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth(userKeys: ['alice' => ['SHA256:alices-key'], 'bob' => ['SHA256:bobs-key']], stderr: $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('bob'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached, 'a key paired to alice must not authenticate bob');
+        $this->assertStringContainsString('key not paired with the requested user', $readErr());
+    }
+
+    public function testUserKeysAdmitsTheActualOwner(): void
+    {
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:alices-key';
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth(userKeys: ['alice' => ['SHA256:alices-key'], 'bob' => ['SHA256:bobs-key']], stderr: $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached);
+        $this->assertSame('', $readErr(), 'the admitted path writes nothing');
+    }
+
+    public function testUserKeysRefusesANameWithNoEntryEvenWithAKnownKey(): void
+    {
+        // carol is unknown to the map even though her key appears under
+        // no one else either: an absent name is a closed door, not an open
+        // one, once the pairing map is armed.
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:carols-key';
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth(userKeys: ['alice' => ['SHA256:alices-key']], stderr: $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('carol'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached);
+        $this->assertStringContainsString('carol', $readErr());
+    }
+
+    public function testUserKeysRefusesAKeyThatIsNoones(): void
+    {
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:strangers-key';
+        [$err] = $this->stderr();
+        $a = new Auth(userKeys: ['alice' => ['SHA256:alices-key']], stderr: $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached, 'a name listed in the map is not a blank cheque for any key');
+    }
+
+    public function testUserKeysRefusesWhenNoKeyWasPresentedAtAll(): void
+    {
+        unset($_SERVER['SSH_USER_KEY_FINGERPRINT'], $_SERVER['KEY_FINGERPRINT'], $_SERVER['SSH_USER_AUTH']);
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth(userKeys: ['alice' => ['SHA256:alices-key']], stderr: $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached);
+        $this->assertStringContainsString('<missing>', $readErr());
+    }
+
+    public function testAnyKeySentinelOpensANameToEveryKeyButOnlyThatName(): void
+    {
+        // Auth::ANY_KEY is the honest way to say "this deployment has no
+        // key evidence for bob". It must not leak to other names.
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:strangers-key';
+        [$err] = $this->stderr();
+        $paired = new Auth(userKeys: ['alice' => [Auth::ANY_KEY], 'bob' => ['SHA256:bobs-key']], stderr: $err);
+        $reached = false;
+        $paired->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached, 'the sentinel admits alice with any key');
+
+        $reachedBob = false;
+        $paired->handle(Context::background(), $this->session('bob'), function () use (&$reachedBob): void {
+            $reachedBob = true;
+        });
+        $this->assertFalse($reachedBob, 'the sentinel is scoped to its own name');
+    }
+
+    public function testUserKeysNarrowsRatherThanReplacesTheFlatLists(): void
+    {
+        // The flat key list passes (the key is known), the flat user list
+        // passes (the name is known), the pairing refuses: combining
+        // surfaces can only tighten.
+        $_SERVER['SSH_USER_KEY_FINGERPRINT'] = 'SHA256:alices-key';
+        [$err] = $this->stderr();
+        $a = new Auth(
+            users: ['alice', 'bob'],
+            keyFingerprints: ['SHA256:alices-key'],
+            userKeys: ['bob' => ['SHA256:alices-key']],
+            stderr: $err,
+        );
+        $reached = false;
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached, 'alice is not in the pairing map, so she is refused');
+
+        $reachedBob = false;
+        $a->handle(Context::background(), $this->session('bob'), function () use (&$reachedBob): void {
+            $reachedBob = true;
+        });
+        $this->assertTrue($reachedBob, 'bob is paired to exactly this key');
+    }
+
+    public function testFingerprintMembershipIsComparedWithoutAnEarlyOut(): void
+    {
+        // Structural pin (audit M2/hygiene): the allowlist is a set of
+        // authorisation secrets, so membership must go through
+        // hash_equals() over every entry rather than in_array(), which
+        // returns on the first match and makes position measurable.
+        $source       = (string) file_get_contents(__DIR__ . '/../../src/Middleware/Auth.php');
+        $this->assertNotFalse($source);
+        $start = strpos($source, 'private function listContains(');
+        $this->assertIsInt($start, 'the membership helper must exist');
+        $body = (string) substr($source, $start, (int) strpos(substr($source, $start), "\n    }") + 6);
+        $this->assertStringContainsString('hash_equals(', $body);
+        $this->assertStringNotContainsString('in_array(', $body, 'no early-out membership test');
+        $this->assertStringNotContainsString('return true;', $body, 'a match may not short-circuit the walk');
+        $this->assertStringNotContainsString('in_array($fp', $source, 'the fingerprint lists must never be scanned with an early-out');
+    }
 }

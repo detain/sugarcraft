@@ -13,7 +13,8 @@ use SugarCraft\SshServer\StreamHelper;
 /**
  * Username / public-key allowlist gate.
  *
- * Two complementary checks:
+ * Three checks, of which the third is the one that binds a key to a
+ * person:
  *
  *   - `users` — exact-match list of acceptable `Session::$user`.
  *     Empty list = allow any user.
@@ -25,6 +26,27 @@ use SugarCraft\SshServer\StreamHelper;
  *     (OpenSSH ExposeAuthInfo multi-line blob, e.g.
  *     `publickey ssh-ed25519 SHA256:AbC123=`), the fingerprint
  *     token is extracted via regex. Empty list = skip key check.
+ *     **This list is a CROSS PRODUCT, not a pairing.** It is compared
+ *     against the presented key only; `users` is compared against the
+ *     requested name only. Two users in `users` and two keys in
+ *     `keyFingerprints` admits all four combinations: with `users`
+ *     `['alice','bob']` and `keyFingerprints` `['alice-key','bob-key']`
+ *     BOB PRESENTING ALICE'S KEY IS ADMITTED AS alice. That is the
+ *     audited defect (K4); it is behaviour, not a bug you can flip
+ *     silently. Use `userKeys` below when the point of the allowlist is
+ *     "whose key is this".
+ *   - `userKeys` — map of `Session::$user` => list of that user's
+ *     acceptable fingerprints. When non-empty this is the AUTHORITATIVE
+ *     pairing: the requested name must be a key of the map, and the
+ *     presented fingerprint must appear in that name's list. A name
+ *     mapped to `[Auth::ANY_KEY]` accepts any key for that user (there is
+ *     no key evidence to check against — see the trust boundary). The
+ *     `users` and `keyFingerprints` lists still apply as additional gates,
+ *     so combining them can only narrow.
+ *
+ * Membership of every fingerprint list is compared with `hash_equals()`
+ * over the whole list rather than `in_array()`, so a miss costs the same
+ * time whatever the position and no early-out leaks which entry matched.
  *
  * On rejection writes a one-line `Unauthorized.` to STDERR and
  * returns without invoking `$next` — the connection ends cleanly.
@@ -47,13 +69,29 @@ use SugarCraft\SshServer\StreamHelper;
  * runs in addition to the allowlist and can consult a real key store /
  * CA / agent. Do NOT rely on the allowlist alone as cryptographic proof
  * of identity.
+ *
+ * Pairing and openness are separate questions. Even a perfectly
+ * configured `keyFingerprints` list admits any name in `users`; and an
+ * EMPTY list is not 'no keys allowed' but 'nothing checked' — `new Auth()`
+ * with the allowlist arguments unset lets every session through. That
+ * default is deliberate (start-simple), but it means the gate has to be
+ * armed explicitly, never left at its constructor default.
  */
 final class Auth implements Middleware
 {
+    /**
+     * Sentinel used as the sole entry of a `userKeys` list to mean "any
+     * key, this name only". Named so a deployment can say it out loud
+     * rather than shipping a bare `'*'` that a reader may take for a glob.
+     */
+    public const ANY_KEY = '*';
+
     /** @var list<string> */
     private array $users;
     /** @var list<string> */
     private array $keyFingerprints;
+    /** @var array<string, list<string>> */
+    private array $userKeys;
     /** @var resource */
     private $stderr;
     /** @var (callable(string, Session): bool)|null */
@@ -61,22 +99,32 @@ final class Auth implements Middleware
 
     /**
      * @param list<string>                          $users                Allowed `Session::$user` values; [] = any
-     * @param list<string>                          $keyFingerprints      Allowed `SHA256:...` fingerprints; [] = skip
+     * @param list<string>                          $keyFingerprints      Allowed `SHA256:...` fingerprints; [] = skip.
+     *                                                                    NOT paired with $users — see class docblock
+     *                                                                    (K4): prefer $userKeys for a real binding.
      * @param resource|null                         $stderr               Stream for the rejection notice
      * @param (callable(string, Session): bool)|null $fingerprintValidator Optional real verifier: receives the
      *                                                                    presented fingerprint (or '' if none) plus
      *                                                                    the Session and returns true to accept. Runs
      *                                                                    in addition to the allowlist, closing the
      *                                                                    forgeable-fingerprint trust gap.
+     * @param array<string, list<string>>           $userKeys             Name => that name's allowed fingerprints.
+     *                                                                    Non-empty makes the pairing authoritative:
+     *                                                                    a key listed under alice admits alice only.
+     *                                                                    `['*']` for a name = any key, that name only.
+     *                                                                    Tail position to keep the older positional
+     *                                                                    call sites working.
      */
     public function __construct(
         array $users = [],
         array $keyFingerprints = [],
         $stderr = null,
         ?callable $fingerprintValidator = null,
+        array $userKeys = [],
     ) {
         $this->users                = $users;
         $this->keyFingerprints      = $keyFingerprints;
+        $this->userKeys             = $userKeys;
         $this->stderr               = StreamHelper::openOrValidate($stderr);
         $this->fingerprintValidator = $fingerprintValidator;
     }
@@ -87,12 +135,21 @@ final class Auth implements Middleware
             $this->reject('user not allowed: ' . $this->sanitize($session->user));
             return;
         }
-        if ($this->keyFingerprints !== [] || $this->fingerprintValidator !== null) {
+        if ($this->keyFingerprints !== [] || $this->fingerprintValidator !== null || $this->userKeys !== []) {
             $fp = $this->fingerprint();
             if ($this->keyFingerprints !== []
-                && ($fp === null || !in_array($fp, $this->keyFingerprints, true))
+                && ($fp === null || !$this->listContains($fp, $this->keyFingerprints))
             ) {
                 $this->reject('key not allowed: ' . $this->sanitize($fp ?? '<missing>'));
+                return;
+            }
+            if ($this->userKeys !== [] && !$this->keyBelongsTo($fp, $session->user)) {
+                // Distinct wording: the cross-product gate passed (or was
+                // absent) but the name that owns this key is not the name
+                // that asked. Without a separate reason an operator
+                // reading the log cannot tell the two failures apart.
+                $this->reject('key not paired with the requested user: ' . $this->sanitize($fp ?? '<missing>')
+                    . ' as ' . $this->sanitize($session->user));
                 return;
             }
             // The allowlist only proves the presented (forgeable) value
@@ -106,6 +163,51 @@ final class Auth implements Middleware
             }
         }
         $next($ctx, $session);
+    }
+
+    /**
+     * The `userKeys` pairing gate: the requested name must be in the map
+     * and the presented key must be one of that name's own keys.
+     *
+     * @param string|null $fp    Presented fingerprint, if any
+     * @param string      $user  Name the client asked to log in as
+     */
+    private function keyBelongsTo(?string $fp, string $user): bool
+    {
+        if (!array_key_exists($user, $this->userKeys)) {
+            return false;
+        }
+        $allowed = $this->userKeys[$user];
+        if ($allowed === [self::ANY_KEY]) {
+            // Declared "any key for this name"; the users gate above has
+            // already bounded which names reach here.
+            return true;
+        }
+        return $fp !== null && $this->listContains($fp, $allowed);
+    }
+
+    /**
+     * Constant-work membership test for an allowlist of secrets.
+     *
+     * `in_array()` short-circuits on the first match, so the position of
+     * the winner is measurable; `hash_equals()` additionally compares
+     * without an early byte-difference return. Every entry is visited
+     * regardless of outcome, which is the point.
+     *
+     * @param list<string> $allowed
+     */
+    private function listContains(string $presented, array $allowed): bool
+    {
+        $found = false;
+        foreach ($allowed as $candidate) {
+            if (!is_string($candidate)) {
+                continue;
+            }
+            if (hash_equals($candidate, $presented)) {
+                $found = true;
+            }
+        }
+        return $found;
     }
 
     private function fingerprint(): ?string

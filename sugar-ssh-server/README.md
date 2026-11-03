@@ -176,7 +176,7 @@ ssh wishuser@your-host
 | Middleware           | Transport       | Purpose                                                                                              |
 |----------------------|-----------------|------------------------------------------------------------------------------------------------------|
 | `Logger`             | both            | One-line JSON event at session start + end, with elapsed time and connection meta.                  |
-| `Auth`               | both            | Username allowlist, public-key fingerprint allowlist (or both).                                       |
+| `Auth`               | both            | Username allowlist, key-fingerprint allowlist, or the paired `userKeys` map (name => that name's keys). **The two flat lists are a cross product, not a pairing:** with `users` `['alice','bob']` and `keyFingerprints` `[alice-key, bob-key]`, bob presenting alice's key is admitted *as alice*. Use `userKeys` when the question is whose key this is (`[Auth::ANY_KEY]` = any key, that name only). An empty list arms nothing — `new Auth()` admits every session. |
 | `PasswordAuth`       | both            | Validates user+password against a caller-supplied callback (`SSH_PASSWORD` env var).                 |
 | `CertificateAuth`    | both            | Validates X.509 peer certificate (`SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars).                   |
 | `AuthMethods`        | both            | Declares accepted auth methods; writes `SSH_AUTH_METHODS` banner to STDOUT; stores list in Context. |
@@ -205,6 +205,42 @@ final class HelloBanner implements Middleware
     }
 }
 ```
+
+## Authentication: pairing a key to a name
+
+`Auth` takes three allowlist surfaces, and they answer different
+questions:
+
+```php
+use SugarCraft\SshServer\Middleware\Auth;
+
+// WRONG for a multi-user box: two independent flat lists. Every user
+// listed in `users` may log in with ANY key listed in
+// `keyFingerprints` — bob with alice's key is admitted AS alice.
+new Auth(users: ['alice', 'bob'], keyFingerprints: ['SHA256:aaa', 'SHA256:bbb']);
+
+// RIGHT: the pairing map. Each name owns its own keys, and membership
+// is checked with hash_equals() over the whole list.
+new Auth(userKeys: [
+    'alice' => ['SHA256:aaa'],
+    'bob'   => ['SHA256:bbb'],
+]);
+
+// A name with no key evidence in this process (the host sshd did the
+// crypto and you are only restricting WHO may use the forced command):
+new Auth(userKeys: ['alice' => [Auth::ANY_KEY], 'bob' => ['SHA256:bbb']]);
+```
+
+With `userKeys` non-empty it is authoritative: a name absent from the
+map is refused even if its key appears nowhere, and a key listed under
+someone else never admits you. `users` and `keyFingerprints`, when also
+supplied, apply as *additional* gates — combining surfaces can only
+narrow, never widen.
+
+Every list is opt-in by being non-empty. `new Auth()` — no arguments —
+performs no check at all and admits every session; that is the
+start-simple default, not a deny-by-default gate. See the admin guide
+(`docs/admin/sugar-ssh-server.md`) for the deployment posture.
 
 ## Async middleware
 

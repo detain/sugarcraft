@@ -81,14 +81,15 @@ orthogonal — compose them based on what your deployment needs:
 
 | Middleware | How it authenticates | Env vars read |
 |-----------|---------------------|---------------|
-| `Auth` | Username allowlist + SHA256 key fingerprint allowlist | `SSH_USER_KEY_FINGERPRINT`, `SSH_USER_AUTH`, `KEY_FINGERPRINT` |
+| `Auth` | Username allowlist, key-fingerprint allowlist, or the paired `userKeys` map (name => that name's own keys) | `SSH_USER_KEY_FINGERPRINT`, `SSH_USER_AUTH`, `KEY_FINGERPRINT` |
 | `PasswordAuth` | Caller-supplied `callable(string $user, string $pw): bool` | `SSH_PASSWORD` |
 | `CertificateAuth` | Caller-supplied `callable(string $pemCert, Session $s): bool` | `SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE` |
 | `KeyboardInteractive` | Challenge-response prompts written to STDOUT, responses read from STDIN (RFC 4256) | — |
 | `AuthMethods` | Writes `SSH_AUTH_METHODS <list>` banner to STDOUT; stores list in Context under `auth.methods` for downstream inspection | — |
 
 **`Auth` trust boundary — the fingerprint allowlist is NOT
-cryptographic proof.** Per `src/Middleware/Auth.php` (docblock :36-49):
+cryptographic proof.** Per the class docblock in
+`src/Middleware/Auth.php`:
 the presented key fingerprint is **not verified by this library**. It
 is read from sshd-provided environment metadata (`SSH_USER_KEY_FINGERPRINT`,
 `KEY_FINGERPRINT`, or the `SSH_USER_AUTH` `ExposeAuthInfo` blob), which
@@ -104,6 +105,22 @@ allowlist, so you can verify the key out-of-band (for example against
 your CA or an attestation service) and close the forgeability gap.
 Rejections sanitize the presented value (ANSI/C0-C1 stripped) before
 echoing it to stderr.
+
+**`Auth` pairing — the flat lists are a cross product (audit K4).**
+`users` is compared against the requested name only, and
+`keyFingerprints` against the presented key only; nothing in either list
+says whose key it is. Configuring `users: ['alice','bob']` with
+`keyFingerprints: ['<alice-key>','<bob-key>']` therefore admits **bob
+presenting alice's key, as alice** — a fact no earlier document stated.
+That behaviour is pinned so it cannot change silently
+(`AuthTest::testFlatListsAdmitTheCrossProductThisIsTheAuditedShape`).
+The cure when you need real binding is the fifth argument, `userKeys`: a
+map of name => that name's own fingerprints, checked authoritatively
+(name must be a key of the map; the key must be one of the name's).
+`[Auth::ANY_KEY]` says honestly "any key for this name" (there is no key
+evidence to check, e.g. the host sshd did the crypto). Fingerprint
+membership uses `hash_equals()` across every entry rather than an
+`in_array()` early-out, so list position is not measurable.
 
 **`PasswordAuth` / `SSH_PASSWORD` caveat.** `PasswordAuth` reads the
 password from `SSH_PASSWORD` via `$_SERVER`/`getenv`
