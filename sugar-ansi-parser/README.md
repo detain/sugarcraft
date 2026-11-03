@@ -3,13 +3,32 @@
 > Formerly published as `sugarcraft/candy-ansi` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Ansi\` → `SugarCraft\AnsiParser\`. <!-- @rename-keep -->
 
-`composer require sugarcraft/sugar-ansi-parser`
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-ansi-parser)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-ansi-parser)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
+## Install
+
+```sh
+composer require sugarcraft/sugar-ansi-parser
+```
+
+PHP `^8.3`. `ext-mbstring` is a hard composer requirement; at runtime it is
+consulted only by the `$replaceMalformed = true` UTF-8 mode (see
+[Limits & hostile input](#limits--hostile-input)).
 
 ECMA-48 VT500 ANSI parser state machine — the shared byte-stream interpreter extracted from `sugar-vterm`. Feeds raw bytes through the Paul-Williams state machine, dispatching abstract `Handler` events. Handles partial input naturally; multi-byte UTF-8 runes arrive at the handler as complete **codepoints** (the parser's unit is a rune, not a grapheme cluster — clustering, where a base character plus combining marks must stay together, is the handler's concern).
 
+The lib stops at abstract events: it recognizes bytes and hands them over. Cell grids, screen state, and cluster assembly are **rendering** — that lives in `sugar-vterm` and `sugar-cellbuffer`, not here.
+
 ## Status
 
-🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`sugar-vterm`, `candy-ansi-inspect`, `sugar-quickpick`, `candy-codeshot`, `sugar-pty`, `candy-vcr`). `CsiHandler` covers the **renderer's working CSI set** — CUU/CUD/CUF/CUB, CUP/HVP, SGR, ED/EL, DECSTBM, DECSET/DECRST, TBC, CBT/CHT, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF — deliberately not every ECMA-48 final: HPA (`G`), VPA (`d`), EDCH (`X`), DSR (`n`), SCUSR (`SP q`) and DA (`c`) have no method and `HandlerAdapter` drops them silently. That set is what `sugar-vterm` implements directly instead of forking its own parser. The `src/Codec/` decoders are the canonical extraction home for inspector-grade sequence semantics; `candy-ansi-inspect` already consumes the DCS one — see [Decoders](#decoders-codec). Note that sugar-vterm keeps near-copies of two sink classes (`Vterm\Parser\DebugHandler`, `Vterm\Parser\OscHandlerImpl`); the shared truth here is the state machine and the interfaces, and those copies are a known drift surface.
+🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`sugar-vterm`, `candy-ansi-inspect`, `sugar-quickpick`, `candy-codeshot`, `sugar-pty`, `candy-vcr`). `CsiHandler` covers the **renderer's working CSI set** — CUU/CUD/CUF/CUB, CUP/HVP, SGR, ED/EL, DECSTBM, DECSET/DECRST, TBC, CBT/CHT, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF — deliberately not every ECMA-48 final: HPA (`G`), VPA (`d`), ECH (`X`), DSR (`n`), DECSCUSR (`SP q`) and DA (`c`) have no method. The `HandlerAdapter` that bridges `Handler` events onto `CsiHandler`/`OscHandler` is a deliberate **sieve**: beyond those unmapped finals it also drops the whole ESC family, DCS, SOS/PM/APC payloads, and every execute except HT/LF/CR/BS (BEL, VT, FF, and the C1 band stop there too). Pass the optional third constructor argument — `new HandlerAdapter($csi, $osc, $fallback)` — and a fallback `Handler` recovers everything the sieve did not consume (the SCO-gated `CSI ? s` / `CSI ? u` discard is considered consumed and stays dropped on purpose). OSC 8 accepts both the canonical `8;params;uri` form and the xterm HVP backtick spelling `8;uri` + `` ` ``; a malformed `8;…` payload closes the current link rather than being dropped. That CsiHandler set is what `sugar-vterm` implements directly instead of forking its own parser. The `src/Codec/` decoders are the canonical extraction home for inspector-grade sequence semantics; `candy-ansi-inspect` already consumes the DCS one — see [Decoders](#decoders-codec). Note that sugar-vterm keeps near-copies of two sink classes (`Vterm\Parser\DebugHandler`, `Vterm\Parser\OscHandlerImpl`); the shared truth here is the state machine and the interfaces, and those copies are a known drift surface.
+
+Two implementation paths, both supported: the 7-method `Handler` interface is the implement-anywhere sink (every parser event, nothing interpreted — `DebugHandler` shows the full shape), while renderer-shaped consumers implement `CsiHandler` + `OscHandler` and receive filtered events through `HandlerAdapter`. If you need the full byte-level truth *and* the typed callbacks, wire your own `Handler` and forward to the adapter from it (or forward from the adapter to it as `$fallback`).
 
 ## Quickstart
 
@@ -20,16 +39,23 @@ use SugarCraft\AnsiParser\Parser\DebugHandler;
 $handler = new DebugHandler();
 $parser  = new Parser($handler);
 
-// parseComplete() feeds then guarantees end-of-stream flush so trailing
-// sequences (OSC/DCS/incomplete UTF-8 runes) are not silently lost.
+// parseComplete() feeds then flushes end-of-stream: an in-flight OSC/DCS/
+// SOS/PM/APC string still dispatches with the payload collected so far (and
+// an incomplete UTF-8 rune becomes U+FFFD in $replaceMalformed mode). It
+// cannot recover an in-flight CSI/ESC sequence or a half-read DCS prelude —
+// those end the stream un dispatched (see Limits & hostile input).
 // For streaming/chunked input, use feed() + flush() separately.
 $parser->parseComplete("hello\x1b[31mworld\x1b[0m");
 
-// $handler->log now contains every parse action, each one
+// $handler->log contains every parse action, each one
 // ['type' => ..., 'detail' => ...]; the csi entries are
 // ['type' => 'csi', 'detail' => ['final' => 109, 'params' => [31], 'prefix' => 0, 'intermediate' => 0]]
-// and ['final' => 109, 'params' => [0], ...] respectively — $params is a list<int>.
+// and ['final' => 109, 'params' => [0], ...] respectively — $params is a list<int>
+// in which -1 marks a default (omitted or empty) slot. Finals and prefixes are
+// raw byte values (ord() of the character).
 ```
+
+A fuller walkthrough of every event type lives in [`examples/debug.php`](examples/debug.php).
 
 ## Handler interface
 
@@ -56,7 +82,7 @@ parameters, and `CSI ? 1000 ; 1006 h` sets **two** modes. The parser exposes
 both faithfully:
 
 - `Parser::subparams()` returns, during and after each `csiDispatch` (and
-  `dcsDispatch`), a `list<bool>` aligned with `$params`: `true` at index *i*
+  `dcsDispatch`) until the next `flush()`, a `list<bool>` aligned with `$params`: `true` at index *i*
   when the value at
   *i* was followed by a `:` (the slot continues). A leading `:` marks the
   implicit default at index 0. This follows the original design's `Param.HasMore`
@@ -98,7 +124,13 @@ load-bearing because the transition table is indexed by value):
   `escDispatch()`. `ESC [`/`]`/`P`/`X`/`^`/`_` open the families below.
 - **CsiEntry → CsiParam → CsiIntermediate** — CSI parameters (`;` and `:`
   are param bytes, `< = > ?` are prefixes, 0x20-0x2F intermediates) until the
-  0x40-0x7E final dispatches `csiDispatch()`.
+  0x40-0x7E final dispatches `csiDispatch()`. Slot trivia, disclosed: the
+  prefix and intermediate slots are single bytes that OVERWRITE on repeat —
+  the *first* private prefix byte wins (`CSI ? < 25 h` keeps `?`, the `<`
+  vanishes, and DCS prelude behaves the same), while a repeated intermediate
+  keeps the *last* byte. Once in CsiIntermediate, a digit or another prefix
+  byte (`0x30-0x3F`) drops the **whole sequence** to Ground with no dispatch —
+  reference-table parity, not an accident.
 - **DcsEntry → DcsParam → DcsIntermediate → DcsString** — the DCS prelude,
   then the passthrough payload until ST; `dcsDispatch()` carries the prelude
   fields plus the data.
@@ -123,7 +155,9 @@ sentinel);
 so `ESC \` is a terminator rather than a lost byte; a *different-type* C1
 introducer mid-string discards the stale payload (title-injection bleed
 guard) while a same-type one deliberately keeps it. Bytes with no mapped
-transition follow the `None → Ground` default row and are dropped.
+transition follow the `None → Ground` default row and are dropped — the
+[Limits & hostile input](#limits--hostile-input) section names the exact
+bands this covers (and the C1 band it does *not*: those bytes execute).
 
 ## Limits & hostile input
 
@@ -132,27 +166,45 @@ product:
 
 - **Payload cap:** DCS/OSC/SOS/PM/APC payload stops accumulating at **64 KiB**
   (default; constructor arg 3, `$maxStringBuffer`, raises it by explicit
-  consumer choice — sugar-vterm keeps the default).
+  consumer choice — sugar-vterm keeps the default). The cap is invisible to
+  decoders: past it, `put()` silently stops, so `Codec\Iterm1337` sees a short
+  base64 payload with no truncation marker from the parser itself (its File
+  view reports `payload truncated` when a declared size contradicts what
+  arrived; `Codec\KittyApc` has no size declaration to cross-check and simply
+  describes a short payload as-is). Chunked protocols are the real answer.
 - **Parameter caps:** at most **32 slots**; a `:` or `;` arriving at the cap
   is dropped and following digits merge into the 32nd slot, and each value
   clamps at **65535**. Past the cap the colon-structure flags stay aligned
   with `$params` but grouping stops being faithful.
 - **Single-byte prefix/intermediate slots:** `collect()`/`prefix()` overwrite,
-  so a multi-intermediate CSI (`CSI 0x2F 0x21 m`) keeps only the last byte —
-  a known parity deviation, disclosed here rather than silently lossy.
+  so the *first* prefix byte survives (later ones never reach `prefix()`) and
+  a multi-intermediate CSI (`CSI 0x2F 0x21 m`) keeps only the last byte —
+  known parity deviations, disclosed here rather than silently lossy.
+- **OSC payloads drop internal C0:** bytes 0x00-0x17, 0x19 and 0x1C-0x1F
+  arriving *inside* an OSC string are discarded without entering the payload
+  (reference-table fidelity); a payload can therefore differ from the raw
+  bytes that were sent.
 - **UTF-8 is not validated by default:** with `$replaceMalformed = false`
   (the default, and what sugar-vterm passes), structurally-completed rune
   byte-sequences are forwarded **verbatim** to `printChar()` — overlong,
   surrogate and >U+10FFFF encodings included. A handler relying on the
   interface's "one rune" contract should pass `$replaceMalformed = true`
   (constructor arg 2) for U+FFFD replacement instead; that mode calls
-  `mb_check_encoding()`, so **ext-mbstring** is declared as a requirement.
-  Lone continuation bytes and invalid lead bytes never enter the rune path at
-  all; they follow the default drop row.
+  `mb_check_encoding()` (the lib already requires ext-mbstring via composer
+  regardless, because the flag must work when flipped). What is actually
+  dropped without replacement: lead bytes 0xA0-0xBF, 0xC0, 0xC1 and 0xF5-0xFF,
+  and a partial rune abandoned at end-of-stream. The C1 band 0x80-0x9F is NOT
+  dropped text — those bytes execute as controls or introduce DCS/OSC/PM/APC
+  sequences like anywhere else; lone continuation bytes likewise never become
+  U+FFFD in either mode.
 - **`reset()` is not silent:** it flushes first, so an in-flight
   OSC/DCS/SOS/PM/APC **dispatches** to the handler before state clears. To
   abandon a stream without a dispatch there is none yet; call `reset()`
-  accepting the trailing flush (end-of-stream semantics).
+  accepting the trailing flush (end-of-stream semantics). The flush recovers
+  *string* states only: an in-flight CSI/ESC sequence and a half-read DCS
+  prelude end un dispatched.
+- **`DebugHandler` has no cap:** its public `$log` grows with every byte fed;
+  it is a development mirror, not a production sink.
 
 Test breadth is hand-built edge pins (`ParserOverflowTest`,
 `Utf8PolicyTest`, `DcsTruncationTest` and friends); there is no continuous
@@ -174,17 +226,33 @@ before any terminal label (`describe()`).
 **Consumer status, honestly measured at this release:** `candy-ansi-inspect`
 imports `Codec\Dcs` — its `Inspector::describeDcsParts()` classifies DCS
 through the shared decoder (`Inspector::describeDcs()` remains only as a
-payload-string compatibility shim). The remaining adoption seam is the
-byte-count-only kitty label, which still lives inline in the inspector. The
+payload-string compatibility shim). `Codec\Iterm1337` and `Codec\KittyApc`
+have **zero repo consumers today**: the inspector still inlines its own
+byte-count-only kitty label, and nothing else decodes 1337 payloads. The
 classes are public API and the canonical home for this decoding, and the
 inspect-side adoption is tracked as such.
 
-## Packages
+## Notes for assistive / text-bridge consumers
 
-| Badge | Description |
-|---|---|
-| [![CI](https://github.com/sugarcraft/sugar-ansi-parser/actions/workflows/ci.yml/badge.svg)](https://github.com/sugarcraft/sugar-ansi-parser/actions/workflows/ci.yml) | Unit tests |
-| [![codecov](https://codecov.io/gh/sugarcraft/sugar-ansi-parser/branch/master/graph/badge.svg?flag=sugar-ansi-parser)](https://app.codecov.io/gh/sugarcraft/sugar-ansi-parser) | Coverage |
+If you re-voice or re-mix the event stream (screen-reader bridges, transcript
+generators, plain-text exports):
+
+- `printChar()` delivers **codepoints, not graphemes** — combining marks
+  arrive as separate events after their base. Buffer and cluster with
+  `grapheme_str_split()`/ICU before reading aloud, or every accent is a word.
+- U+FFFD appears **only** in `$replaceMalformed` mode, and only for encodings
+  that completed their byte count yet failed validity; dropped bytes produce
+  *no* character at all, so a reconstructed transcript may be silently
+  shorter than the sender's intent (see Limits above for the exact bands).
+- Hyperlinks pair: an OSC 8 event opens a span and one with an empty URI
+  closes it. Through `HandlerAdapter` a malformed `8;…` (no second `;`, no
+  HVP backtick) closes the current link rather than being dropped; reading
+  the raw `oscDispatch()` stream instead, treat every `8;`-prefixed payload
+  as link-state and end the span on empty/malformed payloads yourself.
+  `OscHandlerImpl` exposes the resolved `hyperlinkUri()`/`hyperlinkId()`.
+- BEL, SO/SI and the C1 band never reach `printable()`/`printChar()` through
+  `HandlerAdapter` — consume the raw `Handler` (or wire it as the adapter's
+  `$fallback`) if those signals matter to your bridge.
 
 ## Credits & inspiration
 
