@@ -473,7 +473,9 @@ final class SugarPanels
         }
         $topPad = \max(0, $topPad);
 
-        // Pre-compute the SGR prefix from the style (render a single-char probe and strip trailing reset).
+        // Pre-compute the SGR prefix from the style: render a single-space probe and
+        // keep ONLY its leading escape runs (the opening SGR), dropping the probed
+        // space and the closing reset the probe exists to carry.
         // Cache per Style OBJECT via the WeakMap (see $sgrPrefixCache) so repeated leaves and
         // frames that reuse the same immutable Style skip the probe render, while a freed
         // style's entry is evicted automatically and never aliases a later style.
@@ -483,11 +485,7 @@ final class SugarPanels
             if ($cached !== null) {
                 $sgrPrefix = $cached;
             } else {
-                $probe = $style->render(' ');
-                // The render output is: SGR-open + ' ' + SGR-close
-                // Split on the sentinel byte (NUL) to isolate the opening SGR.
-                $parts = \explode("\x00", $probe, 2);
-                $sgrPrefix = $parts[0] ?? '';
+                $sgrPrefix = $this->openingSgr($style->render(' '));
                 $this->sgrPrefixCache[$style] = $sgrPrefix;
             }
         }
@@ -514,6 +512,35 @@ final class SugarPanels
             $lineToPlace = $sgrPrefix !== '' ? $sgrPrefix . $line : $line;
             $this->placeLine($lineToPlace, $x + $leftPad, $lineY, $w - $leftPad, $cells);
         }
+    }
+
+    /**
+     * The leading escape runs of a styled render — that is, the opening SGR a
+     * style emits before its first visible byte.
+     *
+     * Used to apply a leaf's Style without paying for the probe character the
+     * style was rendered with: Style::render() emits `SGR-open + body + reset`,
+     * and only the opening run may be prepended to a content line. Consuming
+     * escapes from offset 0 with the same scanner the renderer uses for content
+     * (see {@see escapeAt}) keeps the derivation in step with the escape
+     * vocabulary of the paint path; the first non-escape byte ends the run.
+     */
+    private function openingSgr(string $styled): string
+    {
+        $prefix = '';
+        $offset = 0;
+        $length = \strlen($styled);
+
+        while ($offset < $length && $styled[$offset] === "\x1b") {
+            $escape = $this->escapeAt($styled, $offset);
+            if ($escape === null) {
+                break;
+            }
+            $prefix .= $escape;
+            $offset += \strlen($escape);
+        }
+
+        return $prefix;
     }
 
     /**

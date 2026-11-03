@@ -20,6 +20,20 @@ final class SugarPanelsTest extends TestCase
         $this->panels = SugarPanels::new();
     }
 
+    /**
+     * The leading SGR run of a style, read off its own render of a space.
+     *
+     * Deliberately independent of the renderer's scanner: the probe's body byte
+     * and closing reset are stripped by shape, so a prefix that smuggled either
+     * (the C1 defect) cannot satisfy an assertion built from this helper.
+     */
+    private static function openingSgr(Style $style): string
+    {
+        \preg_match('/^((?:\x1b\[[0-9;]*m)+)/', $style->render(' '), $lead);
+
+        return $lead[1] ?? '';
+    }
+
     public function testNewPanels(): void
     {
         $b = SugarPanels::new();
@@ -587,6 +601,53 @@ final class SugarPanelsTest extends TestCase
 
         // Should contain SGR reset after content
         $this->assertStringContainsString("\x1b[0m", $result, 'Output should contain SGR reset');
+    }
+
+    public function testStyledContentOpensItsStyleOnTheFirstVisibleGlyph(): void
+    {
+        // The opening SGR must ride the content's first grapheme: nothing the
+        // probe render emitted on the host's behalf (its space, its reset) may
+        // reach the painted row, or the content is unstyled and shifted by one.
+        $style = Style::new()->fg(Color::ansi(14));
+        $layout = Node::leaf('test')->withBorder(false)->withStyle($style);
+        $row = \explode("\n", $this->panels->render($layout, 10, 1))[0];
+
+        $this->assertStringStartsWith(self::openingSgr($style) . 'test', $row, 'style opens on the first visible glyph');
+        $this->assertSame(
+            'test',
+            \trim(\preg_replace('/\x1b\[[0-9;]*m/', '', $row)),
+            'no probe space or reset text is painted before the content',
+        );
+    }
+
+    public function testStyledContentKeepsItsExactWidthAtFullFit(): void
+    {
+        // Regression (C1): a style whose prefix carried the probe byte used to
+        // push the last glyph out of an exactly-fitting region.
+        $style = Style::new()->fg(Color::ansi(14));
+        $layout = Node::leaf('abcd')->withBorder(false)->withStyle($style);
+        $row = \explode("\n", $this->panels->render($layout, 4, 1))[0];
+
+        $this->assertSame('abcd', \trim(\preg_replace('/\x1b\[[0-9;]*m/', '', $row)));
+        $this->assertStringStartsWith(self::openingSgr($style), $row);
+        $this->assertStringEndsWith("\x1b[0m", $row, 'the span is closed inside the region');
+    }
+
+    public function testStylePrefixCacheIsServedFromTheOpeningRunOnly(): void
+    {
+        // A resize re-forces the full-frame path while the WeakMap stays warm, so
+        // the second frame is served from the cached prefix. Both frames must open
+        // the style on the first visible glyph — a cached probe byte would show up
+        // as a shifted row here exactly as it does on a cold render.
+        $style = Style::new()->fg(Color::ansi(14));
+        $layout = Node::leaf('x')->withBorder(false)->withStyle($style);
+        $prefix = self::openingSgr($style);
+
+        $cold = \explode("\n", $this->panels->render($layout, 6, 1))[0];
+        $warm = \explode("\n", $this->panels->render($layout, 7, 1))[0];
+
+        $this->assertStringStartsWith($prefix . 'x', $cold);
+        $this->assertStringStartsWith($prefix . 'x', $warm, 'cached prefix carries no probe byte');
     }
 
     public function testMaxWidthClampsContentWidth(): void
