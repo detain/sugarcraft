@@ -57,6 +57,11 @@ final class FlexBox
 
     public function withGap(int $cells): self
     {
+        if ($cells < 0) {
+            throw new \InvalidArgumentException(
+                'Gap must be >= 0 cells; got ' . $cells . '.',
+            );
+        }
         return new self($this->direction, $this->align, $cells, $this->items);
     }
 
@@ -80,29 +85,33 @@ final class FlexBox
      */
     public function render(int $totalWidth, int $totalHeight): string
     {
-        if ($this->items === []) {
+        // Degenerate containers render empty in BOTH directions (one
+        // contract, no row/column polarity split): a non-positive axis leaves
+        // nothing to fit, and the row path's padding math on negative sizes
+        // dropped rows from the FRONT of the column budget instead.
+        if ($this->items === [] || $totalWidth <= 0 || $totalHeight <= 0) {
             return '';
         }
 
-        if ($this->direction === Direction::Row) {
-            return $this->renderRow($totalWidth, $totalHeight);
-        }
-        return $this->renderColumn($totalWidth, $totalHeight);
+        // Exhaustive on Direction: a new case must be handled loudly here
+        // (unlike an if/else, a missing match arm is a fatal, not a silent
+        // fall-through to the column renderer).
+        return match ($this->direction) {
+            Direction::Row    => $this->renderRow($totalWidth, $totalHeight),
+            Direction::Column => $this->renderColumn($totalWidth, $totalHeight),
+        };
     }
 
     private function renderRow(int $totalWidth, int $totalHeight): string
     {
         $items = $this->items;
-        $gap   = $this->gap;
+        $gap   = $this->effectiveGap($totalWidth);
 
-        // Measure each item — pull ratio/basis off the FlexItem so the
-        // array_column lookups below actually find them.
+        // Measure each item on the axes the renderer actually consumes.
         $measured = \array_map(fn(FlexItem $item): array => [
             'item'   => $item,
             'width'  => $this->measureWidth($item),
             'height' => $this->measureHeight($item),
-            'ratio'  => $item->ratio,
-            'basis'  => $item->basis,
         ], $items);
 
         $measured = $this->allocateMainAxis($measured, $totalWidth, $gap);
@@ -149,14 +158,12 @@ final class FlexBox
     private function renderColumn(int $totalWidth, int $totalHeight): string
     {
         $items = $this->items;
-        $gap   = $this->gap;
+        $gap   = $this->effectiveGap($totalHeight);
 
         $measured = \array_map(fn(FlexItem $item): array => [
             'item'   => $item,
             'width'  => $this->measureWidth($item),
             'height' => $this->measureHeight($item),
-            'ratio'  => $item->ratio,
-            'basis'  => $item->basis,
         ], $items);
 
         $measured = $this->allocateMainAxis($measured, $totalHeight, $gap);
@@ -174,7 +181,7 @@ final class FlexBox
                     $lineStr = $this->applyStyle($lineStr, $m['item']->style);
                 }
                 // Cell-based padding: a byte-based str_pad under-padded lines
-                // carrying wide (CJK/emoji) glyphs (docs-fix-1023).
+                // carrying wide (CJK/emoji) glyphs.
                 $resultLines[] = \SugarCraft\Core\Util\Width::padRight($lineStr, $totalWidth);
             }
 
@@ -184,8 +191,11 @@ final class FlexBox
                 $resultLines[] = \str_repeat(' ', $totalWidth);
             }
 
-            // Gap
-            if ($gap > 0) {
+            // Gap BETWEEN items only — same interstice contract renderRow
+            // keeps (: i < count-1). A trailing gap after the last item
+            // wasted budget rows the height clamp then cut from real
+            // content.
+            if ($gap > 0 && $i < \count($measured) - 1) {
                 for ($j = 0; $j < $gap; $j++) {
                     $resultLines[] = \str_repeat(' ', $totalWidth);
                 }
@@ -200,26 +210,53 @@ final class FlexBox
     // -------------------------------------------------------------------------
 
     /**
-     * Main-axis allocation shared by row and column modes — sum contract
-     * (docs-fix-1023).
+     * The gap that is actually renderable: each interstice is capped so the
+     * gaps plus a 1-cell floor for every item still fit the container,
+     * bounding the str_repeat/pad work a huge positive gap could trigger.
+     * (The setter refuses negatives; this only reins in absurd positives.)
      *
-     * Items with a basis take exactly their basis and are excluded from the
-     * flex pool. The remaining flex items (basis == 0, ratio > 0) split the
-     * usable free space by round-robin remainder carry (equivalent sum
-     * contract) of their ratios: a floor base,
-     * then one extra cell each in item order until the leftover runs out.
-     * The floor remainder is below one cell per flex item by construction,
-     * so a single in-order pass always closes the budget: allocated widths
-     * sum to EXACTLY `mainSize - gap*(n-1) - fixedSum`. The previous
-     * round()-then-excess-pass shape lost a whole cell in the common
-     * even-thirds case (3 items with ratio 1 at width 10 rendered 9).
+     * @param int $mainSize Container size along the active direction
+     */
+    private function effectiveGap(int $mainSize): int
+    {
+        $n = \count($this->items);
+        if ($n < 2 || $this->gap === 0) {
+            return 0;
+        }
+        return \min($this->gap, \max(0, \intdiv($mainSize - $n, $n - 1)));
+    }
+
+    /**
+     * Main-axis allocation shared by row and column modes — sum contract.
+     *
+     * Items with a basis take exactly their basis — clamped to the
+     * container's main-axis size, so a mis-typed huge basis cannot storm
+     * memory at render time — and are excluded from the flex pool. Items
+     * with neither basis nor ratio (CSS `flex-grow: 0` siblings) reserve a
+     * 1-cell floor out of the budget and are excluded too. The remaining
+     * flex items (basis == 0, ratio > 0) split the usable free space by
+     * round-robin remainder carry (equivalent sum contract) of their
+     * ratios: a floor base, then one extra cell each in item order until
+     * the leftover runs out. The floor remainder is below one cell per flex
+     * item by construction, so a single in-order pass always closes the
+     * budget: flex allocations sum to EXACTLY
+     * `mainSize - gap*(n-1) - reserved`. The previous round()-then-
+     * excess-pass shape lost a whole cell in the common even-thirds case
+     * (3 items with ratio 1 at width 10 rendered 9).
      *
      * When there is no flex item, or no free space to share, every
      * basis-less item falls back to one cell and the renderer's final
      * truncate/clamp contains the overflow — unchanged legacy behavior.
      *
-     * @param array<int, array{item: FlexItem, width: int, height: int, ratio: int, basis: int}> $measured
-     * @return array<int, array{item: FlexItem, width: int, height: int, ratio: int, basis: int, allocated: int}>
+     * Whatever path an entry takes, it ALWAYS receives an `allocated` key:
+     * the historical write-gap (a ratio<=0/basis<=0 item beside a flex
+     * sibling matched no branch) made row render crash on the unset-key
+     * null reaching alignCell's typed parameter under strict_types, while
+     * column mode rendered the same input with the item's reserved rows
+     * silently missing.
+     *
+     * @param array<int, array{item: FlexItem, width: int, height: int}> $measured
+     * @return array<int, array{item: FlexItem, width: int, height: int, allocated: int}>
      */
     private function allocateMainAxis(array $measured, int $mainSize, int $gap): array
     {
@@ -229,10 +266,14 @@ final class FlexBox
         $fixedSum    = 0;
         foreach ($measured as $i => $m) {
             if ($m['item']->basis > 0) {
-                $measured[$i]['allocated'] = $m['item']->basis;
-                $fixedSum                 += $m['item']->basis;
+                $space                       = \min($m['item']->basis, \max(0, $mainSize));
+                $measured[$i]['allocated']   = $space;
+                $fixedSum                   += $space;
             } elseif ($m['item']->ratio > 0) {
                 $flexIndices[] = $i;
+            } else {
+                $measured[$i]['allocated'] = 1;
+                $fixedSum++;
             }
         }
 

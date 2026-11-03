@@ -17,7 +17,11 @@ final class FlexItem
     /** Relative size ratio — items with higher ratios take more space. */
     public readonly int $ratio;
 
-    /** Fixed basis (0 = fill available space). */
+    /**
+     * Fixed main-axis reservation in cells (row: width, column: height).
+     * 0 means NO fixed reservation — the item then shares free space by
+     * ratio; a positive basis excludes the item from the flex pool.
+     */
     public readonly int $basis;
 
     /** Style applied to this item (ANSI string). */
@@ -45,13 +49,36 @@ final class FlexItem
         return new self($content, $this->ratio, $this->basis, $this->style);
     }
 
+    /**
+     * @param int $ratio Growth weight, >= 0 (mirrors CSS, where a negative
+     *                   flex-grow is invalid). 0 is legal and means "never
+     *                   grow": the item then keeps a 1-cell floor even
+     *                   beside flex siblings.
+     */
     public function withRatio(int $ratio): self
     {
+        if ($ratio < 0) {
+            throw new \InvalidArgumentException(
+                'Ratio must be >= 0; got ' . $ratio . '.',
+            );
+        }
         return new self($this->content, $ratio, $this->basis, $this->style);
     }
 
+    /**
+     * @param int $basis Fixed main-axis reservation in cells, >= 0. A
+     *                   positive basis excludes the item from the flex pool
+     *                   and is clamped to the container size at render
+     *                   time, so an oversized value shrinks instead of
+     *                   storming memory.
+     */
     public function withBasis(int $basis): self
     {
+        if ($basis < 0) {
+            throw new \InvalidArgumentException(
+                'Basis must be >= 0 cells; got ' . $basis . '.',
+            );
+        }
         return new self($this->content, $this->ratio, $basis, $this->style);
     }
 
@@ -61,6 +88,11 @@ final class FlexItem
         return new self($this->content, $this->ratio, $this->basis, $ansiStyle);
     }
 
+    /**
+     * Alias of withBasis(): the fixed main-axis reservation. Named for the
+     * row case — in a column box this same value is the item's HEIGHT in
+     * cells, not its width.
+     */
     public function withWidth(int $width): self
     {
         return $this->withBasis($width);

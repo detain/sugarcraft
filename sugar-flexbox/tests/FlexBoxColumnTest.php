@@ -230,4 +230,37 @@ final class FlexBoxColumnTest extends TestCase
         $lines = \explode("\n", $box->render(10, 10));
         $this->assertCount(10, $lines, 'round-robin remainder carry (equivalent sum contract) must use every row');
     }
+
+    // ---- Column hardening (lib-fixes-1103) ----------------------------------
+
+    public function testZeroRatioItemKeepsFloorInColumnMode(): void
+    {
+        $box = FlexBox::column(
+            FlexItem::new('top')->withRatio(0),
+            FlexItem::new('bottom')->withRatio(1),
+        );
+
+        $lines = \explode("\n", $box->render(10, 4));
+        $this->assertCount(4, $lines);
+        $this->assertStringContainsString('top', $lines[0]);
+        $this->assertStringContainsString('bottom', $lines[1], 'the flex sibling must start at the item floor, not swallow rows');
+    }
+
+    public function testColumnGapOnlyBetweenItems(): void
+    {
+        $box = FlexBox::column(
+            FlexItem::new('A')->withBasis(1),
+            FlexItem::new('B')->withBasis(1),
+        )->withGap(2);
+
+        $lines = \explode("\n", $box->render(10, 5));
+        // A(1) + gap(2) + B(1) = 4 lines. The old shape appended a trailing
+        // gap row after the LAST item, spending a budget row on nothing.
+        $this->assertCount(4, $lines);
+        $this->assertStringContainsString('A', $lines[0]);
+        $this->assertStringContainsString('B', $lines[3]);
+        foreach ($lines as $line) {
+            $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line));
+        }
+    }
 }

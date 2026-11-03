@@ -781,4 +781,73 @@ final class FlexboxTest extends TestCase
             $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line), 'wide-glyph lines must pad by cells, not bytes');
         }
     }
+
+    // ---- Flex hardening (lib-fixes-1103) ------------------------------------
+
+    public function testZeroRatioItemBesideFlexSiblingKeepsItsFloor(): void
+    {
+        $box = FlexBox::row(
+            FlexItem::new('a')->withRatio(0),
+            FlexItem::new('b')->withRatio(1),
+        );
+
+        $lines = \explode("\n", $box->render(10, 1));
+        $this->assertCount(1, $lines);
+        $this->assertStringContainsString('a', $lines[0]);
+        $this->assertStringContainsString('b', $lines[0]);
+        $this->assertSame(10, \SugarCraft\Core\Util\Width::string($lines[0]));
+    }
+
+    public function testNegativeGapIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Gap must be >= 0');
+        FlexBox::row(FlexItem::new('a'))->withGap(-1);
+    }
+
+    public function testHugeGapIsReinedInAtRender(): void
+    {
+        $box = FlexBox::row(FlexItem::new('A'), FlexItem::new('B'))->withGap(PHP_INT_MAX);
+
+        $lines = \explode("\n", $box->render(10, 1));
+        $this->assertCount(1, $lines);
+        $this->assertLessThanOrEqual(10, \SugarCraft\Core\Util\Width::string($lines[0]));
+        $this->assertStringContainsString('A', $lines[0]);
+        $this->assertStringContainsString('B', $lines[0]);
+    }
+
+    public function testNegativeBasisIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Basis must be >= 0');
+        FlexItem::new('x')->withBasis(-5);
+    }
+
+    public function testNegativeRatioIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Ratio must be >= 0');
+        FlexItem::new('x')->withRatio(-1);
+    }
+
+    public function testHugeBasisClampsToContainer(): void
+    {
+        $box = FlexBox::row(
+            FlexItem::new('BIG')->withBasis(200000),
+            FlexItem::new('x')->withRatio(1),
+        );
+
+        $lines = \explode("\n", $box->render(20, 1));
+        $this->assertCount(1, $lines);
+        $this->assertSame(20, \SugarCraft\Core\Util\Width::string($lines[0]), 'a mis-typed huge basis must shrink, not storm memory');
+        $this->assertStringContainsString('BIG', $lines[0]);
+    }
+
+    public function testDegenerateContainerRendersEmptyBothDirections(): void
+    {
+        $this->assertSame('', FlexBox::row(FlexItem::new('a'))->render(10, -1));
+        $this->assertSame('', FlexBox::row(FlexItem::new('a'))->render(-5, 3));
+        $this->assertSame('', FlexBox::column(FlexItem::new('a'))->render(10, -1));
+        $this->assertSame('', FlexBox::column(FlexItem::new('a'))->render(0, 5));
+    }
 }
