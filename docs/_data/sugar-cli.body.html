@@ -1,12 +1,14 @@
-<p class="lede" style="margin-top: 28px;">StatusLine, Banner, Section, Stage, HelpText. Library-only — no Symfony Console requirement. Drop into any Composer project to give CLI output the same look as the rest of the stack.</p>
+<p class="lede" style="margin-top: 28px;">StatusLine, Banner, Section, Stage, HelpText, Frame, Logo — themed CLI presentation, down to a shared width budget. Library-only — no Symfony Console requirement. Drop into any Composer project to give CLI output the same look as the rest of the stack.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-cli</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Cli\{StatusLine, Banner};
+    <pre class="code"><code class="language-php"><?php
 
-echo Banner::title('CandyApp', 'v0.1.0'), "\n\n";
+use SugarCraft\Cli\{StatusLine, Banner};
+
+echo Banner::title('MyApp', 'v0.1.0'), "\n\n";
 echo StatusLine::info   ('connecting to https://example.com'), "\n";
 echo StatusLine::success('done in 0.4s'), "\n";
 echo StatusLine::warn   ('disk almost full'), "\n";
@@ -14,19 +16,22 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>StatusLine</strong><span><code>success</code> / <code>error</code> / <code>warn</code> / <code>info</code> / <code>prompt</code> static helpers — glyph + message styled per the active theme.</span></div>
+      <div class="feature"><strong>StatusLine</strong><span><code>success</code> / <code>error</code> / <code>warn</code> / <code>info</code> / <code>prompt</code> static helpers — themed glyph + space + message. Only the glyph is styled; the message stays plain, and an over-long message is clipped with <code>…</code> to the width budget.</span></div>
       <div class="feature"><strong>Banner</strong><span>Bordered title block with optional subtitle, rounded by default. Useful for app intros / <code>--version</code> output. Title and subtitle are single display lines — embedded escapes, newlines and control bytes are stripped.</span></div>
-      <div class="feature"><strong>Theme</strong><span>Palette of <code>Sprinkles\Style</code> objects keyed by status level. <code>Theme::ansi()</code> ships the colourful palette; <code>Theme::detect()</code> downgrades it to what the output can show via sugar-core's <code>ColorProfile::detect()</code> — no escape bytes when STDOUT is not a tty, colour dropped but bold kept under <code>NO_COLOR</code> on a terminal, full colour under <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code>. Every presenter called without a theme uses <code>Theme::detect()</code>; apply the same downgrade to a preset with <code>withColorProfile()</code>.</span></div>
+      <div class="feature"><strong>Theme</strong><span>Palette of <code>SugarCraft\Style\Style</code> objects keyed by status level. <code>Theme::ansi()</code> ships the colourful palette and <code>Theme::plain()</code> strips it; <code>charm()</code> / <code>dracula()</code> / <code>nord()</code> / <code>catppuccin()</code> are fixed presets, <code>Theme::auto()</code> adapts to the terminal's reported background, and <code>Theme::byName()</code> resolves the roster. <code>Theme::detect()</code> downgrades the palette to what the output can show via sugar-core's <code>ColorProfile::detect()</code> — no escape bytes when STDOUT is not a tty, colour dropped but bold kept under <code>NO_COLOR</code> on a terminal, full colour under <code>CLICOLOR_FORCE</code> / <code>FORCE_COLOR</code>. Every presenter called without a theme uses <code>Theme::detect()</code>; apply the same downgrade to a preset with <code>withColorProfile()</code>.</span></div>
       <div class="feature"><strong>Section</strong><span>One-line themed dividers — <code>header()</code> label + fill rule, bare <code>rule()</code>, indented <code>subHeader()</code>. An explicit width is a hard cap: an over-long label is cut with <code>…</code> rather than overflowing.</span></div>
-      <div class="feature"><strong>Stage</strong><span>Per-line step renderers — numbered <code>step()</code>, <code>subStep()</code>, and <code>subStepWithProgress()</code> (bar or spinner).</span></div>
-      <div class="feature"><strong>HelpText</strong><span>fang-style <code>--help</code> page: <code>USAGE</code>, an optional description, and titled two-column key/description sections. Wraps to <code>width</code> (default 80, <code>null</code> = never wrap): long descriptions continue at the description column, and switch to a stacked layout when the key column leaves fewer than 16 cells.</span></div>
+      <div class="feature"><strong>Stage</strong><span>Per-line step renderers — numbered <code>step()</code>, <code>subStep()</code>, and <code>subStepWithProgress()</code> (bar or spinner; <code>frame:</code> pins the spinner glyph when bytes must be deterministic). Same width budget as StatusLine; tree glyphs and bars are never clipped.</span></div>
+      <div class="feature"><strong>HelpText</strong><span>fang-shaped <code>--help</code> page: <code>USAGE</code> (retitle via <code>usageLabel</code>), an optional description, and titled two-column key/description sections. Wraps to <code>width</code> (terminal width by default, <code>null</code> = never wrap): long descriptions continue at the description column, and switch to a stacked layout when the key column leaves fewer than <code>MIN_DESCRIPTION_WIDTH</code> (16) cells. <code>renderRows()</code> renders a bare grid; <code>renderPage()</code> a pre-composed page.</span></div>
+      <div class="feature"><strong>Frame</strong><span>Full-screen chrome: double-line box, centred title, dividers, status bar — normalised to exactly <code>rows</code> lines, padded ANSI-aware so it never overflows. Titles and body may carry inline SGR; every other escape or control byte is stripped at ingress.</span></div>
+      <div class="feature"><strong>Logo</strong><span>Unicode box-drawing text art — <code>Logo::sugarcraft()</code> preset (70 cells wide) and <code>Logo::fromAscii($art)</code> for custom pages. Control bytes are stripped on ingress; <code>withColor()</code> tints (replaces, idempotent).</span></div>
+      <div class="feature"><strong>AutoWidth</strong><span>The shared <code>int | AutoWidth | null</code> width sentinel: <code>Auto</code> resolves the exported <code>COLUMNS</code> (else 80 cells; implausible values discarded), an <code>int</code> is exact, <code>null</code> means no cap.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-cli">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-cli/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-cli/tree/main/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-cli/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/fang">fang</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
@@ -35,19 +40,19 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>StatusLine</td><td>success(msg, ?theme)</td><td>Render a success line</td></tr>
-<tr><td>StatusLine</td><td>error(msg, ?theme)</td><td>Render an error line</td></tr>
-<tr><td>StatusLine</td><td>warn(msg, ?theme)</td><td>Render a warning line</td></tr>
-<tr><td>StatusLine</td><td>info(msg, ?theme)</td><td>Render an info line</td></tr>
-<tr><td>StatusLine</td><td>prompt(msg, ?theme)</td><td>Render a prompt line</td></tr>
-<tr><td>Banner</td><td>title(title, subtitle = '', ?theme, ?border)</td><td>Bordered title banner (control bytes stripped from caller text)</td></tr>
-<tr><td>Section</td><td>header(label, ?theme, leftPad = 2, ?width = 80, rune = '─')</td><td>Label + fill rule; a non-null width is a hard cap (long labels end in …)</td></tr>
-<tr><td>Section</td><td>rule(?theme, ?width = 80, rune = '─') / subHeader(label, ?theme, indent = 4, ?width = 80, rune = '·')</td><td>Bare divider / indented nested heading</td></tr>
-<tr><td>Stage</td><td>step() / subStep() / subStepWithProgress()</td><td>Numbered step, sub-step, and sub-step with a bar or spinner</td></tr>
-<tr><td>HelpText</td><td>render(usage, sections, description = '', ?theme, ?width = 80)</td><td>Full --help page; wraps to width, null = never wrap, width &lt; 1 throws</td></tr>
-<tr><td>HelpText</td><td>renderRows(rows, ?theme, ?width = 80)</td><td>One two-column block; stacked layout below MIN_DESCRIPTION_WIDTH (16) cells</td></tr>
-<tr><td>Theme</td><td>ansi() / detect(?env, ?stream) / plain()</td><td>Colourful palette / palette downgraded to the stream's ColorProfile / no styling</td></tr>
-<tr><td>Theme</td><td>withColorProfile(ColorProfile $profile)</td><td>Downgrade any theme to a colour profile</td></tr>
+<tr><td>StatusLine</td><td>success(msg, ?theme, width = Auto)</td><td>Render a success line (error/warn/info/prompt are the same shape)</td></tr>
+<tr><td>Banner</td><td>title(title, subtitle = '', ?theme, ?border, ?width)</td><td>Bordered title banner (control bytes stripped from caller text)</td></tr>
+<tr><td>Section</td><td>header(label, ?theme, leftPad = 2, width = Auto, rune = '─')</td><td>Label + fill rule; a non-null width is a hard cap (long labels end in …)</td></tr>
+<tr><td>Section</td><td>rule(?theme, width = Auto, rune = '─') / subHeader(label, ?theme, indent = 4, width = Auto, rune = '·')</td><td>Bare divider / indented nested heading</td></tr>
+<tr><td>Stage</td><td>step(n, total, msg, ?theme, glyph, width = Auto)</td><td>Numbered step line</td></tr>
+<tr><td>Stage</td><td>subStep(msg, ?theme, width = Auto) / subStepWithProgress(msg, done, total, ?theme, width = Auto, ?frame)</td><td>Sub-step, and sub-step with a progress bar (total &gt; 0) or spinner (frame pins the glyph)</td></tr>
+<tr><td>HelpText</td><td>render(usage, sections, description = '', ?theme, width = Auto, usageLabel = 'USAGE')</td><td>Full --help page; wraps to width, null = never wrap, width &lt; 1 throws</td></tr>
+<tr><td>HelpText</td><td>renderRows(rows, ?theme, width = Auto) / renderPage(page, ?width)</td><td>One two-column block (stacked below MIN_DESCRIPTION_WIDTH = 16 cells) / a pre-composed page, never re-wrapped</td></tr>
+<tr><td>Theme</td><td>ansi() / plain() / detect(?env, ?stream) / auto(?msg)</td><td>Colourful palette / no styling / palette downgraded to the stream's ColorProfile / background-adaptive</td></tr>
+<tr><td>Theme</td><td>charm() / dracula() / nord() / catppuccin() / byName(name) / PRESET_NAMES</td><td>Fixed colour presets, the case-insensitive name resolver, and its roster</td></tr>
+<tr><td>Theme</td><td>build() / withColorProfile(ColorProfile $profile)</td><td>Fluent builder (all seven slots required) / downgrade any theme to a colour profile</td></tr>
+<tr><td>Frame</td><td>new() → withTitle(t) / withTitleText(t, style) / withStatus(s) / withBorderStyle(style) → render(body, cols, rows)</td><td>Exactly-rows full-screen box; SGR-preserving ingress sanitation</td></tr>
+<tr><td>Logo</td><td>sugarcraft() / fromAscii(art) / withColor(color) / render()</td><td>Unicode box-drawing art preset / custom page (newlines are the layout) / replaceable tint / styled render</td></tr>
 </table>
   </div>
 </section>
@@ -55,7 +60,7 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">The library's CLI page example rendered as a VHS-recorded GIF. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-cli/.vhs/cli-page.gif" alt="CLI page">

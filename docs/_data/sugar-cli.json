@@ -1,8 +1,8 @@
 {
     "title": "SugarCli — SugarCraft",
-    "description": "SugarCli: Ready-made CLI widgets — status line, banner, section, stage, and help text for terminal apps.",
+    "description": "SugarCli: Ready-made CLI presentation widgets — status line, banner, section header, stage step, help text, full-screen frame, logo art, and stock themes for terminal apps.",
     "ogTitle": "SugarCli — SugarCraft",
-    "ogDescription": "Ready-made CLI widgets — status line, banner, section, stage, and help text for terminal apps.",
+    "ogDescription": "Ready-made CLI presentation widgets — status line, banner, section, stage, help text, frame, logo, and themes for terminal apps.",
     "emoji": "🎁",
     "displayName": "SugarCli",
     "tagline": "CLI presentation helpers",
