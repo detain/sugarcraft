@@ -27,7 +27,7 @@ final class SgrDoorTest extends TestCase
 
     public function testTheDoorAcceptsWellFormedParameterStrings(): void
     {
-        foreach (['1', '31;1', '38;5;196', '38;2;255;0;0', '999;999'] as $ok) {
+        foreach (['1', '31;1', '38;5;196', '38;2;255;0;0', '255', '1;255;38;2;0;0;0'] as $ok) {
             Sgr::assertParameterString($ok, 'style');
         }
         $this->assertTrue(true);
@@ -35,7 +35,7 @@ final class SgrDoorTest extends TestCase
 
     public function testTheDoorRefusesMalformedShapesWithoutEchoingTheValue(): void
     {
-        foreach (['1;;2', ';1', '1;', '9999', '1;2m', "\x1b[31", 'abc'] as $bad) {
+        foreach (['1;;2', ';1', '1;', '9999', '256', '999', '007', '1;2m', "\x1b[31", 'abc'] as $bad) {
             try {
                 Sgr::assertParameterString($bad, 'myProp');
                 $this->fail('door accepted ' . addcslashes($bad, "\x00..\x1f"));

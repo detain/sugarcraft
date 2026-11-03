@@ -31,7 +31,7 @@ final class Sgr
      * @param string      $property human-readable knob name for the message
      *
      * @throws \InvalidArgumentException when $value carries anything but
-     *         1-3 digit codes separated by single ';'
+     *         SGR parameter codes 0..255 separated by single ';'
      */
     public static function assertParameterString(?string $value, string $property): void
     {
@@ -39,11 +39,22 @@ final class Sgr
             return;
         }
 
-        if (\preg_match('/^([0-9]{1,3}(;[0-9]{1,3})*)$/', $value) !== 1) {
-            throw new \InvalidArgumentException(
-                $property . ' must be a bare SGR parameter string: 1-3 digit codes '
-                    . 'separated by ";" (e.g. "1", "1;31", "38;2;255;0;0").'
-            );
+        // Grammar AND value bound in one pass: every ';' separated
+        // parameter must be a plain integer in 0..255 (the SGR coordinate
+        // space). A 1-3 digit grammar alone let 256-999 through the door
+        // only for the renderer to silently ignore them — a knob that
+        // looks accepted but does nothing is what the door exists to
+        // refuse. Leading zeros are refused too ('007' is not what any
+        // emitter writes); the empty string was handled above as "no
+        // style", so an empty segment here means a doubled or trailing
+        // separator, which is equally malformed.
+        foreach (\explode(';', $value) as $segment) {
+            if (\preg_match('/^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$/', $segment) !== 1) {
+                throw new \InvalidArgumentException(
+                    $property . ' must be a bare SGR parameter string: codes 0-255 '
+                        . 'separated by ";" (e.g. "1", "1;31", "38;2;255;0;0").'
+                );
+            }
         }
     }
 }
