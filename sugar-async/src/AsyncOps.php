@@ -253,10 +253,9 @@ final class AsyncOps
      *
      * Extracted from the candy-sql CancellableQuery pattern.
      *
-     * Note: a token reused across many operations accumulates one
-     * (settled-guarded, cheap) closure per registration until it fires;
-     * onCancel() hands back a removal handle for exactly this reason. Prefer
-     * one token per logical operation.
+     * A token reused across many operations does not accumulate: the wrapper
+     * unsubscribes its own registration the moment the operation settles, and
+     * onCancel() hands back a removal handle for consumer code to do the same.
      *
      * @template T
      * @param PromiseInterface<T> $promise  The in-flight operation
@@ -303,7 +302,7 @@ final class AsyncOps
 
         // onCancel fires synchronously when the token is already cancelled,
         // so a pre-cancelled token rejects before the result can land.
-        $token->onCancel(static function () use (&$settled, $abort, $deferred): void {
+        $registration = $token->onCancel(static function () use (&$settled, $abort, $deferred): void {
             if ($settled === true) {
                 return;
             }
@@ -312,13 +311,17 @@ final class AsyncOps
         });
 
         $promise->then(
-            static function (mixed $value) use (&$settled, $deferred): void {
+            static function (mixed $value) use (&$settled, $deferred, $registration): void {
+                // The operation is over; the wrapper's own hold on the token
+                // is released (idempotent) so shared tokens stay clean.
+                $registration->unsubscribe();
                 if ($settled !== true) {
                     $settled = true;
                     $deferred->resolve($value);
                 }
             },
-            static function (\Throwable $e) use (&$settled, $deferred): void {
+            static function (\Throwable $e) use (&$settled, $deferred, $registration): void {
+                $registration->unsubscribe();
                 if ($settled !== true) {
                     $settled = true;
                     $deferred->reject($e);
@@ -462,8 +465,11 @@ final class AsyncOps
         // one token, and a consumer's cancel() stops the whole cycle instead
         // of silently no-opping on a canceller-less Deferred.
         $stop = CancellationSource::new();
+        $mirror = null;
         if ($token !== null) {
-            $token->onCancel(static function () use ($stop): void {
+            // The mirror is dropped as soon as the cycle settles (below), so a
+            // long-lived external token carries no residue per retry.
+            $mirror = $token->onCancel(static function () use ($stop): void {
                 $stop->cancel();
             });
         }
@@ -472,7 +478,7 @@ final class AsyncOps
         // wall-clock steps (NTP corrections, manual date changes) that
         // microtime() happily follows — a backward step used to silently
         // stretch or skip the budget.
-        $clock = $now ?? static fn(): float => hrtime(true) / 1e9;
+        $clock = $now ?? static fn(): float => Clock::monotonicSeconds();
 
         // Convert the relative budget to an absolute cutoff once, so recursive
         // attempts share a single fixed deadline.
@@ -501,8 +507,14 @@ final class AsyncOps
             throw new OperationCancelledException('Async operation cancelled');
         });
         $core->then(
-            static fn (mixed $value) => $outer->resolve($value),
-            static fn (\Throwable $error) => $outer->reject($error),
+            static function (mixed $value) use ($outer, $mirror): void {
+                $mirror?->unsubscribe();
+                $outer->resolve($value);
+            },
+            static function (\Throwable $error) use ($outer, $mirror): void {
+                $mirror?->unsubscribe();
+                $outer->reject($error);
+            },
         );
 
         return $outer->promise();
@@ -534,7 +546,7 @@ final class AsyncOps
         ?float $maxTotalSeconds = null,
     ): PromiseInterface {
         $loop ??= \React\EventLoop\Loop::get();
-        $clock = $now ?? static fn(): float => hrtime(true) / 1e9;
+        $clock = $now ?? static fn(): float => Clock::monotonicSeconds();
 
         if ($token->isCancelled()) {
             return reject(new OperationCancelledException('Retry cancelled before attempt ' . $attempt));
@@ -566,7 +578,7 @@ final class AsyncOps
                 $remainingBudget = $deadline !== null ? $deadline - $clock() : null;
                 if ($remainingBudget !== null && $remainingBudget <= 0.0) {
                     return reject(new TimeoutException(
-                        'Retry budget of ' . self::formatSeconds($maxTotalSeconds ?? 0.0)
+                        'Retry budget of ' . MessageFormat::seconds($maxTotalSeconds ?? 0.0)
                             . ' exhausted after attempt ' . $attempt
                             . ' (last failure: ' . $e->getMessage() . ')',
                         previous: $e,
@@ -653,27 +665,6 @@ final class AsyncOps
         return $backoff + ($backoff * $jitter * $fraction);
     }
 
-    /**
-     * Render a duration for rejection messages: integral seconds print bare
-     * ("5"), fractional ones to at most three decimals with trailing zeros
-     * stripped ("0.05") — never the long float dump a bare concatenation
-     * produces.
-     */
-    private static function formatSeconds(float $seconds): string
-    {
-        if (floor($seconds) === $seconds && abs($seconds) < 1e15) {
-            return (string) (int) $seconds;
-        }
-
-        return rtrim(rtrim(sprintf('%.3F', $seconds), '0'), '.');
-    }
-
-    /** Duration + correct singular/plural unit ("1 second", "0.25 seconds"). */
-    private static function secondsPhrase(float $seconds): string
-    {
-        return self::formatSeconds($seconds) . ($seconds === 1.0 ? ' second' : ' seconds');
-    }
-
     /** Message subject: named when the caller passed a label, generic otherwise. */
     private static function subject(?string $label): string
     {
@@ -682,14 +673,14 @@ final class AsyncOps
 
     private static function timeoutMessage(?string $label, float $seconds): string
     {
-        return self::subject($label) . ' timed out after ' . self::secondsPhrase($seconds);
+        return self::subject($label) . ' timed out after ' . MessageFormat::seconds($seconds) . ' ' . MessageFormat::unit($seconds);
     }
 
     private static function deadlineMessage(?string $label, float $seconds): string
     {
         // "N-second deadline": the bound is a point in time the wait gets
         // (a duration elapses; a deadline is exceeded).
-        return self::subject($label) . ' exceeded its ' . self::formatSeconds($seconds) . '-second deadline';
+        return self::subject($label) . ' exceeded its ' . MessageFormat::seconds($seconds) . '-second deadline';
     }
 
     /**

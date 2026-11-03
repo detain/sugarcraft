@@ -37,7 +37,7 @@ final class CacheStore
     public function __construct(?callable $clock = null)
     {
         $this->clock = $clock === null
-            ? static fn(): float => hrtime(true) / 1e9
+            ? static fn(): float => Clock::monotonicSeconds()
             : \Closure::fromCallable($clock);
         $this->flights = new InFlightMap();
     }

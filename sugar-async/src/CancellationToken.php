@@ -25,6 +25,12 @@ final class CancellationToken
     /** @var bool */
     private bool $callbacksFired;
 
+    /** Shared never-cancelled token (see {@see self::none()}). */
+    private static ?self $never = null;
+
+    /** Eternal tokens are the shared sentinel: never cancellable, never retaining. */
+    private bool $eternal = false;
+
     /**
      * @param CancellationSource $source  Minting authority; deliberately NOT
      *     retained. Cancellation requires a live source handle on the caller
@@ -43,6 +49,27 @@ final class CancellationToken
     }
 
     /**
+     * The shared never-cancelled token.
+     *
+     * For call sites that want the read-side shape without the wire: helpers
+     * can default a missing token to this instead of minting a throwaway
+     * source per call. isCancelled() is always false and onCancel() never
+     * retains (nor ever fires) the callback — the returned handle is born
+     * spent — so handing out none() cannot accumulate registrations on a
+     * process-global object.
+     */
+    public static function none(): self
+    {
+        if (self::$never === null) {
+            $sentinel = new self(CancellationSource::new());
+            $sentinel->eternal = true;
+            self::$never = $sentinel;
+        }
+
+        return self::$never;
+    }
+
+    /**
      * Returns true if the source has been cancelled.
      */
     public function isCancelled(): bool
@@ -56,6 +83,9 @@ final class CancellationToken
      */
     public function notifyCancellation(): void
     {
+        if ($this->eternal === true) {
+            throw new \LogicException('CancellationToken::none() is the shared never-cancelled sentinel and cannot be cancelled');
+        }
         if ($this->cancelled === true) {
             return;
         }
@@ -80,6 +110,11 @@ final class CancellationToken
      */
     public function onCancel(callable $callback): Subscription
     {
+        if ($this->eternal === true) {
+            // The sentinel never fires: nothing is retained and the handle is
+            // born spent, so a caller-wide default needs no cleanup path.
+            return CallbackSubscription::settled();
+        }
         if ($this->cancelled) {
             // Already cancelled — fire immediately; the handle is born spent.
             $callback();
@@ -98,6 +133,9 @@ final class CancellationToken
      */
     public function fireCallbacks(): void
     {
+        if ($this->eternal === true) {
+            throw new \LogicException('CancellationToken::none() is the shared never-cancelled sentinel and has no cancellation to fire');
+        }
         if ($this->callbacksFired === true) {
             return;
         }
