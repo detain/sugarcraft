@@ -38,21 +38,40 @@ use SugarCraft\SshServer\StreamHelper;
  * middleware's failure path. Within a single check the IP bucket is
  * evaluated before the username bucket.
  *
- * **Fail-open vs fail-closed.** If the state file cannot be opened or
- * locked, the limiter cannot make a decision. By default it FAILS OPEN
- * (allows the connection) so a transient filesystem problem does not
- * lock every user out — but it now LOGS the degradation to stderr
- * instead of failing silently. Pass `$failClosed: true` to instead DENY
- * on a state-layer error (a security-conscious deployment that would
- * rather reject than serve un-throttled traffic).
+ * **Fail-open vs fail-closed.** If the state file cannot be opened,
+ * locked or decoded, the limiter cannot make a decision. By default it
+ * FAILS OPEN (allows the connection) so a transient filesystem problem
+ * does not lock every user out — and it ANNOUNCES the degradation on
+ * `$stderr`. Read that announcement for what it is: under
+ * `ForceCommand` the child's stderr is delivered back to the CONNECTING
+ * CLIENT, not to the operator (see {@see \SugarCraft\SshServer\Middleware\Logger}'s
+ * sink note), so the notice deliberately carries no path and no detail
+ * beyond "degraded". Pass `$failClosed: true` to instead DENY on a
+ * state-layer error (a security-conscious deployment that would rather
+ * reject than serve un-throttled traffic).
  *
- * The persistence file is a JSON map of
- * `{ "ip:<host>"|"user:<name>": [tokens, last_ts] }` — `flock(LOCK_EX)`
- * serialises concurrent updates from sibling sshd-spawned processes.
- * It is written 0600 (owner-only) via a temp-file + atomic rename, so a
- * co-tenant can't read who has been connecting. For high-volume
- * deployments swap in Redis (this class is intentionally
- * dependency-light).
+ * **Persistence and locking.** The state file is a JSON map of
+ * `{ "ip:<host>"|"user:<name>": {"tokens":float,"last":float,"burst":int,"rate":float} }`.
+ * The read-decide-write cycle is serialised by an exclusive `flock` on a
+ * STABLE sidecar, `<state-path>.lock`, which is created on demand and
+ * never deleted. The published file itself travels through
+ * {@see AtomicJsonFile}'s temp-file + rename (0600 on the temp inode
+ * before a payload byte is written, so a co-tenant can't read who has
+ * been connecting). The two locks are deliberately different inodes:
+ * locking the PAYLOAD inode and then renaming over it is the bug this
+ * shape fixes — the rename replaces the inode, so a sibling that was
+ * blocked on `flock()` wakes up holding a lock over a file nobody can
+ * any longer reach, while the next newcomer locks the fresh inode
+ * independently and sees a full bucket (audit K2: N parallel connects
+ * each got the whole burst). Sidecar locks survive renames.
+ *
+ * Buckets are PRUNED: any bucket that is not the current session's own
+ * and has refilled back to its burst is dropped when the map is next
+ * persisted. Dropping a full bucket is behaviour-identical to keeping it
+ * ({@see refill()} treats a missing entry as full), so an attacker
+ * cycling source IPs cannot grow this file without bound (audit M4).
+ * For genuinely high-volume deployments swap in Redis (this class is
+ * intentionally dependency-light).
  */
 final class RateLimit implements Middleware
 {
@@ -106,12 +125,13 @@ final class RateLimit implements Middleware
             return;
         }
         $specs = $this->bucketsFor($session);
-        $this->withState(static function (array &$data) use ($specs, $tokens): bool {
+        $this->withState(function (array &$data) use ($specs, $tokens): bool {
             $now = \microtime(true);
             foreach ($specs as [$key, $burst, $rate]) {
                 $current = self::refill($data, $key, $burst, $rate, $now);
-                $data[$key] = ['tokens' => \max(0.0, $current - $tokens), 'last' => $now];
+                $data[$key] = self::entry(\max(0.0, $current - $tokens), $now, $burst, $rate);
             }
+            $this->pruneIdle($data, $specs, $now);
             return true;
         });
     }
@@ -137,7 +157,7 @@ final class RateLimit implements Middleware
     private function take(Session $session): bool
     {
         $specs = $this->bucketsFor($session);
-        return $this->withState(static function (array &$data) use ($specs): bool {
+        return $this->withState(function (array &$data) use ($specs): bool {
             $now      = \microtime(true);
             $refilled = [];
             foreach ($specs as [$key, $burst, $rate]) {
@@ -149,17 +169,94 @@ final class RateLimit implements Middleware
             // vice-versa.
             foreach ($refilled as $tokens) {
                 if ($tokens < 1.0) {
-                    foreach ($refilled as $k => $t) {
-                        $data[$k] = ['tokens' => $t, 'last' => $now];
+                    foreach ($specs as [$key, $burst, $rate]) {
+                        $data[$key] = self::entry($refilled[$key], $now, $burst, $rate);
                     }
+                    $this->pruneIdle($data, $specs, $now);
                     return false;
                 }
             }
-            foreach ($refilled as $key => $tokens) {
-                $data[$key] = ['tokens' => $tokens - 1.0, 'last' => $now];
+            foreach ($specs as [$key, $burst, $rate]) {
+                $data[$key] = self::entry($refilled[$key] - 1.0, $now, $burst, $rate);
             }
+            $this->pruneIdle($data, $specs, $now);
             return true;
         });
+    }
+
+    /**
+     * A persisted bucket: the live token count, the time it was last
+     * touched, and the shape that produced it.
+     *
+     * `burst`/`rate` ride along because {@see pruneIdle()} must be able to
+     * answer "has this bucket refilled?" for a key this process is not
+     * consulting — which is only decidable against the limits that created
+     * it, not the limits some sibling process happens to be configured with.
+     *
+     * @return array{tokens:float,last:float,burst:int,rate:float}
+     */
+    private static function entry(float $tokens, float $now, int $burst, float $rate): array
+    {
+        return ['tokens' => $tokens, 'last' => $now, 'burst' => $burst, 'rate' => $rate];
+    }
+
+    /**
+     * Drop every bucket that is neither of the caller's own buckets nor
+     * still constraining anything.
+     *
+     * A bucket that has refilled to its burst is, by the rule
+     * {@see refill()} applies to absent keys, indistinguishable from a
+     * bucket that was never written: keeping it saves nothing and dropping
+     * it costs nothing. That makes the prune a pure memory-reclamation step
+     * — an attacker cycling source IPs (each minting an `ip:` entry) no
+     * longer grows the state file, and the file's rewrite cost stops
+     * growing with it (audit M4: the 'bounded state' claim was only true
+     * while nobody was looking).
+     *
+     * Entries written by an older build carry no `burst`/`rate`; they are
+     * judged against this process's own limits for their key prefix, which
+     * is exactly how the writer would have configured them in a
+     * single-configuration deployment.
+     *
+     * @param array<string,array{tokens:float,last:float,burst?:int,rate?:float}> $data
+     * @param list<array{0:string,1:int,2:float}>                                 $specs
+     */
+    private function pruneIdle(array &$data, array $specs, float $now): void
+    {
+        $mine = [];
+        foreach ($specs as [$key, $burst, $rate]) {
+            $mine[$key] = true;
+        }
+        foreach ($data as $key => $entry) {
+            if (isset($mine[$key]) || !\is_array($entry)) {
+                continue;
+            }
+            [$burst, $rate] = $this->limitsFor($key, $entry);
+            if (self::refill($data, (string) $key, $burst, $rate, $now) >= (float) $burst) {
+                unset($data[$key]);
+            }
+        }
+    }
+
+    /**
+     * The burst/rate pair to judge an existing bucket against: the pair it
+     * was written with when present, else this process's configured pair for
+     * the key's prefix.
+     *
+     * @param array{tokens?:float,last?:float,burst?:int,rate?:float} $entry
+     *
+     * @return array{0:int,1:float}
+     */
+    private function limitsFor(string $key, array $entry): array
+    {
+        if (isset($entry['burst'], $entry['rate'])
+            && \is_int($entry['burst']) && \is_numeric($entry['rate'])) {
+            return [$entry['burst'], (float) $entry['rate']];
+        }
+        if (\str_starts_with($key, 'user:')) {
+            return [$this->userBurst ?? $this->burst, $this->userRatePerSec ?? $this->ratePerSec];
+        }
+        return [$this->burst, $this->ratePerSec];
     }
 
     /**
@@ -177,50 +274,109 @@ final class RateLimit implements Middleware
     }
 
     /**
-     * Run `$fn` against the persisted bucket map inside an exclusive
-     * lock, then write the (possibly mutated) map back.
+     * Run `$fn` against the persisted bucket map inside an exclusive lock,
+     * then write the (possibly mutated) map back.
      *
      * `$fn` receives the decoded map by reference and returns the
-     * accept/reject decision. On a state-layer error (open/lock failure)
-     * `$fn` never runs and the failClosed policy decides the return
+     * accept/reject decision. On a state-layer error (lock, read or decode
+     * failure) `$fn` never runs and the failClosed policy decides the return
      * value: fail-open returns true (allow), fail-closed returns false
-     * (deny). Either way the degradation is logged to stderr.
+     * (deny). Either way the degradation is announced.
      *
-     * @param callable(array<string,array{tokens:float,last:float}> &): bool $fn
+     * The lock is held across the WHOLE read-decide-publish cycle and rides
+     * a stable sidecar inode — see the class docblock for why the payload
+     * inode cannot.
+     *
+     * @param callable(array<string,array{tokens:float,last:float,burst?:int,rate?:float}> &): bool $fn
      */
     private function withState(callable $fn): bool
     {
-        // @-suppressed: a missing/locked state file is an expected
-        // operational condition handled below, not a programmer error —
-        // and phpunit runs with failOnWarning.
-        $fh = @\fopen($this->statePath, 'c+');
-        if ($fh === false) {
-            return $this->onStateError('cannot open state file: ' . $this->statePath);
+        $lock = $this->acquireLock();
+        if ($lock === false) {
+            return $this->onStateError('cannot open the lock file');
         }
-        if (!\flock($fh, LOCK_EX)) {
-            \fclose($fh);
-            return $this->onStateError('cannot lock state file: ' . $this->statePath);
+        if (!\flock($lock, LOCK_EX)) {
+            $this->releaseLock($lock);
+            return $this->onStateError('cannot take the exclusive lock');
         }
         try {
-            $raw  = \stream_get_contents($fh);
-            $data = \is_string($raw) && $raw !== '' ? \json_decode($raw, true) : [];
-            if (!\is_array($data)) {
-                $data = [];
+            try {
+                $data = $this->store()->read();
+            } catch (\Throwable $e) {
+                // A present-but-corrupt map is LOUD (audit M5): the previous
+                // `json_decode(...) ?: []` turned garbage into a full burst
+                // for everyone, silently. The failClosed policy decides what
+                // a corrupt file means; it is never "start over at full
+                // speed".
+                return $this->onStateError('state file unreadable: ' . \get_class($e));
             }
-            /** @var array<string,array{tokens:float,last:float}> $data */
+            /** @var array<string,array{tokens:float,last:float,burst?:int,rate?:float}> $data */
             $decision = $fn($data);
             $this->writeBack($data);
             return $decision;
         } finally {
-            \flock($fh, LOCK_UN);
-            \fclose($fh);
+            $this->releaseLock($lock);
         }
     }
 
     /**
-     * Log a state-layer degradation and return the fail-open/closed
+     * The store for the configured path. AtomicJsonFile supplies the
+     * missing-file-is-empty read, the loud corrupt read, the 0600-on-temp
+     * write and the publishing rename; this class supplies the lock that
+     * makes the whole decision atomic (and deliberately does NOT let
+     * AtomicJsonFile's own hidden `.<basename>.lock` be the decision lock —
+     * holding it here would self-deadlock the write below, so our sidecar is
+     * a different inode).
+     */
+    private function store(): AtomicJsonFile
+    {
+        return AtomicJsonFile::new($this->statePath);
+    }
+
+    private function lockPath(): string
+    {
+        return $this->statePath . '.lock';
+    }
+
+    /**
+     * @return resource|false  Handle to hold the lock on, false on failure
+     */
+    private function acquireLock()
+    {
+        $path = $this->lockPath();
+        $dir  = \dirname($path);
+        if (!\is_dir($dir) && !@\mkdir($dir, 0700, true) && !\is_dir($dir)) {
+            return false;
+        }
+        // 'cb': create if absent, never truncate — an existing lock keeps
+        // its identity (and its waiters). @-suppressed because an
+        // uncreateable parent directory is an expected operational
+        // condition handled by the caller (and phpunit runs failOnWarning).
+        $fh = @\fopen($path, 'cb');
+        if ($fh === false) {
+            return false;
+        }
+        @\chmod($path, 0600);
+        return $fh;
+    }
+
+    /**
+     * @param resource $handle
+     */
+    private function releaseLock($handle): void
+    {
+        \flock($handle, LOCK_UN);
+        \fclose($handle);
+    }
+
+    /**
+     * Announce a state-layer degradation and return the fail-open/closed
      * decision: allow (true) unless `$failClosed`, in which case deny
      * (false). This replaces the previous silent fail-open.
+     *
+     * Deliberately path-free (audit K3): under `ForceCommand` this stream
+     * reaches the connecting client, and an unauthenticated prober has no
+     * business learning where the bucket map lives.
      */
     private function onStateError(string $why): bool
     {
@@ -235,25 +391,29 @@ final class RateLimit implements Middleware
     }
 
     /**
-     * @param resource                                     $fh
-     * @param array<string,array{tokens:float,last:float}> $data
+     * @param array<string,array{tokens:float,last:float,burst?:int,rate?:float}> $data
      */
     private function writeBack(array $data): void
     {
-        // AtomicJsonFile sets 0600 on the temp inode BEFORE the payload
-        // and before the publishing rename (sugar-core a32c4faae), so the
-        // bucket map — which reveals who has been connecting — is never
-        // briefly world/group readable the way chmod-after-write allowed
-        // (audit LOW-19). The caller's flock on the original handle still
-        // serialises concurrent readers/writers.
+        // AtomicJsonFile sets 0600 on the temp inode BEFORE the payload and
+        // before the publishing rename (sugar-core a32c4faae), so the bucket
+        // map — which reveals who has been connecting — is never briefly
+        // world/group readable the way chmod-after-write allowed (audit
+        // LOW-19). Mutual exclusion is this class's sidecar lock, held by the
+        // caller across the read that produced $data.
         try {
-            AtomicJsonFile::new($this->statePath)
-                ->withPermissions(0600)
-                ->write($data);
-        } catch (\Throwable) {
-            // Best-effort, matching the previous silent early-returns: a
-            // state-write failure must not break the auth decision the
-            // caller already computed.
+            $this->store()->withPermissions(0600)->write($data);
+        } catch (\Throwable $e) {
+            // The auth decision the caller computed stands — but saying
+            // nothing here is how a throttled deployment quietly becomes an
+            // un-throttled one, since the next process never sees this
+            // consumption. Announce it (path-free, same law as
+            // onStateError) instead of muting it.
+            \fwrite(
+                $this->stderr,
+                'Rate limiter could not persist state (this update is lost): '
+                . \get_class($e) . "\n",
+            );
         }
     }
 }

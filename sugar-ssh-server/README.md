@@ -181,7 +181,7 @@ ssh wishuser@your-host
 | `CertificateAuth`    | both            | Validates X.509 peer certificate (`SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars).                   |
 | `AuthMethods`        | both            | Declares accepted auth methods; writes `SSH_AUTH_METHODS` banner to STDOUT; stores list in Context. |
 | `KeyboardInteractive`| both            | Challenge-response — writes prompts to STDOUT, reads responses from STDIN (RFC 4256).                |
-| `RateLimit`          | both            | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.                            |
+| `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialise on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; see `docs/admin/sugar-ssh-server.md`. |
 | `Keepalive`          | InProcess only  | Writes an idle `\0` byte to the PTY master at a configurable interval (reaches the wire only where the tty echoes); under HostSshd it is a no-op — rely on sshd `ClientAliveInterval`. |
 | `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a sugar-pty controlled by the supervisor.                          |
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |

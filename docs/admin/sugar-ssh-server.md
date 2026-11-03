@@ -38,7 +38,7 @@ Under **HostSshdTransport** (legacy, opt-in):
 
 | Path | When | Contents |
 |------|------|----------|
-| Rate-limit state file (your `RateLimit` constructor's `$statePath`) | on each admitted request | JSON token-bucket map, serialised with `flock(LOCK_EX)` across the sibling sshd-spawned processes, rewritten 0600 via temp-file + atomic rename (`AtomicJsonFile`) |
+| Rate-limit state file (your `RateLimit` constructor's `$statePath`) | on each admitted request | JSON token-bucket map keyed `ip:<host>` / `user:<name>`, entries `{tokens, last, burst, rate}`. The read-decide-publish cycle is serialised by an exclusive `flock(LOCK_EX)` taken on a **stable sidecar** `<state-path>.lock`; the payload itself is republished 0600 via temp-file + atomic rename (`AtomicJsonFile`), which is why the lock cannot ride the payload inode (see below). Buckets that have refilled to burst are pruned on each publish. |
 | Logger output (your `Logger` constructor's `$target`; defaults to stderr) | on each session | JSONL one-line events (session start/end, user, client address, elapsed seconds) |
 
 Neither path is written unless the corresponding middleware is registered.
@@ -181,18 +181,35 @@ auth-failure hook drain buckets faster than connection attempts alone.
 - **Ordering law:** register `RateLimit` **before** any
   authentication middleware, or unauthenticated traffic reaches the
   credential checks unthrottled.
-- **Failure posture — fail-open by default:** if the state file
-  cannot be read or locked, the middleware **allows** the request and
-  logs the degradation to stderr. This keeps an unrelated disk/lock
-  incident from locking everyone out, but it means a persistent state
-  failure silently disables throttling. Set `$failClosed = true`
-  (fifth constructor argument) to **deny** on state errors instead —
-  the right choice for high-exposure hubs.
+- **Failure posture — fail-open by default:** if the lock cannot be
+  taken or the state file cannot be read or decoded, the middleware
+  **allows** the request and announces the degradation. This keeps an
+  unrelated disk/lock incident from locking everyone out, but it means
+  a persistent state failure silently disables throttling. Set
+  `$failClosed = true` (fifth constructor argument) to **deny** on
+  state errors instead — the right choice for high-exposure hubs.
+  The announcement goes to the middleware's `$stderr` stream, which is
+  `php://stderr` unless you inject one: under `ForceCommand` that
+  descriptor is the SSH **extended-data** channel, so an unauthenticated
+  prober can read your fail-open decision. The notices name the failure
+  class (lock/decode error) and never the state-file path; point
+  `$stderr` at a real operator sink (see the logging section) on any
+  internet-facing host.
 - The state file is a JSON map keyed `ip:<host>` / `user:<name>`,
-  written 0600 via temp-file + atomic rename under `flock(LOCK_EX)` so
-  sibling sshd-spawned processes share it safely. For high-volume
-  deployments, swap in a shared-store limiter (e.g. Redis-backed) —
-  the flock-per-request model is the documented ceiling.
+  written 0600 via temp-file + atomic rename (`AtomicJsonFile`).
+  Mutual exclusion rides a **stable sidecar** — `flock(LOCK_EX)` is
+  taken on `<state-path>.lock` and held across the whole
+  read-decide-publish cycle — because the payload's own inode is
+  *replaced* by every publish: a lock taken on the payload is a lock on
+  a file that no longer exists at that path, so each sibling sshd-spawned
+  process would serialise with nothing and hand every concurrent connect
+  its full burst (six parallel connects against `burst: 3` all got in
+  before the sidecar existed; the pin in
+  `sugar-ssh-server/tests/Middleware/RateLimitTest.php` holds that
+  number down at three). Keep the state file on a **local** filesystem:
+  `flock` on NFS is advisory at best. For high-volume deployments where
+  one writer per connect is too coarse, swap in a shared-store limiter
+  (e.g. Redis-backed) — the sidecar lock is correct, not fast.
 
 ### Subsystem
 
