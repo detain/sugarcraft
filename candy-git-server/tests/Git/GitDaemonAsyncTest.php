@@ -113,6 +113,10 @@ final class GitDaemonAsyncTest extends TestCase
         $this->assertIsResource($client, "connect failed: {$errstr}");
         \stream_set_blocking($client, false);
         \fwrite($client, "git-upload-pack /test-repo\n");
+        // Half-close after the request line: the delegated `git upload-pack`
+        // child advertises then sees EOF on its stdin and exits, so the pump
+        // releases the client promptly instead of idling to its deadline.
+        \stream_socket_shutdown($client, \STREAM_SHUT_WR);
 
         $response = '';
         $loop->addReadStream($client, static function () use (&$response, $client, $loop): void {

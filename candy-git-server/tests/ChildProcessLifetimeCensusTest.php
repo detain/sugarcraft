@@ -8,7 +8,9 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\GitDaemon;
+use SugarCraft\GitServer\Git\PktLine;
 use SugarCraft\GitServer\Git\StatelessRpc;
+use SugarCraft\GitServer\Git\StdioPipe;
 use SugarCraft\GitServer\Git\UploadPack;
 use SugarCraft\GitServer\HttpSmartProtocol\Server;
 use SugarCraft\GitServer\Repo;
@@ -29,6 +31,7 @@ use SugarCraft\GitServer\User;
  *
  * @covers \SugarCraft\GitServer\Git\GitDaemon
  * @covers \SugarCraft\GitServer\Git\StatelessRpc
+ * @covers \SugarCraft\GitServer\Git\StdioPipe
  * @covers \SugarCraft\GitServer\Git\UploadPack
  * @covers \SugarCraft\GitServer\HttpSmartProtocol\Server
  */
@@ -42,7 +45,7 @@ final class ChildProcessLifetimeCensusTest extends TestCase
 
     /** Every proc_open site the E721 census accounted for, by file. */
     private const SPAWN_SITES_BY_FILE = [
-        'Git/GitDaemon.php' => 2,          // sendPack(), unpackObjects()
+        'Git/StdioPipe.php' => 1,          // run() — the daemon's delegated git child
         'Git/StatelessRpc.php' => 2,       // advertise(), negotiate() (smart-HTTP children)
         'Git/UploadPack.php' => 1,         // sendPack()
         'HttpSmartProtocol/Server.php' => 1, // dormant generatePackData only (r1024/githttp: live children moved to StatelessRpc)
@@ -177,94 +180,77 @@ final class ChildProcessLifetimeCensusTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // GitDaemon::sendPack — normal drain reaps in scope
+    // StdioPipe — the daemon's only git spawn path
     // -------------------------------------------------------------------------
 
-    public function testSendPackReapsItsPackChildWithZeroSurvivors(): void
+    public function testStdioPipeReapsItsGitChildWithZeroSurvivors(): void
     {
-        $repo = $this->createGitRepo('send-pack-reap');
+        $repo = $this->createGitRepo('pipe-reap');
         $head = $repo->refs()['refs/heads/main'] ?? null;
         $this->assertIsString($head);
 
-        $daemon = new GitDaemon($this->config);
-        $socket = \fopen('php://memory', 'r+');
-        $this->assertIsResource($socket);
+        $in = \fopen('php://memory', 'r+');
+        $out = \fopen('php://memory', 'r+');
+        $this->assertIsResource($in);
+        $this->assertIsResource($out);
 
         try {
-            $method = new \ReflectionMethod(GitDaemon::class, 'sendPack');
-            $method->setAccessible(true);
-            $method->invoke($daemon, $socket, $repo, [$head]);
+            // One-shot delegation shape the daemon actually uses: the
+            // child advertises and exits; the empty memory input reaches
+            // feof immediately, so the pump must finish without ever
+            // waiting a deadline.
+            $rc = StdioPipe::run($in, $out, ['git', 'upload-pack', '--advertise-refs', '.'], $repo->path());
 
-            \rewind($socket);
-            $written = (string) \stream_get_contents($socket);
+            \rewind($out);
+            $written = (string) \stream_get_contents($out);
         } finally {
-            if (\is_resource($socket)) {
-                \fclose($socket);
+            if (\is_resource($in)) {
+                \fclose($in);
+            }
+            if (\is_resource($out)) {
+                \fclose($out);
             }
         }
 
-        self::assertStringStartsWith('PACK', $written, 'the real pack-objects child must have streamed its pack');
-        $this->assertNoLiveChildren('after sendPack drained its child');
+        self::assertSame(0, $rc, 'a one-shot advertisement child must exit clean');
+        self::assertStringContainsString("{$head} refs/heads/main", $written, 'advertisement must reach the out stream');
+        self::assertSame('0000', \substr($written, -4), 'advertisement ends with the flush packet');
+        $this->assertNoLiveChildren('after StdioPipe::run drained its child');
     }
 
-    // -------------------------------------------------------------------------
-    // GitDaemon::sendPack — unwinding drain terminates the stalled child
-    // -------------------------------------------------------------------------
-
-    public function testSendPackTerminatesTheChildWhenTheDrainUnwinds(): void
+    public function testStdioPipeTerminatesAWedgedChildOnTheIdleDeadline(): void
     {
-        // Fake git: swallow the wants, emit one chunk, then stall forever.
-        // The real drain would never end; the TypeError thrown by writeRaw
-        // (a stdClass is not a socket) unwinds the finally, which must
-        // terminate the stalled child instead of waiting it out.
-        $this->withFakeGitOnPath(
-            'cat >/dev/null; head -c 4096 /dev/zero; exec sleep ' . self::STALL_SECONDS
-        );
+        // Fake git: consume stdin, produce nothing, then stall forever. A
+        // tight idle deadline must break the pump and the teardown ladder
+        // must TERM/KILL the wedged child instead of reaping into the stall
+        // — the same E721 contract the removed daemon handlers used to pin.
+        $this->withFakeGitOnPath('cat >/dev/null; exec sleep ' . self::STALL_SECONDS);
 
-        $repo = Repo::new('fake', $this->tmpDir . '/repositories');
-        $daemon = new GitDaemon($this->config);
+        // Empty memory stream: feof at once, so the pump's input side is
+        // done and only the stalled child keeps the loop alive.
+        $in = \fopen('php://memory', 'r+');
+        $out = \fopen('php://memory', 'r+');
 
         $start = \hrtime(true);
-        $threw = null;
         try {
-            $method = new \ReflectionMethod(GitDaemon::class, 'sendPack');
-            $method->setAccessible(true);
-            // writeRaw() takes a resource|\Socket; an object forces the TypeError
-            // that simulates any future throwing statement inside the drain.
-            $method->invoke($daemon, new \stdClass(), $repo, [\str_repeat('a', 40)]);
-        } catch (\TypeError $e) {
-            $threw = $e;
+            $rc = StdioPipe::run($in, $out, ['git', 'upload-pack', '.'], $this->tmpDir, '', 0.3, 30.0);
+        } finally {
+            if (\is_resource($in)) {
+                \fclose($in);
+            }
+            if (\is_resource($out)) {
+                \fclose($out);
+            }
         }
         $elapsedSeconds = (\hrtime(true) - $start) / 1e9;
 
-        self::assertNotNull($threw, 'the drain body must still unwind (test premise)');
+        self::assertNotSame(0, $rc, 'a wedged child must not report success');
         self::assertLessThan(
             self::BOUNDED_TEARDOWN_CEILING_SECONDS,
             $elapsedSeconds,
-            'proc_close() waited on the stalled child — the finally did not terminate it (E721)'
+            'the pump waited out the stalled child — no idle break / terminate fired (E721)'
         );
-        $this->assertNoLiveChildren('after the unwinding sendPack teardown');
-    }
-
-    // -------------------------------------------------------------------------
-    // GitDaemon::unpackObjects — index-pack child reaps in scope
-    // -------------------------------------------------------------------------
-
-    public function testUnpackObjectsReapsItsIndexPackChild(): void
-    {
-        $push = $this->buildSelfContainedPack();
-        $dest = $this->tmpDir . '/repositories/unpack-dest';
-        \mkdir($dest, 0755, true);
-        \exec('git -c init.defaultBranch=main init --bare ' . \escapeshellarg($dest) . ' 2>/dev/null');
-
-        $daemon = new GitDaemon($this->config);
-        $method = new \ReflectionMethod(GitDaemon::class, 'unpackObjects');
-        $method->setAccessible(true);
-        /** @var array{0: bool, 1: string} $verdict */
-        $verdict = $method->invoke($daemon, $dest, $push['pack']);
-
-        self::assertTrue($verdict[0], 'index-pack failed: ' . $verdict[1]);
-        $this->assertNoLiveChildren('after unpackObjects reaped index-pack');
+        $this->assertNoLiveChildren('after the wedged-StdioPipe teardown');
     }
 
     // -------------------------------------------------------------------------
@@ -290,7 +276,15 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         $client = \stream_socket_client('tcp://' . (string) $daemon->listenAddress(), $errno, $errstr, 2.0);
         $this->assertIsResource($client, "connect failed: {$errstr}");
         \stream_set_blocking($client, false);
-        \fwrite($client, "git-upload-pack /stop-census\nwant {$head}\ndone\n");
+        // Real wire framing: the pkt request line plus pkt-framed wants,
+        // then a half-close so the delegated `git upload-pack` child sees
+        // EOF and exits after streaming (a bare 'want' line is not what a
+        // git client sends — the daemon parses both shapes for fixtures).
+        \fwrite($client, PktLine::encode("git-upload-pack /stop-census\0host=localhost\0")
+            . PktLine::encode("want {$head}\n")
+            . PktLine::encode("done\n")
+            . PktLine::FLUSH);
+        \stream_socket_shutdown($client, \STREAM_SHUT_WR);
 
         $response = '';
         $loop->addReadStream($client, static function () use (&$response, $client, $loop): void {
@@ -310,9 +304,11 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         $loop->cancelTimer($safety);
         \fclose($client);
 
-        // The request carried a real pack-objects child end to end...
+        // The request drove a real one-shot upload-pack child end to
+        // end: the advertisement is git's own bytes, and the pump's
+        // reap ladder runs before the handler returns...
         self::assertStringContainsString('refs/heads/main', $response);
-        self::assertStringContainsString('PACK', $response);
+        self::assertSame('0000', \substr($response, -4), 'advertisement ends with the flush packet');
         $this->assertNoLiveChildren('after the served request');
 
         // ...and stopping the daemon leaves nothing behind: every reap
