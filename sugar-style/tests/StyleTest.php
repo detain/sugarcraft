@@ -743,6 +743,31 @@ final class StyleTest extends TestCase
         $this->assertStringContainsString("\x1b]8;id=mygroup-1;https://example.com\x1b\\", $out);
     }
 
+    public function testHyperlinkIdCarryingOscParameterDelimitersIsRefused(): void
+    {
+        // OSC 8 fields are ';'-separated and the kitty id= grammar excludes
+        // both ';' and ':'. An id like 'x;file:///evil' would be parsed as
+        // an extra parameter and could relocate the link destination, so
+        // the setter refuses it instead of emitting a redirectable envelope.
+        foreach (['x;file:///evil', 'a:b', ';', ':'] as $hostile) {
+            $this->expectException(\InvalidArgumentException::class);
+            Style::new()->hyperlink('https://example.com', $hostile);
+        }
+    }
+
+    public function testEmptyAndColonFreeHyperlinkIdsAreAccepted(): void
+    {
+        $this->assertStringContainsString(
+            "\x1b]8;id=group-1_2;https://example.com\x1b\\",
+            Style::new()->hyperlink('https://example.com', 'group-1_2')->render('x'),
+        );
+        // The default id stays empty (terminal-side grouping) and works.
+        $this->assertStringContainsString(
+            "\x1b]8;;https://example.com\x1b\\",
+            Style::new()->hyperlink('https://example.com')->render('x'),
+        );
+    }
+
     public function testGetHyperlinkRoundTrips(): void
     {
         $this->assertNull(Style::new()->getHyperlink());
@@ -1129,6 +1154,40 @@ final class StyleTest extends TestCase
         $merged = $base->patch($patcher);
         $this->assertEquals(Color::rgb(255, 0, 0), $merged->getUnderlineColor());
         $this->assertSame(UnderlineStyle::Curly, $merged->getUnderlineStyle());
+    }
+
+    public function testPatchExplicitUnderlineColorClearNeverLeaksTheInheritSentinel(): void
+    {
+        // underlineColor is the one isset-probed slot whose setter takes
+        // null, so it must participate in the skipped-null rule: a patcher
+        // that set-then-cleared the colour must not stamp its sentinel
+        // onto the merged style, or a later inherit() would mistake the
+        // receiver's surviving value for an explicit child-set and refuse
+        // the parent's colour — violating the patch() guarantee that "a
+        // skipped null never leaves a sentinel".
+        $parent = Style::new()->underlineColor(Color::rgb(255, 0, 0));
+
+        $control = Style::new()->bold()
+            ->patch(Style::new()->bold())
+            ->inherit($parent)
+            ->underline(true)
+            ->render('hi');
+        $cleared = Style::new()->bold()
+            ->patch(Style::new()->bold()->underlineColor(Color::rgb(0, 0, 255))->underlineColor(null))
+            ->inherit($parent)
+            ->underline(true)
+            ->render('hi');
+
+        $this->assertStringContainsString("\x1b[58;2;255;0;0m", $control);
+        $this->assertStringContainsString(
+            "\x1b[58;2;255;0;0m",
+            $cleared,
+            'a patch-side explicit null clear leaked its sentinel and blocked the parent underline colour',
+        );
+        // The clear still means "explicitly none" on the style that made it.
+        $this->assertNull(
+            Style::new()->underlineColor(Color::rgb(0, 0, 255))->underlineColor(null)->getUnderlineColor(),
+        );
     }
 
     public function testPatchAppliesPaddingAndMarginCharFromOther(): void

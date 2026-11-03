@@ -16,6 +16,8 @@ return [
     'style.maxwidth_nonneg' => 'maxWidth должен быть >= 0',
     'style.maxheight_nonneg' => 'maxHeight должен быть >= 0',
     'style.tabwidth_nonneg' => 'tabWidth должен быть >= 0',
+    'style.hyperlink_id_delimiter' => 'ИD гиперссылки не должна содержать ";" или ":" (разделители параметров OSC 8)',
+    'style.markup_depth' => 'вложенность разметки превышает {levels} уровней',
     'style.label_nonneg'    => 'значения {label} должны быть >= 0',
     'style.border_toggles_count' => ' side toggles принимают 0, 2 или 4 булевых значения; получено: {count}',
     'style.expand_sides_count'   => '{label}() принимает 1, 2 или 4 целых числа; получено: {count}',

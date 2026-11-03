@@ -541,11 +541,19 @@ final class Style
      *
      * `$id` groups multi-line links so terminals can highlight every
      * line on hover. Empty (default) leaves grouping to the terminal.
+     * The id must not contain `;` or `:`: OSC 8 separates its fields
+     * with `;`, so an id carrying `x;file:///evil` would be parsed as
+     * extra parameters and could relocate the link destination — the
+     * kitty grammar for `id=` excludes both characters. Throws on such
+     * an id rather than emitting a redirectable envelope.
      */
     public function hyperlink(string $url, string $id = ''): self
     {
         if ($url === '') {
             return $this->unsetHyperlink();
+        }
+        if ($id !== '' && (str_contains($id, ';') || str_contains($id, ':'))) {
+            throw new \InvalidArgumentException(Lang::t('style.hyperlink_id_delimiter'));
         }
         return $this->with(
             hyperlink: $url,
@@ -1148,6 +1156,13 @@ final class Style
             'borderBg'   => $mergedBorderBg === null,
             'marginBg'   => $mergedMarginBg === null,
             'transform'  => $mergedTransform === null,
+            // underlineColor is probed through propsSet (it is the only
+            // isset-probed slot whose setter accepts null), so it needs the
+            // same skip: an explicit `underlineColor(null)` on the patcher
+            // must not carry its sentinel over, or a later inherit() would
+            // mistake the receiver's surviving colour for an explicit
+            // child-set and refuse the parent's.
+            'underlineColor' => $mergedUnderlineColor === null,
         ]));
         $newProps = $this->propsSet;
         foreach ($other->propsSet as $p => $v) {

@@ -16,6 +16,8 @@ return [
     'style.maxwidth_nonneg' => 'maxWidth musi być >= 0',
     'style.maxheight_nonneg' => 'maxHeight musi być >= 0',
     'style.tabwidth_nonneg' => 'tabWidth musi być >= 0',
+    'style.hyperlink_id_delimiter' => 'id hiperłącza nie może zawierać ";" ani ":" (separatory parametrów OSC 8)',
+    'style.markup_depth' => 'zagnieżdżenie markupu przekracza {levels} poziomów',
     'style.label_nonneg'    => 'wartości {label} muszą być >= 0',
     'style.border_toggles_count' => 'border() przyjmuje 0, 2 lub 4 wartości logiczne; otrzymano: {count}',
     'style.expand_sides_count'   => '{label}() przyjmuje 1, 2 lub 4 liczby całkowite; otrzymano: {count}',

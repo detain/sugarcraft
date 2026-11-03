@@ -16,6 +16,8 @@ return [
     'style.maxwidth_nonneg' => 'maxWidth deve ser >= 0',
     'style.maxheight_nonneg' => 'maxHeight deve ser >= 0',
     'style.tabwidth_nonneg' => 'tabWidth deve ser >= 0',
+    'style.hyperlink_id_delimiter' => 'o id do hiperlink não deve conter ";" nem ":" (separadores de parâmetros OSC 8)',
+    'style.markup_depth' => 'o aninhamento de marcação excede {levels} níveis',
     'style.label_nonneg'    => 'os valores de {label} devem ser >= 0',
     'style.border_toggles_count' => 'os toggles de lado de border() aceitam 0, 2 ou 4 booleanos; obtido: {count}',
     'style.expand_sides_count'   => '{label}() aceita 1, 2 ou 4 inteiros; obtido: {count}',
