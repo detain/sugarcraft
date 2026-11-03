@@ -26,6 +26,9 @@ final class AsyncOps
      * Wrap a promise with a timeout. If the timeout fires before the
      * promise settles, the returned promise rejects with TimeoutException.
      * The inner promise is NOT cancelled and keeps running to completion.
+     * The wait itself is abandonable: cancel() on the returned promise
+     * releases the timer and rejects with OperationCancelledException —
+     * abandon, not abort (stopping the work is withDeadline()'s contract).
      * When the abandoned work itself must stop — a hung I/O holding its
      * consumer's in-flight gate open forever — use the cancelling sibling
      * {@see withDeadline()} instead.
@@ -44,7 +47,17 @@ final class AsyncOps
             throw new \InvalidArgumentException('Timeout seconds must be positive');
         }
 
-        $deferred = new Deferred();
+        $settled = false;
+        /** @var \React\EventLoop\TimerInterface|null */
+        $timer = null;
+
+        $deferred = new Deferred(static function () use (&$settled, $loop, &$timer): never {
+            $settled = true;
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+            }
+            throw new OperationCancelledException('Async operation cancelled');
+        });
 
         // Arm the timeout BEFORE attaching the settle handlers. react/promise
         // v3 settles an already-settled inner synchronously inside then(), so
@@ -53,7 +66,11 @@ final class AsyncOps
         // full duration. Armed first, the timer is always in hand when the
         // handler runs — pre-settled inners cancel it in the same synchronous
         // pass, and cancelTimer on an already-fired one-shot is a no-op.
-        $timer = $loop->addTimer($seconds, static function () use ($deferred, $seconds): void {
+        $timer = $loop->addTimer($seconds, function () use (&$settled, $deferred, $seconds): void {
+            if ($settled === true) {
+                return; // wait already abandoned or settled — nothing to do
+            }
+            $settled = true;
             $deferred->reject(new TimeoutException(
                 'Operation timed out after ' . $seconds . ' second(s)',
             ));
@@ -61,11 +78,19 @@ final class AsyncOps
 
         // Settle the outer promise when the inner settles.
         $promise->then(
-            function ($value) use ($deferred, $timer, $loop): void {
+            function ($value) use (&$settled, $deferred, $timer, $loop): void {
+                if ($settled === true) {
+                    return; // abandoned or timed out — late results are dropped
+                }
+                $settled = true;
                 $loop->cancelTimer($timer);
                 $deferred->resolve($value);
             },
-            function (\Throwable $reason) use ($deferred, $timer, $loop): void {
+            function (\Throwable $reason) use (&$settled, $deferred, $timer, $loop): void {
+                if ($settled === true) {
+                    return;
+                }
+                $settled = true;
                 $loop->cancelTimer($timer);
                 $deferred->reject($reason);
             },
@@ -100,6 +125,10 @@ final class AsyncOps
      * inner synchronously inside then(), so the handlers must find the timer
      * in hand to cancel it.
      *
+     * Cancel() on the returned promise runs the full deadline teardown —
+     * hook fired, inner cancelled, OperationCancelledException — the wait
+     * ending early is still a wait that must not outlive its work.
+     *
      * @param LoopInterface $loop
      * @param PromiseInterface $promise
      * @param float $seconds  Deadline in seconds (must be > 0)
@@ -118,8 +147,30 @@ final class AsyncOps
             throw new \InvalidArgumentException('Deadline seconds must be positive');
         }
 
-        $deferred = new Deferred();
         $settled = false;
+        /** @var \React\EventLoop\TimerInterface|null */
+        $timer = null;
+
+        $deferred = new Deferred(function () use (&$settled, $loop, &$timer, $promise, $onTimeout): never {
+            $settled = true;
+            if ($timer !== null) {
+                $loop->cancelTimer($timer);
+            }
+            if ($onTimeout !== null) {
+                try {
+                    $onTimeout();
+                } catch (\Throwable) {
+                    // Same law as the deadline path: a failed kill is not the
+                    // caller's truth.
+                }
+            }
+            try {
+                $promise->cancel();
+            } catch (\Throwable) {
+                // The abandonment rejection below stands regardless.
+            }
+            throw new OperationCancelledException('Async operation cancelled');
+        });
 
         $timer = $loop->addTimer($seconds, function () use (&$settled, $deferred, $promise, $seconds, $onTimeout): void {
             if ($settled === true) {
@@ -142,8 +193,13 @@ final class AsyncOps
 
             // Cancel AFTER settling the caller-facing promise: the caller's
             // truth is the timeout, and a driver whose cancel() re-settles the
-            // inner must not reach them through the guards below.
-            $promise->cancel();
+            // inner must not reach them through the guards below. A driver
+            // whose cancel() THROWS must likewise not escape this callback —
+            // it would poison the loop tick for every other watcher.
+            try {
+                $promise->cancel();
+            } catch (\Throwable) {
+            }
         });
 
         $promise->then(
@@ -219,7 +275,13 @@ final class AsyncOps
                     // A failed abort must not mask the cancellation.
                 }
             }
-            $promise->cancel();
+            // A driver's cancel() may explode; the caller's cancellation is
+            // already decided (token path) or is the throw below (wrapper
+            // path), so a failed inner abort must not escape $abort.
+            try {
+                $promise->cancel();
+            } catch (\Throwable) {
+            }
         };
 
         $deferred = new Deferred(static function () use ($abort): never {
@@ -267,6 +329,11 @@ final class AsyncOps
      * Rides the same {@see InFlightMap} mechanism that backs AsyncCache's
      * loader dedupe: the slot is occupied before the worker runs and freed
      * exactly once when it settles.
+     *
+     * The shared flight is deliberately NOT caller-abandonable: every
+     * coalesced caller holds the SAME promise, so one caller's cancel() must
+     * not reject it for the others. If YOUR join must be abandonable, wrap
+     * it — AsyncOps::cancellable($flight, $token).
      *
      * @param callable(...mixed): string $keyFn  Derives the flight key from the call arguments (must not return '')
      * @param callable(...mixed): PromiseInterface $worker  Starts the backing operation
@@ -319,7 +386,12 @@ final class AsyncOps
     }
 
     /**
-     * Retry a callable up to $attempts times with exponential backoff.
+     * Retry a callable $attempts times in total with exponential backoff.
+     *
+     * Cancel() on the returned promise abandons the whole cycle: backoff
+     * timers are released, no further attempt is scheduled, the current
+     * attempt's promise is cancel()ed, and the returned promise rejects with
+     * OperationCancelledException.
      *
      * The attempt cap alone does not bound wall-clock: exponential backoff
      * (2^n) can stretch a bounded attempt count into an unbounded wait, and a
@@ -363,13 +435,48 @@ final class AsyncOps
             throw new \InvalidArgumentException('Jitter must be >= 0');
         }
 
-        $token ??= CancellationSource::new()->token();
+        // One internal stop source drives every cancellation path: the
+        // external token is mirrored into it, every backoff stage watches it,
+        // and abandoning the returned promise fires it. Stages consult exactly
+        // one token, and a consumer's cancel() stops the whole cycle instead
+        // of silently no-opping on a canceller-less Deferred.
+        $stop = CancellationSource::new();
+        if ($token !== null) {
+            $token->onCancel(static function () use ($stop): void {
+                $stop->cancel();
+            });
+        }
 
         // Convert the relative budget to an absolute wall-clock deadline once,
         // so recursive attempts share a single fixed cutoff.
         $deadline = $maxTotalSeconds !== null ? microtime(true) + $maxTotalSeconds : null;
 
-        return self::retryAttempt($operation, $attempts, $baseBackoffSeconds, $token, 1, $loop, $jitter, $deadline);
+        $core = self::retryAttempt(
+            $operation,
+            $attempts,
+            $baseBackoffSeconds,
+            $stop->token(),
+            1,
+            $loop,
+            $jitter,
+            $deadline,
+        );
+
+        $outer = new Deferred(static function () use ($stop, $core): never {
+            $stop->cancel();
+            try {
+                $core->cancel();
+            } catch (\Throwable) {
+                // A driver whose abort explodes still abandons the wait.
+            }
+            throw new OperationCancelledException('Async operation cancelled');
+        });
+        $core->then(
+            static fn (mixed $value) => $outer->resolve($value),
+            static fn (\Throwable $error) => $outer->reject($error),
+        );
+
+        return $outer->promise();
     }
 
     /**
