@@ -17,12 +17,33 @@ namespace SugarCraft\Async;
  *
  * Mirrors RxJS's Subscription group pattern.
  */
-final class Subscriptions implements Subscription
+final class Subscriptions implements Subscription, \Countable
 {
     /** @var list<Subscription> */
     private array $subscriptions = [];
 
     private bool $unsubscribed = false;
+
+    /**
+     * An empty composite, ready to accumulate via add().
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
+    /**
+     * Mint a standalone disposal handle from a cleanup closure — the public
+     * entry point for consumers who need a Subscription without a producer
+     * that hands one out (timers, listeners, temp-file owners). The closure
+     * runs at most once, from unsubscribe().
+     *
+     * @param \Closure(): void $onUnsubscribe
+     */
+    public static function of(\Closure $onUnsubscribe): Subscription
+    {
+        return CallbackSubscription::of($onUnsubscribe);
+    }
 
     /**
      * Compose multiple subscriptions into a single atomic handle.
@@ -84,9 +105,10 @@ final class Subscriptions implements Subscription
     /**
      * Dispose all underlying subscriptions.
      *
-     * A throwing unsubscribe() on one subscription must not leak the rest:
-     * every subscription is disposed, then the FIRST caught exception is
-     * rethrown so the failure still surfaces to the caller.
+     * Disposal must never break a teardown ladder: every subscription is
+     * disposed, and a throwing unsubscribe() on one is logged, not
+     * propagated. This is the same hook-failure contract as
+     * CancellationToken::fireCallbacks() and the AsyncOps abort hooks.
      *
      * @internal
      */
@@ -97,17 +119,12 @@ final class Subscriptions implements Subscription
         $subscriptions = $this->subscriptions;
         $this->subscriptions = [];
 
-        $firstError = null;
         foreach ($subscriptions as $subscription) {
             try {
                 $subscription->unsubscribe();
             } catch (\Throwable $e) {
-                $firstError ??= $e;
+                \error_log('sugar-async: subscription disposal failed: ' . $e->getMessage());
             }
-        }
-
-        if ($firstError !== null) {
-            throw $firstError;
         }
     }
 }

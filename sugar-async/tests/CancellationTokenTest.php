@@ -118,9 +118,10 @@ final class CancellationTokenTest extends TestCase
         $source = CancellationSource::new();
         $token = $source->token();
 
-        // While markCancelled is technically callable (needed by CancellationSource),
-        // the only intended path is via Source::cancel(). Demonstrating that
-        // markCancelled IS on the token but the public API is Source->cancel().
+        // While notifyCancellation is technically callable (needed by
+        // CancellationSource), the only intended path is via Source::cancel().
+        // Demonstrating that notifyCancellation IS on the token but the
+        // public API is Source->cancel().
         $this->assertFalse($source->isCancelled());
         $this->assertFalse($token->isCancelled());
 
@@ -173,7 +174,7 @@ final class CancellationTokenTest extends TestCase
         $this->assertTrue($called);
     }
 
-    public function testMarkCancelledIsIdempotent(): void
+    public function testCancelKeepsCallbacksFiredOnceAcrossRepeatedCalls(): void
     {
         $source = CancellationSource::new();
         $token = $source->token();
@@ -195,12 +196,12 @@ final class CancellationTokenTest extends TestCase
      * Verify that CancellationSource::cancel() properly sets the token's
      * cancelled state. This is the intended public API for triggering
      * cancellation — consumers must use CancellationSource::cancel(), not
-     * bypass it by calling markCancelled() directly on the token.
+     * bypass it by calling notifyCancellation() directly on the token.
      *
-     * The CancellationToken::markCancelled() method is @internal and must
-     * remain accessible to CancellationSource (same package) so that the
-     * source can propagate cancellation into the token. Consumers who
-     * bypass CancellationSource and call markCancelled() directly would
+     * The CancellationToken::notifyCancellation() method is @internal and
+     * must remain accessible to CancellationSource (same package) so that
+     * the source can propagate cancellation into the token. Consumers who
+     * bypass CancellationSource and call notifyCancellation() directly would
      * corrupt token state — this test validates the correct path works.
      */
     public function testCancellationSourceCancelSetsTokenState(): void
@@ -248,19 +249,19 @@ final class CancellationTokenTest extends TestCase
     }
 
     /**
-     * @covers \SugarCraft\Async\CancellationToken::acceptCancellationSource
+     * @covers \SugarCraft\Async\CancellationToken::notifyCancellation
      */
-    public function testAcceptCancellationSourceIsIdempotent(): void
+    public function testNotifyCancellationIsIdempotent(): void
     {
         $source = CancellationSource::new();
         $token = $source->token();
 
-        // Manually trigger acceptCancellationSource (simulating what CancellationSource.cancel() does)
-        $token->acceptCancellationSource();
+        // Manually trigger notifyCancellation (simulating what CancellationSource.cancel() does)
+        $token->notifyCancellation();
 
         // Now simulate calling it again directly on an already-cancelled token
-        // This exercises the early-return guard at line 49
-        $token->acceptCancellationSource();
+        // This exercises the early-return guard
+        $token->notifyCancellation();
 
         // State should still be cancelled (not corrupted)
         $this->assertTrue($token->isCancelled());
@@ -296,7 +297,7 @@ final class CancellationTokenTest extends TestCase
     /**
      * @covers \SugarCraft\Async\CancellationToken::fireCallbacks
      */
-    public function testFireCallbacksPropagatesCallbackException(): void
+    public function testFireCallbacksSwallowsCallbackException(): void
     {
         $source = CancellationSource::new();
         $token = $source->token();
@@ -305,11 +306,12 @@ final class CancellationTokenTest extends TestCase
             throw new \RuntimeException('callback error');
         });
 
-        // Manually trigger fireCallbacks to exercise the exception-throwing path
-        // (avoiding source->cancel() which propagates the exception directly)
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('callback error');
+        // The unified hook contract: a throwing callback is logged, never
+        // propagated — cancel() (and the direct fire path) must not fail the
+        // canceller a second time.
         $token->fireCallbacks();
+
+        $this->assertTrue($token->isCancelled());
     }
 
     /**
@@ -329,19 +331,18 @@ final class CancellationTokenTest extends TestCase
             $order[] = 'second';
         });
 
-        // All callbacks should execute even if one throws
-        // (exception only propagates after all callbacks have run)
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('first error');
+        // Every callback runs and no exception escapes the fire.
         $token->fireCallbacks();
+
+        $this->assertSame(['first', 'second'], $order);
     }
 
     /**
      * Verify that the order of callbacks is preserved and all are called
-     * even when an exception occurs - the exception only propagates after
-     * all callbacks have been invoked.
+     * even when one throws — the throw is logged, not propagated, and the
+     * rest of the ladder still executes.
      */
-    public function testFireCallbacksCallsAllCallbacksBeforeThrowing(): void
+    public function testFireCallbacksRunsEveryCallbackEvenWhenOneThrows(): void
     {
         $source = CancellationSource::new();
         $token = $source->token();
@@ -358,19 +359,17 @@ final class CancellationTokenTest extends TestCase
             $order[] = 'third';
         });
 
-        // All callbacks should run, exception from second propagates
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('second error');
+        // No exception escapes: teardown ladders must run to completion.
         $token->fireCallbacks();
 
-        // All three should have been called despite the exception
+        // All three ran despite the middle throw.
         $this->assertSame(['first', 'second', 'third'], $order);
     }
 
     /**
-     * A1 (lane A3a): firing callbacks WITHOUT the source (the @internal
-     * direct-call path) used to clear the list while isCancelled() stayed
-     * false — an observer desync. Firing now implies cancellation.
+     * Firing callbacks WITHOUT the source (the @internal direct-call path)
+     * used to clear the list while isCancelled() stayed false — an observer
+     * desync. Firing now implies cancellation.
      */
     public function testDirectFireCallbacksLeavesTheTokenCancelled(): void
     {
@@ -402,9 +401,10 @@ final class CancellationTokenTest extends TestCase
 
     public function testLegitimateCancelDetectionSemanticsAreUnchanged(): void
     {
-        // The guard rail for A1: before the source cancels, nothing may
-        // report cancelled — the flag write inside fireCallbacks must not
-        // leak a premature true into untouched flows.
+        // The guard rail for the fire-implies-cancelled law: before the
+        // source cancels, nothing may report cancelled — the flag write
+        // inside fireCallbacks must not leak a premature true into untouched
+        // flows.
         $source = CancellationSource::new();
         $token = $source->token();
 
@@ -417,5 +417,121 @@ final class CancellationTokenTest extends TestCase
         $source->cancel();
         $this->assertTrue($token->isCancelled());
         $this->assertSame([true], $observed, 'callback observes cancelled during a real cancel');
+    }
+
+    public function testUnsubscribeBeforeFireRemovesTheRegistration(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $called = false;
+        $handle = $token->onCancel(function () use (&$called): void {
+            $called = true;
+        });
+
+        $this->assertTrue($handle->isActive());
+        $handle->unsubscribe();
+        $this->assertFalse($handle->isActive());
+
+        $source->cancel();
+        $this->assertFalse($called, 'an unsubscribed callback must never fire');
+    }
+
+    public function testUnsubscribeAfterFireIsANoOp(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $count = 0;
+        $handle = $token->onCancel(function () use (&$count): void {
+            $count++;
+        });
+
+        $source->cancel();
+        $this->assertSame(1, $count);
+
+        $handle->unsubscribe(); // registration already consumed — no error, no re-fire
+        $this->assertSame(1, $count);
+    }
+
+    public function testLateRegistrationOnCancelledTokenReturnsSpentHandle(): void
+    {
+        $source = CancellationSource::new();
+        $token = $source->token();
+        $source->cancel();
+
+        $called = false;
+        $handle = $token->onCancel(function () use (&$called): void {
+            $called = true;
+        });
+
+        $this->assertTrue($called, 'late registration fires immediately');
+        $this->assertFalse($handle->isActive(), 'the handle is born spent — nothing awaits disposal');
+        $handle->unsubscribe(); // no-op
+        $this->assertTrue($called);
+    }
+
+    public function testReentrantRegistrationDuringFireRunsImmediately(): void
+    {
+        // The cancelled flag is raised BEFORE the callback loop, so a
+        // registration made from inside a fired callback sees a cancelled
+        // token and runs at once instead of queueing onto the cleared list.
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $order = [];
+        $token->onCancel(function () use ($token, &$order): void {
+            $order[] = 'outer';
+            $token->onCancel(function () use (&$order): void {
+                $order[] = 'inner';
+            });
+        });
+
+        $source->cancel();
+        $this->assertSame(['outer', 'inner'], $order);
+    }
+
+    public function testUnsubscribedRegistrationsDoNotAccumulate(): void
+    {
+        // The memory-DoS shape: a long-lived token shared across many
+        // short-lived operations. Each operation retires its registration
+        // on settlement, so the pending list stays empty.
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $handles = [];
+        for ($i = 0; $i < 500; $i++) {
+            $handles[] = $token->onCancel(static function (): void {
+            });
+        }
+
+        $callbacks = new \ReflectionProperty($token, 'callbacks');
+        $this->assertCount(500, $callbacks->getValue($token));
+
+        foreach ($handles as $handle) {
+            $handle->unsubscribe();
+        }
+        $this->assertCount(0, $callbacks->getValue($token), 'unsubscribed registrations must leave the list');
+
+        $late = false;
+        $token->onCancel(function () use (&$late): void {
+            $late = true;
+        });
+        $source->cancel();
+        $this->assertTrue($late, 'the surviving registration still fires');
+    }
+
+    public function testSourceAgreesWithDirectTokenFire(): void
+    {
+        // CancellationSource no longer keeps its own flag: the token is the
+        // single source of truth, so even the @internal direct-fire path
+        // keeps source and token in agreement.
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        $token->fireCallbacks();
+
+        $this->assertTrue($token->isCancelled());
+        $this->assertTrue($source->isCancelled(), 'source delegates to the token — no desync');
     }
 }

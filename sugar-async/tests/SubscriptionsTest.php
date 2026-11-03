@@ -132,34 +132,66 @@ final class SubscriptionsTest extends TestCase
 
     public function testDisposeAllDisposesEveryOneEvenWhenFirstThrows(): void
     {
-        // The FIRST subscription throws on unsubscribe. Every subscription must
-        // still be disposed, and the FIRST caught exception must be rethrown
-        // (not the later one, and not swallowed).
+        // The unified hook contract: EVERY subscription is disposed and no
+        // exception escapes — a throwing unsubscribe() is logged, never
+        // propagated, so a teardown ladder cannot be cut short.
         $first = new ThrowingSubscription('first fail');
         $second = new ThrowingSubscription(null);
         $third = new ThrowingSubscription('third fail');
 
         $composite = Subscriptions::compose($first, $second, $third);
 
-        $caught = null;
-        try {
-            $composite->unsubscribe();
-        } catch (\RuntimeException $e) {
-            $caught = $e;
-        }
+        $composite->unsubscribe(); // does not throw
 
         // No subscription leaked despite the first one throwing.
         $this->assertTrue($first->wasUnsubscribed);
         $this->assertTrue($second->wasUnsubscribed);
         $this->assertTrue($third->wasUnsubscribed);
 
-        // The FIRST failure surfaced (later throwers do not mask it).
-        $this->assertInstanceOf(\RuntimeException::class, $caught);
-        $this->assertSame('first fail', $caught->getMessage());
-
         // Composite is still marked disposed / emptied.
         $this->assertFalse($composite->isActive());
         $this->assertSame(0, $composite->count());
+    }
+
+    public function testOfMintsADisposableHandleFromAClosure(): void
+    {
+        // The public mint path: a cleanup closure becomes a Subscription.
+        $runs = 0;
+        $handle = Subscriptions::of(function () use (&$runs): void {
+            $runs++;
+        });
+
+        $this->assertInstanceOf(Subscription::class, $handle);
+        $this->assertTrue($handle->isActive());
+
+        $handle->unsubscribe();
+        $this->assertSame(1, $runs);
+        $this->assertFalse($handle->isActive());
+
+        $handle->unsubscribe(); // idempotent
+        $this->assertSame(1, $runs, 'the cleanup closure must run at most once');
+    }
+
+    public function testNewMintsAnEmptyComposite(): void
+    {
+        $composite = Subscriptions::new();
+        $this->assertSame(0, $composite->count());
+        $this->assertTrue($composite->isActive());
+
+        $member = new TestSubscription();
+        $composite->add($member);
+        $this->assertSame(1, $composite->count());
+
+        $composite->unsubscribe();
+        $this->assertFalse($member->isActive());
+    }
+
+    public function testCompositeIsCountable(): void
+    {
+        $composite = Subscriptions::compose(new TestSubscription(), new TestSubscription());
+
+        $this->assertInstanceOf(\Countable::class, $composite);
+        $this->assertCount(2, $composite);
     }
 }
 

@@ -16,8 +16,6 @@ final class CancellationSource implements Cancellable
 {
     private CancellationToken $token;
 
-    private bool $cancelled = false;
-
     public function __construct()
     {
         $this->token = new CancellationToken($this);
@@ -39,32 +37,38 @@ final class CancellationSource implements Cancellable
         return $this->token;
     }
 
+    /**
+     * The state lives in the token (single source of truth): a cancellation
+     * raised through the token's @internal paths is visible here too, so the
+     * source and its token can never disagree on isCancelled().
+     */
     public function isCancelled(): bool
     {
-        return $this->cancelled;
+        return $this->token->isCancelled();
     }
 
     /**
-     * Requests cancellation. Idempotent \u2014 calling multiple times is a no-op.
+     * Requests cancellation. Idempotent — calling multiple times is a no-op.
      * All callbacks registered on the token fire exactly once, in order.
+     * A throwing callback is logged and never propagates from here.
      */
     public function cancel(): void
     {
-        if ($this->cancelled === true) {
+        if ($this->token->isCancelled() === true) {
             return;
         }
-        $this->cancelled = true;
-        $this->token->acceptCancellationSource();
+        $this->token->notifyCancellation();
     }
 
     /**
      * Register a cancellation callback on this source's token.
      * Part of the Cancellable contract — public, as the README shows.
+     * Returns the removal handle; see CancellationToken::onCancel().
      *
      * @param callable(): void $callback
      */
-    public function onCancel(callable $callback): void
+    public function onCancel(callable $callback): Subscription
     {
-        $this->token->onCancel($callback);
+        return $this->token->onCancel($callback);
     }
 }
