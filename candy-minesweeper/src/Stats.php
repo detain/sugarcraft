@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Minesweeper;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Immutable stats tracker for minesweeper games.
  *
@@ -11,6 +13,8 @@ namespace SugarCraft\Minesweeper;
  */
 final class Stats
 {
+    use Mutable;
+
     public function __construct(
         public readonly int $easyGames = 0,
         public readonly int $easyWins = 0,
@@ -26,66 +30,28 @@ final class Stats
         public readonly ?int $expertBest = null,
     ) {}
 
+    /**
+     * Fold one finished game into the tally for its preset bucket.
+     *
+     * The three per-difficulty fields (games/wins/best) are addressed by a
+     * name prefix, so all four presets share a single mutate() path (M10) —
+     * the previous per-case duplication had twelve untouched-field copies to
+     * drift. Fields for the other three presets ride get_object_vars carry.
+     */
     public function withGame(Difficulty $d, bool $won, ?int $time): self
     {
-        return match ($d) {
-            Difficulty::EASY   => new self(
-                easyGames: $this->easyGames + 1,
-                easyWins: $this->easyWins + ($won ? 1 : 0),
-                easyBest: $this->minTime($this->easyBest, $won ? $time : null),
-                standardGames: $this->standardGames,
-                standardWins: $this->standardWins,
-                standardBest: $this->standardBest,
-                mediumGames: $this->mediumGames,
-                mediumWins: $this->mediumWins,
-                mediumBest: $this->mediumBest,
-                expertGames: $this->expertGames,
-                expertWins: $this->expertWins,
-                expertBest: $this->expertBest,
-            ),
-            Difficulty::STANDARD => new self(
-                easyGames: $this->easyGames,
-                easyWins: $this->easyWins,
-                easyBest: $this->easyBest,
-                standardGames: $this->standardGames + 1,
-                standardWins: $this->standardWins + ($won ? 1 : 0),
-                standardBest: $this->minTime($this->standardBest, $won ? $time : null),
-                mediumGames: $this->mediumGames,
-                mediumWins: $this->mediumWins,
-                mediumBest: $this->mediumBest,
-                expertGames: $this->expertGames,
-                expertWins: $this->expertWins,
-                expertBest: $this->expertBest,
-            ),
-            Difficulty::MEDIUM => new self(
-                easyGames: $this->easyGames,
-                easyWins: $this->easyWins,
-                easyBest: $this->easyBest,
-                standardGames: $this->standardGames,
-                standardWins: $this->standardWins,
-                standardBest: $this->standardBest,
-                mediumGames: $this->mediumGames + 1,
-                mediumWins: $this->mediumWins + ($won ? 1 : 0),
-                mediumBest: $this->minTime($this->mediumBest, $won ? $time : null),
-                expertGames: $this->expertGames,
-                expertWins: $this->expertWins,
-                expertBest: $this->expertBest,
-            ),
-            Difficulty::EXPERT => new self(
-                easyGames: $this->easyGames,
-                easyWins: $this->easyWins,
-                easyBest: $this->easyBest,
-                standardGames: $this->standardGames,
-                standardWins: $this->standardWins,
-                standardBest: $this->standardBest,
-                mediumGames: $this->mediumGames,
-                mediumWins: $this->mediumWins,
-                mediumBest: $this->mediumBest,
-                expertGames: $this->expertGames + 1,
-                expertWins: $this->expertWins + ($won ? 1 : 0),
-                expertBest: $this->minTime($this->expertBest, $won ? $time : null),
-            ),
+        $p = match ($d) {
+            Difficulty::EASY     => 'easy',
+            Difficulty::STANDARD => 'standard',
+            Difficulty::MEDIUM   => 'medium',
+            Difficulty::EXPERT   => 'expert',
         };
+
+        return $this->mutate([
+            $p . 'Games' => $this->gamesPlayed($d) + 1,
+            $p . 'Wins'  => $this->wins($d) + ($won ? 1 : 0),
+            $p . 'Best'  => $this->minTime($this->bestTime($d), $won ? $time : null),
+        ]);
     }
 
     private function minTime(?int $existing, ?int $new): ?int

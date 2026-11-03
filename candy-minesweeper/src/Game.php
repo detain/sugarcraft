@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Minesweeper;
 
 use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Model;
@@ -35,6 +36,8 @@ use SugarCraft\Minesweeper\Stats\DifficultyStats;
  */
 final class Game implements Model
 {
+    use Mutable;
+
     /**
      * Version tag of the savegame envelope (the inner board payload carries
      * its own {@see Board::serialize()} version — both must match on read
@@ -160,10 +163,13 @@ final class Game implements Model
         if ($msg->type === KeyType::Char && $msg->rune === 'r') {
             // Restart carries the accumulated stats + persistence path forward so
             // a session's tally survives replays.
-            return [self::withCustom(
-                $this->board->width, $this->board->height, $this->board->mineCount,
-                $this->rand, $this->stats, $this->statsPath,
-            ), null];
+            return [$this->mutate([
+                'board'          => Board::blank($this->board->width, $this->board->height, $this->board->mineCount),
+                'cursorX'        => 0,
+                'cursorY'        => 0,
+                'startedAt'      => null,
+                'elapsedSeconds' => null,
+            ]), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'L') {
             // Load deliberately sits ABOVE the over-gate: the point of loading
@@ -337,22 +343,19 @@ final class Game implements Model
             return $this;
         }
         $over = $board->exploded || $board->isWon();
-        return new self(
-            board: $board,
-            cursorX: max(0, min($board->width  - 1, $cursorX)),
-            cursorY: max(0, min($board->height - 1, $cursorY)),
-            rand: $this->rand,
+        return $this->mutate([
+            'board'   => $board,
+            'cursorX' => max(0, min($board->width  - 1, $cursorX)),
+            'cursorY' => max(0, min($board->height - 1, $cursorY)),
             // Re-anchor the wall clock so elapsed() continues from the
             // saved reading; a save taken before the first reveal carries
             // elapsed null and stays a clock-not-started game. A board
             // that loads already OVER (a crafted finished save) keeps the
             // saved seconds as its frozen final time instead of reporting
             // a running clock from a re-anchored start.
-            startedAt: $over ? null : ($elapsed !== null ? microtime(true) - (float) $elapsed : null),
-            elapsedSeconds: $over && $elapsed !== null ? (int) $elapsed : null,
-            stats: $this->stats,
-            statsPath: $this->statsPath,
-        );
+            'startedAt'      => $over ? null : ($elapsed !== null ? microtime(true) - (float) $elapsed : null),
+            'elapsedSeconds' => $over && $elapsed !== null ? (int) $elapsed : null,
+        ]);
     }
 
     public function view(): string
@@ -362,16 +365,10 @@ final class Game implements Model
 
     private function moveCursor(int $dx, int $dy): self
     {
-        return new self(
-            board: $this->board,
-            cursorX: max(0, min($this->board->width  - 1, $this->cursorX + $dx)),
-            cursorY: max(0, min($this->board->height - 1, $this->cursorY + $dy)),
-            rand: $this->rand,
-            startedAt: $this->startedAt,
-            elapsedSeconds: $this->elapsedSeconds,
-            stats: $this->stats,
-            statsPath: $this->statsPath,
-        );
+        return $this->mutate([
+            'cursorX' => max(0, min($this->board->width  - 1, $this->cursorX + $dx)),
+            'cursorY' => max(0, min($this->board->height - 1, $this->cursorY + $dy)),
+        ]);
     }
 
     private function reveal(): self
@@ -384,30 +381,18 @@ final class Game implements Model
         if ($board === $this->board) {
             return $this;
         }
-        return new self(
-            board: $board,
-            cursorX: $this->cursorX,
-            cursorY: $this->cursorY,
-            rand: $this->rand,
-            startedAt: $this->startedAt ?? microtime(true),
-            elapsedSeconds: null,
-            stats: $this->stats,
-            statsPath: $this->statsPath,
-        );
+        return $this->mutate([
+            'board'          => $board,
+            'startedAt'      => $this->startedAt ?? microtime(true),
+            'elapsedSeconds' => null,
+        ]);
     }
 
     private function flag(): self
     {
-        return new self(
-            board: $this->board->toggleFlag($this->cursorX, $this->cursorY),
-            cursorX: $this->cursorX,
-            cursorY: $this->cursorY,
-            rand: $this->rand,
-            startedAt: $this->startedAt,
-            elapsedSeconds: $this->elapsedSeconds,
-            stats: $this->stats,
-            statsPath: $this->statsPath,
-        );
+        return $this->mutate([
+            'board' => $this->board->toggleFlag($this->cursorX, $this->cursorY),
+        ]);
     }
 
     private function chord(): self
@@ -419,16 +404,11 @@ final class Game implements Model
         if ($board === $this->board) {
             return $this;
         }
-        return new self(
-            board: $board,
-            cursorX: $this->cursorX,
-            cursorY: $this->cursorY,
-            rand: $this->rand,
-            startedAt: $this->startedAt ?? microtime(true),
-            elapsedSeconds: null,
-            stats: $this->stats,
-            statsPath: $this->statsPath,
-        );
+        return $this->mutate([
+            'board'          => $board,
+            'startedAt'      => $this->startedAt ?? microtime(true),
+            'elapsedSeconds' => null,
+        ]);
     }
 
     /**
@@ -477,30 +457,22 @@ final class Game implements Model
         if ($board === $this->board) {
             return $this;
         }
-        return new self(
-            board: $board,
-            cursorX: $x,
-            cursorY: $y,
-            rand: $this->rand,
-            startedAt: $this->startedAt ?? microtime(true),
-            elapsedSeconds: null,
-            stats: $this->stats,
-            statsPath: $this->statsPath,
-        );
+        return $this->mutate([
+            'board'          => $board,
+            'cursorX'        => $x,
+            'cursorY'        => $y,
+            'startedAt'      => $this->startedAt ?? microtime(true),
+            'elapsedSeconds' => null,
+        ]);
     }
 
     private function flagAt(int $x, int $y): self
     {
-        return new self(
-            board: $this->board->toggleFlag($x, $y),
-            cursorX: $x,
-            cursorY: $y,
-            rand: $this->rand,
-            startedAt: $this->startedAt,
-            elapsedSeconds: $this->elapsedSeconds,
-            stats: $this->stats,
-            statsPath: $this->statsPath,
-        );
+        return $this->mutate([
+            'board'   => $this->board->toggleFlag($x, $y),
+            'cursorX' => $x,
+            'cursorY' => $y,
+        ]);
     }
 
     private function chordAt(int $x, int $y): self
@@ -510,16 +482,13 @@ final class Game implements Model
         if ($board === $this->board) {
             return $this;
         }
-        return new self(
-            board: $board,
-            cursorX: $x,
-            cursorY: $y,
-            rand: $this->rand,
-            startedAt: $this->startedAt ?? microtime(true),
-            elapsedSeconds: null,
-            stats: $this->stats,
-            statsPath: $this->statsPath,
-        );
+        return $this->mutate([
+            'board'          => $board,
+            'cursorX'        => $x,
+            'cursorY'        => $y,
+            'startedAt'      => $this->startedAt ?? microtime(true),
+            'elapsedSeconds' => null,
+        ]);
     }
 
     /**
@@ -561,28 +530,15 @@ final class Game implements Model
             // result under) — but the end-of-game clock must still freeze.
             // Without this, elapsed() falls through to null once the board
             // is over and a finished custom game has no final time at all.
-            return new self(
-                board: $this->board,
-                cursorX: $this->cursorX,
-                cursorY: $this->cursorY,
-                rand: $this->rand,
-                startedAt: $this->startedAt,
-                elapsedSeconds: $elapsed !== null ? (int) $elapsed : null,
-                stats: $this->stats,
-                statsPath: $this->statsPath,
-            );
+            return $this->mutate([
+                'elapsedSeconds' => $elapsed !== null ? (int) $elapsed : null,
+            ]);
         }
         $won = $this->board->isWon();
-        return new self(
-            board: $this->board,
-            cursorX: $this->cursorX,
-            cursorY: $this->cursorY,
-            rand: $this->rand,
-            startedAt: $this->startedAt,
-            elapsedSeconds: $elapsed !== null ? (int) $elapsed : null,
-            stats: $this->stats()->withGame($difficulty, $won, $elapsed !== null ? (int) $elapsed : null),
-            statsPath: $this->statsPath,
-        );
+        return $this->mutate([
+            'elapsedSeconds' => $elapsed !== null ? (int) $elapsed : null,
+            'stats'          => $this->stats()->withGame($difficulty, $won, $elapsed !== null ? (int) $elapsed : null),
+        ]);
     }
 
     /**
