@@ -222,4 +222,104 @@ final class TableRendererTest extends TestCase
         $frame3 = $renderer->render($t->withCursorStyle('38;2;0;0;255'));
         $this->assertSame('', trim($frame3), 'an unchanged frame must stay silent');
     }
+
+    // ---- style attribution correctness (byte-vs-cluster + accumulation) --
+
+    /** @return \SugarCraft\CellBuffer\Buffer */
+    private function gridFrom(string $line, int $w, int $h): object
+    {
+        $m = new \ReflectionMethod(TableRenderer::class, 'bufferFromOutput');
+        $m->setAccessible(true);
+        return $m->invoke(new TableRenderer(), $line, $w, $h);
+    }
+
+    public function testStyleAttributionIsPerClusterNotPerByte(): void
+    {
+        // The shipped default separator ' │ ' is 3 bytes for 1 cell. The old
+        // byte-keyed map shifted every style lookup two cells right of it,
+        // so recoloring the second column produced an EMPTY delta — the
+        // change never landed on a live session.
+        $plain = Table::new()
+            ->addColumn(Column::new('L', 4))
+            ->addColumn(Column::new('R', 4))
+            ->addRow(['aa', 'bb']);
+        $restyled = Table::new()
+            ->addColumn(Column::new('L', 4))
+            ->addColumn(Column::new('R', 4)->withStyle('31'))
+            ->addRow(['aa', 'bb']);
+
+        $renderer = new TableRenderer();
+        $renderer->render($plain);
+        $delta = $renderer->render($restyled);
+        $this->assertNotSame('', \trim($delta), 'column restyle must emit ops across the wide separator');
+
+        // ASCII separator control: byte == cluster, always worked.
+        $renderer2 = new TableRenderer();
+        $renderer2->render($plain->withSeparator(' | '));
+        $this->assertNotSame('', \trim($renderer2->render($restyled->withSeparator(' | '))));
+    }
+
+    public function testColumnRestyleOnCjkContentEmitsOps(): void
+    {
+        $plain = Table::new()->addColumn(Column::new('名', 6))->addRow(['東京']);
+        $restyled = Table::new()->addColumn(Column::new('名', 6)->withStyle('32'))->addRow(['東京']);
+
+        $renderer = new TableRenderer();
+        $renderer->render($plain);
+        $this->assertNotSame('', \trim($renderer->render($restyled)), 'CJK-led restyle must not be a dead knob');
+    }
+
+    public function testSgrStateAccumulatesAcrossSequences(): void
+    {
+        // A terminal keeps '\x1b[1m' in force when '\x1b[31m' arrives; the
+        // old last-SGR-wins map kept only '31'.
+        $grid = $this->gridFrom("\x1b[1mAB\x1b[31mCD", 4, 1);
+        $bold = $grid->cellAt(0, 0)->style();
+        $this->assertNotNull($bold);
+        $this->assertTrue($bold->hasBold());
+        $this->assertNull($bold->fg());
+        $both = $grid->cellAt(2, 0)->style();
+        $this->assertNotNull($both);
+        $this->assertTrue($both->hasBold(), 'bold must persist across the second sequence');
+        $this->assertSame(0x800000, $both->fg());
+    }
+
+    public function testInvisibleSgrCodesMaterializeNoStyle(): void
+    {
+        // '53' (overline) has no cell-buffer meaning; producing a Style for
+        // it made every such frame churn the diff with invisible changes.
+        $grid = $this->gridFrom("\x1b[53mAB", 2, 1);
+        $this->assertNull($grid->cellAt(0, 0)->style());
+    }
+
+    public function testWidthOracleFollowsCanonicalCoreTable(): void
+    {
+        // U+1F7E0 large orange circle: the private table missed it (width 1),
+        // so delta ops addressed the wrong columns right of any emoji.
+        $grid = $this->gridFrom("x\u{1F7E0}y", 4, 1);
+        $this->assertSame('x', $grid->cellAt(0, 0)->rune());
+        $this->assertSame("\u{1F7E0}", $grid->cellAt(1, 0)->rune());
+        $this->assertSame(2, $grid->cellAt(1, 0)->width());
+        $this->assertSame(0, $grid->cellAt(2, 0)->width());
+        $this->assertSame('y', $grid->cellAt(3, 0)->rune());
+    }
+
+    public function testWideGlyphIsClippedAtTheRightEdge(): void
+    {
+        // A width-2 glyph at the last column would paint over the edge and
+        // desync grid from screen forever after; it is clipped instead.
+        $grid = $this->gridFrom('a東', 2, 1);
+        $this->assertSame('a', $grid->cellAt(0, 0)->rune());
+        $this->assertSame(' ', $grid->cellAt(1, 0)->rune());
+    }
+
+    public function testZeroColumnTableRendersEmptyInsteadOfFatal(): void
+    {
+        $renderer = new TableRenderer();
+        $this->assertSame('', $renderer->render(Table::new()));
+        // And after a real frame, collapsing to zero columns must not fatal
+        // the frame loop either.
+        $renderer->render(Table::new()->addColumn(Column::new('A', 3))->addRow(['x']));
+        $this->assertSame('', $renderer->render(Table::new()));
+    }
 }

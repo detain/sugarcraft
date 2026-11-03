@@ -189,7 +189,16 @@ final class Column
      */
     private function sanitize(string $s): string
     {
-        return \SugarCraft\Core\Util\Sanitize::untrusted($s);
+        // Control bytes must not survive into a cell: an embedded newline
+        // or tab forges extra physical lines/columns on the terminal that
+        // the cell grid never sees, desynchronising full-frame from delta
+        // paint for the rest of the session. Line breaking is the
+        // container's job; a cell contributes one visual line only.
+        return \str_replace(
+            ["\r\n", "\n", "\t", "\r"],
+            [' ', ' ', ' ', ''],
+            \SugarCraft\Core\Util\Sanitize::untrusted($s),
+        );
     }
 
     public function padded(string $value, int $rowIndex): string

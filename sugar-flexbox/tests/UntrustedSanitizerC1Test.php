@@ -115,17 +115,20 @@ final class UntrustedSanitizerC1Test extends TestCase
         }
     }
 
-    public function testColumnPreservesValidUtf8AndTabNewline(): void
+    public function testColumnPreservesValidUtf8AndCollapsesTabNewline(): void
     {
         // The canonical strip keeps well-formed UTF-8 (CJK continuation bytes
-        // 0x80-0x9F are NOT treated as lone C1) and preserves \t and \n that the
-        // layout code splits/pads on.
+        // 0x80-0x9F are NOT treated as lone C1). Tab and newline are then
+        // collapsed to spaces BY DESIGN: a cell paints exactly one visual
+        // line, and a surviving control byte would desynchronise the
+        // terminal cursor from the diff grid for the rest of the session.
         $col = Column::make('X', 200);
         $out = $col->format("東京\tvalue\nline2", 0);
 
         $this->assertStringContainsString('東京', $out, 'CJK must not be corrupted');
-        $this->assertStringContainsString("\t", $out, 'TAB preserved for layout');
-        $this->assertStringContainsString("\n", $out, 'LF preserved for line split');
+        $this->assertStringNotContainsString("\t", $out, 'TAB must collapse');
+        $this->assertStringNotContainsString("\n", $out, 'LF must collapse');
+        $this->assertStringContainsString('value line2', $out, 'visible text must survive');
         $this->assertNoAsciiControls($out, 'Column UTF-8/tab/newline');
     }
 

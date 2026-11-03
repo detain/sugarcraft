@@ -82,13 +82,15 @@ final class ColumnTest extends TestCase
         $this->assertStringNotContainsString("\x01", $result);
     }
 
-    public function testSanitizePreservesTabAndNewline(): void
+    public function testSanitizeCollapsesTabNewlineAndCarriageReturn(): void
     {
-        $col = Column::make('Test', 20);
-        $input = "hel\tlo\nworld";
-        $result = $col->format($input, 0);
-        $this->assertStringContainsString("\t", $result);
-        $this->assertStringContainsString("\n", $result);
+        // A cell contributes ONE visual line: tabs and newlines collapse to
+        // spaces (they would forge columns/rows the cell grid never sees)
+        // and carriage returns are dropped outright.
+        $col = Column::make('Test', 40);
+        $this->assertSame('hel lo world', $col->format("hel\tlo\nworld", 0));
+        $this->assertSame('a bc', $col->format("a\r\nb\rc", 0), 'CRLF becomes one space; lone CR vanishes');
+        $this->assertStringNotContainsString("\r", $col->format("x\ry", 0));
     }
 
     public function testSanitizeRemovesDEL(): void
