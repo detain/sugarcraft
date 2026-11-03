@@ -9,6 +9,11 @@ namespace SugarCraft\AnsiParser\Parser;
  * `['type' => ..., 'detail' => ...]` rows. Used in tests to assert the
  * exact sequence of actions produced by feeding a byte stream.
  *
+ * WARNING: `$log` grows unbounded — one row per dispatched action, forever.
+ * That is fine for a test fixture on a finite input, and a memory trap for a
+ * long-lived program fed by an untrusted stream. Never install this handler
+ * on a production parser; snapshot and clear `$log` between turns at most.
+ *
  * Mirrors charmbracelet/x/ansi.DebugHandler
  */
 final class DebugHandler implements Handler
