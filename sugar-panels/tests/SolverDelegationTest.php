@@ -144,8 +144,14 @@ final class SolverDelegationTest extends TestCase
     /**
      * End-to-end render proof of non-truncating overflow: two fixed panels plus a
      * flex panel in a 5-wide viewport. compat keeps the fixed panels at full width
-     * so the frame reads "AA│CC"; a truncating solver would shrink the first panel
-     * and render "A│CCC".
+     * so the row reads "AAACC" (the left panel keeps all three A's and the last
+     * child clips); a truncating solver would shrink the first panel and render
+     * something like "A│CCC".
+     *
+     * There is no divider between them on purpose: at spacing 0 the divider column
+     * belongs to the previous child, and a divider that lands on a painted cell
+     * used to eat that cell's glyph. Declining to overwrite is what keeps the
+     * fixed panel full-size, so this row proves two laws at once.
      */
     public function testOverflowRenderKeepsFixedPanelsFullSize(): void
     {
@@ -156,9 +162,7 @@ final class SolverDelegationTest extends TestCase
         )->withBorder(false)->withSpacing(0);
 
         $out = self::body(SugarPanels::new()->render($layout, 5, 1));
-        // Stripped: the spacing-0 divider now opens with ESC [ 0 m to close the
-        // previous child's span, which is styling, not geometry.
-        $this->assertSame('AA│CC', \rtrim(Ansi::strip($out)));
+        $this->assertSame('AAACC', \rtrim(Ansi::strip($out)));
     }
 
     // -------------------------------------------------------------------------

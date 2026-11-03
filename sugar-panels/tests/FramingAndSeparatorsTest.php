@@ -20,6 +20,10 @@ use PHPUnit\Framework\TestCase;
  */
 final class FramingAndSeparatorsTest extends TestCase
 {
+    private const HOME = "\x1b[H";
+
+    private const ERASE = "\x1b[2J";
+
     use ReadsFrames;
 
     /**
@@ -205,6 +209,97 @@ final class FramingAndSeparatorsTest extends TestCase
 
         // The visible shape is unchanged: exactly one title cell, corners intact.
         $this->assertSame('╭T─────────╮', \explode("\n", $row)[0]);
+    }
+
+    /**
+     * The earlier skip rule asked the neighbouring NODE whether it was bordered,
+     * which only saw the direct child: a borderless container of bordered panels
+     * still ran its divider across the grandchildren's corners. Asking the grid
+     * fixes every depth, and the README's own sketches are pinned here so the
+     * documented output stays the measured output.
+     */
+    public function testTheDocumentedLayoutsPaintWhatTheReadmeShows(): void
+    {
+        $panels = SugarPanels::new();
+        $nested = $panels->vertical(
+            $panels->horizontal($panels->leaf('Left panel'), $panels->leaf('Right panel')),
+            $panels->leaf('Bottom bar'),
+        );
+        $rows = $this->rows($panels->render($nested, 40, 5));
+        $this->assertSame([
+            '╭──────────────────────────────────────╮',
+            '│──────────────────────────────────────│',
+            '│╭────────────────────────────────────╮│',
+            '│╰────────────────────────────────────╯│',
+            '╰──────────────────────────────────────╯',
+        ], $rows, 'the Quick Start sketch is a promise');
+
+        $fresh = SugarPanels::new();
+        $flat = $fresh->vertical(
+            $fresh->horizontal($fresh->leaf('Left panel'), $fresh->leaf('Right panel'))->withBorder(false),
+            $fresh->leaf('Bottom bar')->withBorder(false),
+        )->withBorder(false);
+        $rows = $this->rows($fresh->render($flat, 60, 7));
+        $this->assertSame([
+            '╭────────────────────────────╮╭────────────────────────────╮',
+            '│Left panel                  ││Right panel                 │',
+            '│                            ││                            │',
+            '╰────────────────────────────╯╰────────────────────────────╯',
+            'Bottom bar',
+            '',
+            '',
+        ], $rows, 'the flattened Quick Start sketch is a promise (rows carry the viewport height)');
+
+        $third = SugarPanels::new();
+        $dashboard = $third->horizontal(
+            $third->leaf("nav\nhome\nabout")->withBorder(false),
+            $third->leaf('main content area')->withBorder(false)->withGrow(),
+        )->withBorder(false)->withSpacing(1);
+        $rows = $this->rows($third->render($dashboard, 40, 3));
+        $this->assertSame([
+            'nav   main content area',
+            'home',
+            'about',
+        ], $rows, 'the natural-size sketch is a promise');
+    }
+
+    /**
+     * At spacing 0 the divider has no gap of its own. A free column still gets
+     * it; a column that already shows a glyph does not, which is what keeps a
+     * neighbour's text and corners intact.
+     */
+    public function testTheDividerTakesAFreeColumnAndLeavesAPaintedOne(): void
+    {
+        $panels = SugarPanels::new();
+        $free = $panels->horizontal(
+            $panels->leaf('AA')->withBorder(false)->withMinWidth(3),
+            $panels->leaf('BB')->withBorder(false),
+        )->withBorder(false)->withSpacing(0);
+        $this->assertSame('AA  │B', \rtrim($this->rows($panels->render($free, 6, 1))[0]),
+            'a free boundary column still gets the divider');
+
+        $fresh = SugarPanels::new();
+        $occupied = $fresh->horizontal(
+            $fresh->leaf('AA')->withBorder(false),
+            $fresh->leaf('BB')->withBorder(false),
+        )->withBorder(false)->withSpacing(0);
+        // Four columns split two-and-two: the divider's column belongs to the
+        // left leaf, so nothing is painted over and both words survive.
+        $this->assertSame('AABB', \rtrim($this->rows($fresh->render($occupied, 4, 1))[0]),
+            'a divider may not eat a neighbour\'s glyph');
+    }
+
+    /** Strip the frame protocol and trailing blanks, keeping empty rows. */
+    private function rows(string $frame): array
+    {
+        $body = $frame;
+        foreach ([self::ERASE, self::HOME] as $prefix) {
+            if (\str_starts_with($body, $prefix)) {
+                $body = \substr($body, \strlen($prefix));
+            }
+        }
+
+        return \array_map('\rtrim', \explode("\n", Ansi::strip($body)));
     }
 
     /**

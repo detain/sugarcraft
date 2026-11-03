@@ -7,6 +7,7 @@ namespace SugarCraft\Panels;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Diff\DiffEncoder;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\Direction;
@@ -359,18 +360,6 @@ final class SugarPanels
     }
 
     /**
-     * Does this node paint a frame of its own into the region it is given?
-     *
-     * Used by the parent layouts to decide whether a spacing-0 divider would
-     * overwrite an existing edge. A noBorder() wrapper answers 'no' because the
-     * frame inside it is suppressed by definition.
-     */
-    private function paintsFrame(Node $node): bool
-    {
-        return $node->border === true && $node->kind !== Node::NOBORDER;
-    }
-
-    /**
      * Apply a node's own max* to the region it was handed.
      *
      * maxWidth/maxHeight cap the node's TOTAL footprint — frame and padding
@@ -517,18 +506,10 @@ final class SugarPanels
 
             // Vertical separator between children, in the previous child's last
             // column when there is no gap to put it in. Skipped for a frameless
-            // subtree, and for a neighbour whose own right edge already stands on
-            // the divider column: painting over it shaved the ╮/╯ corners off the
-            // frame the neighbour had just drawn, and a bordered panel's edge IS
-            // the divider the layout wanted.
+            // subtree; inside a painted column the divider itself declines to
+            // overwrite whatever is already on screen — see drawVLine().
             if ($i < $n - 1 && $sp === 0 && $noFrames === false) {
-                $divider = $x + $offsets[$i + 1] - 1;
-                $ownEdge = $this->paintsFrame($child)
-                    && $ow >= 2 && $availableH >= 2
-                    && $ox + $ow - 1 === $divider;
-                if ($ownEdge === false) {
-                    $this->drawVLine($node->borderStyle, $divider, $y + $b, $availableH, $cells);
-                }
+                $this->drawVLine($node->borderStyle, $x + $offsets[$i + 1] - 1, $y + $b, $availableH, $cells);
             }
         }
     }
@@ -609,16 +590,10 @@ final class SugarPanels
             $this->renderNode($child, $x + $b, $oy, $ow, $oh, $cells, $noFrames);
 
             // Horizontal separator between stacked children, in the previous
-            // child's last row — see renderHorizontal() for why a neighbour that
-            // paints its own bottom edge on that row is left alone.
+            // child's last row — see drawVLine() for why the divider declines to
+            // paint over cells that already carry a glyph.
             if ($i < $n - 1 && $sp === 0 && $noFrames === false) {
-                $divider = $y + $offsets[$i + 1] - 1;
-                $ownEdge = $this->paintsFrame($child)
-                    && $oh >= 2 && $ow >= 2
-                    && $oy + $oh - 1 === $divider;
-                if ($ownEdge === false) {
-                    $this->drawHLine($node->borderStyle, $x + $b, $divider, $ow, $cells);
-                }
+                $this->drawHLine($node->borderStyle, $x + $b, $y + $offsets[$i + 1] - 1, $ow, $cells);
             }
         }
     }
@@ -1163,11 +1138,21 @@ final class SugarPanels
      * left a style open. Overwriting it silently un-does the safety net, so the
      * divider itself carries the closing sequence: whatever the neighbour was
      * doing, the boundary ends the span.
+     *
+     * A cell that already shows a glyph is left alone. The earlier rule asked
+     * the neighbouring NODE whether it was bordered, which only covered the
+     * direct child: in a borderless container of bordered panels the divider
+     * still ran over the grandchildren's ╮/╯ corners, and a stacked layout's
+     * ╰───╯ became a bare dash run. Asking the grid instead of the tree is both
+     * cheaper and correct at every depth.
      */
     private function drawVLine(?Border $border, int $x, int $y, int $h, array &$cells): void
     {
         $b = $border ?? Border::rounded();
         for ($j = 0; $j < $h; $j++) {
+            if ($this->cellIsPainted($cells, $x, $y + $j)) {
+                continue;
+            }
             $this->setChar($x, $y + $j, "\x1b[0m" . $b->left, $cells);
         }
     }
@@ -1177,8 +1162,25 @@ final class SugarPanels
     {
         $b = $border ?? Border::rounded();
         for ($i = 0; $i < $w; $i++) {
+            if ($this->cellIsPainted($cells, $x + $i, $y)) {
+                continue;
+            }
             $this->setChar($x + $i, $y, "\x1b[0m" . $b->top, $cells);
         }
+    }
+
+    /**
+     * Does this cell already carry a visible glyph?
+     *
+     * A cell holding only escape bytes (a styling run parked on a space) is
+     * still empty as far as the screen is concerned, so the divider takes it and
+     * brings its reset along.
+     */
+    private function cellIsPainted(array $cells, int $x, int $y): bool
+    {
+        $cell = $cells[$y][$x] ?? null;
+
+        return $cell !== null && \trim(Ansi::strip($cell)) !== '';
     }
 
     // -------------------------------------------------------------------------

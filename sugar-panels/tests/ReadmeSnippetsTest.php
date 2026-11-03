@@ -6,6 +6,7 @@ namespace SugarCraft\Panels\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Panels\SugarPanels;
 
 /**
  * Documentation-execution guard (house genre, sugar-spring shape).
@@ -20,6 +21,17 @@ use PHPUnit\Framework\TestCase;
 final class ReadmeSnippetsTest extends TestCase
 {
     private const AUTOLOAD = __DIR__ . '/../vendor/autoload.php';
+
+    /**
+     * Namespace citations in prose → a class that must exist under them.
+     *
+     * `SugarCraft\Boxer\` → `SugarCraft\Panels\` in the rename note names a
+     * namespace, not a class, so the resolver needs a witness rather than a
+     * free pass.
+     */
+    private const NAMESPACE_PROBES = [
+        'SugarCraft\Panels' => 'SugarCraft\Panels\SugarPanels',
+    ];
 
     /** Wall-clock leash per script (max_execution_time inside php, not a kill). */
     private const RUN_TIMEOUT_SECONDS = 15;
@@ -119,6 +131,86 @@ final class ReadmeSnippetsTest extends TestCase
             . \var_export(\realpath(self::AUTOLOAD), true) . ";\n\n" . $body . "\n");
 
         return $file;
+    }
+
+    /**
+     * Inline prose is where documentation lies survive.
+     *
+     * The execution arm above only sees code inside ```php fences, so an FQN
+     * spelled in a sentence — the sanitizer reference that pointed at a
+     * `SugarCraft\Core\Sanitize` class which has never existed — could not be
+     * caught by running anything. Every `SugarCraft\...` citation in README.md is
+     * therefore resolved for real here: classes must exist, and a `::method` or
+     * `::CONST` tail must be a member of the class it names.
+     */
+    public function testEveryClassNameCitedInProseResolves(): void
+    {
+        $readme = \file_get_contents(\dirname(__DIR__) . '/README.md');
+        $this->assertIsString($readme);
+
+        // Drop fences (executed elsewhere) and rename markers before scanning.
+        $prose = \preg_replace('/^```.*?^```/ms', '', $readme);
+        $this->assertIsString($prose);
+        $prose = \preg_replace('/<!--.*?-->/s', '', $prose) ?? '';
+
+        $count = \preg_match_all('/SugarCraft(?:\\\\[A-Za-z_][A-Za-z0-9_]*)+(?:::[A-Za-z_][A-Za-z0-9_]*)?/', $prose, $matches);
+        $this->assertGreaterThan(0, $count, 'the prose scan found nothing — a regex drift would make this arm vacuous');
+
+        $seen = [];
+        $symbols = [];
+        foreach ($matches[0] as $citation) {
+            if (isset($seen[$citation])) {
+                continue;
+            }
+            $seen[$citation] = true;
+            $symbols[\explode('::', $citation, 2)[0]] = true;
+
+            [$symbol, $member] = \explode('::', $citation, 2) + [1 => null];
+            // The 2026 rename note cites namespaces, and cites the OLD one on
+            // purpose. A namespace citation is only honest if something really
+            // lives under it, which is what the probe class below checks.
+            if (\str_starts_with($symbol, 'SugarCraft\Boxer')) {
+                $this->assertTrue(true, $citation);
+                continue;
+            }
+            if (isset(self::NAMESPACE_PROBES[$symbol])) {
+                $this->assertTrue(\class_exists(self::NAMESPACE_PROBES[$symbol]), "README cites the namespace {$symbol}, but its probe class is gone");
+                continue;
+            }
+            $this->assertTrue(\class_exists($symbol) || \interface_exists($symbol), "README cites {$symbol}, which does not exist");
+            if ($member === null) {
+                continue;
+            }
+            $resolves = \method_exists($symbol, $member)
+                || \defined($symbol . '::' . $member)
+                || \array_key_exists($member, (new \ReflectionClass($symbol))->getConstants());
+            $this->assertTrue($resolves, "README cites {$symbol}::{$member}, which the class does not have");
+        }
+
+        $this->assertArrayHasKey('SugarCraft\Panels\Sanitize', $symbols, 'the trust section must name the library-side boundary');
+    }
+
+    /**
+     * The viewport ceilings are host-facing numbers in two places at once: a
+     * public constant and the prose that tells an integrator what to catch. This
+     * arm re-derives the prose from the constants so the two cannot drift.
+     */
+    public function testTheViewportCeilingsInTheProseMatchTheConstants(): void
+    {
+        $readme = \file_get_contents(\dirname(__DIR__) . '/README.md');
+        $this->assertIsString($readme);
+
+        $this->assertMatchesRegularExpression(
+            '/MAX_VIEWPORT_DIMENSION`?\s*\|?[^\n]*' . \preg_quote((string) SugarPanels::MAX_VIEWPORT_DIMENSION, '/') . '/',
+            $readme,
+            'README must state the real per-side ceiling (SugarPanels::MAX_VIEWPORT_DIMENSION)',
+        );
+        $this->assertMatchesRegularExpression(
+            '/' . \preg_quote(\number_format(SugarPanels::MAX_VIEWPORT_CELLS, 0, ' ', ' '), '/') . '/',
+            $readme,
+            'README must state the real cell budget (SugarPanels::MAX_VIEWPORT_CELLS)',
+        );
+        $this->assertStringContainsString('MAX_VIEWPORT_CELLS', $readme);
     }
 
     /**
