@@ -847,9 +847,9 @@ final class ParserTest extends TestCase
 
     public function testResetFlushesInFlightOscThenClearsToGround(): void
     {
-        // WELD-H cure (docs-fix-1023): reset() is NOT a silent clear — it
-        // delegates to flush(), so the in-flight OSC payload dispatches
-        // first, then state and buffers clear.
+        // reset() is NOT a silent clear — it delegates to flush(), so the
+        // in-flight OSC payload dispatches first, then state and buffers
+        // clear.
         $handler = new DebugHandler();
         $parser  = new Parser($handler);
 

@@ -180,10 +180,11 @@ product:
   so the *first* prefix byte survives (later ones never reach `prefix()`) and
   a multi-intermediate CSI (`CSI 0x2F 0x21 m`) keeps only the last byte —
   known parity deviations, disclosed here rather than silently lossy.
-- **OSC payloads drop internal C0:** bytes 0x00-0x17, 0x19 and 0x1C-0x1F
-  arriving *inside* an OSC string are discarded without entering the payload
-  (reference-table fidelity); a payload can therefore differ from the raw
-  bytes that were sent.
+- **OSC payloads drop internal C0:** bytes 0x00-0x06 and 0x08-0x17, plus
+  0x19 and 0x1C-0x1F arriving *inside* an OSC string are discarded without
+  entering the payload (reference-table fidelity); a payload can therefore
+  differ from the raw bytes that were sent. BEL (0x07) is not part of the
+  drop band — it terminates the string and dispatches it.
 - **UTF-8 is not validated by default:** with `$replaceMalformed = false`
   (the default, and what sugar-vterm passes), structurally-completed rune
   byte-sequences are forwarded **verbatim** to `printChar()` — overlong,
