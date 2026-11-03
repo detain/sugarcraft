@@ -42,13 +42,17 @@ final class Entry
     /**
      * Whether this entry has expired (applies only if expiresAt is set).
      *
-     * Expiry is stored as an absolute epoch-seconds integer (D4 fix); it no
-     * longer depends on the local clock's UTC offset, so a row written on a
-     * UTC+X box reads with the same true instant everywhere. Strictly-past
-     * comparison: at the exact expiry second the SQL side (`>= :now` with
-     * integer time()) still keeps the row, while this check reads
-     * sub-second resolution — a same-second race of at most one second
-     * remains by design, resolved in the user's favour on reads.
+     * Expiry is stored as an absolute epoch-seconds integer; it does not
+     * depend on the local clock's UTC offset, so a row written on a UTC+X
+     * box reads with the same true instant everywhere. THE ONE liveness
+     * rule: a row is expired exactly when its epoch is strictly before the
+     * integer-second "now" — SQL readers apply `expires_at IS NULL OR
+     * CAST(expires_at AS INTEGER) >= :now` and pruneExpired deletes the
+     * complement; this method carries the same rule at DateTime precision.
+     * At the exact expiry second the integer-second SQL comparison keeps
+     * the row while a sub-second-aware read here may already call it
+     * expired — a same-second boundary of at most one second, resolved in
+     * the user's favour on SQL reads.
      */
     public function isExpired(): bool
     {
@@ -61,7 +65,7 @@ final class Entry
     /**
      * Build from a database row (key, value, binary, created, modified[, expires_at]).
      *
-     * expires_at is an epoch integer (post-D4 schema). Rows still holding a
+     * expires_at is an epoch integer (current schema). Rows still holding a
      * legacy DATE_ATOM string are parsed by instant so pre-migration reads
      * and raw() keep working; a future rewrite of the column happens on
      * Database open.

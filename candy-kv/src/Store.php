@@ -58,7 +58,13 @@ final class Store
     private string $defaultDb;
 
     /**
-     * Create a new Store.
+     * Create a new Store handle.
+     *
+     * Construction touches nothing on disk: no directory is created and no
+     * database file is opened until the first WRITE. Reads against a store
+     * that has never been written see empty results, so `list`, `get` or a
+     * typo'd `key@dbname` can never litter the config directory with empty
+     * .db files.
      *
      * @param string|null $dataDir  Override the data directory path.
      *                              Defaults to $XDG_CONFIG_HOME/skate or ~/.config/skate.
@@ -68,18 +74,6 @@ final class Store
     {
         $this->dataDir = $dataDir ?? self::resolveDataDir();
         $this->defaultDb = $defaultDb;
-
-        if (!\is_dir($this->dataDir)) {
-            // Fail loud: a silently-skipped mkdir would defer the real error
-            // to an opaque SQLite open failure on a path that does not exist.
-            if (!@\mkdir($this->dataDir, 0o700, true) && !\is_dir($this->dataDir)) {
-                throw new \RuntimeException(
-                    \sprintf('Cannot create the key-value data directory: %s', $this->dataDir)
-                );
-            }
-        }
-
-        $this->database($this->defaultDb);
     }
 
     // -------------------------------------------------------------------------
@@ -89,17 +83,27 @@ final class Store
     /**
      * Set a value.
      *
-     * @param string $key    Entry key. May include @dbname to target a specific database.
-     *                       E.g. "token@passwords" sets "token" in the "passwords" database.
-     * @param string $value  The value to store. For binary data use Entry::binary().
-     * @param bool   $binary Whether to treat $value as base64-encoded binary data.
+     * @param string $key    Entry key. May include @dbname to target a specific
+     *                       database — E.g. "token@passwords" sets "token" in
+     *                       the "passwords" database. A literal @ inside the
+     *                       entry key is spelled "\@" (see parseKey rules);
+     *                       an unescaped second @ is refused. Empty keys are
+     *                       refused.
+     * @param string $value  The value to store. Pass raw bytes with
+     *                       $binary = true (they are base64-encoded for
+     *                       storage) — the CLI auto-detects NUL and invalid
+     *                       UTF-8 payloads and arms the flag itself.
+     * @param bool   $binary Whether to treat $value as raw binary data.
      * @param int|null $ttlSeconds If > 0, entry expires after this many seconds.
      */
     public function set(string $key, string $value, bool $binary = false, ?int $ttlSeconds = null): Entry
     {
         [$dbName, $entryKey] = $this->parseKey($key);
+        if ($entryKey === '') {
+            throw new \InvalidArgumentException('Entry key must not be empty.');
+        }
         $stored = $binary ? \base64_encode($value) : $value;
-        return $this->database($dbName)->set($entryKey, $stored, $binary, $ttlSeconds);
+        return $this->database($dbName, create: true)->set($entryKey, $stored, $binary, $ttlSeconds);
     }
 
     /**
@@ -143,7 +147,8 @@ final class Store
     public function get(string $key, string $fallback = ''): string
     {
         [$dbName, $entryKey] = $this->parseKey($key);
-        $entry = $this->database($dbName)->get($entryKey);
+        $db = $this->database($dbName);
+        $entry = $db?->get($entryKey);
 
         if ($entry !== null) {
             return $entry->rawValue();
@@ -156,10 +161,10 @@ final class Store
      * Suggest the closest existing key to $key, or null when nothing is
      * near enough to help. Backs the CLI's "did you mean" line.
      *
-     * Distance is the legacy byte-based Levenshtein; a candidate must lie
-     * within half the query's byte length (a deliberate skate tolerance —
-     * long ASCII queries get proportionally more slack). The comparison
-     * scans every non-expired key of the target database.
+     * Distance is Levenshtein over UTF-8 codepoints; a candidate must lie
+     * within half the query's codepoint length (a deliberate skate
+     * tolerance — long queries get proportionally more slack). The
+     * comparison scans every non-expired key of the target database.
      */
     public function suggestionFor(string $key): ?string
     {
@@ -171,12 +176,13 @@ final class Store
     /**
      * Get the full Entry object for a key (includes metadata).
      *
-     * Returns null if the key does not exist or has expired.
+     * Returns null if the key does not exist, has expired, or the named
+     * database has never been written.
      */
     public function entry(string $key): ?Entry
     {
         [$dbName, $entryKey] = $this->parseKey($key);
-        return $this->database($dbName)->get($entryKey);
+        return $this->database($dbName)?->get($entryKey);
     }
 
     /**
@@ -240,6 +246,9 @@ final class Store
         }
 
         $db = $this->database($dbName ?? $this->defaultDb);
+        if ($db === null) {
+            return [];
+        }
         $matcher = new SmithWatermanMatcher();
 
         // Collect all keys and map to entries
@@ -267,8 +276,20 @@ final class Store
      */
     private function suggestSimilar(string $key, string $dbName): ?string
     {
-        $allKeys = $this->database($dbName)->allKeys();
+        $db = $this->database($dbName);
+        if ($db === null) {
+            return null;
+        }
+        $allKeys = $db->allKeys();
         if ($allKeys === []) {
+            return null;
+        }
+
+        // Codepoint distance, not byte distance: PHP's levenshtein() counts
+        // bytes, so a single two-byte character (ä, one CJK glyph) registers
+        // as 2-3 "edits" and multibyte typos never clear the tolerance.
+        $threshold = intdiv(\mb_strlen($key, 'UTF-8'), 2);
+        if ($threshold === 0) {
             return null;
         }
 
@@ -276,14 +297,44 @@ final class Store
         $bestDist = \PHP_INT_MAX;
 
         foreach ($allKeys as $candidate) {
-            $dist = \levenshtein($key, $candidate);
-            if ($dist < $bestDist && $dist <= (int) (\strlen($key) / 2)) {
+            $dist = self::codepointLevenshtein($key, $candidate);
+            if ($dist < $bestDist && $dist <= $threshold) {
                 $bestDist = $dist;
                 $best = $candidate;
             }
         }
 
         return $best;
+    }
+
+    /**
+     * Levenshtein distance over UTF-8 codepoints (mb_str_split units).
+     */
+    private static function codepointLevenshtein(string $a, string $b): int
+    {
+        $s = \mb_str_split($a, 1, 'UTF-8');
+        $t = \mb_str_split($b, 1, 'UTF-8');
+        $m = \count($s);
+        $n = \count($t);
+
+        if ($m === 0) {
+            return $n;
+        }
+        if ($n === 0) {
+            return $m;
+        }
+
+        $prev = \range(0, $n);
+        for ($i = 1; $i <= $m; $i++) {
+            $cur = [$i];
+            for ($j = 1; $j <= $n; $j++) {
+                $cost = $s[$i - 1] === $t[$j - 1] ? 0 : 1;
+                $cur[$j] = \min($prev[$j] + 1, $cur[$j - 1] + 1, $prev[$j - 1] + $cost);
+            }
+            $prev = $cur;
+        }
+
+        return $prev[$n];
     }
 
     /**
@@ -297,12 +348,17 @@ final class Store
     {
         [$dbName, $entryKey] = $this->parseKey($key);
 
-        // If the key contains glob characters, treat as pattern
-        if ($this->isPattern($entryKey)) {
-            return $this->database($dbName)->deleteMany($entryKey);
+        $db = $this->database($dbName);
+        if ($db === null) {
+            return 0;
         }
 
-        return $this->database($dbName)->delete($entryKey) ? 1 : 0;
+        // If the key contains glob characters, treat as pattern
+        if ($this->isPattern($entryKey)) {
+            return $db->deleteMany($entryKey);
+        }
+
+        return $db->delete($entryKey) ? 1 : 0;
     }
 
     /**
@@ -323,6 +379,9 @@ final class Store
         string $delimiter = "\t",
     ): \Generator {
         $db = $this->database($dbName ?? $this->defaultDb);
+        if ($db === null) {
+            return;
+        }
         yield from $db->list($pattern, $reverse, $mode, $delimiter);
     }
 
@@ -344,9 +403,9 @@ final class Store
      * Write binary data from a key to a file path.
      *
      * Named saveTo(): the operation writes store data OUT to disk, so the
-     * direction verb replaces the legacy getFile() spelling (accessor-era
-     * ruling 3b); the store-side mutator setFile() keeps its name because
-     * it is the file form of this class's canonical set() verb.
+     * direction verb replaces the legacy getFile() spelling from the
+     * accessor-era rename; the store-side mutator setFile() keeps its name
+     * because it is the file form of this class's canonical set() verb.
      */
     public function saveTo(string $key, string $filePath): bool
     {
@@ -355,8 +414,22 @@ final class Store
             return false;
         }
         $bytes = $entry->rawValue();
-        // @-suppressed: unwritable destination is reported via the bool return.
-        return @\file_put_contents($filePath, $bytes) !== false;
+        // The payload is secret material: create/tighten to 0600 BEFORE any
+        // byte is written (file_put_contents would publish the whole value
+        // at umask mode, typically 0644). @-suppressed open failure is
+        // reported via the bool return.
+        $handle = @\fopen($filePath, 'wb');
+        if ($handle === false) {
+            return false;
+        }
+        @\chmod($filePath, 0o600);
+        try {
+            $written = @\fwrite($handle, $bytes);
+        } finally {
+            @\fclose($handle);
+        }
+
+        return $written !== false && $written === \strlen($bytes);
     }
 
     /**
@@ -392,15 +465,18 @@ final class Store
      */
     public function pruneExpired(): int
     {
-        return $this->database($this->defaultDb)->pruneExpired();
+        return $this->database($this->defaultDb)?->pruneExpired() ?? 0;
     }
 
     /**
      * Delete an entire database (all its entries).
+     *
+     * Returns false if the database did not exist OR if any of its files
+     * (main or WAL sidecars) could not be removed — a surviving -wal file
+     * still holds recoverable rows, so a partial teardown is not a delete.
      */
     public function deleteDatabase(string $dbName): bool
     {
-
         $path = $this->dbPath($dbName);
         if (!\file_exists($path)) {
             return false;
@@ -411,12 +487,14 @@ final class Store
             $this->databases[$dbName]->close();
             unset($this->databases[$dbName]);
         }
+        $removedAll = true;
         foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
-            if (\is_file($file)) {
-                @\unlink($file);
+            if (\is_file($file) && !@\unlink($file)) {
+                $removedAll = false;
             }
         }
-        return !\file_exists($path);
+
+        return $removedAll && !\file_exists($path);
     }
 
     // -------------------------------------------------------------------------
@@ -448,7 +526,8 @@ final class Store
      */
     public function transaction(string $dbName, callable $fn): mixed
     {
-        return $this->database($dbName)->transaction($fn);
+        // A transaction may write: the target database is created on demand.
+        return $this->database($dbName, create: true)->transaction($fn);
     }
 
     // -------------------------------------------------------------------------
@@ -456,14 +535,42 @@ final class Store
     // -------------------------------------------------------------------------
 
     /**
-     * Get or open a Database instance.
+     * Get an open Database handle, or null when a read targets a database
+     * that has never been written.
+     *
+     * @param bool $create When true (write paths) the file — and the data
+     *                     directory — are created on first touch. When false
+     *                     (read paths) a missing file yields null and NOTHING
+     *                     is created, not even the directory.
      */
-    private function database(string $name): Database
+    private function database(string $name, bool $create = false): ?Database
     {
-        if (!isset($this->databases[$name])) {
-            $this->databases[$name] = new Database($this->dbPath($name), $name);
+        if (isset($this->databases[$name])) {
+            return $this->databases[$name];
         }
-        return $this->databases[$name];
+        $path = $this->dbPath($name);
+        if (!$create && !\is_file($path)) {
+            return null;
+        }
+
+        if ($create && !\is_dir($this->dataDir)) {
+            // Fail loud: a silently-skipped mkdir would defer the real error
+            // to an opaque SQLite open failure on a path that does not exist.
+            // mkdir is umask-filtered, so re-assert 0700 on what we created:
+            // this directory holds secrets.
+            if (!@\mkdir($this->dataDir, 0o700, true) && !\is_dir($this->dataDir)) {
+                throw new \RuntimeException(
+                    \sprintf('Cannot create the key-value data directory: %s', $this->dataDir)
+                );
+            }
+            if (!@\chmod($this->dataDir, 0o700)) {
+                throw new \RuntimeException(
+                    \sprintf('Cannot set 0700 permissions on the key-value data directory: %s', $this->dataDir)
+                );
+            }
+        }
+
+        return $this->databases[$name] = new Database($path, $name, $create);
     }
 
     /**
@@ -487,55 +594,65 @@ final class Store
      * Parse "key@dbname" into [dbName, entryKey].
      * If no @ suffix, returns [defaultDb, key].
      *
+     * An entry key may contain a literal @ when spelled "\@": the database
+     * separator is the rightmost UNESCAPED @. After the split, the entry
+     * part's "\@" sequences decode to "@", and any remaining unescaped @
+     * ("a@b@c") is ambiguous and refused. Database names cannot contain
+     * escape sequences (they are validated to [A-Za-z0-9_-]+ by dbPath).
+     *
      * @return array{0: string, 1: string}
      */
     private function parseKey(string $key): array
     {
-        $at = \strrpos($key, '@');
+        // Rightmost unescaped '@' is the separator.
+        $at = false;
+        for ($i = \strlen($key) - 1; $i > 0; $i--) {
+            if ($key[$i] === '@' && $key[$i - 1] !== '\\') {
+                $at = $i;
+                break;
+            }
+        }
         if ($at === false) {
-            return [$this->defaultDb, $key];
+            return [$this->defaultDb, \str_replace('\\@', '@', $key)];
         }
 
         $dbName = \substr($key, $at + 1);
         $entryKey = \substr($key, 0, $at);
 
-        // Only ONE @ separator is meaningful; a leftover @ in the entry key
+        // Only ONE unescaped @ is meaningful; a leftover in the entry key
         // ("a@b@c") is ambiguous and always a caller bug.
         if (\strpos($entryKey, '@') !== false) {
             throw new \InvalidArgumentException(
-                "Entry key '{$entryKey}' cannot contain @ (reserved as the database separator)."
+                "Entry key '{$entryKey}' cannot contain @ (reserved as the database separator; spell a literal one '\\@')."
             );
         }
 
         // "default@foo" means db=foo, key=default
-        return [$dbName, $entryKey];
-    }
-
-    /**
-     * Determine the default data directory.
-     *
-     * @deprecated Kept as the historical entry point; resolves through
-     *             self::resolveDataDir().
-     */
-    private function defaultDataDir(): string
-    {
-        return self::resolveDataDir();
+        return [$dbName, \str_replace('\\@', '@', $entryKey)];
     }
 
     /**
      * Resolve the data directory: $XDG_CONFIG_HOME/skate, then
      * $HOME/.config/skate, then the passwd entry's home directory.
      *
+     * XDG_CONFIG_HOME and HOME must be ABSOLUTE paths (the XDG base
+     * directory specification says so): a relative value would silently
+     * relocate secrets under the current working directory, which changes
+     * every time the caller changes directory.
+     *
      * There is deliberately NO fallback to the library install tree:
      * a HOME-less process must fail loudly, not write secrets into a
      * world-writable-shared vendor directory.
      *
-     * @throws \RuntimeException when no home directory can be determined.
+     * @throws \RuntimeException when no home directory can be determined
+     *                           or a configured home is relative.
      */
     public static function resolveDataDir(): string
     {
         $xdg = \getenv('XDG_CONFIG_HOME');
         if ($xdg !== false && $xdg !== '') {
+            self::assertAbsolutePath($xdg, 'XDG_CONFIG_HOME');
+
             return \rtrim($xdg, '/') . '/skate';
         }
 
@@ -548,8 +665,23 @@ final class Store
                 'Cannot determine the data directory: set XDG_CONFIG_HOME or HOME.'
             );
         }
+        if (\is_string($home)) {
+            self::assertAbsolutePath($home, 'HOME');
+        }
 
         return \rtrim($home, '/') . '/' . self::DEFAULT_SUBDIR;
+    }
+
+    /**
+     * Refuse a relative "home" with a message naming the offending variable.
+     */
+    private static function assertAbsolutePath(string $path, string $variable): void
+    {
+        if ($path[0] !== '/') {
+            throw new \RuntimeException(
+                \sprintf('%s must be an absolute path, got "%s" (a relative home would move the store with the working directory).', $variable, $path)
+            );
+        }
     }
 
     /**

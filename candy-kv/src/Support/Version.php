@@ -7,16 +7,16 @@ namespace SugarCraft\Kv\Support;
 /**
  * The version string this tool reports on `--version`.
  *
- * Lighter namespace copy of candy-top/src/Support/Version.php (the DST-1
- * program): {@see self::CURRENT} is the checkout fallback and the ONE
+ * Lighter sibling of the candy-top/candy-code version readers:
+ * {@see self::CURRENT} is the checkout fallback and the ONE
  * override is the build stamp of the phar this process was launched from.
- * candy-kv ships no `self-update`, so the ordering machinery candy-top
+ * candy-kv ships no `self-update`, so the ordering machinery a self-updater
  * needs (parse/compare, fail-closed on `dev-master`) has nothing to serve
  * here — any non-empty stamp the build wrote is reported verbatim, and a
  * dev-built archive (whose stamp is the sentinel `dev-build`) honestly falls
  * through to CURRENT.
  *
- * WHY THE ARCHIVE ARM EXISTS AT ALL (DST-1): the frozen `vendor/` baked
+ * WHY THE ARCHIVE ARM EXISTS AT ALL: the frozen `vendor/` baked
  * into a release archive reports the BUILD ROOT's dev guess, so a `--version`
  * that trusted anything but the archive's own manifest would lie about the
  * artifact it is running from. The build stamps `metadata['version']` in
@@ -37,7 +37,7 @@ final class Version
     /**
      * The stamp a dev working-tree build carries. It is not a version, so
      * {@see self::fromPharMetadata()} refuses it and the report falls
-     * through to {@see self::CURRENT} — mirroring candy-code's rule that
+     * through to {@see self::CURRENT} — the fleet-wide rule that
      * `dev-build` is never read as a version.
      */
     public const DEV_BUILD = 'dev-build';

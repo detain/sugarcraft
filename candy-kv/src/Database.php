@@ -24,10 +24,10 @@ use SugarCraft\Kv\Lang;
  *
  * created/modified stay human-readable ISO-8601 (DATE_ATOM) strings;
  * expiry comparison alone is numeric, because offset-bearing strings
- * compare lexicographically, NOT by instant (docs-fix D4 M3): a
- * '+02:00' stamp read on a '-05:00' box expired early or late depending
- * on the local clock text. Legacy DBs whose expires_at column holds
- * DATE_ATOM strings are converted once on open (see migrateExpiryColumn).
+ * compare lexicographically, NOT by instant — a '+02:00' stamp read on
+ * a '-05:00' box expired early or late depending on the local clock
+ * text. Legacy DBs whose expires_at column holds DATE_ATOM strings are
+ * converted once on open (see migrateExpiryColumn).
  *
  * The database file is a secrets store: it is chmod'ed to 0600 on open,
  * tightening any pre-existing world/group-readable file in place.
@@ -39,9 +39,31 @@ final class Database
     private bool $closed = false;
     private bool $inTransaction = false;
 
-    public function __construct(string $path, string $name)
+    /**
+     * @param bool $create When false the file MUST already exist: opening a
+     *     missing database throws instead of silently creating an empty one.
+     *     Read paths pass false so a typo'd "@dbname" cannot litter the data
+     *     directory; only writes create.
+     */
+    public function __construct(string $path, string $name, bool $create = true)
     {
-        $this->db = new \SQLite3($path);
+        $flags = \SQLITE3_OPEN_READWRITE | ($create ? \SQLITE3_OPEN_CREATE : 0);
+        try {
+            $this->db = new \SQLite3($path, $flags);
+        } catch (\Exception $e) {
+            // The SQLite3 constructor reports open failures as bare
+            // Exception (SQLite3Exception only arrives once exceptions are
+            // enabled for statements). A read on a missing/typo'd database
+            // gets a domain sentence, not SQLite's raw wording.
+            throw new \RuntimeException(
+                "Cannot open the key-value database '{$name}': {$e->getMessage()}",
+                0,
+                $e
+            );
+        }
+        // Diagnostics surface as SQLite3Exception at the failing call, not as
+        // a false return that detonates later as a null-pointer TypeError.
+        $this->db->enableExceptions(true);
         $this->db->busyTimeout(5000);
         $this->name = $name;
         $this->init();
@@ -98,13 +120,19 @@ final class Database
         }
         $this->migrateExpiryColumn();
         $this->db->exec('PRAGMA journal_mode = WAL');
-        $this->db->exec('PRAGMA foreign_keys = ON');
+        // Pattern operations must share the byte-exact case semantics of the
+        // exact ones: default LIKE folds case, so list/delete 'Abc-*' would
+        // sweep keys that get('Abc-1') reads and delete('Abc-1') misses.
+        $this->db->exec('PRAGMA case_sensitive_like = ON');
+        // No PRAGMA foreign_keys: the schema has zero foreign keys, the
+        // pragma would be dead configuration implying a relation that exists
+        // nowhere.
     }
 
     /**
      * Convert legacy offset-string expiries to integer epoch seconds once.
      *
-     * Pre-D4 databases stored expires_at as a DATE_ATOM string; SQLite's
+     * Legacy databases stored expires_at as a DATE_ATOM string; SQLite's
      * dynamic typing means the column may hold a mix. Rows whose value is
      * non-numeric text are parsed (offset-aware) and rewritten as epoch
      * seconds — an integer in fresh INTEGER-affinity columns, numeric text
@@ -167,7 +195,12 @@ final class Database
             }
             $this->db->exec('COMMIT');
         } catch (\Throwable $e) {
-            $this->db->exec('ROLLBACK');
+            // The original failure is the reportable one; a ROLLBACK that
+            // itself fails (connection already dead) must not mask it.
+            try {
+                $this->db->exec('ROLLBACK');
+            } catch (\Throwable) {
+            }
             $update->close();
             throw $e;
         }
@@ -227,7 +260,9 @@ final class Database
      * Set a value, creating or overwriting the entry.
      *
      * @param string $key    Entry key (unique within this database)
-     * @param string $value  Value string (pass Entry::binary() for raw bytes)
+     * @param string $value  Stored value form: raw text when $binary is
+     *                       false, already-base64 when true (Store::set
+     *                       encodes; this layer stores what it is handed).
      * @param bool   $binary Whether the value is base64-encoded binary data
      * @param int|null $ttlSeconds If set, entry expires after this many seconds
      */
@@ -260,8 +295,8 @@ final class Database
         $stmt->execute();
         $stmt->close();
 
-        // Read-back is deliberate (docs-fix-1023 NIT): returning a locally
-        // built Entry would duplicate the row-parsing contract and could
+        // Read-back is deliberate: returning a locally built Entry would
+        // duplicate the row-parsing contract and could
         // hand the caller a value no reader can ever observe. One extra
         // SELECT keeps writer and reader views provably identical.
         return $this->get($key) ?? throw new \RuntimeException(Lang::t('database.entry_unreadable'));
@@ -270,11 +305,21 @@ final class Database
     /**
      * Delete an entry by key.
      * Returns true if deleted, false if key was not present.
+     *
+     * Only LIVE rows are deletable by exact key: an expired row is invisible
+     * to every reader, so silently removing it under a "Deleted 1" verdict
+     * would delete data the operator never agreed exists. Expired residue is
+     * {@see self::pruneExpired()}'s job.
      */
     public function delete(string $key): bool
     {
-        $stmt = $this->db->prepare('DELETE FROM entries WHERE key = :key');
+        $stmt = $this->db->prepare(
+            'DELETE FROM entries
+             WHERE key = :key
+               AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)'
+        );
         $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
+        $stmt->bindValue(':now', \time(), \SQLITE3_INTEGER);
         $stmt->execute();
         $changes = $this->db->changes();
         $stmt->close();
@@ -373,16 +418,23 @@ final class Database
     }
 
     /**
-     * Delete all entries matching a glob pattern.
+     * Delete all LIVE entries matching a glob pattern.
      * Returns the number of entries deleted.
+     *
+     * The same liveness predicate every reader applies: expired rows under
+     * the pattern are skipped (they are already invisible; counting them as
+     * "deleted" inflated a number the operator could never reconcile against
+     * a listing). {@see self::pruneExpired()} reclaims that residue.
      */
     public function deleteMany(string $pattern): int
     {
         $like = $this->globToLike($pattern);
         $stmt = $this->db->prepare(
             'DELETE FROM entries WHERE key LIKE :pat ESCAPE \'\\\''
+                . ' AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)'
         );
         $stmt->bindValue(':pat', $like, \SQLITE3_TEXT);
+        $stmt->bindValue(':now', \time(), \SQLITE3_INTEGER);
         $stmt->execute();
         $deleted = $this->db->changes();
         $stmt->close();
@@ -414,6 +466,11 @@ final class Database
 
     /**
      * Convert a glob pattern (* and ?) to a SQL LIKE string.
+     *
+     * Spelling: `*` = any run, `?` = exactly one byte, `\*`/`\?` request a
+     * literal asterisk/question-mark. A backslash before anything else is
+     * itself a literal (doubled so the LIKE ESCAPE introducer cannot
+     * quietly capture the next character).
      */
     private function globToLike(string $pattern): string
     {
@@ -423,23 +480,37 @@ final class Database
 
         while ($i < $len) {
             $c = $pattern[$i];
-            if ($c === '*') {
+            if ($c === '\\' && $i + 1 < $len && ($pattern[$i + 1] === '*' || $pattern[$i + 1] === '?')) {
+                // Glob escape wins over wildcard expansion: a bare '*'/'?'
+                // carries no meaning in LIKE, so the escaped pair collapses
+                // to the literal character the caller asked to match.
+                $like .= $pattern[$i + 1];
+                $i += 2;
+            } elseif ($c === '*') {
                 $like .= '%';
+                $i++;
             } elseif ($c === '?') {
                 $like .= '_';
+                $i++;
             } elseif ($c === '\\') {
                 // A literal backslash is the LIKE ESCAPE introducer itself:
                 // left unescaped it silently turns the NEXT character into an
-                // escape sequence (e.g. "\x" matching "x" instead of "\x").
-                // Must precede the %/_ branch so introduced escapes survive.
+                // escape sequence (e.g. "a\b" matching "ab" instead of the
+                // real "a\b" key — audit #13). Every other backslash spelling
+                // keeps its backslash and lets the following character take
+                // its own rule.
                 $like .= '\\\\';
+                $i++;
             } elseif ($c === '%' || $c === '_') {
-                // Escape SQL LIKE wildcards
+                // SQL LIKE wildcards arriving un-escaped from the caller are
+                // literal characters in glob vocabulary: hide them behind
+                // the ESCAPE introducer so they cannot widen the match.
                 $like .= '\\' . $c;
+                $i++;
             } else {
                 $like .= $c;
+                $i++;
             }
-            $i++;
         }
 
         return $like;
@@ -471,6 +542,10 @@ final class Database
     /**
      * Get all database names from the config directory.
      *
+     * scandir (not glob): glob treats '[', '*', '?' in directory names as
+     * pattern syntax, so a crafted directory entry could hide or fake a
+     * database listing. Plain readdir matching is injection-proof.
+     *
      * @return list<string>
      */
     public static function listDatabases(string $dataDir): array
@@ -480,13 +555,19 @@ final class Database
         }
 
         $dbs = [];
-        foreach (\glob($dataDir . '/*.db') ?: [] as $file) {
-            $basename = \basename($file, '.db');
+        foreach ((array) \scandir($dataDir) as $entry) {
+            if (!\is_string($entry) || !\str_ends_with($entry, '.db')) {
+                continue;
+            }
+            $basename = \substr($entry, 0, -3);
+            if ($basename === '' || !\is_file($dataDir . '/' . $entry)) {
+                continue;
+            }
             // `settings` is reserved: it carried per-app config in the
             // upstream skate tool this port began from, and skate's own
             // listing excluded it. The exclusion survives so a directory
             // shared with skate does not surface a phantom value database.
-            if ($basename !== '' && $basename !== 'settings') {
+            if ($basename !== 'settings') {
                 $dbs[] = $basename;
             }
         }
@@ -518,7 +599,13 @@ final class Database
                 $this->db->exec('COMMIT');
                 return $result;
             } catch (\Throwable $e) {
-                $this->db->exec('ROLLBACK');
+                // Rollback failures must not mask the original error: if the
+                // connection is already gone there is nothing to unwind and
+                // the caller needs the first cause, not a teardown echo.
+                try {
+                    $this->db->exec('ROLLBACK');
+                } catch (\Throwable) {
+                }
                 throw $e;
             }
         } finally {

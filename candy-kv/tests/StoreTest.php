@@ -172,6 +172,7 @@ final class StoreTest extends TestCase
     {
         $this->store->set('x@alpha', '1');
         $this->store->set('x@beta', '2');
+        $this->store->set('x@testdb', '3');
 
         $dbs = $this->store->listDatabases();
         $this->assertContains('alpha', $dbs);
@@ -699,9 +700,12 @@ final class StoreTest extends TestCase
         $blocker = $this->tmpDir . '/blocker';
         \file_put_contents($blocker, 'not-a-dir');
 
+        // Construction touches nothing; the refusal happens on the first
+        // WRITE (reads against an unopenable store just see emptiness).
+        $store = new Store($blocker . '/sub/dir');
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Cannot create the key-value data directory');
-        new Store($blocker . '/sub/dir');
+        $store->set('k', 'v');
     }
 
     public function testSetWithTtlRefusesArrayValue(): void
