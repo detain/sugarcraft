@@ -285,7 +285,32 @@ final class Board
     /**
      * Reconstruct a Board from a string produced by {@see serialize()}.
      *
-     * @throws \InvalidArgumentException if the payload is malformed
+     * The savegame is user-editable data (it lives on disk at 0600), so the
+     * loader treats it as hostile input and enforces that the payload
+     * describes a state this game could actually have produced:
+     *
+     *  - strict wire types (no silent (int)/"yes"-to-bool coercion of junk);
+     *  - dimensions within the game's 2..50 ladder (CustomDifficulty law);
+     *  - planted mine bits exactly equal the claimed mineCount;
+     *  - pre-placement boards carry zero mines and zero adjacency
+     *    (placeMines() is the only source of either), killing the
+     *    "mines already sitting on a fresh board" first-click detonation;
+     *  - adjacency equals a full recompute from the planted bits (mine
+     *    cells 0, non-mine cells the neighbour-mine count), so numbers
+     *    cannot lie about the layout;
+     *  - exploded ⇔ a revealed mine exists (explosions reveal their mine;
+     *    a revealed mine sets exploded), and exploded implies placement;
+     *  - a cell is never simultaneously revealed and flagged (Cell::reveal
+     *    clears flags; toggleFlag no-ops on revealed).
+     *
+     * revealed/flagged counts are recomputed from cells, never trusted
+     * from disk. Coherence is the guarantee: a hand-crafted but fully
+     * consistent board (e.g. a won layout) still loads — that is the
+     * player cheating themselves in their own save slot, not a loader bug,
+     * and the 0600 mode plus this docblock are the trust boundary.
+     *
+     * @throws \InvalidArgumentException if the payload is malformed or
+     *                                  describes an unreachable state
      */
     public static function unserialize(string $data): self
     {
@@ -305,52 +330,151 @@ final class Board
                     : "Unsupported board serialization version: " . json_encode($v)
             );
         }
-        $w = $p['w'] ?? null;
-        $h = $p['h'] ?? null;
-        $m = $p['m'] ?? null;
-        $p2 = $p['p'] ?? null;
-        $e = $p['e'] ?? null;
+        $w  = $p['w'] ?? null;
+        $h  = $p['h'] ?? null;
+        $m  = $p['m'] ?? null;
+        $placed  = $p['p'] ?? null;
+        $exploded = $p['e'] ?? null;
         $cells = $p['c'] ?? null;
-        if ($w === null || $h === null || $m === null || $p2 === null || $e === null || $cells === null) {
+        if (
+            !is_int($w) || !is_int($h) || !is_int($m)
+            || !is_bool($placed) || !is_bool($exploded)
+            || !is_array($cells)
+        ) {
             throw new \InvalidArgumentException('Invalid board serialization');
         }
-        if (!is_array($cells) || count($cells) !== $h) {
+        // Same ladder the interactive custom-difficulty form enforces; a
+        // crafted 5000x5000 payload must not turn a load into a crawl.
+        if ($w < 2 || $w > 50 || $h < 2 || $h > 50) {
+            throw new \InvalidArgumentException('Invalid board serialization');
+        }
+        if (count($cells) !== $h) {
             throw new \InvalidArgumentException('Invalid board serialization');
         }
         $rows = [];
         $revealedCount = 0;
         $flaggedCount = 0;
+        $plantedBits = 0;
+        $revealedMines = 0;
+        /** @var list<list<int>> $adjGiven */
+        $adjGiven = [];
+        /** @var list<list<bool>> $mineGrid */
+        $mineGrid = [];
         for ($y = 0; $y < $h; $y++) {
             if (!is_array($cells[$y]) || count($cells[$y]) !== $w) {
                 throw new \InvalidArgumentException('Invalid board serialization');
             }
             $row = [];
+            $adjRow = [];
+            $mineRow = [];
             for ($x = 0; $x < $w; $x++) {
                 $cellData = $cells[$y][$x] ?? null;
-                if (!is_array($cellData) || count($cellData) < 4) {
+                if (
+                    !is_array($cellData) || count($cellData) !== 4
+                    || !is_bool($cellData[0]) || !is_bool($cellData[1])
+                    || !is_bool($cellData[2]) || !is_int($cellData[3])
+                ) {
                     throw new \InvalidArgumentException('Invalid board serialization');
                 }
-                $mine     = (bool) $cellData[0];
-                $revealed = (bool) $cellData[1];
-                $flagged  = (bool) $cellData[2];
-                $adjacent = (int)  $cellData[3];
+                $mine     = $cellData[0];
+                $revealed = $cellData[1];
+                $flagged  = $cellData[2];
+                $adjacent = $cellData[3];
+                // Cell-level state machine: reveal clears flags, flagging a
+                // revealed cell no-ops — both-true is unreachable.
+                if ($revealed && $flagged) {
+                    throw new \InvalidArgumentException('Invalid board serialization');
+                }
                 if ($revealed) {
                     $revealedCount++;
+                    if ($mine) {
+                        $revealedMines++;
+                    }
                 }
                 if ($flagged) {
                     $flaggedCount++;
                 }
-                $row[] = new Cell($mine, $revealed, $flagged, $adjacent);
+                if ($mine) {
+                    $plantedBits++;
+                }
+                $adjRow[] = $cellData[3];
+                $mineRow[] = $mine;
+                $row[] = new Cell(mine: $mine, revealed: $revealed, flagged: $flagged, adjacent: 0);
             }
             $rows[] = $row;
+            $adjGiven[] = $adjRow;
+            $mineGrid[] = $mineRow;
+        }
+        // On a PLACED board the claimed mine count must equal the planted
+        // bits — the win threshold (revealedCount === w*h - m) is only
+        // meaningful if m cannot be under-declared to fake a win or
+        // over-declared to make the board un-winnable. An UNPLACED board
+        // carries m as a promise only: placeMines() honours it exactly when
+        // the first reveal runs, and its cells must be mine-free until then
+        // (checked in that branch below).
+        if ($placed && $plantedBits !== $m) {
+            throw new \InvalidArgumentException('Invalid board serialization');
+        }
+        // exploded ⇔ a revealed mine: an explosion is exactly the frame a
+        // flood reveals a mine, and no other path reveals mines.
+        if ($exploded && !$placed) {
+            throw new \InvalidArgumentException('Invalid board serialization');
+        }
+        if ($exploded !== ($revealedMines > 0)) {
+            throw new \InvalidArgumentException('Invalid board serialization');
         }
         // Drop the persisted 'r' value entirely — recompute from live cell state
         // so a tampered payload cannot inflate revealedCount to force a false win
         // or deflate it to make a finished board un-winnable. flaggedCount is
         // likewise derived from the reconstructed cells, never trusted from disk.
+        if (!$placed) {
+            // placeMines() is the only writer of mine bits and adjacency;
+            // an unplaced board must carry neither. The first reveal always
+            // places, so an unplaced board cannot legitimately hold any
+            // revealed cell either — otherwise w*h - m revealed empty cells
+            // would fake a win on a board whose mines were never placed.
+            if ($plantedBits > 0 || $revealedCount > 0) {
+                throw new \InvalidArgumentException('Invalid board serialization');
+            }
+            foreach ($adjGiven as $adjRow) {
+                foreach ($adjRow as $adjacent) {
+                    if ($adjacent !== 0) {
+                        throw new \InvalidArgumentException('Invalid board serialization');
+                    }
+                }
+            }
+        } else {
+            // Full adjacency recompute: every claimed number must equal the
+            // planted-neighbour count (mine cells themselves stay 0), so a
+            // tampered "8" over an empty corner or a 2-char glyph value
+            // cannot survive.
+            for ($y = 0; $y < $h; $y++) {
+                for ($x = 0; $x < $w; $x++) {
+                    $expected = 0;
+                    if (!$mineGrid[$y][$x]) {
+                        for ($dy = -1; $dy <= 1; $dy++) {
+                            for ($dx = -1; $dx <= 1; $dx++) {
+                                if ($dx === 0 && $dy === 0) {
+                                    continue;
+                                }
+                                $nx = $x + $dx;
+                                $ny = $y + $dy;
+                                if (isset($mineGrid[$ny][$nx]) && $mineGrid[$ny][$nx]) {
+                                    $expected++;
+                                }
+                            }
+                        }
+                    }
+                    if ($adjGiven[$y][$x] !== $expected) {
+                        throw new \InvalidArgumentException('Invalid board serialization');
+                    }
+                    $rows[$y][$x] = $rows[$y][$x]->withAdjacent($expected);
+                }
+            }
+        }
         return new self(
-            (int) $w, (int) $h, (int) $m,
-            $rows, (bool) $p2, (bool) $e, $revealedCount, $flaggedCount,
+            $w, $h, $m,
+            $rows, $placed, $exploded, $revealedCount, $flaggedCount,
         );
     }
 

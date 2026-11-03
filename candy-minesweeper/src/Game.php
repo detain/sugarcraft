@@ -250,12 +250,17 @@ final class Game implements Model
 
     /**
      * 'S' — persist the live board to the single savegame slot. Written
-     * through {@see AtomicJsonFile} with 0600: a savegame reveals nothing
-     * secret, but it lives under $HOME like the user's other config and the
-     * strict mode costs nothing. The clock rides as elapsed SECONDS at save
-     * time, so 'L' in a fresh process (later this session or next week)
-     * resumes the timer from where it stood. Failures are swallowed exactly
-     * like {@see persistStats()} — a full disk must never crash a game.
+     * through {@see AtomicJsonFile} with 0600. TRUST BOUNDARY: the slot
+     * contains the FULL live mine layout (serialization is the whole grid
+     * state), so treat the file as private data — reading it is a solitaire
+     * wall-hack the loader cannot and does not try to prevent. What the
+     * loader DOES enforce is semantic coherence ({@see Board::unserialize}):
+     * hand-edited payloads that describe impossible boards (lying mine
+     * counts, adjacency, first-click detonations, fake wins) are refused.
+     * The clock rides as elapsed SECONDS at save time, so 'L' in a fresh
+     * process (later this session or next week) resumes the timer from
+     * where it stood. Failures are swallowed exactly like
+     * {@see persistStats()} — a full disk must never crash a game.
      */
     private function saveGame(): self
     {
@@ -284,9 +289,10 @@ final class Game implements Model
      * this session's stats tally (a load is a time machine, not a memory
      * wipe). Missing/unreadable/unversioned files are refused quietly and
      * the current game continues. The board itself goes through
-     * {@see Board::unserialize()}, whose tamper hardening (recomputed
-     * revealed/flagged counts, enforced version) is what makes trusting a
-     * file on disk safe at all.
+     * {@see Board::unserialize()}, whose coherence hardening (strict wire
+     * types, mine-count census, adjacency recompute, impossible-state
+     * refusal) is what makes trusting a file on disk safe at all; the
+     * envelope fields are type-checked here with the same discipline.
      */
     private function loadSaved(): self
     {
@@ -303,23 +309,36 @@ final class Game implements Model
             || !is_string($payload['board'] ?? null)) {
             return $this;
         }
+        $cursorX = $payload['cursorX'] ?? 0;
+        $cursorY = $payload['cursorY'] ?? 0;
+        $elapsed = $payload['elapsed'] ?? null;
+        // Strict envelope typing: junk shapes refuse the load instead of
+        // being coerced (an (int) cast over an array is a TypeError, and a
+        // negative elapsed would render as a garbage '-1:-40' clock).
+        if (!is_int($cursorX) || !is_int($cursorY)
+            || !($elapsed === null || is_int($elapsed) || is_float($elapsed))
+            || (float) $elapsed < 0.0) {
+            return $this;
+        }
         try {
             $board = Board::unserialize($payload['board']);
         } catch (\InvalidArgumentException) {
             return $this;
         }
-        $elapsed = $payload['elapsed'] ?? null;
+        $over = $board->exploded || $board->isWon();
         return new self(
             board: $board,
-            cursorX: max(0, min($board->width  - 1, (int) ($payload['cursorX'] ?? 0))),
-            cursorY: max(0, min($board->height - 1, (int) ($payload['cursorY'] ?? 0))),
+            cursorX: max(0, min($board->width  - 1, $cursorX)),
+            cursorY: max(0, min($board->height - 1, $cursorY)),
             rand: $this->rand,
             // Re-anchor the wall clock so elapsed() continues from the
             // saved reading; a save taken before the first reveal carries
-            // elapsed null and stays a clock-not-started game.
-            startedAt: (is_float($elapsed) || is_int($elapsed))
-                ? microtime(true) - (float) $elapsed
-                : null,
+            // elapsed null and stays a clock-not-started game. A board
+            // that loads already OVER (a crafted finished save) keeps the
+            // saved seconds as its frozen final time instead of reporting
+            // a running clock from a re-anchored start.
+            startedAt: $over ? null : ($elapsed !== null ? microtime(true) - (float) $elapsed : null),
+            elapsedSeconds: $over && $elapsed !== null ? (int) $elapsed : null,
             stats: $this->stats,
             statsPath: $this->statsPath,
         );
@@ -493,15 +512,20 @@ final class Game implements Model
     }
 
     /**
-     * Returns the elapsed time in seconds (sub-second precision) if the game is in progress.
+     * Elapsed seconds: the live wall clock while the game runs, the frozen
+     * {@see $elapsedSeconds} stamp once it is over (set at the transition or
+     * restored from a finished save), null before the first reveal.
      */
     public function elapsed(): ?float
     {
+        if ($this->board->exploded || $this->board->isWon()) {
+            // Finished boards read the frozen stamp — set by recordResult() at
+            // the transition or restored by loadSaved() from the envelope —
+            // even when no wall clock was ever armed (a crafted finished save).
+            return $this->elapsedSeconds !== null ? (float) $this->elapsedSeconds : null;
+        }
         if ($this->startedAt === null) {
             return null;
-        }
-        if ($this->board->exploded || $this->board->isWon()) {
-            return $this->elapsedSeconds !== null ? (float) $this->elapsedSeconds : null;
         }
         return microtime(true) - $this->startedAt;
     }

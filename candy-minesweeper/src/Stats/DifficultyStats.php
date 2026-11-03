@@ -62,6 +62,15 @@ final class DifficultyStats
         }
 
         $data = $decoded['data'];
+        // Per-field reads index $data — a non-array data section (string,
+        // number, null slipped past isset via explicit null value... isset
+        // already refuses null, but a scalar does not) would have every
+        // expectInt* hit a warning-then-default path, silently replacing
+        // the real tally with zeros that the next save then CLOBBERS to
+        // disk. Refuse loudly instead of overwriting the user's history.
+        if (!is_array($data)) {
+            throw new \RuntimeException("Invalid persistence format in: {$path}");
+        }
 
         $stats = new Stats(
             easyGames:   self::expectInt($data['easyGames']   ?? null, 0, $path),
@@ -77,6 +86,20 @@ final class DifficultyStats
             expertWins:  self::expectInt($data['expertWins']  ?? null, 0, $path),
             expertBest:  self::expectNullableInt($data['expertBest']  ?? null, $path),
         );
+
+        // Counters must describe a countable past: negative games/wins or a
+        // negative best are impossible states, and wins-above-games is the
+        // classic tally forgery. The stats file is user-editable, so the
+        // reader enforces coherence rather than printing a "win rate
+        // 900.0%" leaderboard.
+        foreach (Difficulty::cases() as $d) {
+            $games = $stats->gamesPlayed($d);
+            $wins  = $stats->wins($d);
+            $best  = $stats->bestTime($d);
+            if ($games < 0 || $wins < 0 || ($best !== null && $best < 0) || $wins > $games) {
+                throw new \RuntimeException("Invalid persistence counters in: {$path}");
+            }
+        }
 
         return new self($stats);
     }
@@ -127,8 +150,12 @@ final class DifficultyStats
     public function save(string $path): void
     {
         $s = $this->stats;
-        AtomicJsonFile::new($path)->write([
-            'version' => 1,
+        // 0600 like the savegame slot: this is private per-user history;
+        // the mode is applied to the temp file before the publish rename.
+        AtomicJsonFile::new($path)
+            ->withPermissions(0600)
+            ->write([
+                'version' => 1,
             'data' => [
                 'easyGames' => $s->easyGames,
                 'easyWins' => $s->easyWins,
