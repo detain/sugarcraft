@@ -406,8 +406,11 @@ final class QuickPickTest extends TestCase
 
     public function testHighlightMatchesExactSGRBytes(): void
     {
-        // 'banana' filtered by 'an' yields the highlighted fragment:
-        // "\x1b[33man\x1b[0m" embedded in the item line (yellow highlight).
+        // 'banana' filtered by 'an' matches at codepoints 1-2 AND 3-4 — the
+        // two occurrences are adjacent, so AnsiWalk::paint coalesces them into
+        // one styled run. Before the AnsiWalk move this emitted two touching
+        // "\x1b[33man\x1b[0m" runs; visible output is identical, the merged
+        // spelling is one fewer open/reset pair. Pinned to the merged shape.
         // Use explicit windowWidth to avoid computeWidth() path and ensure
         // no truncateAnsi truncation of the highlighted string.
         $h = QuickPick::new([new FilteredItem(1, 'banana')])
@@ -419,12 +422,16 @@ final class QuickPickTest extends TestCase
         $bg = str_repeat(str_repeat(' ', 40) . "\n", 5);
         $view = $h->view($bg);
 
-        // Assert the exact SGR placement: opening code, matched run, reset.
+        // Assert the exact SGR placement: opening code, merged run, reset.
         // strpos is used directly because PHPUnit's assertStringContainsString
         // may represent non-printable bytes differently in failure output.
         $this->assertNotFalse(
-            \strpos($view, "\x1b[33man\x1b[0m"),
-            'highlighted substring with SGR wrap should appear in view output',
+            \strpos($view, "\x1b[33manan\x1b[0m"),
+            'adjacent match occurrences must merge into one SGR-wrapped run',
+        );
+        $this->assertNotFalse(
+            \strpos($view, 'b' . "\x1b[33manan\x1b[0m" . 'a'),
+            'the run must sit exactly between the unhighlighted b and trailing a',
         );
     }
 
@@ -745,59 +752,61 @@ final class QuickPickTest extends TestCase
         $this->assertStringContainsString('banana', $result);
     }
 
-    public function testPrintableTextReturnsPlainTextUnchanged(): void
+    /**
+     * M1 regression: the old highlighters rebuilt the row from escape-stripped
+     * runes, so any SGR a custom item formatter applied was silently erased by
+     * highlighting. Highlighting must splice INTO the formatted string and the
+     * formatter's own escape sequences must survive byte-for-byte.
+     * (The rune-extraction cases these tests used to pin via reflection now
+     * live as public-API pins in tests/Support/AnsiWalkTest.php.)
+     */
+    public function testHighlightingPreservesFormatterSgr(): void
     {
-        $h = $this->makeQuickPick()->show();
+        $h = QuickPick::new([new FilteredItem(1, 'banana')])
+            ->setWindowWidth(40)
+            ->setWindowHeight(6)
+            ->setItemFormatter(static fn(string $v): string => "\x1b[1m$v\x1b[0m")
+            ->setMatchStyle("\x1b[33m")
+            ->show()
+            ->type('an');
 
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('printableText');
-        $method->setAccessible(true);
+        $view = $h->view(str_repeat(str_repeat(' ', 40) . "\n", 5));
 
-        // Plain ASCII text passes through unchanged.
-        $result = $method->invoke($h, 'hello world');
-        $this->assertSame('hello world', $result);
+        $this->assertStringContainsString("\x1b[1m", $view, 'formatter bold must survive highlighting');
+        $this->assertStringContainsString("\x1b[33m", $view, 'highlight style must be applied');
+        // The merged highlighted run is wrapped INSIDE the formatter's SGR:
+        // bold open, plain 'b', yellow merged run, reset, bold 'a', close.
+        $this->assertStringContainsString(
+            "\x1b[1mb\x1b[33manan\x1b[0ma\x1b[0m",
+            $view,
+        );
     }
 
-    public function testPrintableTextStripsAnsiEscapeSequences(): void
+    public function testHighlightingWithFuzzyRankerPreservesFormatterSgr(): void
     {
-        $h = $this->makeQuickPick()->show();
+        // Ranker double reports 'bn' matching 'banana' at codepoints 0 and 2;
+        // the green formatter SGR must survive the yellow highlight splice.
+        $ranker = $this->createMock(FuzzyMatcher::class);
+        $ranker->method('match')
+            ->willReturn(new MatchResult('bn', 'banana', 10, [0, 2]));
 
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('printableText');
-        $method->setAccessible(true);
+        $h = QuickPick::new([new FilteredItem(1, 'banana')])
+            ->setWindowWidth(40)
+            ->setWindowHeight(6)
+            ->setItemFormatter(static fn(string $v): string => "\x1b[32m$v\x1b[0m")
+            ->setMatchStyle("\x1b[33m")
+            ->setRanker($ranker)
+            ->show()
+            ->type('bn');
 
-        // SGR color code should be stripped, leaving only the text.
-        $colored = "\x1b[33mWarning\x1b[0m";
-        $result = $method->invoke($h, $colored);
-        $this->assertSame('Warning', $result);
-    }
+        $view = $h->view(str_repeat(str_repeat(' ', 40) . "\n", 5));
 
-    public function testPrintableTextStripsComplexAnsiSequences(): void
-    {
-        $h = $this->makeQuickPick()->show();
-
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('printableText');
-        $method->setAccessible(true);
-
-        // Bold + italic + red + underscore (a complex multi-sequence ANSI string).
-        $complex = "\x1b[1;3;31;4mAlert\x1b[0m";
-        $result = $method->invoke($h, $complex);
-        $this->assertSame('Alert', $result);
-    }
-
-    public function testPrintableTextStripsCursorMovementSequences(): void
-    {
-        $h = $this->makeQuickPick()->show();
-
-        $reflection = new \ReflectionClass($h);
-        $method = $reflection->getMethod('printableText');
-        $method->setAccessible(true);
-
-        // CSI cursor movement sequences should be stripped.
-        $withCursor = "\x1b[10C\x1b[5Dtext\x1b[0m";
-        $result = $method->invoke($h, $withCursor);
-        $this->assertSame('text', $result);
+        $this->assertStringContainsString("\x1b[32m", $view, 'formatter green must survive fuzzy highlight');
+        $this->assertStringContainsString("\x1b[33m", $view, 'fuzzy highlight must be applied');
+        $this->assertStringContainsString(
+            "\x1b[32m\x1b[33mb\x1b[0ma\x1b[33mn\x1b[0mana\x1b[0m",
+            $view,
+        );
     }
 
     public function testHighlightFuzzyAppliesStyleToMatchedCharacters(): void
@@ -907,8 +916,16 @@ final class QuickPickTest extends TestCase
         $this->assertSame($frame1, $h1->view($bg1), 'frame 1 view() output must be byte-identical');
 
         // Frame 2: multibyte (accented + CJK) content, multiple substring matches.
+        // Re-pinned when highlightMatches moved to AnsiWalk: adjacent single-char
+        // matches now coalesce into ONE styled run ('aaa' gets one open/reset
+        // pair instead of three) — visible-identical, fewer escape bytes. The
+        // non-adjacent single 'a' runs keep their per-occurrence wrapping.
         $frame2 = \base64_decode(
-            'PiBhICAgICAgICAgICAgICAgICAgICAgCuKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAril48gMS4gYxtbMzFtYRtbMG1mw6kg5pel5pysIBtbMzFtYRtbMG0bWzMxbWEbWzBtG1szMW1hG1swbSAgICAgIAogIDIuIGIbWzMxbWEbWzBtbhtbMzFtYRtbMG1uG1szMW1hG1swbSAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAg',
+            'PiBhICAgICAgICAgICAgICAgICAgICAgCuKUgOKUgOKUgOKUgOKUgOKUgOKU'
+            . 'gOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKU'
+            . 'gOKUgOKUgAril48gMS4gYxtbMzFtYRtbMG1mw6kg5pel5pysIBtbMzFtYWFh'
+            . 'G1swbSAgICAgIAogIDIuIGIbWzMxbWEbWzBtbhtbMzFtYRtbMG1uG1szMW1h'
+            . 'G1swbSAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAg',
         );
         $h2 = QuickPick::new([
             new FilteredItem(1, 'café 日本 aaa'),

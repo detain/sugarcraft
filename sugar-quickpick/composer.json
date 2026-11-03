@@ -25,7 +25,6 @@
     },
     "require": {
         "php": "^8.3",
-        "sugarcraft/sugar-ansi-parser": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master",
         "sugarcraft/sugar-style": "dev-master",

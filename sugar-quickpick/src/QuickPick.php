@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\QuickPick;
 
-use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\FuzzyMatcher;
+use SugarCraft\QuickPick\Support\AnsiWalk;
 use SugarCraft\QuickPick\Support\UntrustedText;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -858,128 +857,59 @@ final class QuickPick
     }
 
     /**
-     * Extract the printable text (runes only, ANSI control sequences stripped)
-     * from a formatted item string, so a highlighter can re-style matched runs
-     * by character index without disturbing escape sequences.
-     */
-    private function printableText(string $text): string
-    {
-        $charString = '';
-
-        $handler = new class($charString) implements \SugarCraft\AnsiParser\Parser\Handler
-        {
-            /** @var string */
-            private string $string;
-
-            public function __construct(string &$string)
-            {
-                $this->string = &$string;
-            }
-
-            public function printChar(string $rune): void
-            {
-                $this->string .= $rune;
-            }
-
-            public function execute(int $byte): void
-            {
-                // Required by Handler interface; we only care about printable chars.
-            }
-
-            public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
-            {
-                // Required by Handler interface; CSI sequences are not relevant for text extraction.
-            }
-
-            public function escDispatch(int $final, int $intermediate): void
-            {
-                // Required by Handler interface; ESC sequences are not relevant for text extraction.
-            }
-
-            public function oscDispatch(string $data): void
-            {
-                // Required by Handler interface; OSC sequences are not relevant for text extraction.
-            }
-
-            public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
-            {
-                // Required by Handler interface; DCS sequences are not relevant for text extraction.
-            }
-
-            public function sosPmApcDispatch(string $kind, string $data): void
-            {
-                // Required by Handler interface; SOS/PM/APC sequences are not relevant for text extraction.
-            }
-        };
-
-        $parser = new \SugarCraft\AnsiParser\Parser\Parser($handler);
-        $parser->feed($text);
-        $parser->flush();
-
-        return $charString;
-    }
-
-    /**
      * Highlight every contiguous occurrence of the filter text within a
      * formatted item string (the default substring strategy).
+     *
+     * Match indices address DISPLAY codepoints only (escape sequences are
+     * invisible to the filter), and re-emission keeps the formatter's own
+     * escape sequences verbatim — see {@see AnsiWalk::paint()}.
      */
     private function highlightMatches(string $text, string $filter): string
     {
-        $charString = $this->printableText($text);
-
-        // Split into character arrays ONCE. The previous per-index mb_substr()
-        // calls made each character access O(n), so scanning the whole string
-        // was O(n²); indexing pre-split arrays keeps the scan linear.
-        $chars      = \mb_str_split($charString, 1, 'UTF-8');
-        $lowerChars = \mb_str_split(\mb_strtolower($charString, 'UTF-8'), 1, 'UTF-8');
+        $chars = AnsiWalk::chars($text);
+        $lowerChars = \array_map(
+            static fn(string $c): string => \mb_strtolower($c, 'UTF-8'),
+            $chars
+        );
         $filterLower = \mb_strtolower($filter, 'UTF-8');
-        $flen = \mb_strlen($filterLower, 'UTF-8');
+        $fArr = \mb_str_split($filterLower, 1, 'UTF-8');
+        $flen = \count($fArr);
         $charLen = \count($chars);
-        $result = '';
-        $i = 0;
+        $matched = [];
 
-        while ($i < $charLen) {
-            $matched = false;
-            if ($flen > 0 && $charLen - $i >= $flen) {
-                $charSubstr = \implode('', \array_slice($lowerChars, $i, $flen));
-                if ($charSubstr === $filterLower) {
-                    $result .= $this->matchStyle;
-                    for ($j = 0; $j < $flen; $j++) {
-                        $result .= $chars[$i + $j];
-                    }
-                    $result .= Ansi::reset();
-                    $i += $flen;
-                    $matched = true;
+        for ($i = 0; $i + $flen <= $charLen; $i++) {
+            if (\array_slice($lowerChars, $i, $flen) === $fArr) {
+                for ($j = 0; $j < $flen; $j++) {
+                    $matched[$i + $j] = true;
                 }
-            }
-            if ($matched === false) {
-                $result .= $chars[$i];
-                $i++;
+                // Non-overlapping, exactly like the previous forward scan
+                // that resumed after each emitted run.
+                $i += $flen - 1;
             }
         }
-        return $result;
+
+        return AnsiWalk::paint($text, $matched, $this->matchStyle);
     }
 
     /**
      * Highlight the sugar-fuzzy-matched runes in a formatted item string,
      * following the ranker's scored indices (a subsequence match) rather than a
-     * contiguous substring. Falls back to the plain printable text when the
-     * ranker reports no match for the displayed string.
+     * contiguous substring. When the ranker reports no match for the displayed
+     * string the row is re-emitted unchanged — host styling included.
      */
     private function highlightFuzzy(FuzzyMatcher $ranker, string $text, string $filter): string
     {
-        $charString = $this->printableText($text);
-        $result = $ranker->match($filter, $charString);
+        $result = $ranker->match($filter, AnsiWalk::plain($text));
         if ($result === null || $result->isEmpty()) {
-            return $charString;
+            return $text;
         }
 
-        $style = $this->matchStyle;
+        $matched = [];
+        foreach ($result->indices() as $index) {
+            $matched[$index] = true;
+        }
 
-        return (new Highlighter())->highlight(
-            $result,
-            static fn(string $matched): string => $style . $matched . Ansi::reset(),
-        );
+        return AnsiWalk::paint($text, $matched, $this->matchStyle);
     }
 
     private function compositeOver(array $overlayLines, int $winWidth, array $bgLines): string
