@@ -203,8 +203,10 @@ final class Toast
      *
      * The message text is app-supplied: inline SGR sequences in it are honoured
      * as styling (re-encoded through the cell grid), but raw control bytes can
-     * never reach the output — see README "Security & trust boundary" and
-     * docs/TRUST-BOUNDARY.md §1 for the host-side Sanitize contract.
+     * never reach the output — action labels obey the same law, normalised at
+     * Action construction (only inline SGR survives there) — see README
+     * "Security & trust boundary" and docs/TRUST-BOUNDARY.md §1 for the
+     * host-side Sanitize contract.
      *
      * When maxConcurrent is set and the queue would exceed it, applies
      * the configured overflow strategy (DropOldest, DropNewest, or Enqueue).
@@ -671,7 +673,7 @@ final class Toast
         // Render action buttons if any
         foreach ($alert->actions as $action) {
             $label = '[' . $action->label . ']';
-            $middleLines[] = '│' . Width::padRight(Width::truncate($label, $inner), $inner) . '│';
+            $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($label, $inner), $inner) . '│';
         }
 
         $lines = [$top, ...$middleLines, $bottom];
@@ -1049,7 +1051,14 @@ final class Toast
     private function graphemeWidth(string $g): int
     {
         if ($g === '') return 0;
-        if ($g === "\t") return 1;
+        // C0 controls (TAB included), DEL, and C1 never occupy a cell —
+        // they are skipped at placement instead of being charged a cell and
+        // emitted (lib-reviews-1102 M2: the old one-cell TAB special-case
+        // put raw 0x09 on the wire, desyncing the terminal's own tab stops).
+        // Action labels are normalised at construction, so this guard is
+        // the second door shared with the message channel.
+        if (\strlen($g) === 1 && (\ord($g) < 0x20 || \ord($g) === 0x7f)) return 0;
+        if (\preg_match('/^[\x{80}-\x{9f}]$/u', $g) === 1) return 0;
         return (int) \min(2, \max(0, Width::string($g)));
     }
 

@@ -143,7 +143,9 @@ final class ToastTrustBoundaryTest extends TestCase
 
     public function testControlBytesInActionLabelsAreContainedToo(): void
     {
-        $action = Action::new("X\x1b]100;y\x07", static function () {});
+        // TAB and LF joined the payload with lib-fixes-1103 M2/M3: the two
+        // bytes that USED to reach the wire verbatim from a label.
+        $action = Action::new("X\x1b]100;y\x07\tZ\nQ", static function () {});
         $toast = Toast::new(60)
             ->withPosition(Position::TopLeft)
             ->alert(ToastType::Info, 'labels are content too', actions: [$action]);
@@ -151,6 +153,13 @@ final class ToastTrustBoundaryTest extends TestCase
         $out = $toast->view(\str_repeat("bg\n", 12), 80, 12);
         $this->assertStringNotContainsString("\x1b]", $out);
         $this->assertStringNotContainsString("\x07", $out);
+        $this->assertStringNotContainsString("\x09", $out, 'raw TAB byte on the wire');
+        // LF cannot tear the frame: "Z\nQ" normalises to "ZQ" inside [ ... ].
+        $this->assertStringContainsString('[XZQ]', (string) \preg_replace(
+            '/\x1b\[[0-9;?]*[ -\/]*[@-~]/',
+            '',
+            $out
+        ));
     }
 
     public function testInlineSgrIsHonouredAsStylingNotStripped(): void

@@ -445,13 +445,22 @@ final class ToastRenderingTest extends TestCase
         );
     }
 
-    public function testGraphemeWidthTabChargesOneCell(): void
+    public function testGraphemeWidthSkipsControlBytes(): void
     {
-        // Declared divergence: sugar-core bills a tab TAB_WIDTH=4 (E69), but
-        // a cell grid has no 4-wide Cell contract (widths are 0/1/2), so the
-        // toast painter charges one cell.
+        // lib-reviews-1102 M2 flip (2026-11-03): the old pin charged a TAB
+        // ONE cell, which put raw 0x09 on the wire — the terminal then
+        // expanded it to its own tab stops and desynced every later column
+        // (label "a\tb" measured 83 cells on an 80-col frame). Cell grids
+        // cannot represent a control's variable advance, so no control gets
+        // a cell: the painter now skips C0/DEL/C1 outright, making the
+        // "raw control bytes can NEVER reach the output" claim true on both
+        // channels. sugar-core's TAB_WIDTH=4 billing stands for text flow.
         $this->assertSame(4, Width::string("\t"), 'the canonical oracle bills a tab four columns');
-        $this->assertSame(1, $this->invokeGraphemeWidth("\t"), 'the cell painter charges one');
+        $this->assertSame(0, $this->invokeGraphemeWidth("\t"), 'the cell painter charges a tab nothing');
+        $this->assertSame(0, $this->invokeGraphemeWidth("\x00"), 'NUL charges nothing');
+        $this->assertSame(0, $this->invokeGraphemeWidth("\x1b"), 'ESC charges nothing');
+        $this->assertSame(0, $this->invokeGraphemeWidth("\x7f"), 'DEL charges nothing');
+        $this->assertSame(0, $this->invokeGraphemeWidth("\u{0085}"), 'C1 NEL charges nothing');
     }
 
     public function testEmojiHeaderRowStaysInsideTheBoxBorder(): void

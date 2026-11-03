@@ -9,27 +9,100 @@ namespace SugarCraft\Toast;
  *
  * Encapsulates a label and a closure callback that is invoked when the
  * action is triggered.
+ *
+ * The label is normalised at construction — the single ingress point the
+ * whole label channel flows through. Inline CSI-SGR styling survives (a
+ * red "Delete" is a legitimate design ask, and the message channel already
+ * honours it); every other control construct is stripped, so a label sourced
+ * from hostile text can never emit raw TAB/LF bytes, OSC framing, or
+ * non-styling escapes onto the wire (lib-reviews-1102 M2/M3). sugar-mouse
+ * zone sentinels U+E000/U+E001 are ordinary printable PUA glyphs here and
+ * pass through by the same documented law as the message channel
+ * (README "Security & trust boundary").
  */
 final class Action
 {
+    /** User-visible button label, normalised at construction. @var non-empty-string */
+    public readonly string $label;
+
     /**
-     * @param non-empty-string $label  User-visible button label
+     * @param string $label  User-visible button label; must retain at least
+     *                       one printable character after control/escape
+     *                       normalisation (psalm's non-empty-string made
+     *                       literal, lib-reviews-1102 n2)
      * @param \Closure(): void $callback  Invoked when action is triggered
      */
-    public function __construct(
-        public readonly string $label,
-        public readonly \Closure $callback,
-    ) {}
+    public function __construct(string $label, public readonly \Closure $callback)
+    {
+        $this->label = self::normaliseLabel($label);
+    }
 
     /**
      * Factory for fluent construction — the project's `::new()` convention
      * (no `::make()`/`::create()`/`::default()`).
-     *
-     * @param non-empty-string $label
-     * @param \Closure(): void $callback
      */
     public static function new(string $label, \Closure $callback): self
     {
         return new self($label, $callback);
+    }
+
+    /**
+     * Parse the label down to printable text + CSI-SGR styling (Law 2: data
+     * is trusted after this boundary, so no render path re-validates it).
+     *
+     * Kept: full CSI parameter/intermediate/final sequences whose final
+     * byte is `m` (SGR), rewritten in canonical form. Dropped: OSC strings
+     * (BEL- or ST-terminated), DCS/APC/PM/SOS strings, non-SGR CSI
+     * sequences, any remaining bare ESC byte, all C0 controls (TAB and DEL
+     * included), and C1 controls. The PUA zone sentinels U+E000/U+E001 are
+     * outside every drop set and survive untouched, exactly as documented.
+     *
+     * @throws \InvalidArgumentException when nothing printable remains
+     */
+    private static function normaliseLabel(string $label): string
+    {
+        // One ordered pass. Alternatives compete left-to-right, so SGR is
+        // kept before generic CSI dies, and a non-SGR escape can never be
+        // mistaken for a kept sequence by a later stage (the staged version
+        // of this function ate the ESC bytes of the sequences it promised
+        // to keep — lib-reviews-1102 M2's fix must not itself break m7).
+        $out = \preg_replace_callback(
+            '/\x1b\[(?<sgr>[0-9;?]*)(?<si>[ -\/]*)m'            // kept: CSI SGR (canonical rewrite)
+            . '|\x1b\][\s\S]*?(?:\x07|\x1b\\\\)'                // OSC terminated (BEL or ST): framing+payload die, following text lives
+            . '|\x1b\][\s\S]*'                                  // unterminated OSC: fail-closed swallow
+            . '|\x1b[\x50\x58\x5e\x5f][\s\S]*?(?:\x07|\x1b\\\\)' // DCS/APC/PM/SOS terminated
+            . '|\x1b[\x50\x58\x5e\x5f][\s\S]*'                  // …and fail-closed swallow
+            . '|\x1b\[[0-9;?]*[ -\/]*[@-~]'                     // non-SGR CSI: dropped
+            . '|\x1b'                                           // bare ESC: dropped
+            . '|[\x{00}-\x{1F}\x{7F}-\x{9F}]/u',                // C0 (TAB/LF/CR all), DEL, C1
+            static fn (array $m): string => isset($m['sgr'])
+                ? "\x1b[{$m['sgr']}{$m['si']}m"
+                : '',
+            $label
+        );
+        if ($out === null) {
+            // Invalid UTF-8 (the /u compile guard): byte-wise equivalent,
+            // C1 classes dropped — matches the cell grid's own behaviour of
+            // reproducing malformed bytes rather than executing them.
+            $out = \preg_replace_callback(
+                '/\x1b\[(?<sgr>[0-9;?]*)(?<si>[ -\/]*)m|\x1b\][\s\S]*?(?:\x07|\x1b\\\\)|\x1b\][\s\S]*|\x1b[\x50\x58\x5e\x5f][\s\S]*?(?:\x07|\x1b\\\\)|\x1b[\x50\x58\x5e\x5f][\s\S]*|\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b|[\x00-\x1F\x7F]/',
+                static fn (array $m): string => isset($m['sgr'])
+                    ? "\x1b[{$m['sgr']}{$m['si']}m"
+                    : '',
+                $label
+            ) ?? '';
+        }
+
+        // A label left with only SGR framing and/or spaces has no visible
+        // button at all — refuse rather than render an empty bracket.
+        $visible = \preg_replace('/\x1b\[[0-9;?]*[ -\/]*m/', '', $out) ?? $out;
+        if (\trim($visible) === '') {
+            throw new \InvalidArgumentException(
+                'Action label must contain at least one printable character '
+                . 'after control/escape normalisation'
+            );
+        }
+
+        return $out;
     }
 }
