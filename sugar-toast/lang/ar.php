@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * Arabic (AR) translations for sugar-toast.
+ *
+ * Keys and {count} placeholders are contract: they ride lang/en.php
+ * verbatim (only values are translated).
+ *
+ * @return array<string, string>
+ */
+
+declare(strict_types=1);
+
+return [
+    // Toast type labels
+    'type.info'    => 'معلومات',
+    'type.warning' => 'تحذير',
+    'type.error'   => 'خطأ',
+    'type.success' => 'نجاح',
+
+    // Default dismiss prompt
+    'dismiss' => 'اضغط أي مفتاح للإغلاق',
+
+    // Notification counter
+    'count' => '{count} إشعار',
+];

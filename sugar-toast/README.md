@@ -248,9 +248,11 @@ All translatable strings live in `lang/en.php` under the `'toast'` namespace.
 > for host-rendered dismiss-hint and counter UI. They are **not** emitted or
 > rendered by `view()` itself — the library outputs only the alert overlay.
 
-To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
-values. The lookup chain follows `SugarCraft\Core\I18n\T`:
-exact locale → base language → `en` → raw key.
+`lang/` ships every LOCALES.md code (17 files: en, fr, de, es, pt, pt-br,
+zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar); keys and `{count}` placeholders are
+contract — only values translate. To add one, copy `lang/en.php` to
+`lang/<code>.php` and translate the values. The lookup chain follows
+`SugarCraft\Core\I18n\T`: exact locale → base language → `en` → raw key.
 
 **Using the facade:**
 
