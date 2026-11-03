@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-flappy",
-    "description": "Flappy-Bird-style game \u2014 port of kbrgl/flapioca on the SugarCraft stack.",
+    "description": "Flappy-Bird-style terminal game on the SugarCraft stack, inspired by kbrgl/flapioca.",
     "type": "project",
     "license": "MIT",
     "keywords": [
@@ -29,7 +29,7 @@
         "bin/candy-flappy"
     ],
     "require": {
-        "php": ">=8.3",
+        "php": "^8.3",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-spring": "dev-master"

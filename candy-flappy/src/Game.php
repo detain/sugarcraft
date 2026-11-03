@@ -357,8 +357,11 @@ final class Game implements Model
             return [$this->withColorProfile($msg->profile), null];
         }
         if ($msg instanceof KeyMsg) {
+            // m4: a Shift-ed letter arrives as the uppercase rune; the game must not
+            // silently ignore it.
+            $rune = strtolower($msg->rune);
             if ($msg->type === KeyType::Escape
-                || ($msg->type === KeyType::Char && $msg->rune === 'q')
+                || ($msg->type === KeyType::Char && $rune === 'q')
                 || ($msg->ctrl && $msg->rune === 'c')) {
                 // M18: quitting mid-flight used to discard a qualifying
                 // score entirely — only a crash could persist. Settle first,
@@ -371,7 +374,7 @@ final class Game implements Model
                 }
                 return [$this, Cmd::quit()];
             }
-            if ($msg->type === KeyType::Char && $msg->rune === 'r' && $msg->ctrl === false) {
+            if ($msg->type === KeyType::Char && $rune === 'r' && $msg->ctrl === false) {
                 // Emit no timer: the stable-id subscription carries over.
                 // m30: restart is a fresh board IN THE SAME viewport — the
                 // old trip through start() silently reset the frame to the
@@ -393,7 +396,7 @@ final class Game implements Model
             $isFlap = $msg->type === KeyType::Space
                 || $msg->type === KeyType::Enter   // M20: Enter flaps too
                 || $msg->type === KeyType::Up
-                || ($msg->type === KeyType::Char && $msg->rune === 'w');
+                || ($msg->type === KeyType::Char && $rune === 'w');
             if ($isFlap === true) {
                 return [$this->withBird($this->bird->flap())->withStarted(), null];
             }

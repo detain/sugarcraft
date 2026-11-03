@@ -2,9 +2,6 @@
 
 # CandyFlappy
 
-> Formerly published as `sugarcraft/honey-flap` (renamed 2026-10). <!-- @rename-keep -->
-> Namespace changed: `SugarCraft\Flap\` → `SugarCraft\Flappy\`. <!-- @rename-keep -->
-
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-flappy)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-flappy)
@@ -18,12 +15,14 @@
 
 candy-flappy — a Flappy-Bird-style game for the terminal, built on the SugarCraft stack, for PHP 8.3+. The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
 
+*Formerly published as `sugarcraft/honey-flap` (renamed 2026-10; namespace `SugarCraft\Flap\` → `SugarCraft\Flappy\`). The first run of `bin/candy-flappy` migrates a pre-rename `~/.config/.honey-flap` high-score directory automatically.*
+
 ## Install & run
 
 ```bash
 # From a clone of the monorepo:
 composer install
-./bin/candy-flappy
+./bin/candy-flappy      # or: php examples/play.php
 
 # As a library dependency (pre-1.0: the package publishes a dev branch only):
 #   composer require sugarcraft/candy-flappy:@dev
@@ -67,12 +66,12 @@ The framed world is a fixed 62 x 21 cells (`Game::MIN_COLS` x `Game::MIN_ROWS`).
 
 | File            | Role                                                                           |
 |-----------------|--------------------------------------------------------------------------------|
-| `Bird`          | Wraps a SugarSpring `Projectile` — gravity pulls it down, `flap()` resets vertical velocity to a fixed kick, and fall speed is capped at terminal velocity. |
-| `Pipe`          | Single-column pipe pair with a centred gap. Slides left one cell per tick.     |
-| `TickMsg`       | Frame-tick message fired by the `game-tick` subscription timer (`Game::TICK_SECONDS`, 1/30 s exactly). |
-| `Game` (Model)  | Pure-state world: bird + pipes + score + crashed flag. Injects PRNG closure for deterministic gap placements in tests. |
-| `Renderer`      | Pure view — single playfield walk, ANSI-styled glyphs, rounded border.         |
-| `PipeGenerator` | Generates pipes with variable gap height — gap shrinks as score increases, raising difficulty. Gap starts at 6 cells, shrinks by 1 every 5 points, floors at 3. |
+| `Bird.php`          | Wraps a SugarSpring `Projectile` — gravity pulls it down, `flap()` resets vertical velocity to a fixed kick, and fall speed is capped at terminal velocity. |
+| `Pipe.php`          | Single-column pipe pair with a centred gap. Slides left one cell per tick.     |
+| `TickMsg.php`       | Frame-tick message fired by the `game-tick` subscription timer (`Game::TICK_SECONDS`, 1/30 s exactly). |
+| `Game.php` (Model)  | Pure-state world: bird + pipes + score + crashed flag. Injects PRNG closure for deterministic gap placements in tests. |
+| `Renderer.php`      | Pure view — single playfield walk, ANSI-styled glyphs, rounded border.         |
+| `PipeGenerator.php` | Generates pipes with variable gap height — gap shrinks as score increases, raising difficulty. Gap starts at 6 cells, shrinks by 1 every 5 points, floors at 3. |
 
 The PRNG is injected as a `Closure(int $maxInclusive): int` so unit tests can pin the pipe layout to a specific sequence — the standard SugarCraft pattern.
 
@@ -133,6 +132,30 @@ rm tests/fixtures/render-alive.golden
 UPDATE_GOLDENS=1 vendor/bin/phpunit --filter GoldenRenderTest   # recreates
 vendor/bin/phpunit --filter GoldenRenderTest                    # must pass with no env
 ```
+
+## Scoring
+
+The score increments by one for each pipe pair whose column passes the bird's
+column (per tick), so surviving is scored, not flapping. The top ten scores
+ever recorded on this machine are kept.
+
+Tuning is compiled in, deliberately: physics constants, tick rate, gap bands
+and key bindings are NOT configurable. The leaderboard and the difficulty
+curve are one coherent game; knobs would let a session claim scores the
+defaults could not produce.
+
+## High scores, config, and environment
+
+- Save file: `~/.config/.candy-flappy/scores.json` (0600, atomic; a corrupt
+  file is quarantined to `scores.json.corrupt-<timestamp>` instead of
+  bricking launch).
+- Config base resolution: `XDG_CONFIG_HOME` if set, else `HOME/.config`. With
+  neither set the game refuses to launch rather than guess.
+- To reset the leaderboard: `rm ~/.config/.candy-flappy/scores.json`.
+- Colour posture follows `sugar-core`'s `ColorProfile::detect()`:
+  `NO_COLOR` forces the ASCII posture; `CLICOLOR_FORCE` / `FORCE_COLOR` can
+  force colour on where detection would demure; a non-TTY stdout or
+  `TERM=dumb` gets the plain refusal screen.
 
 ## Credits & inspiration
 

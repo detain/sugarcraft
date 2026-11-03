@@ -806,6 +806,22 @@ final class GameTest extends TestCase
         $this->assertSame(2, substr_count($g->view(), '💥'));
     }
 
+    public function testShiftedLetterKeysActLikeTheirLowerCase(): void
+    {
+        // m4: terminals deliver Shift+w as 'W'; the game used to ignore it.
+        $g = Game::start(static fn(int $_m): int => 0, $this->hermeticConfigDir());
+        $g = $g->update(new KeyMsg(KeyType::Char, rune: 'W'))[0];
+        self::assertTrue($g->started);
+
+        $flipped = $g->update(new KeyMsg(KeyType::Space))[0];
+        $g = $flipped->update(new KeyMsg(KeyType::Char, rune: 'R'));
+        self::assertTrue($g[0]->pipes === [] && $g[0]->started === false,
+            'uppercase R restarts to the ready card like r');
+
+        $quit = $g[0]->update(new KeyMsg(KeyType::Char, rune: 'Q'))[1];
+        self::assertNotNull($quit);
+    }
+
     public function testSettleOnExitSavesALiveQualifyingScore(): void
     {
         // The bin-level safety net for signal death (M18): a started,

@@ -41,7 +41,8 @@ final class PipeGenerator
      * Generate a new Pipe at the right edge with a variable gap height.
      *
      * @param int $score          Current game score (affects gap height)
-     * @param \Closure(int): int  $rand  PRNG producing 0..$max
+     * @param \Closure(int $maxInclusive): int  $rand  PRNG returning an int in
+     *     0..$maxInclusive, endpoints included (Game's default wraps random_int)
      */
     public static function makePipe(int $score, \Closure $rand): Pipe
     {
