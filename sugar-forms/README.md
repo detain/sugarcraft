@@ -21,7 +21,8 @@ SugarForms owns the full primitive + form surface:
 - **Input primitives** — `TextInput`, `TextArea`, `ItemList`, `Viewport`,
   `FilePicker`, `Cursor`, `Scrollbar`, `Spinner`.
 - **Form engine** — `Field` interface + `Field\{Input,Text,Confirm,Select,
-  MultiSelect,Note,FilePicker}`, `Form`, `Group`, `KeyMap`, `Theme`,
+  MultiSelect,Note,FilePicker,Date,Slider,Color,NumberField,RadioPills}`,
+  `Form`, `Group`, `KeyMap`, `Theme`,
   `Fuzzy\FuzzyMatcher`, and `Validator\{Required,Email,MinLength,MaxLength,Pattern}`.
 
 `sugar-widgets` (`SugarCraft\Widgets\*`) exposes these classes as thin
@@ -81,7 +82,7 @@ $spinner = Spinner::new(Style::dot());
 
 ## Forms (huh-style)
 
-Multi-page Group wizards, six themes, per-field validators, conditional skip
+Multi-page Group wizards, seven themes, per-field validators, conditional skip
 predicates. The form is itself a SugarCraft Model — drop it into a Program.
 
 ```php
@@ -105,16 +106,18 @@ $form = Form::new(
 
 | Field         | Description                                                 | Notable knobs |
 | ------------- | ----------------------------------------------------------- | ------------- |
-| `Input`       | Single-line text (wraps `SugarCraft\Widgets\TextInput`)             | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
+| `Input`       | Single-line text (wraps `SugarCraft\Widgets\TextInput`)             | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator|\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
 | `Text`        | Multi-line text editor                                      | `withCharLimit`, `withMaxLines`, `withShowLineNumbers`, `withValidator` |
-| `Confirm`     | Yes/no boolean                                              | `withAffirmative`/`withNegative`, `withValidator(\Closure(bool):?string)`, `withTitleFunc`, `withDescriptionFunc` |
+| `Confirm`     | Yes/no boolean                                              | `withAffirmative`/`withNegative`, `withValidator(Validator|\Closure(bool):?string)`, `withTitleFunc`, `withDescriptionFunc` |
 | `Select`      | Single-choice list (wraps `SugarCraft\Widgets\ItemList`)            | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` |
 | `MultiSelect` | Multi-choice list (j/k vim keys + space to toggle)          | `withOptions(...)`, `withLimit(int)` |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) |
 | `FilePicker`  | Filesystem picker (wraps `SugarCraft\Widgets\FilePicker`)          | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
-| `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withWidth`, `withValidator(\Closure)` |
+| `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withWidth`, `withValidator(Validator|\Closure|null)` |
 | `Slider`      | Numeric range slider (keyboard drag, snapping step)         | `withMin` / `withMax` / `withStep`, `withValue(int|float)`, `withValidator` |
 | `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)`, `withValidator` |
+| `NumberField` | Bounded numeric input — draft + committed int64-safe value on a step lattice | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withoutValue()` (never-set ≠ 0), `withPlaceholder`, `withWidth` |
+| `RadioPills`  | Horizontal pill row, single choice by arrows or mouse      | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc` |
 
 All fields share a common navigation contract: `Tab` / `↓` advances,
 `Shift+Tab` / `↑` retreats, `Enter` on the last interactive field submits,
@@ -151,16 +154,16 @@ Form::groups(
 | `withShowHelp(bool)` | Toggle the help footer. |
 | `withShowErrors(bool)` | Toggle the inline `! error` line on validation failures. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
-| `withTimeout(int $ms)` | Auto-abort after `$ms` of wall clock. |
+| `withTimeout(int $ms)` | Stores a wall-clock budget (ms) for the host runtime to consult; the `Form` model itself starts no timer. |
 | `withKeyMap(KeyMap)` (or the `Form` constructor's `$keyMap` prop) | Override the bindings for `Next` / `Prev` / `Submit` / `Quit` (and per-field nav) on a single form. |
 | `validateAll(): array<string,string>` | Run all field validators and return `[fieldKey => errorMessage]` for fields that failed. Use after `Form::run()` to collect cross-field validation failures that cannot be expressed per-field. |
 
 ### Reading values after submit
 
 `values()` returns every visible field keyed by `key()`. For typed access
-call `getString`, `getInt`, `getBool`, `getArray`. For inspecting validation
-state during a run use `errors()`, `hasErrors()`, `getFocusedField()`,
-`keyBinds()`, `help()`.
+call `string()`, `int()`, `bool()`, `array()`. For inspecting state during a
+run use `errors()`, `hasErrors()`, `focusedField()`, `keyBinds()`, `help()`.
+(`getString()` & friends are deprecated forwarders, removed in 2.0.0.)
 
 ### Themes & accessibility
 
@@ -172,7 +175,7 @@ mode flips the entire form to plain-text rendering — useful when you detect
 
 ### Validators and dynamic labels
 
-Every value-producing field supports `withValidator(\Closure)`. The closure
+Every value-producing field supports `withValidator(Validator|\Closure)` — a ready-made validator instance or a closure. The closure
 runs on every keystroke (or every value flip for `Confirm`) and returns
 `null` for valid or an error string. The error renders inline beneath the
 field and shows up in `Form::errors()`.
@@ -368,8 +371,17 @@ collision reasons).
 
 ## Dependencies
 
+Runtime requires (see `composer.json`):
+
 - `sugarcraft/sugar-core` — Model–Update–View TUI runtime
 - `sugarcraft/sugar-style` — Declarative styling
+- `sugarcraft/sugar-async` — async suggestion support (cancellation sources)
+- `sugarcraft/sugar-cellbuffer` — cell-grid rendering for the raw widgets
+- `sugarcraft/sugar-constraints` — layout solving for `Form::withConstraints()`
+- `sugarcraft/sugar-fuzzy` — Smith-Waterman suggestion scoring
+
+(`sugarcraft/sugar-testing` is a dev-only require, used by the golden
+snapshot tests.)
 
 ### Versioning
 

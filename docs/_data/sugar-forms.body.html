@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Form engine built on SugarCraft — multi-page Group wizards, six themes, per-field validators, conditional skip predicates. The form is itself a Model — drop it into a Program. Also the foundation for the raw form / input primitives that <code>sugar-widgets</code> re-exports, folded together with the interactive form library (port of charmbracelet/huh) into a single standalone dependency.</p>
+<p class="lede" style="margin-top: 28px;">Form engine built on SugarCraft — multi-page Group wizards, seven themes, per-field validators, conditional skip predicates. The form is itself a Model — drop it into a Program. Also the foundation for the raw form / input primitives that <code>sugar-widgets</code> re-exports, folded together with the interactive form library (port of charmbracelet/huh) into a single standalone dependency.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-forms</code></pre>
@@ -54,7 +54,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
       <div class="feature"><strong>MultiSelect vim keys</strong><span><code>j</code> / <code>k</code> navigate, <code>Space</code> toggles selection — mirrors vim-style keybindings.</span></div>
       <div class="feature"><strong>Select enum mode</strong><span><code>Select::withEnum(\BackedEnum::class)</code> coerces the selected value to the given enum type automatically.</span></div>
       <div class="feature"><strong>Multi-page Groups</strong><span><code>Group::new()</code> stacks Forms into a wizard. Conditional <code>->withSkipFn()</code>.</span></div>
-      <div class="feature"><strong>Six themes</strong><span>Default, charm, dracula, base16, catppuccin, pink. Custom error summary slot via <code>Theme::$errorSummary</code>.</span></div>
+      <div class="feature"><strong>Seven themes</strong><span>ansi (default), plain, charm, dracula, catppuccin, base16, base. Custom error summary slot via <code>Theme::$errorSummary</code>.</span></div>
       <div class="feature"><strong>Tab nav</strong><span>Tab / Shift+Tab between fields, Enter on the last submits, Esc / Ctrl+C aborts.</span></div>
       <div class="feature"><strong>Submit hook</strong><span><code>$form->getValue('name')</code> after the Program ends — typed value retrieval.</span></div>
       <div class="feature"><strong>Form-level KeyMap</strong><span><code>Form::keyMap($keymap)</code> rebinds Next / Prev / Submit / Quit per form.</span></div>
