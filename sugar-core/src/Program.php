@@ -1596,8 +1596,15 @@ final class Program
         }
         $rendered = $this->activeModel()->view();
         $images = [];
+        $cursorView = null;
         if ($rendered instanceof View) {
+            // Mode side effects (mouse, focus, paste, title, progress, cursor
+            // visibility) go on the wire BEFORE the frame. The cursor
+            // POSITION command is deferred until after it — the frame
+            // repaints the screen and a position move emitted mid-paint lands
+            // where the next diff will overwrite it, not where the user aims.
             $this->applyViewSideEffects($rendered);
+            $cursorView = $rendered;
             $body = $rendered->body;
             $images = $rendered->images;
         } else {
@@ -1631,6 +1638,11 @@ final class Program
         }
         if (($imagesChanged || $bodyChanged) && $paints !== []) {
             $this->writeOutput(ImageOverlay::paint($paints));
+        }
+
+        // Cursor shape + position land last, on top of the painted frame.
+        if ($cursorView !== null) {
+            $this->applyCursorPlacement($cursorView);
         }
 
         $this->lastRenderedBody = $body;
@@ -1713,12 +1725,24 @@ final class Program
             $this->lastBackgroundColor = $c;
         }
 
-        if ($view->cursor === null) {
-            // null cursor → hide.
-            if (!$this->lastCursorHidden) {
-                $this->writeOutput(Ansi::cursorHide());
-                $this->lastCursorHidden = true;
-            }
+        if ($view->cursor === null && !$this->lastCursorHidden) {
+            // null cursor → hide (the visibility flip is a mode, so it
+            // belongs before the frame; shape + position wait for
+            // applyCursorPlacement() after it).
+            $this->writeOutput(Ansi::cursorHide());
+            $this->lastCursorHidden = true;
+        }
+    }
+
+    /**
+     * Emit the View's cursor shape and position, deferred until the frame
+     * (text diff + image paints) has been written — see renderFrame(). The
+     * show/hide toggle itself already happened in applyViewSideEffects().
+     */
+    private function applyCursorPlacement(View $view): void
+    {
+        $cur = $view->cursor;
+        if ($cur === null) {
             return;
         }
 
@@ -1728,7 +1752,6 @@ final class Program
             $this->lastCursorHidden = false;
         }
 
-        $cur  = $view->cursor;
         $prev = $this->lastCursor;
         if ($prev === null
             || $prev->shape !== $cur->shape
