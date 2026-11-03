@@ -985,7 +985,7 @@ final class SugarPanels
                 $result[] = $paragraphLine;
                 continue;
             }
-            // Audit #12: single preg_split call (the old expression ran it twice).
+            // One preg_split call for the split (an earlier form ran it twice).
             $split = \preg_split('/\s+/', $paragraphLine);
             $words = $split !== false ? $split : [];
             $current = '';
@@ -1139,20 +1139,20 @@ final class SugarPanels
      * divider itself carries the closing sequence: whatever the neighbour was
      * doing, the boundary ends the span.
      *
-     * A cell that already shows a glyph is left alone. The earlier rule asked
-     * the neighbouring NODE whether it was bordered, which only covered the
-     * direct child: in a borderless container of bordered panels the divider
-     * still ran over the grandchildren's ╮/╯ corners, and a stacked layout's
-     * ╰───╯ became a bare dash run. Asking the grid instead of the tree is both
-     * cheaper and correct at every depth.
+     * A span with any visible glyph in it stands down as a whole. The earlier
+     * rule asked the neighbouring NODE whether it was bordered, which only
+     * covered the direct child: in a borderless container of bordered panels the
+     * divider still ran over the grandchildren's ╮/╯ corners, and a stacked
+     * layout's ╰───╯ became a bare dash run. Asking the grid instead of the tree
+     * is both cheaper and correct at every depth.
      */
     private function drawVLine(?Border $border, int $x, int $y, int $h, array &$cells): void
     {
+        if ($this->dividerSpanIsFree($cells, $x, $y, 1, $h) === false) {
+            return;
+        }
         $b = $border ?? Border::rounded();
         for ($j = 0; $j < $h; $j++) {
-            if ($this->cellIsPainted($cells, $x, $y + $j)) {
-                continue;
-            }
             $this->setChar($x, $y + $j, "\x1b[0m" . $b->left, $cells);
         }
     }
@@ -1160,27 +1160,40 @@ final class SugarPanels
     /** @see drawVLine() — the horizontal divider closes the neighbour's span too. */
     private function drawHLine(?Border $border, int $x, int $y, int $w, array &$cells): void
     {
+        if ($this->dividerSpanIsFree($cells, $x, $y, $w, 1) === false) {
+            return;
+        }
         $b = $border ?? Border::rounded();
         for ($i = 0; $i < $w; $i++) {
-            if ($this->cellIsPainted($cells, $x + $i, $y)) {
-                continue;
-            }
             $this->setChar($x + $i, $y, "\x1b[0m" . $b->top, $cells);
         }
     }
 
     /**
-     * Does this cell already carry a visible glyph?
+     * Is an entire divider span still free?
      *
-     * A cell holding only escape bytes (a styling run parked on a space) is
-     * still empty as far as the screen is concerned, so the divider takes it and
-     * brings its reset along.
+     * "Free" means no visible glyph: a cell holding only escape bytes (a styling
+     * run parked on a space) is empty as far as the screen is concerned, so the
+     * divider takes it and brings its reset along.
+     *
+     * The verdict is all-or-nothing because the divider always lands on the
+     * previous child's last row or column. Cell-by-cell it cut a rule straight
+     * through the padded tail of a neighbour's text line — half a line of ─
+     * after the word 'DASHBOARD' - which reads as a rendering defect, not as a
+     * separator. A span with anything visible in it stands down as a whole.
      */
-    private function cellIsPainted(array $cells, int $x, int $y): bool
+    private function dividerSpanIsFree(array $cells, int $x, int $y, int $w, int $h): bool
     {
-        $cell = $cells[$y][$x] ?? null;
+        for ($j = 0; $j < $h; $j++) {
+            for ($i = 0; $i < $w; $i++) {
+                $cell = $cells[$y + $j][$x + $i] ?? null;
+                if ($cell !== null && \trim(Ansi::strip($cell)) !== '') {
+                    return false;
+                }
+            }
+        }
 
-        return $cell !== null && \trim(Ansi::strip($cell)) !== '';
+        return true;
     }
 
     // -------------------------------------------------------------------------
@@ -1244,8 +1257,8 @@ final class SugarPanels
      * fourth quirk the three compat() flags cannot express. The floor's
      * reservation frame is seeded with `$borderPad` ({@see GreedySolver}'s
      * `reserveLead`) and bumped by one `$spacing` per placed child (`reserveGap`),
-     * re-creating the old `$used` counter exactly. A 28 280-case offset sweep plus
-     * a 960-layout rendered-byte sweep confirmed 0 divergences (byte-identical).
+     * re-creating the old `$used` counter exactly. The equivalence is swept over a
+     * grid of viewport sizes and child counts, byte-for-byte, in the suite.
      *
      * @param list<int> $weights
      * @return list<int> Starting offsets for each child
@@ -1326,7 +1339,7 @@ final class SugarPanels
      * axes it flips (round-split, remainder-to-the-last Fill, and NON-truncating
      * overflow so fixed children keep their full base and the layout runs off-grid
      * rather than being shrunk) are precisely sugar-panels's flex semantics. A
-     * 3456-layout characterization sweep confirmed 0 offset divergences.
+     * swept layout grid confirms 0 offset divergences.
      *
      * @param list<int> $bases   natural size per child (ignored for flex children)
      * @param list<int> $flexes  flex weight per child (0 = fixed)

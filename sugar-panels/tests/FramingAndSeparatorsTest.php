@@ -268,6 +268,38 @@ final class FramingAndSeparatorsTest extends TestCase
      * it; a column that already shows a glyph does not, which is what keeps a
      * neighbour's text and corners intact.
      */
+    /**
+     * A padded tail is not an invitation. At spacing 0 the divider lands on the
+     * previous child's last row, where a short line has left blank cells behind;
+     * cell-by-cell it cut a rule through the middle of the neighbour's text row.
+     * The verdict is per span, so a row that carries text is left intact while a
+     * genuinely free row still gets its separator.
+     */
+    public function testAPaddedTailDoesNotReceiveHalfADivider(): void
+    {
+        $rows = self::rows(SugarPanels::new()->render(
+            Node::vertical(
+                Node::leaf('HEADER')->withBorder(false),
+                Node::leaf('body')->withBorder(false)->withGrow(),
+                Node::leaf('READY')->withBorder(false),
+            )->withBorder(false),
+            20,
+            4,
+        ));
+
+        // The free row between two children keeps its divider - that is what
+        // spacing(0) promises - but no row is ever half text, half rule.
+        self::assertSame(['HEADER', 'body', str_repeat('─', 20), 'READY'], $rows);
+        foreach ($rows as $row) {
+            $visible = trim(str_replace('─', '', $row));
+            $hasRule = str_contains($row, '─');
+            self::assertFalse(
+                $hasRule && $visible !== '',
+                'a divider cut through a neighbour\'s text row: ' . $row,
+            );
+        }
+    }
+
     public function testTheDividerTakesAFreeColumnAndLeavesAPaintedOne(): void
     {
         $panels = SugarPanels::new();

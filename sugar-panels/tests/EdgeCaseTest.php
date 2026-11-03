@@ -397,7 +397,7 @@ final class EdgeCaseTest extends TestCase
     public function testRenderNegativeWidthViewport(): void
     {
         $layout = Node::leaf('content')->withBorder(false);
-        // Audit #11: the named-domain guard replaces array_fill()'s raw ValueError.
+        // The named-domain guard replaces array_fill()'s raw ValueError.
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Viewport dimensions must not be negative, got -5x5');
         self::body($this->panels->render($layout, -5, 5));

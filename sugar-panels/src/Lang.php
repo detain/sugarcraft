@@ -11,7 +11,7 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
  * `'panels'` namespace baked in. Translated strings live in
- * {@see ../lang/en.php}.
+ * the lookup table in `lang/en.php`.
  *
  * Currently DORMANT: the render path emits no user-facing strings, so there
  * are zero production `Lang::t()` callers. The facade and the `align.*` /

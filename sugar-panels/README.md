@@ -260,10 +260,12 @@ panels meet, the neighbour's left/top edge characters stand in for the join, so 
 nested layout reads as doubled `││` seams rather than crosses.
 
 At `withSpacing(0)` the divider has no gap of its own and shares the previous
-child's boundary. It never paints over a visible glyph: a bordered neighbour's
-own edge is the separator (its `╮`/`╯` corners survive), and in a borderless
-layout the divider appears only where a column or row is actually free — which
-means a zero-gap layout can legitimately show no divider at all.
+child's boundary. It never paints over a visible glyph, and the verdict is taken
+for the whole span at once: a bordered neighbour's own edge is the separator (its
+`╮`/`╯` corners survive), a neighbour whose line simply ended early keeps its text
+row intact instead of collecting half a rule across the padding, and in a
+borderless layout the divider appears where a column or row is genuinely free —
+which means a zero-gap layout can legitimately show no divider at all.
 
 ## Buffer diffing
 

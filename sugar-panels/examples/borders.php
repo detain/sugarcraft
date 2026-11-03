@@ -3,7 +3,11 @@
 declare(strict_types=1);
 
 /**
- * SugarPanels — no border and padding variations.
+ * SugarPanels — every border preset sugar-style ships.
+ *
+ * The list is read from Border::catalog() at runtime rather than written out
+ * here, so the demo cannot fall behind a newly added factory: each catalog
+ * entry is the name of a zero-argument static on Border.
  *
  * Run: php examples/borders.php
  */
@@ -11,25 +15,20 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Panels\{Node, SugarPanels};
+use SugarCraft\Style\Border;
 
-$panels = SugarPanels::new();
+foreach (Border::catalog() as $name) {
+    // A fresh renderer per preset. Reusing one instance at the same viewport
+    // would take the diff path against the previous frame and paint nothing.
+    $panels = SugarPanels::new();
 
-// No border between panels
-$flat = $panels->horizontal(
-    Node::leaf('NO')->withBorder(false)->withMinWidth(5),
-    Node::leaf('BORDER')->withBorder(false)->withMinWidth(10),
-    Node::leaf('HERE')->withBorder(false)->withMinWidth(8),
-)->withBorder(false)->withSpacing(1);
-
-echo "=== No-border layout ===\n";
-echo $panels->render($flat, 40, 5);
-
-// With padding
-$padded = Node::leaf('PADDED CONTENT')->withPadding(3)->withBorder(true)->withMinWidth(15);
-echo "\n=== With padding (3 cells) ===\n";
-echo $panels->render($padded, 30, 8);
-
-// NoBorder wrapper
-$nested = Node::noBorder(Node::leaf('Inside noborder wrapper')->withBorder(false));
-echo "\n=== NoBorder wrapper ===\n";
-echo $panels->render($nested, 35, 5);
+    echo "=== Border::{$name}() ===\n";
+    echo $panels->render(
+        Node::leaf("panel: {$name}")
+            ->withBorderStyle([Border::class, $name]())
+            ->withMinWidth(24),
+        28,
+        3,
+    );
+    echo "\n";
+}
