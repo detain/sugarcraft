@@ -281,9 +281,9 @@ final class GlamourThemeTest extends TestCase
 
             $captured = null;
             $output = $this->createMock(OutputInterface::class);
-            $output->method('writeln')->willReturnCallback(
-                static function (string $text) use (&$captured): void {
-                    $captured = $text;
+            $output->method('write')->willReturnCallback(
+                function ($messages, bool $newline = false, int $type = 0) use (&$captured): void {
+                    $captured = (string) $messages;
                 }
             );
 

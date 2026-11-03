@@ -17,6 +17,37 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final class RenderCommandTest extends TestCase
 {
+    /**
+     * Every environment variable the color/theme chain consults. The auto
+     * theme is decided from globals, so the suite pins them class-wide:
+     * a developer box exporting NO_COLOR must not flip these answers.
+     */
+    private const COLOR_ENV_KEYS = ['NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR', 'TERM'];
+
+    /** @var array<string,string|false> values as found before setUp cleared them */
+    private array $savedColorEnv = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        foreach (self::COLOR_ENV_KEYS as $key) {
+            $this->savedColorEnv[$key] = getenv($key);
+            putenv($key); // unset
+        }
+    }
+
+    /**
+     * @param non-empty-string $method
+     *
+     * @return mixed the static method's return value
+     */
+    private function invokeStatic(string $method, array $args = []): mixed
+    {
+        $ref = new ReflectionMethod(RenderCommand::class, $method);
+        $ref->setAccessible(true);
+        return $ref->invoke(null, ...$args);
+    }
+
     public function testPickThemeAnsi(): void
     {
         $theme = RenderCommand::pickTheme('ansi');
@@ -92,6 +123,73 @@ final class RenderCommandTest extends TestCase
         return $method->invoke($command, $input, $output);
     }
 
+    /**
+     * Build a print-mode execute() run over $content and capture the single
+     * raw-write payload the command emits.
+     *
+     * @return array{0:int,1:string} exit code + written bytes
+     */
+    private function runPrint(string $content, array $optionMap = [], array $argumentMap = []): array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, $content);
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->willReturnCallback(
+                static fn(string $name): mixed => $argumentMap[$name] ?? ($name === 'file' ? $tmp : null)
+            );
+            $input->method('getOption')->willReturnMap($optionMap);
+
+            $output = $this->createMock(OutputInterface::class);
+            $payload = null;
+            $newline = null;
+            $type = null;
+            $output->method('write')->willReturnCallback(
+                static function ($messages, bool $nl, int $t) use (&$payload, &$newline, &$type): void {
+                    $payload  = (string) $messages;
+                    $newline  = $nl;
+                    $type     = $t;
+                }
+            );
+
+            $result = $this->invokeExecute(new RenderCommand(), $input, $output);
+            $this->assertNotNull($payload, 'print mode must emit exactly one write()');
+            return [$result, $payload];
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    /** @return array{0:int,1:string,2:bool,3:int} rc + payload + newline flag + verbosity type */
+    private function runPrintCapturingArgs(string $content, array $optionMap = []): array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, $content);
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->willReturnCallback(
+                static fn(string $name): mixed => $name === 'file' ? $tmp : null
+            );
+            $input->method('getOption')->willReturnMap($optionMap);
+
+            $output = $this->createMock(OutputInterface::class);
+            $captured = [];
+            $output->method('write')->willReturnCallback(
+                static function ($messages, bool $nl, int $t) use (&$captured): void {
+                    $captured = [(string) $messages, $nl, $t];
+                }
+            );
+
+            $result = $this->invokeExecute(new RenderCommand(), $input, $output);
+            $this->assertCount(3, $captured);
+            return [$result, ...$captured];
+        } finally {
+            unlink($tmp);
+        }
+    }
+
     public function testExecuteWithNoInputReturnsFailure(): void
     {
         $input = $this->createMock(InputInterface::class);
@@ -117,216 +215,175 @@ final class RenderCommandTest extends TestCase
 
     public function testExecuteWithValidInputNoPagerReturnsSuccess(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, "# Hello\n\nWorld");
-        try {
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
-                ['theme-config', ''],
-                ['style', null],
-                ['theme', 'ansi'],
-                ['width', 0],
-                ['pager', false],
-                ['no-hyperlinks', false],
-            ]);
-
-            $output = $this->createMock(OutputInterface::class);
-            $output->expects($this->once())
-                ->method('writeln')
-                ->with($this->stringContains('Hello'));
-
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
-            $this->assertSame(Command::SUCCESS, $result);
-        } finally {
-            unlink($tmp);
-        }
+        // Piped shape (terminal check false): the implicit chain picks the
+        // byte-plain theme and the payload still carries the document text.
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        [$result, $payload] = $this->runPrint("# Hello\n\nWorld", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', null],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString('Hello', $payload);
+        $this->assertStringNotContainsString("\x1b[", $payload);
     }
 
     public function testExecuteWithStyleOptionUsesStyleAsTheme(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, "plain text");
-        try {
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
-                ['theme-config', ''],
-                ['style', 'plain'],
-                ['theme', 'ansi'],
-                ['width', 0],
-                ['pager', false],
-                ['no-hyperlinks', false],
-            ]);
-
-            $output = $this->createMock(OutputInterface::class);
-            $output->expects($this->once())
-                ->method('writeln');
-
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
-            $this->assertSame(Command::SUCCESS, $result);
-        } finally {
-            unlink($tmp);
-        }
+        [$result, $payload] = $this->runPrint("plain text", [
+            ['theme-config', ''],
+            ['style', 'plain'],
+            ['theme', null],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString('plain text', $payload);
     }
 
     public function testExecuteWithThemeConfigOverridesTheme(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, "test");
         $configTmp = tempnam(sys_get_temp_dir(), 'mdview-config-');
         $this->assertNotFalse($configTmp);
         file_put_contents($configTmp, '{"paragraph":{"fg":"white","bg":"black"}}');
         try {
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
+            [$result, $payload] = $this->runPrint("test", [
                 ['theme-config', $configTmp],
                 ['style', null],
-                ['theme', 'ansi'],
+                ['theme', null],
                 ['width', 0],
                 ['pager', false],
                 ['no-hyperlinks', false],
             ]);
-
-            $output = $this->createMock(OutputInterface::class);
-            $output->expects($this->once())
-                ->method('writeln');
-
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
             $this->assertSame(Command::SUCCESS, $result);
+            $this->assertStringContainsString('test', $payload);
         } finally {
-            unlink($tmp);
             unlink($configTmp);
         }
     }
 
     public function testExecuteWithWidthOptionEnablesWordWrap(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, str_repeat("word ", 50));
-        try {
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
-                ['theme-config', ''],
-                ['style', null],
-                ['theme', 'ansi'],
-                ['width', 40],
-                ['pager', false],
-                ['no-hyperlinks', false],
-            ]);
-
-            $output = $this->createMock(OutputInterface::class);
-            $output->expects($this->once())
-                ->method('writeln');
-
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
-            $this->assertSame(Command::SUCCESS, $result);
-        } finally {
-            unlink($tmp);
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        [$result, $payload] = $this->runPrint(str_repeat("word ", 50), [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', null],
+            ['width', 40],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        // A 250-column paragraph must come back as several wrapped rows.
+        $this->assertGreaterThanOrEqual(3, substr_count($payload, "\n"));
+        foreach (explode("\n", $payload) as $row) {
+            $this->assertLessThanOrEqual(40, strlen(rtrim($row)), 'no wrapped row exceeds the width budget');
         }
     }
 
     public function testExecuteWithNoHyperlinksDisablesHyperlinks(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, "[link](https://example.com)");
-        try {
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
-                ['theme-config', ''],
-                ['style', null],
-                ['theme', 'ansi'],
-                ['width', 0],
-                ['pager', false],
-                ['no-hyperlinks', true],
-            ]);
+        // Explicit dark theme on a terminal: the OSC 8 envelope is that
+        // theme's default, and --no-hyperlinks must strip it while keeping
+        // the link text and the visible (url) tail.
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        [$result, $payload] = $this->runPrint("[link](https://example.com)", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'dark'],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', true],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringNotContainsString("\x1b]8;;", $payload);
+        $this->assertStringContainsString('(https://example.com)', $payload);
+    }
 
-            $output = $this->createMock(OutputInterface::class);
-            $output->expects($this->once())
-                ->method('writeln');
+    public function testHyperlinkEnvelopesAreTerminalOnly(): void
+    {
+        // The pipe face of the OSC 8 etiquette fix: WITHOUT any flag, a
+        // non-terminal stream still gets no clickable envelopes (the gate
+        // is capability, not just the opt-out).
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        [$result, $payload] = $this->runPrint("[link](https://example.com)", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'dark'],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringNotContainsString("\x1b]8;;", $payload);
+        $this->assertStringContainsString('(https://example.com)', $payload);
+    }
 
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
-            $this->assertSame(Command::SUCCESS, $result);
-        } finally {
-            unlink($tmp);
-        }
+    public function testHyperlinkEnvelopesAppearOnTerminals(): void
+    {
+        // The negative control: same document, terminal capability TRUE and
+        // no opt-out, and the envelope MUST be emitted. Without this pair
+        // the pipe suppression above could be satisfied by never hyperlinking.
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        [$result, $payload] = $this->runPrint("[link](https://example.com)", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'dark'],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString("\x1b]8;;https://example.com", $payload);
     }
 
     public function testExecuteWithDarkTheme(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, "# Dark Theme Test");
-        try {
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
-                ['theme-config', ''],
-                ['style', null],
-                ['theme', 'dark'],
-                ['width', 0],
-                ['pager', false],
-                ['no-hyperlinks', false],
-            ]);
-
-            $output = $this->createMock(OutputInterface::class);
-            $output->expects($this->once())
-                ->method('writeln');
-
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
-            $this->assertSame(Command::SUCCESS, $result);
-        } finally {
-            unlink($tmp);
-        }
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        [$result, $payload] = $this->runPrint("# Dark Theme Test", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'dark'],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString('Dark Theme Test', $payload);
+        $this->assertStringContainsString("\x1b[", $payload, 'a color theme must decorate');
     }
 
     public function testExecuteWithTokyoNightTheme(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, "# Tokyo Night Theme Test");
-        try {
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
-                ['theme-config', ''],
-                ['style', null],
-                ['theme', 'tokyo-night'],
-                ['width', 0],
-                ['pager', false],
-                ['no-hyperlinks', false],
-            ]);
-
-            $output = $this->createMock(OutputInterface::class);
-            $output->expects($this->once())
-                ->method('writeln');
-
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
-            $this->assertSame(Command::SUCCESS, $result);
-        } finally {
-            unlink($tmp);
-        }
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        [$result, $payload] = $this->runPrint("# Tokyo Night Theme Test", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'tokyo-night'],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString('Tokyo Night Theme Test', $payload);
     }
 
     protected function tearDown(): void
     {
-        parent::tearDown();
         RenderCommand::setColorProbeCallback(null);
+        RenderCommand::setTerminalCheckCallback(null);
+        foreach ($this->savedColorEnv as $key => $value) {
+            if ($value === false) {
+                putenv($key);
+            } else {
+                putenv($key . '=' . $value);
+            }
+        }
+        parent::tearDown();
     }
 
     public function testTerminalSupportsColorWhenProbeSaysColorCapable(): void
@@ -387,69 +444,246 @@ final class RenderCommandTest extends TestCase
         }
     }
 
-    public function testExecuteAutoDowngradesToNottyWhenNoColor(): void
+    public function testExecuteAutoSelectsAsciiEmphasisOnColorlessTerminal(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, "# Hello\n\nWorld");
-        try {
-            RenderCommand::setColorProbeCallback(fn () => false);
-
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
-                ['theme-config', ''],
-                ['style', null],
-                ['theme', 'ansi'], // default — no explicit choice
-                ['width', 0],
-                ['pager', false],
-                ['no-hyperlinks', false],
-            ]);
-
-            $output = $this->createMock(OutputInterface::class);
-            $capturedOutput = '';
-            $output->method('writeln')->willReturnCallback(function ($msg) use (&$capturedOutput) {
-                $capturedOutput .= $msg;
-            });
-
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
-            $this->assertSame(Command::SUCCESS, $result);
-            // notty theme produces plain output with no SGR escapes
-            $this->assertStringNotContainsString("\x1b[", $capturedOutput);
-        } finally {
-            unlink($tmp);
-        }
+        // KM10 keystone: color-off must not mean structure-off. A terminal
+        // whose probe says "no color" gets Theme::ascii() — bold/italic/
+        // underline survive. The shipped chain downgraded this path to
+        // notty(), which sugar-markdown defines as plain(), so ALL emphasis
+        // died. Red pre-fix: zero SGR bytes in the payload.
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        RenderCommand::setColorProbeCallback(fn () => false);
+        [$result, $payload] = $this->runPrint("# Hello\n\nWorld **bold** and *em*.", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', null], // omitted option — implicit chain decides
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString("\x1b[1m", $payload, 'bold must survive color-off');
+        $this->assertStringContainsString("\x1b[3m", $payload, 'italic must survive color-off');
+        $this->assertDoesNotMatchRegularExpression(
+            '/\x1b\[(?:3[0-9]|4[0-9]|9[0-9]|38;|48;)[0-9;]*m/',
+            $payload,
+            'the colorless tier must emit no color SGR'
+        );
     }
 
     public function testExecuteRespectsExplicitThemeEvenWhenNoColor(): void
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'mdview-');
-        $this->assertNotFalse($tmp);
-        file_put_contents($tmp, "# Hello\n\nWorld");
-        try {
-            RenderCommand::setColorProbeCallback(fn () => false);
+        // Explicit choices are honored verbatim (they include notty/plain by
+        // name, so "color off" cannot downgrade a named theme).
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        RenderCommand::setColorProbeCallback(fn () => false);
+        [$result, $payload] = $this->runPrint("# Hello\n\nWorld", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'dracula'], // explicit theme choice
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertMatchesRegularExpression('/\x1b\[(?:38;2;|38;5;|48;)/', $payload, 'dracula must paint');
+    }
 
-            $input = $this->createMock(InputInterface::class);
-            $input->method('getArgument')->with('file')->willReturn($tmp);
-            $input->method('getOption')->willReturnMap([
-                ['theme-config', ''],
-                ['style', null],
-                ['theme', 'dracula'], // explicit theme choice
-                ['width', 0],
-                ['pager', false],
-                ['no-hyperlinks', false],
-            ]);
+    // --- color-chain keystones (KC1 / KC2 / KM8) ---------------------------
 
-            $output = $this->createMock(OutputInterface::class);
-            $output->expects($this->once())->method('writeln');
+    public function testKeystoneUnsetNoColorStillColors(): void
+    {
+        // THE KC1 keystone. With NO_COLOR absent from the environment (setUp
+        // guarantees that), the shipped `getenv('NO_COLOR') !== ''` compared
+        // FALSE !== '' — true — and forced every implicit run monochrome.
+        // Unset must now be "no opinion": the probe answers, TERM says color.
+        putenv('TERM=xterm-256color');
+        $this->assertTrue($this->invokeStatic('terminalSupportsColor'));
 
-            $command = new RenderCommand();
-            $result = $this->invokeExecute($command, $input, $output);
-            $this->assertSame(Command::SUCCESS, $result);
-        } finally {
-            unlink($tmp);
-        }
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        [$result, $payload] = $this->runPrint("# Hello\n\nWorld", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', null],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString("\x1b[38;2;", $payload, 'default on a color terminal must be the ansi theme');
+    }
+
+    public function testProbeAnswersNoColorForDumbTerminal(): void
+    {
+        putenv('TERM=dumb');
+        $this->assertFalse($this->invokeStatic('terminalSupportsColor'));
+    }
+
+    public function testProbeIsConsultedAfterEnvVerdictOrder(): void
+    {
+        // Structural anti-regression: the environment verdict must be read
+        // BEFORE TerminalProbe::run() inside terminalSupportsColor(), and the
+        // probe must remain reachable (a verdict of null falls through).
+        $src = implode('', array_slice(
+            file((string) (new ReflectionMethod(RenderCommand::class, 'terminalSupportsColor'))->getFileName()),
+            (new ReflectionMethod(RenderCommand::class, 'terminalSupportsColor'))->getStartLine() - 1,
+            (new ReflectionMethod(RenderCommand::class, 'terminalSupportsColor'))->getEndLine()
+                - (new ReflectionMethod(RenderCommand::class, 'terminalSupportsColor'))->getStartLine() + 1
+        ));
+        $verdict = strpos($src, 'colorDecisionFromEnvironment()');
+        $probe   = strpos($src, 'TerminalProbe::run()');
+        $this->assertNotFalse($verdict);
+        $this->assertNotFalse($probe);
+        $this->assertLessThan($probe, $verdict, 'env verdict must short-circuit before the probe');
+        // And the whole `!== ''` inversion shape must never reappear.
+        $this->assertStringNotContainsString("getenv('NO_COLOR') !== ''", $src);
+    }
+
+    public function testNoColorSpecHonorsZeroAndIgnoresEmpty(): void
+    {
+        // no-color.org: ANY non-empty value disables, including "0".
+        putenv('NO_COLOR=0');
+        $this->assertFalse($this->invokeStatic('colorDecisionFromEnvironment'));
+        // Empty means "not set" for the verdict; the probe decides.
+        putenv('NO_COLOR=');
+        putenv('TERM=xterm-256color');
+        $this->assertNull($this->invokeStatic('colorDecisionFromEnvironment'));
+        $this->assertTrue($this->invokeStatic('terminalSupportsColor'));
+    }
+
+    public function testClicolorForceWinsOverNoColor(): void
+    {
+        // House ladder step: a force variable outranks NO_COLOR, and force
+        // decorates even when the stream is not a terminal.
+        putenv('NO_COLOR=1');
+        putenv('CLICOLOR_FORCE=1');
+        $this->assertTrue($this->invokeStatic('colorDecisionFromEnvironment'));
+
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        [$result, $payload] = $this->runPrint("# Hello", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', null],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString("\x1b[", $payload, 'CLICOLOR_FORCE decorates pipes');
+    }
+
+    public function testNoAnsiFlagStripsDecorationOnATty(): void
+    {
+        // --no-ansi is a decoration veto independent of tty-ness.
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        $input = $this->createMock(InputInterface::class);
+        $input->method('hasOption')->willReturnMap([['no-ansi', true], ['ansi', true]]);
+        $input->method('getOption')->willReturnMap([['no-ansi', true], ['ansi', false]]);
+        $output = $this->createMock(OutputInterface::class);
+        $output->method('isDecorated')->willReturn(true);
+        $this->assertFalse($this->invokeStatic('decoratedOutput', [$input, $output]));
+    }
+
+    public function testAnsiFlagDecoratesAPipe(): void
+    {
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        $input = $this->createMock(InputInterface::class);
+        $input->method('hasOption')->willReturnMap([['no-ansi', true], ['ansi', true]]);
+        $input->method('getOption')->willReturnMap([['no-ansi', false], ['ansi', true]]);
+        $output = $this->createMock(OutputInterface::class);
+        $this->assertTrue($this->invokeStatic('decoratedOutput', [$input, $output]));
+    }
+
+    public function testExplicitAnsiThemeIsAChoiceNotTheDefault(): void
+    {
+        // KM8: 'ansi' used to double as the option default AND the no-choice
+        // sentinel, so `--theme ansi` fell into the downgrade branch and the
+        // theme the flag names could never be selected on a colorless probe.
+        RenderCommand::setTerminalCheckCallback(fn () => true);
+        RenderCommand::setColorProbeCallback(fn () => false);
+        [$result, $payload] = $this->runPrint("# Hello", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'ansi'], // EXPLICIT ansi
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString("\x1b[38;2;", $payload, 'explicit --theme ansi must paint even when the probe refuses color');
+    }
+
+    public function testAsciiThemeIsSelectableByName(): void
+    {
+        // KM10 reachable-acessibility face: the ascii arm exists in pickTheme.
+        [$result, $payload] = $this->runPrint("# Hello\n\nWorld **bold**.", [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', 'ascii'],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertStringContainsString("\x1b[1m", $payload);
+        $this->assertDoesNotMatchRegularExpression('/\x1b\[(?:3[0-9]|4[0-9]|9[0-9]|38;|48;)[0-9;]*m/', $payload);
+    }
+
+    public function testPrintPathWritesRawUntouchedDocumentBytes(): void
+    {
+        // KC2: the print path previously handed the rendered document to the
+        // Symfony formatter via writeln(), which ATE <info>…</info> tags,
+        // restyled document text, and — the security face — INTERPRETED
+        // hostile inline-HTML <href=…> tags into live OSC 8 links, bypassing
+        // sugar-markdown's refused-scheme gate. OUTPUT_RAW makes the write a
+        // byte conduit. Every claim here is red under the old writeln path
+        // (formatter consumed/restyled the tags) and green under OUTPUT_RAW.
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        $doc = "Before <info>keepme</info> after\n\n"
+            . "Closing </error> alone.\n\n"
+            . "X <fg=red;options=bold>Y</fg> Z\n\n"
+            . "<href=javascript:alert(1)>click</href> end";
+        [$result, $payload, $newline, $type] = $this->runPrintCapturingArgs($doc, [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', null],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertSame(OutputInterface::OUTPUT_RAW, $type, 'document bytes must bypass the formatter entirely');
+        $this->assertStringContainsString('<info>keepme</info>', $payload);
+        $this->assertStringContainsString('</error> alone.', $payload);
+        $this->assertStringContainsString('<fg=red;options=bold>Y</fg>', $payload);
+        $this->assertStringContainsString('<href=javascript:alert(1)>click</href>', $payload);
+        // The formatter's interpretation (green SGR / live OSC-8) must be absent.
+        $this->assertStringNotContainsString("\x1b[32m", $payload);
+        $this->assertStringNotContainsString("\x1b]8;;javascript:", $payload);
+        // Newline etiquette: append only when the render lacks a trailing one.
+        $this->assertSame(str_ends_with($payload, "\n") === false, $newline);
+    }
+
+    public function testPrintPathAppendsNoNewlineAfterNewlineTerminatedRender(): void
+    {
+        // The other half of the str_ends_with arm: find content whose plain
+        // render already ends in \n and prove no extra newline is requested.
+        // A hard line-break list item ends the document with a newline even
+        // after padding trim; if the render shape ever changes, the test
+        // still pins the invariant (flag == !ends-with-newline) truthfully.
+        RenderCommand::setTerminalCheckCallback(fn () => false);
+        $doc = "- one\n- two\n";
+        [$result, $payload, $newline, $type] = $this->runPrintCapturingArgs($doc, [
+            ['theme-config', ''],
+            ['style', null],
+            ['theme', null],
+            ['width', 0],
+            ['pager', false],
+            ['no-hyperlinks', false],
+        ]);
+        $this->assertSame(Command::SUCCESS, $result);
+        $this->assertSame(OutputInterface::OUTPUT_RAW, $type);
+        $this->assertSame(str_ends_with($payload, "\n") === false, $newline);
     }
 
     public function testLoadInputEmptyStdinReturnsNull(): void

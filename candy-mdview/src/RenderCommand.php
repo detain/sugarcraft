@@ -40,10 +40,22 @@ final class RenderCommand extends Command
     /** @var callable|null */
     private static $colorProbeCallback = null;
 
+    /** @var callable|null */
+    private static $terminalCheckCallback = null;
+
     /** @deprecated test seam only */
     public static function setColorProbeCallback(?callable $callback): void
     {
         self::$colorProbeCallback = $callback;
+    }
+
+    /**
+     * @deprecated test seam only — the terminal check is the other half of
+     * the auto-theme decision and was previously unpinable.
+     */
+    public static function setTerminalCheckCallback(?callable $callback): void
+    {
+        self::$terminalCheckCallback = $callback;
     }
 
     protected function configure(): void
@@ -51,7 +63,7 @@ final class RenderCommand extends Command
         $this
             ->addArgument('file',     InputArgument::OPTIONAL, 'Markdown file. Default: stdin.')
             ->addOption('pager',         'p', InputOption::VALUE_NONE,     'Open the rendered output in a fullscreen pager.')
-            ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | notty | dracula | tokyo-night | pink | solarized | monokai | github', 'ansi')
+            ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | ascii | plain | dark | light | notty | dracula | tokyo-night | pink | solarized | monokai | github. Aliases: no, auto-no, tokyonight. Default (omitted): ansi on a color-capable terminal, ascii when color is off, plain when piped.', null)
             ->addOption('style',         's',  InputOption::VALUE_REQUIRED, 'Alias for --theme (glamour-compat).', null)
             ->addOption('theme-config',  null, InputOption::VALUE_REQUIRED, 'Load a custom JSON theme file (overrides --theme).', '')
             ->addOption('width',         'w',  InputOption::VALUE_REQUIRED, 'Wrap text at this column count. 0 = no wrap.', 0)
@@ -69,23 +81,36 @@ final class RenderCommand extends Command
 
         // Theme selection: --theme-config (JSON) wins over --theme/--style.
         $configPath = (string) $input->getOption('theme-config');
-        $themeName  = (string) ($input->getOption('style') ?? $input->getOption('theme'));
+        $themeName  = (string) ($input->getOption('style') ?? $input->getOption('theme') ?? 'ansi');
 
-        // Determine whether the user explicitly chose a theme (vs. accepting the 'ansi' default).
-        // 'ansi' default from configure() means "no explicit choice" — auto-downgrade when
-        // the terminal has no color capability.
+        // An explicit choice means the user NAMED a theme. The --theme default
+        // is null precisely so that `--theme ansi` counts as a choice: 'ansi'
+        // names a real theme and must render its SGR even where the implicit
+        // default would downgrade.
         $explicitTheme = $configPath !== ''
             || $input->getOption('style') !== null
-            || (string) $input->getOption('theme') !== 'ansi';
+            || $input->getOption('theme') !== null;
+
+        // Explicit --theme-config/--theme/--style always wins; otherwise the
+        // tier chain below decides (KM8: the option default is null precisely
+        // so `--theme ansi` is recognised as a choice, not "no choice").
+        $onTerminal = self::decoratedOutput($input, $output);
 
         if ($configPath !== '') {
             if (is_readable($configPath) === false) {
                 throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $configPath]));
             }
             $theme = self::loadThemeConfig($configPath);
-        } elseif ($explicitTheme === false && self::terminalSupportsColor() === false) {
-            // No explicit theme AND terminal cannot render color → use notty.
-            $theme = Theme::notty();
+        } elseif ($explicitTheme === false) {
+            // Implicit choice, three tiers: a pipe/--no-ansi stream gets raw
+            // bytes (plain); a real terminal that cannot color gets the ASCII
+            // theme (bold/underline survive, hue does not — fleet convention
+            // maps color-off to the ASCII tier); otherwise ansi.
+            $theme = match (true) {
+                $onTerminal === false => Theme::plain(),
+                self::terminalSupportsColor() => Theme::ansi(),
+                default => Theme::ascii(),
+            };
         } else {
             $theme = self::pickTheme($themeName);
         }
@@ -93,11 +118,19 @@ final class RenderCommand extends Command
         $width      = (int) $input->getOption('width');
         $renderer   = (new Renderer($theme))
             ->withWordWrap($width > 0 ? $width : null)
-            ->withHyperlinks(!$input->getOption('no-hyperlinks'));
+            // OSC 8 envelopes are a terminal capability: never emit them into
+            // a pipe or file, and never over an explicit --no-hyperlinks.
+            ->withHyperlinks($onTerminal && $input->getOption('no-hyperlinks') === false);
         $rendered   = $renderer->render($raw);
 
         if ($input->getOption('pager') === false) {
-            $output->writeln($rendered);
+            // OUTPUT_RAW: the rendered document is DATA, never markup. Passing
+            // it through the formatter would EAT <info>/<href=…> tags —
+            // corrupting the displayed text and letting hostile inline HTML in
+            // a document smuggle live OSC 8 links past sugar-markdown's
+            // refused-scheme gate. The newline is appended only when the
+            // render lacks one, so redirection never gains a stray blank line.
+            $output->write($rendered, str_ends_with($rendered, "\n") === false, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
 
@@ -124,6 +157,7 @@ final class RenderCommand extends Command
     {
         return match (strtolower(str_replace('_', '-', $name))) {
             '', 'ansi'         => Theme::ansi(),
+            'ascii'            => Theme::ascii(),
             'plain', 'no'      => Theme::plain(),
             'dark'             => Theme::dark(),
             'light'            => Theme::light(),
@@ -140,11 +174,82 @@ final class RenderCommand extends Command
     }
 
     /**
+     * Should this stream receive terminal decoration (SGR, OSC 8)?
+     *
+     * --no-ansi vetoes, --ansi asserts, CLICOLOR_FORCE/FORCE_COLOR decorate
+     * even a pipe (house ladder step 5). Otherwise a plain `stream_isatty`
+     * answers — deliberately NOT {@see OutputInterface::isDecorated()},
+     * because Symfony folds NO_COLOR and TERM=dumb into decoration (see
+     * StreamOutput::hasColorSupport), which would collapse the color
+     * question into the terminal question and cost a NO_COLOR user even
+     * their bold text.
+     */
+    private static function decoratedOutput(InputInterface $input, OutputInterface $output): bool
+    {
+        if ($input->hasOption('no-ansi') && $input->getOption('no-ansi') === true) {
+            return false;
+        }
+        if ($input->hasOption('ansi') && $input->getOption('ansi') === true) {
+            return true;
+        }
+        if (self::colorDecisionFromEnvironment() === true) {
+            return true; // *FORCE means decoration regardless of stream kind.
+        }
+        // Symfony's isDecorated() is false under NO_COLOR/TERM=dumb on a real
+        // tty; stream_isatty() keeps the terminal question separate, while a
+        // decorated-but-unclaimed stream (--ansi handled upstream, wrappers)
+        // still counts as decoration-capable.
+        return self::stdoutIsTerminal() === true || $output->isDecorated() === true;
+    }
+
+    /** Raw stdout tty-ness, behind a test seam (the sibling of the color-probe seam). */
+    private static function stdoutIsTerminal(): bool
+    {
+        if (self::$terminalCheckCallback !== null) {
+            return (bool) (self::$terminalCheckCallback)();
+        }
+        return defined('STDOUT') === true && @stream_isatty(STDOUT) === true;
+    }
+
+    /**
+     * The standard color environment conventions, decided BEFORE any probe.
+     *
+     * Returns true (force color), false (refuse color), or null (the
+     * environment has no opinion — consult the terminal probe).
+     *
+     * NO_COLOR follows the no-color.org spec: set to ANY non-empty value —
+     * including "0" — disables. Unset {@see getenv()} returns FALSE, not the
+     * empty string, so the classic `!== ''` comparison reads "unset" as
+     * "disable" and silently inverts the whole chain; that inversion is the
+     * reason the shipped default rendered monochrome for every user.
+     * CLICOLOR=0 disables (BSD convention). CLICOLOR_FORCE=1 / FORCE_COLOR=1
+     * re-enable over everything, mirrors sugar-core ColorProfile::detect().
+     */
+    private static function colorDecisionFromEnvironment(): ?bool
+    {
+        foreach (['CLICOLOR_FORCE', 'FORCE_COLOR'] as $forceVar) {
+            $force = getenv($forceVar);
+            if ($force !== false && $force !== '' && $force !== '0') {
+                return true;
+            }
+        }
+        $noColor = getenv('NO_COLOR');
+        if ($noColor !== false && $noColor !== '') {
+            return false;
+        }
+        if (getenv('CLICOLOR') === '0') {
+            return false;
+        }
+        return null;
+    }
+
+    /**
      * Probe the terminal for ANSI color capability.
      *
-     * Honors NO_COLOR and CLICOLOR=0 env vars before probing.
-     * Falls back to true (assume color capable) on any probe error
-     * so we never incorrectly refuse input due to a broken probe.
+     * Order: test seam, then the environment verdict (NO_COLOR / CLICOLOR=0 /
+     * *FORCE), then the sugar-colorprofile terminfo probe. TERM=dumb reaches
+     * the probe and reports NoColor there. Falls back to true (assume color
+     * capable) on any probe error so we never lose output to a broken probe.
      */
     private static function terminalSupportsColor(): bool
     {
@@ -152,12 +257,26 @@ final class RenderCommand extends Command
             if (self::$colorProbeCallback !== null) {
                 return (self::$colorProbeCallback)();
             }
-            // Honor standard color-disabling env vars before probing the terminal.
-            if (getenv('NO_COLOR') !== '' || getenv('CLICOLOR') === '0') {
-                return false;
+            $verdict = self::colorDecisionFromEnvironment();
+            if ($verdict !== null) {
+                return $verdict;
             }
-            $report = TerminalProbe::run();
-            return !$report->has(Capability::NoColor);
+            // An EMPTY NO_COLOR takes no position (no-color.org: "if present
+            // and not empty"), but sugar-colorprofile's probe disables on ANY
+            // value including empty. Hide the empty value from the probe so
+            // the spec-correct "no opinion" answer reaches it, then restore.
+            $noColor = getenv('NO_COLOR');
+            if ($noColor === false || $noColor !== '') {
+                $report = TerminalProbe::run();
+                return !$report->has(Capability::NoColor);
+            }
+            putenv('NO_COLOR');
+            try {
+                $report = TerminalProbe::run();
+                return !$report->has(Capability::NoColor);
+            } finally {
+                putenv('NO_COLOR=');
+            }
         } catch (\Throwable) {
             return true; // Fall back to assuming color is available.
         }
