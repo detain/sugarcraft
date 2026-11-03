@@ -6,6 +6,7 @@ namespace SugarCraft\GifView\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Animation\Decoder;
 use SugarCraft\Animation\Player;
 use SugarCraft\Animation\Renderer;
 use SugarCraft\GifView\Cli;
@@ -125,8 +126,109 @@ final class CliTest extends TestCase
         return [
             'default is solid'  => [[], Renderer::PRESET_SOLID],
             'density'           => [['density'], Renderer::PRESET_DENSITY],
-            'unknown token falls back to solid' => [['wat'], Renderer::PRESET_SOLID],
         ];
+    }
+
+    /**
+     * The preset slot accepts exactly the two documented presets; a third
+     * spelling is a refusal, never a silent fall back to solid.
+     */
+    public function testUnknownPresetIsRefusedLoudly(): void
+    {
+        $gif = $this->gifFixture();
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', $gif, 'wat'], $stdout, $stderr,
+            static fn (Player $p): int => 0);
+
+        $this->assertSame(1, $exit);
+        $err = self::drain($stderr);
+        $this->assertStringContainsString("unknown preset 'wat'", $err);
+        $this->assertStringContainsString('usage:', $err);
+        $this->assertSame('', self::drain($stdout));
+    }
+
+    /**
+     * Only the double-dash spellings are options; -fps=10 must refuse as an
+     * unknown option instead of being swallowed as a file path.
+     */
+    public function testSingleDashLongOptionsAreRefused(): void
+    {
+        $gif = $this->gifFixture();
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', $gif, '-fps=10'], $stdout, $stderr,
+            static fn (Player $p): int => 0);
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('unknown option --fps', self::drain($stderr));
+    }
+
+    public function testMissingFileIsWrappedInTheAppCannotPlayLine(): void
+    {
+        [$stdout, $stderr] = self::pipes();
+        $path = '/nonexistent/candy-gifview-wrap-absent.gif';
+
+        $exit = Cli::main(['candy-gifview', $path], $stdout, $stderr);
+
+        $this->assertSame(1, $exit);
+        $err = self::drain($stderr);
+        $this->assertStringContainsString('could not play', $err, 'the CLI speaks in its own brand');
+        $this->assertStringContainsString($path, $err, 'the refused path is echoed back');
+        $this->assertStringContainsString('no such file', $err, 'the engine reason survives the wrap');
+        $this->assertSame('', self::drain($stdout));
+    }
+
+    public function testAnEmptyFrameListIsRefusedLoudly(): void
+    {
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(
+            ['candy-gifview', 'empty.gif'],
+            $stdout,
+            $stderr,
+            null,
+            null,
+            static fn (string $p, int $w, int $h): array => ['GIF89a', []],
+        );
+
+        $this->assertSame(1, $exit, 'a zero-frame intake never opens the TUI');
+        $err = self::drain($stderr);
+        $this->assertStringContainsString('no frames to play', $err);
+        $this->assertStringContainsString('empty.gif', $err);
+        $this->assertSame('', self::drain($stdout));
+    }
+
+    public function testDurationOnASingleFrameAnimationIsRefused(): void
+    {
+        $gif = $this->gifFixture();
+        [$stdout, $stderr] = self::pipes();
+
+        $exit = Cli::main(['candy-gifview', $gif, '--duration=2'], $stdout, $stderr,
+            static fn (Player $p): int => 0);
+
+        $this->assertSame(1, $exit, 'the engine deadline can never elapse on one frame — refuse instead');
+        $this->assertStringContainsString('needs at least two frames', self::drain($stderr));
+    }
+
+    public function testOversizedFilesAreRefusedBeforeTheyAreBuffered(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'sc_gifview_big_') . '.gif';
+        $this->artifacts[] = $path;
+        $handle = fopen($path, 'a');
+        $this->assertIsResource($handle);
+        $this->assertTrue(ftruncate($handle, Cli::MAX_INPUT_BYTES + 1), 'sparse 64 MiB+1 file');
+        fclose($handle);
+
+        [$stdout, $stderr] = self::pipes();
+        $exit = Cli::main(['candy-gifview', $path], $stdout, $stderr,
+            static fn (Player $p): int => 0);
+
+        $this->assertSame(1, $exit, self::drain($stderr));
+        $err = self::drain($stderr);
+        $this->assertStringContainsString('intake cap', $err);
+        $this->assertStringContainsString('could not play', $err);
+        $this->assertSame('', self::drain($stdout));
     }
 
     public function testViewportCellsUsesTheDocumentedFallbackOffATty(): void
@@ -165,15 +267,50 @@ final class CliTest extends TestCase
     }
 
     /**
+     * Repeat a single-frame GD GIF's frame block n times, prepending a fresh
+     * Graphics Control Extension to each copy (GD's imagegif output carries
+     * no GCE, so the repeated blocks would otherwise share one delay). The
+     * header is 13 bytes plus the global colour table when present; the
+     * frame block spans header-end to the final 0x3B trailer.
+     */
+    private static function assembleGif(string $single, int $n): string
+    {
+        $flags = ord($single[10]);
+        $headerEnd = 13 + (($flags & 0x80) !== 0 ? 3 * (2 << ($flags & 7)) : 0);
+        $trailerAt = strrpos($single, ';');
+        self::assertIsInt($trailerAt, 'GD output must end its block chain with the 0x3B trailer');
+
+        $block = substr($single, $headerEnd, $trailerAt - $headerEnd);
+        $gce = "\x21\xF9\x04\x04" . pack('v', 4) . "\x00\x00";
+
+        return substr($single, 0, $headerEnd) . str_repeat($gce . $block, $n) . "\x3B";
+    }
+
+    /** A fixture GIF decoded to exactly $n frames (n=1 is the bare GD file). */
+    private function gifFixtureFrames(int $n): string
+    {
+        $single = $this->gifFixture();
+        if ($n === 1) {
+            return $single;
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'sc_gifview_multi_') . '.gif';
+        $this->artifacts[] = $path;
+        file_put_contents($path, self::assembleGif((string) file_get_contents($single), $n));
+
+        return $path;
+    }
+
+    /**
      * E-09 seam probe: run main() with the given extra argv through the
      * $play seam and return the wired Player (failing on non-zero exit).
      *
      * @param list<string> $args flags/positions after the script name, the
      *        GIF path placeholder {gif} substituted with the fixture.
      */
-    private function wiredPlayer(array $args): Player
+    private function wiredPlayer(array $args, int $frames = 1): Player
     {
-        $gif = $this->gifFixture();
+        $gif = $this->gifFixtureFrames($frames);
         [$stdout, $stderr] = self::pipes();
 
         $seen = null;
@@ -231,14 +368,16 @@ final class CliTest extends TestCase
 
     public function testE09DurationWiresTheModelDeadline(): void
     {
-        $player = $this->wiredPlayer(['{gif}', '--duration=3.5']);
+        // Two frames: --duration on a single-frame file is a loud refusal
+        // (the engine deadline can never elapse), not a wiring question.
+        $player = $this->wiredPlayer(['{gif}', '--duration=3.5'], 2);
         $this->assertSame(3.5, $player->maxSeconds);
         $this->assertNull($player->fixedFps, 'duration alone keeps the GIF cadence');
     }
 
     public function testE09FlagsAndPositionalsMixInAnyOrder(): void
     {
-        $player = $this->wiredPlayer(['--fps=10', '--duration=2', '{gif}', 'density']);
+        $player = $this->wiredPlayer(['--fps=10', '--duration=2', '{gif}', 'density'], 2);
         $this->assertSame(10.0, $player->fixedFps);
         $this->assertSame(2.0, $player->maxSeconds);
         $this->assertSame(Renderer::PRESET_DENSITY, $player->preset);
@@ -290,8 +429,11 @@ final class CliTest extends TestCase
     }
 
     /**
-     * The intake cap is a documented promise: the README "Limits" section
-     * names 4096, and the whole animation is materialised below it.
+     * The outer belt constant is a documented promise: the README "Limits"
+     * section names 4096 and the whole animation is materialised below it.
+     * The engine window (Decoder::MAX_FRAMES) truncates long files before
+     * this belt can fire — the truncation pin below proves the honest
+     * end-to-end shape.
      */
     public function testTheFrameCeilingIsTheDocumentedConstant(): void
     {
@@ -314,11 +456,91 @@ final class CliTest extends TestCase
             }
         };
 
-        $this->assertCount(5, $collect->invoke(null, $five(), 5), 'at the cap the walk succeeds');
+        $this->assertCount(5, $collect->invoke(null, $five(), 5, 16), 'at the cap the walk succeeds');
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('exceeds the 4-frame limit');
-        $collect->invoke(null, $five(), 4);
+        $this->expectExceptionMessage('exceeds the 4-frame intake cap');
+        $collect->invoke(null, $five(), 4, 16);
+    }
+
+    /**
+     * The resident-memory gate is frames × viewport cells, checked during
+     * the drain (fail-loud, not buffered-past): five 3M-cell frames pass the
+     * 6M budget's line and refuse before the fifth lands.
+     */
+    public function testCollectFramesEnforcesTheResidentCellBudget(): void
+    {
+        $collect = new \ReflectionMethod(Cli::class, 'collectFrames');
+        $collect->setAccessible(true);
+
+        $five = static function (): \Generator {
+            for ($i = 0; $i < 5; $i++) {
+                yield new \stdClass();
+            }
+        };
+
+        $this->assertCount(5, $collect->invoke(null, $five(), 10, 1_000), 'a small grid never trips the budget');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('resident budget');
+        $collect->invoke(null, $five(), 10, 3_000_000);
+    }
+
+    /**
+     * End-to-end shape of the engine window: a 257-frame GIF plays its
+     * first Decoder::MAX_FRAMES frames and the viewer says so on stderr —
+     * the truncation is disclosed, never silent.
+     */
+    public function testTheEngineWindowTruncatesWithAnHonestNotice(): void
+    {
+        $gif = $this->gifFixtureFrames(257);
+        [$stdout, $stderr] = self::pipes();
+
+        $seen = null;
+        $exit = Cli::main(['candy-gifview', $gif], $stdout, $stderr,
+            static function (Player $player) use (&$seen): int {
+                $seen = $player;
+
+                return 0;
+            });
+
+        $this->assertSame(0, $exit, self::drain($stderr));
+        $this->assertCount(Decoder::MAX_FRAMES, $seen->frames);
+        $this->assertStringContainsString('showing the first 256 frames', self::drain($stderr));
+        $this->assertSame('', self::drain($stdout));
+    }
+
+    /**
+     * --paused starts the Player frozen (Space steps it by hand); the
+     * default stays running, and a value with the bare flag refuses.
+     */
+    public function testPausedWiresThePlayerAndRefusesAValue(): void
+    {
+        $this->assertTrue($this->wiredPlayer(['{gif}', '--paused'])->paused);
+        $this->assertFalse($this->wiredPlayer(['{gif}'])->paused, 'default is playing');
+
+        $gif = $this->gifFixture();
+        [$stdout, $stderr] = self::pipes();
+        $exit = Cli::main(['candy-gifview', $gif, '--paused=5'], $stdout, $stderr,
+            static fn (Player $p): int => 0);
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('--paused takes no value', self::drain($stderr));
+    }
+
+    /**
+     * Structural pins for the two launch-path affordances that cannot be
+     * driven in-process (the real Program loop): the loading line is keyed
+     * and emitted, and a signal stop re-encodes as the shell idiom 128+N.
+     */
+    public function testTheLaunchPathCarriesTheLoadingLineAndSignalExit(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/Cli.php');
+
+        $this->assertStringContainsString("\$program->stopSignal()", $src);
+        $this->assertStringContainsString('128 + $signal', $src);
+        $this->assertStringContainsString("Lang::t('cli.decoding'", $src);
+        $this->assertStringContainsString("Lang::t('cli.truncated'", $src);
     }
 
     /**
