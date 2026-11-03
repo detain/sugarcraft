@@ -142,6 +142,11 @@ final class OscHandler
      * encoding before `base64_decode()` and MUST treat the decoded content
      * as untrusted (it may contain malicious data injected by the remote
      * program). The selection field is also untrusted input.
+     *
+     * A remote program can arm OSC 52 itself — there is no capability gate —
+     * so the event log is a bounded ring (ScreenHandler::MAX_EVENTS,
+     * drop-oldest) reached only through
+     * {@see ScreenHandler::recordClipboardEvent()}.
      */
     private function clipboard(string $rest, ScreenHandler $h): void
     {
@@ -152,13 +157,13 @@ final class OscHandler
         $selection = substr($rest, 0, $semi);
         $payload = substr($rest, $semi + 1);
         if ($payload === '?') {
-            $h->clipboardEvents[] = ['kind' => 'read', 'selection' => $selection];
+            $h->recordClipboardEvent(['kind' => 'read', 'selection' => $selection]);
             return;
         }
-        $h->clipboardEvents[] = [
+        $h->recordClipboardEvent([
             'kind' => 'write',
             'selection' => $selection,
             'payload' => $payload,
-        ];
+        ]);
     }
 }

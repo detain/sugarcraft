@@ -383,30 +383,47 @@ final class Terminal
     }
 
     /**
-     * Clipboard events recorded from OSC 52 sequences.
+     * Clipboard events recorded from OSC 52 sequences — DRAIN semantics.
      *
      * Each entry: `['kind' => 'write'|'read', 'selection' => string, 'payload' => string]`
      * (`payload` is base64-encoded content for writes; absent for reads).
+     *
+     * Like {@see self::replies()}, this returns the accumulated events and
+     * clears the log; a second read returns `[]` until more OSC 52 traffic
+     * arrives. The log is a bounded ring (drop-oldest past 1024 entries):
+     * a hostile program can arm OSC 52 itself, so backlog is capped rather
+     * than grown. Consumers needing every event live should poll after each
+     * feed. Payload and selection fields are UNTRUSTED remote output.
      *
      * @return list<array{kind: string, selection: string, payload?: string}>
      */
     public function clipboardEvents(): array
     {
-        return $this->handler->clipboardEvents;
+        $events = $this->handler->clipboardEvents;
+        $this->handler->clipboardEvents = [];
+
+        return $events;
     }
 
     /**
      * Focus events recorded while DECSET 1004 was active (CSI I / CSI O).
      *
      * Each entry is a {@see FocusInMsg} or {@see FocusOutMsg}, oldest first.
+     *
+     * DRAIN semantics, mirroring {@see self::replies()} and
+     * {@see self::clipboardEvents()}: the read returns the backlog and
+     * clears it. The log is a bounded ring (drop-oldest past 1024 entries).
      * Consumers wanting live notification instead of draining this list pass
-     * an `onFocusEvent` callback to the constructor (findings #30).
+     * an `onFocusEvent` callback to the constructor.
      *
      * @return list<FocusInMsg|FocusOutMsg>
      */
     public function focusEvents(): array
     {
-        return $this->handler->focusEvents;
+        $events = $this->handler->focusEvents;
+        $this->handler->focusEvents = [];
+
+        return $events;
     }
 
     public function resize(int $cols, int $rows): void

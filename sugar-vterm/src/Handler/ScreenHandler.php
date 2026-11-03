@@ -134,6 +134,25 @@ final class ScreenHandler implements SubparamsAwareHandler
     private const MAX_REPLIES = 1024;
 
     /**
+     * Shared backlog cap for the two event logs ({@see $clipboardEvents},
+     * {@see $focusEvents}): drop-oldest rings, same shape as MAX_REPLIES.
+     * Both logs are fed by hostile streams — OSC 52 self-arms the clipboard
+     * log without any consumer opt-in, and DECSET 1004 arms the focus log —
+     * and a pull accessor has no back-pressure, so the ceiling is a library
+     * memory guarantee rather than a consumer courtesy.
+     */
+    private const MAX_EVENTS = 1024;
+
+    /**
+     * Ceiling for the DEC 2026 synchronized-output mutation queue. Past it
+     * the queue is FLUSHED to the grid and collecting resumes: under
+     * adversarial pressure a bounded partial repaint beats an unbounded
+     * buffer (the window's all-or-nothing atomicity is surrendered only
+     * when the attacker forces the ceiling).
+     */
+    private const MAX_SYNC_MUTATIONS = 16384;
+
+    /**
      * SCS designation state: G0..G3 charset bytes ('B', '0', 'U', …).
      *
      * @var array{0: string, 1: string, 2: string, 3: string}
@@ -418,7 +437,7 @@ final class ScreenHandler implements SubparamsAwareHandler
         // Handle focus events first (CSI I / CSI O) when DECSET 1004 is active.
         if ($finalChar === 'I' && $this->mode->reportFocusEvents) {
             $msg = new FocusInMsg();
-            $this->focusEvents[] = $msg;
+            $this->pushEvent($this->focusEvents, $msg);
             if ($this->onFocusEvent !== null) {
                 ($this->onFocusEvent)($msg);
             }
@@ -426,7 +445,7 @@ final class ScreenHandler implements SubparamsAwareHandler
         }
         if ($finalChar === 'O' && $this->mode->reportFocusEvents) {
             $msg = new FocusOutMsg();
-            $this->focusEvents[] = $msg;
+            $this->pushEvent($this->focusEvents, $msg);
             if ($this->onFocusEvent !== null) {
                 ($this->onFocusEvent)($msg);
             }
@@ -528,6 +547,13 @@ final class ScreenHandler implements SubparamsAwareHandler
                 // putCell/attachCombiningChar mutations.
                 if ($this->mode->syncUpdate) {
                     $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr, $this->pendingMutations);
+                    // Erases append through EraseHandler's own hand, past the
+                    // queueMutation() choke — enforce the ceiling here too.
+                    // A hostile ED-3/DCH storm lands a partial flush instead
+                    // of growing the queue without bound.
+                    if (\count($this->pendingMutations) >= self::MAX_SYNC_MUTATIONS) {
+                        $this->flushPendingMutations();
+                    }
                 } else {
                     $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr);
                 }
@@ -1054,6 +1080,48 @@ final class ScreenHandler implements SubparamsAwareHandler
             array_shift($this->replies);
         }
         $this->replies[] = $bytes;
+    }
+
+    /**
+     * Append one entry to a capped event log, dropping the oldest past
+     * {@see self::MAX_EVENTS}. Mirrors {@see self::reply()} for the two
+     * hostile-stream event lists so neither can grow without bound.
+     *
+     * @param array<array-key, mixed> $log
+     */
+    private function pushEvent(array &$log, mixed $event): void
+    {
+        if (\count($log) >= self::MAX_EVENTS) {
+            array_shift($log);
+        }
+        $log[] = $event;
+    }
+
+    /**
+     * Queue a DEC 2026 synchronized-output mutation, flushing the existing
+     * batch to the grid first when it has reached {@see
+     * self::MAX_SYNC_MUTATIONS}. All three append paths (putCell,
+     * attachCombiningChar, and the erase-by-reference handoff in
+     * csiDispatch) funnel the ceiling decision through bounded growth; the
+     * erase path checks the count explicitly after its by-reference append.
+     */
+    private function queueMutation(int $row, int $col, Cell $cell): void
+    {
+        if (\count($this->pendingMutations) >= self::MAX_SYNC_MUTATIONS) {
+            $this->flushPendingMutations();
+        }
+        $this->pendingMutations[] = ['row' => $row, 'col' => $col, 'cell' => $cell];
+    }
+
+    /**
+     * Public entry for OSC 52 to record a clipboard event without appending
+     * to the property directly (keeps the ring ceiling in one place).
+     *
+     * @param array{kind: string, selection: string, payload?: string} $event
+     */
+    public function recordClipboardEvent(array $event): void
+    {
+        $this->pushEvent($this->clipboardEvents, $event);
     }
 
     /**
@@ -1938,7 +2006,7 @@ final class ScreenHandler implements SubparamsAwareHandler
         $updated = $prev->withCombining($combining);
 
         if ($this->mode->syncUpdate) {
-            $this->pendingMutations[] = ['row' => $r, 'col' => $c, 'cell' => $updated];
+            $this->queueMutation($r, $c, $updated);
             return;
         }
         $this->buffer->put($r, $c, $updated);
@@ -1995,7 +2063,7 @@ final class ScreenHandler implements SubparamsAwareHandler
     private function putCell(int $row, int $col, Cell $cell): void
     {
         if ($this->mode->syncUpdate) {
-            $this->pendingMutations[] = ['row' => $row, 'col' => $col, 'cell' => $cell];
+            $this->queueMutation($row, $col, $cell);
             return;
         }
         $this->buffer->put($row, $col, $cell);

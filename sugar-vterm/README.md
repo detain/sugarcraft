@@ -96,7 +96,7 @@ sugar-vterm ships **two** Terminal entry-points for distinct use cases:
 
 | Class | Use case | Methods |
 |-------|----------|---------|
-| `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
+| `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()` and `focusEvents()` (both drain-on-read), `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
 | `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self` (mutates in place, returns `$this`), `snapshot(?time): Snapshot` (deep-copies the grid), `revision(): int`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`, `isWrapPending(): bool`. `enableAltScreen()`/`disableAltScreen()` exist for interface parity but ALWAYS throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
 
 ```php
@@ -304,9 +304,15 @@ The default `OscHandlerImpl` (renderer path) implements:
 | `lastTitle()` | accessor | Most recent title set during the stream. |
 
 The full `Handler\OscHandler` (used by `SugarCraft\Vterm\Terminal\Terminal`)
-adds palette query/set (`OSC 4`, `OSC 10`, `OSC 11`), clipboard get/set
-(`OSC 52`), and forwards focus / mode-query events to
-`ScreenHandler::$clipboardEvents` / `$focusEvents`.
+also handles palette **set** (`OSC 4` — writes only, no query reply) and
+clipboard get/set requests (`OSC 52`). The OSC 52 log is a bounded ring:
+a remote program can arm OSC 52 itself, so past 1024 entries the oldest
+event is dropped. Drain it with `Terminal::clipboardEvents()`, which
+returns and clears the backlog (like `replies()`). `OSC 10`/`OSC 11`
+(default foreground/background query and set) are discarded — the
+emulator keeps no host-window or default-colour state. Focus and
+mode-query events are CSI-driven, not OSC: see the focus-reporting and
+DEC 2026 sections below.
 
 ## SGR attributes
 
@@ -577,10 +583,12 @@ var_dump($mode->reportFocusEvents);  // bool — true under mode 1004
 $tracking = $mode->withReportFocusEvents(true);
 ```
 
-Events are accumulated on the internal `ScreenHandler::$focusEvents`
-array as `FocusInMsg` / `FocusOutMsg` value objects. A consumer can
-inspect the array directly or wire the handler to dispatch events to
-an event loop.
+Events land in a bounded focus ring inside the handler (drop-oldest past
+1024 entries — a hostile stream can arm mode 1004 and flood `CSI I`/`O`),
+as `FocusInMsg` / `FocusOutMsg` value objects. The emulator facade drains
+it: `Terminal::focusEvents()` returns the backlog oldest-first and clears
+it, so poll after each feed. For live notification instead of draining,
+pass an `onFocusEvent` callback to the constructor.
 
 ## Combining characters and wide characters
 
@@ -637,9 +645,12 @@ $vt->feed("\x1b[?2026l");       // flush → both cells appear together
 var_dump($vt->screen()->cell(0, 0)->grapheme);  // 'A'
 ```
 
-Mutations are queued in `ScreenHandler::$pendingMutations` and flushed by
-`flushPendingMutations()` when sync mode is exited. BCE erase (CSI ?12 h)
+Mutations are queued on the handler's internal sync buffer and replayed
+atomically when the window closes. BCE erase (CSI ?12 h)
 and combining-char attachments are both eligible for queued writes.
+The queue is bounded: past 16 384 pending mutations a partial flush lands
+to the grid, so an adversarial flood costs memory safety before it costs
+content — all-or-nothing is surrendered only under hostile pressure.
 
 ## Theme catalog
 
@@ -715,7 +726,7 @@ Each subdirectory of `src/` owns a small piece of VT state:
 | `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | `fromInt()`, `value`. |
 | `Mode\Mode` | DEC private modes. | `withAltScreen/AltScreenVariant/CursorVisible/MouseEncoding/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `isMouseReporting()`, `equals()`. |
 | `Hyperlink\Hyperlink` | OSC 8 URI + id state. | `fromRaw($id, $uri)`, `equals()`. |
-| `Msg\FocusInMsg` / `FocusOutMsg` | Focus event records — accumulated on `ScreenHandler::$focusEvents` when DEC mode `1004` is set. | Plain DTOs. |
+| `Msg\FocusInMsg` / `FocusOutMsg` | Focus event records — land in the emulator's bounded focus ring (DEC mode `1004`) and drain via `Terminal::focusEvents()`. | Plain DTOs. |
 | `Color\Color` | Color value object — palette index or truecolor RGB. | `default()`, `indexed16($i)`, `indexed256($i)`, `truecolor($r,$g,$b)`, `fromInt($kind,$v)`, `red()`, `green()`, `blue()`, `equals()`. |
 | `CursorShape` (root enum) | `BlinkingBlock` (0/1) / `SteadyBlock` (2) / `BlinkingUnderline` (3) / `SteadyUnderline` (4) / `BlinkingBar` (5) / `SteadyBar` (6). | `fromInt()`, `toInt()`. |
 
