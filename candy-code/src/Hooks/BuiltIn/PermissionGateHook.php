@@ -14,7 +14,7 @@ use SugarCraft\Code\ToolCall;
 
 /**
  * Adapts a {@see PermissionGate} onto the `PreToolUse` hook chain, which is
- * how crush_code.md Phase 1 item 2 resolves the two-permission-systems split:
+ * how Phase 1 item 2 resolves the two-permission-systems split:
  * the 6-mode gate (with its rules and its Auto-mode circuit breaker) had
  * exactly one consumer — the sub-agent path — while the main loop got only
  * {@see \SugarCraft\Code\Hooks\HookManager}'s built-ins.

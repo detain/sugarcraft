@@ -64,7 +64,7 @@ final class TaskList
      *        {@see HookContext::$projectRoot} becomes the `proc_open()` cwd in
      *        {@see \SugarCraft\Code\Hooks\ScriptHook::execute()}, so this is a
      *        root-resolving position even though no `getcwd()` appears at the
-     *        site (crush_code.md Phase 0 item 6). The `Team` tool passes its
+     *        site (Phase 0 item 6). The `Team` tool passes its
      *        launch's root ({@see \SugarCraft\Code\Tools\BuiltIn\TeamTool::fromCatalog()});
      *        null falls back to the process directory, which beats the
      *        hardcoded `''` that used to sit in makeHookContext().

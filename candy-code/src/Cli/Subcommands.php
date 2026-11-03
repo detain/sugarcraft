@@ -44,7 +44,7 @@ use SugarCraft\Core\Util\Tty;
 /**
  * The real CLI subcommands — `mcp list`, `session list|show|rename|delete|
  * pin|unpin|archive|unarchive`, `models`, `doctor`, `bundles list|install`,
- * `serve`, `self-update`, `usage` and `completion bash|zsh|fish` (crush_code.md Phase 4 item 6; the
+ * `serve`, `self-update`, `usage` and `completion bash|zsh|fish` (Phase 4 item 6; the
  * session verbs past
  * `list`/`delete` are Appendix P §3.4; `serve` is Appendix O §4.7, its body in
  * {@see Serve} — the one verb that keeps running rather than answering, and
@@ -64,7 +64,7 @@ use SugarCraft\Core\Util\Tty;
  * turn of conversation: they have to answer on a machine with no provider, no
  * API key and no TTY. A subcommand that fell through to `Program::run()` would
  * attach to the terminal and enter the alt-screen — the "`--help` opens the
- * TUI" bug of crush_code.md Phase 0 item 3, reopened by a new verb. Nothing in
+ * TUI" bug of Phase 0 item 3, reopened by a new verb. Nothing in
  * this class constructs a backend, a `Program`, a `Chat` or an `App`.
  *
  * `doctor` is the sharpest case of that rule and the reason it is stated

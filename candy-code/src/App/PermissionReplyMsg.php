@@ -10,7 +10,7 @@ use SugarCraft\Code\Chat;
 
 /**
  * The user's answer to the {@see PermissionRequestMsg} currently blocking a
- * turn (crush_feat.md §1 E2).
+ * turn (§1 E2).
  *
  * Delivered as a Msg rather than read straight off a keystroke so the answer
  * can also come from a palette action, a test, or a non-interactive

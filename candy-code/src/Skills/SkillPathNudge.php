@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Skills;
 
 /**
  * Session-lifetime tracker that turns a skill's `paths:` frontmatter into a
- * live auto-scoping signal (crush_feat.md section 7 E4).
+ * live auto-scoping signal (section 7 E4).
  *
  * Before this, `paths:` was static metadata: {@see SkillRegistry::forPaths()}
  * was correct and unit-tested but had no production caller, so a skill scoped

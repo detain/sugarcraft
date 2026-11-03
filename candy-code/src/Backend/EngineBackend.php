@@ -85,7 +85,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * for the whole turn. It used to be a single wall-clock timer started
      * once for the entire fork, which SIGKILLed any turn whose legitimate
      * multi-step tool work ran past it ("Provider request timed out after
-     * 120s" mid-flight, crush_feat.md §1 E1). Every frame the child streams
+     * 120s" mid-flight, §1 E1). Every frame the child streams
      * resets it, so a turn that is making visible progress stays alive
      * indefinitely while a genuinely hung provider still dies.
      *
@@ -479,7 +479,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
          * evaluated against, installed onto the PreToolUse chain by
          * {@see resolveHookManager()}. Null leaves the built-in hooks as the
          * only gating layer, which is what every caller got before
-         * crush_code.md Phase 1 item 2. @see withPermissionGate()
+         * Phase 1 item 2. @see withPermissionGate()
          */
         private readonly ?PermissionGate $permissionGate = null,
         /**
@@ -511,7 +511,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         private readonly ?\Closure $clientCaller = null,
         /**
          * The cross-session memory store whose PROJECT-scope notes are folded
-         * into every system prompt this backend builds (crush_code.md Phase 5
+         * into every system prompt this backend builds (Phase 5
          * item 9). Forwarded straight onto {@see App::$memoryStore}, which is
          * where {@see \SugarCraft\Code\Runtime::buildSystemPrompt()} reads it.
          *
@@ -856,7 +856,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     /**
      * The real context window of the model this backend completes against —
      * the one number {@see \SugarCraft\Code\Chat}'s context tiers are
-     * percentages of (crush_code.md Phase 5 item 4).
+     * percentages of (Phase 5 item 4).
      *
      * Every provider has implemented this correctly for a long time and
      * nothing could read it: `Chat` holds a {@see Backend}, and `Backend`
@@ -1280,7 +1280,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     }
 
     /**
-     * Attach the 6-mode {@see PermissionGate} — crush_code.md Phase 1 item 2's
+     * Attach the 6-mode {@see PermissionGate} — Phase 1 item 2's
      * consolidation seam, sibling to {@see withHooks()}.
      *
      * Before this, the gate (with its rules, its Auto-mode 3-strike circuit
@@ -1712,7 +1712,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *                           intermediate steps whose messages get folded
      *                           back into $app and never reach the caller — is
      *                           observable while the turn is still running
-     *                           (crush_feat.md §1 E1). Without it the caller
+     *                           (§1 E1). Without it the caller
      *                           sees only $lastAssistant's text.
      *
      * @param ?callable $onToken Incremental-text observer, threaded straight
@@ -1722,7 +1722,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      *                           bounded loop had finished, with the finished
      *                           reply — which is why streaming was
      *                           indistinguishable from no streaming
-     *                           (crush_code.md Phase 0 item 13).
+     *                           (Phase 0 item 13).
      *
      *                           Deltas span the WHOLE turn, every step of the
      *                           agentic loop included, so a consumer that
@@ -1878,7 +1878,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // $maxSteps provider calls per turn and each reports its own figure,
         // so the turn's cost is the SUM: a readout fed from $lastAssistant
         // alone would bill a five-tool turn as if it were the one final call
-        // that answered without tools (crush_code.md Phase 5 item 7). A tool
+        // that answered without tools (Phase 5 item 7). A tool
         // that billed a provider itself (a Task sub-agent, audit B4) lands
         // here too, as it settles — see delegatedSpend().
         /** @var list<?Usage> $stepUsages */
@@ -3861,7 +3861,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * Whether this run may fan a same-turn batch of
      * {@see \SugarCraft\Code\Tools\ParallelSafe} calls out concurrently.
      *
-     * {@see Runtime} has carried the switch since crush_code.md Phase 0 item
+     * {@see Runtime} has carried the switch since Phase 0 item
      * 14, but nothing outside its own tests ever passed it: a user hitting a
      * bad interaction with concurrency had no way to turn it off short of
      * editing this file. This is that way.
@@ -4175,9 +4175,9 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * whatever whole frames have arrived on every readable edge and hands each
      * straight to $onEvent/$onToken/$onReasoning, so a turn running
      * eight rounds of tools renders them as they happen instead of showing
-     * nothing but a "thinking" spinner until the very end (crush_feat.md §1
+     * nothing but a "thinking" spinner until the very end (§1
      * E1), and the reply itself appears as it is written rather than all at
-     * once at the end (crush_code.md Phase 0 item 13).
+     * once at the end (Phase 0 item 13).
      *
      * Text and events share this one channel deliberately. Their relative
      * order is meaningful — it is the difference between "the model explained
@@ -5578,7 +5578,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 // parent's state and vanish on exit, so a delta is a frame or
                 // it is nothing. One frame per chunk, unbatched, because a
                 // batch is precisely the re-buffering that made streaming
-                // fake (crush_code.md Phase 0 item 13). Interleaved with the
+                // fake (Phase 0 item 13). Interleaved with the
                 // event frames in wire order, which is what lets the parent
                 // reconstruct "said this, then called that".
                 static function (string $delta) use ($childSocket): void {

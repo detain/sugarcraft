@@ -12,7 +12,7 @@ use SugarCraft\Diff\Diff;
  *
  * Extracted verbatim from {@see \SugarCraft\Code\Tools\BuiltIn\Edit}, where it
  * was born, when {@see \SugarCraft\Code\Tools\BuiltIn\Write} landed
- * (crush_code.md Phase 8 item 12): a new file is just an edit whose "before"
+ * (Phase 8 item 12): a new file is just an edit whose "before"
  * side is empty, so it deserves the same before/after preview and the same
  * permission-gating treatment rather than a second, drifting implementation.
  *

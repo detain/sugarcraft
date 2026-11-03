@@ -39,7 +39,7 @@ final class KeyboardHandler
      *
      * Read off {@see KeyBindingRegistry}'s `Panes & windows` rows rather than
      * spelled out here, so this routing table and the in-app keybinding
-     * reference cannot describe two different keyboards (crush_code.md Phase
+     * reference cannot describe two different keyboards (Phase
      * 8 item 2). The registry keeps its dormant rows in this set on purpose:
      * an unclaimed chord is not inert, it falls through to Chat's generic
      * `KeyType::Char` arm and types its own letter into the input box.
@@ -104,7 +104,7 @@ final class KeyboardHandler
      * Decide whether the pane SHELL claims this keypress, and if so apply it.
      *
      * This is the {@see KeyMsg} bridge that lets {@see App::update()} host the
-     * live {@see \SugarCraft\Code\Chat} (crush_feat.md §5 E7, the merge
+     * live {@see \SugarCraft\Code\Chat} (§5 E7, the merge
      * branch): the shell answers its own keys — menu, pane switch, the agent
      * view's c/r/s/q and arrows — and returns **null** for everything else so
      * the App can hand the untouched `KeyMsg` to `Chat::update()`. Returning
@@ -427,7 +427,7 @@ final class KeyboardHandler
      */
     private static function chatOwns(KeyMsg $msg, App $app): bool
     {
-        // Session cycling (crush_feat.md §5 E2). Shift only picks the
+        // Session cycling (§5 E2). Shift only picks the
         // direction, so both Ctrl+Tab and Ctrl+Shift+Tab belong to Chat.
         if ($msg->type === KeyType::Tab && $msg->ctrl) {
             return true;
@@ -792,7 +792,7 @@ final class KeyboardHandler
             $app = $app->withAgentsStopArmedAt(null);
         }
 
-        // Alt+1..9 — jump straight to slot N of the dashboard (crush_feat.md
+        // Alt+1..9 — jump straight to slot N of the dashboard (
         // §5 E5). The slot→agent mapping is AgentDashboardPane's, not a second
         // ordering invented here, so the number the user presses is the number
         // printed on the row. Deliberately below the Attach dispatch: while
@@ -1092,7 +1092,7 @@ final class KeyboardHandler
             return [$app->withAgentViewMode(AgentViewMode::Peek), null];
         }
 
-        // Space - the non-committing peek (crush_feat.md §5 E5): look at what
+        // Space - the non-committing peek (§5 E5): look at what
         // the selected worker is blocked on without leaving the dashboard.
         // Both spellings are matched because sugar-core reports the key as
         // KeyType::Space ("space") but a Char " " reaches here from any

@@ -1082,7 +1082,7 @@ final class AgentManager
             if ($this->provider->supportsStreaming()) {
                 $subAgent->status = SubAgent::STATUS_STREAMING;
 
-                // Transient-failure retry (crush_code.md Phase 5 item 8), on
+                // Transient-failure retry (Phase 5 item 8), on
                 // the same policy as Runtime's two provider seams so the same
                 // 5xx is not recoverable on the main turn and fatal for a
                 // sub-agent. This loop is INSIDE the outer try, so only a
@@ -2130,7 +2130,7 @@ final class AgentManager
      * from the workflow's maxConcurrent/stopOnFirstFailure. Before those two
      * call sites were routed here they called AgentWorkerPool::executeAll()
      * directly, so no SubAgent was ever registered and the telemetry
-     * accessors above reported zeros for real work (crush_feat.md 5E item 6).
+     * accessors above reported zeros for real work (5E item 6).
      * Omit it to fall back to the manager's own pool.
      *
      * EVERY BATCH MEMBER IS GOVERNED BY ITS OWN GRANT (E644). This used to be
@@ -2453,7 +2453,7 @@ final class AgentManager
      * granted bodies but never told what else exists — the `Skill` tool it
      * may hold (inherited grant, or a `tools:` list naming it) has no
      * discoverable targets, which is exactly the Level-1/Level-2 dead wire
-     * crush_feat.md sections 7 E1/E2 named for the main prompt.
+     * sections 7 E1/E2 named for the main prompt.
      *
      * THE EXCLUSION MIRRORS RUNTIME'S, PER MEMBER: the names whose full bodies
      * this very prompt already folds (the E643 loop above) are dropped from

@@ -78,7 +78,7 @@ final class EchoProvider implements ProviderInterface
      * PHP. There is no window it could report, and the 1,000,000 it used to
      * return was a stand-in for "effectively unlimited" from a time when
      * nothing read this method (measured: zero call sites in `src/` before
-     * crush_code.md Phase 5 item 4). Now that
+     * Phase 5 item 4). Now that
      * {@see \SugarCraft\Code\Chat}'s context tiers are percentages of it,
      * an invented 1,000,000 switched all four of them off on the one path
      * that runs by default: {@see \SugarCraft\Code\Cli\Bootstrap::backend()}

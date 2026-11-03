@@ -10,7 +10,7 @@ use SugarCraft\Code\Tools\ToolCall;
 
 /**
  * Last-resort parser for a MiniMax-M2.x deployment whose server was launched
- * *without* `--tool-call-parser minimax-m2` (crush_feat.md §12 D6).
+ * *without* `--tool-call-parser minimax-m2` (§12 D6).
  *
  * With the flag missing the server never decodes the model's native syntax, so
  * the tool call arrives as literal XML inside `message.content` and

@@ -81,7 +81,7 @@ final class SettingsPane
         // to rather than the directory the binary was started from. It stayed
         // getcwd() here only because App carried no root to read back — the
         // same gap that let the model be told the wrong repository
-        // (crush_code.md Phase 0 item 6). Null means the App was built
+        // (Phase 0 item 6). Null means the App was built
         // without one (a test, an embedder), and the process directory is
         // then the honest answer.
         $root = $a->root ?? getcwd();

@@ -18,7 +18,7 @@ use SugarCraft\Code\Skills\SkillSource;
 
 /**
  * `/bg <task>` (alias `/background`) — dispatch a task onto the
- * {@see BackgroundSupervisor} and hand the prompt straight back (crush_feat.md
+ * {@see BackgroundSupervisor} and hand the prompt straight back (
  * §5 E3); `/bg stop <id>` stops one (audit BG-1). Moved out of `Chat` in
  * roadmap O-2h; `/fork` ({@see ForkCommand}) shares its spawn.
  *

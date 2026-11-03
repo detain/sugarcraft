@@ -19,7 +19,7 @@ use SugarCraft\Code\Theme;
  * {@see \SugarCraft\Code\Chat}, this delegates to the live
  * {@see LiveRenderer} — the one that carries tool results, diffs, the Veil
  * permission modal, collapse/expand, images and the mouse zone pass — and
- * only supplies the surrounding box (crush_feat.md §5 E7, merge branch).
+ * only supplies the surrounding box (§5 E7, merge branch).
  * That is the whole point of the merge: the pane layer contributes layout,
  * `src/Renderer.php` contributes content, and neither reimplements the other.
  *
@@ -82,7 +82,7 @@ final class ChatPane
      *
      * The image layer has to ride out of here rather than being dropped:
      * {@see LiveRenderer::renderView()} leaves a marker in the body for every
-     * image-bearing tool result (crush_feat.md §9 E3) — a zero-width
+     * image-bearing tool result (§9 E3) — a zero-width
      * authenticating OSC plus one U+E002 + id cell
      * ({@see \SugarCraft\Core\ImageOverlay::marker()}) — and only
      * `Program::renderFrame()`, given the placements on a

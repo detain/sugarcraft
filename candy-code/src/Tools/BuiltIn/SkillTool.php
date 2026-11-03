@@ -18,7 +18,7 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 /**
  * Level-2 on-demand skill loader, exposed to the model as an ordinary tool.
  *
- * Mirrors Claude Code's own Skill invocation model (crush_feat.md section
+ * Mirrors Claude Code's own Skill invocation model (section
  * 7.E2): only Level-1 metadata (name + description, via SkillMatcher) is
  * folded into the system prompt at session start. The full SKILL.md body
  * — which can run to thousands of tokens per skill — is deliberately NOT

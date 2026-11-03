@@ -50,7 +50,7 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
  * Deliberately stops at producing the image-bearing result and threading it
  * back onto the root {@see \SugarCraft\Code\Message} (see {@see
  * \SugarCraft\Code\Backend\EngineBackend::complete()}) -- the full
- * ImageOverlay/View::images pixel-rendering pipeline is E3 (crush_feat.md
+ * ImageOverlay/View::images pixel-rendering pipeline is E3 (
  * section 9), a separate, later step.
  */
 #[BuiltInTool(name: 'doctor', permission: ToolPermissionClass::Ask, position: 9, gloss: 'a capability probe the model can call to report what this build/deployment actually supports')]

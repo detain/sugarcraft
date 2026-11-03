@@ -139,7 +139,7 @@ final class PathJail
 
     /**
      * Resolve a path that is allowed NOT TO EXIST YET, including any number of
-     * missing parent directories (crush_code.md Phase 8 item 12).
+     * missing parent directories (Phase 8 item 12).
      *
      * {@see resolve()} accepts a missing FILE, but only when its immediate
      * parent already exists — `realpath(dirname($fullPath))` is its containment

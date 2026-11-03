@@ -82,7 +82,7 @@ final class PathJail implements PathJailInterface
      * It used to be an alias of {@see expandPath()}, which returns an
      * absolute path unchanged and leaves `..` intact — so `jailPath('/etc/passwd')`
      * answered `/etc/passwd`, a name promising containment the method never
-     * provided (crush_code.md P8.14, audit F-J5). No in-tree caller is left
+     * provided (P8.14, audit F-J5). No in-tree caller is left
      * (Read/Edit/Write moved to {@see resolve()}/{@see resolveForCreate()},
      * Bash to {@see root()}), so the next consumer is an out-of-tree one, and
      * the one thing it must not get is the old unchecked join under a name

@@ -797,7 +797,7 @@ final class SkillLoader
      * recorded in {@see skipped()} by {@see mergeTier()}) but loads only each
      * one's manifest, not its body.
      *
-     * Fixes the defect described in crush_feat.md section 7.E3: every
+     * Fixes the defect described in section 7.E3: every
      * ReactPHP-loop session used to pay the full I/O + YAML-parse cost of
      * every built-in/user/project skill's body at startup even when zero
      * skills were invoked that session, defeating the point of the
@@ -806,7 +806,7 @@ final class SkillLoader
      * Tools\BuiltIn\SkillTool::execute() -- and that tool IS registered into
      * Bootstrap::tools() now, so the backfill half is production reachable.
      * This paragraph said "not yet registered ... not yet reachable from
-     * bin/candy-code (tracked separately: crush_feat.md section 7 item 2 /
+     * bin/candy-code (tracked separately: section 7 item 2 /
      * W3.S8)" for several rounds after W3.S8 shipped; see
      * {@see SkillManager::loadAll()} for the same correction and for the tests
      * that hold it.

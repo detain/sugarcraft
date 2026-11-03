@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\Sanitize;
 /**
  * A hook that executes an external script.
  *
- * EXIT-CODE CONTRACT (crush_code.md Phase 1 item 2). Until this, a script hook
+ * EXIT-CODE CONTRACT (Phase 1 item 2). Until this, a script hook
  * could only ever say allow (0) or deny (anything else), which left two of
  * {@see HookResult}'s four actions — ASK and MODIFY — reachable only by
  * hand-writing a PHP {@see HookInterface} class. ASK in particular is what
@@ -57,7 +57,7 @@ use SugarCraft\Core\Util\Sanitize;
  * 0/1/2 are NOT this class's invention and were NOT free to renumber: they are
  * already the documented, tested contract of {@see HookDispatcher} and
  * {@see HookDispatchResult} (0 allow / 1 non-blocking deny / 2 hard block),
- * which is why ASK and MODIFY got 3 and 4 rather than crush_code.md's
+ * which is why ASK and MODIFY got 3 and 4 rather than the plan's
  * suggested 2 and 3 — 2 was taken, and quietly redefining it would have turned
  * every existing "exit 2 to block" hook into a prompt.
  *

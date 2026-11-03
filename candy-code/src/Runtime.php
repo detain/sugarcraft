@@ -884,7 +884,7 @@ final class Runtime
      *                                {@see \SugarCraft\Code\Tools\ParallelSafe}
      *                                calls concurrently. False forces the
      *                                strictly sequential dispatch this class
-     *                                had before crush_code.md Phase 0 item 14 —
+     *                                had before Phase 0 item 14 —
      *                                an escape hatch, not a default. Reached
      *                                from a real run through
      *                                `$CANDY_CODE_DISABLE_PARALLEL_TOOL_CALLS`
@@ -1473,7 +1473,7 @@ final class Runtime
      *                           Mirrors the `$onToken` plumbing the streaming
      *                           text path already has: the engine's tool calls
      *                           are otherwise invisible to whoever drives it
-     *                           (crush_feat.md §1 E1), because only the final
+     *                           (§1 E1), because only the final
      *                           assistant message survives back out of
      *                           {@see \SugarCraft\Code\Backend\EngineBackend::complete()}.
      *
@@ -1482,7 +1482,7 @@ final class Runtime
      *                           decision, signature
      *                           `function(ToolCall $call, HookResult $ask): bool`
      *                           returning true to permit the call. An ASK is a
-     *                           hook deferring to the user (crush_feat.md §1 E2),
+     *                           hook deferring to the user (§1 E2),
      *                           so it needs an owner with a UI; without one this
      *                           Runtime fails the call closed rather than
      *                           guessing. See {@see settleAsk()}.
@@ -1493,7 +1493,7 @@ final class Runtime
      *                           is parsed off the wire.
      *
      *                           This is what makes streaming real rather than
-     *                           merely parsed (crush_code.md Phase 0 item 13):
+     *                           merely parsed (Phase 0 item 13):
      *                           {@see runStreaming()} decoded the provider's
      *                           SSE correctly and then re-buffered the WHOLE
      *                           response before yielding a single
@@ -1705,7 +1705,7 @@ final class Runtime
 
     /**
      * The streaming provider call, with a retry that is deliberately NOT
-     * unconditional (crush_code.md Phase 5 item 8).
+     * unconditional (Phase 5 item 8).
      *
      * WHY A STREAM RETRY IS NOT A BATCH RETRY
      * ---------------------------------------
@@ -2121,7 +2121,7 @@ final class Runtime
 
     /**
      * The non-streaming provider call, with the transient-failure retry
-     * (crush_code.md Phase 5 item 8).
+     * (Phase 5 item 8).
      *
      * This is the easy half of the retry: `complete()` is a single request that
      * either returns a whole response or fails, and NOTHING observable has
@@ -2272,7 +2272,7 @@ final class Runtime
             $toolCalls,
             $response->reasoning,
             // The provider-counted figures this response already carried and
-            // that were dropped here until crush_code.md Phase 5 item 7. Null
+            // that were dropped here until Phase 5 item 7. Null
             // when the provider reported neither, which is not the same claim
             // as "$0.00 spent" - see {@see Usage}. Since the E17 fold the
             // provider's parsed buckets ride along when the wire carried
@@ -2349,7 +2349,7 @@ final class Runtime
      * {@see \SugarCraft\Code\Tools\ParallelSafe} calls becomes one concurrent
      * group, and every other call is a barrier executed alone, in place, by
      * exactly the sequential code path this method has always used. That is
-     * the whole concurrency-safety rule (crush_code.md Phase 0 item 14), and
+     * the whole concurrency-safety rule (Phase 0 item 14), and
      * it buys three guarantees that make it safe to reason about:
      *
      *   - No two mutating calls ever overlap, so two `Edit`s of one file, or
@@ -3426,7 +3426,7 @@ final class Runtime
      * Identical decisions in both dispatch paths, which is the point of it
      * being one method: only a true DENY blocks (a MODIFY is "allowed, with
      * rewritten input", and isAllowed() is false for it too), and an ASK is
-     * not a verdict — it is the hook deferring to the user (crush_feat.md §1
+     * not a verdict — it is the hook deferring to the user (§1
      * E2), settled by whoever owns a UI that can put the question and failing
      * CLOSED when nobody does. This method BLOCKS on that answer, which is
      * what keeps an asking hook meaningful once the prompt becomes real UI:
@@ -5433,7 +5433,7 @@ final class Runtime
         // only), distinct from the full bodies the explicitly-enabled skills
         // above contribute. Without this listing the Skill tool is a tool the
         // model has no reason to call, so a populated registry would still be
-        // un-auto-triggerable (crush_feat.md section 7 E1/E2 Strategy A).
+        // un-auto-triggerable (section 7 E1/E2 Strategy A).
         // Empty registry => empty string, so nothing changes for a session
         // that discovered no skills. The enabled bodies are excluded from the
         // lines ($enabledSkillNames above): P7.S3 made the body channel real,
@@ -5999,7 +5999,7 @@ final class Runtime
     private function basePrompt(?App $app = null): string
     {
         // A prompt that misdescribes a tool is worse than the one sentence it
-        // replaced (crush_code.md Phase 5.1), so each clause below names the
+        // replaced (Phase 5.1), so each clause below names the
         // code that makes it true AND the limit past which it stops being
         // true. An earlier revision of this comment asserted blanket
         // verification of everything under it, and two clauses were
@@ -6858,7 +6858,7 @@ final class Runtime
      * for an App that was never given one.
      *
      * Single seam for every consumer, because the whole defect in
-     * crush_code.md Phase 0 item 6 was two of them disagreeing with the tools'
+     * Phase 0 item 6 was two of them disagreeing with the tools'
      * own root. There are three today — the {@see HookContext::$projectRoot}
      * every PreToolUse/PostToolUse hook gates on, the environment block the
      * model reads, and the repo map beside it — and the enumeration is
@@ -6884,7 +6884,7 @@ final class Runtime
      * {@see \SugarCraft\Code\Chat::shouldPromptIdleCompaction()} - two
      * copies of one number, neither tied to the model actually being talked
      * to, in a class that holds a provider whose real window it never asked
-     * for (crush_code.md Phase 5 item 4). The limit is now
+     * for (Phase 5 item 4). The limit is now
      * {@see ContextWindow::resolve()} over `$this->provider->contextWindow()`:
      * this runtime's provider, not `$app`'s, because it is the one that will
      * receive the request and therefore the one whose ceiling matters. A

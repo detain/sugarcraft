@@ -13,7 +13,7 @@ use SugarCraft\Code\Tools\ToolCall;
  * `--tool-call-parser` flag (SGLang, vLLM) or for OpenAI itself, because the
  * server has already decoded the model's native syntax into the wire schema.
  * The logic is the one previously inlined byte-identically in
- * `SglangProvider`/`CustomProvider`/`OpenAIProvider` (crush_feat.md §12 D6).
+ * `SglangProvider`/`CustomProvider`/`OpenAIProvider` (§12 D6).
  */
 final readonly class OpenAiArrayToolCallParser implements ToolCallParserInterface
 {

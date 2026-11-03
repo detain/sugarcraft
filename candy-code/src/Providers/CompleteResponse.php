@@ -18,7 +18,7 @@ final readonly class CompleteResponse
          * Whether the failure behind {@see $isError} is worth another attempt
          * — {@see TransientFailure::isTransient()}'s verdict on the live
          * exception, recorded at the catch site while that exception still
-         * exists (crush_code.md Phase 5 item 8).
+         * exists (Phase 5 item 8).
          *
          * This field exists because {@see CustomProvider} and
          * {@see VertexProvider} report a failed call as an error RESPONSE

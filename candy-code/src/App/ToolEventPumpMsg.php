@@ -9,7 +9,7 @@ use SugarCraft\Code\Chat;
 
 /**
  * Wake-up telling {@see Chat} to drain one entry from its live tool-event
- * inbox (crush_feat.md §1 E1).
+ * inbox (§1 E1).
  *
  * Deliberately payload-free. The events themselves live in the single shared
  * queue {@see Chat} hands its backend's `$onEvent` callback, and carrying them

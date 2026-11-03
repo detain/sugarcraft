@@ -20,7 +20,7 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 /**
  * The model-facing door onto `src/LSP/` — go-to-definition, find-references,
  * hover, document symbols, code actions and published diagnostics, answered by
- * a language server instead of by a regex (crush_code.md Phase 2 item 7).
+ * a language server instead of by a regex (Phase 2 item 7).
  *
  * WHAT THIS WIRES, AND WHAT IT DELIBERATELY DOES NOT. Before this class,
  * `grep -rn 'LspClient\|LSP\\\\' src bin examples` outside `src/LSP/` matched

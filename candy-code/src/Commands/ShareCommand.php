@@ -597,7 +597,7 @@ final class ShareCommand
      * The canonical variable is CANDY_CODE_SHARE_UPLOAD_URL.
      * `SUGARCRUSH_SHARE_UPLOAD_URL` is the pre-rename spelling and // @rename-keep
      * `SUGAR_CRUSH_SHARE_UPLOAD_URL` its original one-of-two underscore variant // @rename-keep
-     * (crush_code.md Phase 4 item 4); both still reach this reader —
+     * (Phase 4 item 4); both still reach this reader —
      * bin/candy-code folds the old prefixes onto CANDY_CODE_* via LegacyEnv
      * before anything reads env.
      */

@@ -80,7 +80,7 @@ final class Message implements \JsonSerializable
         /**
          * What this assistant turn cost in PROVIDER-COUNTED tokens and
          * dollars, summed over every step of the agentic loop that produced
-         * it, or null when nothing was reported (crush_code.md Phase 5 item
+         * it, or null when nothing was reported (Phase 5 item
          * 7). Carried across the {@see
          * \SugarCraft\Code\Backend\EngineBackend} conversion boundary for
          * the same reason $reasoning and $imageBytes are: every provider
@@ -449,7 +449,7 @@ final class Message implements \JsonSerializable
     /**
      * Human-readable one-liner for a tool invocation.
      *
-     * crush_feat.md §3 E2: the same model turn that emits a tool call also
+     * §3 E2: the same model turn that emits a tool call also
      * emits a `description` argument (every built-in tool's `inputSchema()`
      * marks it required), so no extra LLM round-trip is needed to get a
      * Claude-Code-Bash-style "List files in current directory" label. That

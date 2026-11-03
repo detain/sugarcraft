@@ -31,7 +31,7 @@ final class SubAgent
      * A sub-agent can sit `pending` in the pool for a long time, so elapsed
      * *work* time has to be measured from the moment
      * {@see AgentManager::executeSubAgent()} started it — measuring from
-     * creation would report queue time as work time (crush_feat.md §5 E6).
+     * creation would report queue time as work time (§5 E6).
      */
     public ?\DateTimeImmutable $startedAt = null;
     /**

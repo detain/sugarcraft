@@ -9,7 +9,7 @@ use SugarCraft\Code\Chat;
 
 /**
  * Internal Msg carrying the OUTCOME of a `/bg`/`/fork` spawn attempt
- * (crush_feat.md section 5 E3).
+ * (section 5 E3).
  *
  * `BackgroundSupervisor::spawnSession()` forks a daemon and then waits on a
  * socket handshake, so calling it inline from `Chat::update()` would freeze

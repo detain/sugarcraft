@@ -27,7 +27,7 @@ use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
- * Create a file (crush_code.md Phase 8 item 12).
+ * Create a file (Phase 8 item 12).
  *
  * {@see Edit} cannot do this: it requires `file_exists($path)` AND a non-empty
  * `old_string`, so the model's only route to a new file was a `Bash` heredoc —

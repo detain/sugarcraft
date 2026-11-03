@@ -31,7 +31,7 @@ use SugarCraft\Code\Skills\SkillSource;
  * loss is reported through {@see warnings()} and error_log rather than being
  * discarded silently.
  *
- * WIRED INTO THE RUNTIME as of crush_code.md Phase 1 item 3:
+ * WIRED INTO THE RUNTIME as of Phase 1 item 3:
  * {@see \SugarCraft\Code\Cli\Bootstrap::foreignAgentPresets()} constructs this
  * class and {@see \SugarCraft\Code\Cli\Bootstrap::agentRoster()} inserts the
  * result BENEATH the six built-in definitions and the native presets, so an

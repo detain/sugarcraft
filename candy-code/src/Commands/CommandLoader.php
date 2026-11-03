@@ -47,12 +47,12 @@ use SugarCraft\Code\Skills\SkillSource;
  * than tidying a symmetry; {@see loadUserCommands()} carries what was measured
  * and what the fix costs.
  *
- * WIRED (crush_code.md Phase 2 item 4): {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
+ * WIRED (Phase 2 item 4): {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
  * builds one and hands it to {@see \SugarCraft\Code\Chat}, which loads once at
  * construction and then serves all three command surfaces from the merged map —
  * the "/" popup, `/help`'s listing, and dispatch itself
  * ({@see \SugarCraft\Code\Commands\CommandSpec::expandTemplate()} turns the
- * template into the prompt that is sent). ALL FOUR of crush_feat.md section
+ * template into the prompt that is sent). ALL FOUR of section
  * 4.E4's template forms are now implemented: `$ARGUMENTS` and `$1`..`$9` in
  * {@see CommandSpec::expandTemplate()}, and `` !`cmd` `` and `@file` behind the
  * two gates the earlier revision of this doc-block said each would need.

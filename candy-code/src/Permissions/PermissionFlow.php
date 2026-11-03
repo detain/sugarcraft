@@ -10,7 +10,7 @@ use SugarCraft\Code\App\PermissionRequestMsg;
 /**
  * The transient state of one permission prompt, as a value object.
  *
- * These five fields lived directly on Chat (crush_feat.md §1 E2 and the
+ * These five fields lived directly on Chat (§1 E2 and the
  * rounds that followed); the FSM that READS and WRITES them is being lifted
  * into this namespace family in steps, and this class is where the STATE
  * settled first, so the prompt's data has one home while Chat keeps only the
@@ -62,7 +62,7 @@ final class PermissionFlow
     /**
      * @param ?PermissionRequestMsg $pendingPermission The permission prompt
      *        currently blocking this turn, or null when nothing is waiting on
-     *        the user (crush_feat.md §1 E2). Set by
+     *        the user (§1 E2). Set by
      *        {@see \SugarCraft\Code\Chat::requestPermission()}, cleared by
      *        {@see \SugarCraft\Code\Chat::answerPermission()};
      *        {@see \SugarCraft\Code\Renderer} reads it through

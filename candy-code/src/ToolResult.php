@@ -27,7 +27,7 @@ use SugarCraft\Image\Mosaic;
  * message history), convert at that boundary rather than collapsing these
  * two differently-shaped representations into one.
  *
- * This is the Chat/Renderer-side half of the two type pairs crush_feat.md
+ * This is the Chat/Renderer-side half of the two type pairs 
  * §1 D flags as "a maintenance hazard independent of the rendering gap".
  * {@see EngineToolResult} (`Tools\ToolResult`) is the canonical pair -- it
  * is what the {@see Tools\Tool} interface returns, what {@see Runtime}
@@ -35,10 +35,10 @@ use SugarCraft\Image\Mosaic;
  * while this type is what {@see Message}'s `$toolResults` and {@see
  * Renderer} render. The two are reconciled by the lossless {@see
  * toEngineResult()}/{@see fromEngineResult()} adapters rather than by
- * rewriting every consumer of either pair at once (crush_feat.md §1 E1).
+ * rewriting every consumer of either pair at once (§1 E1).
  * For those adapters to be genuinely lossless this type carries the two
  * fields only the engine side had -- `$diff` (W1.F1, the unified diff
- * crush_feat.md §1 E3 wants rendered, which otherwise could not reach
+ * §1 E3 wants rendered, which otherwise could not reach
  * {@see Renderer} at all since the renderer only ever sees THIS type) and
  * `$durationMs` -- exactly as the engine side already carries the image
  * fields that started life only here.
@@ -109,7 +109,7 @@ final class ToolResult
      *                                 attached by {@see \SugarCraft\Code\Chat} at the point the
      *                                 "running" placeholder is replaced, because that placeholder is
      *                                 the only carrier of the call's arguments that survives to the
-     *                                 finish of an engine-dispatched call (crush_feat.md §3 E2/§1 E5).
+     *                                 finish of an engine-dispatched call (§3 E2/§1 E5).
      * @param array<string, mixed> $arguments The model's raw arguments for the CALL this result
      *                                        answers. Display-only for the same reasons as
      *                                        $description, and attached at the same point: it
@@ -173,7 +173,7 @@ final class ToolResult
      * later renderer (see E3, not part of this step) knows which protocol
      * to paint with without re-probing the TTY per tool call.
      *
-     * Mirrors candy-code's sugar-image wiring plan (crush_feat.md section
+     * Mirrors candy-code's sugar-image wiring plan (section
      * 9, E1): "Extend ToolResult.php with an optional imageBytes field."
      */
     public static function okWithImage(string $name, string $result, string $imageBytes, ?string $id = null): self
@@ -285,7 +285,7 @@ final class ToolResult
 
     /**
      * True when this result carries a unified diff for a renderer to show
-     * (crush_feat.md §1 E3) instead of only a "File updated: …" one-liner.
+     * (§1 E3) instead of only a "File updated: …" one-liner.
      */
     public function hasDiff(): bool
     {
@@ -388,7 +388,7 @@ final class ToolResult
     /**
      * Adapt this Chat-side result to the canonical engine-side
      * {@see EngineToolResult} the {@see Tools\Tool} interface, {@see Runtime}
-     * and {@see \SugarCraft\Code\Events\ToolFinished} speak (crush_feat.md
+     * and {@see \SugarCraft\Code\Events\ToolFinished} speak (
      * §1 E1).
      *
      * The engine pair carries one `content` string plus an `isError` flag
@@ -441,7 +441,7 @@ final class ToolResult
 
     /**
      * Probe-once capture point for sugar-image's terminal capability
-     * detection (crush_feat.md section 9, E2), mode-aware since W2.2
+     * detection (section 9, E2), mode-aware since W2.2
      * (crush_media §8.7 gap-1): memoized per render-mode word, so a mode
      * switch derives a fresh Mosaic instead of returning another mode's
      * cached probe. `'auto'` keeps the original detect-based behaviour --

@@ -40,7 +40,7 @@ use SugarCraft\Core\Util\Ansi;
  * runs the full bounded agentic loop synchronously and returns a finished
  * `Message` with no `Program`/`Chat` involved — this class is purely the
  * argv/stdin/stdout/exit-code plumbing wrapped around that existing
- * capability. See crush_feat.md section 2 ("CLI commands, parameters, help
+ * capability. See section 2 ("CLI commands, parameters, help
  * screens & non-interactive mode"), Recommendations 2 ("Add candy-code -p
  * ... one-shot mode built directly on EngineBackend::complete()"), 3
  * ("--output-format text|json on the one-shot path"), and 4 ("Exit codes
@@ -66,7 +66,7 @@ use SugarCraft\Core\Util\Ansi;
  * {@see \SugarCraft\Code\Providers\EchoProvider}, which is right for a
  * developer opening an editor, while this class calls
  * {@see Bootstrap::backendFor()} and hard-fails, which is right for a caller
- * whose entire view of the run is stdout plus an exit code (crush_code.md
+ * whose entire view of the run is stdout plus an exit code (
  * Phase 0 item 10 / §5). The Echo provider is still reachable from here — it
  * is simply never *substituted* for something else.
  */
@@ -114,7 +114,7 @@ final class NonInteractive
      * Everything under this code has the same operational meaning: something
      * was attempted, and attempting it again might produce a different result.
      *
-     * Since crush_code.md Phase 5 item 8 that is a weaker statement than it
+     * Since Phase 5 item 8 that is a weaker statement than it
      * used to be FOR ONE OF THE BACKENDS, and both halves of that matter to
      * whoever wires a CI gate on this code.
      *
@@ -168,7 +168,7 @@ final class NonInteractive
      * tests, and correcting it later would not be.
      *
      * 2 rather than 1 deliberately, and it is the whole point of
-     * crush_code.md Phase 0 item 10: no provider constructor in this codebase
+     * Phase 0 item 10: no provider constructor in this codebase
      * performs any I/O (the OpenAI/Anthropic/SGLang factories only build a
      * Guzzle client, Bedrock only an AWS SDK client, Vertex only stores
      * strings), so a throw from construction is *always* a configuration
@@ -248,7 +248,7 @@ final class NonInteractive
      *   answered with an error-marked message — a command-tier nonzero exit
      *   (`CANDY_CODE_BACKEND_CMD`/`_STREAM`) now reaches the caller as exit 1
      *   instead of a printed failure at exit 0 (1021 F-5) — extending the existing `candy-mail`/`candy-ssh-launcher`
-     *   bins' 0/1 convention (crush_feat.md Recommendation 4) with
+     *   bins' 0/1 convention (Recommendation 4) with
      *   `bin/candy-code`'s own 2-means-usage-error.
      */
     public static function run(ParsedArgs $args, ?Backend $backend = null, string $outputFormat = self::FORMAT_TEXT): int
@@ -1361,7 +1361,7 @@ final class NonInteractive
 
     /**
      * Report an explicitly selected provider that could not be constructed,
-     * and refuse to answer (crush_code.md Phase 0 item 10).
+     * and refuse to answer (Phase 0 item 10).
      *
      * This is the asymmetry the item exists to create. {@see
      * Bootstrap::backend()} — which the interactive TUI still reaches through
@@ -2296,7 +2296,7 @@ final class NonInteractive
      * Render the finished Message per --output-format.
      *
      * `text` (default): the assistant's raw content, matching the plain
-     * stdout contract of every tool surveyed in crush_feat.md section 2.
+     * stdout contract of every tool surveyed in section 2.
      * `json`: `{"schema": 1, "result": "<content>"}`, plus SEVEN conditional
      * keys. `refusals` appears when the turn blocked at least one tool call
      * — see {@see self::emitErrorDocument()} for why refusals is
@@ -2365,7 +2365,7 @@ final class NonInteractive
      * stop conditions as system notices in its settle arm (Chat.php); this is
      * the one-shot path's same-fact vocabulary.
      *
-     * crush_feat.md Recommendation 3 sketched this envelope;
+     * Recommendation 3 sketched this envelope;
      * the first cut shipped `result` alone and left its `session_id`/`usage`
      * fields a promise. AUT-2 keeps the promise: both fields land when the
      * run has a session and a billing report to fill them. Any value other

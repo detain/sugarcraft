@@ -40,7 +40,7 @@ use SugarCraft\McpClient\RequestIdSequence;
  * doc-comment in `src/Providers/Concerns/HttpClientDefaults.php` comparing
  * timeouts, not a construction. THAT IS NO LONGER TRUE OF THE SIBLING, and the
  * half that changed is precisely the half a reader of this file would carry
- * away: crush_code.md Phase 2 item 2 gave {@see \SugarCraft\Code\MCP\McpClient}
+ * away: Phase 2 item 2 gave {@see \SugarCraft\Code\MCP\McpClient}
  * a real caller in {@see \SugarCraft\Code\Cli\Bootstrap::mcpClient()}, which
  * reads `$root/.mcp.json` behind a {@see \SugarCraft\Code\Support\ContainedPath}
  * compare AND a per-user trust grant (`trustedProjectMcp`, because starting a

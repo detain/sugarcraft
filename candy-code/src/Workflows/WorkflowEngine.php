@@ -2350,7 +2350,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // the manager registers each SubAgent and mirrors per-result usage back
         // onto it, which is what makes its elapsed/token/cost accessors (and so
         // the live agent status line) report real work for workflow-spawned
-        // agents instead of zeros (crush_feat.md section 5 E6). Exactly one of
+        // agents instead of zeros (section 5 E6). Exactly one of
         // the two paths runs -- the manager accumulates with `+=`, so iterating
         // the pool as well would double-count this stage's usage.
         $results = $this->agentManager !== null

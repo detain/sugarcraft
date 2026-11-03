@@ -10,7 +10,7 @@ use SugarCraft\Core\Util\Width;
  * The old-file/new-file line-number gutter for a unified diff — the column
  * {@see \SugarCraft\Code\Renderer::renderDiff()} paints to the left of each
  * diff row so a reviewer can tell *which line of the file* a change lands on
- * (crush_code.md Phase 8 item 1; before this, the diff box was raw `diff -u`
+ * (Phase 8 item 1; before this, the diff box was raw `diff -u`
  * text with add/remove colouring and nothing else).
  *
  * Pure: in, a list of already-sanitised diff rows; out, one same-length list of

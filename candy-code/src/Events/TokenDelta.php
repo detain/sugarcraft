@@ -13,7 +13,7 @@ namespace SugarCraft\Code\Events;
  * engine parsed the stream correctly at the wire and then threw the
  * incrementality away, so "streaming on" and "streaming off" rendered
  * identically — a silent "assistant is thinking…" placeholder followed by the
- * entire reply at once (crush_code.md Phase 0 item 13).
+ * entire reply at once (Phase 0 item 13).
  *
  * A DELTA, never a running total: consumers append. That is the contract every
  * producer on the path honours — {@see \SugarCraft\Code\Runtime::runStreaming()}

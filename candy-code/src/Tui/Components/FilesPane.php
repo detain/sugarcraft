@@ -13,7 +13,7 @@ use SugarCraft\Code\ToolCall;
 
 /**
  * The shell's left sidebar list of files this session is working on
- * (crush_feat.md §5 E7, the MERGE branch — the pane layer is kept and fed
+ * (§5 E7, the MERGE branch — the pane layer is kept and fed
  * real data rather than retired).
  *
  * Two sources, in this order: the files explicitly attached to the shell

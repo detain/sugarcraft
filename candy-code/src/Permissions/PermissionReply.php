@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Permissions;
 
 /**
- * A user's answer to a blocking permission prompt (crush_feat.md §1 E2).
+ * A user's answer to a blocking permission prompt (§1 E2).
  *
  * The three replies opencode's permission service offers, and the reason
  * this is not just a bool: `Once` and `Always` both permit the paused call,

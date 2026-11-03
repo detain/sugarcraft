@@ -146,7 +146,7 @@ use DateTimeImmutable;
  * Main application state - immutable with*() builders.
  * Mirrors the canonical sugar-style/src/Style.php pattern.
  *
- * Also the root {@see Model} of the pane shell (crush_feat.md §5 E7, the
+ * Also the root {@see Model} of the pane shell (§5 E7, the
  * MERGE branch). §5 E7 offers two ways out of the two-parallel-UI-systems
  * drift risk: delete the `App`/`Pane` layer, or switch the app onto it.
  * The merge is what this is: `App` is the SHELL (pane focus, menu bar,
@@ -292,13 +292,13 @@ final class App implements Model
          * library while {@see \SugarCraft\Code\Runtime}'s environment block
          * and hook contexts still reported the whole monorepo — so the model
          * reasoned about one repository while acting inside another, which is
-         * worse than either being wrong on its own (crush_code.md Phase 0
+         * worse than either being wrong on its own (Phase 0
          * item 6).
          */
         public readonly ?string $root = null,
         /**
          * The cross-session memory store THIS App's project-scope notes are
-         * folded into the system prompt from (crush_code.md Phase 5 item 9).
+         * folded into the system prompt from (Phase 5 item 9).
          *
          * "This App", not "this session": the App a session's TUI holds
          * ({@see \SugarCraft\Code\Cli\Bootstrap::app()}) never sets this and
@@ -1582,7 +1582,7 @@ final class App implements Model
     }
 
     /**
-     * Host a {@see Chat} inside the shell (crush_feat.md §5 E7, merge branch).
+     * Host a {@see Chat} inside the shell (§5 E7, merge branch).
      *
      * The instance handed in is the SAME model `bin/candy-code` would have run
      * standalone — the shell adds layout around it and routes unhandled
@@ -3670,7 +3670,7 @@ final class App implements Model
 
     /**
      * Click-to-open a menu title and click-to-run a dropdown row
-     * (crush_feat.md §8's click-to-select pattern, applied to the one surface
+     * (§8's click-to-select pattern, applied to the one surface
      * its E-list never reached — the user report is "clicking the menu up top
      * with a mouse doesnt work").
      *

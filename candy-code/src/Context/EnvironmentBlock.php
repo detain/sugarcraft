@@ -913,7 +913,7 @@ final readonly class EnvironmentBlock implements PromptSection
      * see {@see DIFF_MAX_BYTES} and {@see SUMMARY_MAX_BYTES} for the bounds and
      * for why the branch is the one exception.
      *
-     * There is no "additional working directories" line — crush_code.md Phase 5
+     * There is no "additional working directories" line — Phase 5
      * item 10a once asked for one and the answer stayed that this application
      * has no writable multi-root concept. C-CTX-4.f adds the thing it really
      * describes: an optional `Project references` block after the date, listing

@@ -45,7 +45,7 @@ use SugarCraft\Code\Backend\CancellationToken;
  * because the returned Message is a single opaque final answer: an
  * agentic backend such as {@see Backend\EngineBackend} can run several
  * rounds of tool calls behind it, and without this callback none of
- * them are observable by the caller at all (crush_feat.md §1 E1).
+ * them are observable by the caller at all (§1 E1).
  * A backend that never calls tools and never refuses emits nothing here.
  *
  * **Reasoning:** deliberately NOT a fifth parameter here. The model's thinking

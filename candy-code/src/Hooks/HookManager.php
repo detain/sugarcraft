@@ -136,7 +136,7 @@ final class HookManager
     /**
      * Load hooks from a YAML hook file, adding each one to the chain.
      *
-     * LIVE since crush_code.md Phase 2 item 5:
+     * LIVE since Phase 2 item 5:
      * {@see \SugarCraft\Code\Cli\Bootstrap::hooks()} calls this for
      * `~/.candy-code/hooks.yaml` — and for `{root}/.candy-code/hooks.yaml`
      * only when the user has TRUSTED that project, since a hook entry is a

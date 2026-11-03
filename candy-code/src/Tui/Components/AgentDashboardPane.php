@@ -33,7 +33,7 @@ use SugarCraft\Overlay\Veil;
 
 /**
  * The full-pane agent dashboard — candy-code's answer to `claude agents`
- * (crush_feat.md §5 E5).
+ * (§5 E5).
  *
  * Renders every live worker in ONE ordered list: each run of the {@see Agent}s
  * registered on {@see \SugarCraft\Code\Agents\AgentManager} followed by the
@@ -596,7 +596,7 @@ final class AgentDashboardPane
             // A registered agent has no output buffer of its own — its
             // sub-agents do, and {@see
             // \SugarCraft\Code\Agents\AgentManager::liveOutput()} is the
-            // accessor that rolls theirs up as it is produced (crush_code.md
+            // accessor that rolls theirs up as it is produced (
             // Phase 1 item 1). Before it existed this was necessarily `[]`,
             // so a delegating agent's row was a header with no body while a
             // background session's row showed a live tail.
@@ -656,7 +656,7 @@ final class AgentDashboardPane
      * always rendered an amber border and a warning line for a non-null
      * `stallWarning`, and this builder has always defaulted the parameter,
      * so the producer and the renderer were both complete while nothing
-     * joined them (crush_code.md Phase 8 item 3).
+     * joined them (Phase 8 item 3).
      */
     private static function sessionEntry(BackgroundSession $session, ?StallWarning $stall = null): AgentOutputState
     {

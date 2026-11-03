@@ -13,7 +13,7 @@ use SugarCraft\Code\Tools\ToolCall;
  *
  * Exists because the engine pipeline used to swallow every intermediate tool
  * call inside {@see \SugarCraft\Code\Backend\EngineBackend::complete()}'s
- * bounded loop (crush_feat.md §1 D/E1): only the final assistant message
+ * bounded loop (§1 D/E1): only the final assistant message
  * escaped, so a turn that silently ran eight rounds of tools rendered as a
  * bare "thinking…" spinner. A consumer pairs this event with the matching
  * {@see ToolFinished} (same {@see $toolCallId}) to drive the placeholder-then-

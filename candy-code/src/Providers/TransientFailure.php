@@ -14,7 +14,7 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 
 /**
  * Decides whether a failed provider call is worth trying again, and how long
- * to wait before doing so (crush_code.md Phase 5 item 8).
+ * to wait before doing so (Phase 5 item 8).
  *
  * WHY THIS IS A CLASSIFIER AND NOT A RETRY LOOP
  * ---------------------------------------------
@@ -33,7 +33,7 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
  *
  * WHY IT IS NOT WRAPPED AROUND THE AGENTIC LOOP
  * --------------------------------------------
- * crush_code.md Phase 5 item 8 names
+ * Phase 5 item 8 names
  * {@see \SugarCraft\Code\Backend\EngineBackend::runCompleteInChild()} as the
  * place for this. It is the wrong place and would cause data loss, so it is
  * deliberately not used there. That method calls

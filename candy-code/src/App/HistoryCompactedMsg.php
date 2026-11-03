@@ -12,7 +12,7 @@ use SugarCraft\Code\Usage;
 /**
  * Internal Msg dispatched once a background summarization call has produced
  * model-written one-liners for the exchanges a compaction is about to condense
- * (crush_code.md Phase 5 item 6).
+ * (Phase 5 item 6).
  *
  * TWO ROUTES SCHEDULE ONE, and `$parkedSubmission` is what tells them apart:
  * `/compact` typed by hand ({@see Chat::scheduleModelCompaction()}, null) and

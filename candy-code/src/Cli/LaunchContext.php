@@ -1881,7 +1881,7 @@ final class LaunchContext
         // Glob, Grep and Write: the "announce a path-scoped skill the first
         // time we touch a file it covers" rule is only correct if all of them
         // share the announced-set. Five trackers would re-announce the same
-        // skill once per tool (crush_feat.md section 7 E4).
+        // skill once per tool (section 7 E4).
         //
         // This comment said THREE and named Read/Edit/Glob. It was already
         // stale — `Write` below has taken the same pair since it was wired —
@@ -2177,7 +2177,7 @@ final class LaunchContext
      *
      * Public because this is the exact question the one-shot path has to ask
      * before choosing between {@see Bootstrap::backend()}'s lenient fallback and {@see
-     * backendFor()}'s throw-don't-degrade contract (crush_code.md Phase 0
+     * backendFor()}'s throw-don't-degrade contract (Phase 0
      * item 10): a non-null answer means *this run asked for a specific
      * provider*, and silently answering it from Echo is the bug. Exposing the
      * existing helper rather than re-deriving the precedence in {@see
@@ -2662,7 +2662,7 @@ final class LaunchContext
     /**
      * Build the pane shell the CLI binary runs interactively: an {@see App}
      * hosting the very {@see chat()} model this class already builds
-     * (crush_feat.md §5 E7, the MERGE branch).
+     * (§5 E7, the MERGE branch).
      *
      * §5 E7 gave two ways out of candy-code's two-parallel-UI-systems drift
      * risk — delete the `App`/`Pane` layer, or move the app onto it — and

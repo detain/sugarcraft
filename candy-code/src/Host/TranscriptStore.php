@@ -372,7 +372,7 @@ final class TranscriptStore
 
     /**
      * Rebuild one checkpointed history row, healing a checkpoint taken while
-     * a tool call was still in flight (crush_feat.md §1 E7). See
+     * a tool call was still in flight (§1 E7). See
      * {@see Chat::reviveCheckpointMessage()}, which delegates here and keeps
      * the full account of why each role and the placeholder are handled the
      * way they are.

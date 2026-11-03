@@ -8,7 +8,7 @@ use SugarCraft\Code\Backend;
 
 /**
  * Opt-in declaration that a {@see Backend} knows the token budget the model
- * behind it will actually accept (crush_code.md Phase 5 item 4).
+ * behind it will actually accept (Phase 5 item 4).
  *
  * The context tiers in {@see \SugarCraft\Code\Chat} — the 70% reminder, the
  * 85% automatic compaction, the 95% blocking refusal and the idle-compaction

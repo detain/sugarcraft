@@ -21,7 +21,7 @@ final readonly class AgentDefinition
      * path tells the sub-agent that `php-best-practices` is available to it,
      * so a prompt that does not name the skill leaves the model to infer the
      * connection from a separate listing block — which is exactly the
-     * mechanism-exists-but-is-never-reached failure crush_code.md section 12
+     * mechanism-exists-but-is-never-reached failure section 12
      * finding 3 is about. `AgentDefinitionTest` asserts the invariant over
      * every preset {@see fromType()} can build, so a preset added later
      * without naming its skills fails rather than shipping.

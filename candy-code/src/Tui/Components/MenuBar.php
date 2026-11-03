@@ -35,7 +35,7 @@ use SugarCraft\Mouse\Mark;
 final class MenuBar
 {
     /**
-     * Zone-id prefix every clickable menu TITLE carries (crush_feat.md §8 E6:
+     * Zone-id prefix every clickable menu TITLE carries (§8 E6:
      * "on click, dispatch the same Msg/Cmd the Enter key currently
      * dispatches"). The suffix is the 1-based painted-title index
      * {@see openMenu()} takes — including the `»` overflow slot as a title —

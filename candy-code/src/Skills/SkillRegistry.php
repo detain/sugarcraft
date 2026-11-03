@@ -506,7 +506,7 @@ final class SkillRegistry
      * auto-scoping (forPaths()) and, unlike content, is cheap frontmatter
      * data the Stage-1 manifest already carries; hardcoding it to [] here
      * would silently break every path-scoped skill loaded via the lazy
-     * manifest path (crush_feat.md section 7 E3/E4).
+     * manifest path (section 7 E3/E4).
      *
      * `requires` is optional for the same reason `origin` is: the Stage-1
      * reader refuses an unavailable skill before building the manifest, so a

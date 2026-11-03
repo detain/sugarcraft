@@ -191,7 +191,7 @@ final readonly class ParsedArgs
      * @param string|null $usageError A malformed invocation that is neither an
      *   unknown flag nor a bad `--root` — "a prompt option was handed a flag"
      *   (follow-up #48) or an `--output-format` value nothing implements
-     *   (crush_code.md Phase 4 item 6). Non-null means the binary must fail
+     *   (Phase 4 item 6). Non-null means the binary must fail
      *   with exit 2 rather than run anything.
      * @param string|null $usageHint The remedy line printed under
      *   `$usageError`, chosen by whichever check produced that error — a

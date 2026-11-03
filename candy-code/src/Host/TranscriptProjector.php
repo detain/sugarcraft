@@ -184,7 +184,7 @@ final class TranscriptProjector
             // The placeholder content is Message::describeToolCall()'s
             // one-liner, and ToolFinished carries no arguments, so this is
             // the only point at which the finished row can learn WHAT ran
-            // (crush_feat.md §3 E2). The thought that led to this call rides
+            // (§3 E2). The thought that led to this call rides
             // along from the placeholder, so the finished row keeps its
             // collapsible "💭 Thought" above it.
             $row = self::resultRow(

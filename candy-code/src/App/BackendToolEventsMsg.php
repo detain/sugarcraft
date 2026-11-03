@@ -24,7 +24,7 @@ use SugarCraft\Code\Message;
  * to one of these, and {@see Chat} drains it one event per `update()` — each
  * step producing its own render, which is what makes an engine-dispatched tool
  * call show the same running-then-done transcript states as a
- * {@see Chat::registerTool()} one (crush_feat.md §1 D/E1).
+ * {@see Chat::registerTool()} one (§1 D/E1).
  *
  * Once `$events` is empty the queue hands off to an {@see AssistantMsg}
  * carrying {@see $message}, so the final reply goes through the exact same

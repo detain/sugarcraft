@@ -1375,7 +1375,7 @@ final class WorktreeManager
      * The canonical name is CANDY_CODE_WORKTREES_DIR. The pre-rename
      * spellings `SUGARCRUSH_WORKTREES_DIR` and its underscore variant // @rename-keep
      * `SUGAR_CRUSH_WORKTREES_DIR` (one of only two app variables that ever // @rename-keep
-     * carried the underscore after SUGAR, crush_code.md Phase 4 item 4) keep
+     * carried the underscore after SUGAR, Phase 4 item 4) keep
      * working — bin/candy-code folds the old prefixes onto CANDY_CODE_* via
      * LegacyEnv, and this reader accepts all three shapes directly so an
      * existing export never silently relocates every agent worktree back to

@@ -1079,7 +1079,7 @@ final class Bootstrap
      * "PROJECT-TIER" IS NOW NARROWER THAN THE CONTENTS, and the name is kept
      * while the claim is corrected rather than the reverse. FOUR subsystems feed
      * it — the count was two for one round after a third arrived, and three until
-     * crush_code.md Phase 1 item 3 wired the fourth: the workflow registry
+     * Phase 1 item 3 wired the fourth: the workflow registry
      * ({@see \SugarCraft\Code\Workflows\WorkflowRegistry::projectTierRefusal()}),
      * the skill loader
      * ({@see \SugarCraft\Code\Skills\SkillManager::refusedDirectories()}), the
@@ -1092,7 +1092,7 @@ final class Bootstrap
      * reason, and the custom-command loader
      * ({@see \SugarCraft\Code\Commands\CommandLoader::refusedDirectories()}),
      * drained in {@see chat()} AFTER the {@see \SugarCraft\Code\Chat}
-     * construction that performs the walk (crush_code.md Phase 2 item 4).
+     * construction that performs the walk (Phase 2 item 4).
      *
      * SIX SEAMS, THEREFORE, NOT FIVE: the workflow registry exposes a SECOND
      * one, {@see \SugarCraft\Code\Workflows\WorkflowRegistry::userTierRefusal()},
@@ -1114,7 +1114,7 @@ final class Bootstrap
       * importer's chat trigger, named inside that entry below — and each
       * is named rather than counted, because "five feeders" quietly becoming
       * "six things nobody drains" is the drift this collector keeps producing. It
-      * was FOUR until crush_code.md Phase 1 item 3 wired
+      * was FOUR until Phase 1 item 3 wired
       * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry}, and THREE until
       * Phase 2 item 4 wired {@see \SugarCraft\Code\Commands\CommandLoader} — which
       * is what a named gap is for, twice over. It is FIVE now, and the three
@@ -1450,7 +1450,7 @@ final class Bootstrap
 
         // The session this window runs in, opened on the workspace's ONE store:
         // seedSession() is what makes /sessions, the tab strip, /branch and the
-        // auto-title call reachable at all on a real run (crush_feat.md §5 E1).
+        // auto-title call reachable at all on a real run (§5 E1).
         // P-TABS.d: a tab names its session (or null for a fresh lazy mint) and
         // goes through {@see openTabSession()} — no launch-mode ladder.
         $opened = $launch
@@ -1522,7 +1522,7 @@ final class Bootstrap
             // reasons, and must not start claiming to be incognito.
             incognito: self::incognito(),
             titleBackend: $workspace->titleBackend,
-            // crush_code.md Phase 5 item 6. Without this argument `/compact`
+            // Phase 5 item 6. Without this argument `/compact`
             // reaches only the heuristic summarizer, whose stage-2 output for a
             // long exchange was the literal string "[exchanged information]" —
             // a compaction that preserved nothing of what a compaction exists to
@@ -1535,7 +1535,7 @@ final class Bootstrap
             // the next launch; the Chat hands the same instance to every
             // turn's backend (TurnRunner::backendForTurn()).
             compactorConfig: \SugarCraft\Code\Context\CompactorConfig::fromSettings($userConfig),
-            // crush_code.md Phase 5 item 7. Null unless the launch set a cap;
+            // Phase 5 item 7. Null unless the launch set a cap;
             // `/budget` can set one at runtime either way.
             maxCostUsd: $workspace->maxCostUsd,
             themeName: is_string($userConfig['theme'] ?? null) ? $userConfig['theme'] : 'dark',
@@ -1546,11 +1546,11 @@ final class Bootstrap
             // The same built-in guard chain backend()/backendFor() hand the
             // engine backend. Without it, Chat's own registerTool() calls
             // would still be the one unguarded tool path in the live binary
-            // (crush_feat.md §1 E1) - hooks that a call gets gated by on the
+            // (§1 E1) - hooks that a call gets gated by on the
             // engine pipeline would silently not apply on this one.
             hooks: $workspace->hooks,
             // Without a supervisor instance /bg answers "Background sessions
-            // not configured" on every real run, which leaves crush_feat.md
+            // not configured" on every real run, which leaves 
             // §5 E3 (`/bg` dispatching onto BackgroundSupervisor) implemented
             // everywhere except where a user can reach it. One supervisor per
             // launch: it owns the spawned sessions' IPC table, and a second
@@ -1575,10 +1575,10 @@ final class Bootstrap
             // The same root the tools above are jailed to. Chat's own
             // pipeline builds hook contexts and spawns background sessions
             // without an App or Runtime in reach, so it needs its own copy
-            // or `--root` stops at the tool boundary (crush_code.md Phase 0
+            // or `--root` stops at the tool boundary (Phase 0
             // item 6).
             projectRoot: $root,
-            // crush_code.md Phase 0 item 13's second half. Every provider on
+            // Phase 0 item 13's second half. Every provider on
             // the engine path already streamed, and {@see Chat} already had a
             // `$streaming` flag - but nothing ever turned it on, so
             // {@see Chat::scheduleBackendCompletion()} passed a null $onToken
@@ -1591,7 +1591,7 @@ final class Bootstrap
             // TUI rendering is driven off the shared inbox instead. Passing
             // one here would only duplicate what the pump already does.
             streaming: true,
-            // crush_code.md Phase 1 item 1. Until now this argument was never
+            // Phase 1 item 1. Until now this argument was never
             // passed on the one construction path `bin/candy-code` runs, so
             // `/agents`, Ctrl+A, the transcript's agent strip,
             // AgentDashboardPane's agent rows, PermissionGate (whose only
@@ -1607,7 +1607,7 @@ final class Bootstrap
             // naming the absence; this wiring never substitutes `echo` for an
             // unconfigured production session.
             agentPoolConfig: $workspace->agentPoolConfig,
-            // crush_code.md Phase 2 item 3. `/workflow run|pause|resume|status|
+            // Phase 2 item 3. `/workflow run|pause|resume|status|
             // list` answered "Workflow engine not configured" on every real run
             // because this argument was never passed — the 2,200-line
             // Workflows/ subsystem, the shipped `workflows/deep-research.php`
@@ -1621,7 +1621,7 @@ final class Bootstrap
             // and both are evaluated before the constructor body runs, so the
             // order they appear in here is style, not mechanism.)
             workflowEngine: $workspace->workflowEngine,
-            // crush_code.md Phase 2 item 4. Until now nothing in src/ or bin/
+            // Phase 2 item 4. Until now nothing in src/ or bin/
             // constructed a CommandLoader at all, so `~/.candy-code/commands`
             // and `<root>/.candy-code/commands` were directories the loader
             // knew how to walk and no launch ever asked it to — a `*.md` command
@@ -2070,7 +2070,7 @@ final class Bootstrap
         // one: PermissionGate's Auto-mode circuit breaker is per-INSTANCE
         // state, so two gates would each need three strikes before either
         // escalated, and a user watching one counter would be watching half
-        // the session's refusals (crush_code.md Phase 1 item 2). It is also
+        // the session's refusals (Phase 1 item 2). It is also
         // ONE read of the config, so the engine and Chat's own tool path can
         // never end up enforcing two different modes — including across a
         // Ctrl+P provider switch, which carries this instance rather than
@@ -2587,7 +2587,7 @@ final class Bootstrap
      *   `.opencode/skills`        `.candy-code/agents`  `.claude/agents`
      *   `.opencode/agents`        `.agents/skills`
      *
-     * The last two joined in crush_code.md Phase 1 item 3, which wired
+     * The last two joined in Phase 1 item 3, which wired
      * {@see foreignAgentPresets()} and gave that registry's refusal seam its first
      * reader; the split was five and five before it.
      *
@@ -2606,7 +2606,7 @@ final class Bootstrap
      * itemised on {@see $projectTierRefusals}, all nineteen of them.
      *
      * `.candy-code/commands` IS NOT ONE OF THEM, and this sentence used to say
-     * it was — a gap list that went stale when crush_code.md Phase 2 item 4
+     * it was — a gap list that went stale when Phase 2 item 4
      * wired {@see \SugarCraft\Code\Commands\CommandLoader} and
      * {@see chat()} started draining `refusedDirectories()` straight into
      * {@see $projectTierRefusals}. It is a ninth feeder beside the eight above,
@@ -2861,7 +2861,7 @@ final class Bootstrap
             $provider,
             $resolvedSkills,
             // Sub-agent gates are built from the SAME config the main loop's
-            // gate is (crush_code.md Phase 1 item 2's "one config source"),
+            // gate is (Phase 1 item 2's "one config source"),
             // rather than AgentManager's own bare `new PermissionGate($mode)`
             // fallback: that fallback passes no SafetyClassifier, and
             // PermissionGate::evaluateAuto() fails closed without one — so a
@@ -2983,7 +2983,7 @@ final class Bootstrap
      *
      * Foreign presets (`.claude/agents`, `.opencode/agents`, via
      * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry}) ARE merged
-     * here as of crush_code.md Phase 1 item 3 — see
+     * here as of Phase 1 item 3 — see
      * {@see foreignAgentPresets()}. They go in FIRST, which makes the roster's
      * precedence three layers deep, lowest first:
      *
@@ -3229,7 +3229,7 @@ final class Bootstrap
      * tier — mapped onto {@see \SugarCraft\Code\Agents\AgentPreset} and keyed by
      * filename stem, the same key space {@see agentPresets()} uses.
      *
-     * crush_code.md Phase 1 item 3. Until this method existed nothing in `src/`
+     * Phase 1 item 3. Until this method existed nothing in `src/`
      * or `bin/` constructed
      * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry}: an agent
      * authored for either tool was read by that class's own unit tests and by
@@ -3258,7 +3258,7 @@ final class Bootstrap
      * checkout gets the tree dropped, and until this drain existed the seam
      * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry::refusedDirectories()}
      * exposes had no reader at all — a refused directory was indistinguishable
-     * from an empty one, which is the silence crush_code.md Phase 1 item 3 and
+     * from an empty one, which is the silence Phase 1 item 3 and
      * Phase 2 item 6 both exist to end. See {@see $projectTierRefusals} for the
      * other four seams and {@see reportProjectTierRefusals()} for the notice.
      *
@@ -5499,7 +5499,7 @@ public static function useMaxCost(?string $maxCost): void
      * ~/.opencode/skills, ~/.config/opencode/skills (see {@see
      * \SugarCraft\Code\Skills\ForeignSkillDiscovery}).
      *
-     * The foreign half of that list was ASPIRATIONAL until crush_code.md
+     * The foreign half of that list was ASPIRATIONAL until 
      * Phase 2 item 6: nothing called ForeignSkillDiscovery, so a
      * `~/.claude/skills` tree was discovered by its unit tests and by nothing
      * else. {@see \SugarCraft\Code\Skills\SkillManager::loadAll()} now calls
@@ -5507,7 +5507,7 @@ public static function useMaxCost(?string $maxCost): void
      * collision — see that method for why additive is the only safe merge
      * direction here.
      *
-     * This is the missing link crush_feat.md section 10.5(1) needed: without
+     * This is the missing link section 10.5(1) needed: without
      * it, SkillManager/SkillLoader/ForeignSkillDiscovery were only ever
      * exercised by their own unit tests — nothing in `bin/candy-code` called
      * them, so a skill dropped under any of those directories had zero
@@ -6377,7 +6377,7 @@ public static function useMaxCost(?string $maxCost): void
      *        for why that order. Pass the launch's single gate instance so the
      *        Auto-mode circuit breaker counts strikes once across every path
      *        that shares this manager; null keeps the built-ins-only chain
-     *        every caller had before crush_code.md Phase 1 item 2.
+     *        every caller had before Phase 1 item 2.
      * @param string|null $root The project whose `.candy-code/hooks.yaml` and
      *        `.claude` settings files are read alongside the user's. Null
      *        reads only the user's files, which
@@ -7405,7 +7405,7 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
-     * The launch's {@see PermissionGate} — crush_code.md Phase 1 item 2's
+     * The launch's {@see PermissionGate} — Phase 1 item 2's
      * "constructed from the same config source as sub-agents".
      *
      * Same vocabulary the sub-agent path already speaks: the kebab-case
@@ -8065,7 +8065,7 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
-     * The permission keys of `~/.candy-code/settings.json` — crush_code.md
+     * The permission keys of `~/.candy-code/settings.json` — 
      * Phase 6 item 4's `permission`/`permissionMode` settings block.
      *
      * WHY NOT THROUGH {@see \SugarCraft\Code\Config\LayeredSettings}, which
@@ -10320,7 +10320,7 @@ public static function useMaxCost(?string $maxCost): void
      * `null` leaves the tools with no jail at all — strictly worse than
      * refusing to start. A process whose working directory has been deleted
      * has no root to offer, so saying so is the only honest degradation
-     * (crush_code.md Phase 0 item 6).
+     * (Phase 0 item 6).
      */
     public static function requireRoot(?string $root): string
     {
@@ -10702,7 +10702,7 @@ public static function useMaxCost(?string $maxCost): void
     /**
      * Give the CLI a real session row to run against, resuming the most
      * recent one when the store already has sessions and creating one when
-     * it does not (crush_feat.md §5 E1's sketch).
+     * it does not (§5 E1's sketch).
      *
      * Since `-c`/`--continue` this is THAT flag's path, reached through
      * {@see openSession()}; a launch with no session flag opens a new row
@@ -10866,7 +10866,7 @@ public static function useMaxCost(?string $maxCost): void
     }
 
     /**
-     * The session's summary backend (crush_code.md Phase 5 item 6; roadmap
+     * The session's summary backend (Phase 5 item 6; roadmap
      * 2.4-2), or null when this run has no provider to build one from.
      *
      * Given the launch's main engine, it is a
@@ -11055,7 +11055,7 @@ public static function useMaxCost(?string $maxCost): void
      * The spend ceiling for this launch, in US dollars — from the
      * `--max-cost` flag ({@see useMaxCost()}), else `$CANDY_CODE_MAX_COST`,
      * else the `maxCostUsd` setting ({@see persistedMaxCostUsd()}) — or null
-     * for no cap (crush_code.md Phase 5 item 7, flag half of ISS-006).
+     * for no cap (Phase 5 item 7, flag half of ISS-006).
      *
      * ABSENCE AND A BAD VALUE ARE DIFFERENT ANSWERS, exactly as they are for
      * `$CANDY_CODE_PERMISSION_MODE` (see {@see permissionGate()}), and for the
@@ -11859,7 +11859,7 @@ public static function useMaxCost(?string $maxCost): void
     /**
      * {@see memoryStore()}, or null if it cannot be opened.
      *
-     * The prompt-side consumer (crush_code.md Phase 5 item 9) must never be
+     * The prompt-side consumer (Phase 5 item 9) must never be
      * able to stop a session starting. `memoryStore()` throws when
      * `~/.candy-code/memory` cannot be created or is not writable — a
      * read-only home, a tmpfs quota, an existing file where the directory

@@ -264,7 +264,7 @@ final class Chat implements Model
 
     /**
      * The live tool-event inbox: the ONE deliberately mutable object on this
-     * otherwise immutable model (crush_feat.md §1 E1).
+     * otherwise immutable model (§1 E1).
      *
      * {@see Backend::completeAsync()}'s `$onEvent` callback fires deep inside
      * the backend while the turn is still running — for
@@ -282,7 +282,7 @@ final class Chat implements Model
      * {@see AssistantMsg::$generation}.
      *
      * Also carries {@see TokenDelta}s — the assistant's reply as it is written
-     * (crush_code.md Phase 0 item 13) — and {@see ReasoningDelta}s — the
+     * (Phase 0 item 13) — and {@see ReasoningDelta}s — the
      * model's thinking while it writes it (E456/E494) — on this SAME queue
      * rather than ones of their own, because the order of "the model thought
      * this", "the model said this" and "the model called that tool" is the
@@ -345,7 +345,7 @@ final class Chat implements Model
     /**
      * This session's running PROVIDER-COUNTED spend, fed one entry per settled
      * turn by {@see update()} and read by the status bar's spend readout and by
-     * `/budget` (crush_code.md Phase 5 item 7).
+     * `/budget` (Phase 5 item 7).
      *
      * Mutable and shared by object identity across every {@see mutate()} clone,
      * exactly like {@see $liveToolEvents} and for the same reason: a fresh
@@ -577,7 +577,7 @@ final class Chat implements Model
     }
 
     /**
-     * Transcript lines moved per wheel notch (crush_feat.md §8 E4's literal
+     * Transcript lines moved per wheel notch (§8 E4's literal
      * `$delta = ... ? -3 : 3`). Three keeps a notch's worth of context
      * overlapping between the old and new window instead of paging blind.
      * The DEFAULT of the `scrollWheelLines` setting (roadmap N-P4g).
@@ -606,7 +606,7 @@ final class Chat implements Model
     /**
      * How far (Manhattan cells) the pointer may stray between press and
      * release and still count as a click rather than a text selection
-     * (crush_feat.md §8 E8).
+     * (§8 E8).
      *
      * One cell, not zero: a press and release one cell apart is a shaky
      * hand on a two-cell-wide tab, while a deliberate selection sweep
@@ -636,7 +636,7 @@ final class Chat implements Model
 
     /**
      * Reconciliation id of the background-session poll subscription
-     * (crush_feat.md section 5 E4). Stable across rebuilds so `Program`
+     * (section 5 E4). Stable across rebuilds so `Program`
      * recognises the timer it already started instead of restarting it on
      * every update cycle.
      */
@@ -673,7 +673,7 @@ final class Chat implements Model
 
     /**
      * Reconciliation id of the live tool-event poll subscription
-     * (crush_feat.md §1 E1). Stable across rebuilds for the same reason
+     * (§1 E1). Stable across rebuilds for the same reason
      * {@see BACKGROUND_POLL_SUBSCRIPTION} is.
      */
     private const TOOL_EVENT_POLL_SUBSCRIPTION = 'code.tool-event-poll';
@@ -789,7 +789,7 @@ final class Chat implements Model
          * place, so a Chat built with custom thresholds silently reverted to
          * the defaults on the first keystroke. Nothing in the repo passed one
          * yet, which is why it went unnoticed — and why wiring the tiers
-         * (crush_code.md Phase 5 item 5) had to fix it first.
+         * (Phase 5 item 5) had to fix it first.
          */
         private readonly ?CompactorConfig $compactorConfig = null,
         ?MemoryStore $memoryStore = null,
@@ -913,7 +913,7 @@ final class Chat implements Model
     /**
          * The sugar-image probe-once capability instance (W1.G2/E2 - see
          * {@see ToolResult::mosaic()}'s docblock), exposed here per
-         * crush_feat.md section 9's literal `new Chat(..., mosaic: $mosaic)`
+         * section 9's literal `new Chat(..., mosaic: $mosaic)`
          * so a future renderer (E3) can read the SAME detected protocol an
          * image-bearing {@see ToolResult} was produced against instead of
          * re-probing the TTY independently. {@see
@@ -925,7 +925,7 @@ final class Chat implements Model
     /**
          * Hook chain gating this Chat's OWN ({@see registerTool()}) tool
          * calls, so `PreToolUse`/`PostToolUse` fire for a call no matter
-         * which of the two pipelines crush_feat.md §1 D describes dispatched
+         * which of the two pipelines §1 D describes dispatched
          * it. Before this, {@see Runtime}'s engine pipeline ran every call
          * through {@see HookManager} while the Chat-native pipeline called
          * the registered closure with zero gating - so the same `rm -rf`
@@ -961,7 +961,7 @@ final class Chat implements Model
         private readonly ?Backend $titleBackend = null,
     /**
          * The transient state of the permission prompt that may be blocking
-         * this turn (crush_feat.md §1 E2) — prompt, stage, settle-handle,
+         * this turn (§1 E2) — prompt, stage, settle-handle,
          * parked batch, open scope editor — as the value object
          * {@see PermissionFlow} describes. The durable `permissionGrants`
          * map below is deliberately NOT part of it: different lifetime.
@@ -988,7 +988,7 @@ final class Chat implements Model
          * growing one entry per tool call for the life of the session.
          *
          * {@see Renderer::renderToolResults()} hides a successful call's body
-         * unless {@see isToolOutputExpanded()} says otherwise (crush_feat.md
+         * unless {@see isToolOutputExpanded()} says otherwise (
          * §1 E5's "hide-on-success by default"); Ctrl+O toggles it (see
          * {@see toggleToolOutput()}).
          *
@@ -997,7 +997,7 @@ final class Chat implements Model
         private readonly array $expanded = [],
     /**
          * Most-recently-used Ctrl+P palette rows, most recent FIRST, capped
-         * at {@see PALETTE_MRU_LIMIT} (crush_feat.md §4 E7). Only consulted
+         * at {@see PALETTE_MRU_LIMIT} (§4 E7). Only consulted
          * by the empty-query root list ({@see paletteMatchResults()}), which
          * floats recent rows to the top of their category - a typed query
          * stays purely relevance-ranked so the matcher's score, not history,
@@ -1013,7 +1013,7 @@ final class Chat implements Model
         private readonly array $paletteMru = [],
     /**
          * How many lines the transcript is scrolled back from the newest
-         * one (crush_feat.md §8 E4). 0 pins the view to the bottom, which
+         * one (§8 E4). 0 pins the view to the bottom, which
          * is what every non-wheel path leaves it at.
          *
          * Measured from the BOTTOM rather than the top because that is the
@@ -1051,7 +1051,7 @@ final class Chat implements Model
         private readonly int $pasteCounter = 0,
     /**
          * Supervisor the `/bg` and `/fork` commands dispatch onto
-         * (crush_feat.md section 5 E3). Before this, `BackgroundSupervisor`
+         * (section 5 E3). Before this, `BackgroundSupervisor`
          * had no caller anywhere in the codebase: the fork+daemonize,
          * heartbeat and reconnect machinery was fully built and fully
          * unit-tested but unreachable from chat, so a user could not
@@ -1064,7 +1064,7 @@ final class Chat implements Model
         private readonly ?\SugarCraft\Code\Background\BackgroundSupervisor $backgroundSupervisor = null,
     /**
          * Last status this Chat reported for each background session, keyed
-         * by session id (crush_feat.md section 5 E4).
+         * by session id (section 5 E4).
          *
          * The poll pump is edge-triggered, not level-triggered: a session
          * sitting at `running` for ten minutes must not append a transcript
@@ -1079,7 +1079,7 @@ final class Chat implements Model
         private readonly array $backgroundStatuses = [],
     /**
          * The live session picker overlay, or null when it is closed
-         * (crush_feat.md section 5 E8).
+         * (section 5 E8).
          *
          * Persisted on the model rather than rebuilt per keystroke because
          * the picker owns navigation state (selected row, branch filter):
@@ -1108,7 +1108,7 @@ final class Chat implements Model
          * The in-flight assistant reply as far as it has arrived — the
          * accumulation of this turn's {@see TokenDelta}s, drained off
          * {@see $liveToolEvents} by {@see pumpLiveToolEvents()}
-         * (crush_code.md Phase 0 item 13).
+         * (Phase 0 item 13).
          *
          * Deliberately NOT a {@see Message} in {@see $history}. A half-written
          * reply must never be checkpointed, compacted, counted towards the
@@ -1170,13 +1170,13 @@ final class Chat implements Model
          * hands a spawned session — run entirely inside Chat, with no App
          * and no Runtime in reach. Both used to call `getcwd()` bare, so a
          * `--root <lib>` run gated its Chat-side tool calls against the
-         * monorepo and backgrounded work into it too (crush_code.md Phase 0
+         * monorepo and backgrounded work into it too (Phase 0
          * item 6).
          */
         private readonly ?string $projectRoot = null,
     /**
          * Scroll position of the in-app keybinding reference, in lines from
-         * its first row; null while the reference is closed (crush_code.md
+         * its first row; null while the reference is closed (
          * Phase 8 item 2). One nullable int rather than a bool plus an int
          * for the same reason {@see $palette} is one nullable object: "is it
          * open" and "where in it am I" are never independently meaningful,
@@ -1191,7 +1191,7 @@ final class Chat implements Model
         private readonly ?int $keyHelp = null,
     /**
          * The draft's editing widget — `sugar-forms`' {@see TextArea}, which
-         * owns the value AND the cursor (crush_code.md Phase 3 item 1).
+         * owns the value AND the cursor (Phase 3 item 1).
          *
          * `$inputBuf` above is now a SEED for this, not a peer of it: when
          * both arrive, the widget wins and `$inputBuf` is re-derived from
@@ -1210,7 +1210,7 @@ final class Chat implements Model
         ?TokenTracker $tokenTracker = null,
     /**
          * Hard ceiling on this session's provider spend in US dollars, or null
-         * for no cap (crush_code.md Phase 5 item 7). Set from
+         * for no cap (Phase 5 item 7). Set from
          * `$CANDY_CODE_MAX_COST` at launch and from `/budget <n>` at runtime.
          *
          * Enforced on the way IN to a turn, not on the way out: see
@@ -1233,7 +1233,7 @@ final class Chat implements Model
         private readonly ?float $maxCostUsd = null,
     /**
          * Dedicated tool-less Backend for `/compact`'s model-written exchange
-         * summaries (crush_code.md Phase 5 item 6), built by
+         * summaries (Phase 5 item 6), built by
          * {@see \SugarCraft\Code\Cli\Bootstrap::summaryBackend()}.
          *
          * Separate from {@see $backend} for a reason that is not tidiness:
@@ -1252,7 +1252,7 @@ final class Chat implements Model
         private readonly ?Backend $summaryBackend = null,
     /**
          * Identifies the `/compact` summarization currently out at the model,
-         * or null when none is (crush_code.md Phase 5 item 6).
+         * or null when none is (Phase 5 item 6).
          *
          * A plain id rather than the generation counter: `/compact` does not
          * start a turn, so it does not bump `$generation`, and the four sites
@@ -1428,7 +1428,7 @@ final class Chat implements Model
         private readonly ?array $resolvedCustomCommand = null,
     /**
          * Discovers `*.md` commands under `~/.candy-code/commands` and
-         * `<root>/.candy-code/commands` (crush_code.md Phase 2 item 4). Null —
+         * `<root>/.candy-code/commands` (Phase 2 item 4). Null —
          * the default — means no file-based commands at all, which is what every
          * existing embedder and unit test gets, so nothing that does not ask for
          * disk discovery acquires it.
@@ -1903,7 +1903,7 @@ final class Chat implements Model
         // the engine learns which manager its parallel-stage sub-agents should
         // register with -- without this link a /workflow run's agents would
         // still bypass the manager the renderer reads telemetry from
-        // (crush_feat.md section 5 E6). Idempotent across mutate(), and an
+        // (section 5 E6). Idempotent across mutate(), and an
         // engine that was constructed with its own manager keeps it.
         if ($agentManager !== null
             && $workflowEngine instanceof WorkflowEngine
@@ -2728,7 +2728,7 @@ final class Chat implements Model
      * {@see ToolResultsMsg} arrives.
      *
      * The `PreToolUse` chain runs FIRST, over the whole batch, before any
-     * placeholder is appended or any child forked (crush_feat.md §1 E2): a
+     * placeholder is appended or any child forked (§1 E2): a
      * hook may answer {@see \SugarCraft\Code\Hooks\HookResult::ask()}, in
      * which case nothing about this turn may proceed until the user decides,
      * and a "running" spinner for a call that has not been permitted yet
@@ -3034,7 +3034,7 @@ final class Chat implements Model
      * it stays pending - and the turn with it - until
      * {@see answerPermission()} resolves the same {@see Deferred}. That is
      * the "schedule a Cmd that resolves once the user answers" half of
-     * crush_feat.md §1 E2, and it reuses the exact Deferred/Cmd::promise
+     * §1 E2, and it reuses the exact Deferred/Cmd::promise
      * pattern {@see waitForToolChildrenAsync()} already uses for tool
      * children.
      *
@@ -3594,7 +3594,7 @@ final class Chat implements Model
      * "?why" could not be composed AT ALL — measured then, the "?" opened the
      * reference and the remaining runes were swallowed, leaving inputBuf empty.
      *
-     * The cursor half of that is no longer true: crush_code.md Phase 3 item 1
+     * The cursor half of that is no longer true: Phase 3 item 1
      * moved the draft into `sugar-forms`' TextArea, so there is now a second
      * route — type "why", press Home, type "?" — which
      * `ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark()`
@@ -3879,7 +3879,7 @@ final class Chat implements Model
                 // one-liner, and it is the only carrier of the call's
                 // arguments that reaches this point - the result itself never
                 // saw them. Carrying it onto the finished result is what lets
-                // a collapsed row still say WHAT ran (crush_feat.md §3 E2).
+                // a collapsed row still say WHAT ran (§3 E2).
                 $result = $resultsById[$pendingId]
                     ->withDescription($historyMessage->content)
                     ->withArguments($historyMessage->pendingToolArguments);
@@ -3916,7 +3916,7 @@ final class Chat implements Model
      * re-dispatch whatever is left of the queue.
      *
      * This is the consuming half of the `$onEvent` seam {@see Backend} threads
-     * through {@see Backend\EngineBackend}/{@see Runtime} (crush_feat.md §1 E1).
+     * through {@see Backend\EngineBackend}/{@see Runtime} (§1 E1).
      * Before it, an agentic backend could run several rounds of tool calls
      * inside one `complete()` and the user saw nothing but a "thinking…"
      * spinner: only the final Message escaped, so none of {@see Renderer}'s
@@ -4181,7 +4181,7 @@ final class Chat implements Model
      * Append one fragment of assistant text to the live inbox
      * ({@see $liveToolEvents}) — the text counterpart of
      * {@see enqueueToolEvent()}, written through by a {@see Backend}'s
-     * `$onToken` callback (crush_code.md Phase 0 item 13).
+     * `$onToken` callback (Phase 0 item 13).
      *
      * Mutating for exactly the reason that one is: the callback fires inside
      * the backend, on a ReactPHP readable edge for {@see Backend\EngineBackend},
@@ -4293,7 +4293,7 @@ final class Chat implements Model
 
     /**
      * Drain ONE entry from the live inbox and fold it into the transcript,
-     * re-scheduling itself while anything is left (crush_feat.md §1 E1).
+     * re-scheduling itself while anything is left (§1 E1).
      *
      * One event per `update()` for the same reason
      * {@see applyBackendToolEvent()} does it: each returned Chat is rendered
@@ -4884,7 +4884,7 @@ final class Chat implements Model
      * the parent, once {@see waitForToolChildrenAsync()} collects that
      * call's real result.
      *
-     * Hook gating (crush_feat.md §1 E1) runs in the parent, before any fork:
+     * Hook gating (§1 E1) runs in the parent, before any fork:
      * a denied call must never reach a child at all, and a
      * {@see HookManager} whose hooks ran inside a forked child would have
      * every effect of that run (audit log, accumulated state) die with the
@@ -4892,7 +4892,7 @@ final class Chat implements Model
      * the parent rather than in {@see invokeTool()}. The gate itself now runs
      * one step earlier still, in {@see beginToolCalls()}, because an ASK
      * decision has to suspend the batch before any of it is forked
-     * (crush_feat.md §1 E2) - this method receives the already-gated batch.
+     * (§1 E2) - this method receives the already-gated batch.
      *
      * @param list<array{0: ToolCall, 1: ?ToolResult, 2: ?HookContext, 3: ?\SugarCraft\Code\Hooks\HookResult}> $gated
      * @return list<array{toolCall: ToolCall, file: ?string, pid: ?int, result: ?ToolResult, hookContext: ?HookContext}>
@@ -4976,7 +4976,7 @@ final class Chat implements Model
      * ASK is the one decision this method cannot settle: the hook defers to
      * the user, so the call is neither run nor reported as denied here - it
      * is handed back in slot 3 for {@see beginToolCalls()} to suspend the
-     * batch on (crush_feat.md §1 E2). A call the user has already answered
+     * batch on (§1 E2). A call the user has already answered
      * {@see PermissionReply::Always} for skips that: the ASK becomes plain
      * permission, with its HookContext intact so `PostToolUse` still runs —
      * but only when {@see grantCovers()} says so, i.e. the gate alone asked
@@ -6373,7 +6373,7 @@ final class Chat implements Model
         $view = Renderer::renderView($this);
 
         // The View wrapper exists only to carry the pixel-graphics layer an
-        // image-bearing tool result puts on it (crush_feat.md §9 E3); Program
+        // image-bearing tool result puts on it (§9 E3); Program
         // auto-wraps a plain string for every other frame, and returning the
         // literal frame keeps view() substitutable for its own body wherever
         // no image is on screen - which is every frame of a text-only session.
@@ -6381,7 +6381,7 @@ final class Chat implements Model
     }
 
     /**
-     * How the terminal is asked to report mouse events (crush_feat.md §8 E1).
+     * How the terminal is asked to report mouse events (§8 E1).
      *
      * `CellMotion` rather than `AllMotion`: hover-everywhere turns every
      * pointer move into a MouseMotionMsg on the ReactPHP read loop, and
@@ -6501,7 +6501,7 @@ final class Chat implements Model
 
     /**
      * The in-flight left press as `[col, row, drift]` — where it landed and
-     * the furthest the pointer has strayed from it since (crush_feat.md
+     * the furthest the pointer has strayed from it since (
      * §8 E8), or null when no press is pending.
      *
      * Static for the same reason {@see $clickTracker} is: the press half is
@@ -6536,7 +6536,7 @@ final class Chat implements Model
     }
 
     /**
-     * Click-to-switch session tab (crush_feat.md §8 E2), click-to-switch pane
+     * Click-to-switch session tab (§8 E2), click-to-switch pane
      * (§8 E3), click-to-expand a tool call (§8 E5), click-to-select a palette
      * row (§8 E6), plus wheel-scroll of the transcript (§8 E4).
      *
@@ -7355,7 +7355,7 @@ final class Chat implements Model
     }
 
     /**
-     * Click-to-select in the command palette / picker (crush_feat.md §8 E6).
+     * Click-to-select in the command palette / picker (§8 E6).
      *
      * §8 E6 asks explicitly for the click to "dispatch the same Msg/Cmd the
      * Enter key currently dispatches" rather than a parallel confirm path, so
@@ -7429,7 +7429,7 @@ final class Chat implements Model
     }
 
     /**
-     * Wheel-scroll the chat transcript (crush_feat.md §8 E4).
+     * Wheel-scroll the chat transcript (§8 E4).
      *
      * `WheelUp` moves BACK into history, so it raises the offset — §8 E4's
      * sketch subtracts because its `$app->chatScrollOffset` counts from the
@@ -7618,7 +7618,7 @@ final class Chat implements Model
     }
 
     /**
-     * Click-to-switch pane (crush_feat.md §8 E3).
+     * Click-to-switch pane (§8 E3).
      *
      * §8 E3 sketches `$app->withPane(Pane::from($name))`. This method does
      * something else, and the reason recorded here for that was FALSE.
@@ -8625,7 +8625,7 @@ final class Chat implements Model
      * per-result usage back onto it, which is the only thing that makes
      * {@see AgentManager::elapsedSeconds()}/tokensUsed()/costUsd() -- and so
      * AgentDashboardPane::agentEntry()'s status line -- observe real work instead
-     * of zeros (crush_feat.md section 5 E6). Dispatch stays single-pass: the
+     * of zeros (section 5 E6). Dispatch stays single-pass: the
      * manager accumulates with `+=`, so the pool must never also be iterated
      * for the same SubAgent instances or usage would be counted twice.
      *
@@ -8775,7 +8775,7 @@ final class Chat implements Model
     /**
      * Gate this Chat's {@see registerTool()} calls through `$hooks`, the
      * same {@see HookManager} the engine pipeline already runs its calls
-     * through (crush_feat.md §1 E1).
+     * through (§1 E1).
      *
      * @return self A new Chat with the hook chain attached
      */
@@ -8785,7 +8785,7 @@ final class Chat implements Model
     }
 
     /**
-     * Tool-call ids whose output the user has expanded (crush_feat.md §1 E5).
+     * Tool-call ids whose output the user has expanded (§1 E5).
      * {@see Renderer::render()} reads this to decide which tool bodies to
      * paint in full; ids absent from the map are collapsed.
      *
@@ -8852,7 +8852,7 @@ final class Chat implements Model
 
     /**
      * Error-message prefixes that mark a {@see ToolResult} as REFUSED rather
-     * than merely failed (crush_feat.md §1 E7).
+     * than merely failed (§1 E7).
      *
      * Refusal is carried in the error text rather than in a dedicated flag
      * because every refusal producer already writes one of these three
@@ -8899,7 +8899,7 @@ final class Chat implements Model
     /**
      * Verbatim error text {@see reviveCheckpointMessage()} writes onto a tool
      * call that was still running when the process that started it went away
-     * - crush_feat.md §1 E7's literal "Tool call interrupted by restart".
+     * - §1 E7's literal "Tool call interrupted by restart".
      * Also the marker {@see isInterruptedResult()} matches on, so the
      * renderer can draw it as its own state rather than as a plain failure.
      */
@@ -8921,7 +8921,7 @@ final class Chat implements Model
      * True when $result is a refusal - a call the user or a hook stopped -
      * rather than a call that ran and failed.
      *
-     * crush_feat.md §1 E7 wants a refusal drawn as its own visual state
+     * §1 E7 wants a refusal drawn as its own visual state
      * (struck through), not just another red error line, and §1's opencode
      * survey (line 111) is explicit that "denied" is "a distinct visual
      * state, not just an error color". {@see Renderer::renderToolResults()}
@@ -8961,7 +8961,7 @@ final class Chat implements Model
     /**
      * Rebuild one checkpointed history row into a {@see Message}, healing a
      * checkpoint that was taken while a tool call was still in flight
-     * (crush_feat.md §1 E7).
+     * (§1 E7).
      *
      * A row with a non-null `pendingToolCallId` is a {@see
      * Message::toolRunning()} placeholder whose call died with the previous
@@ -10343,7 +10343,7 @@ final class Chat implements Model
             return $this->idleCompactionPromptResponse($text, $tokenCount);
         }
 
-        // The 85% and 95% compaction tiers (crush_code.md Phase 5 item 5).
+        // The 85% and 95% compaction tiers (Phase 5 item 5).
         // ContextCompactor::shouldCompact()/shouldCompactForeground() had zero
         // call sites anywhere in src/ — the tiered design in the compactor's
         // own class docblock existed only as prose, so a session filled up
@@ -10422,7 +10422,7 @@ final class Chat implements Model
             }
 
             // Ask the model to write the summaries first, when there is one to
-            // ask (crush_code.md Phase 5 item 6). Returns null - and the
+            // ask (Phase 5 item 6). Returns null - and the
             // synchronous heuristic below then runs unchanged - whenever there is
             // no summary backend, the history holds no exchange a model could
             // usefully summarise, or the spend cap is reached, in which last case
@@ -12014,7 +12014,7 @@ final class Chat implements Model
      * Route a submitted draft to a slash-command handler, or return null when
      * it is an ordinary prompt for the model.
      *
-     * The name is parsed by {@see CommandParser::parse()} (crush_code.md Phase
+     * The name is parsed by {@see CommandParser::parse()} (Phase
      * 4 item 7), which was already built, already tested, and already used by
      * {@see \SugarCraft\Code\Commands\AgentsCommand} - while this method's
      * predecessor re-derived the same thing inline as sixteen
@@ -12888,7 +12888,7 @@ final class Chat implements Model
      * claimed to have corrected this docblock for the split.
      *
      * `/help` WAS a second spelling of this command and is no longer one
-     * (crush_code.md Phase 4 item 2): it lists the commands now, so everything
+     * (Phase 4 item 2): it lists the commands now, so everything
      * below is about `/keys` alone. `KeyHelpTest`'s draft corpus was re-driven
      * against that split rather than trimmed to fit it -- the `/help`-shaped
      * drafts stayed in it and now assert the reference does NOT open.
@@ -13191,7 +13191,7 @@ final class Chat implements Model
     }
 
     /**
-     * `/model` (crush_code.md Phase 4 item 1) - the slash spelling of the
+     * `/model` (Phase 4 item 1) - the slash spelling of the
      * Ctrl+P palette's Switch Model action, which until now was the ONLY way
      * to change provider mid-session even though `Tui\Components\SettingsPane`'s
      * footer already advertised the command.
@@ -13497,7 +13497,7 @@ final class Chat implements Model
     }
 
     /**
-     * `/help` (crush_code.md Phase 4 item 2) - the command list, which is what
+     * `/help` (Phase 4 item 2) - the command list, which is what
      * `/help` means in every other CLI. It used to be a second spelling of
      * `/keys`, i.e. two names for the keyboard reference and no name at all for
      * the thing a first-time user is actually asking for.
@@ -13612,7 +13612,7 @@ final class Chat implements Model
     }
 
     /**
-     * `/clear` (crush_code.md Phase 4 item 2) - empty the transcript and STAY
+     * `/clear` (Phase 4 item 2) - empty the transcript and STAY
      * in this session. Deliberately not `/new`: the palette's New session
      * action ({@see handlePaletteNewSession()}) mints a fresh session id and
      * leaves the old conversation where it was, which is the opposite trade.
@@ -13852,7 +13852,7 @@ final class Chat implements Model
      * only part of the old body that ever needed a TUI.
      *
      * Also the point where the backend's `$onEvent` tool-lifecycle seam is
-     * consumed (crush_feat.md §1 E1). The callback only QUEUES events on
+     * consumed (§1 E1). The callback only QUEUES events on
      * {@see $liveToolEvents}: it runs inside the backend, where there is no
      * dispatcher and no way to mutate an immutable Chat, so the live pump
      * ({@see pumpLiveToolEvents()}) folds what it reaches and the rest rides
@@ -14485,7 +14485,7 @@ final class Chat implements Model
 
     /**
      * `/budget` — show the session's reported spend, or set/clear the cap
-     * {@see spendCapRefusal()} enforces (crush_code.md Phase 5 item 7).
+     * {@see spendCapRefusal()} enforces (Phase 5 item 7).
      *
      * Three forms, and the bare one is the reason this command is worth having
      * even to a user who never sets a cap: it is the only place the
@@ -14888,7 +14888,7 @@ final class Chat implements Model
     /**
      * Ask the model to summarise the exchanges `/compact` is about to condense,
      * off the render loop, or null when there is nothing to ask or nobody to ask
-     * (crush_code.md Phase 5 item 6).
+     * (Phase 5 item 6).
      *
      * Null is the ordinary answer and it is not a failure: no summary backend
      * (offline, either `$CANDY_CODE_BACKEND_CMD*` shell-out, every unit test),
@@ -15104,7 +15104,7 @@ final class Chat implements Model
      * The automatic 85% tier's model route: echo the submitted prompt, park its
      * turn behind a summarization round-trip, and return the Cmd — or null when
      * there is no model route, in which case {@see submit()} compacts
-     * synchronously on the heuristic exactly as it always did (crush_code.md
+     * synchronously on the heuristic exactly as it always did (
      * Phase 5 item 6).
      *
      * WHY THE TURN IS PARKED rather than sent against a heuristic compaction:
@@ -15428,7 +15428,7 @@ final class Chat implements Model
     }
 
     /**
-     * The prior summaries to carry into a re-compaction (crush_code.md Phase 8,
+     * The prior summaries to carry into a re-compaction (Phase 8,
      * the recursive merge) — {@see \SugarCraft\Code\Host\CompactionService::priorSummariesFromHistory()}, which
      * carries the fence ruling P8.S3-R1 and the forgery-surface account.
      *
@@ -16045,7 +16045,7 @@ final class Chat implements Model
 
     /**
      * Handle /sessions — OPEN the live {@see SessionPicker} overlay
-     * (crush_feat.md section 5 E8), filtered when an argument is given:
+     * (section 5 E8), filtered when an argument is given:
      * `/sessions auth` opens it with `auth` already in the `/` filter
      * (Appendix P §3.2).
      *
@@ -16329,7 +16329,7 @@ final class Chat implements Model
     }
 
     /**
-     * Route one keystroke into the open session picker (crush_feat.md
+     * Route one keystroke into the open session picker (
      * section 5 E8, Appendix P §3.2) and act on what it reports:
      *
      * - `browse` / `edit` — keep the navigated or edited picker.
@@ -18011,7 +18011,7 @@ final class Chat implements Model
      * fall out of step.
      *
      * Exists for the same reason {@see paletteMatchResults()} does
-     * (crush_code.md Phase 4 item 5): {@see Renderer::renderSlashMenu()} needs
+     * (Phase 4 item 5): {@see Renderer::renderSlashMenu()} needs
      * the indices to highlight the run the user actually typed, and the popup
      * was the one of the two command surfaces that could not.
      *
@@ -18482,7 +18482,7 @@ final class Chat implements Model
     /**
      * {@see paletteMatches()}'s rows with their matched-character indices
      * kept, in the SAME order - the label list is just this list's haystacks
-     * (crush_feat.md §4 E3: the indices used to be discarded here, so
+     * (§4 E3: the indices used to be discarded here, so
      * {@see Renderer::renderPalette()} had nothing to highlight with and
      * could only bold whole rows).
      *
@@ -18581,7 +18581,7 @@ final class Chat implements Model
     }
 
     /**
-     * Palette rows the user has run, most recent first (crush_feat.md §4 E7).
+     * Palette rows the user has run, most recent first (§4 E7).
      *
      * @return list<string>
      */
@@ -18979,7 +18979,7 @@ final class Chat implements Model
             'providers' => $this->pickPaletteProvider($label),
             'models' => $this->selectPaletteProvider((string) $this->palette->provider, $label),
             'themes' => $this->selectPaletteTheme($label),
-            // Recorded BEFORE dispatch (crush_feat.md §4 E7): several root
+            // Recorded BEFORE dispatch (§4 E7): several root
             // actions return a Cmd/second-level palette rather than a plain
             // copy of $this, so the MRU has to be folded into the instance
             // the handler runs against, not bolted onto its result.
@@ -20172,7 +20172,7 @@ final class Chat implements Model
 
     /**
      * Declare the recurring work this model needs the runtime to drive
-     * (crush_feat.md section 5 E4).
+     * (section 5 E4).
      *
      * FOUR THINGS. IT SAID "TWO" AND ENUMERATED TWO, and both halves were true
      * when written; the `statusLine` clock and then the runtime-notice poll
@@ -20189,7 +20189,7 @@ final class Chat implements Model
      *   - while a turn is in flight, draining the live tool-event inbox
      *     ({@see $liveToolEvents}) so engine-dispatched tool calls appear in
      *     the transcript as they start and finish rather than all at once
-     *     when the turn ends (crush_feat.md §1 E1). This is the wake-up half
+     *     when the turn ends (§1 E1). This is the wake-up half
      *     of that mechanism: the backend appends off-loop with no way to
      *     dispatch a Msg, so something has to come back and look.
      *
@@ -20925,7 +20925,7 @@ final class Chat implements Model
     /**
      * The same size a {@see WindowSizeMsg} would have recorded, as a wither.
      *
-     * A hosted `Chat` (crush_feat.md section 5 E7, merge branch) does not own
+     * A hosted `Chat` (section 5 E7, merge branch) does not own
      * the whole terminal: it lays out inside the shell's chat pane, several
      * rows and columns smaller. Without this the content model would lay out
      * against the FULL terminal and the pane would have to truncate every line
@@ -21137,7 +21137,7 @@ final class Chat implements Model
      * {@see contextTokenLimit()} - for the status bar's context-usage
      * indicator ({@see Renderer}).
      *
-     * The denominator changed meaning in crush_code.md Phase 5 item 4: it is
+     * The denominator changed meaning in Phase 5 item 4: it is
      * the model's real context window whenever the backend can report one, so
      * this fraction is now "how full is the window", not "how close to a
      * fixed 100,000-token proxy". Numerator and denominator are also in
@@ -21183,7 +21183,7 @@ final class Chat implements Model
      *
      * This IS the live model's advertised context window now, whenever the
      * backend implements {@see \SugarCraft\Code\Backend\ReportsContextWindow}
-     * and reports a positive one - crush_code.md Phase 5 item 4, which replaced
+     * and reports a positive one - Phase 5 item 4, which replaced
      * a hardcoded 100,000 that matched no provider in this repo: measured over
      * every `contextWindow()` in `src/Providers/`, the six with a model behind
      * them report 8,192 / 16,385 / 128,000 / 196,608 / 200,000 / 1,048,570
@@ -21462,7 +21462,7 @@ final class Chat implements Model
     /**
      * Whether this session has reached its spend cap, i.e. whether the app
      * should stop making provider calls on the user's key
-     * (crush_code.md Phase 5 item 7).
+     * (Phase 5 item 7).
      *
      * The one definition of "over budget", asked by EVERY enforcement site:
      * {@see spendCapRefusal()} for a turn the user submitted,
@@ -21511,7 +21511,7 @@ final class Chat implements Model
 
     /**
      * Refuse this turn when the session has already reached its spend cap, or
-     * null when it has not (crush_code.md Phase 5 item 7).
+     * null when it has not (Phase 5 item 7).
      *
      * WHICH SIDE OF THE CAP THIS IS, stated exactly, because the two possible
      * behaviours have different messages and only one of them is implemented:
@@ -22052,7 +22052,7 @@ final class Chat implements Model
      * submission as fresh activity, so the nudge does not repeat on the
      * very next message.
      *
-     * What the advisory offers changed in crush_code.md Phase 5 item 5, and
+     * What the advisory offers changed in Phase 5 item 5, and
      * the message had to change with it. It used to end "or send another
      * message to proceed anyway", which was true while nothing enforced the
      * window. It cannot be now: this tier fires only when the estimate is past

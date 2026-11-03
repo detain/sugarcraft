@@ -9,7 +9,7 @@ use SugarCraft\Code\Support\ContainedPath;
 /**
  * Renders a structural map of the workspace — which directories hold code and
  * what namespace each one is — as a fenced `<repo-map>` block for the system
- * prompt (crush_code.md P8.8).
+ * prompt (P8.8).
  *
  * Third of the {@see EnvironmentBlock} / {@see MemoryBlock} family: same
  * directory, same capture-then-render split, same

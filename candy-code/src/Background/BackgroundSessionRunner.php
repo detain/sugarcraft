@@ -28,7 +28,7 @@ use SugarCraft\Code\Usage;
  * it is ordinary, unit-testable repository code — the previous inline daemon
  * only answered HEARTBEAT/RESUME/STOP and never executed the task it was
  * spawned with, which made "Backgrounded as <id>" a message about work that
- * never happened (crush_feat.md section 5 E3).
+ * never happened (section 5 E3).
  *
  * Process shape, and why:
  *

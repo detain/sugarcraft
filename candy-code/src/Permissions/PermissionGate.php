@@ -1840,7 +1840,7 @@ final class PermissionGate
     /**
      * Write-capable tools: those declaring {@see ToolPermissionClass::Write}
      * (`Bash`, `Edit`, `Write`, `Task` — `Task` because the sub-agent it
-     * delegates to can do whatever its own tools can, crush_code.md P8.13), and
+     * delegates to can do whatever its own tools can, P8.13), and
      * MCP tools, which follow the `mcp__<server>__<tool>` naming convention
      * (@see PermissionRule): their capability is server-defined and unknowable
      * here, so they are treated conservatively as writes — unless their trusted

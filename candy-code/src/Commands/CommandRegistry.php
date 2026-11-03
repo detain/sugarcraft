@@ -271,7 +271,7 @@ final class CommandRegistry
     /**
      * {@see filter()}'s rows with their matched-character indices kept, in the
      * SAME order - the spec list is just this list's haystacks looked up by
-     * name (crush_code.md Phase 4 item 5: the indices used to be discarded
+     * name (Phase 4 item 5: the indices used to be discarded
      * here, so {@see \SugarCraft\Code\Renderer::renderSlashMenu()} had
      * nothing to highlight with while the Ctrl+P palette beside it did).
      *

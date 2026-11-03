@@ -32,7 +32,7 @@ use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
  *
  * NOT NAMED `McpTool`, and the name is load-bearing: {@see McpTool} is the DTO
  * this class wraps, in the same subsystem. Two types called `McpTool` one `use`
- * apart is the collision crush_code.md Phase 2 item 1 spent a bundle undoing, and
+ * apart is the collision Phase 2 item 1 spent a bundle undoing, and
  * this class lives in `src/Tools/` — where `Tool` implementations live — rather
  * than beside the DTO so a future reader is not invited to re-introduce it.
  *

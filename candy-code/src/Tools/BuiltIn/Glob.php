@@ -63,7 +63,7 @@ final readonly class Glob implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
     /**
      * $skillNudge turns a skill's `paths:` frontmatter into a live signal
-     * (crush_feat.md section 7 E4): the whole match list is scoped in ONE
+     * (section 7 E4): the whole match list is scoped in ONE
      * call, so a 500-file glob costs one in-memory pass, not one per file.
      * Null keeps the tool standalone.
      *

@@ -13,7 +13,7 @@ use SugarCraft\Code\Workspace\GitRunner;
  * Renders the memory INDEX for the system prompt — one line per saved note
  * (type, id, opening words, tags), never the note bodies — plus the standing
  * instructions that tell the model when to save a note and when not to
- * (roadmap 5.1-1; crush_code.md Phase 5 item 9 before it).
+ * (roadmap 5.1-1; Phase 5 item 9 before it).
  *
  * Shaped after {@see EnvironmentBlock} — same directory, same
  * capture-then-render split — so
@@ -137,7 +137,7 @@ final class MemoryBlock implements PromptSection
      * Bounded because the fold happens on EVERY turn: the block is part of the
      * system prompt, so an unbounded one grows the prompt for the rest of the
      * session, and the context window and the compaction tiers are now real
-     * (crush_code.md Phase 5 items 4/5) — an inflating prompt pushes a session
+     * (Phase 5 items 4/5) — an inflating prompt pushes a session
      * into automatic compaction sooner. Forty, up from the twelve BODIES this
      * block used to carry (roadmap 5.1-1): an index line is a fraction of a
      * body, so forty of them fit the same {@see MAX_BYTES} that twelve bodies

@@ -11,7 +11,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\ToolCall;
 
 /**
- * Raises a blocking permission prompt for ONE tool call (crush_feat.md §1 E2).
+ * Raises a blocking permission prompt for ONE tool call (§1 E2).
  *
  * Dispatched into {@see Chat::update()} when a `PreToolUse` hook answers
  * {@see \SugarCraft\Code\Hooks\HookResult::ask()} instead of allow/deny:

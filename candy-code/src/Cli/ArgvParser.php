@@ -32,10 +32,10 @@ use SugarCraft\Code\Lang;
  * in {@see ParsedArgs::$unknownFlags} rather than dropped: dropping them made
  * every typo fall all the way through `bin/candy-code` into the blocking
  * full-screen TUI instead of failing fast — the same bug class as the
- * already-fixed "`--help` opens the TUI" (crush_code.md Phase 0 item 3). The
+ * already-fixed "`--help` opens the TUI" (Phase 0 item 3). The
  * binary turns a non-empty `$unknownFlags` into a usage error (exit 2) before
  * it can reach `Program`. `--version` was the original reproduction for that
- * item and is now a recognised flag of its own (crush_code.md Phase 4 item 3),
+ * item and is now a recognised flag of its own (Phase 4 item 3),
  * dispatched by the binary exactly the way `--help` is.
  */
 final class ArgvParser
@@ -209,7 +209,7 @@ final class ArgvParser
             // it silently discarded the subcommand: `candy-code
             // --output-format json run` parsed to promptRequested=false and
             // fell through bin/candy-code's dispatch into the blocking
-            // full-screen TUI — the same hang crush_code.md Phase 0 item 3
+            // full-screen TUI — the same hang Phase 0 item 3
             // fixed for `--version`, reopened by flag order alone.
             //
             // $promptRequested guards the SECOND occurrence, which keeps the
@@ -234,14 +234,14 @@ final class ArgvParser
                 continue;
             }
 
-            // The real subcommands (crush_code.md Phase 4 item 6):
+            // The real subcommands (Phase 4 item 6):
             // `mcp list`, `session list|delete <id>`, `models`, `doctor` and
             // `completion bash|zsh|fish`. Recognised HERE, in the parser, and
             // dispatched by `bin/candy-code` in the same pre-flight place
             // --help/--version are: every one of them has to answer on a
             // machine with no provider, no config and no TTY, so a subcommand
             // that reached Program::run() would be the "`--help` opens the
-            // TUI" bug (crush_code.md Phase 0 item 3) all over again.
+            // TUI" bug (Phase 0 item 3) all over again.
             //
             // Recognised at ANY operand position for the same reason `run` is
             // (see above): pinning it to $argv[1] means `candy-code
@@ -1172,7 +1172,7 @@ final class ArgvParser
      * — it silently downgraded a DENYING hook into an allow. ScriptHook now
      * fails closed on its own, but a typo deserves a message at the boundary
      * rather than a run that quietly does the wrong thing everywhere
-     * (crush_code.md Phase 0 item 6).
+     * (Phase 0 item 6).
      */
     public static function rootError(ParsedArgs $args): ?string
     {

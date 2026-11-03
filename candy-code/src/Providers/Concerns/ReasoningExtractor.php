@@ -11,7 +11,7 @@ namespace SugarCraft\Code\Providers\Concerns;
  * (previously `SglangProvider`/`CustomProvider`/`OpenAIProvider` each
  * hardcoded `reasoning: null` independently).
  *
- * Mirrors SGLang's own `--reasoning-parser` duality (crush_feat.md §12 D1/D3):
+ * Mirrors SGLang's own `--reasoning-parser` duality (§12 D1/D3):
  * the deployed `minimax` parser (`Qwen3Detector`, `force_reasoning=true`)
  * already splits reasoning into a dedicated `reasoning_content` field and
  * leaves `content` clean, while the narrower `minimax-append-think` detector

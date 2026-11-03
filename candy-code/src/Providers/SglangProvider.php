@@ -54,7 +54,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
 
     /**
      * The literal substring at the heart of the MiniMax-M2.x tool-call
-     * truncation bug (crush_feat.md §12 D5): the model's own XML tool-call
+     * truncation bug (§12 D5): the model's own XML tool-call
      * envelope closes a parameter with this tag, so an argument *value* that
      * contains it terminates the value early inside the server-side parser.
      * Confirmed in both vLLM's parser and MiniMax's hosted API, i.e. it is a
@@ -1155,7 +1155,7 @@ final readonly class SglangProvider implements ProviderInterface, ReportsServedM
      * sampling and the configured model's window, and that mismatch predates
      * this method being model-aware at all.
      *
-     * Read, not decorative (crush_code.md Phase 5 item 4):
+     * Read, not decorative (Phase 5 item 4):
      * {@see \SugarCraft\Code\Backend\EngineBackend} exposes it through
      * {@see \SugarCraft\Code\Backend\ReportsContextWindow}, and
      * {@see \SugarCraft\Code\Chat} makes it the budget its four context

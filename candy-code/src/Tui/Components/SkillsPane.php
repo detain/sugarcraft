@@ -19,7 +19,7 @@ use SugarCraft\Code\Theme;
  * user has enabled, and — when neither applies — the skills actually
  * DISCOVERED on disk ({@see App::$availableSkills}, which {@see
  * \SugarCraft\Code\Cli\Bootstrap::app()} fills from the same loader the
- * engine's registry uses). That third state is the crush_feat.md §10.5
+ * engine's registry uses). That third state is the §10.5
  * wiring: a shell whose Skills pane reads "(no skills enabled)" while four
  * imported `.claude/skills` trees sit loaded is the failure mode, so the
  * pane shows what is available and marks what is on.
@@ -114,7 +114,7 @@ final class SkillsPane
 
     /**
      * The coloured provenance badge that precedes a skill's name, or '' for
-     * native content (crush_feat.md §10.5 — a native skill deliberately gets
+     * native content (§10.5 — a native skill deliberately gets
      * no badge, so the badge means "imported" at a glance).
      */
     private static function badgePrefix(Skill $skill, Theme $theme): string

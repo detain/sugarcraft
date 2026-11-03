@@ -15,7 +15,7 @@ use SugarCraft\Code\Util\TokenEstimate;
  * Stage 2 condenses older exchanges into single-line summaries capturing
  * "what happened and any key decisions made." TWO summarizers can produce those
  * lines: a MODEL-written one, when the caller has supplied summaries through
- * {@see withExchangeSummaries()} (crush_code.md Phase 5 item 6), and the local
+ * {@see withExchangeSummaries()} (Phase 5 item 6), and the local
  * heuristic otherwise — per exchange, so a partially-answered set degrades
  * rather than failing. The heuristic truncates the user's message and either
  * appends a short assistant reply verbatim or writes
@@ -67,7 +67,7 @@ final class ContextCompactor
          * heuristic", which is what every caller without a provider gets — pure
          * unit tests, the echo provider, and either `$CANDY_CODE_BACKEND_CMD*`
          * shell-out all legitimately have no model to ask
-         * (crush_code.md Phase 5 item 6).
+         * (Phase 5 item 6).
          *
          * Supplied rather than fetched, so {@see compact()} stays synchronous
          * and side-effect-free: it runs inside {@see \SugarCraft\Code\Chat}'s
@@ -1629,7 +1629,7 @@ final class ContextCompactor
      * appends either the assistant's reply verbatim, when it is short enough to
      * fit, or the placeholder `[exchanged information]` when it is not.
      *
-     * That placeholder is what crush_code.md Phase 5 item 6 exists to remove,
+     * That placeholder is what Phase 5 item 6 exists to remove,
      * and it is worth being exact about what "remove" means here: the heuristic
      * is NOT deleted, because it is the only thing available when there is no
      * model to ask, and a compaction that refused to run without a provider

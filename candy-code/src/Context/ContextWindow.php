@@ -9,7 +9,7 @@ use SugarCraft\Code\Backend\ReportsContextWindow;
 
 /**
  * The single place the token budget behind every context tier is resolved
- * (crush_code.md Phase 5 item 4).
+ * (Phase 5 item 4).
  *
  * {@see ContextCompactor}'s three predicates and the idle-compaction prompt
  * are each a percentage of a limit passed in by their caller. Before this
@@ -31,7 +31,7 @@ final class ContextWindow
      * tokenizer-counted tokens. The value is the one this app acted on before
      * any real window was reachable, kept deliberately so that a backend with
      * no model behind it (echo, or a shelled-out command) goes on behaving
-     * exactly as it did before crush_code.md Phase 5 item 4.
+     * exactly as it did before Phase 5 item 4.
      *
      * It is NOT a conservative floor, and an earlier draft of this docblock
      * claimed it was. Measured over every `contextWindow()` in

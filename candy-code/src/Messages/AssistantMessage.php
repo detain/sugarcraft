@@ -14,7 +14,7 @@ final readonly class AssistantMessage implements Message
         private ?string $reasoning = null,
         /**
          * What this ONE provider call cost, as the provider counted it, or
-         * null when it reported nothing (crush_code.md Phase 5 item 7).
+         * null when it reported nothing (Phase 5 item 7).
          * {@see \SugarCraft\Code\Runtime} sets it from
          * {@see \SugarCraft\Code\Providers\CompleteResponse}; until it did,
          * the count and cost every provider already returns were dropped here

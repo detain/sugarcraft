@@ -16,7 +16,7 @@ use SugarCraft\Code\ToolResult;
 
 /**
  * The shell's tool-activity sidebar, fed from the hosted {@see
- * \SugarCraft\Code\Chat}'s transcript (crush_feat.md §1 E6: "wire
+ * \SugarCraft\Code\Chat}'s transcript (§1 E6: "wire
  * `ToolsPane::render()` to read from `Chat::history` and actually reach it
  * from the live path" — the wire-it branch of that recommendation, taken
  * because §5 E7's MERGE branch keeps the pane layer alive).

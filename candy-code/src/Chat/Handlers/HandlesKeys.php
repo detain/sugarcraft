@@ -519,7 +519,7 @@ trait HandlesKeys
                 // The generation bump does NOT cover a summarization: the latch
                 // is $pendingCompactionId, deliberately not the generation
                 // counter (see that property's docblock). Releasing it here is
-                // load-bearing since crush_code.md Phase 5 item 6 wired the 85%
+                // load-bearing since Phase 5 item 6 wired the 85%
                 // tier, because a PARKED submission
                 // ({@see scheduleParkedCompaction()}) holds `inFlight` true with
                 // no turn running, which is what makes this arm reachable during
@@ -609,7 +609,7 @@ trait HandlesKeys
             return $this->handlePaletteKey($msg);
         }
 
-        // Same rule for the session picker overlay (crush_feat.md section 5
+        // Same rule for the session picker overlay (section 5
         // E8): while it is up every keystroke browses/resumes rather than
         // reaching inputBuf. Checked after the palette so the two modals
         // have a fixed, documented precedence even though they cannot both
@@ -752,7 +752,7 @@ trait HandlesKeys
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'p'
                 => [$this->mutate(['palette' => PaletteState::root()]), null],
             // Ctrl+O expands/collapses the most recent tool call's output
-            // (crush_feat.md §1 E5) and the most recent thought - successful
+            // (§1 E5) and the most recent thought - successful
             // tool bodies and settled thoughts are hidden by default, and with
             // clicks off this is the only way to see one. Checked before
             // the generic Char arm below, or the literal "o" would be typed
@@ -778,7 +778,7 @@ trait HandlesKeys
             // generic Char arm for the same reason as Ctrl+P above.
             $msg->type === KeyType::Char && $msg->ctrl && $msg->rune === 'v'
                 => [$this, static fn (): Msg => new ClipboardImagePastedMsg(ClipboardImage::save())],
-            // Ctrl+R opens the live session picker (crush_feat.md section 5
+            // Ctrl+R opens the live session picker (section 5
             // E8). NOT the Ctrl+O that section suggests: §1 E5 already bound
             // Ctrl+O to tool-output expansion above, and that is the only
             // way to read a hidden tool body. `r` is a chord
@@ -921,7 +921,7 @@ trait HandlesKeys
             // all (no KeyType::Left or KeyType::Right arm anywhere in this
             // file) ... so column 0 is only ever reached by typing the first
             // character". Both halves of that were true when written and the
-            // first half is now FALSE: crush_code.md Phase 3 item 1 delegated
+            // first half is now FALSE: Phase 3 item 1 delegated
             // the draft to sugar-forms' TextArea, and Left/Right/Home/End
             // reach it from the arms at the foot of this match. So there is now
             // a SECOND hatch, and it is the ordinary one a user would reach

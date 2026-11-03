@@ -10,7 +10,7 @@ use SugarCraft\Code\Tools\ToolCall;
  * Strategy for turning one OpenAI-shaped assistant `message` object into the
  * tool calls it requests.
  *
- * Mirrors SGLang's own `--tool-call-parser` CLI concept (crush_feat.md §12 D6):
+ * Mirrors SGLang's own `--tool-call-parser` CLI concept (§12 D6):
  * the server decides how a model's native tool-call syntax is decoded, and the
  * shape that reaches the wire differs accordingly. Making the client side
  * pluggable too means a deployment launched *without* the right parser flag

@@ -53,7 +53,7 @@ use SugarCraft\Overlay\Veil;
  * Composes multiple panes into a full terminal interface.
  * Pure function - given the same App it always produces the same bytes.
  *
- * This is the body of {@see App::view()} (crush_feat.md §5 E7, merge branch).
+ * This is the body of {@see App::view()} (§5 E7, merge branch).
  * It renders the SHELL only — menu bar, sidebars, input line, status bar —
  * and the chat pane it lays out delegates to the live
  * {@see \SugarCraft\Code\Renderer} against the App's hosted `Chat`, so
@@ -364,7 +364,7 @@ final class Renderer
 
     /**
      * Zone registry for the shell CHROME — today the menu bar's titles and
-     * the open menu's dropdown rows (crush_feat.md §8, whose E-list wired
+     * the open menu's dropdown rows (§8, whose E-list wired
      * session tabs, panes, tool rows and the palette but never the bar).
      *
      * Deliberately NOT the hosted chat's registry
@@ -664,7 +664,7 @@ final class Renderer
             + ($bottom === '' ? 0 : self::lineCount($bottom));
         $paneRows = max(3, $rows - $chrome);
 
-        // Pane::Agents is a FULL-pane view (crush_feat.md §5 E5): the whole
+        // Pane::Agents is a FULL-pane view (§5 E5): the whole
         // content band becomes the dashboard, no sidebars and no chat column.
         // A dashboard squeezed into a quarter-width sidebar cannot show the
         // status/operation/elapsed/usage columns it exists to show.
@@ -1983,7 +1983,7 @@ final class Renderer
      * tracked this.
      *
      * The OTHER route that would populate this map, a Task/Agent tool
-     * delegating from a model turn, still does not exist (crush_code.md #45).
+     * delegating from a model turn, still does not exist (#45).
      * Beyond the live path, the split is exercised by
      * `AgentSplitCompositorTest` and by an embedder driving the manager
      * directly; the live one is exercised by `WorkflowLivePaneTest`.

@@ -121,7 +121,7 @@ use SugarCraft\Code\App\ToolResultsMsg;
  * ### R20.fix, CLOSED: `agentManager` IS populated in production
  *
  * The rendering below is only reachable when `Chat::agentManager()` is
- * non-null, and until crush_code.md Phase 1 item 1 it never was:
+ * non-null, and until Phase 1 item 1 it never was:
  * `SugarCraft\Code\Cli\Bootstrap::chat()` — the construction path
  * `bin/candy-code` actually runs — passed no `agentManager:` argument, so
  * `renderAgentView()` returned `''` for every real user regardless of
@@ -135,7 +135,7 @@ use SugarCraft\Code\App\ToolResultsMsg;
  * ⚠️ THE REST OF THIS PARAGRAPH USED TO SAY `WorkflowEngine` IS NEVER
  * CONSTRUCTED AND THAT `Chat::executeAgents()` IS THE ONE PRODUCTION ROUTE
  * INTO `AgentManager::executeAll()`. BOTH WERE TRUE WHEN WRITTEN AND BOTH ARE
- * NOW FALSE. crush_code.md Phase 2 item 3 landed
+ * NOW FALSE. Phase 2 item 3 landed
  * `Bootstrap::workflowEngine()` and `Bootstrap::agentManager()`, wired side by
  * side into `Bootstrap::chat()`'s `new Chat(` as the `workflowEngine:` and
  * `agentManager:` arguments; `Chat::__construct()` links the two; and
@@ -180,14 +180,14 @@ use SugarCraft\Code\App\ToolResultsMsg;
  * looking for #79 again.
  *
  * The OTHER route opened with E675: `Tools\BuiltIn\TaskTool`
- * (crush_code.md P8.13) is the model-turn delegation path —
+ * (P8.13) is the model-turn delegation path —
  * `Bootstrap::chat()` binds the session's one `AgentManager` into the tool
  * feed, a `Task` call dispatches a roster agent through
  * `AgentManager::executeAll()`, and that reaches `createSubAgent()` for the
  * batch member. What still has no `src/` caller is `executeSubAgent()`'s
  * in-process streaming path — the tool rides the pool path, not it — so the
  * old sentence "there is no Task/Agent tool; delegation from a model turn
- * remains unavailable" (crush_code.md #45) is false on its first half and
+ * remains unavailable" (#45) is false on its first half and
  * true only on the in-process pair.
  *
  * What that does NOT mean is a permanent agent strip on every launch:
@@ -209,7 +209,7 @@ use SugarCraft\Code\App\ToolResultsMsg;
  * on `Tui\Renderer`, meant for laying out *multiple* agents' live output side
  * by side) could be wired to anything but empty tiles.
  * {@see \SugarCraft\Code\Tui\Components\AgentDashboardPane} consumes it
- * already, and crush_code.md Phase 8 item 4 has since answered the layout
+ * already, and Phase 8 item 4 has since answered the layout
  * question the rest of this paragraph was waiting on: the compositor is WIRED,
  * and it does NOT replace this strip.
  *
@@ -468,7 +468,7 @@ final class Renderer
     /**
      * Cell width a tool-result image ({@see renderToolImage()}) is scaled to
      * before its height is derived from the source aspect ratio. Literally
-     * crush_feat.md §9 E3's `$w = 40`: wide enough for a screenshot to be
+     * §9 E3's `$w = 40`: wide enough for a screenshot to be
      * legible, narrow enough that it still fits inside the chat shell on an
      * 80-column terminal without pushing the transcript off-screen.
      */
@@ -727,7 +727,7 @@ final class Renderer
 
     /**
      * Rows/characters {@see collapseToolOutput()} keeps of a tool body before
-     * it clips and prints an overflow trailer (crush_feat.md §1 E5). Both
+     * it clips and prints an overflow trailer (§1 E5). Both
      * limits matter independently: a `Grep` result can be 400 short lines
      * (blows the line budget) and a `Bash` result can be one 200KB line
      * (blows the character budget while still being "1 line").
@@ -746,7 +746,7 @@ final class Renderer
     /**
      * Whether a settled tool call's output is shown in full until the user
      * collapses it: the `expandToolOutput` setting (roadmap N-P4g, default
-     * off — hide-on-success, crush_feat.md §1 E5). {@see Chat::expanded()}
+     * off — hide-on-success, §1 E5). {@see Chat::expanded()}
      * then records only the calls that differ from it, so a `false` entry is
      * a call the user closed. Thoughts keep their own collapsed default.
      */
@@ -816,7 +816,7 @@ final class Renderer
     private const THINKING_LIVE_CHROME_ROWS = 10;
 
     /**
-     * Zone-id prefix every session tab carries (crush_feat.md §8 E2). Public
+     * Zone-id prefix every session tab carries (§8 E2). Public
      * because {@see Chat::update()} parses it back off a click's zone id —
      * one literal, defined next to the code that writes it, rather than the
      * same string spelled out independently on both sides of the hit test.
@@ -834,7 +834,7 @@ final class Renderer
     private const SESSION_TAB_NAME_COLS = 20;
 
     /**
-     * Zone-id prefix every clickable pane region carries (crush_feat.md §8
+     * Zone-id prefix every clickable pane region carries (§8
      * E3). The suffix is always a {@see Pane} case's own `value`, so
      * {@see Chat::update()} can turn a click straight back into the enum
      * case rather than matching hand-spelled strings on both sides.
@@ -866,7 +866,7 @@ final class Renderer
 
     /**
      * Zone-id prefix every clickable command-palette / picker row carries
-     * (crush_feat.md §8 E6, which names `picker-item:{$index}` literally).
+     * (§8 E6, which names `picker-item:{$index}` literally).
      * The suffix is the row's index into {@see Chat::paletteMatches()}, i.e.
      * exactly what {@see \SugarCraft\Code\Palette\PaletteState::$selectedIndex}
      * holds, so a click can move the selection and then run the SAME confirm
@@ -896,7 +896,7 @@ final class Renderer
     public const SESSION_ACT_ZONE_PREFIX = 'session-act:';
 
     /**
-     * Zone-id prefix every clickable tool-call row carries (crush_feat.md §8
+     * Zone-id prefix every clickable tool-call row carries (§8
      * E5). The suffix is the SAME key {@see Chat::expanded()} is keyed by
      * (`ToolResult::$id`, falling back to its name), so a click can be handed
      * straight to {@see Chat::toggleToolOutput()} — §8 E5's note is explicit
@@ -1208,7 +1208,7 @@ final class Renderer
      * signal.
      *
      * For a shell frame that does NOT contain this renderer's output at all —
-     * the full-pane agent dashboard (crush_feat.md §5 E5) is the first one.
+     * the full-pane agent dashboard (§5 E5) is the first one.
      * {@see scanRoot()} only clears the registry when it runs, so a frame that
      * never calls it would leave the PREVIOUS frame's boxes hit-testable
      * underneath content that never drew them, and a click would fire whatever
@@ -1672,7 +1672,7 @@ final class Renderer
 
     /**
      * The full frame plus the pixel-graphics layer for any image-bearing tool
-     * result in the transcript (crush_feat.md §9 E3).
+     * result in the transcript (§9 E3).
      *
      * Sixel/Kitty/iTerm2 blobs are not text and cannot be diffed by
      * sugar-core's line renderer, so — exactly as `sugar-gallery`'s
@@ -1807,7 +1807,7 @@ final class Renderer
                 $body = $body === '' ? $thought : $body . "\n\n" . $thought;
             }
             // The reply so far, when the model has started writing one
-            // (crush_code.md Phase 0 item 13). It sits ABOVE the spinner
+            // (Phase 0 item 13). It sits ABOVE the spinner
             // rather than replacing it: the turn is still running - more text
             // is coming, and possibly tool calls after it - so removing the
             // only "still working" affordance the moment the first token
@@ -1963,7 +1963,7 @@ final class Renderer
         // the tail clip above leaves to the user: $chat->scrollOffset() is a
         // distance in lines from the BOTTOM (0 = pinned to the newest line,
         // the historical behaviour), so scrolling back moves the window's
-        // start earlier by exactly that many lines (crush_feat.md §8 E4).
+        // start earlier by exactly that many lines (§8 E4).
         // It is re-clamped against THIS frame's overflow rather than trusted:
         // the offset was clamped against the frame that was on screen when
         // the wheel turned, and the transcript can have shrunk since (/clear,
@@ -2405,7 +2405,7 @@ final class Renderer
         // The "Ctrl+P menu" hint is the live path's only affordance for
         // Pane::Menu (the palette is what the disconnected App system's
         // MenuBar pane would have been), so it is the region that carries
-        // the `pane:menu` click zone — crush_feat.md §8 E3's "click the
+        // the `pane:menu` click zone — §8 E3's "click the
         // pane's title region to jump straight to it". While a request is in
         // flight the hint is not drawn at all, so no zone is marked either.
         //
@@ -3094,7 +3094,7 @@ final class Renderer
 
     /**
      * The status bar's spend readout: what this session has cost in dollars,
-     * and the cap if one is set (crush_code.md Phase 5 item 7).
+     * and the cap if one is set (Phase 5 item 7).
      *
      * Empty string — no segment at all — when the session has neither a cap nor
      * a reported spend, which is every offline run, every
@@ -3338,7 +3338,7 @@ final class Renderer
      * percentage — the renderer must not hardcode a budget Chat resolves.
      *
      * The pair still carries a leading `~`, but for a narrower reason than it
-     * used to: since crush_code.md Phase 5 item 4 the limit IS the model's
+     * used to: since Phase 5 item 4 the limit IS the model's
      * advertised context window whenever the backend can report one, so it is
      * no longer "not the provider's window". The count on the left of the
      * slash is what stays an approximation — a script-weighted character proxy
@@ -3417,7 +3417,7 @@ final class Renderer
 
     /**
      * "How far back am I?" readout, shown only while the transcript is
-     * scrolled off the bottom (crush_feat.md §8 E4's scrollbar-during-scroll).
+     * scrolled off the bottom (§8 E4's scrollbar-during-scroll).
      *
      * A fixed-height frame has no spare column for crush's real scrollbar
      * gutter, and the frame is clipped to the terminal anyway, so the
@@ -3494,7 +3494,7 @@ final class Renderer
         $width = AgentViewPane::contentWidth($cols, 40);
 
         // The status bar's first row is this pane's header, so it carries the
-        // `pane:agents` click zone (crush_feat.md §8 E3) — clicking it runs
+        // `pane:agents` click zone (§8 E3) — clicking it runs
         // the same /agents dispatch Ctrl+A does. See {@see markPaneHeader()}
         // for why the whole block is not marked, and clipRowsToCols() for why
         // the clip runs BEFORE the mark (a cut must never split a sentinel).
@@ -3716,7 +3716,7 @@ final class Renderer
     }
 
     /**
-     * Wrap one session tab label in a `tab:<id>` click zone (crush_feat.md
+     * Wrap one session tab label in a `tab:<id>` click zone (
      * §8 E2), so the cells it lands on can be turned back into the session
      * they belong to by {@see Chat::update()}.
      *
@@ -3747,7 +3747,7 @@ final class Renderer
     }
 
     /**
-     * Wrap one on-screen region in a `pane:<name>` click zone (crush_feat.md
+     * Wrap one on-screen region in a `pane:<name>` click zone (
      * §8 E3), so a click on it can be turned back into the {@see Pane} it
      * belongs to by {@see Chat::update()}.
      *
@@ -3773,7 +3773,7 @@ final class Renderer
 
     /**
      * Remember that $label's row should become a `toolcall:<key>` click zone
-     * (crush_feat.md §8 E5). Called as the transcript is built; the actual
+     * (§8 E5). Called as the transcript is built; the actual
      * {@see Mark::zone()} happens later in {@see markToolCalls()}, for the
      * layout reason documented on {@see $toolCallZones}.
      *
@@ -3810,7 +3810,7 @@ final class Renderer
 
     /**
      * Turn each row recorded by {@see recordToolCallZone()} into a click zone
-     * on the already-bordered, already-padded shell (crush_feat.md §8 E5).
+     * on the already-bordered, already-padded shell (§8 E5).
      *
      * Rows are located by their label text rather than by index because the
      * shell adds its own border/padding rows and a tool block is preceded by
@@ -4847,7 +4847,7 @@ final class Renderer
     }
 
     /**
-     * A model's thinking as ONE collapsible row (crush_feat.md §12 D3's
+     * A model's thinking as ONE collapsible row (§12 D3's
      * "dimmed/collapsed"): `💭 Thought ▸ 42 lines · click to expand` until
      * the user opens it, then the same row flipped to `▾` with the whole
      * trace below it, newlines kept. Clicking the row again closes it.
@@ -5029,7 +5029,7 @@ final class Renderer
      *
      * A result that carries a unified diff ({@see ToolResult::hasDiff()} -
      * `Edit`/`Write` produce one, see `Tools\BuiltIn\Edit::unifiedDiff()`)
-     * additionally gets that diff painted below the marker, per crush_feat.md
+     * additionally gets that diff painted below the marker, per 
      * §1 E3. The diff is consumed verbatim from the result; it is never
      * recomputed here, because the renderer has neither the pre-edit file
      * contents nor any business touching the filesystem.
@@ -5037,7 +5037,7 @@ final class Renderer
      * A result carrying image bytes ({@see ToolResult::hasImage()} - the
      * `/doctor` built-in is a real producer) additionally gets the picture
      * itself painted below the marker, via {@see renderToolPicture()}
-     * (crush_feat.md §9 E3), but only once the user has EXPANDED that call.
+     * (§9 E3), but only once the user has EXPANDED that call.
      *
      * User-reported: running `/doctor` "shows just a big green box for output,
      * nothing else, not collapsable or expandable". Two causes, both fixed
@@ -5057,7 +5057,7 @@ final class Renderer
      * rather than hidden when the call is collapsed. A captionless swatch is
      * what read as a glitch in the first place.
      *
-     * Bodies are no longer dumped in full forever (crush_feat.md §1 E5). A
+     * Bodies are no longer dumped in full forever (§1 E5). A
      * SUCCESSFUL result is the case where the output is least likely to be
      * worth screen space - the model already read it, and the user mostly
      * needs to know the call happened - so its body is hidden entirely until
@@ -5068,7 +5068,7 @@ final class Renderer
      * conversation it belongs to. Expanding shows the body verbatim.
      *
      * A result that never ran gets its own visual state rather than the
-     * generic error one (crush_feat.md §1 E7): both a refusal
+     * generic error one (§1 E7): both a refusal
      * ({@see Chat::isDeniedResult()} - the user rejected the prompt, or a
      * hook/permission gate stopped it) and a restart-orphaned call
      * ({@see Chat::isInterruptedResult()}) draw the icon+name row STRUCK
@@ -5096,7 +5096,7 @@ final class Renderer
             // LF that would otherwise split the single-line click zone.
             // A refused or interrupted call is not just a failed one: it never
             // ran, so its whole icon+text row is struck through rather than
-            // merely recoloured (crush_feat.md §1 E7).
+            // merely recoloured (§1 E7).
             $denied = Chat::isDeniedResult($result);
             $stopped = $denied || Chat::isInterruptedResult($result);
             $status = match (true) {
@@ -5244,7 +5244,7 @@ final class Renderer
     /**
      * The " — <what actually ran>" tail appended to a finished tool row.
      *
-     * User-reported gap behind crush_feat.md §3 E2: the running placeholder
+     * User-reported gap behind §3 E2: the running placeholder
      * has always shown {@see Message::describeToolCall()}'s one-liner (e.g.
      * `bash(command: "ls -la")`, or the model-authored description when the
      * turn sent one), but the finished row replaced it with just the tool
@@ -5345,7 +5345,7 @@ final class Renderer
 
     /**
      * Paint one image-bearing {@see ToolResult}'s bytes at the terminal's best
-     * available protocol (crush_feat.md §9 E3), following the exact pattern
+     * available protocol (§9 E3), following the exact pattern
      * `sugar-gallery/src/PosterCard.php` proves out.
      *
      * Two shapes come back out of sugar-image and they are composed
@@ -5570,7 +5570,7 @@ final class Renderer
 
     /**
      * Clip a tool's raw output to at most $maxLines lines AND $maxChars
-     * characters, reporting whether anything was dropped (crush_feat.md
+     * characters, reporting whether anything was dropped (
      * §1 E5).
      *
      * Deliberately a pure function over plain strings - no Theme, no Style,
@@ -6514,7 +6514,7 @@ final class Renderer
      * contains a space, or the typed prefix matches no command.
      *
      * Two things this surface used to lack that the Ctrl+P palette beside it
-     * already had (crush_code.md Phase 4 item 5):
+     * already had (Phase 4 item 5):
      *
      * - the ARGUMENT HINT. `CommandSpec::$argumentHint` was parsed from command
      *   frontmatter, set on the built-in rows that take arguments, and read by
@@ -6941,7 +6941,7 @@ final class Renderer
 
     /**
      * The live session picker's content, composited over the whole frame by
-     * {@see render()} via {@see Veil} (crush_feat.md section 5 E8). Returns
+     * {@see render()} via {@see Veil} (section 5 E8). Returns
      * '' (nothing composited) when the picker is closed - see
      * {@see Chat::sessionPicker()}.
      *
@@ -7030,7 +7030,7 @@ final class Renderer
      *
      * Rows come from {@see Chat::paletteMatchResults()} rather than the bare
      * label list so the matched characters can be highlighted through
-     * {@see Highlighter} (crush_feat.md §4 E3). With no query typed, the root
+     * {@see Highlighter} (§4 E3). With no query typed, the root
      * list arrives category-grouped and MRU-biased and gets a faint header
      * per category (§4 E6/E7); a typed query stays a flat relevance-ranked
      * list, headers omitted, so the best match is always the first row.
@@ -7161,7 +7161,7 @@ final class Renderer
 
     /**
      * Remember which lines of the rendered palette box are clickable rows
-     * (crush_feat.md §8 E6), for {@see markPaletteItems()} to wrap once the
+     * (§8 E6), for {@see markPaletteItems()} to wrap once the
      * box has been composited.
      *
      * A row is located by the content line it produced rather than by index,
@@ -7202,7 +7202,7 @@ final class Renderer
     /**
      * Turn each palette box line recorded by {@see recordPaletteItemZones()}
      * into a `picker-item:<index>` click zone on the ALREADY-composited frame
-     * (crush_feat.md §8 E6) — see RenderFrame::$paletteItemZones for why the mark
+     * (§8 E6) — see RenderFrame::$paletteItemZones for why the mark
      * cannot happen before the composite.
      *
      * Only the box line's own cells are wrapped, not the frame row it landed
@@ -7382,7 +7382,7 @@ final class Renderer
 
     /**
      * The in-app keybinding reference, composited over the whole frame by
-     * {@see renderView()} via {@see Veil} (crush_code.md Phase 8 item 2).
+     * {@see renderView()} via {@see Veil} (Phase 8 item 2).
      * Returns '' (nothing composited) when it is closed — see
      * {@see Chat::keyHelp()}.
      *
@@ -7558,7 +7558,7 @@ final class Renderer
     }
 
     /**
-     * The blocking permission prompt's modal (crush_feat.md §1 E2, the
+     * The blocking permission prompt's modal (§1 E2, the
      * rendering half), composited over the whole frame by {@see render()}
      * through the same {@see Veil} mechanism the Ctrl+P palette already uses
      * rather than a second overlay path. Returns '' (nothing composited)

@@ -277,7 +277,7 @@ final class Checkpoints
     {
         $messages = $state['state_data']['messages'] ?? $state['messages'] ?? [];
         // Raw arrays become Message objects, healing any placeholder whose tool
-        // call died with the checkpointing process (crush_feat.md §1 E7).
+        // call died with the checkpointing process (§1 E7).
         $messages = array_map(
             static fn (array $msg): Message => Chat::reviveCheckpointMessage($msg),
             \is_array($messages) ? array_values($messages) : [],

@@ -47,7 +47,7 @@ use SugarCraft\Code\Usage;
 
 /**
  * The model-callable Task tool: delegate one bounded task to a sub-agent from
- * the session's agent roster and return the sub-agent's final text (crush_code.md P8.13).
+ * the session's agent roster and return the sub-agent's final text (P8.13).
  *
  * This is the seam the whole sub-agent machinery was built toward but never had:
  * {@see AgentManager::createSubAgent()} and {@see AgentManager::executeAll()}

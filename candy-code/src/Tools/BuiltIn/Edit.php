@@ -43,7 +43,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
     /**
      * $skillNudge turns a skill's `paths:` frontmatter into a live signal
-     * (crush_feat.md section 7 E4): editing a file a skill scopes itself to
+     * (section 7 E4): editing a file a skill scopes itself to
      * announces that skill once. Null keeps the tool standalone.
      *
      * $writeSeam is a TEST SEAM only (audit F-T7): the payload writer handed
@@ -219,7 +219,7 @@ final readonly class Edit implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // jailPath()+isAllowed() proved containment on the realpath() of
             // $path and then re-opened the unresolved $path below, so a
             // symlink component swapped between the check and the open landed
-            // outside the jail (crush_code.md P8.14/15). The file_exists()
+            // outside the jail (P8.14/15). The file_exists()
             // clause is isAllowed()'s existence-strictness kept verbatim, so
             // a missing file still reports 'path outside worktree' here
             // exactly as it did before, not the 'file not found' below.

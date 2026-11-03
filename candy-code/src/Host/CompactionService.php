@@ -1163,7 +1163,7 @@ final class CompactionService
             Message::system(self::COMPACT_SUMMARY_PROMPT),
             Message::user(self::renderExchangesForSummary($exchanges)),
         ];
-        // The recursive merge (crush_code.md Phase 8): when an earlier compaction
+        // The recursive merge (Phase 8): when an earlier compaction
         // already reduced part of this transcript to `[summary] ` rows, this round
         // would otherwise ask the model to summarise only the surviving live
         // exchanges and lose everything the first round chose to keep. Hand it the
@@ -1626,7 +1626,7 @@ final class CompactionService
      * The prior summaries to carry into a re-compaction, marker stripped and text
      * verbatim.
      *
-     * WHY THIS EXISTS (crush_code.md Phase 8 — the recursive merge): a second
+     * WHY THIS EXISTS (Phase 8 — the recursive merge): a second
      * `/compact` cannot otherwise preserve what the first recorded. Once a
      * compaction lands the exchanges it condensed are gone from the transcript and
      * only the `SUMMARY_ROW_PREFIX` rows remain, and those rows arrive back through

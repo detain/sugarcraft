@@ -720,7 +720,7 @@ final class PermissionPrompt
             // that the call it asked for was refused.
             Message::system('_' . DenialKind::Refused->reason($refusal) . '_'),
             // The refusal also has to exist as a RESULT, not only as
-            // a system note (crush_feat.md §1 E7): the assistant
+            // a system note (§1 E7): the assistant
             // message above carries the tool call, so leaving it
             // unanswered puts a tool_use block on the next request's
             // wire with no matching tool_result. It doubles as the

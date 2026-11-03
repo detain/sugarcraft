@@ -6,7 +6,7 @@ namespace SugarCraft\Code;
 
 /**
  * What one provider call — or a whole turn's worth of them summed — actually
- * cost, in PROVIDER-COUNTED tokens and dollars (crush_code.md Phase 5 item 7).
+ * cost, in PROVIDER-COUNTED tokens and dollars (Phase 5 item 7).
  * Since prompt_plan.md P4.S1 (backlog E17) it also carries the provider's own
  * token BUCKETS — input/output, the two cache sides, and (since qwen.md §Q6)
  * the completion-side reasoning side — null until a provider

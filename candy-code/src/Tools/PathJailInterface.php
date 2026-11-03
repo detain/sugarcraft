@@ -9,7 +9,7 @@ namespace SugarCraft\Code\Tools;
  *
  * ## Why there are two PathJail classes
  *
- * candy-code contains two path-containment types, and until crush_code.md
+ * candy-code contains two path-containment types, and until 
  * item P8.14 they had no stated relationship, so a caller had to know which
  * one it was holding to know whether a returned path had been checked:
  *

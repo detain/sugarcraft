@@ -6,7 +6,7 @@ namespace SugarCraft\Code\Tools;
 
 /**
  * Opt-in declaration that a {@see Tool} may run CONCURRENTLY with its
- * same-turn siblings (crush_code.md Phase 0 item 14).
+ * same-turn siblings (Phase 0 item 14).
  *
  * {@see \SugarCraft\Code\Runtime::executeToolCalls()} fans a batch out over
  * one forked child per call, so "safe" here means two independent things, and

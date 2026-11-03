@@ -210,7 +210,7 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
      * capability runs `rg` (extended regex, where `|` and `(` are operators
      * as written); one without it builds `grep -rn` with NO `-E` and NO `-P`,
      * so there the pattern is GNU basic regular expression (BRE) syntax and
-     * `a|b` matches the literal three characters. crush_code.md section 12
+     * `a|b` matches the literal three characters. section 12
      * once asserted ERE for the grep branch; that was wrong then, and the
      * difference was not cosmetic — which is exactly why the sentence now
      * splits per engine instead of claiming one dialect for both.

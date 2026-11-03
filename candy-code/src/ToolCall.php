@@ -13,7 +13,7 @@ use SugarCraft\Code\Tools\ToolCall as EngineToolCall;
  * execute an action (like running a shell command, reading a
  * file, etc.) rather than just returning text.
  *
- * This is the Chat/TUI-side half of the two type pairs crush_feat.md §1 D
+ * This is the Chat/TUI-side half of the two type pairs §1 D
  * flags ("Two separate ToolCall/ToolResult type pairs ... with different
  * field names ... is itself a maintenance hazard"): {@see EngineToolCall}
  * (`Tools\ToolCall`) is the canonical pair every `ProviderInterface`,
@@ -23,7 +23,7 @@ use SugarCraft\Code\Tools\ToolCall as EngineToolCall;
  * than duplicate the engine pair's field set here (or rewrite every
  * consumer of either pair at once), the two are reconciled by the explicit,
  * lossless {@see toEngineCall()}/{@see fromEngineCall()} adapters below --
- * the bridge crush_feat.md §1 E1's "point Chat::beginToolCalls()/
+ * the bridge §1 E1's "point Chat::beginToolCalls()/
  * finishToolCalls() at Tools\ToolCall/Tools\ToolResult" needs. The adapters
  * live on this side only, so the engine-side pair stays unaware of the
  * TUI-side one and no dependency cycle is created between the namespaces.
@@ -58,7 +58,7 @@ final class ToolCall
     /**
      * Adapt this Chat-side call to the canonical engine-side
      * {@see EngineToolCall} the live Runtime/EngineBackend/provider pipeline
-     * speaks (crush_feat.md §1 E1).
+     * speaks (§1 E1).
      *
      * `Tools\ToolCall::$id` is non-nullable, so an id-less call falls back to
      * its name -- deliberately the same fallback {@see

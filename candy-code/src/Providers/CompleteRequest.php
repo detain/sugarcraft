@@ -12,7 +12,7 @@ namespace SugarCraft\Code\Providers;
  * route accepts a wider sampling surface than plain OpenAI does, and
  * MiniMax-M2.7 in particular needs `repetition_penalty`/`min_p` to stay
  * coherent across the long agentic tool-loop transcripts candy-code
- * produces (crush_feat.md §12 D4). Every field is optional and defaults to
+ * produces (§12 D4). Every field is optional and defaults to
  * null so a provider that has no equivalent knob simply drops it.
  *
  * SAMPLING has no config surface in candy-code yet, and no step in the

@@ -119,7 +119,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
 
     /**
      * $skillNudge turns a skill's `paths:` frontmatter into a live signal
-     * (crush_feat.md section 7 E4): reading a file a skill scopes itself to
+     * (section 7 E4): reading a file a skill scopes itself to
      * announces that skill once, the way Claude Code loads skills on first
      * read inside a scoped subdirectory. Null keeps the tool standalone.
      */
@@ -478,7 +478,7 @@ final readonly class Read implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // jailPath()+isAllowed() pairing proved containment on the
             // realpath() of $path and then re-opened the UNRESOLVED $path --
             // a symlink component swapped between the two calls resolved
-            // somewhere else on the second pass (crush_code.md P8.14/15).
+            // somewhere else on the second pass (P8.14/15).
             //
             // The file_exists() half is isAllowed()'s existence-strictness,
             // kept verbatim: resolve() also accepts a not-yet-existing file

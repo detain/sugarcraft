@@ -35,7 +35,7 @@ final class SkillManager
      * SkillLoader::loadAllManifests()) -- not the previous
      * SkillLoader::loadAll(), which eagerly read every skill's full
      * SKILL.md body off disk regardless of whether it was ever used that
-     * session. Fixes crush_feat.md section 7.E3.
+     * session. Fixes section 7.E3.
      *
      * The body backfills lazily, on-demand, via
      * Tools\BuiltIn\SkillTool::execute(), which calls loadSkillBody() -- and
@@ -44,14 +44,14 @@ final class SkillManager
      * "not yet registered into Bootstrap::tools()/EngineBackend, so that half of
      * the backfill path is implemented and tested, not yet production reachable
      * from bin/candy-code", and it outlived the wiring it described by several
-     * rounds: crush_feat.md section 7 item 2 / W3.S8 landed, and
+     * rounds: section 7 item 2 / W3.S8 landed, and
      * BinCandyCodeWiringTest::testBootstrapToolsIncludesTheModelFacingSkillTool
      * plus testSkillToolInvocationReturnsTheOnDiskSkillBody have been asserting
      * both halves since. A doc-block claiming a subsystem is unreachable while it
      * is reachable is the same defect as one claiming the reverse -- which is the
      * defect the paragraph below records.
      *
-     * FOREIGN DISCOVERY IS CALLED HERE, and this is crush_code.md Phase 2
+     * FOREIGN DISCOVERY IS CALLED HERE, and this is Phase 2
      * item 6: {@see ForeignSkillDiscovery}, its SkillSource tagging and its
      * tests all existed, and nothing ever called it — so a skill under
      * `~/.claude/skills` was invisible to a real run no matter what

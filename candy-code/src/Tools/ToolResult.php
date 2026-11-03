@@ -21,7 +21,7 @@ final readonly class ToolResult
      * that only Chat's own (production-unreachable) registerTool()
      * dispatch consumes.
      *
-     * $diff carries a raw unified diff (crush_feat.md §1 recommendation E3)
+     * $diff carries a raw unified diff (§1 recommendation E3)
      * for edit-shaped tools, kept OFF $content so a renderer can hand it
      * straight to `candy-git\DiffViewer::fromRawDiff()` instead of
      * string-scanning a free-text summary for a `--- a/` line.
