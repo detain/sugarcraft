@@ -863,8 +863,8 @@ EXCEPTION paragraph.
 cd sugar-style && composer install && vendor/bin/phpunit
 ```
 
-Suite at the 2026-10-24 accessor-era and setter-collider-exceptions close:
-966 tests, 3,358 assertions, 0 failures (cited figure is a point-in-time
+Suite at the 2026-11-03 docs-fidelity lane close:
+987 tests, 3,438 assertions, 0 failures (cited figure is a point-in-time
 measurement, not a live-pinned number).
 
 ## Demos
