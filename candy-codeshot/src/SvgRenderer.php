@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeShot;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * Renders text (with optional ANSI styling) to an SVG document. The
  * output is plain text — no `ext-gd` / Imagick required — making it
@@ -27,6 +29,19 @@ namespace SugarCraft\CodeShot;
  */
 final class SvgRenderer
 {
+    public readonly int $padding;
+
+    public readonly int $borderRadius;
+
+    /** Upper bound accepted for padding (cells); the ctor doors the value. */
+    public const MAX_PADDING = 4096;
+
+    /** Upper bound for corner rounding (pixels); the ctor doors the value. */
+    public const MAX_BORDER_RADIUS = 256;
+
+    /** Font blobs larger than this (32 MiB) are refused by render(). */
+    public const MAX_EMBEDDED_FONT_BYTES = 33_554_432;
+
     /** @param array{range: array{0:int,1:int}, color:string}|null $highlight */
     public function __construct(
         public readonly Theme $theme       = new Theme(
@@ -39,17 +54,23 @@ final class SvgRenderer
             windowYellow: '#ffbd2e',
             windowGreen:  '#27c93f',
         ),
-        public readonly int $padding       = 24,
         public readonly bool $window       = true,
         public readonly bool $shadow       = true,
         public readonly bool $border       = true,
         public readonly bool $lineNumbers  = false,
-        public readonly int $borderRadius  = 8,
         public readonly WindowStyle $windowStyle = WindowStyle::Macos,
         public readonly bool $ligatures    = false,
         public readonly ?string $fontPath  = null,
         public readonly ?array $highlight  = null,
-    ) {}
+        int $padding = 24,
+        int $borderRadius = 8,
+    ) {
+        // A direct `new SvgRenderer(padding: -5)` must not be able to forge
+        // negative geometry the withers refuse: the constructor clamps
+        // exactly like withPadding()/withBorderRadius().
+        $this->padding      = max(0, min(self::MAX_PADDING, $padding));
+        $this->borderRadius = max(0, min(self::MAX_BORDER_RADIUS, $borderRadius));
+    }
 
     public static function dark():       self { return new self(theme: Theme::dark()); }
     public static function light():      self { return new self(theme: Theme::light()); }
@@ -58,12 +79,12 @@ final class SvgRenderer
     public static function nord():       self { return new self(theme: Theme::nord()); }
 
     public function withTheme(Theme $t):     self { return $this->copy(theme: $t); }
-    public function withPadding(int $p):     self { return $this->copy(padding: max(0, $p)); }
+    public function withPadding(int $p):     self { return $this->copy(padding: max(0, min(self::MAX_PADDING, $p))); }
     public function withWindow(bool $on):    self { return $this->copy(window: $on); }
     public function withShadow(bool $on):    self { return $this->copy(shadow: $on); }
     public function withBorder(bool $on):    self { return $this->copy(border: $on); }
     public function withLineNumbers(bool $on): self { return $this->copy(lineNumbers: $on); }
-    public function withBorderRadius(int $r): self { return $this->copy(borderRadius: max(0, $r)); }
+    public function withBorderRadius(int $r): self { return $this->copy(borderRadius: max(0, min(self::MAX_BORDER_RADIUS, $r))); }
     public function withLigatures(bool $on): self { return $this->copy(ligatures: $on); }
     public function withWindowStyle(WindowStyle|string $style): self
     {
@@ -171,8 +192,20 @@ final class SvgRenderer
                  . '  </filter>' . "\n";
         }
         if ($this->fontPath !== null) {
+            $fontSize = @filesize($this->fontPath);
+            if ($fontSize === false) {
+                throw new \RuntimeException("Cannot stat font file: {$this->fontPath}");
+            }
+            if ($fontSize > self::MAX_EMBEDDED_FONT_BYTES) {
+                throw new \RuntimeException(
+                    "Font file too large to embed: {$fontSize} bytes exceed the 32 MiB limit ({$this->fontPath})"
+                );
+            }
             $fontData = file_get_contents($this->fontPath);
-            if ($fontData !== false) {
+            if ($fontData === false) {
+                throw new \RuntimeException("Cannot read font file: {$this->fontPath}");
+            }
+            {
                 $base64 = base64_encode($fontData);
                 $mime = self::sniffFontMime($fontData) ?? 'font/ttf';
                 $defs .= '  <style type="text/css"><![CDATA[' . "\n"
@@ -212,6 +245,7 @@ final class SvgRenderer
               . 'fill="' . self::xmlEscape($this->theme->foreground) . '"'
               . $ligatureAttr . ' xml:space="preserve">' . "\n";
 
+        $sgrCarry = null;
         foreach ($lines as $i => $line) {
             $lineNumber = $i + 1;
             $y = $textY0 + $i * $cellH;
@@ -241,10 +275,10 @@ final class SvgRenderer
                     self::xmlEscape(str_pad((string) ($i + 1), max(2, strlen((string) count($lines))), ' ', STR_PAD_LEFT)),
                 );
             }
-            $segments = AnsiParser::parse($line);
+            $segments = AnsiParser::parse($line, $sgrCarry);
             $x = $textX0 + $gutter * $cellW;
             foreach ($segments as $seg) {
-                $textLen = mb_strlen($seg->text, 'UTF-8');
+                $textLen = Width::of($seg->text);
                 $segW = $textLen * $cellW;
                 if ($seg->bg !== null) {
                     $svg .= sprintf(
@@ -388,6 +422,11 @@ final class SvgRenderer
 
     private static function xmlEscape(string $s): string
     {
+        // XML 1.0 forbids C0 scalars outright - a lone \x00 makes the whole
+        // document unparseable - so drop them before escaping. Tab, LF and
+        // CR stay legal and pass through untouched.
+        $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s) ?? '';
+
         return htmlspecialchars($s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     }
 

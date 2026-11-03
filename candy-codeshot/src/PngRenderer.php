@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\CodeShot;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * Renders text (with optional ANSI styling) to a PNG image via GD.
  * Requires ext-gd.
@@ -12,13 +14,15 @@ namespace SugarCraft\CodeShot;
  *
  *  - macOS-style window-control "traffic lights" (`withWindow(true)`)
  *  - Padding around the code area
- *  - Optional rounded-corner frame
+ *  - Frame corners stay square (rounding is an SVG feature; the CLI
+ *    announces --border-radius as dropped in PNG mode)
  *  - Optional drop shadow
  *  - Line numbers in the gutter
  *  - Inline ANSI SGR colour parsing — foreground colours from the
- *    rendered tokens become coloured text segments. Background
- *    colours and attribute flags (bold, italic, underline) are also
- *    honoured.
+ *    rendered tokens become coloured text segments, and background
+ *    colours are painted as bands behind them. Attribute flags (bold,
+ *    italic, underline) cannot be honoured: the built-in bitmap font
+ *    has no such variants.
  *
  * Uses GD's built-in bitmap fonts (imagestring) for portability — no
  * TTF font file required. Because the bitmap font is fixed, the theme's
@@ -43,6 +47,19 @@ final class PngRenderer
 
     private const DEFAULT_FONT = 5;
 
+    public readonly int $padding;
+
+    public readonly int $borderRadius;
+
+    /** Upper bound accepted for padding (cells); the ctor doors the value. */
+    public const MAX_PADDING = 4096;
+
+    /** Upper bound for corner rounding (pixels); the ctor doors the value. */
+    public const MAX_BORDER_RADIUS = 256;
+
+    /** Hard ceiling on output pixels (~40M) to bound GD memory. */
+    public const MAX_PNG_PIXELS = 40_000_000;
+
     /** @var \WeakMap<\GdImage, array<string, int>> Per-image colour cache */
     private \WeakMap $colorCache;
 
@@ -57,14 +74,17 @@ final class PngRenderer
             windowYellow: '#ffbd2e',
             windowGreen:  '#27c93f',
         ),
-        public readonly int $padding       = 24,
         public readonly bool $window       = true,
         public readonly bool $shadow       = true,
         public readonly bool $border       = true,
         public readonly bool $lineNumbers  = false,
-        public readonly int $borderRadius  = 8,
         public readonly WindowStyle $windowStyle = WindowStyle::Macos,
+        int $padding = 24,
+        int $borderRadius = 8,
     ) {
+        // Mirror SvgRenderer's constructor door (M13).
+        $this->padding      = max(0, min(self::MAX_PADDING, $padding));
+        $this->borderRadius = max(0, min(self::MAX_BORDER_RADIUS, $borderRadius));
         $this->colorCache = new \WeakMap();
     }
 
@@ -127,6 +147,13 @@ final class PngRenderer
 
         $frameWidth  = (int) ($contentWidth + $this->padding * 2);
         $frameHeight = (int) ($contentHeight + $this->padding * 2 + $headerHeight);
+
+        if ($totalW * $totalH > self::MAX_PNG_PIXELS) {
+            throw new \RuntimeException(sprintf(
+                'PNG output too large (%d x %d = %d pixels; cap %d). Reduce content, padding or line count.',
+                $totalW, $totalH, $totalW * $totalH, self::MAX_PNG_PIXELS,
+            ));
+        }
 
         $img = imagecreatetruecolor((int) $totalW, (int) $totalH);
         if ($img === false) {
@@ -203,20 +230,32 @@ final class PngRenderer
         $lineNumColor = $this->allocateColor($img, $this->theme->lineNumber);
         $fgColor      = $this->allocateColor($img, $this->theme->foreground);
 
+        $sgrCarry = null;
         foreach ($lines as $i => $line) {
             $y = $textY0 + $i * $cellH;
             if ($this->lineNumbers) {
                 $num = str_pad((string) ($i + 1), max(2, strlen((string) count($lines))), ' ', STR_PAD_LEFT);
                 imagestring($img, self::DEFAULT_FONT, $textX0, $y, $num, $lineNumColor);
             }
-            $segments = AnsiParser::parse($line);
+            $segments = AnsiParser::parse($line, $sgrCarry);
             $x = $textX0 + $gutter * $cellW;
             foreach ($segments as $seg) {
+                $segW = (int) round(Width::of($seg->text) * $cellW);
+                if ($seg->bg !== null) {
+                    imagefilledrectangle(
+                        $img,
+                        (int) $x,
+                        (int) $y,
+                        (int) $x + $segW - 1,
+                        (int) $y + max(1, (int) round($cellH)) - 1,
+                        $this->allocateColor($img, $seg->bg)
+                    );
+                }
                 $color = $seg->fg !== null
                     ? $this->allocateColor($img, $seg->fg)
                     : $fgColor;
                 imagestring($img, self::DEFAULT_FONT, $x, $y, $seg->text, $color);
-                $x += mb_strlen($seg->text, 'UTF-8') * $cellW;
+                $x += $segW;
             }
         }
 

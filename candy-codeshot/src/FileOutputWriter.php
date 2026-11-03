@@ -11,11 +11,14 @@ namespace SugarCraft\CodeShot;
  */
 final class FileOutputWriter implements OutputWriter
 {
+    private string $path;
+
     /** @var resource|null */
     private $fp;
 
     public function __construct(string $path)
     {
+        $this->path = $path;
         // E739: fopen() reports an unopenable path with an E_WARNING *before* it returns
         // false, so the refusal below used to arrive after the noise — under this library's
         // failOnWarning gate that made the honest door look like a defect, and in a log
@@ -60,15 +63,19 @@ final class FileOutputWriter implements OutputWriter
 
     public function write(string $chunk): void
     {
-        if ($this->fp !== null) {
-            fwrite($this->fp, $chunk);
+        if ($this->fp === null) {
+            throw new \LogicException("FileOutputWriter: write() called after close(): {$this->path}");
+        }
+        $written = fwrite($this->fp, $chunk);
+        if ($written === false || $written !== strlen($chunk)) {
+            throw new \RuntimeException("FileOutputWriter: short write to {$this->path}");
         }
     }
 
     public function flush(): void
     {
-        if ($this->fp !== null) {
-            fflush($this->fp);
+        if ($this->fp !== null && !fflush($this->fp)) {
+            throw new \RuntimeException("FileOutputWriter: flush() failed on {$this->path}");
         }
     }
 

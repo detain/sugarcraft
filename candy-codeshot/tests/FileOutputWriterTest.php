@@ -195,14 +195,21 @@ final class FileOutputWriterTest extends TestCase
         $this->assertSame('final content', file_get_contents($this->tempFile));
     }
 
-    public function testWriteAfterCloseDoesNotWrite(): void
+    public function testWriteAfterCloseThrows(): void
     {
-        $writer = new FileOutputWriter($this->tempFile);
+        $path = tempnam(sys_get_temp_dir(), 'cfw');
+        self::assertIsString($path);
+
+        $writer = new FileOutputWriter($path);
         $writer->write('before close');
         $writer->close();
+        self::assertSame('before close', (string) file_get_contents($path));
 
-        // The close sets $this->fp = null, so subsequent writes are no-ops.
-        // The file should still have the content from before close.
-        $this->assertSame('before close', file_get_contents($this->tempFile));
+        $this->expectException(\LogicException::class);
+        try {
+            $writer->write('after close');
+        } finally {
+            unlink($path);
+        }
     }
 }

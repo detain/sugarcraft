@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Shared layout dimension calculator for SVG and PNG renderers.
@@ -32,7 +33,7 @@ final class LayoutCalculator
     ): array {
         $maxCols = 0;
         foreach ($lines as $line) {
-            $cols = mb_strlen(Ansi::strip($line), 'UTF-8');
+            $cols = Width::of(Ansi::strip($line));
             if ($cols > $maxCols) {
                 $maxCols = $cols;
             }

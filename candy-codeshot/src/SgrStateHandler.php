@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeShot;
 
 use SugarCraft\AnsiParser\Parser\SubparamsAwareHandler;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Handler implementation for SGR (Select Graphic Rendition) state parsing.
@@ -57,9 +58,34 @@ final class SgrStateHandler implements SubparamsAwareHandler
         $this->textBuf .= $rune;
     }
 
+    /**
+     * Tab-stop size used to expand HT (0x09) into spaces, in cells. The
+     * upstream parser routes every Ground-state control byte here (its
+     * transition table sends 0x00-0x17 to Execute); only HT has a visual
+     * meaning in a static render, so CR, BS, DEL and friends stay dropped.
+     * 8 cells mirrors xterm's default stops (sugar-core's Width::TAB_WIDTH
+     * is 4 and deliberately not used here).
+     */
+    private const TAB_STOP_CELLS = 8;
+
     public function execute(int $_byte): void
     {
-        // Interface required; byte value not needed for SGR-only handler.
+        if ($_byte !== 0x09) {
+            // Interface required; other control bytes carry no visual
+            // meaning for an SGR-only handler.
+            return;
+        }
+
+        // Count cells without flushing: the pad joins the pending text so
+        // the run keeps one segment and the current SGR attributes (xterm
+        // paints tabs in the colour in force).
+        $column = Width::of($this->textBuf);
+        foreach ($this->segments as $segment) {
+            $column += Width::of($segment->text);
+        }
+
+        $pad = self::TAB_STOP_CELLS - ($column % self::TAB_STOP_CELLS);
+        $this->textBuf .= str_repeat(' ', $pad);
     }
 
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void

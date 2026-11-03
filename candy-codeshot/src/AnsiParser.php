@@ -8,7 +8,7 @@ use SugarCraft\AnsiParser\Parser\Parser;
 
 /**
  * Splits a single line of ANSI-styled text into typed {@see Segment}s
- * for {@see SvgRenderer}.
+ * for {@see SvgRenderer} and {@see PngRenderer}.
  *
  * Handles SGR foreground and background colours (16-color / 256-color
  * / 24-bit RGB) and the standard attribute flags (bold, italic,
@@ -40,10 +40,10 @@ final class AnsiParser
      *
      * @return list<Segment>
      */
-    public static function parse(string $line): array
+    public static function parse(string $line, ?SgrState &$carry = null): array
     {
         $segments = [];
-        $state = new SgrState();
+        $state = $carry ?? new SgrState();
         $textBuf = '';
         $flush = static function () use (&$segments, &$textBuf, &$state): void {
             if ($textBuf === '') {
@@ -62,7 +62,13 @@ final class AnsiParser
 
         $handler = new SgrStateHandler($state, $textBuf, $flush, $segments);
 
-        $parser = new Parser($handler);
+        // Feed a UTF-8-clean line so the strict parser replaces malformed
+        // bytes instead of forwarding them verbatim into the document (M12).
+        if (!mb_check_encoding($line, 'UTF-8')) {
+            $line = mb_convert_encoding($line, 'UTF-8', 'UTF-8');
+        }
+
+        $parser = new Parser($handler, true);
         // The flattened `list<int>` a handler receives cannot distinguish
         // `38:2::80:160:240` (one parameter group) from `38;2;80;160;240`, so
         // the handler reads the ECMA-48 sub-parameter flags the parser PUSHES
@@ -72,6 +78,8 @@ final class AnsiParser
         $parser->feed($line);
         $parser->flush();
         $flush();
+
+        $carry = $state;
 
         return $segments;
     }

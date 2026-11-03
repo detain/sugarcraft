@@ -109,7 +109,7 @@ final class ChromaThemeLoader
             windowRed:      $windowRed,
             windowYellow:   $windowYellow,
             windowGreen:   $windowGreen,
-            fontFamily:    $fontFamily,
+            fontFamily:    self::sanitizeFontFamily($fontFamily),
             fontSize:      14.0,
             lineHeight:    1.4,
         );
@@ -129,5 +129,20 @@ final class ChromaThemeLoader
         }
         $normalized = self::normalizeHex($value);
         return self::isValidHexColor($normalized) ? $normalized : null;
+    }
+
+    /**
+     * Font family names are echoed into SVG attributes and CSS by the
+     * renderers; keep them to a plainly-safe charset and fall back to the
+     * house default instead of trusting theme files (docs-fix era).
+     */
+    private static function sanitizeFontFamily(string $family): string
+    {
+        $p = '/^[A-Za-z0-9 ,"\'\-]+$/';
+        if (preg_match($p, $family) !== 1) {
+            return 'Hack, "JetBrains Mono", Menlo, Consolas, monospace';
+        }
+
+        return $family;
     }
 }

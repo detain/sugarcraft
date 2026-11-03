@@ -133,4 +133,48 @@ final class AnsiParserTest extends TestCase
             $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $hex, "Index $i produced '$hex'");
         }
     }
+    public function testHorizontalTabExpandsToTheNextEightCellStop(): void
+    {
+        $segments = AnsiParser::parse("a\tb");
+        self::assertCount(1, $segments);
+        self::assertSame('a       b', $segments[0]->text);
+    }
+
+    public function testHorizontalTabAtColumnZeroPadsFullStop(): void
+    {
+        $segments = AnsiParser::parse("\tb");
+        self::assertSame('        b', $segments[0]->text);
+    }
+
+    public function testWideGlyphCountsCellsBeforeTab(): void
+    {
+        $segments = AnsiParser::parse("\u{5bbd}\tb");
+        self::assertSame("\u{5bbd}      b", $segments[0]->text);
+    }
+
+    public function testSgrStateCarriesAcrossLinesWhenThreaded(): void
+    {
+        $carry = null;
+        $first = AnsiParser::parse("\x1b[31mA", $carry);
+        $second = AnsiParser::parse('B', $carry);
+        self::assertSame('#cd0000', $first[0]->fg);
+        self::assertSame('#cd0000', $second[0]->fg);
+    }
+
+    public function testSgrStateStaysFreshWithoutCarry(): void
+    {
+        AnsiParser::parse("\x1b[31mA");
+        $second = AnsiParser::parse('B');
+        self::assertNull($second[0]->fg);
+    }
+
+    public function testMalformedUtf8IsScrubbedNotFatal(): void
+    {
+        $segments = AnsiParser::parse("\xff\xfe safe");
+        $text = '';
+        foreach ($segments as $seg) {
+            $text .= $seg->text;
+        }
+        self::assertStringContainsString('safe', $text);
+    }
 }
