@@ -31,4 +31,6 @@ return [
     'confirm.unknown_default' => 'bilinmeyen --default değeri: {value}',
     'cursor_mode.unknown' => 'bilinmeyen imleç modu: {mode}',
     'runtime.no_terminal' => '{command} etkileşimli bir uçbirim gerektirir; denetim uçbirimi yok.',
+    'runtime.bad_timeout' => 'Geçersiz --timeout değeri \'{value}\' — negatif olmayan bir saniye sayısı bekleniyor (0 son tarihi kapatır).',
+    'runtime.unknown_choice' => '{option} için geçersiz değer: \'{value}\'. İzin verilenler: {allowed}.',
 ];

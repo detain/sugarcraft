@@ -79,6 +79,7 @@ final class ChooseModel implements Model
         public readonly int $limit       = 1,
         public readonly array $checked   = [],
         public readonly bool $ordered    = false,
+        public readonly bool $interrupted = false,
     ) {}
 
     public function init(): ?\Closure
@@ -97,7 +98,7 @@ final class ChooseModel implements Model
 
             if (!$listOwnsKey) {
                 if ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c')) {
-                    return [$this->copy(aborted: true), Cmd::quit()];
+                    return [$this->copy(aborted: true, interrupted: $msg->ctrl), Cmd::quit()];
                 }
                 if ($msg->type === KeyType::Enter && !empty($this->list->visibleItems())) {
                     return [$this->copy(submitted: true), Cmd::quit()];
@@ -176,6 +177,7 @@ final class ChooseModel implements Model
 
     public function isSubmitted(): bool { return $this->submitted; }
     public function isAborted(): bool   { return $this->aborted; }
+    public function isInterrupted(): bool { return $this->interrupted; }
     public function isMulti(): bool     { return $this->multi; }
 
     /** Toggle the highlighted index in multi mode. */
@@ -220,15 +222,17 @@ final class ChooseModel implements Model
         ?bool $submitted = null,
         ?bool $aborted = null,
         ?array $checked = null,
+        ?bool $interrupted = null,
     ): self {
         return new self(
-            list:      $list      ?? $this->list,
-            submitted: $submitted ?? $this->submitted,
-            aborted:   $aborted   ?? $this->aborted,
-            multi:     $this->multi,
-            limit:     $this->limit,
-            checked:   $checked   ?? $this->checked,
-            ordered:   $this->ordered,
+            list:       $list       ?? $this->list,
+            submitted:  $submitted  ?? $this->submitted,
+            aborted:    $aborted    ?? $this->aborted,
+            multi:      $this->multi,
+            limit:      $this->limit,
+            checked:    $checked    ?? $this->checked,
+            ordered:    $this->ordered,
+            interrupted: $interrupted ?? $this->interrupted,
         );
     }
 

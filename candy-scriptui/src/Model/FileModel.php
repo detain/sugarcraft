@@ -47,6 +47,7 @@ final class FileModel implements Model
     private function __construct(
         public readonly FilePicker $picker,
         public readonly bool $aborted,
+        public readonly bool $interrupted = false,
     ) {}
 
     public function init(): ?\Closure
@@ -64,7 +65,7 @@ final class FileModel implements Model
         }
         if ($msg instanceof KeyMsg
             && ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c'))) {
-            return [new self($this->picker, true), Cmd::quit()];
+            return [new self($this->picker, true, $msg->ctrl), Cmd::quit()];
         }
         [$next, $cmd] = $this->picker->update($msg);
         $self = new self($next, false);
@@ -79,6 +80,7 @@ final class FileModel implements Model
     public function view(): string  { return $this->picker->view(); }
     public function selected(): ?string { return $this->picker->selected(); }
     public function isAborted(): bool   { return $this->aborted; }
+    public function isInterrupted(): bool { return $this->interrupted; }
     public function isSubmitted(): bool { return !$this->aborted && $this->picker->selected() !== null; }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

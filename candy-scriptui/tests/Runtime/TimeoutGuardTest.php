@@ -84,4 +84,36 @@ final class TimeoutGuardTest extends TestCase
         $guard->disarm();
         $this->assertTrue($guard->fired());
     }
+
+    public function testTryParseSecondsAcceptsValidValues(): void
+    {
+        foreach ([null, 0, 5, 12.5, '0', '5', '12.5', 1e3] as $raw) {
+            $seconds = -1.0;
+            $this->assertTrue(TimeoutGuard::tryParseSeconds($raw, $seconds), 'must accept ' . var_export($raw, true));
+            $this->assertGreaterThanOrEqual(0.0, $seconds);
+        }
+
+        $seconds = -1.0;
+        $this->assertTrue(TimeoutGuard::tryParseSeconds(null, $seconds));
+        $this->assertSame(0.0, $seconds, 'an absent flag means no deadline');
+
+        $seconds = -1.0;
+        $this->assertTrue(TimeoutGuard::tryParseSeconds('12.5', $seconds));
+        $this->assertSame(12.5, $seconds);
+    }
+
+    public function testTryParseSecondsRefusesGarbage(): void
+    {
+        // m-a (2026-11-03): the old `(float)` cast turned 'abc' into 0.0,
+        // silently DISABLING the requested deadline. Fail-open numerics are
+        // exactly what the strict parser exists to refuse.
+        $garbage = ['abc', '', '1e999', -1, '-5.5', true, false, NAN, INF, [1], 'abc5'];
+        foreach ($garbage as $raw) {
+            $seconds = -1.0;
+            $this->assertFalse(
+                TimeoutGuard::tryParseSeconds($raw, $seconds),
+                'must refuse ' . (is_scalar($raw) ? var_export($raw, true) : get_debug_type($raw)),
+            );
+        }
+    }
 }

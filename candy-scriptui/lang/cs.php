@@ -31,4 +31,6 @@ return [
     'confirm.unknown_default' => 'neznámá hodnota --default: {value}',
     'cursor_mode.unknown' => 'neznámý režim kurzoru: {mode}',
     'runtime.no_terminal' => '{command} vyžaduje interaktivní terminál; řídicí terminál není dostupný.',
+    'runtime.bad_timeout' => 'Neplatná hodnota --timeout \'{value}\' — očekává se nezáporný počet sekund (0 deadline vypíná).',
+    'runtime.unknown_choice' => 'Neplatná hodnota pro {option}: \'{value}\'. Pouze: {allowed}.',
 ];

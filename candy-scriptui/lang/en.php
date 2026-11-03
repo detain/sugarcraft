@@ -46,4 +46,6 @@ return [
     'confirm.unknown_default' => 'unknown --default value: {value}',
     'cursor_mode.unknown' => 'unknown --cursor-mode: {mode}',
     'runtime.no_terminal' => '{command} needs an interactive terminal; no controlling terminal is available.',
+    'runtime.bad_timeout' => 'Invalid --timeout value \'{value}\' — expected a non-negative number of seconds (0 disables the deadline).',
+    'runtime.unknown_choice' => 'Invalid value for {option}: \'{value}\'. Allowed: {allowed}.',
 ];

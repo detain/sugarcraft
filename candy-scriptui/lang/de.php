@@ -44,4 +44,6 @@ return [
     'confirm.unknown_default' => 'unbekannter --default-Wert: {value}',
     'cursor_mode.unknown' => 'unbekannter Cursor-Modus: {mode}',
     'runtime.no_terminal' => '{command} benötigt ein interaktives Terminal; kein steuerndes Terminal verfügbar.',
+    'runtime.bad_timeout' => 'Ungültiger --timeout-Wert \'{value}\' — erwartet wird eine nicht negative Sekundenanzahl (0 deaktiviert die Frist).',
+    'runtime.unknown_choice' => 'Ungültiger Wert für {option}: \'{value}\'. Erlaubt: {allowed}.',
 ];

@@ -19,7 +19,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * Scroll long input. Reads from stdin or `--file` and lets the user
  * navigate with the standard pager keys (↑/↓ / PgUp / PgDn / Home / End
- * / `q` to quit).
+ * / `q` to quit). Quitting with q or Esc exits 0; Ctrl+C exits 130, a
+ * --timeout deadline exits 124, and an OS signal exits 128+signum.
  */
 #[AsCommand(name: 'pager', description: 'Scroll long input in a fullscreen pager.')]
 final class PagerCommand extends Command
@@ -39,6 +40,14 @@ final class PagerCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // Refuse a typo'd deadline BEFORE reading the file/stdin — and
+            // never let it silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+
         $file = $input->getOption('file');
         if (is_string($file) && $file !== '') {
             $raw = @file_get_contents($file);
@@ -72,8 +81,9 @@ final class PagerCommand extends Command
             return Command::FAILURE;
         }
         $program = new Program($model, $options);
-        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
-        $program->run();
+        $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
+        /** @var PagerModel $final */
+        $final = $program->run();
         $guard->disarm();
 
         // Deadline elapsed — the pager auto-exits with the timeout code.
@@ -85,6 +95,12 @@ final class PagerCommand extends Command
         $signalExit = SignalExit::code($program->stopSignal());
         if ($signalExit !== null) {
             return $signalExit;
+        }
+
+        // Typed Ctrl+C (KeyMsg — raw mode clears ISIG) must not exit 0 as
+        // if the page had been read; q/Esc stay a normal 0 finish.
+        if ($final->isInterrupted()) {
+            return SignalExit::EXIT_INTERRUPTED;
         }
         return Command::SUCCESS;
     }

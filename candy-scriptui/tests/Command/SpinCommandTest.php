@@ -75,6 +75,75 @@ final class SpinCommandTest extends TestCase
     }
 
     /**
+     * Cluster 6 (2026-11-03): the timeout path used to close the child and
+     * return 124 WITHOUT flushing the captured buffers — with `--show-output`
+     * set, everything the child had printed was silently dropped. The rewrite
+     * flushes stdout/stderr on every exit path, so a timed-out run still
+     * surfaces what the child managed to produce.
+     */
+    public function testTimeoutStillFlushesShowOutputBuffer(): void
+    {
+        $fake = new FakeProcess();
+        $fake->bufferedStdout = 'TIMEOUT-STDOUT-MARKER'; // never exits -> deadline wins
+        $command = $this->spinCommandWith($fake);
+
+        $loop = new StreamSelectLoop();
+        \React\EventLoop\Loop::set($loop);
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+
+        $tester = new CommandTester($command);
+        $status = $tester->execute(
+            ['argv' => ['sleep', '9999'], '--timeout' => '0.1', '--show-output' => true],
+            ['decorated' => false],
+        );
+
+        $this->assertSame(TimeoutGuard::EXIT_TIMEOUT, $status);
+        $this->assertTrue($fake->stdoutRead, 'the timeout path must still read the captured stdout');
+        $this->assertStringContainsString('TIMEOUT-STDOUT-MARKER', $tester->getDisplay());
+    }
+
+    /** The stderr twin: `--show-error` consumes the buffer on the timeout path too. */
+    public function testTimeoutStillReadsShowErrorBuffer(): void
+    {
+        $fake = new FakeProcess();
+        $fake->bufferedStderr = ''; // exercise the branch without polluting the runner's STDERR
+        $command = $this->spinCommandWith($fake);
+
+        $loop = new StreamSelectLoop();
+        \React\EventLoop\Loop::set($loop);
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+
+        $status = (new CommandTester($command))->execute(
+            ['argv' => ['sleep', '9999'], '--timeout' => '0.1', '--show-error' => true],
+            ['decorated' => false],
+        );
+
+        $this->assertSame(TimeoutGuard::EXIT_TIMEOUT, $status);
+        $this->assertTrue($fake->stderrRead, 'the timeout path must still read the captured stderr');
+    }
+
+    /** Unknown `--align` values must be refused, not silently coerced (m-a). */
+    public function testUnknownAlignIsRefused(): void
+    {
+        $fake = new FakeProcess();
+        $fake->finish(0);
+        $command = $this->spinCommandWith($fake);
+
+        $loop = new StreamSelectLoop();
+        \React\EventLoop\Loop::set($loop);
+        $loop->addTimer(2.0, static fn () => $loop->stop());
+
+        $tester = new CommandTester($command);
+        $status = $tester->execute(
+            ['argv' => ['true'], '--timeout' => '0', '--align' => 'middle'],
+            ['decorated' => false],
+        );
+
+        $this->assertSame(\Symfony\Component\Console\Command\Command::FAILURE, $status);
+        $this->assertSame('', $this->readRendered(), 'no UI may start for a refused --align value');
+    }
+
+    /**
      * `--timeout 0` (the default) leaves the run unbounded: a child that
      * completes normally still yields its own exit code and is never
      * terminated. Guards the timeout wiring against clobbering the happy path.

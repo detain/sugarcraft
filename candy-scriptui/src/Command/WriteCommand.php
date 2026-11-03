@@ -18,8 +18,9 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Multi-line text editor. Press Ctrl+D to submit, Esc / Ctrl+C to
- * abort. Submitted text is printed verbatim on stdout.
+ * Multi-line text editor. Press Ctrl+D to submit; Esc aborts (exit 1),
+ * Ctrl+C cancels (exit 130), a --timeout deadline exits 124, and an OS
+ * signal exits 128+signum. Submitted text is printed verbatim on stdout.
  */
 #[AsCommand(name: 'write', description: 'Open a multi-line editor; print the result on submit (Ctrl+D).')]
 final class WriteCommand extends Command
@@ -45,6 +46,13 @@ final class WriteCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // A typo'd deadline must not silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+
         $cursorMode = strtolower((string) $input->getOption('cursor-mode'));
         if (!CursorMode::isKnown($cursorMode)) {
             $output->writeln('<error>' . Lang::t('cursor_mode.unknown', ['mode' => $cursorMode]) . '</error>');
@@ -69,7 +77,7 @@ final class WriteCommand extends Command
             return Command::FAILURE;
         }
         $program = new Program($model, $options);
-        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
+        $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var WriteModel $final */
         $final = $program->run();
         $guard->disarm();
@@ -83,6 +91,12 @@ final class WriteCommand extends Command
         $signalExit = SignalExit::code($program->stopSignal());
         if ($signalExit !== null) {
             return $signalExit;
+        }
+
+        // Typed Ctrl+C (KeyMsg — raw mode clears ISIG) reads as a 130
+        // cancellation, distinct from the Esc abort below.
+        if ($final->isInterrupted()) {
+            return SignalExit::EXIT_INTERRUPTED;
         }
 
         if ($final->isAborted() || !$final->isSubmitted()) {

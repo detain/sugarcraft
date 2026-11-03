@@ -67,6 +67,48 @@ final class TimeoutGuard
     }
 
     /**
+     * Strict parse of a `--timeout` option value into armable seconds.
+     *
+     * A deadline flag must fail LOUD, never open: a bare `(float)` cast
+     * maps a typo like `--timeout abc` to 0.0, and 0.0 means "no limit"
+     * here — the run would then hang exactly when the caller asked for a
+     * bound. Only a non-negative finite number (null = option absent) is
+     * accepted; everything else is refused so the command can surface a
+     * diagnostic instead of arming an inert guard.
+     *
+     * @param mixed $raw     Raw option value (string|int|float|null).
+     * @param float $seconds Out-param: the parsed deadline in seconds
+     *                       (0.0 = inert) whenever true is returned.
+     */
+    public static function tryParseSeconds(mixed $raw, float &$seconds): bool
+    {
+        $seconds = 0.0;
+        if ($raw === null) {
+            return true;
+        }
+        if (is_int($raw)) {
+            $seconds = (float) $raw;
+            return $seconds >= 0.0;
+        }
+        if (is_float($raw)) {
+            if (!is_finite($raw)) {
+                return false;
+            }
+            $seconds = $raw;
+            return $seconds >= 0.0;
+        }
+        if (!is_string($raw) || !is_numeric($raw)) {
+            return false;
+        }
+        $parsed = (float) $raw;
+        if (!is_finite($parsed) || $parsed < 0.0) {
+            return false;
+        }
+        $seconds = $parsed;
+        return true;
+    }
+
+    /**
      * Cancel a still-pending deadline. Safe (and cheap) to call after the
      * timer already fired, when the guard was never armed, or more than once
      * — the guard forgets its timer either way, so this is idempotent.

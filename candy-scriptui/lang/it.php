@@ -31,4 +31,6 @@ return [
     'confirm.unknown_default' => 'valore --default sconosciuto: {value}',
     'cursor_mode.unknown' => 'modalità cursore sconosciuta: {mode}',
     'runtime.no_terminal' => '{command} richiede un terminale interattivo; nessun terminale di controllo disponibile.',
+    'runtime.bad_timeout' => 'Valore di --timeout non valido \'{value}\' — previsto un numero di secondi non negativo (0 disattiva il termine).',
+    'runtime.unknown_choice' => 'Valore non valido per {option}: \'{value}\'. Consentiti: {allowed}.',
 ];

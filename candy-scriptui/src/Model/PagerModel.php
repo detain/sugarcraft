@@ -74,6 +74,7 @@ final class PagerModel implements Model
     private function __construct(
         public readonly Viewport $viewport,
         public readonly bool $exited,
+        public readonly bool $interrupted = false,
     ) {}
 
     public function init(): ?\Closure
@@ -93,7 +94,10 @@ final class PagerModel implements Model
             if ($msg->type === KeyType::Escape
                 || ($msg->ctrl && $msg->rune === 'c')
                 || ($msg->type === KeyType::Char && $msg->rune === 'q' && !$msg->ctrl)) {
-                return [new self($this->viewport, true), Cmd::quit()];
+                // 'q'/Esc are a normal finish (exit 0); Ctrl+C is a
+                // cancellation and the command must exit 130, not pretend
+                // the page was read to the end.
+                return [new self($this->viewport, true, $msg->ctrl && $msg->rune === 'c'), Cmd::quit()];
             }
         }
         [$next, $cmd] = $this->viewport->update($msg);
@@ -102,6 +106,7 @@ final class PagerModel implements Model
 
     public function view(): string  { return $this->viewport->view(); }
     public function isExited(): bool { return $this->exited; }
+    public function isInterrupted(): bool { return $this->interrupted; }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {

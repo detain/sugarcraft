@@ -119,6 +119,7 @@ final class FilterModel implements Model
         // for. $allItems is fixed at construction, so text is the only
         // input that can invalidate the cache.
         public readonly string $lastFilterText = '',
+        public readonly bool $interrupted = false,
         ?FuzzyMatcher $matcher = null,
     ) {
         $this->matcher = $matcher ?? new SmithWatermanMatcher();
@@ -139,7 +140,7 @@ final class FilterModel implements Model
         }
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c')) {
-                return [$this->copy(aborted: true), Cmd::quit()];
+                return [$this->copy(aborted: true, interrupted: $msg->ctrl), Cmd::quit()];
             }
             if ($msg->type === KeyType::Enter) {
                 $visible = $this->fuzzy ? $this->fuzzyVisibleItems() : $this->list->visibleItems();
@@ -329,6 +330,7 @@ final class FilterModel implements Model
 
     public function isSubmitted(): bool { return $this->submitted; }
     public function isAborted(): bool   { return $this->aborted; }
+    public function isInterrupted(): bool { return $this->interrupted; }
     public function isMulti(): bool     { return $this->multi; }
 
     /**
@@ -392,6 +394,7 @@ final class FilterModel implements Model
         ?array $checked = null,
         ?array $fuzzyResults = null,
         ?string $lastFilterText = null,
+        ?bool $interrupted = null,
     ): self {
         return new self(
             list:           $list           ?? $this->list,
@@ -405,6 +408,7 @@ final class FilterModel implements Model
             allItems:       $this->allItems,
             fuzzyResults:   $fuzzyResults   ?? $this->fuzzyResults,
             lastFilterText: $lastFilterText ?? $this->lastFilterText,
+            interrupted:    $interrupted    ?? $this->interrupted,
             matcher:        $this->matcher,
         );
     }

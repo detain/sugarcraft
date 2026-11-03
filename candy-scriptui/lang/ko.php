@@ -31,4 +31,6 @@ return [
     'confirm.unknown_default' => '알 수 없는 --default 값: {value}',
     'cursor_mode.unknown' => '알 수 없는 커서 모드: {mode}',
     'runtime.no_terminal' => '{command}에는 대화형 터미널이 필요합니다. 제어 터미널을 사용할 수 없습니다.',
+    'runtime.bad_timeout' => '--timeout 값 \'{value}\'이(가) 잘못되었습니다 — 0 이상의 초 수를 입력하세요 (0이면 제한 없음).',
+    'runtime.unknown_choice' => '{option}의 값 \'{value}\'이(가) 잘못되었습니다. 허용: {allowed}.',
 ];

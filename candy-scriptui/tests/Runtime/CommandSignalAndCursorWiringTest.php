@@ -124,4 +124,79 @@ final class CommandSignalAndCursorWiringTest extends TestCase
         $this->assertStringContainsString('MAX_TIMEOUT_SECONDS = 86400.0', $src,
             'the documented 24h ceiling must stay paired with the clamp');
     }
+
+    /**
+     * m-a (2026-11-03): every command owning a --timeout must parse it through
+     * the strict TimeoutGuard::tryParseSeconds and refuse garbage BEFORE any UI
+     * starts — the old (float) cast turned 'abc' into "no deadline".
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function timeoutParsingCommandProvider(): array
+    {
+        $rows = self::commandSourceProvider();
+        $rows['SpinCommand'] = ['SpinCommand'];
+        return $rows;
+    }
+
+    /**
+     * @dataProvider timeoutParsingCommandProvider
+     */
+    public function testEveryTimeoutCommandParsesTheDeadlineStrictlyFirst(string $name): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/' . $name . '.php');
+
+        // SpinCommand builds its Program inside an injected factory closure, so
+        // the first point of no return there is spawning the child; every other
+        // command paints through InteractiveRuntime::programOptions inline.
+        $anchor = $name === 'SpinCommand' ? '($this->processFactory)(' : 'InteractiveRuntime::programOptions';
+
+        $parse = strpos($src, 'tryParseSeconds(');
+        $ui = strpos($src, $anchor);
+        self::assertNotFalse($parse, $name . ' must route --timeout through tryParseSeconds');
+        self::assertNotFalse($ui, $name . ' must reach its UI/child through ' . $anchor);
+        self::assertLessThan($ui, $parse,
+            $name . ' must refuse a bad --timeout BEFORE arming the UI');
+        self::assertStringContainsString('runtime.bad_timeout', $src);
+    }
+
+    /**
+     * Cluster 4 (2026-11-03): the abort models must distinguish "Esc" (exit 1
+     * /2 semantics) from "Ctrl+C" (130); every command owning one maps
+     * isInterrupted() through SignalExit::EXIT_INTERRUPTED before its plain
+     * abort path, so a typed cancellation can never masquerade as an answer.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function interruptedMappingCommandProvider(): array
+    {
+        return self::commandSourceProvider();
+    }
+
+    /**
+     * @dataProvider interruptedMappingCommandProvider
+     */
+    public function testAbortModelCommandsMapTypedCtrlCTo130(string $name): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/' . $name . '.php');
+
+        self::assertStringContainsString('isInterrupted()', $src,
+            $name . ' must consult the model interruption flag');
+        self::assertStringContainsString('return SignalExit::EXIT_INTERRUPTED;', $src,
+            $name . ' must exit 130 for a typed Ctrl+C');
+    }
+
+    /** The spin path: signal deaths consult stopSignal (SIGTERM→143) and Esc maps to 130. */
+    public function testSpinCommandConsultsSignalsAndMapsEscTo130(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/SpinCommand.php');
+        self::assertStringContainsString('SignalExit::code($program->stopSignal())', $src,
+            'a SIGTERM-killed spin run must exit 143, not 130');
+
+        $model = (string) file_get_contents(__DIR__ . '/../../src/Model/SpinModel.php');
+        self::assertStringContainsString('SignalExit::EXIT_INTERRUPTED', $model,
+            'the spin abort sentinel must be the conventional 130');
+        self::assertStringNotContainsString('-1,', $model,
+            'the old negative sentinel must be gone');
+    }
 }

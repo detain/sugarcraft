@@ -40,6 +40,7 @@ final class ConfirmModel implements Model
         public readonly Confirm $field,
         public readonly bool $submitted,
         public readonly bool $aborted,
+        public readonly bool $interrupted = false,
     ) {}
 
     public function init(): ?\Closure
@@ -57,7 +58,10 @@ final class ConfirmModel implements Model
         }
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c')) {
-                return [new self($this->field, false, true), Cmd::quit()];
+                // Ctrl+C and Esc both abort, but they are DIFFERENT exits:
+                // the shell convention reserves 130 for cancellation, so the
+                // command layer must be able to tell them apart.
+                return [new self($this->field, false, true, $msg->ctrl), Cmd::quit()];
             }
             // Direct y / n keys also commit.
             if (!$msg->ctrl && $msg->type === KeyType::Char) {
@@ -89,6 +93,7 @@ final class ConfirmModel implements Model
     public function answer(): bool       { return (bool) $this->field->value(); }
     public function isSubmitted(): bool  { return $this->submitted; }
     public function isAborted(): bool    { return $this->aborted; }
+    public function isInterrupted(): bool { return $this->interrupted; }
 
     private static function refocus(Confirm $f): Confirm
     {

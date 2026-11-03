@@ -13,12 +13,15 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\ScriptUi\Process\Process;
+use SugarCraft\ScriptUi\Runtime\SignalExit;
 
 /**
  * Run a child {@see Process} while a {@see Spinner} animates beside an
  * optional status title. Each spinner tick polls the process; when the
  * child exits, the model captures its code and stops the loop. Pressing
- * `Esc` or `Ctrl+C` terminates the child early and exits with -1.
+ * `Esc` or `Ctrl+C` terminates the child early; the run then reports
+ * {@see SignalExit::EXIT_INTERRUPTED} (130), the conventional cancellation
+ * code — never a negative value, which `exit()` would wrap to 255.
  */
 final class SpinModel implements Model
 {
@@ -63,7 +66,7 @@ final class SpinModel implements Model
         if ($msg instanceof KeyMsg
             && ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c'))) {
             $this->process->terminate();
-            return [self::finish($this->spinner, $this->process, $this->title, -1, $this->align), Cmd::quit()];
+            return [self::finish($this->spinner, $this->process, $this->title, SignalExit::EXIT_INTERRUPTED, $this->align), Cmd::quit()];
         }
         if ($msg instanceof TickMsg && $msg->id === $this->spinner->id) {
             $code = $this->process->exitCode();

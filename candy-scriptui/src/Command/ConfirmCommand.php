@@ -20,7 +20,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Confirmation prompt. Exit code reflects the answer: 0 for yes, 1 for
- * no, 2 for abort (Esc / Ctrl-C).
+ * no, 2 for an Esc abort, 130 for a Ctrl+C cancellation (typed or
+ * kill -INT), 124 when a --timeout deadline elapses, and 128+signum for
+ * an OS signal that stopped the loop (e.g. SIGTERM -> 143).
  */
 #[Example('candy-scriptui confirm --default=yes "Deploy?"', 'Ask with Yes pre-selected.')]
 #[AsCommand(name: 'confirm', description: 'Prompt for a yes/no answer; exit code reflects the choice.')]
@@ -46,6 +48,13 @@ final class ConfirmCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // A typo'd deadline must not silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+
         $defaultRaw = strtolower((string) $input->getOption('default'));
         if ($defaultRaw !== '' && !in_array($defaultRaw, ['yes', 'y', 'no', 'n'], true)) {
             // A typo'd default must not silently flip to "no" — refusing is
@@ -78,7 +87,7 @@ final class ConfirmCommand extends Command
             return Command::FAILURE;
         }
         $program = new Program($model, $options);
-        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
+        $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var ConfirmModel $final */
         $final = $program->run();
         $guard->disarm();
@@ -95,6 +104,12 @@ final class ConfirmCommand extends Command
             return $signalExit;
         }
 
+        // Typed Ctrl+C lands as a KeyMsg (raw mode clears ISIG), not as an
+        // OS signal — the model records it so Esc-abort (2) stays
+        // distinguishable from Ctrl+C cancellation (130).
+        if ($final->isInterrupted()) {
+            return SignalExit::EXIT_INTERRUPTED;
+        }
         if ($final->isAborted()) {
             return self::EXIT_ABORT;
         }

@@ -31,4 +31,6 @@ return [
     'confirm.unknown_default' => 'неизвестное значение --default: {value}',
     'cursor_mode.unknown' => 'неизвестный режим курсора: {mode}',
     'runtime.no_terminal' => 'команде {command} нужен интерактивный терминал; управляющий терминал недоступен.',
+    'runtime.bad_timeout' => 'Недопустимое значение --timeout «{value}» — ожидается неотрицательное число секунд (0 отключает дедлайн).',
+    'runtime.unknown_choice' => 'Недопустимое значение для {option}: «{value}». Допустимо: {allowed}.',
 ];

@@ -48,6 +48,12 @@ final class ChooseCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // A typo'd deadline must not silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
         /** @var list<string> $options */
         $options = $input->getArgument('options');
         $height  = (int) $input->getOption('height');
@@ -88,7 +94,7 @@ final class ChooseCommand extends Command
             return Command::FAILURE;
         }
         $program = new Program($model, $options);
-        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
+        $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var ChooseModel $final */
         $final = $program->run();
         $guard->disarm();
@@ -103,6 +109,13 @@ final class ChooseCommand extends Command
         $signalExit = SignalExit::code($program->stopSignal());
         if ($signalExit !== null) {
             return $signalExit;
+        }
+
+        // Typed Ctrl+C (KeyMsg — raw mode clears ISIG) reads as a 130
+        // cancellation; renderResult below would otherwise fold it into
+        // the generic Esc-failure exit.
+        if ($final->isInterrupted()) {
+            return SignalExit::EXIT_INTERRUPTED;
         }
 
         $noSelected = $input->getOption('no-selected');

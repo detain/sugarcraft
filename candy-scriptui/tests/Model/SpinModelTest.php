@@ -65,7 +65,9 @@ final class SpinModelTest extends TestCase
         $model = SpinModel::spawn($proc, '');
         [$next, $cmd] = $model->update(new KeyMsg(KeyType::Escape));
         $this->assertTrue($next->isDone());
-        $this->assertSame(-1, $next->exitCode());
+        // Cluster 4 (2026-11-03): an abort surfaces the conventional 130,
+        // not a negative code (which the shell folds into 255).
+        $this->assertSame(130, $next->exitCode());
         $this->assertTrue($proc->terminated);
         $this->assertNotNull($cmd);
     }
@@ -76,6 +78,7 @@ final class SpinModelTest extends TestCase
         $model = SpinModel::spawn($proc, '');
         [$next, ] = $model->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
         $this->assertTrue($next->isDone());
+        $this->assertSame(130, $next->exitCode());
         $this->assertTrue($proc->terminated);
     }
 

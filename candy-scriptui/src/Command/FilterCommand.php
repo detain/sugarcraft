@@ -22,7 +22,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  *   $ ls | candy-scriptui filter
  *
- * Enter submits the highlighted match; Esc / Ctrl-C aborts.
+ * Enter submits the highlighted match; Esc aborts (exit 1), Ctrl+C
+ * cancels (exit 130), a --timeout deadline exits 124, and an OS signal
+ * exits 128+signum.
  */
 #[AsCommand(name: 'filter', description: 'Incremental filter over stdin lines.')]
 final class FilterCommand extends Command
@@ -54,6 +56,14 @@ final class FilterCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // Refuse a typo'd deadline BEFORE consuming stdin — and never
+            // let it silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+
         $lines = self::stdinLines();
         if ($lines === []) {
             return Command::FAILURE;
@@ -87,7 +97,7 @@ final class FilterCommand extends Command
             return Command::FAILURE;
         }
         $program = new Program($model, $options);
-        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
+        $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var FilterModel $final */
         $final = $program->run();
         $guard->disarm();
@@ -101,6 +111,13 @@ final class FilterCommand extends Command
         $signalExit = SignalExit::code($program->stopSignal());
         if ($signalExit !== null) {
             return $signalExit;
+        }
+
+        // Typed Ctrl+C (KeyMsg — raw mode clears ISIG) reads as a 130
+        // cancellation; renderResult below would otherwise fold it into
+        // the generic Esc-failure exit.
+        if ($final->isInterrupted()) {
+            return SignalExit::EXIT_INTERRUPTED;
         }
 
         return self::renderResult(

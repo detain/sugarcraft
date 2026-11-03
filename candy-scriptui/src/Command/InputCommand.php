@@ -20,7 +20,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Read a single line from the user. Prints the entered value on stdout;
- * exits 1 when aborted.
+ * exits 1 when aborted (Esc), 130 on Ctrl+C cancellation, 124 when a
+ * --timeout deadline elapses, and 128+signum on an OS signal.
  */
 #[Example('candy-scriptui input --password', 'Read a secret without echoing it.')]
 #[AsCommand(name: 'input', description: 'Prompt for a single line of input.')]
@@ -44,6 +45,13 @@ final class InputCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // A typo'd deadline must not silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+
         $cursorMode = strtolower((string) $input->getOption('cursor-mode'));
         if (!CursorMode::isKnown($cursorMode)) {
             $output->writeln('<error>' . Lang::t('cursor_mode.unknown', ['mode' => $cursorMode]) . '</error>');
@@ -66,7 +74,7 @@ final class InputCommand extends Command
             return Command::FAILURE;
         }
         $program = new Program($model, $options);
-        $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
+        $guard = TimeoutGuard::arm($loop, $timeoutSeconds, fn () => $program->kill());
         /** @var InputModel $final */
         $final = $program->run();
         $guard->disarm();
@@ -80,6 +88,12 @@ final class InputCommand extends Command
         $signalExit = SignalExit::code($program->stopSignal());
         if ($signalExit !== null) {
             return $signalExit;
+        }
+
+        // Typed Ctrl+C (KeyMsg — raw mode clears ISIG) reads as a 130
+        // cancellation, distinct from an Esc abort below.
+        if ($final->isInterrupted()) {
+            return SignalExit::EXIT_INTERRUPTED;
         }
 
         if ($final->isAborted() || !$final->isSubmitted()) {

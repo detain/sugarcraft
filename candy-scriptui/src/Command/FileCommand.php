@@ -46,6 +46,13 @@ final class FileCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // A typo'd deadline must not silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+
         $cwd = $input->getArgument('cwd');
         $cwd = is_string($cwd) && $cwd !== '' ? $cwd : null;
 
@@ -78,7 +85,10 @@ final class FileCommand extends Command
             return Command::FAILURE;
         }
         $program = new Program($model, $options);
-        $seconds = min((float) $input->getOption('timeout'), self::MAX_TIMEOUT_SECONDS);
+        // Oversized deadlines clamp to MAX_TIMEOUT_SECONDS (the help text
+        // discloses the cap); the parse above already refused non-numerics
+        // instead of silently casting them to 0 (= no deadline).
+        $seconds = min($timeoutSeconds, self::MAX_TIMEOUT_SECONDS);
         $guard = TimeoutGuard::arm($loop, $seconds, fn () => $program->kill());
         /** @var FileModel $final */
         $final = $program->run();
@@ -92,6 +102,11 @@ final class FileCommand extends Command
         $signalExit = SignalExit::code($program->stopSignal());
         if ($signalExit !== null) {
             return $signalExit;
+        }
+        // Typed Ctrl+C (KeyMsg — raw mode clears ISIG) exits 130 here too;
+        // the Esc abort below keeps exit 1.
+        if ($final->isInterrupted()) {
+            return SignalExit::EXIT_INTERRUPTED;
         }
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;

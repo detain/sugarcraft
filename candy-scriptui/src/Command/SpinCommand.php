@@ -14,6 +14,7 @@ use SugarCraft\ScriptUi\Model\SpinModel;
 use SugarCraft\ScriptUi\Process\Process;
 use SugarCraft\ScriptUi\Process\RealProcess;
 use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
+use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -30,9 +31,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * The child inherits the parent's stdout/stderr so its output overlays
  * the spinner naturally. Use shell redirection if you want silent
- * execution. Esc / Ctrl-C terminate the child and exit with 130 (the
- * conventional 128+SIGINT code); the normal exit code is forwarded as
- * the candy-scriptui exit code.
+ * execution. Esc / Ctrl+C terminate the child and exit with 130 (the
+ * conventional 128+SIGINT code); SIGTERM exits 143 and a --timeout
+ * deadline exits 124. The child's own exit code is forwarded as the
+ * candy-scriptui exit code — note that a child exiting 2/124/130/143
+ * is therefore indistinguishable from the runner's own reserved codes
+ * (gum parity: the child's verdict always wins).
  */
 #[Example('candy-scriptui spin -- npm ci', 'Run a build behind a spinner.')]
 #[AsCommand(name: 'spin', description: 'Run a command while showing a spinner.')]
@@ -97,10 +101,17 @@ final class SpinCommand extends Command
             ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Kill the spawned command after N seconds (0 = no limit).', 0);
     }
 
-    public const EXIT_INTERRUPTED = 130; // 128 + SIGINT(2)
+    public const EXIT_INTERRUPTED = SignalExit::EXIT_INTERRUPTED;
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $timeoutSeconds = 0.0;
+        if (!TimeoutGuard::tryParseSeconds($input->getOption('timeout'), $timeoutSeconds)) {
+            // A typo'd deadline must not silently disable itself (fail-open).
+            fwrite(STDERR, Lang::t('runtime.bad_timeout', ['value' => (string) $input->getOption('timeout')]) . "\n");
+            return Command::FAILURE;
+        }
+
         /** @var list<string> $argv */
         $argv  = $input->getArgument('argv');
         $title = (string) $input->getOption('title');
@@ -116,6 +127,15 @@ final class SpinCommand extends Command
         if ($align === '') {
             $align = 'left';
         }
+        if (!in_array($align, ['left', 'right'], true)) {
+            // Anything else would silently render left-aligned; refuse loudly.
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option'  => '--align',
+                'value'   => $align,
+                'allowed' => 'left|right',
+            ]) . "\n");
+            return Command::FAILURE;
+        }
 
         $process = ($this->processFactory)($argv, $showOutput, $showError);
         $model   = SpinModel::spawn($process, $title, $style, $align);
@@ -127,7 +147,7 @@ final class SpinCommand extends Command
         // the Program alone would orphan the still-running command.
         $guard = TimeoutGuard::arm(
             $loop,
-            (float) $input->getOption('timeout'),
+            $timeoutSeconds,
             function () use ($process, $program): void {
                 $process->terminate();
                 $program->kill();
@@ -138,26 +158,35 @@ final class SpinCommand extends Command
         $final = $program->run();
         $guard->disarm();
 
-        // Check the deadline FIRST: a timed-out run also leaves exitCode()
-        // null, so without this the interrupted->130 branch below would
-        // mis-report a timeout as a Ctrl-C. The child was already signalled
-        // in the onFire closure; close() reaps it so the handle doesn't leak.
+        // Decide the exit code with the deadline checked FIRST: a timed-out
+        // run also leaves exitCode() null, so any other order would
+        // mis-report a timeout as a cancellation.
         if ($guard->fired()) {
-            $process->close();
-            return TimeoutGuard::EXIT_TIMEOUT;
+            $code = TimeoutGuard::EXIT_TIMEOUT;
+        } else {
+            // OS-level signals (kill -INT / -TERM) land through the
+            // Program's stopSignal. Raw mode clears ISIG, so a TYPED
+            // Ctrl+C never becomes a signal here — it arrives as a KeyMsg
+            // and SpinModel records it as exit code 130.
+            $signalExit = SignalExit::code($program->stopSignal());
+            if ($signalExit !== null) {
+                $process->terminate();
+                $code = $signalExit;
+            } else {
+                $code = $final->exitCode();
+                if ($code === null) {
+                    // Loop stopped with no child verdict (e.g. a QuitMsg
+                    // race) — treat as cancellation and make sure the
+                    // child dies with it.
+                    $process->terminate();
+                    $code = self::EXIT_INTERRUPTED;
+                }
+            }
         }
 
-        $code = $final->exitCode();
-        // The Program installs a SIGINT handler that stops the loop
-        // *before* dispatching a KeyMsg, so a Ctrl-C run never reaches
-        // SpinModel::update() and exitCode stays null. Treat any
-        // non-completed run as cancellation: terminate the child and
-        // surface 130 (the conventional SIGINT exit code) so calling
-        // scripts can detect interruption.
-        if ($code === null) {
-            $process->terminate();
-            $code = self::EXIT_INTERRUPTED;
-        }
+        // Flush captured output on EVERY exit path — including the
+        // timeout — so `spin --timeout N --show-output` never swallows
+        // what the child managed to print.
         if ($showOutput) {
             $output->write($process->stdout());
         }

@@ -46,6 +46,7 @@ final class WriteModel implements Model
         public readonly bool $submitted,
         public readonly bool $aborted,
         public readonly string $header = '',
+        public readonly bool $interrupted = false,
     ) {}
 
     public function init(): ?\Closure
@@ -69,7 +70,9 @@ final class WriteModel implements Model
                 return [new self($this->area, true, false, $this->header), Cmd::quit()];
             }
             if ($msg->ctrl && $msg->rune === 'c') {
-                return [new self($this->area, false, true, $this->header), Cmd::quit()];
+                // Same distinction as everywhere else: cancellation is 130,
+                // not the Esc-abort code.
+                return [new self($this->area, false, true, $this->header, true), Cmd::quit()];
             }
         }
         [$next, $cmd] = $this->area->update($msg);
@@ -84,6 +87,7 @@ final class WriteModel implements Model
     public function value(): string { return $this->area->value(); }
     public function isSubmitted(): bool { return $this->submitted; }
     public function isAborted(): bool   { return $this->aborted; }
+    public function isInterrupted(): bool { return $this->interrupted; }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {

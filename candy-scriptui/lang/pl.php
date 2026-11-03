@@ -31,4 +31,6 @@ return [
     'confirm.unknown_default' => 'nieznana wartość --default: {value}',
     'cursor_mode.unknown' => 'nieznany tryb kursora: {mode}',
     'runtime.no_terminal' => '{command} wymaga interaktywnego terminala; brak dostępnego terminala sterującego.',
+    'runtime.bad_timeout' => 'Nieprawidłowa wartość --timeout \'{value}\' — oczekowano liczby sekund nieujemnej (0 wyłącza limit).',
+    'runtime.unknown_choice' => 'Nieprawidłowa wartość dla {option}: \'{value}\'. Dozwolone: {allowed}.',
 ];

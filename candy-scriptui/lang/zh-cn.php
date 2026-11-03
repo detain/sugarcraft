@@ -31,4 +31,6 @@ return [
     'confirm.unknown_default' => '未知 --default 值：{value}',
     'cursor_mode.unknown' => '未知光标模式：{mode}',
     'runtime.no_terminal' => '{command} 需要交互式终端；没有可用的控制终端。',
+    'runtime.bad_timeout' => '--timeout 值“{value}”无效——需要非负秒数（0 表示不限）。',
+    'runtime.unknown_choice' => '{option} 的值“{value}”无效。允许：{allowed}。',
 ];

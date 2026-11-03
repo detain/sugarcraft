@@ -239,9 +239,22 @@ discovered by walking up from the package directory to find the nearest
   forwarded from the external command run by `spin`.
 - `2`   — `confirm` aborted (Esc) — distinct from a "no" answer.
 - `124` — a `--timeout` deadline elapsed before the interaction finished
-  (gum-compatible, matches GNU `timeout(1)`).
-- `130` — interrupted by Ctrl-C / SIGINT (128 + 2).
-- `143` — terminated by SIGTERM (128 + 15).
+  (gum-compatible, matches GNU `timeout(1)`). A malformed `--timeout` value
+  is refused up front (exit `1` on STDERR) — it is never coerced to "no
+  deadline". For `spin`, the captured child output is still flushed when
+  `--show-output` / `--show-error` are set, so a timed-out build or test run
+  shows what it managed to print.
+- `130` — cancelled with Ctrl+C, whether typed (raw mode reports it as a
+  key, and the models record it separately from Esc) or delivered as SIGINT
+  (128 + 2). `spin` likewise exits `130` when its child is interrupted with
+  Esc and never reports a completion code.
+- `143` — terminated by SIGTERM (128 + 15). Other OS signals follow the
+  same `128 + signum` convention.
+
+`spin` forwards the external command's own exit code verbatim (gum parity),
+which means a child exiting `2`, `124`, `130`, or `143` is indistinguishable
+from candy-scriptui's own codes for those numbers; gate on the child's
+success (`0`) rather than specific non-zero values.
 
 ## Keyboard map (interactive commands)
 

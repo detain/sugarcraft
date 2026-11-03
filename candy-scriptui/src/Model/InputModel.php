@@ -51,6 +51,7 @@ final class InputModel implements Model
         public readonly bool $submitted,
         public readonly bool $aborted,
         public readonly string $header = '',
+        public readonly bool $interrupted = false,
     ) {}
 
     public function init(): ?\Closure
@@ -68,7 +69,7 @@ final class InputModel implements Model
         }
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Escape || ($msg->ctrl && $msg->rune === 'c')) {
-                return [new self($this->input, false, true, $this->header), Cmd::quit()];
+                return [new self($this->input, false, true, $this->header, $msg->ctrl), Cmd::quit()];
             }
             if ($msg->type === KeyType::Enter) {
                 return [new self($this->input, true, false, $this->header), Cmd::quit()];
@@ -89,6 +90,7 @@ final class InputModel implements Model
     public function value(): string { return $this->input->value; }
     public function isSubmitted(): bool { return $this->submitted; }
     public function isAborted(): bool   { return $this->aborted; }
+    public function isInterrupted(): bool { return $this->interrupted; }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {

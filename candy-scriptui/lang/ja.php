@@ -31,4 +31,6 @@ return [
     'confirm.unknown_default' => '不明な --default 値: {value}',
     'cursor_mode.unknown' => '不明なカーソルモード: {mode}',
     'runtime.no_terminal' => '{command} にはインタラクティブな端末が必要です。制御端末を利用できません。',
+    'runtime.bad_timeout' => '--timeout の値 \'{value}\' が不正です — 非負の秒数を指定してください (0 で期限無効)。',
+    'runtime.unknown_choice' => '{option} の値 \'{value}\' が不正です。使用可能: {allowed}。',
 ];
