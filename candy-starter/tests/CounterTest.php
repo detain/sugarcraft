@@ -239,7 +239,7 @@ final class CounterTest extends TestCase
     {
         $view = (new Counter(42))->view();
         $this->assertStringContainsString('42', $view);
-        $this->assertStringContainsString('q to quit', $view);
+        $this->assertStringContainsString('q / Esc / Ctrl+C quit', $view);
     }
 
     public function testViewRendersStyledBorder(): void
@@ -260,6 +260,22 @@ final class CounterTest extends TestCase
         $this->assertSame($view1, $view2, 'view() output must be deterministic');
     }
 
+    public function testTheFrameDecorationIsMemoizedNotRebuiltPerFrame(): void
+    {
+        // CALIBER [bug:candy-starter-style-rebuild] closed 2026-11-03:
+        // Style is immutable, so a per-frame `Style::new()->…` chain in
+        // the most-copied function taught the anti-pattern its own ledger
+        // disowned. Exactly one construction site, behind the static ??=.
+        $source = (string) file_get_contents(dirname(__DIR__) . '/src/Counter.php');
+
+        $this->assertSame(
+            1,
+            substr_count($source, 'Style::new()'),
+            'view() must render through the memoized frameStyle() — no per-frame Style rebuild may return',
+        );
+        $this->assertStringContainsString('self::$frameStyle ??=', $source, 'the memoization arm is the point of the pattern');
+    }
+
     public function testViewContainsNavigationHints(): void
     {
         $view = (new Counter())->view();
@@ -270,7 +286,7 @@ final class CounterTest extends TestCase
     public function testViewContainsQuitHint(): void
     {
         $view = (new Counter())->view();
-        $this->assertStringContainsString('q to quit', $view, 'view must show quit hint');
+        $this->assertStringContainsString('q / Esc / Ctrl+C quit', $view, 'the hint must enumerate every shipped exit path, not just one');
     }
 
     // -------------------------------------------------------------------------
@@ -334,7 +350,8 @@ final class CounterTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Quit with modifier keys (alt/ctrl combos that should NOT quit)
+    // Quit-adjacent modifier keys (the ctrl-excluded / rune-excluded combos —
+    // note alt+q and any-modifier Esc DO quit, per the arms below)
     // -------------------------------------------------------------------------
 
     public function testAltQTriggersQuit(): void
@@ -472,7 +489,10 @@ final class CounterTest extends TestCase
 
     public function testIntegerBoundaryPositive(): void
     {
-        // PHP_INT_MAX - 1 to avoid overflow (PHP integer math wraps to float on overflow)
+        // PHP_INT_MAX - 1 to stay one step inside the boundary: overflow
+        // would yield a float, and storing it in the promoted int property
+        // under strict_types is an uncaught TypeError, not a silent decay
+        // (CALIBER [gotcha:candy-starter-overflow-teaching]).
         $counter = new Counter(PHP_INT_MAX - 1);
         [$next, ] = $counter->update(new KeyMsg(KeyType::Up, ''));
         $this->assertSame(PHP_INT_MAX, $next->n);
@@ -481,7 +501,9 @@ final class CounterTest extends TestCase
 
     public function testIntegerBoundaryNegative(): void
     {
-        // PHP_INT_MIN + 1 to avoid overflow
+        // PHP_INT_MIN + 1 to stay one step inside the boundary: the
+        // decrement would overflow to float and TypeError against the
+        // promoted int property long before any silent decay.
         $counter = new Counter(PHP_INT_MIN + 1);
         [$next, ] = $counter->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(PHP_INT_MIN, $next->n);

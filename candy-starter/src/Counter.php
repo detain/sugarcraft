@@ -14,7 +14,9 @@ use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 
 /**
- * Demo Model — a counter you can drive with ↑ / ↓ and quit with `q`.
+ * Demo Model — a counter you can drive with ↑ / ↓ and quit with `q`,
+ * `Esc`, or Ctrl+C (all three are pinned in the matrix — the frame's
+ * hint line enumerates exactly what `shouldQuit()` accepts).
  *
  * Picked deliberately as the "hello, world" of TUI development: small
  * enough to read in one screen, but exercises every piece of the
@@ -27,6 +29,14 @@ use SugarCraft\Style\Style;
  * are pure functions, side effects (timers, HTTP, file I/O) get
  * scheduled as Cmds.
  *
+ * Not every Msg is a key: the harness also dispatches `WindowSizeMsg`
+ * (at startup and on every resize) and `ExceptionMsg` (the async
+ * failure channel for anything you schedule via `Cmd::promise()`).
+ * The demo ignores both — honestly, since it renders one fixed box and
+ * arms no promises — but a real app capturing layout or surfacing
+ * errors handles them BEFORE the key filter; see the arms sketched in
+ * `update()` and the README's "Beyond keys" note.
+ *
  * To extend:
  *   1. Add a field to the constructor (e.g. `int $step = 1`).
  *   2. Add a Msg handler in update() that returns a new Model with
@@ -38,6 +48,9 @@ use SugarCraft\Style\Style;
  */
 final class Counter implements Model
 {
+    /** One shared immutable frame decoration — built on first render, never per frame. */
+    private static ?Style $frameStyle = null;
+
     public function __construct(public readonly int $n = 0) {}
 
     public function init(): ?\Closure
@@ -47,11 +60,23 @@ final class Counter implements Model
 
     public function update(Msg $msg): array
     {
+        // Beyond keys — sketch the two non-key arms a real app usually
+        // needs, BEFORE the key filter:
+        // if ($msg instanceof \SugarCraft\Core\Msg\WindowSizeMsg) {
+        //     return [new self($this->n), null]; // or store $msg->cols/$msg->rows for layout
+        // }
+        // if ($msg instanceof \SugarCraft\Core\Msg\ExceptionMsg) {
+        //     // Cmd::promise() failures land HERE and nowhere else — a real
+        //     // app logs or renders the error instead of swallowing it.
+        // }
         if ($msg instanceof KeyMsg === false) {
+            // The demo has no layout to recompute and no promises to fail on,
+            // so every non-key Msg is genuinely a no-op — see the class
+            // docblock before copying this arm into an app that grows either.
             return [$this, null];
         }
         // Mirrors charmbracelet/bubbletea-app-template/Program.update
-        // quit with q (plain), Esc, or ctrl+c
+        // quit with q (any modifier except ctrl), Esc, or ctrl+c
         if ($this->shouldQuit($msg)) {
             return [$this, Cmd::quit()];
         }
@@ -66,13 +91,33 @@ final class Counter implements Model
     // \SugarCraft\Core\View for per-frame extras (cursor, window
     // title, colours — alt-screen itself is ProgramOptions):
     // return new \SugarCraft\Core\View($frame, windowTitle: 'count ' . $this->n);
+    //
+    // Trust boundary: Program writes the frame to the terminal
+    // UNMEDIATED, so anything interpolated here must be trusted. Text
+    // from files, the network, or user input goes through sugar-core's
+    // Sanitize::untrusted() first (untrustedForMarkedFrames() when the
+    // frame carries image/mouse-zone U+E000 markers) — raw SGR, OSC-8
+    // and private-use bytes are a terminal-injection surface, not
+    // payload.
     public function view(): string
     {
-        $body = sprintf("count: %d\n↑ ↓ to change · q to quit", $this->n);
-        return Style::new()
+        $body = sprintf("count: %d\n↑ ↓ to change · q / Esc / Ctrl+C quit", $this->n);
+
+        return self::frameStyle()->render($body);
+    }
+
+    /**
+     * The frame decoration is built ONCE and reused (CALIBER
+     * [bug:candy-starter-style-rebuild], shipped 2026-11-03): Style is an
+     * immutable value object, so per-frame `Style::new()->…` chains in
+     * view() only manufactured throwaways at render rate. Memoized static
+     * style is the pattern for any constant decoration.
+     */
+    private static function frameStyle(): Style
+    {
+        return self::$frameStyle ??= Style::new()
             ->border(Border::rounded())
-            ->padding(1, 2)
-            ->render($body);
+            ->padding(1, 2);
     }
 
     public function subscriptions(): ?Subscriptions
@@ -83,7 +128,9 @@ final class Counter implements Model
     /** Determines if the given key message should trigger program quit. */
     private function shouldQuit(KeyMsg $msg): bool
     {
-        // quit with q (plain, no modifiers), Esc, or ctrl+c
+        // quit: plain `q` under any modifier EXCEPT ctrl (alt+q quits — the
+        // rune-exact gap is intentional teaching surface, pinned in
+        // CounterTest), Esc under any modifier, or ctrl+c.
         if ($msg->type === KeyType::Char && $msg->rune === 'q' && $msg->ctrl === false) {
             return true;
         }
