@@ -931,7 +931,7 @@ final class Renderer
                 - $dropped,
         );
 
-        return new View($frame, images: $images);
+        return new View($frame, images: $images, mouseMode: $a->frameMouseMode());
     }
 
     /**

@@ -147,7 +147,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.mouse.label'))
                 ->withHelp(Lang::t('settings.mouse.help'))
                 ->withReaderSymbol(Chat::class . '::mouseMode')
-                ->withReadBy('`Chat::programOptions()` at launch, `Chat::applySettings()` on a save → `Chat::mouseMode()`'),
+                ->withReadBy('`Chat::programOptions()` at launch, `App::frameMouseMode()` on every frame → `Chat::mouseMode()`'),
             SettingDefinition::new('mouseClicks', SettingType::Bool, true)
                 ->withCategory(SettingCategory::Interface)
                 ->withRiskClass(RiskClass::Cosmetic)

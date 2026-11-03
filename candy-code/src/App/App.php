@@ -3457,15 +3457,13 @@ final class App implements Model
     {
         // P-MENU.e hover: the bar's menus highlight rows under the pointer,
         // and button-less motion is reported ONLY in all-motion mouse mode —
-        // CellMotion (the Chat's steady state) never sends it. So ONE
-        // transition check here, comparing the open-menu count before and
-        // after the message, swaps AllMotion in for every open path and back
-        // out for EVERY close path — Esc, a row that ran, a click-away, a
-        // drag that armed — without any of those sites knowing about it.
-        // Skipped entirely when the mouse is Off (there is no mode to
-        // restore and no motion to feed).
-        $menuWasOpen = MenuBar::activeMenu() > 0;
-
+        // CellMotion (the Chat's steady state) never sends it. The shell no
+        // longer ships mode-switch Cmds for this (they bypassed the runtime's
+        // tracking mirror and leaked `?1003` past exit — the C2 defect):
+        // every frame DECLARES its wanted mode through
+        // {@see self::frameMouseMode()} on the View, and the Program's
+        // per-frame diff writes the DEC pair (and keeps the mirror it
+        // consults at teardown) whenever the declared value changes.
         $result = match (true) {
             $msg instanceof WindowSizeMsg => $this->handleWindowSize($msg),
             $msg instanceof OpenSettingsMsg => [$this->openSettings($msg->query), null],
@@ -3536,17 +3534,31 @@ final class App implements Model
             default => $this->delegateToChat($msg),
         };
 
-        $menuIsOpen = MenuBar::activeMenu() > 0;
-        if ($menuWasOpen !== $menuIsOpen && Chat::mouseMode() !== MouseMode::Off) {
-            $result[1] = CoreCmd::batch(
-                $result[1],
-                $menuIsOpen
-                    ? CoreCmd::enableMouseAllMotion()
-                    : CoreCmd::enableMouseCellMotion(),
-            );
-        }
-
         return $result;
+    }
+
+    /**
+     * The mouse-tracking mode this shell's frames declare to the runtime.
+     *
+     * Single source for the P-MENU.e hover law: an open menu needs
+     * AllMotion (button-less motion is reported only there, and hover is
+     * the bar's whole feedback loop); every other frame runs exactly the
+     * mode the user's settings arm at launch ({@see Chat::mouseMode()}).
+     * The mode rides {@see \SugarCraft\Core\View::$mouseMode}, so the
+     * Program's per-frame diff owns the DEC writes AND the tracking
+     * mirror its teardown consults — a menu left open at exit can no
+     * longer strand `?1003` on the terminal (the C2 leak: the pre-frame
+     * path swapped modes through RawMsg Cmds the mirror never heard
+     * about, so teardown emitted the wrong OFF pair and the tracking
+     * survived the process).
+     */
+    public function frameMouseMode(): MouseMode
+    {
+        $steady = Chat::mouseMode();
+
+        return $steady !== MouseMode::Off && MenuBar::activeMenu() > 0
+            ? MouseMode::AllMotion
+            : $steady;
     }
 
     /**

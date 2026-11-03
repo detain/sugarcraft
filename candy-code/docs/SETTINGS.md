@@ -328,7 +328,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `watchFiles` | `Chat::subscriptions()` → `AiCommentWatcher::enabled()` | **no** |
 | `queueMode` | `Chat::submit()`, `SubmitOptions::effectiveDelivery()` → `QueueMode::onEnter()` | yes |
 | `terminalBackground` | `Theme::adaptive()`, the shell chrome → `TerminalBackground::isDark()`, `color()` → `setting()` | yes |
-| `mouse` | `Chat::programOptions()` at launch, `Chat::applySettings()` on a save → `Chat::mouseMode()` | yes |
+| `mouse` | `Chat::programOptions()` at launch, `App::frameMouseMode()` on every frame → `Chat::mouseMode()` | yes |
 | `mouseClicks` | `Chat::mouseClicksEnabled()` | yes |
 | `scrollWheelLines` | `Chat::scrollWheelLines()` | yes |
 | `doubleEscSeconds` | `Chat::doubleEscapeWindowSeconds()` | yes |

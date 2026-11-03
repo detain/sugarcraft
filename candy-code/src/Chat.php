@@ -8066,8 +8066,6 @@ final class Chat implements Model
                     $refused[] = $key;
                     continue;
                 }
-            } elseif ($key === 'mouse') {
-                $cmds[] = self::mouseMode() === MouseMode::Off ? Cmd::disableMouse() : Cmd::enableMouseCellMotion();
             } elseif ($key === 'statusLine') {
                 $cmds[] = static function (): StatusLineTickMsg {
                     StatusLineCommand::reconfigure(\SugarCraft\Code\Cli\Bootstrap::readUserConfig());

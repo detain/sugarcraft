@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Tui;
 
-use Closure;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Chat;
@@ -14,31 +13,35 @@ use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Code\Tests\Support\CarriesStandardFrameTrait;
-use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMotionMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
-use SugarCraft\Core\RawMsg;
 use SugarCraft\Core\Util\Ansi;
 
 /**
- * P-MENU.e hover law: while ANY menu is open the shell arms all-motion mouse
- * reporting (cell-motion reports no button-less motion, so the highlight
- * could not exist without it) and restores cell-motion on EVERY close path —
- * the bar itself is the only thing that consumes motion while a menu is up.
+ * P-MENU.e hover law: while ANY menu is open the shell DECLARES all-motion
+ * mouse reporting (cell-motion reports no button-less motion, so the
+ * highlight could not exist without it) and restores cell-motion on EVERY
+ * close path — the bar itself is the only thing that consumes motion while a
+ * menu is up.
  *
- * The transition lives in exactly one place — App::update() comparing
- * `MenuBar::activeMenu() > 0` before and after every message — so this file
- * is the close-path table the plan's risk note demands: F10-open and
- * click-open arm AllMotion; Esc, a row run, and a click-away each restore
- * CellMotion; a mouse turned Off emits NO mode Cmd at all; motion over a row
- * highlights it (and previews a submenu); motion with no menu open still
- * reaches the chat (pinned by the press-drift the chat itself records).
+ * The declaration lives in exactly one place — {@see App::frameMouseMode()},
+ * riding every frame on the View — and the runtime's per-frame diff owns the
+ * DEC writes and the mirror its teardown consults (the C2 fix: mode swaps
+ * once travelled as RawMsg Cmds the mirror never heard about, so `?1003`
+ * survived a normal exit). This file is therefore the close-path table the
+ * plan's risk note demands: F10-open and click-open declare AllMotion; Esc,
+ * a row run, and a click-away each declare CellMotion; a mouse turned Off
+ * declares Off even with a menu up; the close pair of bytes must name
+ * `1003l` before it re-arms; motion over a row highlights it (and previews a
+ * submenu); motion with no menu open still reaches the chat (pinned by the
+ * press-drift the chat itself records).
  */
 final class MenuHoverTest extends TestCase
 {
@@ -88,13 +91,13 @@ final class MenuHoverTest extends TestCase
 
     public function testOpeningTheMenuByF10ArmsAllMotion(): void
     {
-        [, $cmd] = $this->app()->update(new KeyMsg(KeyType::F10));
+        [$app] = $this->app()->update(new KeyMsg(KeyType::F10));
 
         self::assertGreaterThan(0, MenuBar::activeMenu(), 'fixture: F10 opens a menu');
-        self::assertStringContainsString(
-            Ansi::mouseAllMotionOn(),
-            self::modeBytes($cmd),
-            'an OPENED menu must arm all-motion reporting, or hover cannot exist',
+        self::assertSame(
+            MouseMode::AllMotion,
+            $this->declaredMouseMode($app),
+            'an OPENED menu must declare all-motion reporting, or hover cannot exist',
         );
     }
 
@@ -106,21 +109,22 @@ final class MenuHoverTest extends TestCase
         self::assertNotNull($zone, 'fixture: the painted bar marked a menu title');
 
         [$app] = $app->update(new MouseClickMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Press));
-        [, $cmd] = $app->update(new MouseReleaseMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Release));
+        [$app] = $app->update(new MouseReleaseMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Release));
 
         self::assertGreaterThan(0, MenuBar::activeMenu());
-        self::assertStringContainsString(Ansi::mouseAllMotionOn(), self::modeBytes($cmd));
+        self::assertSame(MouseMode::AllMotion, $this->declaredMouseMode($app));
     }
 
     public function testEscapeRestoresCellMotion(): void
     {
         [$app] = $this->app()->update(new KeyMsg(KeyType::F10));
-        [, $cmd] = $app->update(new KeyMsg(KeyType::Escape));
+        self::assertSame(MouseMode::AllMotion, $this->declaredMouseMode($app), 'fixture: the open frame declares AllMotion');
+        [$app] = $app->update(new KeyMsg(KeyType::Escape));
 
         self::assertSame(0, MenuBar::activeMenu(), 'fixture: Esc closed the menu');
-        self::assertStringContainsString(
-            Ansi::mouseCellMotionOn(),
-            self::modeBytes($cmd),
+        self::assertSame(
+            MouseMode::CellMotion,
+            $this->declaredMouseMode($app),
             'the close path must hand the terminal back the cell-motion mode Chat arms',
         );
     }
@@ -142,10 +146,10 @@ final class MenuHoverTest extends TestCase
         self::assertNotNull($zone, 'fixture: the third View row (theme) carries a menuitem: zone');
 
         [$app] = $app->update(new MouseClickMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Press));
-        [, $cmd] = $app->update(new MouseReleaseMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Release));
+        [$app] = $app->update(new MouseReleaseMsg($zone->startCol, $zone->startRow, MouseButton::Left, MouseAction::Release));
 
         self::assertSame(0, MenuBar::activeMenu(), 'fixture: a command row closes the menu');
-        self::assertStringContainsString(Ansi::mouseCellMotionOn(), self::modeBytes($cmd));
+        self::assertSame(MouseMode::CellMotion, $this->declaredMouseMode($app));
     }
 
     public function testClickAwayRestoresCellMotion(): void
@@ -156,23 +160,45 @@ final class MenuHoverTest extends TestCase
         // Deep in the transcript band, far from the bar and any open panel:
         // the press names no chrome zone, so it dismisses the menu (the
         // Windows-95 law P-MENU.e makes explicit) and still lands in the chat.
-        [, $cmd] = $app->update(new MouseClickMsg(60, 20, MouseButton::Left, MouseAction::Press));
+        [$app] = $app->update(new MouseClickMsg(60, 20, MouseButton::Left, MouseAction::Press));
 
         self::assertSame(0, MenuBar::activeMenu(), 'a press outside the menu dismisses it');
-        self::assertStringContainsString(Ansi::mouseCellMotionOn(), self::modeBytes($cmd));
+        self::assertSame(MouseMode::CellMotion, $this->declaredMouseMode($app));
     }
 
-    public function testNoModeCmdIsEmittedWhenTheMouseIsOff(): void
+    public function testTheFrameStillDeclaresOffWhenTheMouseIsOff(): void
     {
         putenv('CANDY_CODE_DISABLE_MOUSE=1');
         try {
-            [, $cmd] = $this->app()->update(new KeyMsg(KeyType::F10));
+            [$app] = $this->app()->update(new KeyMsg(KeyType::F10));
 
             self::assertGreaterThan(0, MenuBar::activeMenu(), 'fixture: the menu still opens');
-            self::assertNull($cmd, 'a disabled mouse never receives a mode switch');
+            self::assertSame(
+                MouseMode::Off,
+                $this->declaredMouseMode($app),
+                'a disabled mouse never receives a mode switch, menu or no menu',
+            );
         } finally {
             putenv('CANDY_CODE_DISABLE_MOUSE');
         }
+    }
+
+    public function testTheClosePairOfBytesClearsAllMotionBeforeReArming(): void
+    {
+        // C2, the DEC-1003 leak: the runtime writes the OFF pair for the
+        // mirror's mode, then the ON pair for the declared one. The close
+        // transition must therefore name 1003l BEFORE re-arming 1002h —
+        // the pre-frame RawMsg Cmds skipped the mirror, teardown emitted
+        // only the CellMotion OFF (which never names 1003), and the
+        // terminal kept all-motion reporting after the process exited.
+        $pair = Ansi::mouseAllMotionOff() . Ansi::mouseCellMotionOn();
+        $clear = strpos($pair, '1003l');
+        $arm = strpos($pair, '1002h');
+
+        self::assertNotFalse($clear, 'the close pair must clear all-motion tracking');
+        self::assertNotFalse($arm, '...and re-arm cell motion');
+        self::assertLessThan($arm, $clear, 'the clear precedes the re-arm');
+        self::assertStringContainsString('1003l', Ansi::mouseAllMotionOff(), 'teardown from an open menu clears 1003');
     }
 
     public function testMotionOverARowHighlightsItAndAPreviewRowExpandsTheSubmenu(): void
@@ -256,30 +282,13 @@ final class MenuHoverTest extends TestCase
         TuiRenderer::renderView($app, self::FRAME_COLS, self::FRAME_ROWS);
     }
 
-    /**
-     * The bytes the mouse-mode Cmd writes: run the closure — core's Cmd
-     * closures RETURN a Msg (BatchMsg explodes into the members' closures,
-     * each of which returns a RawMsg) — and concatenate the RawMsg payloads.
-     */
-    private static function modeBytes(?Closure $cmd): string
+    /** The mouse mode the shell's next frame declares to the runtime. */
+    private function declaredMouseMode(App $app): MouseMode
     {
-        if ($cmd === null) {
-            return '';
-        }
+        $mode = TuiRenderer::renderView($app, self::FRAME_COLS, self::FRAME_ROWS)->mouseMode;
 
-        $bytes = '';
-        $stack = [$cmd];
-        while ($stack !== []) {
-            $msg = (array_pop($stack))();
-            if ($msg instanceof BatchMsg) {
-                foreach ($msg->cmds as $inner) {
-                    $stack[] = $inner;
-                }
-            } elseif ($msg instanceof RawMsg) {
-                $bytes .= $msg->bytes;
-            }
-        }
+        self::assertNotNull($mode, 'every shell frame must declare its mouse mode');
 
-        return $bytes;
+        return $mode;
     }
 }
