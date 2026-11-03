@@ -9,7 +9,8 @@ namespace SugarCraft\Mouse;
  * gesture, clamped to a selectable region of the painted frame.
  *
  * Ported upstream from candy-code's `Tui\TextSelection`.
- * With SGR mouse tracking on, the terminal hands every press/drag/release to
+ * With mouse motion tracking on (modes 1002/1003, with or without the
+ * SGR coordinate companion 1006), the terminal hands every press/drag/release to
  * the application instead of running its own copy-on-select, so an app that
  * wants the gesture every terminal user expects has to own it — the way tmux
  * copy-mode, Candy Code and OpenCode do. candy-code grew this as an immutable

@@ -168,16 +168,35 @@ one, and the trackers need different reporting:
 | `1000` | press / release / wheel | `ZoneClickTracker`, `ClickCounter` (clean press+release pairs, clicks) |
 | `1002` | 1000 + drag (button held, crossing a cell) | `DragTracker` boundary crossings while pressed |
 | `1003` | all motion, button held or not | `ZoneHoverTracker` (enter/exit with no press at all) |
-| `1006` | SGR extended coordinates (`CSI <x;yM/m`) | any of the above beyond row/col 222, where legacy X10 encoding saturates |
+| `1006` | SGR-style extended coordinates: reports arrive as `CSI < b ; x ; y M|m` — `M` press, `m` release, `b` the button code plus modifier bits | any of the above beyond row/col 223, where legacy X10 single-byte coordinates saturate |
 
-`Manager::setMotionTracking(bool)` returns the `CSI ?1003 h/l` byte string
-for the all-motion case — write it to the terminal yourself. The other modes
-are the host app's enable sequence (its input layer — e.g. sugar-input —
-turns the reports into `MouseMsg` / `MouseEvent` values). Consequence: the
-hover tracker reacts to whatever it receives — enter/exit fire on a plain
-`1000` press — but press-free hover needs motion reporting (`1003`); the drag
-tracker's cross-boundary moves need at least `1002`; click trackers work on
-plain `1000` reporting alone.
+`Manager::setMotionTracking(bool)` returns the all-motion byte string:
+`\x1b[?1003h\x1b[?1006h` on enable and the LIFO `\x1b[?1006l\x1b[?1003l` on
+disable — motion tracking plus the SGR coordinate companion, byte-identical
+to sugar-core's `Ansi::mouseAllMotionOn()/Off()`. Core ships the same pairing
+for the plain-click case (`mouseAllOn/Off` = 1000+1006) and the held-drag
+case (`mouseCellMotionOn/Off` = 1002+1006). The other modes are the host
+app's enable sequence; its input layer (e.g. sugar-input) turns the reports
+into `MouseMsg` / `MouseEvent` values, which means the `b` field is decoded
+before this lib ever sees a message: strip the modifier bits (4 shift, 8
+alt, 16 ctrl; 32 marks a held-drag motion) before comparing button numbers,
+and fold xterm's wheel pair (64 = up, 65 = down) into one wheel event.
+Consequence: the hover tracker reacts to press and motion reports —
+enter/exit fire on a plain `1000` press — but wheel reports are inert for
+all three `Zones` trackers and for `ClickCounter` (a scroll is not a press;
+see `MouseWheelMsg` gates). Press-free hover needs motion reporting
+(`1003`); the drag tracker's cross-boundary moves need at least `1002`;
+click trackers work on plain `1000` reporting alone.
+
+**Mode lifecycle.** This lib never touches the TTY, so it cannot undo what
+it never wrote: whoever enables `1000`/`1002`/`1003`/`1006` owns the
+disable on every exit path — including crashes (a `register_shutdown` hook
+or the frame runner's `finally`). A leaked `?1003` streams every mouse move
+into the session for its remaining lifetime, a continuous byte flood that
+hits assistive tech hardest (Orca and brltty users cannot wave it away).
+Interop floor: `1002`/`1003` are the xterm family — Konsole ships no 1003
+and tmux re-encodes reports — so design for `1000`-only degradation when
+motion reports never arrive.
 
 ## Zones façade (`SugarCraft\Mouse\Zones`)
 
@@ -248,8 +267,10 @@ Beyond `mark()` / `scan()` / `get()`:
 - `close()` — drop every zone + flip the manager into pass-through
   mode. Idempotent. To re-arm a closed default manager call
   `Zones::setDefaultManager(null)` (forces lazy reconstruction of a
-  fresh enabled manager on the next `defaultManager()` call) or
-  `Zones::setEnabled(true)` to keep zone state but re-enable marking.
+  fresh enabled manager on the next `defaultManager()` call).
+  `Zones::setEnabled(true)` instead only flips marking back on — the
+  zone registry is already gone, so you must `scan()` again before
+  any hit-test resolves.
 
 ### Package-level facade
 
@@ -276,10 +297,11 @@ manager.
 `ZoneHoverTracker` wraps a `Manager` and tracks which zone the cursor
 is in across `MouseMsg` events. It emits `ZoneEnterMsg` when the cursor
 crosses into a zone and `ZoneExitMsg` when it leaves — ideal for
-tooltips, highlights, or data-fetch-on-hover. `update()` gates no mouse
-action, so any reported event moves it: a plain mode-`1000` press inside
-a zone already fires `ZoneEnterMsg`, while press-free hover tracking needs
-the terminal to report motion (mode `1003`, see
+tooltips, highlights, or data-fetch-on-hover. `update()` gates press and
+motion but refuses wheel reports (`MouseWheelMsg`): a plain mode-`1000`
+press inside a zone fires `ZoneEnterMsg`, scrolling does not, and
+press-free hover tracking needs the terminal to report motion (mode
+`1003`, see
 [Mouse-tracking modes](#mouse-tracking-modes)):
 
 ```php
@@ -401,8 +423,9 @@ if ($msg instanceof DoubleClickMsg) {
 ### Motion tracking escape sequences
 
 `Manager::setMotionTracking(bool $on)` returns the terminal escape
-sequence that enables (`\x1b[?1003h`) or disables (`\x1b[?1003l`)
-SGR mouse mode 1003 (all motion events). Write the returned string to
+sequence that enables (`\x1b[?1003h\x1b[?1006h`) or disables
+(`\x1b[?1006l\x1b[?1003l`) all-motion tracking (mode 1003) together
+with SGR extended coordinates (mode 1006). Write the returned string to
 the TTY to activate motion reporting before processing mouse move
 events. This manager does not directly emit — it is a
 text-processing component that produces the raw CSI sequence.
@@ -444,7 +467,7 @@ text-processing component that produces the raw CSI sequence.
 | `Manager` | `scan(output)` | Record positions, strip markers |
 | `Manager` | `anyInBounds(mouseMsg)` | Return the innermost zone under the mouse |
 | `Manager` | `get(name)` | Get zone by name |
-| `Manager` | `setMotionTracking(bool)` | Return CSI 1003 h/l escape sequence |
+| `Manager` | `setMotionTracking(bool)` | Return paired CSI 1003+1006 enable / LIFO disable sequence |
 | `Zone` | `inBounds(mouseMsg)` | Test if mouse is inside zone |
 | `ZoneHoverTracker` | `__construct(manager)` | Track hover state over a manager |
 | `ZoneHoverTracker` | `update(mouseMsg)` | Process mouse event, return enter/exit msg |

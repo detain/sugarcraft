@@ -7,6 +7,7 @@ namespace SugarCraft\Mouse\Zones;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scan;
 
@@ -119,22 +120,32 @@ final class Manager
     /**
      * Toggle mouse motion reporting.
      *
-     * When `$on` is true, returns the escape sequence that enables
-     * SGR Mouse mode 1003 (all motion events reported on movement).
-     * When false, returns the sequence that disables it.
+     * When `$on` is true, returns the paired sequence enabling
+     * all-motion tracking (mode 1003) AND SGR extended coordinate
+     * reporting (mode 1006); when false, the LIFO disable pair.
+     * ("SGR" names 1006 — the report byte format — not 1003.)
+     * Bare 1003 would leave coordinates on legacy X10 single-byte
+     * encoding, where everything past row/col 223 saturates — the
+     * exact failure this package's own mode table warns about.
+     *
+     * The bytes delegate to sugar-core's canonical helpers
+     * ({@see \SugarCraft\Core\Util\Ansi::mouseAllMotionOn()} /
+     * {@see \SugarCraft\Core\Util\Ansi::mouseAllMotionOff()}), so
+     * enable/disable ordering matches every other SugarCraft app.
      *
      * The caller writes the returned string to the terminal to
      * activate/deactivate motion reporting. This manager does not
      * directly emit to the TTY — it is a text-processing component.
-     * This is unrelated to the zone markers.
+     * This is unrelated to the zone markers. Whoever enables is also
+     * responsible for disabling on every exit path — see the
+     * lifecycle note in README's Mouse-tracking modes section.
      *
-     * Mirrors bubblezone's `Manager::SetMotionTracking`.
+     * Mirrors bubblezone's `Manager::SetMotionTracking` (which emits
+     * the bare 1003 pair; this lib ships the 1006 companion).
      */
     public function setMotionTracking(bool $on): string
     {
-        // CSI ? 1003 h = enable all event mode
-        // CSI ? 1003 l = disable
-        return $on === true ? "\x1b[?1003h" : "\x1b[?1003l";
+        return $on === true ? Ansi::mouseAllMotionOn() : Ansi::mouseAllMotionOff();
     }
 
     /** Read-only accessor for the prefix this manager prepends to ids. */
