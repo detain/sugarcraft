@@ -12,7 +12,7 @@
 
 > Formerly published as `sugarcraft/candy-hermit` (renamed 2026-10). <!-- @rename-keep -->
 
-sugar-quickpick — a fuzzy finder / quick-fix overlay for terminal UIs, for PHP 8.3+. Renders a filterable list overlay on top of a background view while the background continues to update.
+sugar-quickpick — a fuzzy finder / quick-pick overlay for terminal UIs, for PHP 8.3+. Renders a filterable list overlay on top of a background view while the background continues to update.
 
 ## Install
 
@@ -30,7 +30,7 @@ use SugarCraft\QuickPick\QuickPick;
 // Items to filter
 $items = ['apple', 'banana', 'cherry', 'date', 'elderberry'];
 
-// Create hermit with items
+// Create the overlay
 $h = QuickPick::new($items)
     ->setPrompt('> ')
     ->setItemFormatter(fn($item, $selected) => ($selected ? '*' : ' ') . " $item");
@@ -46,7 +46,7 @@ $h = $h->cursorDown();
 $h = $h->cursorUp();
 
 // Select
-$selected = $h->selected();  // always an Item — string inputs are coerced to FilteredItem
+$selected = $h->selected();  // ?Item — null when nothing is selected; string inputs are coerced to FilteredItem
 
 // Hide
 $h = $h->hide();
@@ -68,7 +68,7 @@ $items = [
     new FilteredItem(3, 'cherry'),
 ];
 
-// Create hermit with Item[] and custom filter function
+// Create the overlay with Item[] and a custom filter function
 $h = QuickPick::new($items)
     ->setFilterFn(fn($item): bool => $item->number() > 0)  // filter by custom predicate
     ->setPrompt('> ');
@@ -84,8 +84,15 @@ $allItems = $history->all();      // load previous items
 
 ## Fuzzy ranking (sugar-fuzzy)
 
-By default the filter is anchor-aware contiguous-substring matching. Plug in a
-[sugar-fuzzy](../sugar-fuzzy) ranker to switch to **true subsequence matching**,
+By default the filter is a **contiguous, case-folded substring match with an
+anchor bias**: a candidate is kept only when the first match starts in the
+**first half** of the item text. The rule is measured in Unicode codepoints,
+not bytes, so multibyte values (é, 日, emoji) halve where a user would expect.
+Worked misses: `ry` does not match `cherry` (first hit sits exactly at the
+midpoint), and `e` does not match `apple` (its first hit is past halfway).
+These are deliberate — deep matches are usually noise — and `setRanker()` is
+the escape hatch: plug in a
+[sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) ranker to switch to **true subsequence matching**,
 ordering the list by descending fuzzy score and highlighting the scored runes:
 
 ```php
@@ -118,6 +125,7 @@ A custom `setFilterFn()` predicate still applies on top of the ranker.
 | **Border & Style composition** | `withBorder()` and `withStyle()` compose `sugar-style` `Border` and `Style` for window decoration |
 | **HelpBar / StatusBar** | `withHelpBar()` and `withStatusBar()` attach keyboard-shortcut and status-line renders below the overlay |
 | **SIGWINCH resize** | `withOnResize()` + `attachSigwinch()` forwards terminal resize events via `SignalForwarder::attachSigwinchToFd` |
+| **Colorless by design** | The frame itself emits no color — pure Unicode runes. SGR appears only where the host opts in (`setMatchStyle()`, the item formatter, `withStyle()`), so there is nothing for `NO_COLOR` to suppress |
 
 ## Architecture
 
@@ -128,9 +136,19 @@ SugarCraft\QuickPick
 ├── FilteredItem        — Numbered item implementation of Item
 ├── HelpBar             — Keyboard shortcut summary line
 ├── StatusBar           — Status message line with optional segments
+├── Model               — update()/view() composition contract (package-local)
+├── ItemFactory         — string[]/Item[] coercion (used by new()/withItems())
+├── Concerns
+│   └── Visible         — show()/hide()/isVisible() shared by HelpBar/StatusBar
+├── Support
+│   ├── AnsiWalk        — escape-preserving codepoint walker (highlighting)
+│   └── UntrustedText   — trust-boundary guard for rendered strings
 └── History
     └── FileHistory     — JSONL-backed persistent history
 ```
+
+The `examples/` directory in the repository is package-internal: it exists to
+drive the VHS demo tapes and is not shipped as a runnable template.
 
 ## API — QuickPick factory
 
@@ -141,8 +159,12 @@ public static function new(array $items = [], ?\Closure $itemFormatter = null): 
 
 ## API — QuickPick configuration (fluent setters)
 
+Every `set*()`/`with*()` below returns a **clone**; the receiver is never
+mutated. Bind the result (`$h = $h->setPrompt('> ');`) or the change is lost.
+
 ```php
-// Set items (string[] or Item[]) and reset filter state
+// Replace items (string[] or Item[]). The filter text is KEPT and the new
+// list is re-filtered with it; the cursor resets to 0.
 public function withItems(array $items): self
 
 // Configure the filter prompt
@@ -151,17 +173,26 @@ public function setPrompt(string $prompt): self
 // Set ANSI SGR codes for matched character highlighting (e.g. "\e[33m")
 public function setMatchStyle(string $ansiStyle): self
 
-// Set overlay window height (number of visible items)
+// Set overlay window height in rows INCLUDING header+separator, so the
+// visible item count is height − 2 (clamped to a minimum of 2). HelpBar and
+// StatusBar rows append BELOW this height.
 public function setWindowHeight(int $h): self
 
-// Set overlay window width (0 = auto-computed from prompt + items)
+// Set overlay width (0 = auto from prompt + items, clamped to the terminal
+// column count; a positive value is the OUTER width — a border consumes two
+// of those cells)
 public function setWindowWidth(int $w): self
 
-// Position the overlay at (x, y); also shows the hermit
+// Position the overlay at (x, y). Pure placement: visibility is unchanged
+// (use show()/hide()) and negative coordinates clamp to 0.
 public function setOffset(int $x, int $y): self
 
-// Custom item formatter: Closure(item, isSelected): string
-// For string items the closure receives (string $item, bool $isSelected)
+// Custom item formatter:
+//   Closure(string $value, bool $isSelected, int $number): string
+// It always receives the VALUE STRING (never an Item), even for Item objects,
+// plus the selection flag and the item's ordinal. Values arrive already
+// guarded (control bytes, escape sequences and forged zone sentinels are
+// stripped before you see them); SGR you add survives highlighting.
 public function setItemFormatter(\Closure $fn): self
 
 // Custom filter predicate: Closure(Item $item): bool
@@ -171,6 +202,9 @@ public function setFilterFn(\Closure $fn): self
 // Plug in a sugar-fuzzy ranker (null restores the default substring filter).
 // When set, a non-empty filter ranks items by descending fuzzy score (true
 // subsequence matching) and highlighting follows the scored indices.
+// Cost note: every keystroke re-scores the WHOLE corpus against the filter —
+// tens of ms to hundreds of ms on 20k-item lists (the substring path is
+// single-digit ms). Debounce at the host or keep corpora modest.
 public function setRanker(?\SugarCraft\Fuzzy\FuzzyMatcher $matcher): self
 
 // Apply a sugar-style Border to the overlay window
@@ -201,10 +235,14 @@ public function show(): self
 // Hide the overlay
 public function hide(): self
 
-// Append a character to the filter text and re-filter
+// Append one or more characters to the filter text and re-filter. Resets
+// the cursor to 0. Input is silently refused once the filter holds
+// MAX_FILTER_LENGTH (256) codepoints — compare filterText() to detect.
 public function type(string $char): self
 
-// Remove last character from filter text
+// Remove the last codepoint from the filter text. Unlike type(), the
+// cursor CLAMPS to the new list end instead of resetting — deliberate
+// asymmetry: narrowing preserves your place, widening does not.
 public function backspace(): self
 
 // Clear filter text and show all items
@@ -300,6 +338,10 @@ $history->append(new FilteredItem(1, 'apple'));
 // scalars, arrays without a value field) are skipped.
 $items = $history->all();  // returns list<Item>
 
+// Growth policy: the file grows unbounded by design — there is no built-in
+// rotation or cap. Hosts that need one trim with clear() (or rewrite the
+// file themselves between sessions).
+
 // Clear the history: the file is truncated in place under an exclusive
 // lock (permissions and inode are preserved; no unlink-and-recreate).
 $history->clear();
@@ -354,6 +396,26 @@ $bar = $bar->hide();
 echo $bar->render();
 ```
 
+## Wiring keyboard input
+
+QuickPick **reads no input itself**. It holds state and renders; your event
+loop decodes terminal keys and forwards them. A conventional mapping:
+
+| Key | Call |
+|-----|------|
+| printable text | `$h = $h->type($s)` |
+| Backspace | `$h = $h->backspace()` |
+| Ctrl+U | `$h = $h->clear()` |
+| Up / Down | `$h = $h->cursorUp()` / `$h->cursorDown()` (step argument optional; there are no page keys — call with a step) |
+| Home / End | `$h = $h->cursorTop()` / `$h->cursorBottom()` |
+| Enter (accept) | `$choice = $h->selected()` — `null` means nothing to accept — then `$h = $h->hide()` |
+| Esc (cancel) | `$h = $h->hide()` |
+
+`hide()` is not `accept()`: the overlay simply stops rendering; reading
+`selected()` **before** hiding is your accept path. The `Model` interface's
+`update(QuickPick $hermit, string $msg)` expects exactly this forwarding —
+`$msg` strings are host-defined, nothing in this library decodes them.
+
 ## SIGWINCH Resize
 
 ```php
@@ -367,7 +429,9 @@ $h = QuickPick::new($items)
 // attachSigwinch() returns bool — whether the handler installed — not the
 // QuickPick, so call it on its own line rather than continuing the chain.
 if ($h->attachSigwinch() === false) {
-    // No ext-pcntl, no SIGWINCH, or no callback registered: fall back to
+    // No ext-pcntl, no SIGWINCH, no callback registered, or the size query
+    // cannot fire (non-tty STDIN — the handler installs but silently stops
+    // reporting on such descriptors): fall back to
     // polling the size yourself, or simply carry on without resize events.
 }
 ```

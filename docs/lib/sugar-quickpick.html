@@ -51,7 +51,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-quickpick"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-quickpick" alt="SugarQuickpick code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Fuzzy-search overlay — type to filter a list, arrow keys to select, Enter to confirm. Ships as a model wrapper that composes into any SugarCraft app. Supports structured Item objects, custom filter predicates, and persistent JSONL history.</p>
+    <p class="lede" style="margin-top: 28px;">Fuzzy-search overlay: a render-and-state component your event loop drives — you decode keys and forward them (type(), cursorUp()/Down(), selected(), hide()); the library itself reads no input. Composes into any SugarCraft app via the package-local Model contract. Supports structured Item objects, custom filter predicates, and persistent JSONL history.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-quickpick</code></pre>
@@ -59,7 +59,7 @@
     <h3 style="margin-top: 32px;">Quickstart — plain strings</h3>
     <pre class="code"><code class="language-php">use SugarCraft\QuickPick\QuickPick;
 
-$hermit = QuickPick::new(
+$quickpick = QuickPick::new(
     items: ['Ruby', 'PHP', 'Go', 'Rust', 'Python'],
 )->setPrompt('Choose language: ');</code></pre>
 
@@ -74,26 +74,26 @@ $items = [
     new FilteredItem(3, 'cherry'),
 ];
 
-$hermit = QuickPick::new($items)
+$quickpick = QuickPick::new($items)
     ->setFilterFn(fn($item) => $item->number() > 0)
     ->setPrompt('> ');
 
 // Persist selections (path you own; files created are 0600)
 $history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
-if ($choice = $hermit->selected()) {
+if ($choice = $quickpick->selected()) {
     $history->append($choice);
 }
 $allItems = $history->all();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Fuzzy matching</strong><span>Anchor-aware substring filter on item text as you type.</span></div>
-            <div class="feature"><strong>QuickPick model</strong><span>Full init / update / view model.</span></div>
+      <div class="feature"><strong>Fuzzy matching</strong><span>Case-folded substring filter; a candidate must match in the first half of the text (codepoint-based). setRanker() swaps in true subsequence scoring.</span></div>
+            <div class="feature"><strong>Composition wrapper</strong><span>update()/view() Model contract — package-local, no init()/subscriptions plumbing.</span></div>
             <div class="feature"><strong>Configurable</strong><span>Custom formatter, prompt, match highlight style, window size.</span></div>
             <div class="feature"><strong>Item interface</strong><span>Structured Item objects with number() + value() instead of raw strings.</span></div>
             <div class="feature"><strong>Custom filter predicates</strong><span>setFilterFn() applies arbitrary Closure(Item): bool logic.</span></div>
             <div class="feature"><strong>Persistent history</strong><span>FileHistory stores items as JSONL lines, one item per line.</span></div>
-            <div class="feature"><strong>Border &amp; Style</strong><span>withBorder() / withStyle() compose sugar-style Border and Style objects.</span></div>
+            <div class="feature"><strong>Border &amp; Style</strong><span>withBorder() frames every row (T-junction separator); withStyle() paints each rendered row via sugar-style.</span></div>
             <div class="feature"><strong>HelpBar / StatusBar</strong><span>Keyboard-shortcut summary and status message rendered below the overlay.</span></div>
             <div class="feature"><strong>SIGWINCH resize</strong><span>withOnResize() + attachSigwinch() forward terminal resize events via SignalForwarder.</span></div>
     </div>
@@ -115,11 +115,11 @@ $allItems = $history->all();</code></pre>
 <tr><td>QuickPick</td><td>withItems(array $items)</td><td>Replace items and reset filter state</td></tr>
 <tr><td>QuickPick</td><td>setPrompt(string)</td><td>Set filter prompt string</td></tr>
 <tr><td>QuickPick</td><td>setFilterFn(Closure)</td><td>Set custom filter predicate: Closure(Item): bool</td></tr>
-<tr><td>QuickPick</td><td>setItemFormatter(Closure)</td><td>Set item formatter: Closure(item, isSelected): string</td></tr>
+<tr><td>QuickPick</td><td>setItemFormatter(Closure)</td><td>Set item formatter: Closure(value: string, isSelected: bool, number: int): string</td></tr>
 <tr><td>QuickPick</td><td>setMatchStyle(string)</td><td>Set ANSI SGR codes for match highlighting</td></tr>
 <tr><td>QuickPick</td><td>setWindowHeight(int)</td><td>Set visible item window height</td></tr>
 <tr><td>QuickPick</td><td>setWindowWidth(int)</td><td>Set overlay width (0 = auto)</td></tr>
-<tr><td>QuickPick</td><td>setOffset(int $x, int $y)</td><td>Position overlay and show</td></tr>
+<tr><td>QuickPick</td><td>setOffset(int $x, int $y)</td><td>Set overlay position (pure placement; negatives clamp; visibility unchanged)</td></tr>
 <tr><td>QuickPick</td><td>show() / hide()</td><td>Show or hide the overlay</td></tr>
 <tr><td>QuickPick</td><td>type(string) / backspace() / clear()</td><td>Modify filter text</td></tr>
 <tr><td>QuickPick</td><td>cursorUp/Down/Top/Bottom()</td><td>Navigate item cursor</td></tr>
@@ -129,10 +129,11 @@ $allItems = $history->all();</code></pre>
 <tr><td>QuickPick</td><td>withStyle(?Style)</td><td>Apply sugar-style Style to overlay window</td></tr>
 <tr><td>QuickPick</td><td>withHelpBar(?HelpBar)</td><td>Attach keyboard-shortcut summary below filter list</td></tr>
 <tr><td>QuickPick</td><td>withStatusBar(?StatusBar)</td><td>Attach status message line at overlay bottom</td></tr>
-<tr><td>QuickPick</td><td>withOnResize(Closure)</td><td>Register callback invoked on SIGWINCH (cols, rows)</td></tr>
+<tr><td>QuickPick</td><td>setRanker(?FuzzyMatcher)</td><td>Plug a sugar-fuzzy ranker (per-keystroke full-corpus scoring); null restores substring filter</td></tr>
+<tr><td>QuickPick</td><td>withOnResize(?Closure)</td><td>Register callback invoked on SIGWINCH (cols, rows); null detaches</td></tr>
 <tr><td>QuickPick</td><td>attachSigwinch()</td><td>Install SIGWINCH handler via SignalForwarder (requires ext-pcntl)</td></tr>
 <tr><td>QuickPick</td><td>border() / style() / helpBar() / statusBar()</td><td>Query attached border, style, help bar, status bar</td></tr>
-<tr><td>QuickPick</td><td>View(string $backgroundView)</td><td>Render composited overlay over background</td></tr>
+<tr><td>QuickPick</td><td>view(string $backgroundView)</td><td>Render composited overlay over background</td></tr>
 <tr><td>HelpBar</td><td>new(array $shortcuts, bool $visible)</td><td>Create help bar with key→description pairs</td></tr>
 <tr><td>HelpBar</td><td>withShortcut(key, desc) / withoutShortcut(key)</td><td>Add/remove shortcut entry</td></tr>
 <tr><td>HelpBar</td><td>show() / hide() / isVisible()</td><td>Control visibility</td></tr>

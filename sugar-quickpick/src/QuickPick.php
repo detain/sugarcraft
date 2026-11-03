@@ -14,12 +14,16 @@ use SugarCraft\Style\Style;
 use SugarCraft\Pty\SignalForwarder;
 
 /**
- * The QuickPick — fuzzy finder / quick-fix overlay component.
+ * The QuickPick — fuzzy finder / quick-pick overlay component.
  *
  * Renders a filterable list overlay on top of a background view.
  * Background continues to update while the overlay is shown.
  *
- * Port of Genekkion/theHermit.
+ * The component itself reads no input and decodes no keys: it is state and
+ * rendering only. The host wires terminal events onto type()/backspace()/
+ * cursor*()/selected()/hide() (see README “Wiring keyboard input”).
+ *
+ * Inspired by Genekkion/theHermit; developed as a native PHP project.
  *
  * @see https://github.com/Genekkion/theHermit
  */
@@ -152,6 +156,13 @@ final class QuickPick
     // Configuration (with* fluent setters)
     // -------------------------------------------------------------------------
 
+    /**
+     * Replace the item list.
+     *
+     * The current filter text is KEPT — the new list is immediately
+     * re-filtered with it (withItems() is not “clear the filter”). The
+     * cursor resets to 0.
+     */
     public function withItems(array $items): self
     {
         $clone = clone $this;
@@ -198,6 +209,14 @@ final class QuickPick
         return $clone;
     }
 
+    /**
+     * Set the overlay width in cells.
+     *
+     * 0 = auto: width is computed from prompt + items and clamped to the
+     * terminal's column count (auto width can never exceed the screen).
+     * A positive value is the OUTER width — when a border is attached via
+     * withBorder(), two of those cells go to the side runes.
+     */
     public function setWindowWidth(int $w): self
     {
         $clone = clone $this;
@@ -327,7 +346,8 @@ final class QuickPick
 
     /**
      * Register a callback to invoke after SIGWINCH resize events.
-     * The callback receives (cols: int, rows: int).
+     * The callback receives (cols: int, rows: int). Pass null to detach a
+     * previously registered callback (attachSigwinch() then returns false).
      */
     public function withOnResize(?\Closure $callback): self
     {
@@ -429,6 +449,17 @@ final class QuickPick
         return $clone;
     }
 
+    /**
+     * Append one or more characters to the filter text.
+     *
+     * The parameter is a string, not a single character: paste-shaped input
+     * and multi-codepoint keypresses are appended whole.
+     *
+     * Refusal is silent at the cap: once the filter already holds
+     * {@see MAX_FILTER_LENGTH} (256) codepoints, further input is refused
+     * and $this is returned unchanged — no exception, no notice. Hosts that
+     * must surface the cap compare filterText() before and after.
+     */
     public function type(string $char): self
     {
         // Counted in codepoints, not bytes: MAX_FILTER_LENGTH is a limit on the
@@ -461,6 +492,10 @@ final class QuickPick
      * Trade-off stated honestly: a multi-codepoint grapheme such as '👍🏽'
      * (thumbs-up + skin-tone modifier) takes two backspaces to clear, because
      * the modifier is its own codepoint and the matcher indexes it as one.
+     *
+     * Cursor behaviour is deliberately asymmetric with type(): backspace
+     * CLAMPS the cursor to the new list end (narrowing preserves your
+     * place), while type() RESETS it to 0 (widening starts from the top).
      */
     public function backspace(): self
     {
