@@ -12,7 +12,7 @@ $parser  = new Parser($handler);
 // Chunks may split anywhere; in-flight sequences carry across feed() calls.
 $parser-&gt;feed("\x1b[1;");
 $parser-&gt;feed("31mHi\x1b[0m");
-$parser-&gt;flush();                        // end of stream: dispatch anything pending
+$parser-&gt;flush();                        // end of stream: dispatches a pending string payload
 
 $handler-&gt;filter('csi');   // two csi entries: params [1, 31] then [0], final 'm' (109)
 $handler-&gt;filter('print'); // 'H', 'i'</code></pre>
@@ -26,10 +26,10 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>VT500 state machine</strong><span><code>Parser</code> implements the Paul Williams DEC parser and dispatches abstract <code>Handler</code> events: printChar, execute, csiDispatch, escDispatch, oscDispatch, dcsDispatch, sosPmApcDispatch.</span></div>
-      <div class="feature"><strong>Partial-input safe</strong><span>Feed any chunk size. Incomplete sequences and UTF-8 runes wait for the next <code>feed()</code>; <code>flush()</code> (or <code>parseComplete()</code>) settles the end of the stream.</span></div>
+      <div class="feature"><strong>Partial-input safe</strong><span>Feed any chunk size. Incomplete sequences and UTF-8 runes wait for the next <code>feed()</code>; <code>flush()</code> (or <code>parseComplete()</code>) settles a pending OSC/DCS/SOS/PM/APC string at end of stream — an in-flight CSI or ESC, and a half-finished DCS prelude, end undispatched.</span></div>
       <div class="feature"><strong>CSI handler interface</strong><span><code>CsiHandler</code> covers the emulator CSI set: CUU/CUD/CUF/CUB/CUP/HVP, ED/EL, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF, DECSET/DECRST, DECSTBM, TBC/CHT/CBT and SGR. <code>HandlerAdapter</code> translates parser events into these calls.</span></div>
       <div class="feature"><strong>Sub-parameters</strong><span><code>subparams()</code> and <code>Parser::groupSubparameters()</code> keep ECMA-48 colon groups apart, so <code>CSI 4:3 m</code> (curly underline) is not confused with <code>CSI 4;3 m</code>. Handlers can opt in through <code>SubparamsAwareHandler</code>.</span></div>
-      <div class="feature"><strong>Bounded payloads</strong><span>DCS/OSC/SOS/PM/APC payloads are capped (64 KiB by default; the third constructor argument raises it), so a hostile stream cannot grow memory without limit.</span></div>
+      <div class="feature"><strong>Bounded payloads</strong><span>DCS/OSC/SOS/PM/APC payloads are capped (64 KiB by default; the third constructor argument raises it), so a hostile stream cannot grow memory without limit. Past the cap the excess is dropped and decoders see a truncated payload; <code>Codec\Iterm1337</code> flags it as malformed when the declared <code>size=</code> contradicts the bytes collected.</span></div>
       <div class="feature"><strong>DebugHandler</strong><span>Records every action as <code>['type' =&gt; …, 'detail' =&gt; …]</code> in <code>$log</code>; <code>filter($type)</code> selects one kind. Useful in tests and for stream inspection.</span></div>
     </div>
 
@@ -42,9 +42,9 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
-      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-ansi-parser/tree/main/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/detain/sugarcraft/tree/master/sugar-ansi-parser">Source on GitHub</a></li>
+      <li><a href="https://github.com/detain/sugarcraft/blob/master/sugar-ansi-parser/README.md">Full README</a></li>
+      <li><a href="https://github.com/detain/sugarcraft/tree/master/sugar-ansi-parser/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/ansi">charmbracelet/x/ansi</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
@@ -58,9 +58,9 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
 <tr><td>Parser</td><td>currentState(): State / subparams(): list&lt;bool&gt;</td><td>Current state-machine state; colon flags for the last parameter list</td></tr>
 <tr><td>Parser</td><td>static groupSubparameters(params, flags)</td><td>Regroup a flat parameter list by its colon flags</td></tr>
 <tr><td>Handler</td><td>printChar / execute / csiDispatch / escDispatch / oscDispatch / dcsDispatch / sosPmApcDispatch</td><td>Parse events a handler receives</td></tr>
-<tr><td>HandlerAdapter</td><td>__construct(CsiHandler, OscHandler)</td><td>Bridges parser events to the CSI and OSC handler interfaces</td></tr>
+<tr><td>HandlerAdapter</td><td>__construct(CsiHandler, OscHandler, ?Handler $fallback = null)</td><td>Bridges parser events to the CSI and OSC handler interfaces; unhandled and non-emulator events (ESC/DCS/SOS/PM/APC, unmapped finals, extra executes) forward to the optional fallback</td></tr>
 <tr><td>CsiHandler</td><td>printable / cuu/cud/cuf/cub / cup / sgr / ed / el / decset / decrst / decstbm / tbc / cht / cbt / …</td><td>Emulator-facing CSI actions</td></tr>
-<tr><td>OscHandler</td><td>title(string) / hyperlink(uri, id)</td><td>Emulator-facing OSC actions</td></tr>
+<tr><td>OscHandler</td><td>title(string) / hyperlink(uri, id)</td><td>Emulator-facing OSC actions; the adapter maps OSC 0/1/2 to title and OSC 8 (including the backtick <code>8;URI`</code> spelling) to hyperlink — a malformed <code>8;</code> payload closes the open link instead of dropping silently</td></tr>
 <tr><td>DebugHandler</td><td>$log / filter(type)</td><td>Records every action for inspection</td></tr>
 <tr><td>Codec\Dcs</td><td>static parse(final, params, prefix, intermediate, data) → kind() / isSixel() / isTruncated() / describe()</td><td>Typed DCS decoder: sixel, XTVERSION, DECRQSS/PSS, tmux, truncation</td></tr>
 <tr><td>Codec\Iterm1337</td><td>static parse(oscData) / static fromDcs(final, data)</td><td>iTerm2/WezTerm 1337 inline-image + control decoder; malformed() records, never throws</td></tr>
