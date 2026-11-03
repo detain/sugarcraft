@@ -55,13 +55,25 @@ function diffParams(): MethodParams<'files.diff'> {
   return base.value > 0 ? { sessionId: session, checkpoint: base.value } : { sessionId: session }
 }
 
+/**
+ * Newest-wins latch (MA-31): switching sessions or bases re-arms `load()` while an older
+ * pair is still in flight, and the RPC round-trip is the slowest thing in the component —
+ * the stale pair can settle LAST and paint the new view with the old session's files, then
+ * clear the loading flag the newer pair had just armed. The token is checked once after
+ * the awaits settle: if a newer load has since been armed, this one's answers are dropped
+ * whole (FileViewer.vue carries the same idiom for the shared viewer).
+ */
+let loadSeq = 0
+
 async function load(): Promise<void> {
+  const mine = ++loadSeq
   loading.value = true
   error.value = null
   const [changed, diff] = await Promise.allSettled([
     connection.request('files.changed', {}),
     connection.request('files.diff', diffParams()),
   ])
+  if (mine !== loadSeq) return
   if (changed.status === 'fulfilled') {
     items.value = changed.value.items
     changedTruncated.value = changed.value.truncated

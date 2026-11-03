@@ -55,7 +55,7 @@ export interface BackgroundShell {
   interactive?: boolean
 }
 
-/** WEB-3a: what the session's context is built from — structure for the panel `/context` prints as text. */
+/** What the session's context is built from — structure for the panel `/context` prints as text. */
 export interface ContextSources {
   /** The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them. */
   instructionFiles: ({
@@ -108,7 +108,7 @@ export interface ContextSources {
   }[]
   /** C-SEC-5.b: this root's trust prompts — the 5.a launch census' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant. */
   trusts?: TrustPrompt[]
-  /** The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer (WEB-3a). */
+  /** The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer. */
   breakdown: {
     window: number
     sections: {
@@ -352,7 +352,7 @@ export type Subscription = {
 
 export interface TrustPrompt {
   askId: string
-  /** WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
+  /** The marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
   kind: "trust"
   /** C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`). */
   target: "mcp" | "mcp-pin" | "hooks" | "commands" | "settings"
@@ -1037,7 +1037,7 @@ export interface Methods {
         /** base64url of the 16-octet subscription auth secret. */
         auth: string
       }
-      /** Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (R13 default). */
+      /** Opt this row into carrying the session title in the payload. Omitted or false: every notification stays redacted generic text (the default). */
       name?: boolean
       /** A retry with the same key gets the original answer (5 min). */
       idempotencyKey?: string
@@ -1157,7 +1157,7 @@ export interface Methods {
       limits?: Record<string, number>
     }
   }
-  /** The tail of the server log, flattened and capped; admin scope is the only door (R13). */
+  /** The tail of the server log, flattened and capped; admin scope is the only door. */
   "server.logs": {
     params: {
       /** How many trailing lines to answer with; the newest survive the line and byte caps. Default 100. */
@@ -1181,7 +1181,7 @@ export interface Methods {
       accepted: boolean
     }
   }
-  /** The web UI chrome strings in one locale (C-TUI-6.f): only web.-prefixed keys; server, tool and model text stay untranslated. */
+  /** The web UI chrome strings in one locale: only web.-prefixed keys; server, tool and model text stay untranslated. */
   "server.strings": {
     params: {
       /** BCP-47-ish tag to serve; the ladder answers exact, then base-before-dash, then English. */
@@ -2107,7 +2107,7 @@ export interface Events {
     sessionId: SessionId
   } | {
     askId: string
-    /** WEB-3b: the marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
+    /** The marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
     kind: "trust"
     /** C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`). */
     target: "mcp" | "mcp-pin" | "hooks" | "commands" | "settings"

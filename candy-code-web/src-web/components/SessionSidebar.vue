@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ago, oneLine, spendLabel } from '../lib/format'
 import { t } from '../lib/i18n'
 import type { SessionSummary } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
+import { useSlowPending } from '../lib/slowPending'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
 import { useLayoutStore } from '../stores/layout'
@@ -21,9 +22,65 @@ const newSession = useNewSessionStore()
 const router = useRouter()
 const filter = ref('')
 const creating = ref(false)
+/** MA-36: which button was pressed, so only that one takes the busy verb. */
+const createKind = ref<'plain' | 'incognito'>('plain')
+const slowCreating = useSlowPending(() => creating.value)
 const error = ref<string | null>(null)
 /** WEB-1a: the session whose row action menu is open, at most one at a time. */
 const menuFor = ref<string | null>(null)
+
+/**
+ * MA-32: the menu had no dismissal beyond its own toggle — a click anywhere else left it
+ * open (and open menus swallow the row underneath them visually). The document listens
+ * while a menu is up; clicks inside the open row (trigger or items) belong to that row's
+ * own handlers. Test specs dispatch `click` without pointerdown, so the pinned menu
+ * flows in the specs are untouched.
+ */
+function onDocPointer(event: PointerEvent): void {
+  if (menuFor.value === null) return
+  const target = event.target
+  if (target instanceof Element && target.closest('.row.open') !== null) return
+  menuFor.value = null
+}
+
+/**
+ * MA-32: opening a menu by keyboard or click lands the focus on its first item, and the
+ * arrows/Tab walk it (Escape already closes, from the sidebar's own onKey, which stands
+ * down from j/k while a menu is open).
+ */
+async function revealMenu(id: string): Promise<void> {
+  await nextTick()
+  const menu = document.querySelector<HTMLElement>(`[data-menu-owner="${id}"]`)
+  menu?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+}
+
+watch(menuFor, (id) => {
+  if (id !== null) void revealMenu(id)
+})
+
+function onMenuKey(event: KeyboardEvent): void {
+  const menu = event.currentTarget
+  if (!(menu instanceof HTMLElement)) return
+  const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+  if (items.length === 0) return
+  const at = items.indexOf(document.activeElement as HTMLElement)
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    items[(at + 1) % items.length]?.focus()
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    items[(at - 1 + items.length) % items.length]?.focus()
+  } else if (event.key === 'Home') {
+    event.preventDefault()
+    items[0]?.focus()
+  } else if (event.key === 'End') {
+    event.preventDefault()
+    items[items.length - 1]?.focus()
+  } else if (event.key === 'Tab') {
+    // Tabbing out of the menu closes it, as WAI-ARIA menu pattern expects; focus moves on.
+    menuFor.value = null
+  }
+}
 /**
  * C-SES-7.e: the tray toggle drives the store (which re-reads the server);
  * the v-model write is the async reload itself, never a local sweep.
@@ -43,6 +100,9 @@ const canWrite = computed(() => connection.scopes.includes('write'))
  */
 const shareDialog = ref<{ url: string; expiresAt: number } | null>(null)
 const shareCopied = ref(false)
+/** MA-33: the dialog itself and its copy button, for the reveal after publishing. */
+const sharePanel = ref<HTMLElement | null>(null)
+const shareCopyButton = ref<HTMLElement | null>(null)
 
 const EXPORT_EXTENSIONS: Record<'markdown' | 'json' | 'text', string> = { markdown: 'md', json: 'json', text: 'txt' }
 
@@ -79,7 +139,9 @@ function open(id: string): void {
 }
 
 async function create(incognito = false): Promise<void> {
+  if (creating.value) return
   creating.value = true
+  createKind.value = incognito ? 'incognito' : 'plain'
   error.value = null
   try {
     const summary = await newSession.start(incognito)
@@ -196,6 +258,14 @@ async function shareRow(summary: SessionSummary): Promise<void> {
   await act(async () => {
     const result = await sessions.share(summary.id)
     shareDialog.value = { url: `${window.location.origin}${result.path}`, expiresAt: result.expiresAt }
+    // MA-33: the token appears at the bottom of a scrollable list and the sidebar never
+    // moves — a share that scrolled off-screen silently fails to exist. Reveal it and
+    // take focus with it (role=dialog + aria-label the block already carries).
+    await nextTick()
+    // Optional-call: a missing scrollIntoView (some DOM shims) must not break the share
+    // itself — the reveal is a progressive enhancement on top of the emitted dialog.
+    sharePanel.value?.scrollIntoView?.({ block: 'nearest' })
+    shareCopyButton.value?.focus()
   })
 }
 
@@ -242,7 +312,9 @@ function download(filename: string, content: string): void {
   link.click()
 }
 
+onMounted(() => document.addEventListener('pointerdown', onDocPointer))
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointer)
   if (downloadUrl !== null) URL.revokeObjectURL(downloadUrl)
 })
 
@@ -261,6 +333,7 @@ function onKey(event: KeyboardEvent): void {
     menuFor.value = null
     return
   }
+  if (menuFor.value !== null) return // The menu owns the keys now; see onMenuKey.
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
   const typedInto = event.target
   if (
@@ -283,14 +356,25 @@ function onKey(event: KeyboardEvent): void {
   <nav class="sidebar" :aria-label="t('web.chrome.sidebar.heading')" data-testid="sidebar" @keydown="onKey">
     <div class="top">
       <h2>{{ t('web.chrome.sidebar.heading') }}</h2>
-      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="new-session" @click="create()">{{ t('web.chrome.sidebar.new') }}</button>
-      <!-- C-SES-7.e: the incognito entry — the same start path, ephemeral. -->
-      <button type="button" :disabled="creating || !connection.connected" data-testid="new-incognito" :title="t('web.chrome.sidebar.incognito_hint')" @click="create(true)">{{ t('web.chrome.sidebar.incognito_button') }}</button>
+      <!-- MA-36: the pressed button takes the busy verb after a short grace, and a
+           disconnected server says why on the button instead of silently greying it. -->
+      <button
+        type="button"
+        class="primary"
+        :disabled="creating || !connection.connected"
+        :aria-busy="creating"
+        :title="connection.connected ? undefined : t('web.chrome.banner.no_answer')"
+        data-testid="new-session"
+        @click="create()"
+      >
+        {{ createKind === 'plain' && slowCreating ? t('web.chrome.about.loading') : t('web.chrome.sidebar.new') }}
+      </button>
+      <button type="button" :disabled="creating || !connection.connected" :aria-busy="creating" :title="!connection.connected ? t('web.chrome.banner.no_answer') : t('web.chrome.sidebar.incognito_hint')" data-testid="new-incognito" @click="create(true)">{{ createKind === 'incognito' && slowCreating ? t('web.chrome.about.loading') : t('web.chrome.sidebar.incognito_button') }}</button>
     </div>
     <input v-model="filter" type="search" :placeholder="t('web.chrome.sidebar.filter_placeholder')" :aria-label="t('web.chrome.sidebar.filter_aria')">
     <!-- C-SES-7.e: the tray toggle drives the store's re-read of the server. -->
     <label class="tray"><input v-model="trayShown" type="checkbox" data-testid="show-archived"> {{ t('web.chrome.sidebar.show_archived') }}</label>
-    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="error" class="error" role="alert" data-testid="sidebar-error">{{ error }}</p>
     <p v-if="sessions.loaded && sessions.items.length === 0" class="empty">{{ t('web.chrome.sidebar.empty') }}</p>
     <p v-else-if="filter.trim() !== '' && !sessions.searching && shown.length === 0" class="empty" data-testid="search-empty">{{ t('web.chrome.sidebar.search_empty', { query: filter.trim() }) }}</p>
     <ul>
@@ -319,7 +403,7 @@ function onKey(event: KeyboardEvent): void {
           :data-testid="`row-menu-${summary.id}`"
           @click="menuFor = menuFor === summary.id ? null : summary.id"
         >&#8942;</button>
-        <ul v-if="menuFor === summary.id" class="menu" role="menu" data-testid="row-actions">
+        <ul v-if="menuFor === summary.id" class="menu" role="menu" data-testid="row-actions" :data-menu-owner="summary.id" @keydown="onMenuKey">
           <li><button type="button" role="menuitem" :data-testid="`row-fork-${summary.id}`" @click="fork(summary)">{{ t('web.chrome.sidebar.fork') }}</button></li>
           <li><button type="button" role="menuitem" :data-testid="`row-export-markdown-${summary.id}`" @click="exportRow(summary, 'markdown')">{{ t('web.chrome.sidebar.export_markdown') }}</button></li>
           <li><button type="button" role="menuitem" :data-testid="`row-export-json-${summary.id}`" @click="exportRow(summary, 'json')">{{ t('web.chrome.sidebar.export_json') }}</button></li>
@@ -336,12 +420,12 @@ function onKey(event: KeyboardEvent): void {
         </ul>
       </li>
     </ul>
-    <div v-if="shareDialog" class="share" role="dialog" :aria-label="t('web.chrome.sidebar.share_dialog_aria')" data-testid="share-dialog">
+    <div v-if="shareDialog" ref="sharePanel" class="share" role="dialog" :aria-label="t('web.chrome.sidebar.share_dialog_aria')" data-testid="share-dialog">
       <p>{{ t('web.chrome.sidebar.share_published') }}</p>
       <code class="share-url" data-testid="share-url">{{ shareDialog.url }}</code>
       <p class="share-expiry" data-testid="share-expiry">{{ t('web.chrome.sidebar.share_expiry', { when: expiryLabel(shareDialog.expiresAt) }) }}</p>
       <div class="share-actions">
-        <button type="button" class="primary" data-testid="share-copy" @click="copyShareUrl">{{ shareCopied ? t('web.chrome.sidebar.revoked') : t('web.chrome.sidebar.share_copy') }}</button>
+        <button ref="shareCopyButton" type="button" class="primary" data-testid="share-copy" @click="copyShareUrl">{{ shareCopied ? t('web.chrome.sidebar.revoked') : t('web.chrome.sidebar.share_copy') }}</button>
         <button type="button" data-testid="share-close" @click="closeShareDialog">{{ t('web.chrome.sidebar.close') }}</button>
       </div>
     </div>

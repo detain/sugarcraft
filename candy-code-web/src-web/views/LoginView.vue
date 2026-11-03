@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { t } from '../lib/i18n'
+import { useSlowPending } from '../lib/slowPending'
 import { AuthError } from '../protocol/auth'
 import { useConnectionStore } from '../stores/connection'
 
@@ -10,6 +11,9 @@ const router = useRouter()
 const secret = ref('')
 const busy = ref(false)
 const error = ref<string | null>(null)
+// MA-36: "Asking the server…" appears only if the round-trip takes long enough
+// to be worth seeing — a fast sign-in never flashes the verb.
+const slowBusy = useSlowPending(() => busy.value)
 
 /**
  * A sign-in code (from `candy-code serve url`) or the owner token
@@ -18,6 +22,7 @@ const error = ref<string | null>(null)
  * the code is tried first and the token second.
  */
 async function submit(): Promise<void> {
+  if (busy.value) return // MA-36: Enter in the field submits even while the button is greyed
   const value = secret.value.trim().replace(/^.*#code=/, '')
   if (value === '') return
   busy.value = true
@@ -50,7 +55,7 @@ async function submit(): Promise<void> {
     <form @submit.prevent="submit">
       <label for="secret">{{ t('web.views.login.code_label') }}</label>
       <input id="secret" v-model="secret" type="password" autocomplete="off" spellcheck="false" data-testid="login-secret">
-      <button type="submit" class="primary" :disabled="busy || secret.trim() === ''" data-testid="login-submit">{{ t('web.views.login.submit') }}</button>
+      <button type="submit" class="primary" :disabled="busy || secret.trim() === ''" data-testid="login-submit">{{ slowBusy ? t('web.chrome.about.loading') : t('web.views.login.submit') }}</button>
     </form>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
   </section>

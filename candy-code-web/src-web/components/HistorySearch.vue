@@ -131,6 +131,12 @@ input {
   border-bottom: 1px solid var(--line);
   outline: none;
 }
+/* MA-35: this block deleted the focus ring and nothing replaced it — the global
+   tokens.css rule cannot win here (same specificity, injected earlier). */
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 ul {
   list-style: none;
   margin: 0;

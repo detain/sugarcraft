@@ -14,7 +14,19 @@ import { t } from '../lib/i18n'
  * `after` slot, inside the same scroller. The view follows the bottom while
  * the reader is there, and stays put once they scroll up.
  */
-const props = defineProps<{ items: Item[]; subagents?: Record<string, SubAgent>; tick?: unknown; sessionId?: string }>()
+const props = defineProps<{
+  items: Item[]
+  subagents?: Record<string, SubAgent>
+  tick?: unknown
+  sessionId?: string
+  /** ISS-058 / MA-29: the store says the server named an older cursor; the top-edge
+   *  sentinel only ever pulls while this holds. */
+  canLoadOlder?: boolean
+  /** A page walk is in flight (drives `aria-busy` and short-circuits the sentinel). */
+  loadingOlder?: boolean
+  /** Pull one older page; resolves to the server-failure text to surface, or null. */
+  fetchOlder?: () => Promise<string | null>
+}>()
 // C-TUI-3.b: the two checkpoint row actions ride through to the view, which
 // owns the transcript order, the confirm guard, and the composer draft.
 const emit = defineEmits<{ loadFull: [item: ToolItem]; rewind: [item: UserItem]; editResend: [item: UserItem] }>()
@@ -41,10 +53,68 @@ function measure(element: Element | ComponentPublicInstance | null): void {
   if (element instanceof Element) virtualizer.value.measureElement(element)
 }
 
+/** Distance from the top (px) at which the walk pulls one more page. */
+const OLDER_TRIGGER_PX = 48
+/** A page that adds no visible height (all rows hidden or compacted) counts against
+ *  this budget; at the limit the walk rests until the reader scrolls away and back. */
+const OLDER_STABLE_LIMIT = 3
+
+const olderBusy = ref(false)
+const olderProblem = ref<string | null>(null)
+let olderArmed = true
+let olderStableTries = 0
+
 function onScroll(): void {
   const el = scroller.value
   if (!el) return
   following.value = el.scrollHeight - el.scrollTop - el.clientHeight < 48
+  // The top-edge sentinel (MA-29): paging older history is armed once per visit to the
+  // edge, and re-armed only when the reader leaves it — nothing ever hammers the socket.
+  if (el.scrollTop > OLDER_TRIGGER_PX) {
+    olderArmed = true
+    olderStableTries = 0
+    return
+  }
+  void tickOlder()
+}
+
+/** Pull one page of older rows while the reader sits on the top edge (MA-29: the store's
+ *  loadOlder was reachable only from tests — no surface called it). On a page that grew
+ *  the list, the distance-from-bottom is restored so the view stays anchored to what the
+ *  reader was looking at, instead of jumping them through the new rows; the retry cap
+ *  covers the pathological case the store's stuck-page law cannot see from inside one
+ *  call (every page present in the transcript, none adding height).
+ */
+async function tickOlder(): Promise<void> {
+  const el = scroller.value
+  const fetchOlder = props.fetchOlder
+  if (el === null || fetchOlder === undefined) return
+  if (!props.canLoadOlder || props.loadingOlder === true || olderBusy.value || !olderArmed) return
+  olderArmed = false
+  olderBusy.value = true
+  olderProblem.value = null
+  const heightBefore = el.scrollHeight
+  const scrollTopBefore = el.scrollTop
+  try {
+    olderProblem.value = await fetchOlder()
+  } finally {
+    olderBusy.value = false
+  }
+  if (olderProblem.value !== null) return
+  await nextTick()
+  const node = scroller.value
+  if (node === null) return
+  if (node.scrollHeight > heightBefore) {
+    node.scrollTop = scrollTopBefore + (node.scrollHeight - heightBefore)
+    olderStableTries = 0
+    return
+  }
+  olderStableTries += 1
+  // The retry re-arms deliberately: each try stands for "the reader is still on the
+  // edge and the last page changed nothing visible", the one case the sentinel latch
+  // was not meant to suppress.
+  olderArmed = true
+  if (olderStableTries < OLDER_STABLE_LIMIT) void tickOlder()
 }
 
 function toBottom(): void {
@@ -68,11 +138,32 @@ function jumpToEnd(): void {
   void follow()
 }
 
+/**
+ * MA-29 asked for an explicit button as well as the sentinel: the scroll trigger is
+ * pointer-only, and keyboard and screen-reader readers deserve the same door. It rides
+ * the same path — re-arming the latch makes one pull, guards and anchoring unchanged.
+ * Label reuses web.transcript.file_load_more ("load more"); a dedicated "older
+ * messages" key is a catalog seam (see PROGRESS.md).
+ */
+function loadOlderFromButton(): void {
+  olderArmed = true
+  void tickOlder()
+}
+
 defineExpose({ jumpToEnd })
 </script>
 
 <template>
-  <div ref="scroller" class="scroller" data-testid="transcript" @scroll.passive="onScroll">
+  <div ref="scroller" class="scroller" data-testid="transcript" :aria-busy="olderBusy || loadingOlder === true" @scroll.passive="onScroll">
+    <p v-if="olderProblem !== null" class="older-problem" role="alert" data-testid="transcript-older-error">{{ olderProblem }}</p>
+    <button
+      v-if="canLoadOlder"
+      type="button"
+      class="older-more"
+      :disabled="loadingOlder === true || olderBusy"
+      data-testid="transcript-load-older"
+      @click="loadOlderFromButton"
+    >{{ t('web.transcript.file_load_more') }}</button>
     <div class="toolbar" data-testid="transcript-toggles">
       <button type="button" :aria-pressed="view.showThinking" data-testid="toggle-thinking" @click="view.toggleThinking()">{{ t('web.transcript.show_thinking') }}</button>
       <button type="button" :aria-pressed="view.expandTools" data-testid="toggle-tools" @click="view.toggleExpandTools()">{{ t('web.transcript.expand_tools') }}</button>
@@ -136,5 +227,20 @@ defineExpose({ jumpToEnd })
   gap: 0.5rem;
   padding: 0.35rem 1rem 0;
   font-size: 0.8125rem;
+}
+/* MA-29: the paging failure line. The text is the server's own describe() output
+   and is rendered verbatim (the app's law: failure strings are not re-translated
+   client-side), so it only needs a shape, not a translation. */
+.older-problem {
+  margin: 0;
+  padding: 0.35rem 1rem;
+  color: var(--error);
+  font-size: 0.8125rem;
+}
+/* MA-29: the explicit affordance at the head of the transcript; the label reuses the
+   catalog's "load more" verb (a dedicated load-older key is a protocol seam). */
+.older-more {
+  align-self: flex-start;
+  margin: 0.25rem 1rem 0;
 }
 </style>

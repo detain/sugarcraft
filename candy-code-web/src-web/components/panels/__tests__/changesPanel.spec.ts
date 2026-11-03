@@ -351,4 +351,37 @@ describe('ChangesPanel base selector (C-TUI-2.g)', () => {
     // Clicking still drives the store behind the label.
     expect(useSettingsStore().diffStyle).toBe('unified')
   })
+
+  it('a session switch arms a newer pair that wins over the pair still in flight (MA-31)', async () => {
+    await wire.connect()
+    const wrapper = mount(ChangesPanel)
+    await flushPromises()
+    // The mount's pair (session-less) is left unanswered on purpose; switching the
+    // panel's session arms the newer pair. Answer NEW first, then let the stale
+    // answers land late: they must be dropped whole, never painted over B's view.
+    const staleChanged = wire.sent('files.changed').pop()
+    const staleDiff = wire.sent('files.diff').pop()
+    usePanelsStore().sessionId = 'sB'
+    await nextTick()
+    await wire.answer('files.changed', { items: [{ path: 'fresh/marker.ts', status: 'M' }], truncated: false })
+    await wire.answer(
+      'files.diff',
+      headDiff({
+        ref: 'HEAD',
+        diff: ['diff --git a/fresh/marker.ts b/fresh/marker.ts', '--- a/fresh/marker.ts', '+++ b/fresh/marker.ts', '@@ -1 +1 @@', '-x', '+freshwinner'].join('\n'),
+      }),
+    )
+    await flushPromises()
+    expect(wrapper.text()).toContain('fresh/marker.ts')
+    const socket = wire.socket()
+    socket.answer({ items: [{ path: 'stale/marker.ts', status: 'M' }], truncated: false }, staleChanged?.id)
+    socket.answer(headDiff({ ref: 'STALE', diff: 'staleloser' }), staleDiff?.id)
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('stale/marker.ts')
+    expect(wrapper.text()).not.toContain('STALE')
+    expect(wrapper.text()).not.toContain('staleloser')
+    expect(wrapper.text()).toContain('freshwinner')
+    // And the newer load's completion still cleared the flag — no stuck spinner.
+    expect(wrapper.find('[data-testid="changes-diff-style"]').exists()).toBe(true)
+  })
 })

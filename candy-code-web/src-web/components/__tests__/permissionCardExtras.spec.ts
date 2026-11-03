@@ -146,11 +146,20 @@ describe('PermissionCard Always (save) verdict (C-SEC-6.c)', () => {
     const save = wrapper.find('[data-testid="ask-always-save"]')
     expect(save.exists()).toBe(true)
     expect(save.text()).toBe('Always (save)')
+    // MA-34: the first press only arms — a durable config write is two deliberate
+    // clicks away, with the inline confirmation naming what it persists.
+    await save.trigger('click')
+    expect(wrapper.emitted('answer')).toBeUndefined()
+    const confirm = wrapper.find('[data-testid="ask-save-confirm"]')
+    expect(confirm.exists()).toBe(true)
+    expect(confirm.attributes('role')).toBe('status')
     await save.trigger('click')
     const call = wrapper.emitted('answer')?.[0]
     expect(call?.slice(0, 3)).toEqual(['always', false, ''])
     expect(call).toHaveLength(5)
     expect(call?.[4]).toBe(true)
+    // The armed state is spent: the card answered, and a fresh card starts disarmed.
+    expect(wrapper.find('[data-testid="ask-save-confirm"]').exists()).toBe(false)
   })
 
   it('shows no save button when the server offers no always', () => {

@@ -202,3 +202,39 @@ describe('DiffView highlights diff bodies by file extension (C-TUI-2.f, GAP-UI-0
     }
   })
 })
+
+describe('row cap keeps a giant diff paintable (MA-30)', () => {
+  const BIG = [
+    '--- a/big.txt',
+    '+++ b/big.txt',
+    '@@ -1,600 +1,600 @@',
+    ...Array.from({ length: 600 }, (_, i) => ` line ${i}`),
+  ].join('\n')
+
+  // parseUnifiedDiff yields one row per diff line: 2 file headers + 1 hunk + 600 context.
+  const TOTAL = 603
+
+  it('paints 500 rows, says what is hidden, and the button reveals the rest', async () => {
+    const wrapper = mount(DiffView, { props: { diff: BIG } })
+    expect(wrapper.findAll('.row')).toHaveLength(500)
+    const more = wrapper.find('[data-testid="diff-more"]')
+    expect(more.exists()).toBe(true)
+    expect(more.attributes('role')).toBe('status')
+    expect(more.text()).toContain(String(TOTAL - 500))
+    await wrapper.find('[data-testid="diff-show-more"]').trigger('click')
+    expect(wrapper.findAll('.row')).toHaveLength(TOTAL)
+    expect(wrapper.find('[data-testid="diff-more"]').exists()).toBe(false)
+  })
+
+  it('a fresh diff resets the budget', async () => {
+    const wrapper = mount(DiffView, { props: { diff: BIG } })
+    await wrapper.find('[data-testid="diff-show-more"]').trigger('click')
+    expect(wrapper.findAll('.row')).toHaveLength(TOTAL)
+    await wrapper.setProps({ diff: TXT_DIFF })
+    // A new diff starts under the cap again — no leftover 'show more', few rows.
+    expect(wrapper.find('[data-testid="diff-more"]').exists()).toBe(false)
+    const rows = wrapper.findAll('.row')
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.length).toBeLessThan(10)
+  })
+})

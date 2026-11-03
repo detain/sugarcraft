@@ -50,8 +50,11 @@ describe('ToolCard', () => {
   })
 
   it('opens a refusal and names its kind', () => {
-    const wrapper = mount(ToolCard, { props: { item: tool({ status: 'denied', denial: { kind: 'UserRejected', reason: 'no thanks' } }) } })
-    expect(wrapper.text()).toContain('Refused (UserRejected): no thanks')
+    const wrapper = mount(ToolCard, { props: { item: tool({ status: 'denied', denial: { kind: 'Refused', reason: 'no thanks' } }) } })
+    // MA-22: the wire carries the enum case name; the human line names the kind.
+    expect(wrapper.text()).toContain('Refused (permission): no thanks')
+    const legacy = mount(ToolCard, { props: { item: tool({ status: 'denied', denial: { kind: 'UserRejected', reason: 'nope' } }) } })
+    expect(legacy.text()).toContain('Refused (user rejected): nope')
   })
 
   it('shows the diff with its +/− counts', async () => {

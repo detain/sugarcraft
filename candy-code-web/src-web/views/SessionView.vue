@@ -277,6 +277,17 @@ async function rename(): Promise<void> {
     error.value = describe(failure)
   }
 }
+
+/**
+ * MA-29: the Transcript scroller drives infinite scroll-up; it asks the store for one
+ * older page and reports back the store's own failure string (null = the page landed or
+ * there was simply nothing to fetch). The component needs the outcome to re-anchor the
+ * view or show the alert, and the store keeps the single source of truth for olderError.
+ */
+async function fetchOlderTranscript(): Promise<string | null> {
+  await session.value.loadOlder()
+  return session.value.olderError
+}
 </script>
 
 <template>
@@ -286,7 +297,18 @@ async function rename(): Promise<void> {
       <button type="button" class="link" @click="rename">{{ t('web.views.session.rename') }}</button>
     </header>
     <p v-if="session.error" class="error" role="alert">{{ session.error }}</p>
-    <Transcript :items="state.items" :subagents="state.subagents" :tick="liveText.length + liveReasoning.length + state.asks.length" :session-id="id" @load-full="loadFull" @rewind="rewindHere" @edit-resend="editAndResend">
+    <Transcript
+      :items="state.items"
+      :subagents="state.subagents"
+      :tick="liveText.length + liveReasoning.length + state.asks.length"
+      :session-id="id"
+      :can-load-older="state.hasMoreOlder"
+      :loading-older="session.loadingOlder"
+      :fetch-older="fetchOlderTranscript"
+      @load-full="loadFull"
+      @rewind="rewindHere"
+      @edit-resend="editAndResend"
+    >
       <template #after>
         <ReasoningFold v-if="liveReasoning" :text="liveReasoning" live />
         <div v-if="liveText" class="live" data-testid="live-reply">

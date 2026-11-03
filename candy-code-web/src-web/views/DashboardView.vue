@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ago, oneLine } from '../lib/format'
 import { t } from '../lib/i18n'
+import { useSlowPending } from '../lib/slowPending'
 import type { MethodResult } from '../protocol/generated'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
@@ -17,6 +18,8 @@ const newSession = useNewSessionStore()
 const router = useRouter()
 const creating = ref(false)
 const error = ref<string | null>(null)
+// MA-36: the pending verb, gated so a fast round-trip never flashes it.
+const slowCreating = useSlowPending(() => creating.value)
 
 const recent = computed(() => sessions.items.slice(0, 8))
 
@@ -43,6 +46,7 @@ onMounted(async () => {
 })
 
 async function create(): Promise<void> {
+  if (creating.value) return // MA-36: same re-entry guard as the sidebar create.
   creating.value = true
   error.value = null
   try {
@@ -67,7 +71,9 @@ async function create(): Promise<void> {
     </p>
     <p v-if="approvals.total > 0" class="asks">{{ t(approvals.total === 1 ? 'web.views.dashboard.asks_one' : 'web.views.dashboard.asks_other', { n: approvals.total }) }}</p>
     <p>
-      <button type="button" class="primary" :disabled="creating || !connection.connected" data-testid="dashboard-new" @click="create">{{ t('web.views.dashboard.new_session') }}</button>
+      <button type="button" class="primary" :disabled="creating || !connection.connected" :aria-busy="creating" :title="connection.connected ? undefined : t('web.chrome.banner.no_answer')" data-testid="dashboard-new" @click="create">{{ slowCreating ? t('web.chrome.about.loading') : t('web.views.dashboard.new_session') }}</button>
+      <!-- MA-36: `title` alone is not reliably announced — say the reason inline too. -->
+      <span v-if="!connection.connected" class="offline-note" data-testid="dashboard-offline">{{ t('web.chrome.banner.no_answer') }}</span>
     </p>
     <p v-if="error" class="error">{{ error }}</p>
     <template v-if="recent.length > 0">
@@ -118,6 +124,12 @@ a {
 }
 .asks {
   color: var(--warn);
+}
+/* MA-36: the disabled-create reason, inline next to the greyed button. */
+.offline-note {
+  margin-left: 0.5rem;
+  color: var(--warn);
+  font-size: 0.875rem;
 }
 .error {
   color: var(--error);

@@ -130,7 +130,11 @@ button:disabled {
 
 button:focus-visible,
 a:focus-visible,
-select:focus-visible {
+select:focus-visible,
+/* MA-35: the two text-entry controls were absent from the ring — keyboard focus on an
+   input or textarea was invisible in every surface that does not draw its own. */
+input:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

@@ -72,6 +72,26 @@ const agentTree = computed(() =>
 function openAgent(id: string): void {
   usePanelsStore().openAgent(id)
 }
+
+/**
+ * MA-22: `denial.kind` rides the wire as the server enum's PHP case name
+ * (`Refused`, `Unanswered`, `Hook` — TranscriptProjector stamps `->name`) — an
+ * identifier, not a word to drop into a human sentence. These nouns are the three
+ * kinds' reader-facing names; anything unknown is camel-split instead of echoed
+ * verbatim, so a case rename server-side still reads as words client-side.
+ */
+const DENIAL_KIND_NOUNS: Record<string, string> = {
+  Refused: 'permission',
+  Unanswered: 'no answer',
+  Hook: 'hook',
+}
+
+function humaniseDenialKind(kind: string): string {
+  const noun = DENIAL_KIND_NOUNS[kind]
+  if (noun !== undefined) return noun
+  const spaced = kind.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase()
+  return spaced.trim() === '' ? kind : spaced
+}
 </script>
 
 <template>
@@ -91,7 +111,7 @@ function openAgent(id: string): void {
       <pre class="output">{{ tail }}</pre>
     </section>
     <div v-if="open" class="body">
-      <p v-if="item.denial" class="denial">{{ item.denial.reason ? t('web.transcript.refused_reason', { kind: item.denial.kind, reason: item.denial.reason }) : t('web.transcript.refused', { kind: item.denial.kind }) }}</p>
+      <p v-if="item.denial" class="denial">{{ item.denial.reason ? t('web.transcript.refused_reason', { kind: humaniseDenialKind(item.denial.kind), reason: item.denial.reason }) : t('web.transcript.refused', { kind: humaniseDenialKind(item.denial.kind) }) }}</p>
       <details class="args">
         <summary>{{ t('web.transcript.args_summary') }}</summary>
         <pre>{{ argsJson }}</pre>

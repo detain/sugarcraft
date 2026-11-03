@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { keyArgument } from '../lib/format'
 import { t } from '../lib/i18n'
 import { askDiffPreview, diffCounts } from '../lib/lineDiff'
@@ -16,6 +16,25 @@ const props = defineProps<{ ask: PendingAsk; canAnswer: boolean }>()
 const emit = defineEmits<{ answer: [reply: Reply, cascade: boolean, note: string, failed: () => void, save: boolean] }>()
 
 const busy = ref(false)
+/**
+ * MA-34: an answer whose RPC never comes back (succeeded while the ask lingered
+ * server-side, or a consumer that forgot to call `failed`) used to leave a
+ * permanently greyed card — the review's "trains users to click Reject twice".
+ * The card therefore keeps its own leash: if it is still busy after this window,
+ * it re-arms itself so the reader can try again. Long enough that a healthy
+ * round-trip never trips it, short enough that a dead one is not an ordeal.
+ */
+const BUSY_REARM_MS = 10_000
+let busyTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearBusyTimer(): void {
+  if (busyTimer !== null) {
+    clearTimeout(busyTimer)
+    busyTimer = null
+  }
+}
+
+onBeforeUnmount(clearBusyTimer)
 /**
  * The note the agent reads: feedback on a rejection, or — on a question the
  * agent put itself (`AskUser`, `PlanExit`: source `tool:<name>`) — the answer
@@ -87,8 +106,18 @@ const planSummary = computed(() => {
   return planText.value !== '' && typeof summary === 'string' ? summary : ''
 })
 
+/**
+ * MA-34: "Always (save)" is the only action on this card that WIDENS future
+ * authority — it writes a durable grant into user config — yet it was a single
+ * click while every reversible path routes through a confirm. First click arms
+ * the inline confirmation (the existing catalog sentence naming exactly what is
+ * persisted); only the second click answers. Any other verdict disarms.
+ */
+const saveArmed = ref(false)
+
 function answer(reply: Reply, cascade = false, forcedNote?: string, save = false): void {
   if (busy.value || !props.canAnswer) return
+  saveArmed.value = false
   busy.value = true
   const text = forcedNote ?? note.value.trim()
   // The card disables itself on the assumption the answer lands and the ask
@@ -96,9 +125,27 @@ function answer(reply: Reply, cascade = false, forcedNote?: string, save = false
   // refusal leaves the same question open, and a permanently greyed card is
   // a dead end. The `failed` callback lets the caller re-arm the buttons.
   const failed = () => {
+    clearBusyTimer()
     busy.value = false
   }
+  // The card's own leash (MA-34): whoever takes `failed` may never call it —
+  // the RPC resolved while the ask lingered server-side. Re-arm after a beat.
+  clearBusyTimer()
+  busyTimer = setTimeout(() => {
+    busyTimer = null
+    failed()
+  }, BUSY_REARM_MS)
   emit('answer', reply, cascade, reply === 'reject' || (reply === 'once' && question.value) ? text : '', failed, save)
+}
+
+/** First press of Always (save): show what would be persisted. Second: answer. */
+function pressSaveButton(): void {
+  if (busy.value || !props.canAnswer) return
+  if (!saveArmed.value) {
+    saveArmed.value = true
+    return
+  }
+  answer('always', false, undefined, true)
 }
 
 /** WEB-5a-iii: clicking a choice answers with that exact option string. */
@@ -117,7 +164,7 @@ function onKey(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <section class="ask" tabindex="0" data-testid="permission-card" :data-ask-id="ask.askId" @keydown="onKey">
+  <section class="ask" :class="{ 'is-busy': busy }" :aria-busy="busy" tabindex="0" data-testid="permission-card" :data-ask-id="ask.askId" @keydown="onKey">
     <header>
       <span class="label">{{ t('web.approvals.label') }}</span>
       <strong>{{ ask.tool }}</strong>
@@ -161,10 +208,11 @@ function onKey(event: KeyboardEvent): void {
         @click="answerChoice(option)"
       >{{ index + 1 }}. {{ option }}<span v-if="index === 0" class="recommended">{{ t('web.approvals.recommended') }}</span></button>
     </div>
+    <p v-if="saveArmed" id="ask-save-confirm" class="save-confirm" role="status" data-testid="ask-save-confirm">{{ t('web.approvals.always_save_title') }}</p>
     <div class="actions">
       <button type="button" class="primary" :disabled="busy || !canAnswer" data-testid="ask-once" @click="answer('once')">{{ planText ? t('web.approvals.approve_plan') : t('web.approvals.allow_once') }}</button>
       <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always" @click="answer('always')">{{ alwaysLabel }}</button>
-      <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always-save" :title="t('web.approvals.always_save_title')" @click="answer('always', false, undefined, true)">{{ t('web.approvals.always_save') }}</button>
+      <button v-if="offers.has('always')" type="button" :disabled="busy || !canAnswer" data-testid="ask-always-save" :aria-describedby="saveArmed ? 'ask-save-confirm' : undefined" @click="pressSaveButton">{{ t('web.approvals.always_save') }}</button>
       <button type="button" :disabled="busy || !canAnswer" data-testid="ask-reject" @click="answer('reject')">{{ t('web.approvals.reject') }}</button>
       <button type="button" class="danger" :disabled="busy || !canAnswer" data-testid="ask-reject-stop" @click="answer('reject', true)">{{ t('web.approvals.reject_stop') }}</button>
     </div>
@@ -182,6 +230,20 @@ function onKey(event: KeyboardEvent): void {
 }
 .ask:focus-visible {
   outline: 2px solid var(--accent);
+}
+/* MA-34: busy used to be invisible beyond the greyed buttons. The border moves to
+   the accent and the action row dims — the card says "one answer is in flight"
+   without minting a string the 12-locale catalog does not have. */
+.ask.is-busy {
+  border-color: var(--accent);
+}
+.ask.is-busy .actions {
+  opacity: 0.6;
+}
+.save-confirm {
+  margin: 0.25rem 0;
+  color: var(--accent);
+  font-size: 0.8125rem;
 }
 header {
   display: flex;
