@@ -672,4 +672,38 @@ final class LoggerTest extends TestCase
         $this->assertStringContainsString('back-to-one', $mainContent);
         $this->assertSame('', $singleContent);
     }
+
+    // [M14] The formatted helpers take arguments in the context slot when
+    // what sits there is not an array — infof('count %d', 7) must format,
+    // not TypeError.
+    public function testFormattedHelperAcceptsArgsInContextSlot(): void
+    {
+        $log = $this->logger();
+        $log->infof('count %d', 7);
+        \fclose($this->tempFile);
+
+        $content = (string) \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('count 7', $content);
+    }
+
+    public function testFormattedHelperKeepsRealContextAlongsideArgs(): void
+    {
+        $log = $this->logger();
+        $log->infof('count %d', ['id' => 1], 7);
+        \fclose($this->tempFile);
+
+        $content = (string) \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('count 7', $content);
+        $this->assertStringContainsString('id=1', $content);
+    }
+
+    public function testPrintfAcceptsArgsInContextSlot(): void
+    {
+        $log = $this->logger();
+        $log->printf('raw %s', 'x');
+        \fclose($this->tempFile);
+
+        $content = (string) \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('raw x', $content);
+    }
 }

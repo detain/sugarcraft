@@ -346,49 +346,76 @@ final class Logger
     // filtered-out call never pays the formatting cost (nor triggers argument
     // side effects such as __toString()). `printf` is intentionally excluded —
     // like `print`, it bypasses the level filter and must always render.
-    public function debugf(string $format, array $context = [], ...$args): void
+    //
+    // [M14] Slot two is `mixed`: an array there is context (the historic
+    // behaviour), anything else is the first sprintf argument — so
+    // infof('count %d', 7) formats the way the name promises instead of
+    // TypeError-ing. Context alongside real arguments:
+    // infof('count %d', ['id' => 1], 7).
+    public function debugf(string $format, mixed $context = [], mixed ...$args): void
     {
         if (!$this->enabled(Level::Debug)) {
             return;
         }
+        self::parseFormatted($context, $args);
         $this->debug(\sprintf($format, ...$args), $context);
     }
 
-    public function infof(string $format, array $context = [], ...$args): void
+    public function infof(string $format, mixed $context = [], mixed ...$args): void
     {
         if (!$this->enabled(Level::Info)) {
             return;
         }
+        self::parseFormatted($context, $args);
         $this->info(\sprintf($format, ...$args), $context);
     }
 
-    public function warnf(string $format, array $context = [], ...$args): void
+    public function warnf(string $format, mixed $context = [], mixed ...$args): void
     {
         if (!$this->enabled(Level::Warn)) {
             return;
         }
+        self::parseFormatted($context, $args);
         $this->warn(\sprintf($format, ...$args), $context);
     }
 
-    public function errorf(string $format, array $context = [], ...$args): void
+    public function errorf(string $format, mixed $context = [], mixed ...$args): void
     {
         if (!$this->enabled(Level::Error)) {
             return;
         }
+        self::parseFormatted($context, $args);
         $this->error(\sprintf($format, ...$args), $context);
     }
 
-    public function fatalf(string $format, array $context = [], ...$args): void
+    public function fatalf(string $format, mixed $context = [], mixed ...$args): void
     {
         if (!$this->enabled(Level::Fatal)) {
             return;
         }
+        self::parseFormatted($context, $args);
         $this->fatal(\sprintf($format, ...$args), $context);
     }
 
-    public function printf(string $format, array $context = [], ...$args): void
+    public function printf(string $format, mixed $context = [], mixed ...$args): void
     {
+        self::parseFormatted($context, $args);
         $this->print(\sprintf($format, ...$args), $context);
+    }
+
+    /**
+     * Shared slot-two parse for the formatted helpers (see [M14] above):
+     * non-array context becomes the first sprintf argument.
+     *
+     * @param mixed       $context
+     * @param list<mixed> $args
+     */
+    private static function parseFormatted(mixed &$context, array &$args): void
+    {
+        if (!\is_array($context)) {
+            \array_unshift($args, $context);
+            $context = [];
+        }
     }
 
     // -------------------------------------------------------------------------

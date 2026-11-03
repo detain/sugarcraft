@@ -69,4 +69,40 @@ final class PartsOrderTest extends TestCase
         $this->assertSame(PartsOrder::PART_LEVEL, $order->parts[1]);
         $this->assertSame(PartsOrder::PART_FIELDS, $order->parts[2]);
     }
+
+    // [M15] A typo'd or duplicated part must fail loudly at construction —
+    // before this guard, new PartsOrder([PART_MESSAGE, 'msg']) silently
+    // rendered the real message twice-less-nothing and hid the mistake.
+    public function testUnknownPartIsRefusedAndNamed(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/unknown log line part\(s\).*msg/');
+
+        new PartsOrder([PartsOrder::PART_MESSAGE, 'msg']);
+    }
+
+    public function testDuplicatePartIsRefusedAndNamed(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/duplicate log line part\(s\).*message/');
+
+        new PartsOrder([PartsOrder::PART_MESSAGE, PartsOrder::PART_MESSAGE, PartsOrder::PART_LEVEL]);
+    }
+
+    public function testTheDocumentedDefaultListIsValid(): void
+    {
+        $order = new PartsOrder();
+
+        $this->assertSame(
+            [
+                PartsOrder::PART_TIMESTAMP,
+                PartsOrder::PART_LEVEL,
+                PartsOrder::PART_PREFIX,
+                PartsOrder::PART_CALLER,
+                PartsOrder::PART_MESSAGE,
+                PartsOrder::PART_FIELDS,
+            ],
+            $order->parts,
+        );
+    }
 }

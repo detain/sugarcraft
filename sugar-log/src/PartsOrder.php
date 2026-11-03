@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Log;
 
 /**
- * Config DTO for configurable timestamp/level/msg/fields ordering in formatters.
+ * Config DTO for configurable timestamp/level/prefix/caller/message/fields
+ * ordering in formatters.
  *
  * Allows callers to specify which log-parts appear and in what sequence,
- * enabling custom log formats (e.g., msg-first, syslog-friendly, etc.).
+ * enabling custom log formats (e.g., message-first, syslog-friendly, etc.).
  *
  * Scope: PartsOrder is honored ONLY by {@see \SugarCraft\Log\Formatter\TextFormatter}.
  * The JSON and logfmt formatters intentionally ignore it — a JSON object has
@@ -20,9 +21,7 @@ namespace SugarCraft\Log;
  */
 final class PartsOrder
 {
-    /**
-     * @param list<self::PART_*> $parts Which parts to include and in what order.
-     */
+    /** Recognised log-line parts, in their default emission order. */
     public const PART_TIMESTAMP = 'timestamp';
     public const PART_LEVEL     = 'level';
     public const PART_PREFIX    = 'prefix';
@@ -38,12 +37,16 @@ final class PartsOrder
 
     /**
      * @param list<self::PART_*>|null $parts Which parts to emit and in what order.
-     *                                        Defaults to [timestamp, level, prefix?, caller?, message, fields?].
+     *                                        Defaults to [timestamp, level, prefix, caller, message, fields].
+     *
+     * @throws InvalidArgumentException if the list names an unknown part or repeats one —
+     *                                  a typo'd part (e.g. 'msg') would otherwise silently
+     *                                  delete the piece from every line [M15].
      */
     public function __construct(
         ?array $parts = null,
     ) {
-        $this->parts = $parts ?? [
+        $given = $parts ?? [
             self::PART_TIMESTAMP,
             self::PART_LEVEL,
             self::PART_PREFIX,
@@ -51,9 +54,30 @@ final class PartsOrder
             self::PART_MESSAGE,
             self::PART_FIELDS,
         ];
+
+        $known = [
+            self::PART_TIMESTAMP,
+            self::PART_LEVEL,
+            self::PART_PREFIX,
+            self::PART_CALLER,
+            self::PART_MESSAGE,
+            self::PART_FIELDS,
+        ];
+
+        $unknown = \array_values(\array_filter($given, static fn (string $part): bool => !\in_array($part, $known, true)));
+        if ($unknown !== []) {
+            throw new \InvalidArgumentException('unknown log line part(s): ' . \implode(', ', $unknown));
+        }
+
+        $duplicates = \array_keys(\array_filter(\array_count_values($given), static fn (int $count): bool => $count > 1));
+        if ($duplicates !== []) {
+            throw new \InvalidArgumentException('duplicate log line part(s): ' . \implode(', ', $duplicates));
+        }
+
+        $this->parts = \array_values($given);
     }
 
-    /** DefaultPartsOrder: timestamp level message fields. */
+    /** DefaultPartsOrder: timestamp level prefix caller message fields. */
     public static function default(): self
     {
         return new self();
