@@ -78,7 +78,7 @@ final class LocaleParityTest extends TestCase
     public function testEveryUsageLineNamesEveryAcceptedFlag(string $code, string $path): void
     {
         $locale = require $path;
-        foreach (['--fps=', '--speed=', '--duration=', '--watch', '--help'] as $flag) {
+        foreach (['--fps=', '--speed=', '--duration=', '--watch', '--help', '--version'] as $flag) {
             $this->assertStringContainsString(
                 $flag,
                 $locale['cli.usage'],
@@ -90,7 +90,12 @@ final class LocaleParityTest extends TestCase
     public function testEnglishSourceOfTruthCarriesTheRefusalKeyFamily(): void
     {
         $en = require __DIR__ . '/../lang/en.php';
-        foreach (['cli.usage', 'cli.no_autoload', 'cli.bad_flag', 'cli.bad_value', 'cli.too_many', 'cli.unexpected_value'] as $key) {
+        foreach ([
+            'cli.usage', 'cli.no_autoload', 'cli.bad_flag', 'cli.bad_value', 'cli.too_many',
+            'cli.unexpected_value', 'cli.bad_preset', 'cli.no_frames', 'cli.cannot_play',
+            'cli.reason_frames_over', 'cli.reason_bytes_over', 'cli.reason_cells_over',
+            'cli.duration_static', 'cli.need_gd', 'cli.decoding', 'cli.truncated',
+        ] as $key) {
             $this->assertArrayHasKey($key, $en);
         }
     }
