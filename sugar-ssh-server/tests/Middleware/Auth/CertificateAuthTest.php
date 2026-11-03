@@ -120,4 +120,53 @@ final class CertificateAuthTest extends TestCase
         $this->assertInstanceOf(Session::class, $receivedSession);
         $this->assertSame('alice', $receivedSession->user);
     }
+
+    /**
+     * Audit K6: an optional gate with nothing to read used to pass in silence, so a
+     * misdeployed deployment looked configured. The pass must now be announced.
+     */
+    public function testTheOptionalGateSaysOutLoudThatItCheckedNothing(): void
+    {
+        [$err, $read] = $this->stderr();
+        $a = new CertificateAuth(fn($cert, $s) => true, false, $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached, 'optional gate still forwards');
+        $notice = $read();
+        $this->assertStringContainsString('checked nothing', $notice);
+        $this->assertStringContainsString('SSL_CLIENT_CERT', $notice, 'the notice names where it looked');
+        $this->assertStringContainsString('CERTIFICATE', $notice);
+    }
+
+    /** The required path keeps denying, and now says the delivery failed, not just "none". */
+    public function testTheRequiredGateNamesTheDeliveryProblemAlongsideTheDenial(): void
+    {
+        [$err, $read] = $this->stderr();
+        $a = new CertificateAuth(fn($cert, $s) => true, true, $err);
+        $reached = false;
+        $a->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached);
+        $notice = $read();
+        $this->assertStringContainsString('checked nothing', $notice);
+        $this->assertStringContainsString('Certificate required but none presented', $notice);
+    }
+
+    /**
+     * The probe list is public so docs and operators can name the surface, and the
+     * class doc has to say plainly that stock sshd fills none of it (audit K6).
+     */
+    public function testTheProbeListIsPublicAndTheClassSaysSshdSetsNoneOfIt(): void
+    {
+        $this->assertSame(['SSL_CLIENT_CERT', 'SSH_CLIENT_CERT', 'CERTIFICATE'], CertificateAuth::ENV_KEYS);
+
+        $src = \file_get_contents(\dirname(__DIR__, 3) . '/src/Middleware/Auth/CertificateAuth.php');
+        $this->assertNotFalse($src);
+        $flat = (string) \preg_replace('/\s+/u', ' ', $src);
+        $this->assertStringContainsString('Nothing in stock OpenSSH', $flat);
+        $this->assertStringContainsString('SSH_USER_AUTH', $flat, 'the doc points at the real sshd auth blob');
+    }
 }

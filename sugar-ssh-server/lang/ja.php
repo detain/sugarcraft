@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'パーミッションが拒否されました。',
     'certificateauth.required'        => '証明書が必要ですが提示されませんでした。',
     'certificateauth.rejected'        => '証明書が拒否されました。',
+    'certificateauth.env_missing'     => '環境内にクライアント証明書がありません（検索済み: {vars}）。証明書による認証は何も検証していません。',
     'keyboardinteractive.auth_failed' => '認証に失敗しました。',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

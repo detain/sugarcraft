@@ -255,6 +255,46 @@ For the fail-open/fail-closed posture of every gate, see
 [Authentication: pairing a key to a name](#authentication-pairing-a-key-to-a-name)
 and `docs/admin/sugar-ssh-server.md`.
 
+## What sshd actually hands your middleware
+
+There is no protocol conversation to inspect: the child learns about the
+connection from its environment. That list is shorter than people expect,
+and who fills each slot changes what you may trust in it.
+
+| Variable | Who sets it | Read by | Trust |
+| --- | --- | --- | --- |
+| `USER`, `LOGNAME` | sshd, for the target account | `Session::fromEnvironment()` | Good -- sshd chose it, the client asked for it. |
+| `SSH_CONNECTION` | sshd: `client-ip client-port server-ip server-port` | `Session::fromEnvironment()` | Good -- socket-derived, not peer-asserted. |
+| `SSH_CLIENT` | sshd: `client-ip client-port server-port` (older, 3 fields) | `Session::fromEnvironment()` fallback | Good, but it has no server-IP slot; read it as three fields. |
+| `SSH_ORIGINAL_COMMAND` | sshd, when `ForceCommand` rewrote `command` `ssh host some command` | `Session::$command`, then your decoder | Good -- but see the [exec policy](#exec-policy-the-program-comes-from-the-peer): the program string is peer-chosen. |
+| `SSH_TTY` | sshd when a PTY was allocated | `Session::$tty` | Good. |
+| `TERM` | sshd, from the client's pty-request | `Session::$term` | Peer-asserted. Shape it before it reaches a terminfo lookup. |
+| `LANG`, `LC_*` | only if the client sends them **and** `AcceptEnv` allows it | `Session::$lang` | Peer-asserted. This is how a visitor picks your UI language; see the i18n note below. |
+| `COLUMNS`, `LINES` | not by sshd -- the window size lives on the tty (this transport ioctls it, or accepts `withSizeProvider()`) | `Session::$cols/$rows` | Whatever you measured, not the peer's claim. |
+| `SSH_USER_AUTH` | sshd **only** with `ExposeAuthInfo` (see `sshd_config(5)` on your release): the authorized_keys line that matched | `Auth::fingerprint()` | Good -- server-side, since sshd picked the line. |
+| `SSH_USER_KEY_FINGERPRINT` | not sshd; a wrapper that parses `SSH_USER_AUTH`, or your own `AuthorizedKeysCommand` | `Auth::fingerprint()` | Depends entirely on your wrapper. |
+| `SSH_PASSWORD` | **nothing in OpenSSH ever sets it** | `PasswordAuth` | Operator-injected out of band, or peer-asserted through `AcceptEnv` -- never a credential proof. |
+| `SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE` | nothing; the first is Apache mod_ssl, the others are aspirational | `CertificateAuth::ENV_KEYS` | If your wrapper does not export one, the gate sees nothing. |
+| `SSH_CLIENT_VERSION`, `SSH_SERVER_VERSION` | nothing in stock OpenSSH | `Session::$clientVersion/$serverVersion` | Usually empty; do not treat them as audit columns. |
+
+Two consequences deserve the front of your mind:
+
+- **Pairing without delivery is a lockout.** `Auth`'s `userKeys` map (and
+  a non-empty `keyFingerprints` list) rejects a session that presents no
+  fingerprint. With `ExposeAuthInfo` off, no fingerprint arrives, so
+  every login is refused. Turn the delivery on -- or keep the key lists
+  empty and authenticate by name only -- and prove the shape with a
+  `ssh -v` round trip before you enable it on a live account.
+- **Peer-asserted slots are input, not fact.** Anything that arrived via
+  `AcceptEnv` is a string the client chose. The middleware in this
+  library never reads an `AcceptEnv` name as an authority; `Auth` uses
+  `hash_equals()` on fingerprints, and the strings that do land are run
+  through `Auth::sanitize()` before they are echoed anywhere.
+
+`Session::fromEnvironment()` takes no arguments and reads the process
+environment; nothing here offers a language-selection API yet, so
+`Session::$lang` is today whatever `LANG` happened to be.
+
 ## Authentication: pairing a key to a name
 
 `Auth` takes three allowlist surfaces, and they answer different

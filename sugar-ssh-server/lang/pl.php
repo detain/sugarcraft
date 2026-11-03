@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'Odmowa dostępu.',
     'certificateauth.required'        => 'Wymagany certyfikat, ale nie został przedstawiony.',
     'certificateauth.rejected'        => 'Certyfikat odrzucony.',
+    'certificateauth.env_missing'     => 'Brak certyfikatu klienta w środowisku (szukano: {vars}); uwierzytelnianie certyfikatem niczego nie zweryfikowało.',
     'keyboardinteractive.auth_failed' => 'Uwierzytelnianie nie powiodło się.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

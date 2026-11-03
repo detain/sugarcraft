@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'Permission refusée.',
     'certificateauth.required'        => 'Certificat requis mais aucun présenté.',
     'certificateauth.rejected'        => 'Certificat refusé.',
+    'certificateauth.env_missing'     => 'Aucun certificat client dans l’environnement (recherché : {vars}) ; l’authentification par certificat n’a rien vérifié.',
     'keyboardinteractive.auth_failed' => 'Échec de l’authentification.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

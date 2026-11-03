@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'تم رفض الإذن.',
     'certificateauth.required'        => 'مطلوب شهادة ولكن لم يتم تقديم أي شهادة.',
     'certificateauth.rejected'        => 'تم رفض الشهادة.',
+    'certificateauth.env_missing'     => 'لا توجد شهادة عميل في البيئة (تمت البحث عن: {vars})؛ لم يتحقق التوثيق بالشهادة من شيء.',
     'keyboardinteractive.auth_failed' => 'فشلت المصادقة.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

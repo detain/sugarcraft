@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'Toegang geweigerd.',
     'certificateauth.required'        => 'Certificaat vereist maar niet aangeboden.',
     'certificateauth.rejected'        => 'Certificaat geweigerd.',
+    'certificateauth.env_missing'     => 'Geen cliëntcertificaat in de omgeving (gezocht: {vars}); certificaatauthenticatie heeft niets gecontroleerd.',
     'keyboardinteractive.auth_failed' => 'Verificatie mislukt.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

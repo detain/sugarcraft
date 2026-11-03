@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'İzin reddedildi.',
     'certificateauth.required'        => 'Sertifika gerekiyor ancak sunulmadı.',
     'certificateauth.rejected'        => 'Sertifika reddedildi.',
+    'certificateauth.env_missing'     => 'Ortamda istemci sertifikası yok (aranan: {vars}); sertifika ile kimlik doğrulama hiçbir şey denetlemedi.',
     'keyboardinteractive.auth_failed' => 'Kimlik doğrulama başarısız.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

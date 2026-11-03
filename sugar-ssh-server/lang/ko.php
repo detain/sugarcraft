@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => '권한이 거부되었습니다.',
     'certificateauth.required'        => '증명서가 필요하지만 제시되지 않았습니다.',
     'certificateauth.rejected'        => '증명서가 거부되었습니다.',
+    'certificateauth.env_missing'     => '환경에 클라이언트 인증서가 없습니다(검색함: {vars}); 인증서 인증이 무조건 검증하지 못했습니다.',
     'keyboardinteractive.auth_failed' => '인증에 실패했습니다.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

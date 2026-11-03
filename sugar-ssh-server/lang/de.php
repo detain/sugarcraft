@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'Zugriff verweigert.',
     'certificateauth.required'        => 'Zertifikat erforderlich, aber keines vorgelegt.',
     'certificateauth.rejected'        => 'Zertifikat abgelehnt.',
+    'certificateauth.env_missing'     => 'Kein Client-Zertifikat in der Umgebung (gesucht: {vars}); die Zertifikatsprüfung hat nichts kontrolliert.',
     'keyboardinteractive.auth_failed' => 'Authentifizierung fehlgeschlagen.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

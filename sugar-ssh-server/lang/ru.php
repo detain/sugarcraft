@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'Доступ запрещён.',
     'certificateauth.required'        => 'Требуется сертификат, но он не был представлен.',
     'certificateauth.rejected'        => 'Сертификат отклонён.',
+    'certificateauth.env_missing'     => 'В окружении нет сертификата клиента (искали: {vars}); аутентификация по сертификату ничего не проверила.',
     'keyboardinteractive.auth_failed' => 'Ошибка аутентификации.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

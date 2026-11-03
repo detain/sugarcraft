@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => 'Oprávnění zamítnuto.',
     'certificateauth.required'        => 'Vyžadován certifikát, ale nebyl předložen.',
     'certificateauth.rejected'        => 'Certifikát zamítnut.',
+    'certificateauth.env_missing'     => 'V prostředí není žádný klientský certifikát (hledáno: {vars}); ověření certifikátem nic nezkontrolovalo.',
     'keyboardinteractive.auth_failed' => 'Ověření selhalo.',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

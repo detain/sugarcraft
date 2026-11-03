@@ -28,6 +28,7 @@ return [
     'passwordauth.permission_denied'  => '权限被拒绝。',
     'certificateauth.required'        => '需要证书但未提供。',
     'certificateauth.rejected'        => '证书被拒绝。',
+    'certificateauth.env_missing'     => '环境中没有客户端证书（已查找: {vars}）；证书认证未检查任何内容。',
     'keyboardinteractive.auth_failed' => '认证失败。',
-    'channel.exec_refused' => 'Exec request refused: {program}',
+    'channel.exec_refused'            => 'Exec request refused: {program}',
 ];
