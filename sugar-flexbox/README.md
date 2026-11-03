@@ -13,7 +13,7 @@
 > Formerly published as `sugarcraft/sugar-stickers` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Stickers\` → `SugarCraft\Flexbox\`. <!-- @rename-keep -->
 
-sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provides FlexBox layout and Table components.
+sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provides four components: `FlexBox` (flexbox-like row/column layout), `Table` (sortable, filterable, styled grids with a cursor), `Viewport` (scrollable window with sticky regions), and `Scrollbar` (decorative scroll indicators).
 
 ## Features
 
@@ -30,13 +30,18 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 - **Configurable columns** — title, width, alignment, formatter
 - **Cell styling** — per-column ANSI style support
 - **Cursor tracking** — get current row/cell on selection
+- **Delta rendering** — the stateful `TableRenderer` emits only the cells that changed between frames (see Buffer diffing below)
 
 ### Viewport
 - **Scrollable viewport** — composes `sugar-widgets` `Viewport` (SSOT)
-- **Keyboard navigation** — line-up/down, page-up/down, goto-top/bottom
+- **Keyboard navigation** — line-up/down, page-up/down, half-page-up/down (`halfPageUp()`/`halfPageDown()`), goto-top/bottom
+- **Sticky regions** — `withStickyHeader($rows)` / `withStickyFooter($rows)` pin lines across scrolling; a row can never appear
+  in both regions (the footer is clamped when the document is shorter than header + footer)
+- **Sync partner** — `syncWith($other)` is a decorative association: it marks the viewport as synced and is readable via
+  `isSynced()`, but propagates nothing (scroll state never crosses to the partner)
 - **Mouse wheel** support with configurable delta
 - **Horizontal scrolling** with step-based navigation
-- **Smooth scroll** and scrollbar toggle
+- **Smooth scroll** and scrollbar toggle; wide scrollbar runes reserve their true cell width
 
 ### Scrollbar
 - **Scrollbar** — composes `sugar-widgets` `Scrollbar` (SSOT)
@@ -66,6 +71,28 @@ $box = FlexBox::row(
 echo $box->render(80, 24);
 ```
 
+### How sizing works
+
+Every dimension is in **cells**, and allocation follows one deterministic model (no CSS
+`justify-content`, `flex-wrap`, or reverse-direction counterparts exist):
+
+1. **Basis first.** Each item's `withBasis(cells)` reserves a fixed main-axis slice
+   (row: width, column: height), clamped to the container; a zero ratio with a positive
+   basis is a fixed-size item that never grows. `withWidth()` is a legacy alias of
+   `withBasis()` — in column mode the reserved axis is the HEIGHT, so prefer `withBasis`.
+2. **Gaps next.** `n` items cost `(n - 1) x gap` cells before any ratio math; the gap is
+   reined in at render time if the budget cannot pay for it.
+3. **Ratios split the rest.** Remaining cells are shared by grow ratios with an exact-sum
+   guarantee: every item gets at least a 1-cell floor, and the rounding remainder is handed
+   out in item order (80 cells across ratios 1:1:1 yields 27/27/26, always the same way).
+   Widths never shrink when the container grows.
+4. **Cross-axis align** (`start`/`center`/`end`/`stretch`) places an item's content within
+   its allocated slice; `render(w, h)` output always fits the requested box.
+
+To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the panel
+`withRatio(1)`. There is no center-a-dialog primitive in this lib — pad with fixed-ratio
+spacers (`withRatio(1)` on each side, content `withRatio(n)`) instead.
+
 ## Table Quick Start
 
 Table and Column are immutable: every builder returns a NEW instance, so the
@@ -82,10 +109,10 @@ $table = (new Table())
     ->addRow(['Bob', '25', 'LA'])
     ->addRow(['Carol', '35', 'Chicago']);
 
-$sorted = $table->sortBy(0);    // sort by Name column → new Table
+$sorted = $table->sortBy(0);      // sort by Name column → new Table
 $filtered = $sorted->filter('a'); // rows containing 'a' → new Table
 
-echo $sorted->render();
+echo $filtered->render();
 ```
 
 ## Viewport Quick Start
@@ -98,17 +125,42 @@ $viewport = $viewport->withScrollbar(true);
 
 // Viewport is a plain immutable component, not a Core\Model: drive it from
 // your own Model's update() and render the view it returns.
-$viewport = $viewport->lineDown(3);
-echo $viewport->view();
+$viewport = $viewport->lineDown(3)->withStickyHeader(1);
+echo $viewport->view();                    // first content line stays pinned at top
 ```
 
-## Buffer diffing
+## Buffer diffing (TableRenderer)
 
-The Table renderer maintains a `?Buffer $previousFrame` across renders. On each render it
-builds the current Buffer, computes `current->diff(previous)` (from
-[sugar-cellbuffer](https://github.com/detain/sugarcraft-sugar-cellbuffer)), and emits only
-the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
-`previousFrame` for the next render.
+`Table::render()` is pure — it always returns a full frame. `TableRenderer` is the stateful
+companion that maintains the previous frame as a `SugarCraft\CellBuffer\Buffer` and emits
+deltas instead. On each `render()` it builds the current Buffer, computes `current->diff(previous)`
+(from [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer)),
+and returns only the changed cells' ANSI ops via `DiffEncoder::encode($ops)`; the current frame
+then replaces the previous one. Style changes are visible to the diff (colors are carried per
+cell), and a dimension change resets the state so the next frame is complete again.
+
+```php
+use SugarCraft\Flexbox\Table\{Column, Table, TableRenderer};
+
+$renderer = new TableRenderer();
+
+$table = Table::new()
+    ->addColumn(Column::new('Status', 8))
+    ->addColumn(Column::new('Job', 20))
+    ->addRow(['running', 'nightly-backup']);
+
+echo $renderer->render($table);            // full first frame
+
+$changed = Table::new()
+    ->addColumn(Column::new('Status', 8))
+    ->addColumn(Column::new('Job', 20))
+    ->addRow(['done', 'nightly-backup']);
+
+echo $renderer->render($changed);          // only the 'Status' cell is re-painted
+```
+
+Call `reset()` to force the next `render()` to emit a full frame (e.g. after the terminal
+was cleared externally).
 
 **SSH bandwidth + flicker win:** a one-character change emits only the ops for
 the affected cells instead of a full repaint — for an 80×24 screen (~1.9 KB of

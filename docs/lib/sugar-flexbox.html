@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarFlexbox — SugarCraft</title>
-<meta name="description" content="SugarFlexbox: Flex-style box layout plus a sortable/filterable table for terminal grids.">
+<meta name="description" content="SugarFlexbox: flexbox-like terminal-cell layout (FlexBox), a sortable/filterable styled Table with a delta-rendering TableRenderer, plus Viewport and Scrollbar windows.">
 <meta property="og:title" content="SugarFlexbox — SugarCraft">
-<meta property="og:description" content="Flex-style box layout plus a sortable/filterable table for terminal grids.">
+<meta property="og:description" content="Flex-style cell layout, sortable/filterable tables with delta rendering, sticky viewports and scrollbars for terminal UIs.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-flexbox.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-flexbox.html">
 <meta property="og:type" content="website">
@@ -42,7 +42,7 @@
       <img class="detail-icon" src="../img/icons/sugar-flexbox.png" alt="SugarFlexbox">
       <div>
         <h2>SugarFlexbox</h2>
-        <p class="detail-sub">FlexBox layout + simple sort/filter table</p>
+        <p class="detail-sub">FlexBox layout + delta Table + sticky Viewport</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/76creates/stickers" style="color: inherit;">76creates/stickers</a></span>
           <span class="tag-chip">flexbox</span><span class="tag-chip">table</span><span class="tag-chip">layout</span><span class="tag-chip">grid</span>
@@ -69,13 +69,16 @@ $table = (new Table())
     -&gt;addColumn(Column::make('Name', 20))
     -&gt;addRow(['Alice'])
     -&gt;addRow(['Bob'])
-    -&gt;sortBy(0, true);</code></pre>
+    -&gt;sortBy(0, true);
+
+echo $flex-&gt;render(40, 1), PHP_EOL;
+echo $table-&gt;render(), PHP_EOL;</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>FlexBox</strong><span>Ratio-based row / column layout. Align: Center, Start, End, Stretch (cross-axis placement; no CSS justify-content counterpart).</span></div>
             <div class="feature"><strong>Table</strong><span>Sort by column (asc/desc toggle), filter by text, cursor navigation, per-column style.</span></div>
-            <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes sugar-widgets Viewport (SSOT). Keyboard nav, mouse wheel, smooth scroll, scrollbar. Sticky headers/footers deferred.</span></div>
+            <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes sugar-widgets Viewport (SSOT). Keyboard nav (line/page/half-page), mouse wheel, smooth scroll, scrollbar. Sticky headers and footers via withStickyHeader()/withStickyFooter(); syncWith() is a decorative partner marker only (scroll state never propagates).</span></div>
             <div class="feature"><strong>Scrollbar</strong><span>Scrollbar composes sugar-widgets Scrollbar (SSOT). Vertical/horizontal, configurable thumb/track chars.</span></div>
             <div class="feature"><strong>Immutability</strong><span>All builders return new instances.</span></div>
             
@@ -86,7 +89,7 @@ $table = (new Table())
       <li><a href="https://github.com/sugarcraft/sugar-flexbox">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-flexbox/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-flexbox/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/76creates/stickers">76creates/stickers</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li>Design antecedent: <a href="https://github.com/76creates/stickers">76creates/stickers</a> (PHP); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
@@ -96,15 +99,22 @@ $table = (new Table())
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>FlexBox</td><td>row(...items)</td><td>Create horizontal flexbox</td></tr>
 <tr><td>FlexBox</td><td>column(...items)</td><td>Create vertical flexbox</td></tr>
-<tr><td>FlexBox</td><td>withGap(pixels)</td><td>Set gap between items</td></tr>
+<tr><td>FlexBox</td><td>withGap(cells)</td><td>Set gap between items</td></tr>
 <tr><td>FlexItem</td><td>new(content)</td><td>Create flex item</td></tr>
-<tr><td>FlexItem</td><td>withRatio(n)</td><td>Set size ratio</td></tr>
-<tr><td>Table</td><td>new()</td><td>Create table</td></tr>
+<tr><td>FlexItem</td><td>withRatio(n)</td><td>Share of leftover main-axis space (0 = never grows, keeps its floor)</td></tr>
+<tr><td>FlexItem</td><td>withBasis(cells)</td><td>Fixed main-axis reservation before ratios share the rest</td></tr>
+<tr><td>Table</td><td>new()</td><td>Create empty table</td></tr>
 <tr><td>Table</td><td>addColumn(col)</td><td>Add table column</td></tr>
 <tr><td>Table</td><td>addRow(cells)</td><td>Add table row</td></tr>
 <tr><td>Table</td><td>sortBy(col, asc)</td><td>Sort by column</td></tr>
-<tr><td>Viewport</td><td>new(w, h)</td><td>Create viewport (80×24 default)</td></tr>
-<tr><td>Viewport</td><td>withContent(str, w, h)</td><td>Create with string content</td></tr>
+<tr><td>Table</td><td>sortByNext(col)</td><td>Toggle asc/desc on a column</td></tr>
+<tr><td>Table</td><td>filter(text)</td><td>Rows containing text in any cell</td></tr>
+<tr><td>Table</td><td>render()</td><td>Full frame (pure); use TableRenderer for deltas</td></tr>
+<tr><td>TableRenderer</td><td>render(table)</td><td>First/resize frame full, then change-only delta</td></tr>
+<tr><td>Column</td><td>make(title, width)</td><td>Create a column (width in cells)</td></tr>
+<tr><td>Column</td><td>withAlign(align)</td><td>Left / right / center cell placement</td></tr>
+<tr><td>Viewport</td><td>withContent(str, w=80, h=24)</td><td>Create viewport from string content</td></tr>
+<tr><td>Viewport</td><td>withStickyHeader/Footer(rows)</td><td>Pin lines at top/bottom across scrolling</td></tr>
 <tr><td>Viewport</td><td>withScrollbar(bool)</td><td>Toggle scrollbar display</td></tr>
 <tr><td>Viewport</td><td>lineUp/Down(n)</td><td>Scroll by n lines</td></tr>
 <tr><td>Viewport</td><td>gotoTop/Bottom()</td><td>Jump to start/end</td></tr>
@@ -129,12 +139,12 @@ $table = (new Table())
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/sort-filter.gif" alt="Sort + filter table" onerror="this.parentElement.style.display='none'">
                 <h3>Sort + filter table</h3>
-                <span class="demo-caption">Sortable + filterable table with per-column align.</span>
+                <span class="demo-caption">Sortable + filterable table driven programmatically.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/table.gif" alt="Static table" onerror="this.parentElement.style.display='none'">
                 <h3>Static table</h3>
-                <span class="demo-caption">Static table render with zebra rows.</span>
+                <span class="demo-caption">Static table with per-column widths and right-aligned column.</span>
             </div>
         </div>
     </div>
