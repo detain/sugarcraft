@@ -20,7 +20,16 @@ composer require sugarcraft/candy-scriptui
 ```
 
 candy-scriptui — a composer-installable CLI of SugarCraft TUI primitives for
-shell scripts, for PHP 8.3+.
+shell scripts, for PHP 8.3+. Composer installs the launcher at
+`vendor/bin/candy-scriptui`; the examples below assume it is on your `PATH`
+(add `vendor/bin` to it, or invoke the full path). Prebuilt single-file
+binaries are published per commit as rolling dev phars:
+
+```sh
+curl -fsSL -o candy-scriptui \
+  https://github.com/detain/sugarcraft/releases/download/candy-scriptui/dev/candy-scriptui.phar
+chmod +x candy-scriptui
+```
 
 ```sh
 # Apply styling.
@@ -249,10 +258,25 @@ directly or drop it into the appropriate completion directory.
 
 ### Version
 
-`candy-scriptui --version` reports the version read from the monorepo root
-`composer.json` via `Application::versionFromComposer()`. The version is
-discovered by walking up from the package directory to find the nearest
-`composer.json` with a non-empty `version` field.
+`candy-scriptui --version` answers through `Application::versionString()`, in
+precedence order:
+
+1. When running from a phar, the version stamped into the archive's phar
+   metadata at build time (a `dev-build` working-tree stamp is refused, so a
+   dev archive never impersonates a release).
+2. Otherwise the nearest reachable `composer.json` that carries a non-empty
+   `version` field, found by walking up from the package directory.
+3. Otherwise `0.0.0` — the honest answer when no version metadata is
+   reachable. A `composer require`-installed copy inside a project whose
+   root `composer.json` declares no `version` sees exactly this; use the
+   phar (or the versioned release) when the stamp matters.
+
+### Language
+
+`candy-scriptui` reads `LC_ALL`, then `LC_MESSAGES`, then `LANG` at startup
+and answers refusal and UI messages in that language. Sixteen catalogs ship
+with the package; a territory spelling falls back to its base language
+(`de_DE.UTF-8` → `de`) and then to English. `C`/`POSIX` stay English.
 
 ## Exit codes
 

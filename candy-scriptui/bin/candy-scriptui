@@ -38,10 +38,25 @@ if ($archive !== '') {
     foreach ($autoloadCandidates as $autoload) {
         if (file_exists($autoload)) {
             require $autoload;
+            $bootedFrom = $autoload;
             break;
         }
     }
+    if (!isset($bootedFrom)) {
+        // A silent fall-through here produced the baffling
+        // "Class 'SugarCraft\Core\Util\LegacyEnv' not found" fatal; the phar
+        // branch above already answers loudly, so this branch must too.
+        \fwrite(\STDERR, "candy-scriptui: no vendor/autoload.php found — run 'composer install' (or install via composer require).\n");
+        exit(1);
+    }
 }
+
+// Locale wiring: 16 translated catalogs ship with this app; without this
+// call they are dead weight (the process default is 'en'). T::detect()
+// reads LC_ALL → LC_MESSAGES → LANG, strips encoding suffixes and
+// lowercases; T::translate() then falls back territory → base language →
+// English, so de_DE.UTF-8 lands on lang/de.php and pt_BR on lang/pt-br.php.
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
 // Pre-rename env compatibility (plan_rename.md R4.5): CANDYSHELL_* was this app's // @rename-keep
 // option-fallback prefix before the 2026-10 rename to candy-scriptui. Import any // @rename-keep
 // old-prefix exports under the new CANDY_SCRIPTUI_* name (new name always wins),
