@@ -1,0 +1,195 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\NavStack\Tests;
+
+use InvalidArgumentException;
+use LogicException;
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Mouse\MouseEvent;
+use SugarCraft\Mouse\Scanner;
+use SugarCraft\NavStack\Breadcrumb;
+use SugarCraft\NavStack\NavStack;
+
+/**
+ * Geometry contract of the click layer: scan() speaks the Breadcrumb's own
+ * rendered frame, row() shifts it onto a terminal row, hit()/hitItem() translate
+ * terminal coordinates back into items, and the maxWidth budget is a hard
+ * invariant even in degenerate corners.
+ */
+final class ZoneGeometryTest extends TestCase
+{
+    private function stackWith(string ...$titles): NavStack
+    {
+        $stack = new NavStack();
+        foreach ($titles as $title) {
+            $stack->push($title);
+        }
+
+        return $stack;
+    }
+
+    public function testBarOnTerminalRowThreeResolvesViaRowArgument(): void
+    {
+        $stack = $this->stackWith('Home');
+        $bc = (new Breadcrumb())->withScanner(new Scanner());
+        $out = $bc->render($stack);
+
+        $bc->scan($out, row: 3);
+
+        self::assertSame('crumb-0', $bc->hit(1, 3)?->id);
+        // Rows above the bar, and rows past its single line, are dead cells.
+        self::assertNull($bc->hit(1, 2));
+        self::assertNull($bc->hit(1, 4));
+    }
+
+    public function testTerminalMouseReportFeedsHitDirectly(): void
+    {
+        // The documented recipe: a decoded MouseEvent carries 1-based terminal
+        // coordinates which hit() consumes untouched once scan() names its row.
+        $stack = $this->stackWith('Home', 'Settings');
+        $bc = (new Breadcrumb())->withScanner(new Scanner());
+        $out = $bc->render($stack);
+        $bc->scan($out, row: 5);
+
+        $event = MouseEvent::press(9, 5);
+        $clicked = $bc->hit($event->x, $event->y);
+
+        // 'Home › Settings' — with the gutter fold col 9 sits inside crumb-1.
+        self::assertNotNull($clicked);
+        self::assertSame('crumb-1', $clicked->id);
+    }
+
+    public function testViewportWidthForwardsToScanner(): void
+    {
+        $stack = $this->stackWith('Home', 'Settings');
+        $bc = (new Breadcrumb())->withScanner(new Scanner());
+        $out = $bc->render($stack);
+
+        // A narrow viewport must not make scan() explode; zones still resolve.
+        $bc->scan($out, 10);
+        self::assertSame('crumb-0', $bc->hit(1, 1)?->id);
+    }
+
+    public function testHitAfterFreshRenderThrowsStaleNotSilent(): void
+    {
+        $stack = $this->stackWith('Home');
+        $bc = (new Breadcrumb())->withScanner(new Scanner());
+        $bc->scan($bc->render($stack));
+        self::assertNotNull($bc->hit(1, 1));
+
+        $bc->render($stack); // geometry recomputed; the old scan is history now
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('before scan()');
+        $bc->hit(1, 1);
+    }
+
+    public function testGutterSeparatorCellsBelongToTheLeftCrumb(): void
+    {
+        $stack = $this->stackWith('Home', 'Settings', 'Display');
+        $bc = (new Breadcrumb())->withScanner(new Scanner());
+        $out = $bc->render($stack);
+        $bc->scan($out);
+
+        // 'Home › Settings › Display' — the gutter after 'Home' (cols 6-7) is
+        // part of the Home zone, not a dead cell.
+        self::assertSame('Home', $bc->hitItem($stack, 6, 1)?->title);
+        self::assertSame('Home', $bc->hitItem($stack, 1, 1)?->title);
+        self::assertSame('Settings', $bc->hitItem($stack, 8, 1)?->title);
+        self::assertSame('Settings', $bc->hitItem($stack, 17, 1)?->title);
+        self::assertSame('Display', $bc->hitItem($stack, 19, 1)?->title);
+        // Display width of the plain render; the marker bytes are zero cells.
+        $displayEnd = Width::string('Home › Settings › Display');
+        self::assertSame(25, $displayEnd);
+        self::assertSame('Display', $bc->hitItem($stack, $displayEnd, 1)?->title);
+        self::assertNull($bc->hitItem($stack, $displayEnd + 1, 1));
+    }
+
+    public function testZonePrefixIsConfigurableAndValidated(): void
+    {
+        $bc = (new Breadcrumb())->withScanner(new Scanner())->setZonePrefix('nav2');
+        $stack = $this->stackWith('Home', 'Settings');
+        $bc->scan($bc->render($stack));
+
+        $ids = array_keys($bc->scanner()->prefixed('nav2-'));
+        sort($ids);
+        self::assertSame(['nav2-0', 'nav2-1'], $ids);
+        self::assertSame('Home', $bc->hitItem($stack, 1, 1)?->title);
+
+        foreach (['', 'bad id', 'bad/id', "\x1b[0m"] as $rejected) {
+            try {
+                (new Breadcrumb())->setZonePrefix($rejected);
+                self::fail('prefix accepted: ' . json_encode($rejected));
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString('zone prefix', $e->getMessage());
+            }
+        }
+    }
+
+    public function testNegativeMaxWidthRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('>= 0');
+        (new Breadcrumb())->setMaxWidth(-1);
+    }
+
+    public function testHardCapHoldsInDegenerateCorners(): void
+    {
+        $render = static function (int $cap, array $titles): string {
+            return (new Breadcrumb())->setMaxWidth($cap)->renderTitles($titles);
+        };
+
+        // Marker alone at/beyond the budget: drop it, ellipsize the lone crumb.
+        self::assertSame('b', $render(1, ['a', 'b']));
+        self::assertSame('b', $render(2, ['a', 'b']));   // '… ' is 2 wide = cap -> dropped
+        self::assertSame('… b', $render(3, ['a', 'b']));
+        self::assertSame('H…', $render(2, ['Home']));
+        self::assertSame('H', $render(1, ['Home']));       // budget 1: single-cell clip
+        self::assertSame('a › b', $render(0, ['a', 'b'])); // cap 0 disables the cap entirely
+
+        foreach ([1, 2, 3, 4, 5, 8] as $cap) {
+            $out = $render($cap, ['alpha', 'beta', 'gammagamma']);
+            self::assertLessThanOrEqual($cap, Width::string($out), "cap {$cap} breached: '{$out}'");
+        }
+    }
+
+    public function testVisibleIndicesTracksSurvivors(): void
+    {
+        $bc = new Breadcrumb();
+        self::assertSame([], $bc->visibleIndices()); // nothing rendered yet
+
+        $bc->renderTitles(['Home', 'Settings', 'Display']);
+        self::assertSame([0, 1, 2], $bc->visibleIndices());
+
+        $bc->setMaxWidth(10)->renderTitles(['Home', 'Settings', 'Display']);
+        // Survivors are 'Display' (elision dropped the ancestors): index 2 only.
+        self::assertSame([2], $bc->visibleIndices());
+
+        $bc->renderTitles([]);
+        self::assertSame([], $bc->visibleIndices());
+    }
+
+    public function testTruncationPrefixCarriesNoPhantomZone(): void
+    {
+        $stack = $this->stackWith('old-entry', 'a2', 'Current');
+        $bc = (new Breadcrumb())->withScanner(new Scanner())->setMaxWidth(8);
+        $out = $bc->render($stack);
+        $bc->scan($out);
+
+        // Zones == surviving crumbs exactly ('… ' rides the first surviving zone).
+        self::assertCount(1, $bc->scanner()->prefixed('crumb-'));
+        self::assertStringStartsWith('… ', $out);
+    }
+
+    public function testMarkerlessRenderIsPlainTextWithoutScanner(): void
+    {
+        $stack = $this->stackWith('Home', 'Settings');
+        $out = (new Breadcrumb())->render($stack);
+
+        self::assertSame('Home › Settings', $out);
+        self::assertStringNotContainsString("\u{E000}", $out);
+    }
+}

@@ -49,11 +49,16 @@ final class BreadcrumbTest extends TestCase
 
         // Rendering without scanner should produce plain text (no zone markers)
         $rendered = $bc->render($s);
-        $bc->scan($rendered);
+        $this->assertStringNotContainsString("\u{E000}", $rendered);
 
         // hit() returns null when no scanner is attached
         $zone = $bc->hit(1, 1);
         $this->assertNull($zone);
+
+        // scan() with no scanner is a programming error, not a silent
+        // no-op — it would record nothing and every later hit() dead-ends.
+        $this->expectException(\LogicException::class);
+        $bc->scan($rendered);
     }
 
     // ─── scan() / hit() zone detection ────────────────────────────────────
@@ -465,5 +470,56 @@ final class BreadcrumbTest extends TestCase
     {
         $this->assertNull((new Breadcrumb())->scanner());
         $this->assertNull((new Breadcrumb())->withScanner(Scanner::new())->withScanner(null)->scanner());
+    }
+
+    // ─── Remediation contracts (zone-forgery era) ────────────────────────────
+
+    public function testItemRendererOutputPassesThroughRaw(): void
+    {
+        // A theme's styled string is TRUSTED: the sanitizer runs only on the
+        // default title fallback, never over renderer output.
+        $bc = (new Breadcrumb())->setItemRenderer(
+            static fn ($item): string => "\x1b[32m" . $item->title . "\x1b[0m"
+        );
+        $out = $bc->render((new NavStack())->push('Home'));
+
+        $this->assertSame("\x1b[32mHome\x1b[0m", $out);
+    }
+
+    public function testItemRendererNullFallsBackToSanitizedTitle(): void
+    {
+        $bc = (new Breadcrumb())->setItemRenderer(static fn ($item): ?string => null);
+        $out = $bc->render((new NavStack())->push("Ho\x1b[31mm\u{E000}u\x1b[0m"));
+
+        $this->assertStringNotContainsString("\x1b", $out);
+        $this->assertStringNotContainsString("\u{E000}", $out);
+        $this->assertStringContainsString('Hom', $out);
+    }
+
+    public function testSeparatorAndTruncatorGetDistinctRefusalMessages(): void
+    {
+        try {
+            (new Breadcrumb())->setSeparator("a\nb");
+            $this->fail('multiline separator accepted');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('single-line', $e->getMessage());
+        }
+        try {
+            (new Breadcrumb())->setSeparator('');
+            $this->fail('empty separator accepted');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('non-empty', $e->getMessage());
+        }
+        $this->expectException(\InvalidArgumentException::class);
+        (new Breadcrumb())->setTruncator("…\r");
+    }
+
+    public function testEmptyTruncatorIsAnAllowedSilentMarker(): void
+    {
+        $bc = (new Breadcrumb())->setTruncator('')->setMaxWidth(7);
+        $out = $bc->renderTitles(['alpha', 'beta', 'gammagamma']);
+
+        // No throw, cap honored; the lone survivor ellipsizes into the budget.
+        $this->assertSame('gammag…', $out);
     }
 }

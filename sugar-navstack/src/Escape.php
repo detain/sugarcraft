@@ -13,7 +13,17 @@ namespace SugarCraft\NavStack;
  * back out. Because the separator is configurable
  * ({@see Breadcrumb::setSeparator()}), both methods take a $separator so the
  * caller can pass the SAME one they gave the breadcrumb; the default matches
- * {@see Breadcrumb}'s own default (' › '), not the ASCII ' > ' NavStack uses.
+ * {@see Breadcrumb}'s (and {@see NavStack::view()}'s) default separator (' › ').
+ *
+ * Limits (this is a display-splitting aid, not a general quoting system):
+ * escaping is purely mechanical backslash-insertion, so a title that ALREADY
+ * contains a backslash-escaped separator needs no escaping to split safely,
+ * and {@see unescape()} on a never-escaped title rewrites any literal
+ * literal backslash-plus-separator it happens to contain. There is no
+ * double-escape marker, so
+ * backslash handling is not invertible for titles that contain escaped
+ * backslashes; full round-trip fidelity for adversarial titles is out of
+ * scope.
  */
 final class Escape
 {

@@ -15,6 +15,9 @@ namespace SugarCraft\NavStack;
  * owns the navigation flow) decides when a level is entered or left and
  * invokes the hooks on whatever items it manages. Treat this as a
  * lifecycle vocabulary the library standardizes on, not an event bus.
+ * (Naming tax: the name is inherited from the upstream port; the contract
+ * is really enter/leave transitions — "close" being the historical term
+ * for leaving a level. Nothing here destroys or finalizes anything.)
  */
 interface Closable
 {

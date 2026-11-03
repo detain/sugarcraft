@@ -322,4 +322,69 @@ final class ShellTest extends TestCase
         $this->assertSame(0, $original->stack->depth());
         $this->assertSame(1, $modified->stack->depth());
     }
+
+    // ─── Honest immutability: shared Breadcrumb + side door ─────────────────
+
+    public function testDerivedShellsShareTheSameMutableBreadcrumb(): void
+    {
+        $base = Shell::new();
+        $derived = $base->withPush('Anywhere')->withPush('Deeper');
+
+        // Documented aliasing: the SAME Breadcrumb instance rides every derived
+        // Shell, so configuration through one is visible through the other.
+        $this->assertSame($base->breadcrumb, $derived->breadcrumb);
+
+        $base->breadcrumb->setSeparator(' | ');
+        $this->assertSame('Anywhere | Deeper', $derived->renderBreadcrumb());
+    }
+
+    public function testPublicStackPropertyIsALiveSideDoor(): void
+    {
+        // readonly protects the property slot, not mutation through the object.
+        // Pinned so the documented escape hatch cannot silently become a copy.
+        $shell = Shell::new();
+        $shell->stack->push('ThroughTheDoor');
+
+        $this->assertSame(1, $shell->stack->depth());
+        $this->assertSame('ThroughTheDoor', $shell->stack->current()?->title);
+    }
+
+    public function testPushDirectoryKeepsNumericZeroSegment(): void
+    {
+        // array_filter() without a callback used to drop '0' segments — '/0/1'
+        // must yield two crumbs, not one.
+        $shell = Shell::new()->pushDirectory('/0/1');
+
+        $this->assertSame(
+            ['0', '1'],
+            array_map(static fn ($i): string => $i->title, $shell->stack->items())
+        );
+        $this->assertSame('/0', $shell->stack->items()[0]->data);
+    }
+
+    public function testPushDirectoryNormalizesDotsLexically(): void
+    {
+        $shell = Shell::new()->pushDirectory('/a/b/../c/.');
+
+        $this->assertSame(
+            ['a', 'c'],
+            array_map(static fn ($i): string => $i->title, $shell->stack->items())
+        );
+        $this->assertSame('/a', $shell->stack->items()[0]->data);
+        $this->assertSame('/a/c', $shell->stack->items()[1]->data);
+    }
+
+    public function testPushDirectoryClimbsPastCallStartAreNoOps(): void
+    {
+        // '..' only cancels segments pushed by the same call — the pre-existing
+        // stack is never unwound.
+        $before = Shell::new()->pushDirectory('/keep');
+        $shell = $before->pushDirectory('/../etc');
+
+        $this->assertSame(['keep', 'etc'], array_map(static fn ($i): string => $i->title, $shell->stack->items()));
+        $this->assertSame('/etc', $shell->stack->items()[1]->data);
+
+        $cancel = Shell::new()->pushDirectory('/a/b/..');
+        $this->assertSame(['a'], array_map(static fn ($i): string => $i->title, $cancel->stack->items()));
+    }
 }

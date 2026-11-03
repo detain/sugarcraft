@@ -22,7 +22,7 @@ final class NavStackHtmlTest extends TestCase
 
         $html = $stack->viewHtml();
         $this->assertSame(
-            '<nav class="breadcrumb" aria-label="Breadcrumb"><span aria-current="page">Home</span></nav>',
+            '<nav class="breadcrumb" aria-label="Breadcrumb"><ol><li aria-current="page">Home</li></ol></nav>',
             $html
         );
     }
@@ -36,7 +36,9 @@ final class NavStackHtmlTest extends TestCase
 
         $html = $stack->viewHtml();
         $this->assertSame(
-            '<nav class="breadcrumb" aria-label="Breadcrumb"><span>Home</span> &gt; <span>Settings</span> &gt; <span aria-current="page">Display</span></nav>',
+            '<nav class="breadcrumb" aria-label="Breadcrumb">'
+            . '<ol><li>Home</li><li>Settings</li><li aria-current="page">Display</li></ol>'
+            . '</nav>',
             $html
         );
     }
@@ -51,13 +53,13 @@ final class NavStackHtmlTest extends TestCase
         $html = $stack->viewHtml();
 
         // Only the last item should have aria-current="page"
-        $this->assertStringContainsString('<span>A</span>', $html);
-        $this->assertStringContainsString('<span>B</span>', $html);
-        $this->assertStringContainsString('<span aria-current="page">C</span>', $html);
+        $this->assertStringContainsString('<li>A</li>', $html);
+        $this->assertStringContainsString('<li>B</li>', $html);
+        $this->assertStringContainsString('<li aria-current="page">C</li>', $html);
 
         // Non-last items should NOT have aria-current
-        $this->assertStringNotContainsString('aria-current="page">A</span>', $html);
-        $this->assertStringNotContainsString('aria-current="page">B</span>', $html);
+        $this->assertStringNotContainsString('aria-current="page">A', $html);
+        $this->assertStringNotContainsString('aria-current="page">B', $html);
     }
 
     public function testViewHtmlEscapesHtmlCharacters(): void
@@ -79,23 +81,16 @@ final class NavStackHtmlTest extends TestCase
         $stack->push('Home');
 
         $html = $stack->viewHtml();
-        $this->assertStringStartsWith('<nav class="breadcrumb" aria-label="Breadcrumb">', $html);
-        $this->assertStringEndsWith('</nav>', $html);
+        $this->assertStringStartsWith('<nav class="breadcrumb" aria-label="Breadcrumb"><ol>', $html);
+        $this->assertStringEndsWith('</ol></nav>', $html);
     }
 
-    public function testViewHtmlUsesSeparatorConstant(): void
-    {
-        $stack = new NavStack();
-        $stack->push('X');
-        $stack->push('Y');
-
-        $html = $stack->viewHtml();
-
-        // Default separator is ' > ' (HTML-escaped as ' &gt; ')
-        $this->assertStringContainsString(' &gt; ', $html);
-    }
-
-    public function testViewHtmlSeparatorsBetweenItemsOnly(): void
+    /**
+     * The semantic-list shape carries NO literal separator text — the old
+     * ' &gt; ' gutter made screen readers announce noise between crumbs;
+     * hosts style the separator in CSS.
+     */
+    public function testViewHtmlEmitsNoSeparatorText(): void
     {
         $stack = new NavStack();
         $stack->push('A');
@@ -103,21 +98,93 @@ final class NavStackHtmlTest extends TestCase
         $stack->push('C');
 
         $html = $stack->viewHtml();
-
-        // Count occurrences of separator (HTML-escaped)
-        // Should have exactly 2 separators for 3 items
-        $this->assertSame(2, \substr_count($html, ' &gt; '));
+        $this->assertStringNotContainsString(' &gt; ', $html);
+        $this->assertSame(0, \substr_count($html, ' &gt; '));
     }
 
-    public function testViewHtmlSingleItemNoSeparator(): void
+    public function testViewHtmlSanitizesTerminalControlsBeforeEscaping(): void
     {
+        // view() and the terminal render are display-safe; viewHtml() must
+        // be too — htmlspecialchars alone leaves ESC/NUL/zone-sentinel bytes
+        // intact, and a copy-paste of the string into a terminal reanimates
+        // them. This pin holds the SHARED sanitizer (TitleSanitizer) in the
+        // HTML path, not just the terminal path.
         $stack = new NavStack();
-        $stack->push('Only');
+        $stack->push("Ev\x1b[31mil\x00\u{E000}crumb-0\u{E001}Name");
 
         $html = $stack->viewHtml();
 
-        // No separator should appear for single item
-        $this->assertStringNotContainsString(' &gt; ', $html);
+        $this->assertStringNotContainsString("\x1b", $html);
+        $this->assertStringNotContainsString("\x00", $html);
+        $this->assertStringNotContainsString("\u{E000}", $html);
+        $this->assertStringNotContainsString("\u{E001}", $html);
+        $this->assertStringNotContainsString('[31m', $html);
+        $this->assertStringContainsString('Evil', $html);
+        $this->assertStringContainsString('Name', $html);
+    }
+
+    public function testViewHtmlHrefCallbackLinksAncestorsOnly(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Home');
+        $stack->push('Settings');
+        $stack->push('Display');
+
+        $html = $stack->viewHtml(static fn(NavigationItem $i): ?string => '/' . \strtolower($i->title));
+
+        $this->assertStringContainsString('<li><a href="/home">Home</a></li>', $html);
+        $this->assertStringContainsString('<li><a href="/settings">Settings</a></li>', $html);
+        // The current page is never a link to itself
+        $this->assertStringContainsString('<li aria-current="page">Display</li>', $html);
+        $this->assertStringNotContainsString('<a href="/display"', $html);
+    }
+
+    public function testViewHtmlHrefReceivesItemAndNullLeavesPlainText(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Home');
+        $stack->push('Secret');
+
+        $seen = [];
+        $html = $stack->viewHtml(static function(NavigationItem $i) use (&$seen): ?string {
+            $seen[] = $i->title;
+            return $i->title === 'Home' ? '/home' : null;
+        });
+
+        // Only ancestors are consulted (last item has no link slot)
+        $this->assertSame(['Home'], $seen);
+        $this->assertStringContainsString('<li><a href="/home">Home</a></li>', $html);
+        $this->assertStringContainsString('<li aria-current="page">Secret</li>', $html);
+    }
+
+    public function testViewHtmlHrefIsEscaped(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Home');
+        $stack->push('End');
+
+        $html = $stack->viewHtml(static fn(NavigationItem $i): string => '/x" onmouseover="alert(1)');
+
+        $this->assertStringNotContainsString('onmouseover="alert', $html);
+        $this->assertStringContainsString('&quot; onmouseover=&quot;', $html);
+    }
+
+    public function testViewHtmlCustomAriaLabel(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Home');
+
+        $html = $stack->viewHtml(null, 'You are here');
+        $this->assertStringContainsString('aria-label="You are here"', $html);
+    }
+
+    public function testViewHtmlAriaLabelIsEscaped(): void
+    {
+        $stack = new NavStack();
+        $stack->push('Home');
+
+        $html = $stack->viewHtml(null, 'a"b');
+        $this->assertStringContainsString('aria-label="a&quot;b"', $html);
     }
 
     public function testViewHtmlEscapesAmpersand(): void

@@ -10,17 +10,46 @@ namespace SugarCraft\NavStack;
  * Holds the title (used in breadcrumbs) and optional arbitrary data
  * that each navigation level wants to carry (e.g. filter state, selected ID, etc.)
  *
+ * The title is validated at construction: whitespace-only titles are
+ * refused (they render as dead crumbs and derive `//` URL segments), and
+ * titles above {@see self::MAX_TITLE_BYTES} bytes are refused so a hostile
+ * path/URL segment cannot smuggle megabytes into every render of the row.
+ *
  * Implements {@see Closable}; see that interface for who dispatches the
  * lifecycle hooks (the CONSUMING component does — this library never calls
- * onEnter/onLeave on items it renders). This class is `final`, so the
- * extension point is your own Closable implementation, not subclassing.
+ * onEnter/onLeave on items it renders). This class is `final` and
+ * {@see NavStack::push()} constructs its items from a title + data — so a
+ * Closable implementation of YOUR OWN can never enter the stack through
+ * this library's API. Implementing {@see Closable} is the vocabulary your
+ * host application uses for its own screens; you dispatch those hooks
+ * yourself when a crumb click (or pop) moves between them.
  */
 final class NavigationItem implements Closable
 {
+    /**
+     * Hard ceiling on raw title bytes (pre-sanitization). Breadcrumb rows
+     * are single-line widgets; titles past this size are input attacks or
+     * bugs, not navigation labels.
+     */
+    public const MAX_TITLE_BYTES = 65536;
+
+    /**
+     * @throws \InvalidArgumentException On an empty/whitespace-only title or
+     *                                   one exceeding {@see MAX_TITLE_BYTES}
+     */
     public function __construct(
         public readonly string $title,
         public readonly mixed $data = null,
-    ) {}
+    ) {
+        if (\trim($title) === '') {
+            throw new \InvalidArgumentException('Navigation item title must not be empty');
+        }
+        if (\strlen($title) > self::MAX_TITLE_BYTES) {
+            throw new \InvalidArgumentException(
+                'Navigation item title must not exceed ' . self::MAX_TITLE_BYTES . ' bytes'
+            );
+        }
+    }
 
     /**
      * Contract default from {@see Closable}: a no-op. Nothing in this

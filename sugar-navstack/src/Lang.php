@@ -18,8 +18,11 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * truncation ellipsis, which are punctuation glyphs chosen per
  * {@see Breadcrumb::setSeparator()}/{@see setTruncator()}, not text to
  * translate. The facade and lang file are therefore DORMANT on purpose:
- * they exist so a host app can localize those glyphs through the shared
- * registry without touching this library's API.
+ * the library's own render paths NEVER consult the registry — Breadcrumb
+ * starts from its hardcoded defaults. A host that wants localized glyphs
+ * reads them itself (`Lang::t('separator')`) and feeds the result to the
+ * setters. That is the entire localization story today; nothing else in
+ * this package is translatable.
  *
  * @extends BaseLang
  */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\NavStack\Tests;
 
 use SugarCraft\NavStack\{Breadcrumb, NavStack, NavigationItem, Shell};
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class NavStackTest extends TestCase
@@ -135,8 +136,12 @@ final class NavStackTest extends TestCase
         $bc = (new Breadcrumb())->setMaxWidth(30);
         $result = $bc->render($s);
 
-        $this->assertLessThanOrEqual(30, \strlen($result));
+        // Cell-width (grapheme) oracle — strlen misleads on multibyte
+        // separators and ellipsis bytes.
+        $this->assertLessThanOrEqual(30, Width::string($result));
         $this->assertStringContainsString('Current Page Title', $result);
+        // The survivor is stack index 2 (the two older crumbs were elided)
+        $this->assertSame([2], $bc->visibleIndices());
     }
 
     public function testBreadcrumbEmptyStack(): void
@@ -195,7 +200,7 @@ final class NavStackTest extends TestCase
         $s = new NavStack();
         $s->push('Home')->push('Settings')->push('Display');
 
-        $this->assertSame('Home > Settings > Display', $s->view());
+        $this->assertSame('Home › Settings › Display', $s->view());
     }
 
     public function testViewWithCustomSeparator(): void

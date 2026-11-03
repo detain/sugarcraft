@@ -27,12 +27,17 @@ final class Url
 
     /**
      * Parse a URL path back into a NavStack.
+     *
+     * Empty AND whitespace-only segments (including percent-encoded ones
+     * like `/%20/`) are dropped — the counterpart to
+     * {@see NavigationItem}'s refusal of blank titles, keeping
+     * round-trips through derive() lossless for valid stacks.
      */
     public static function parse(string $path): NavStack
     {
         $segments = \array_filter(
             \explode('/', \trim($path, '/')),
-            static fn(string $s): bool => $s !== ''
+            static fn(string $s): bool => \trim(rawurldecode($s)) !== ''
         );
         $stack = new NavStack();
         foreach ($segments as $segment) {

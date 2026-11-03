@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\Zone;
 
 /**
  * Renders a NavStack as a breadcrumb string.
@@ -26,6 +27,16 @@ use SugarCraft\Mouse\Scanner;
  * `with*()` convention: the `with*()` methods here DO return new
  * instances, but the `set*` setters mutate in place. Callers must not
  * assume copy-on-write for the `set*` family.
+ *
+ * **Trust split** — titles taken from the stack (or handed to
+ * {@see renderTitles()}) are untrusted and run through
+ * {@see TitleSanitizer::sanitize()} — terminal controls, zone sentinels,
+ * invisible-formatting spoofers, and CR/LF/tab are stripped before any
+ * width math. Output from a custom {@see setItemRenderer()} closure is
+ * instead treated as host-theme territory: it passes through UNTOUCHED
+ * (sanitizing it would strip the very ANSI styling a theme exists to add).
+ * A renderer returning user data verbatim is responsible for sanitizing it
+ * itself first.
  *
  * Design antecedent: KevM/bubbleo Breadcrumb (Go); implemented as a
  * native PHP component.
@@ -46,6 +57,13 @@ final class Breadcrumb
     private string $truncator  = '… ';
     private int    $maxWidth   = 0;  // 0 = no limit
 
+    /**
+     * Prefix for per-crumb zone ids (`{prefix}-{stackIndex}`).
+     * Validated against sugar-mouse's zone-id alphabet so a hostile
+     * prefix cannot smuggle sentinel or delimiter bytes into ids.
+     */
+    private string $zonePrefix = 'crumb';
+
     /** @var \Closure(NavigationItem, int): ?string */
     private ?\Closure $itemRenderer = null;
 
@@ -61,34 +79,109 @@ final class Breadcrumb
      */
     private ?Mark $marker = null;
 
+    /**
+     * Stack indices the most recent render made visible
+     * (see {@see visibleIndices()}); empty before the first render.
+     *
+     * @var list<int>
+     */
+    private array $lastVisible = [];
+
+    /** True between a scan() of the current output and the next render. */
+    private bool $scanned = false;
+
+    /** Row the last scan() was told the breadcrumb occupies (1-based). */
+    private int $scanRowOffset = 0;
+
+    /**
+     * Set the string drawn between crumbs (and folded into each zone's
+     * click region except after the last crumb).
+     *
+     * Host ANSI styling survives; sugar-mouse zone sentinels are stripped
+     * (a separator carrying `\x{E000}crumb-0\x{E001}` would forge a fake
+     * zone into every crumb's rendered row), and multi-line separators are
+     * refused because the breadcrumb is a single-row widget.
+     *
+     * @throws \InvalidArgumentException On an empty or multi-line separator
+     */
     public function setSeparator(string $s): self
     {
+        $s = Sanitize::stripZoneSentinels($s);
         if ($s === '') {
-            throw new \InvalidArgumentException('Breadcrumb separator must be non-empty and single-line');
+            throw new \InvalidArgumentException('Breadcrumb separator must be non-empty');
         }
         if (preg_match('/[\r\n]/', $s) === 1) {
-            throw new \InvalidArgumentException('Breadcrumb separator must be non-empty and single-line');
+            throw new \InvalidArgumentException('Breadcrumb separator must be single-line');
         }
         $this->separator = $s;
         return $this;
     }
 
+    /**
+     * Set the elision marker shown in place of dropped leftmost crumbs.
+     *
+     * An empty truncator is allowed (a silent "older crumbs were dropped"
+     * marker); zone sentinels are stripped and CR/LF refused for the same
+     * single-line/zone-forgery reasons as {@see setSeparator()}.
+     *
+     * @throws \InvalidArgumentException On a multi-line truncator
+     */
     public function setTruncator(string $s): self
     {
+        $s = Sanitize::stripZoneSentinels($s);
+        if (preg_match('/[\r\n]/', $s) === 1) {
+            throw new \InvalidArgumentException('Breadcrumb truncator must be single-line');
+        }
         $this->truncator = $s;
         return $this;
     }
 
+    /**
+     * Hard cap on rendered cell width; 0 disables the cap.
+     *
+     * When the cap is smaller than the truncator marker itself, the marker
+     * is dropped so the surviving crumb still receives cells — the cap is
+     * never breached and crumbs never render as empty unclickable zones.
+     *
+     * @throws \InvalidArgumentException On a negative cap
+     */
     public function setMaxWidth(int $w): self
     {
+        if ($w < 0) {
+            throw new \InvalidArgumentException('Breadcrumb maxWidth must be >= 0 (0 disables the cap)');
+        }
         $this->maxWidth = $w;
+        return $this;
+    }
+
+    /**
+     * Rename the per-crumb zone id prefix (default `crumb`, ids
+     * `crumb-{stackIndex}`). Useful when several breadcrumb widgets share
+     * one scanner and need disjoint id namespaces.
+     *
+     * Restricted to sugar-mouse's zone-id alphabet
+     * (`[A-Za-z0-9._:-]`, non-empty) so a prefix can never carry sentinel,
+     * delimiter, or control bytes.
+     *
+     * @throws \InvalidArgumentException On an empty or out-of-alphabet prefix
+     */
+    public function setZonePrefix(string $prefix): self
+    {
+        if ($prefix === '' || preg_match('/[^A-Za-z0-9._:-]/', $prefix) === 1) {
+            throw new \InvalidArgumentException('Breadcrumb zone prefix must be non-empty and use only [A-Za-z0-9._:-]');
+        }
+        $this->zonePrefix = $prefix;
         return $this;
     }
 
     /**
      * Custom per-item renderer. The closure MUST return string|null:
      * fn(NavigationItem $item, int $index): ?string.
-     * Return null to fall back to the default title-based rendering.
+     * Return null to fall back to the default (sanitized) title rendering.
+     *
+     * Returned strings are emitted RAW — see the trust split in the class
+     * docblock; theme styling is preserved, sanitizing host data is the
+     * closure's own responsibility.
      *
      * @throws \InvalidArgumentException  If the closure returns a non-string, non-null value
      */
@@ -114,8 +207,9 @@ final class Breadcrumb
      */
     public function withScanner(?Scanner $scanner): self
     {
-        $clone = clone $this;
+        $clone         = clone $this;
         $clone->scanner = $scanner === null ? null : clone $scanner;
+        $clone->scanned = false;
         return $clone;
     }
 
@@ -133,23 +227,85 @@ final class Breadcrumb
      * subsequent hit-testing can determine which crumb zone contains
      * a given coordinate pair.
      *
-     * Call this after render() returns, before calling hit().
+     * Call this after render() returns, before calling hit(). Pass the
+     * terminal's viewport width so sugar-mouse clamps zone extents the
+     * same way the emulator will wrap the row, and `$row` when the
+     * breadcrumb is not painted on terminal row 1 — hit() then takes
+     * absolute terminal coordinates.
+     *
+     * @throws \LogicException When no scanner is attached (the call would
+     *                         silently record nothing and every later
+     *                         hit() would dead-end)
      */
-    public function scan(string $rendered): self
+    public function scan(string $rendered, ?int $viewportWidth = null, int $row = 1): self
     {
-        $this->scanner?->scan($rendered);
+        if ($this->scanner === null) {
+            throw new \LogicException('Breadcrumb::scan() requires a scanner attached via withScanner()');
+        }
+        $this->scanner->scan($rendered, $viewportWidth);
+        $this->scanRowOffset = max(0, $row - 1);
+        $this->scanned       = true;
         return $this;
     }
 
     /**
-     * Return the zone at the given terminal coordinate, or null if no
-     * crumb zone contains that cell.
+     * Return the zone at the given ABSOLUTE terminal coordinate, or null
+     * if no crumb zone contains that cell.
      *
-     * Requires scan() to have been called after the last render.
+     * Requires scan() of the current render; {@see render()} and
+     * {@see renderTitles()} invalidate the geometry.
+     *
+     * @throws \LogicException  When a scanner is attached but scan() has
+     *                          not run for the current render (a hit
+     *                          against stale geometry would misroute)
      */
-    public function hit(int $col, int $row): ?\SugarCraft\Mouse\Zone
+    public function hit(int $col, int $row): ?Zone
     {
-        return $this->scanner?->hit($col, $row);
+        if ($this->scanner === null) {
+            return null;
+        }
+        if ($this->scanned === false) {
+            throw new \LogicException('Breadcrumb::hit() called before scan() of the current render');
+        }
+        $localRow = $row - $this->scanRowOffset;
+        if ($localRow < 1) {
+            return null;
+        }
+        return $this->scanner->hit($col, $localRow);
+    }
+
+    /**
+     * Resolve an ABSOLUTE terminal coordinate straight to the stack item
+     * whose crumb zone contains it — the one-call click dispatcher.
+     *
+     * Zone ids carry full-stack indices, so the returned item matches the
+     * stack position regardless of left-elision; use the caller's own
+     * stack (the one rendered) for the lookup.
+     */
+    public function hitItem(NavStack $stack, int $col, int $row): ?NavigationItem
+    {
+        $zone = $this->hit($col, $row);
+        if ($zone === null) {
+            return null;
+        }
+        $pattern = '/\A' . preg_quote($this->zonePrefix, '/') . '-(\d+)\z/';
+        if (preg_match($pattern, $zone->id, $m) !== 1) {
+            return null;
+        }
+        return $stack->items()[(int) $m[1]] ?? null;
+    }
+
+    /**
+     * Stack indices made visible by the most recent render (empty before
+     * the first render, and after a render of an empty stack). When
+     * {@see setMaxWidth()} elides older crumbs, these are the survivors'
+     * true positions — exactly the indices zone ids carry.
+     *
+     * @return list<int>
+     */
+    public function visibleIndices(): array
+    {
+        return $this->lastVisible;
     }
 
     /**
@@ -161,6 +317,8 @@ final class Breadcrumb
     {
         $items = $stack->items();
         if ($items === []) {
+            $this->lastVisible = [];
+            $this->scanned     = false;
             return '';
         }
 
@@ -174,11 +332,10 @@ final class Breadcrumb
                 throw new \InvalidArgumentException('itemRenderer must return string|null');
             }
 
-            if ($title === null) {
-                $title = $item->title;
-            }
-
-            $titles[] = $title;
+            // Default fallback path carries the UNTRUSTED stack title and
+            // is sanitized; a renderer's own string is host-theme territory
+            // and passes through raw (trust split — see class docblock).
+            $titles[] = $title ?? TitleSanitizer::sanitize($item->title);
         }
 
         return $this->doRender($titles);
@@ -187,50 +344,75 @@ final class Breadcrumb
     /**
      * Render a custom list of titles (not from a NavStack).
      *
+     * Inputs are treated like stack titles: untrusted, sanitized at this
+     * boundary before width math and zone wrapping.
+     *
      * @param list<string> $titles
      */
     public function renderTitles(array $titles): string
     {
         if ($titles === []) {
+            $this->lastVisible = [];
+            $this->scanned     = false;
             return '';
         }
-        return $this->doRender($titles);
+        return $this->doRender(\array_map([TitleSanitizer::class, 'sanitize'], $titles));
     }
 
     /**
      * Shared render logic — handles truncate then zone-wrap.
      *
-     * @param list<string> $titles  Items in display order (oldest→newest)
+     * Titles arrive already sanitized (render()/renderTitles() boundaries);
+     * re-sanitizing here would destroy a custom renderer's ANSI styling.
+     *
+     * @param list<string> $titles  Items in display order (oldest→newest), sanitized
      */
     private function doRender(array $titles): string
     {
-        // Neutralize terminal-control-sequence injection from untrusted titles
-        // (Shell::pushDirectory / Url::parse segments are user-controlled)
-        // BEFORE any width math, truncation, or zone-wrapping — otherwise a raw
-        // ESC/newline both desyncs the render and skews width accounting.
-        $titles = \array_map([self::class, 'sanitizeTitle'], $titles);
+        $this->scanned = false;
 
-        $prefix       = '';
-        $visibleFrom  = 0;   // stack index of the first surviving crumb
-        $all          = $titles;
+        $prefix      = '';
+        $visibleFrom = 0;   // stack index of the first surviving crumb
+        $all         = $titles;
 
         // Truncate from the left if too wide
         if ($this->maxWidth > 0 && $this->effectiveWidth(\implode($this->separator, $titles)) > $this->maxWidth) {
             [$titles, $elided] = $this->truncate($titles);
             $prefix      = $elided === true ? $this->truncator : '';
             $visibleFrom = \count($all) - \count($titles);
-            $result      = $prefix . \implode($this->separator, $titles);
-
-            // Left-dropping bottoms out at the single most-recent crumb; if even
-            // that lone crumb overflows, ellipsis-truncate it so setMaxWidth() is
-            // a hard cap (upstream keeps the last crumb verbatim — the bug here).
-            if (\count($titles) === 1 && $this->effectiveWidth($result) > $this->maxWidth) {
-                $titles = [$this->truncateSegment($titles[0], $this->maxWidth - $this->effectiveWidth($prefix))];
-                $result = $prefix . $titles[0];
-            }
-        } else {
-            $result = \implode($this->separator, $titles);
         }
+
+        // Hard-cap enforcement. Left-dropping bottoms out at the single
+        // most-recent crumb; when even prefix+that crumb overflows, the
+        // crumb is ellipsized to the remaining budget — and if the marker
+        // alone already breaches the cap, it is dropped so the survivor
+        // still gets cells (setMaxWidth is a cap that is never breached,
+        // and no crumb ever renders empty/unclickable).
+        $result = $prefix . \implode($this->separator, $titles);
+        if ($this->maxWidth > 0 && $this->effectiveWidth($result) > $this->maxWidth) {
+            if (\count($titles) === 1) {
+                if ($this->effectiveWidth($prefix) < $this->maxWidth) {
+                    $titles = [$this->truncateSegment($titles[0], $this->maxWidth - $this->effectiveWidth($prefix))];
+                } else {
+                    $prefix = '';
+                    $titles = [$this->truncateSegment($titles[0], $this->maxWidth)];
+                }
+            } else {
+                // Unreachable via truncate() (its loop only grows while the
+                // marker-prefixed join fits) but guards the cap structurally.
+                $prefix = '';
+            }
+            $result = $prefix . \implode($this->separator, $titles);
+        }
+
+        // Record the survivors' full-stack positions for visibleIndices():
+        // either the whole stack, or the contiguous newest tail truncate()
+        // kept (its loop breaks at the first non-fit, so survivors are a
+        // suffix, never a scattering).
+        $total = \count($all);
+        $this->lastVisible = $visibleFrom > 0
+            ? \range($visibleFrom, $total - 1)
+            : \range(0, $total - 1);
 
         // Wrap each crumb in a zone marker when a scanner is attached. The
         // truncator prefix rides OUTSIDE the zone wrapping (it is not a
@@ -242,16 +424,6 @@ final class Breadcrumb
         }
 
         return $result;
-    }
-
-    /**
-     * Full ANSI + C0/C1 strip via sugar-core Sanitize (SSOT), then collapse the
-     * whitespace controls it deliberately preserves (\n \r \t) to spaces so an
-     * untrusted title cannot inject a newline into the single-line breadcrumb.
-     */
-    private static function sanitizeTitle(string $title): string
-    {
-        return \str_replace(["\r\n", "\r", "\n", "\t"], ' ', Sanitize::untrusted($title));
     }
 
     /**
@@ -280,7 +452,9 @@ final class Breadcrumb
      * Truncate titles to fit within maxWidth, returning the surviving titles.
      * Items are kept from most-recent to oldest until they fit.
      *
-     * Mirrors bubbleo Breadcrumb.truncate.
+     * Deliberate divergence from bubbleo Breadcrumb.truncate: upstream
+     * keeps the last crumb verbatim and can exceed the width budget; this
+     * port treats maxWidth as a hard cap (doRender() finishes the job).
      *
      * @param list<string> $titles  Items in display order (oldest→newest)
      * @return array{list<string>, bool}  [kept titles oldest→newest, whether any were elided]
@@ -310,11 +484,17 @@ final class Breadcrumb
      *
      * Each item is individually wrapped so click coordinates map back
      * to the correct crumb. Zone names carry the crumb's position in the
-     * FULL stack (`crumb-$stackOffset`, incremented per visible crumb),
+     * FULL stack (`{prefix}-$stackOffset`, incremented per visible crumb),
      * not its position among the survivors — after setMaxWidth() elides
      * the oldest crumbs, a hit on the leftmost visible crumb still
      * reports its true stack index, so the caller's popTo($index)
      * dispatch cannot silently misroute.
+     *
+     * The separator after each non-final crumb is folded INTO that zone's
+     * content so the gutter users instinctively click ("Home ›") routes to
+     * the crumb on its left instead of dead-zoning. Width math is
+     * unaffected: the same cells render either way and cap accounting
+     * happens pre-wrap.
      *
      * Uses sugar-mouse Mark::wrap() internally — no external Manager needed.
      *
@@ -326,11 +506,13 @@ final class Breadcrumb
         if ($this->marker === null) {
             $this->marker = new Mark();
         }
+        $last = \count($titles) - 1;
         $wrapped = [];
         foreach ($titles as $i => $title) {
-            $wrapped[] = $this->marker->wrap("crumb-" . ($stackOffset + $i), $title);
+            $content = $title . ($i < $last ? $this->separator : '');
+            $wrapped[] = $this->marker->wrap($this->zonePrefix . '-' . ($stackOffset + $i), $content);
         }
-        return \implode($this->separator, $wrapped);
+        return \implode('', $wrapped);
     }
 
     /** Visible cell width — delegates to sugar-core's grapheme-aware util. */
