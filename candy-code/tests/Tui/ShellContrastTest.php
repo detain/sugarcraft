@@ -291,7 +291,7 @@ final class ShellContrastTest extends TestCase
     }
 
     /**
-     * The guard that keeps the sweep from rotting: no file under `src/Tui/` may
+     * The guard that keeps the sweep from rotting: no shipped renderer file may
      * name a colour itself.
      *
      * A presence check, and it earns its place only as a COMPANION to the ratio
@@ -300,10 +300,16 @@ final class ShellContrastTest extends TestCase
      * dashboard's rows, the stall indicator, the session picker's footer). A new
      * literal in one of those is a colour no theme can move and no frame test
      * would see.
+     *
+     * The 2026-11 M11 diff-tint fix moved the last raw palette numbers out of
+     * src/Renderer.php (its tool-card row tints now ride the theme's shell
+     * trio through {@see \SugarCraft\Code\Renderer::styleDiffLine}), so the
+     * file joined the census — before that it was a whole renderer outside the
+     * walk, and the reviewed defect lived exactly there.
      */
-    public function testNoFileUnderSrcTuiNamesAColourItself(): void
+    public function testNoShippedRendererFileNamesAColourItself(): void
     {
-        $offenders = [];
+        $paths = [dirname(__DIR__, 2) . '/src/Renderer.php'];
         $dir = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(dirname(__DIR__, 2) . '/src/Tui', \FilesystemIterator::SKIP_DOTS)
         );
@@ -313,10 +319,16 @@ final class ShellContrastTest extends TestCase
                 continue;
             }
 
-            $source = (string) file_get_contents($file->getPathname());
+            $paths[] = $file->getPathname();
+        }
+
+        $offenders = [];
+        foreach ($paths as $path) {
+            $name = basename($path);
+            $source = (string) file_get_contents($path);
             foreach (explode("\n", $source) as $number => $line) {
                 if (preg_match("/'#[0-9a-fA-F]{3,8}'/", $line) === 1) {
-                    $offenders[] = $file->getFilename() . ':' . ($number + 1) . ' ' . trim($line);
+                    $offenders[] = $name . ':' . ($number + 1) . ' ' . trim($line);
                 }
                 // A hex literal is only the FORM the reported bug took.
                 // `Color::rgb(107, 114, 128)` is the same #6b7280 and used to
@@ -328,14 +340,46 @@ final class ShellContrastTest extends TestCase
                 // not the notation.
                 if (
                     preg_match('/\bColor::(rgb|hex|hsl|hsv|ansi|ansi256|parse)\s*\(|new\s+Color\s*\(/', $line) === 1
-                    && !in_array($file->getFilename(), self::COLOUR_CONSTRUCTORS_ALLOWED, true)
+                    && !in_array($name, self::COLOUR_CONSTRUCTORS_ALLOWED, true)
                 ) {
-                    $offenders[] = $file->getFilename() . ':' . ($number + 1) . ' ' . trim($line);
+                    $offenders[] = $name . ':' . ($number + 1) . ' ' . trim($line);
                 }
             }
         }
 
-        $this->assertSame([], $offenders, 'src/Tui/ must take its colours from Theme, not from literals');
+        $this->assertSame(
+            [],
+            $offenders,
+            'src/Tui/ and src/Renderer.php must take their colours from Theme, not from literals',
+        );
+    }
+
+    /**
+     * M11: the diff row tints never entered a measured frame — a 120x40 pane
+     * sweep carries no diff rows — which is exactly how three raw ANSI palette
+     * numbers (ANSI16 #00CDE5/#00CD00/#CD0000, all under the shell's own
+     * CONTRAST_MIN floor on light backgrounds) shipped in the tool-card and
+     * checkpoint tinting. This leg measures the seam directly: every row class
+     * {@see \SugarCraft\Code\Renderer::styleDiffLine()} paints, on every
+     * theme, on every background the census sweep uses.
+     */
+    public function testTheDiffRowTintsReachTheFloorThroughTheThemeSeam(): void
+    {
+        foreach (self::BACKGROUNDS as $hex) {
+            $background = Color::hex($hex);
+            TerminalBackground::forget();
+            TerminalBackground::observe(new BackgroundColorMsg($background->r, $background->g, $background->b));
+
+            foreach (Theme::names() as $name) {
+                $theme = Theme::byName($name);
+                $frame = '';
+                foreach ([['@@ -1,2 +1,2 @@', false], ['+added line', false], ['-removed line', false], ['--- a/file', true], ['+++ b/file', true], [' context', false]] as [$row, $isHeader]) {
+                    $frame .= "\n" . \SugarCraft\Code\Renderer::styleDiffLine($row, $theme, $isHeader)->render($row);
+                }
+
+                $this->assertFrameIsLegible($frame, $background, "{$name} diff rows on {$hex}");
+            }
+        }
     }
 
     /**

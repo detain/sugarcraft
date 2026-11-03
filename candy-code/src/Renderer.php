@@ -6,7 +6,6 @@ namespace SugarCraft\Code;
 
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\SgrState;
-use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Token;
@@ -6115,10 +6114,14 @@ final class Renderer
      * the ambiguous reading back.
      *
      * Public as the ONE marker-column vocabulary: the review overlay's rows
-     * in `Tui\Renderer::reviewDiffRow()` paint through here rather than
-     * repeating the `Color::ansi()` literals — `tests/Tui/ShellContrastTest`
-     * forbids colour literals under `src/Tui/`, and a second spelling of the
-     * same three colours is exactly how the two diff surfaces would drift.
+     * in `Tui\Renderer::reviewDiffRow()` paint through here, and
+     * `tests/Tui/ShellContrastTest` keeps this file inside its census. The
+     * three tints ride the theme's own shell trio — a raw ANSI palette number
+     * names an entry the theme cannot move, and the M11 review
+     * measured ANSI16 #00CDE5/#00CD00/#CD0000 failing the shell's own
+     * CONTRAST_MIN floor on lit-up terminals; `shellInfo`/`shellSuccess`/
+     * `shellError` are projected against the observed background, so every
+     * theme carries them above the line.
      */
     public static function styleDiffLine(string $line, Theme $theme, bool $isHeader): Style
     {
@@ -6126,13 +6129,13 @@ final class Renderer
             return Style::new()->foreground($theme->systemLabel)->bold();
         }
         if (str_starts_with($line, '@@')) {
-            return Style::new()->foreground(Color::ansi(6));
+            return Style::new()->foreground($theme->shellInfo);
         }
         if (str_starts_with($line, '+')) {
-            return Style::new()->foreground(Color::ansi(2));
+            return Style::new()->foreground($theme->shellSuccess);
         }
         if (str_starts_with($line, '-')) {
-            return Style::new()->foreground(Color::ansi(1));
+            return Style::new()->foreground($theme->shellError);
         }
 
         return self::dim($theme);
