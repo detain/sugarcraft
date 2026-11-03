@@ -115,6 +115,7 @@ final class TerminalPostureTest extends TestCase
             pipes: [],
             score: 9999999,
             highScores: [987654],
+            started: true,
             configDir: $this->hermeticConfigDir(),
         );
         $crashed = new Game(
@@ -136,6 +137,7 @@ final class TerminalPostureTest extends TestCase
             bird: $wide->bird,
             pipes: [],
             score: 9999999,
+            started: true,
             configDir: $this->hermeticConfigDir(),
             frameCols: 100,
         );

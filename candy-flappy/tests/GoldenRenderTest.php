@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flappy\Tests;
 
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\KeyType;
 use SugarCraft\Flappy\Game;
 use SugarCraft\Flappy\Renderer;
 use SugarCraft\Testing\Snapshot\Assertions;
@@ -27,8 +29,12 @@ final class GoldenRenderTest extends TestCase
     public function testAliveFrameIsByteExact(): void
     {
         // Deterministic seed + tick count: pipe spawned, bird off spawn row.
+        // M10: flap first — a ready board never scrolls, so the live golden
+        // must show a RUN, exactly like a player sees it.
         $rand = static fn(int $max): int => 3;
-        $g = Game::start($rand, $this->hermeticConfigDir())->tickN(Game::PIPE_EVERY + 5);
+        [$g, ] = Game::start($rand, $this->hermeticConfigDir())
+            ->update(new KeyMsg(KeyType::Space));
+        $g = $g->tickN(Game::PIPE_EVERY + 5);
 
         $output = Renderer::render($g);
 
@@ -43,13 +49,26 @@ final class GoldenRenderTest extends TestCase
 
     public function testCrashedFrameIsByteExact(): void
     {
-        // Deterministic seed, tick until crash.
+        // Deterministic seed, start, tick until crash.
         $rand = static fn(int $max): int => 0;
-        $g = Game::start($rand, $this->hermeticConfigDir())->tickN(80);
+        [$g, ] = Game::start($rand, $this->hermeticConfigDir())
+            ->update(new KeyMsg(KeyType::Space));
+        $g = $g->tickN(80);
 
         $output = Renderer::render($g);
 
         Assertions::assertGoldenAnsi(self::FIXTURE_DIR . '/render-crashed.golden', $output);
         $this->assertSame($output, file_get_contents(self::FIXTURE_DIR . '/render-crashed.golden'));
+    }
+
+    public function testReadyFrameIsByteExact(): void
+    {
+        // M10: the READY card — bird hovering, frozen world, start hint.
+        $g = Game::start(static fn(int $max): int => 0, $this->hermeticConfigDir());
+
+        $output = Renderer::render($g);
+
+        Assertions::assertGoldenAnsi(self::FIXTURE_DIR . '/render-ready.golden', $output);
+        $this->assertSame($output, file_get_contents(self::FIXTURE_DIR . '/render-ready.golden'));
     }
 }

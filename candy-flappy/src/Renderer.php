@@ -83,23 +83,43 @@ final class Renderer
             $hintPlain = self::pickHint(
                 $g,
                 $scoreText . $highScorePlain,
-                '💥 splat — press r to flap again, q to quit',
+                '💥 splat — press r to try again, q to quit',
                 '💥 splat — r retry · q quit',
             );
             $hint = Style::new()->foreground(Color::hex('#ff5f87'))->bold()
                 ->render($hintPlain);
             return self::fit($g, $framed . "\n " . $score . $highScoreLine . '    ' . $hint . "\n");
         }
-        $hintPlain = self::pickHint(
-            $g,
-            $scoreText,
-            'space / ↑ / w  flap   ·   q  quit',
-            'space flap · q quit',
-        );
+        // m28: the live status shows the standing best, not just the
+        // death screen — players want to know what they are chasing.
+        $bestPlain = '';
+        $bestLine = '';
+        if ($highScore > 0) {
+            $bestPlain = " best: {$highScore}";
+            $bestLine = Style::new()->foreground(Color::hex('#7d6e98'))
+                ->render($bestPlain) . '    ';
+        }
+        // M10: an unstarted board advertises the start key instead of the
+        // flap cadence hint; the world is visibly frozen behind it.
+        if ($g->started === false) {
+            $hintPlain = self::pickHint(
+                $g,
+                $scoreText . $bestPlain,
+                'press space / ↑ / w  to start   ·   q  quit',
+                'space to start · q quit',
+            );
+        } else {
+            $hintPlain = self::pickHint(
+                $g,
+                $scoreText . $bestPlain,
+                'space / ↑ / w  flap   ·   q  quit',
+                'space flap · q quit',
+            );
+        }
         $hint = Style::new()->foreground(Color::hex('#7d6e98'))
             ->render($hintPlain);
 
-        return self::fit($g, $framed . "\n " . $score . '    ' . $hint . "\n");
+        return self::fit($g, $framed . "\n " . $score . $bestLine . '    ' . $hint . "\n");
     }
 
     /**
@@ -120,7 +140,7 @@ final class Renderer
             $line = '|';
             for ($x = 0; $x < $w; $x++) {
                 if ($x === $birdX && $y === $birdRow) {
-                    $line .= '>';
+                    $line .= $g->crashed === true ? 'x' : '>';
                     continue;
                 }
                 $cell = ' ';
@@ -152,18 +172,31 @@ final class Renderer
             $hint = self::pickHint(
                 $g,
                 $scoreText . $recordPlain,
-                'x splat - press r to flap again, q to quit',
+                'x splat - press r to try again, q to quit',
                 'x splat - r retry - q quit',
             );
             return implode("\n", $rows) . "\n " . $scoreText . $recordPlain . '    ' . $hint . "\n";
         }
-        $hint = self::pickHint(
-            $g,
-            $scoreText,
-            'space / ^ / w  flap   .   q  quit',
-            'space flap . q quit',
-        );
-        return implode("\n", $rows) . "\n " . $scoreText . '    ' . $hint . "\n";
+        $bestPlain = '';
+        if ($g->highScore() > 0) {
+            $bestPlain = " best: {$g->highScore()}";
+        }
+        if ($g->started === false) {
+            $hint = self::pickHint(
+                $g,
+                $scoreText . $bestPlain,
+                'press space / ^ / w  to start   .   q  quit',
+                'space to start . q quit',
+            );
+        } else {
+            $hint = self::pickHint(
+                $g,
+                $scoreText . $bestPlain,
+                'space / ^ / w  flap   .   q  quit',
+                'space flap . q quit',
+            );
+        }
+        return implode("\n", $rows) . "\n " . $scoreText . $bestPlain . '    ' . $hint . "\n";
     }
 
     private static function refusal(): string
@@ -204,8 +237,12 @@ final class Renderer
 
     private static function cellGlyph(Game $g, int $x, int $y, int $birdX, int $birdRow): string
     {
-        // Bird glyph wins over everything.
+        // Bird glyph wins over everything (m29: on a crashed board the
+        // bird cell renders as the 💥 that the status line announces).
         if ($x === $birdX && $y === $birdRow) {
+            if ($g->crashed === true) {
+                return Style::new()->foreground(Color::hex('#ff5f87'))->bold()->render('💥');
+            }
             return Style::new()->foreground(Color::hex('#fde68a'))->bold()->render('>');
         }
         // Pipe walls.

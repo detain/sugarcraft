@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flappy\Tests;
 
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Flappy\Bird;
@@ -297,6 +298,7 @@ final class GameTest extends TestCase
             pipes: [],
             score: 5,
             crashed: false,
+            started: true,
             highScores: [],
             configDir: $tmp,
         );
@@ -436,6 +438,7 @@ final class GameTest extends TestCase
                 pipes: [],
                 score: 7,
                 crashed: false,
+                started: true,
                 highScores: [],
                 configDir: $tmp,
             );
@@ -612,6 +615,7 @@ final class GameTest extends TestCase
             bird: $bird,
             pipes: [],
             score: 99,
+            started: true,
             highScores: [],
             configDir: $tmp,
         );
@@ -629,5 +633,176 @@ final class GameTest extends TestCase
             @rmdir($tmp . '/.candy-flappy');
             @rmdir($tmp);
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Playability block (M10/M18/M19/M20/M24/m28/m29, lib-reviews-1102)
+    // ------------------------------------------------------------------
+
+    public function testReadyBoardFreezesUnderTicks(): void
+    {
+        // M10: an unstarted board ignores TickMsg entirely — no gravity,
+        // no scroll, no pipes. The old launch dropped the bird straight
+        // toward the floor before the player could react.
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        $before = $g->update(new TickMsg())[0];
+        $after = $before->update(new TickMsg())[0];
+        $this->assertSame($g->bird->row(), $after->bird->row());
+        $this->assertSame(0, $after->tickIndex);
+        $this->assertSame([], $after->pipes);
+    }
+
+    public function testFirstFlapStartsTheRun(): void
+    {
+        // M10: the flap both kicks the bird and leaves the ready phase;
+        // ticks after it move the world.
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space));
+        $g = $g->update(new TickMsg())[0];
+        $this->assertSame(1, $g->tickIndex);
+    }
+
+    public function testEnterFlapsLikeSpace(): void
+    {
+        // M20: Enter is a flap/start key (README promises a one-key start).
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        $row = $g->bird->row();
+        [$g, ] = $g->update(new KeyMsg(KeyType::Enter));
+        $g = $g->update(new TickMsg())[0];
+        $this->assertSame(1, $g->tickIndex);
+        // The Enter board actually kicked the bird upward (one tick is
+        // sub-cell; four ticks of lift clear a whole row).
+        $this->assertNotSame($row, $g->tickN(4)->bird->row());
+    }
+
+    public function testMidFlightRestartReturnsAReadyBoard(): void
+    {
+        // M19: 'r' works any time; with M10 it lands on the READY card,
+        // not a falling board.
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space));
+        $g = $g->update(new TickMsg())[0];
+        [$g, ] = $g->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertSame(0, $g->score);
+        $this->assertSame([], $g->pipes);
+        $this->assertFalse($g->crashed);
+        // Ready: a tick does nothing until the next flap.
+        $frozen = $g->update(new TickMsg())[0];
+        $this->assertSame(0, $frozen->tickIndex);
+    }
+
+    public function testQuitSettlesAQualifyingMidFlightScore(): void
+    {
+        // M18: q with a live record writes the leaderboard before quitting.
+        $tmp = sys_get_temp_dir() . '/candy-flappy-settle-' . getmypid() . '-' . spl_object_id($this);
+        $bird = Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0);
+        $g = new Game(
+            bird: $bird,
+            pipes: [],
+            score: 12,
+            started: true,
+            highScores: [],
+            configDir: $tmp,
+        );
+        [, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotNull($cmd);
+        // Cmd::batch is a data sentinel: the Program explodes it. Drive the
+        // children exactly as runCmd does.
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        foreach ($batch->cmds as $child) {
+            $child();
+        }
+        $target = $tmp . '/.candy-flappy/scores.json';
+        $this->assertFileExists($target);
+        $this->assertSame([12], json_decode((string) file_get_contents($target), true, 512, JSON_THROW_ON_ERROR));
+        @unlink($target);
+        @rmdir($tmp . '/.candy-flappy');
+        @rmdir($tmp);
+    }
+
+    public function testQuitDoesNotDoublePersistAfterACrash(): void
+    {
+        // The crash already persisted; q must be a bare quit, no second write.
+        $tmp = sys_get_temp_dir() . '/candy-flappy-nodbl-' . getmypid() . '-' . spl_object_id($this);
+        // Live board with a score, dropped onto the floor through the
+        // production tick path so the crash persist really runs first.
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0),
+            pipes: [],
+            score: 7,
+            started: true,
+            highScores: [],
+            configDir: $tmp,
+        );
+        for ($i = 0; $i < 400 && $g->crashed === false; $i++) {
+            [$g, $cmd] = $g->update(new TickMsg());
+            if ($cmd !== null) {
+                $cmd();
+            }
+        }
+        $this->assertTrue($g->crashed);
+        $this->assertSame([7], json_decode((string) file_get_contents($tmp . '/.candy-flappy/scores.json'), true));
+        $target = $tmp . '/.candy-flappy/scores.json';
+        $this->assertFileExists($target);
+        $mtime = (int) filemtime($target);
+        [$next, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'q'));
+        $this->assertNotNull($cmd);
+        $this->assertSame($g, $next, 'a crashed board quits as-is, no re-merge');
+        $cmd();
+        clearstatcache();
+        $this->assertFileExists($target);
+        $this->assertSame($mtime, (int) filemtime($target), 'quit after crash must not rewrite the save');
+        @unlink($target);
+        @rmdir($tmp . '/.candy-flappy');
+        @rmdir($tmp);
+    }
+
+    public function testReadyViewAdvertisesTheStartKey(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        $this->assertStringContainsString('to start', $g->view());
+        $this->assertStringNotContainsString('flap   ·   q', $g->view());
+    }
+
+    public function testLiveStatusCarriesTheStandingBest(): void
+    {
+        // m28: 'best:' is no longer death-screen-only.
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0),
+            pipes: [],
+            score: 3,
+            started: true,
+            highScores: [42],
+            configDir: $this->hermeticConfigDir(),
+        );
+        $this->assertStringContainsString('best: 42', $g->view());
+    }
+
+    public function testCrashCopySaysTryAgainNotFlapAgain(): void
+    {
+        // M24: 'r' restarts, it does not flap — the copy must match the key.
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir())->tickN(80);
+        $this->assertTrue($g->crashed);
+        $view = $g->view();
+        $this->assertStringContainsString('press r to try again', $view);
+        $this->assertStringNotContainsString('flap again', $view);
+    }
+
+    public function testCrashedBoardDrawsTheSplatGlyph(): void
+    {
+        // m29: the 💥 promised by the status line is actually on the board.
+        // A floor crash leaves the frame (the bird is below it), so pin the
+        // glyph with an in-field crash board instead.
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0),
+            pipes: [],
+            score: 3,
+            crashed: true,
+            highScores: [42],
+            configDir: $this->hermeticConfigDir(),
+        );
+        // One glyph on the board (m29) plus the one in the crash hint.
+        $this->assertSame(2, substr_count($g->view(), '💥'));
     }
 }

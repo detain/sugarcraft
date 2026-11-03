@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flappy\Tests;
 
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\KeyType;
 use SugarCraft\Flappy\Game;
 use SugarCraft\Flappy\Renderer;
 use PHPUnit\Framework\TestCase;
@@ -17,7 +19,10 @@ final class RendererTest extends TestCase
     private function game(): Game
     {
         // Deterministic PRNG: always return 0 → pipes pin to top.
-        return Game::start(static fn(int $max): int => 0, $this->hermeticConfigDir());
+        // M10: flap once so the board is LIVE, not on the ready card.
+        [$g, ] = Game::start(static fn(int $max): int => 0, $this->hermeticConfigDir())
+            ->update(new KeyMsg(KeyType::Space));
+        return $g;
     }
 
     public function testRenderHasBirdGlyph(): void

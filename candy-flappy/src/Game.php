@@ -22,7 +22,15 @@ use SugarCraft\Flappy\PipeGenerator;
  * at a fixed cadence. Pipes spawn on the right edge at intervals
  * controlled by `pipeSpacing` and slide left one column per tick.
  *
- * Keys: space / w / ↑ — flap.  q / esc / Ctrl+C — quit.  r — restart.
+ * Keys: space / ⏎ / w / ↑ — flap, which also starts the run.  q / esc /
+ * Ctrl+C — quit.  r — restart at any moment (README's "fresh board mid-flight
+ * too" is the spec; M19).
+ *
+ * Playability (M10/M18, lib-reviews-1102): the board opens in a READY phase —
+ * the bird hovers at spawn and the world does not scroll until the first
+ * flap, so a launch never drops you straight into the floor. Quitting
+ * mid-flight with a qualifying score settles it to the leaderboard before
+ * the process exits (M18: previously only a crash could ever persist).
  *
  * Terminal posture (M6-M8, lib-reviews-1102): the frame needs a 62x21
  * viewport; a smaller one gets a plain notice screen and the world freezes
@@ -108,6 +116,8 @@ final class Game implements Model
         public readonly int $tickIndex = 0,
         public readonly array $highScores = [],
         public readonly bool $newRecord = false,
+        /** False until the first flap (M10 ready phase). */
+        public readonly bool $started = false,
         ?\Closure $rand = null,
         ?string $configDir = null,
         /** Live viewport (M6): seeded at MIN, replaced by WindowSizeMsg. */
@@ -242,6 +252,7 @@ final class Game implements Model
             tickIndex: $this->tickIndex,
             highScores: $this->highScores,
             newRecord: $this->newRecord,
+            started: $this->started,
             rand: $this->rand,
             configDir: $this->configDir,
             frameCols: $cols,
@@ -261,6 +272,7 @@ final class Game implements Model
             tickIndex: $this->tickIndex,
             highScores: $this->highScores,
             newRecord: $this->newRecord,
+            started: $this->started,
             rand: $this->rand,
             configDir: $this->configDir,
             frameCols: $this->frameCols,
@@ -295,6 +307,7 @@ final class Game implements Model
             tickIndex: $this->tickIndex,
             highScores: $scores,
             newRecord: true,
+            started: $this->started,
             rand: $this->rand,
             configDir: $this->configDir,
             frameCols: $this->frameCols,
@@ -347,6 +360,15 @@ final class Game implements Model
             if ($msg->type === KeyType::Escape
                 || ($msg->type === KeyType::Char && $msg->rune === 'q')
                 || ($msg->ctrl && $msg->rune === 'c')) {
+                // M18: quitting mid-flight used to discard a qualifying
+                // score entirely — only a crash could persist. Settle first,
+                // then quit, in one batched Cmd.
+                if ($this->crashed === false && $this->started === true && $this->score > 0) {
+                    $merged = $this->withHighScore($this->score);
+                    if ($merged->newRecord === true) {
+                        return [$merged, Cmd::batch($merged->persistCmd(), Cmd::quit())];
+                    }
+                }
                 return [$this, Cmd::quit()];
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'r' && $msg->ctrl === false) {
@@ -369,15 +391,21 @@ final class Game implements Model
                 return [$this, null];
             }
             $isFlap = $msg->type === KeyType::Space
+                || $msg->type === KeyType::Enter   // M20: Enter flaps too
                 || $msg->type === KeyType::Up
                 || ($msg->type === KeyType::Char && $msg->rune === 'w');
             if ($isFlap === true) {
-                return [$this->withBird($this->bird->flap()), null];
+                return [$this->withBird($this->bird->flap())->withStarted(), null];
             }
             return [$this, null];
         }
         if ($msg instanceof TickMsg) {
             if ($this->crashed) {
+                return [$this, null];
+            }
+            if ($this->started === false) {
+                // M10: the ready board is frozen — no gravity, no scroll,
+                // no pipe spawn until the first flap.
                 return [$this, null];
             }
             $next = $this->advance();
@@ -388,14 +416,7 @@ final class Game implements Model
             if ($next->crashed === true) {
                 $updated = $next->withHighScore($next->score);
                 if ($updated->newRecord === true) {
-                    $persistCmd = static function () use ($updated): ?Msg {
-                        try {
-                            $updated->persistHighScores();
-                        } catch (\Throwable) {
-                            // Swallow: full disk / unwritable file must not crash the loop.
-                        }
-                        return null;
-                    };
+                    $persistCmd = $updated->persistCmd();
                     // C1: persist only — the crashed model's subscriptions()
                     // is empty, so Program's reconcile cancels the tick chain
                     // right here (m31: no more idle re-arming after death).
@@ -465,6 +486,7 @@ final class Game implements Model
             crashed: $crashed,
             tickIndex: $tick,
             highScores: $this->highScores,
+            started: $this->started,
             rand: $this->rand,
             configDir: $this->configDir,
             frameCols: $this->frameCols,
@@ -482,12 +504,51 @@ final class Game implements Model
             crashed: $this->crashed,
             tickIndex: $this->tickIndex,
             highScores: $this->highScores,
+            started: $this->started,
             rand: $this->rand,
             configDir: $this->configDir,
             frameCols: $this->frameCols,
             frameRows: $this->frameRows,
             colorProfile: $this->colorProfile,
         );
+    }
+
+    /** First flap arms the run (M10): the ready board becomes live. */
+    private function withStarted(): self
+    {
+        if ($this->started === true) {
+            return $this;
+        }
+        return new self(
+            bird: $this->bird,
+            pipes: $this->pipes,
+            score: $this->score,
+            crashed: $this->crashed,
+            tickIndex: $this->tickIndex,
+            highScores: $this->highScores,
+            started: true,
+            rand: $this->rand,
+            configDir: $this->configDir,
+            frameCols: $this->frameCols,
+            frameRows: $this->frameRows,
+            colorProfile: $this->colorProfile,
+        );
+    }
+
+    /** Deferred leaderboard write (M18): the crash path and the settling
+     *  quit path share one Cmd shape — run the persist, swallow I/O so a
+     *  full disk cannot kill the loop, hand back no Msg. */
+    private function persistCmd(): \Closure
+    {
+        $g = $this;
+        return static function () use ($g): ?Msg {
+            try {
+                $g->persistHighScores();
+            } catch (\Throwable) {
+                // Swallow: full disk / unwritable file must not crash the loop.
+            }
+            return null;
+        };
     }
 
     /** Test helper — apply N ticks deterministically. */

@@ -109,9 +109,9 @@ final class Counter implements Model
     /**
      * The frame decoration is built ONCE and reused (CALIBER
      * [bug:candy-starter-style-rebuild], shipped 2026-11-03): Style is an
-     * immutable value object, so per-frame `Style::new()->…` chains in
-     * view() only manufactured throwaways at render rate. Memoized static
-     * style is the pattern for any constant decoration.
+     * immutable value object, so the pre-fix per-frame construction chain
+     * in view() only manufactured throwaways at render rate. Memoized
+     * static style is the pattern for any constant decoration.
      */
     private static function frameStyle(): Style
     {
