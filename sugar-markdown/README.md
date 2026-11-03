@@ -2,8 +2,8 @@
 
 # SugarMarkdown
 
-> Formerly published as `sugarcraft/candy-shine` (renamed 2026-10). <!-- @rename-keep -->
-> Namespace changed: `SugarCraft\Shine\` → `SugarCraft\Markdown\`. <!-- @rename-keep -->
+> Formerly published as `sugarcraft/candy-shine` (renamed 2026-10);
+> namespace `SugarCraft\Shine\` → `SugarCraft\Markdown\`.
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
@@ -17,15 +17,16 @@
 ![demo](.vhs/render.gif)
 
 sugar-markdown — a Markdown → ANSI renderer for PHP 8.3+, built on
-`league/commonmark` and SugarStyle.
+`league/commonmark` and sugar-style.
 
 ```sh
 composer require sugarcraft/sugar-markdown
 ```
 
 > The `Renderer` exposes short-form aliases on every option:
-> `theme` / `wordWrap` / `hyperlinks` / `baseURL` / `tableWrap` /
-> `inlineTableLinks` / `preservedNewLines` / `emoji` / `standardStyle`.
+> `theme` / `sanitize` / `wordWrap` / `hyperlinks` / `baseURL` /
+> `tableWrap` / `inlineTableLinks` / `tableColumnBudget` /
+> `fenceColumnBudget` / `preservedNewLines` / `emoji` / `standardStyle`.
 > The long-form `with*` names still work — pick whichever
 > reads better at the call site.
 
@@ -35,7 +36,12 @@ The example below embeds a fenced code block inside its Markdown sample,
 so the snippet itself is fenced with tildes — four backticks would
 truncate the heredoc on GitHub too:
 
-~~~~php
+~`render()` ends without a trailing newline on purpose — that byte
+sequence is exactly what `stream()` yields for a one-chunk document —
+so an `echo` adds its own `"\n"` above. `write()` and `Writer` follow
+the same law.
+
+~~~php
 use SugarCraft\Markdown\Renderer;
 
 echo (new Renderer())->render(<<<MD
@@ -51,7 +57,7 @@ A few **bold** and _italic_ words, with `inline code` and a
 ```php
 echo "hello world";
 ```
-MD);
+MD), "\n";
 ~~~~
 
 ## Themes
@@ -82,7 +88,17 @@ $theme = Theme::fromJsonString('{"heading1":{"foreground":"#ff5f87","bold":true}
 echo (new Renderer($theme))->render("# Styled\n");
 ```
 
-JSON shape: an object keyed by element name (`heading1`, `paragraph`,
+Two schemas are accepted. The one above is this library's FLAT schema;
+the flat reader decodes the listed style slots and leaves the rest
+(document margins and indent, affixes, heading prefixes, glyphs) at
+defaults. A payload that carries a `document` block is glamour's
+`styles.json` and routes through `StyleGuide`, which decodes the full
+element (`h1`, `block_quote`, `code_block`, …) and `chroma` token
+vocabulary — `new StyleGuide` helpers `fromJsonString()` / `fromFile()`
+/ `element()` / `theme()` are public if you want the guide itself.
+Malformed JSON and unreadable files throw.
+
+JSON shape (flat): an object keyed by element name (`heading1`, `paragraph`,
 `bold`, `italic`, `code`, `codeBlock`, `link`, `blockquote`,
 `listMarker`, `rule`, `keyword`, `string`, `number`, `comment`,
 `strike`, `linkText`, `image`, `htmlBlock`, `htmlSpan`,
@@ -116,16 +132,19 @@ through a click: the link text and its `(url)` suffix still render,
 visible and inert. Every other scheme passes to the terminal's opener
 **unfiltered** — treat non-`http(s)` / `mailto` targets the way you
 would treat a raw terminal. Control bytes (C0, DEL, ESC, BEL) are
-stripped from every URL unconditionally. Numeric-entity
-scheme spellings (e.g. `&#006A;avascript:`) reach the terminal as
-literal entities — destinations are never entity-decoded — so their
-emitted target is inert and forms no scheme.
+stripped from every URL unconditionally, and so are the invisible
+formatting characters (soft hyphen, Mongolian vowel separator, zero
+width space, word joiner, BOM, right-to-left override) before the
+scheme comparison — probes run over the raw, percent-decoded and
+HTML-entity-decoded spellings, so a refused scheme split by invisibles
+(`java&#8203;script:`) never becomes a target either. A link with an
+empty destination renders its text and nothing more — no `()` noise.
 
 `withSanitize(false)` relaxes only the general text pipeline, for
 trusted input where control characters must survive: raw HTML blocks
 and inline HTML stay control-stripped regardless of the flag, and URL
 stripping is likewise always on. See the fleet-wide trust model in
-[docs/TRUST-BOUNDARY.md](../docs/TRUST-BOUNDARY.md).
+[docs/TRUST-BOUNDARY.md](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
 
 ## Streaming
 
@@ -140,10 +159,18 @@ equals `$renderer->render($bytes)` byte for byte.
 use SugarCraft\Markdown\{Renderer, Theme};
 
 $renderer = (new Renderer(Theme::dark()))->withWordWrap(80);
-foreach ($renderer->stream(["# Heading\n\n", "Paragraph **now**.\n"]) as $chunk) {
-    echo $chunk; // the heading is on screen while the tail is still arriving
+foreach ($renderer->stream(["# Heading\n\n", "body prose\n\n## Next heading\n"]) as $chunk) {
+    echo $chunk; // finished sections land as soon as the next heading proves them closed
 }
 ```
+
+A section is proven complete when the next top-level ATX heading
+arrives (column one, after a blank line) or the input ends — the tail
+after the final heading never emits before the stream finishes. A
+section that still references an undefined link label is held (its
+source and first render both kept) and re-rendered whenever a later
+definition event could resolve it, so definition-first documents stream
+correctly at the cost of that hold.
 
 `Writer` is the push-side twin: `Writer::toPath($renderer, $path)` or
 `Writer::toStream($renderer, $resource)` accept chunks through
@@ -166,6 +193,21 @@ $writer->feed("# Live\n\n");
 $writer->feed("first section proven\n");
 $writer->close();
 ```
+
+## Resource limits (hostile input)
+
+- Block nesting is capped at `Renderer::MAX_NESTED_BLOCK_DEPTH` (32).
+  Past the ceiling a blockquote or list still renders its content, but
+  stops adding decoration — no extra bar, no markers, no re-wrap. Quote
+  bodies stop re-wrapping below 4 usable cells, and at a 1-cell floor
+  text letter-wraps; bytes are never dropped, and output grows linearly
+  with the document, never per level.
+- There is no source-size cap: cost is roughly proportional to the
+  input. Only syntax highlighting refuses to try — a fenced body over
+  1 MB degrades to the plain code-block style instead of tokenising.
+- The streaming channel keeps a section that waits on a link-reference
+  definition in memory (source plus first render) until the definition
+  or the end of input arrives; see Streaming above.
 
 ## What it renders
 
@@ -241,17 +283,30 @@ The full slot reference (left-to-right reading the constructor):
 | Definition lists | `definitionTerm` · `definitionDescription` · `definitionList` |
 | Syntax highlighting | `keyword` · `string` · `number` · `comment` |
 
+`tableHeader` defaults to `null` = no header styling (set it explicitly
+for bold headers). `tableSeparator` is reserved: borders draw their
+glyphs from `tableColumnSeparator` / `tableCenterSeparator` /
+`tableRowSeparator`, and the style slot is not applied to them yet.
+
 Stock themes (`Theme::ansi()`, `Theme::dark()`, `Theme::dracula()`,
 `Theme::tokyoNight()`, `Theme::pink()`, `Theme::light()`, `Theme::ascii()`,
 `Theme::notty()`, `Theme::plain()`) are good starting points — copy
 the constructor call and adjust the slots you care about.
 
-`Theme::fromEnvironment(?$default)` reads `GLAMOUR_STYLE` (case-
-insensitive, hyphen / underscore tolerant) so users can override the
-theme without code changes:
+`Theme::fromEnvironment(?$default)` (also `Renderer::fromEnvironment()`)
+resolves the theme from the environment without code changes: a
+non-empty `NO_COLOR` wins first and returns `plain()`; otherwise
+`GLAMOUR_STYLE` names a preset (case-insensitive, hyphen / underscore
+tolerant), the literal `auto` picks `dark()` on a TTY and `notty()`
+off one, and an unknown name falls back to `$default` (default
+`ansi()`). `new Renderer()` keeps its own `ansi()` hard default —
+honouring the environment is exactly what this channel is for.
+`examples/render.php` prints an extra section when either variable is
+set:
 
 ```sh
 GLAMOUR_STYLE=tokyo-night php examples/render.php
+NO_COLOR=1 php examples/render.php
 ```
 
 ## Renderer options
@@ -261,10 +316,13 @@ use SugarCraft\Markdown\{Renderer, Theme};
 
 $renderer = (new Renderer(Theme::dark()))
     ->withWordWrap(80)               // wrap paragraphs / blockquotes / lists
+                                     // (headings, code blocks, tables never)
     ->withHyperlinks(true)           // emit OSC 8 link envelopes
     ->withBaseURL('https://docs.example.com/')  // prefix relative links
     ->withTableWrap(true)            // wrap text inside table cells
     ->withInlineTableLinks(false)    // suppress (url) suffix in cells
+    ->withTableColumnBudget(true)    // scale table columns into the wrap
+    ->withFenceColumnBudget(true)    // clip fenced lines to the wrap
     ->withPreservedNewLines(true)    // keep source blank-line runs between blocks
     ->withStandardStyle('dracula')   // re-pick the stock theme
     ->withEmoji(true);               // expand `:smile:` shortcodes
@@ -272,20 +330,42 @@ $renderer = (new Renderer(Theme::dark()))
 echo $renderer->render("Hello :wave:\n");
 ```
 
-With emoji on, 1,842 codes resolve: the full 1,837-entry GitHub
-cheat-sheet corpus (`GithubEmoji::MAP`) merged under the 39 curated house codes — house bytes
-win every collision — and unknown `:codes:` pass through verbatim.
+With emoji on, expansion runs after parsing — code spans, fenced
+blocks and link destinations keep the source bytes. 1,842 codes
+resolve: the 1,837-entry GitHub cheat-sheet corpus (`GithubEmoji::MAP`)
+merged with 39 curated house codes; the 34 names both spellings share
+resolve to the house bytes. Unknown `:codes:` pass through verbatim.
 
 `Renderer::renderMarkdown($md, ?Theme)` is a one-shot static
 convenience for ad-hoc rendering. For repeated renders with the same
 theme, build a Renderer and reuse it (the parser is cached per
-instance).
+instance). A Renderer is not reentrant: each render resets its block
+stack, so reuse renders sequentially, not concurrently from one
+object.
+
+### API at a glance
+
+- Constructors / factories: `new Renderer(?Theme, ?int $wrapWidth, ...)`,
+  `Renderer::ansi()`, `Renderer::plain()`, `Renderer::ascii()`,
+  `Renderer::fromEnvironment()`, one-shot `Renderer::renderMarkdown($md, ?Theme)`.
+- Channels: `render()` (whole string), `stream()` (chunk generator),
+  `renderSection()` / `sectionBodies()` (per-section), `write()` (render
+  into a stream resource), `writer()` / `Writer::toPath()` /
+  `Writer::toStream()` (push side), `StreamSink` (the sink both share).
+- Readback: `defersStreaming()` tells buffered from streaming regime;
+  `Theme::byName()`, `Theme::fromEnvironment()`, `Theme::fromJson()` and
+  `Theme::fromJsonString()` complete the theme side.
 
 ## Test
 
 ```sh
-cd sugar-markdown && composer install && vendor/bin/phpunit
+cd sugar-markdown && vendor/bin/phpunit
 ```
+
+Inside the monorepo, refresh sibling vendors first (path-linked):
+`php scripts/refresh-deps.php --mode=linked` from the repo root. A bare
+`composer install` in the standalone split repo resolves siblings from
+Packagist instead.
 
 ## Demos
 
@@ -302,10 +382,13 @@ cd sugar-markdown && composer install && vendor/bin/phpunit
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record fixtures after intentional output changes:
+The flag is create-only: an existing fixture that differs still fails
+and is never rewritten. To re-baseline after intentional output changes,
+delete the fixture and re-record it:
 
 ```sh
-UPDATE_GOLDENS=1 vendor/bin/phpunit
+rm tests/fixtures/<name>.golden
+UPDATE_GOLDENS=1 vendor/bin/phpunit   # recreates the missing file
 ```
 
 ## Related
