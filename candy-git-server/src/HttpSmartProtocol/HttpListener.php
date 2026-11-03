@@ -319,7 +319,7 @@ final class HttpListener
                 if ($eol === false) {
                     return; // size line not complete yet
                 }
-                $size = \hexdec(\trim(\substr($body, $scan['pos'], $eol - $scan['pos'])));
+                $size = \hexdec((string) \preg_replace('/[^0-9a-fA-F].*$/', '', \trim(\substr($body, $scan['pos'], $eol - $scan['pos']))));
                 $scan['pos'] = $eol + 2;
                 if ($size === 0) {
                     $scan['mode'] = 'term';
@@ -367,7 +367,7 @@ final class HttpListener
             if ($eol === false) {
                 return null; // size line not complete yet
             }
-            $size = \hexdec(\trim(\substr($raw, $offset, $eol - $offset)));
+            $size = \hexdec((string) \preg_replace('/[^0-9a-fA-F].*$/', '', \trim(\substr($raw, $offset, $eol - $offset))));
             $offset = $eol + 2;
             if ($size === 0) {
                 // terminator: trailing CRLF after the last-chunk size line

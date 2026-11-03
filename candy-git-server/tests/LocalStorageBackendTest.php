@@ -207,9 +207,81 @@ final class LocalStorageBackendTest extends TestCase
     {
         $backend = new LocalStorageBackend($this->tmpDir);
 
-        // Should not throw exception
+        // Honest shape: nothing existed, nothing may appear — the old arm
+        // asserted only that no exception flew out.
         $backend->delete('nonexistent-delete-oid');
 
-        $this->assertTrue(true); // If we get here, no exception was thrown
+        $this->assertSame([], \array_diff(\scandir($this->tmpDir), ['.', '..']));
+    }
+
+    public function testWritePublishesAtomicallyWithPrivateModeAndNoResidue(): void
+    {
+        $backend = new LocalStorageBackend($this->tmpDir);
+        $oid = \hash('sha256', 'atomic-payload');
+        $source = \fopen('data://text/plain,atomic-payload', 'rb');
+        $this->assertIsResource($source);
+
+        $backend->write($oid, $source);
+        \fclose($source);
+
+        $path = $this->tmpDir . '/' . \substr($oid, 0, 2) . '/' . \substr($oid, 2, 2) . '/' . $oid;
+        $this->assertFileExists($path);
+        $this->assertSame('atomic-payload', \file_get_contents($path));
+        // Mode arrives via chmod-on-temp-then-rename, never a widened final.
+        $this->assertSame(0600, \fileperms($path) & 0777);
+        // The same-directory temp is renamed away: only the object remains.
+        $bucket = $this->tmpDir . '/' . \substr($oid, 0, 2) . '/' . \substr($oid, 2, 2);
+        $this->assertSame(
+            [\basename($path)],
+            \array_values(\array_diff(\scandir($bucket), ['.', '..'])),
+            'no .tmp- residue may survive a successful write'
+        );
+    }
+
+    public function testFailedWriteLeavesNeitherObjectNorTempBehind(): void
+    {
+        $backend = new LocalStorageBackend($this->tmpDir);
+        $oid = \hash('sha256', 'doomed-payload');
+        $path = $this->tmpDir . '/' . \substr($oid, 0, 2) . '/' . \substr($oid, 2, 2) . '/' . $oid;
+
+        // A closed source stream fails the copy before publication.
+        $source = \fopen('data://text/plain,x', 'rb');
+        $this->assertIsResource($source);
+        \fclose($source);
+
+        try {
+            $backend->write($oid, $source);
+            $this->fail('write() must refuse a dead source stream');
+        } catch (\Throwable) {
+            // Expected shape: TypeError or RuntimeException, never silence.
+        }
+
+        $this->assertFileDoesNotExist($path, 'a failed write must never publish the final object');
+        $bucket = \dirname($path);
+        if (\is_dir($bucket)) {
+            $this->assertSame([], \array_values(\array_diff(\scandir($bucket), ['.', '..'])),
+                'the temp file must be swept on failure');
+        }
+    }
+
+    public function testWriteSourceIsTheStructuralPinForTempThenRename(): void
+    {
+        // Functional arms can pass under a 'chmod AFTER rename' mutation —
+        // the window where the final object is world-readable is exactly
+        // what must stay structurally impossible.
+        $source = (string) \file_get_contents(\dirname(__DIR__) . '/src/LFS/LocalStorageBackend.php');
+        \preg_match('/public function write\(.*?\n    \}/s', $source, $body);
+        $this->assertNotEmpty($body, 'write() vanished from the backend source');
+
+        $this->assertStringContainsString("fopen(\$temp, 'xb')", $body[0], 'temp-file publish lost');
+        $this->assertStringContainsString('rename($temp, $path)', $body[0]);
+        $this->assertStringContainsString('chmod($temp, 0600)', $body[0], 'mode must settle on the temp, before rename');
+        // Order: chmod strictly before rename inside the body.
+        $this->assertLessThan(
+            \strpos($body[0], 'rename($temp, $path)'),
+            \strpos($body[0], 'chmod($temp, 0600)'),
+            'chmod-after-rename reintroduces the world-readable window'
+        );
+        $this->assertStringNotContainsString('fopen($path', $body[0], 'direct write to the final path is back');
     }
 }
