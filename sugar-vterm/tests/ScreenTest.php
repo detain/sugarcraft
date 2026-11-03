@@ -128,7 +128,12 @@ final class ScreenTest extends TestCase
     {
         $screen = Screen::fromBuffer(new Buffer(4, 2));
 
-        $this->assertInstanceOf(\Generator::class, $screen->lines());
+        // m1 contract: the channel is lazy — row 0 arrives on demand with
+        // its key, and the generator is single-pass (a fresh call feeds the
+        // array assertion below rather than rewinding this one).
+        $lines = $screen->lines();
+        $this->assertSame(0, $lines->key());
+        $this->assertSame('    ', $lines->current());
         $this->assertSame(['    ', '    '], iterator_to_array($screen->lines()));
     }
 

@@ -177,8 +177,14 @@ final class ParamLimitTest extends TestCase
     public function testFacadeStringBufferCapUsesTheSharedConstant(): void
     {
         // The contract is the 64 KiB value itself — widening the constant
-        // must redden this file, not move the goalposts with it.
-        $this->assertSame(65_536, RootTerminal::MAX_STRING_BUFFER);
+        // must redden this file, not move the goalposts with it. Read
+        // through reflection so the pin compares a runtime value against
+        // the literal, never two copies of the same compile-time constant.
+        $this->assertSame(
+            65_536,
+            (new \ReflectionClass(RootTerminal::class))->getConstant('MAX_STRING_BUFFER'),
+            'the shared parser ceiling is 64 KiB'
+        );
 
         $h = new DebugHandler();
         $p = new Parser($h, maxStringBuffer: RootTerminal::MAX_STRING_BUFFER);
