@@ -645,6 +645,19 @@ final class Model
     /**
      * Render the visible lines of the list within the viewport.
      *
+     * Window geometry follows the standard scroll-end contract:
+     * - the window aims to show cursorOffset lines above the cursor item,
+     *   the cursor item, then as many following lines as fit;
+     * - when the list runs out below, the window grows from ABOVE instead
+     *   of shifting down (a shift could only leave holes), so the frame is
+     *   filled with maximum context at the tail and a list shorter than the
+     *   viewport renders in full;
+     * - invariants: count(returned lines) <= height, and the cursor item's
+     *   first line is always inside the returned window.
+     *
+     * Work stays bounded: only items inside (or adjacent to) the window are
+     * rendered — a pass never walks the whole list.
+     *
      * @return list<string> Visible lines
      * @throws \RuntimeException If the viewport has zero dimensions or the list is empty.
      */
@@ -657,70 +670,61 @@ final class Model
             throw new \RuntimeException(Lang::t('list.zero_viewport'));
         }
 
+        // A top gap that cannot fit beside the cursor row is clamped at render
+        // time; setCursorOffset() accepts any sane int, so the frame geometry
+        // must not depend on the caller having sized the gap against height.
+        $topGap = \min($this->cursorOffset, $this->height - 1);
+
+        // --- Lines above the cursor, collected nearest-first, capped at $topGap.
+        // $walkIndex/$walkLine remember how far upward the window could still
+        // grow, so the scroll-end backfill below continues this walk instead of
+        // re-deriving it. ---
+        $above = [];
+        $walkIndex = $this->cursorIndex - 1;
+        $walkLine = null; // null = all of $walkIndex still unconsumed
+        while ($walkIndex >= 0 && \count($above) < $topGap) {
+            $itemLines = $this->renderItem($walkIndex);
+            $start = $walkLine ?? (\count($itemLines) - 1);
+            $i = $start;
+            for (; $i >= 0 && \count($above) < $topGap; $i--) {
+                $above[] = $itemLines[$i];
+            }
+            if ($i >= 0) {
+                $walkLine = $i; // walk stopped mid-item; $i is the next line to take
+            } else {
+                $walkLine = null;
+                $walkIndex--;   // item consumed whole
+            }
+        }
+
+        $allLines = \array_reverse($above);
+
+        // --- Cursor item and everything below it, capped by the frame. ---
         $count = \count($this->items);
-
-        // Collect lines for items above the cursor, walking outward, capped by cursorOffset.
-        // We collect them bottom-up (closest to cursor first), then reverse for display order.
-        $before = [];
-        for ($c = 1; $this->cursorIndex - $c >= 0 && $c <= $this->cursorOffset; $c++) {
-            $index = $this->cursorIndex - $c;
-            $itemLines = $this->renderItem($index);
-            for ($i = \count($itemLines) - 1; $i >= 0 && \count($before) < $this->cursorOffset; $i--) {
-                $before[] = $itemLines[$i];
-            }
-            if (\count($before) >= $this->cursorOffset) {
-                break;
-            }
-        }
-
-        $allLines = [];
-        for ($c = \count($before) - 1; $c >= 0; $c--) {
-            $allLines[] = $before[$c];
-        }
-
-        // Lines from the cursor downward, capped by viewport height.
-        // $lastRenderedIndex tracks the highest item index with at least one line
-        // emitted, so the viewport-follow refill below can continue where this
-        // loop stopped instead of re-walking already-rendered items.
-        $cursorLineIndex = \count($allLines); // 0-based line index of cursor item's first line
-        $lastRenderedIndex = $this->cursorIndex - 1;
         for ($index = $this->cursorIndex; $index < $count && \count($allLines) < $this->height; $index++) {
             foreach ($this->renderItem($index) as $line) {
                 if (\count($allLines) >= $this->height) {
                     break 2;
                 }
                 $allLines[] = $line;
-                $lastRenderedIndex = $index;
             }
         }
 
-        // Viewport-follow: if cursor is within cursorOffset of the bottom while more lines
-        // remain below, shift the window down so the cursor stays cursorOffset from the edge.
-        // This mirrors the bubblelister "keep selection visible top+bottom" contract.
-        $cursorLineInWindow = $cursorLineIndex;
-        $bottomGap = \count($allLines) - 1 - $cursorLineInWindow; // lines below cursor in current window
-        if ($bottomGap < $this->cursorOffset && \count($allLines) < $this->height) {
-            // Not enough lines below cursor; cursor would be too close to bottom edge.
-            // Shift window: drop $shift = cursorOffset - $bottomGap lines from the top
-            // and pull more lines from below if available.
-            $shift = $this->cursorOffset - $bottomGap;
-            if ($shift > 0 && \count($allLines) > $shift) {
-                $allLines = \array_slice($allLines, $shift);
-                // Fill back up to height starting AFTER the last item already emitted —
-                // restarting at cursorIndex + 1 re-appended lines that survived the
-                // top-slice and duplicated the list's tail (audit M1 fix wave).
-                $linesAdded = \count($allLines);
-                $fillFrom = \max($this->cursorIndex + 1, $lastRenderedIndex + 1);
-                for ($index = $fillFrom; $index < $count && $linesAdded < $this->height; $index++) {
-                    foreach ($this->renderItem($index) as $line) {
-                        if ($linesAdded >= $this->height) {
-                            break 2;
-                        }
-                        $allLines[] = $line;
-                        $linesAdded++;
-                        $lastRenderedIndex = $index;
-                    }
-                }
+        // --- Scroll-end backfill: the list ran out below the cursor, so the
+        // frame is short. Extend the window upward (the capped walk above is
+        // the only source of withheld lines) until the frame is full or the
+        // list head is reached. This is what keeps the cursor from being
+        // stranded on a one-line frame at the end of the list. ---
+        while (\count($allLines) < $this->height && $walkIndex >= 0) {
+            $itemLines = $this->renderItem($walkIndex);
+            $available = ($walkLine ?? (\count($itemLines) - 1)) + 1;
+            $take = \min($this->height - \count($allLines), $available);
+            $firstLine = $available - $take; // first unconsumed line still needed
+            $prepend = \array_slice($itemLines, $firstLine, $take);
+            $allLines = \array_merge($prepend, $allLines);
+            $walkLine = $firstLine > 0 ? $firstLine - 1 : null;
+            if ($walkLine === null) {
+                $walkIndex--;
             }
         }
 

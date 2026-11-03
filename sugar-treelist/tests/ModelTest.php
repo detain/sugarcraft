@@ -622,8 +622,14 @@ final class ModelTest extends TestCase
             ->setViewport(80, 24);
 
         $lines = $m->lines();
-        // Should be limited to 2 lines due to wrap setting
-        $this->assertLessThanOrEqual(2, \count($lines));
+        // Exact geometry (2026-11-03 strengthened pin — the old count-only
+        // assertion accepted any <=2 rows, including zero): wrap=2 cuts the
+        // five logical lines to two rendered rows; the first row carries the
+        // box head, number column and cursor marker, the continuation row
+        // carries the wrap glyph and no marker.
+        $this->assertCount(2, $lines);
+        $this->assertStringStartsWith('╭ 0 > line1', $lines[0]);
+        $this->assertStringStartsWith('│     line2', $lines[1]);
     }
 
     public function testLinesWithContentWidthTooNarrowExercisingHardWrapEdgeCase(): void
@@ -635,7 +641,99 @@ final class ModelTest extends TestCase
             ->setViewport(5, 24);
 
         $lines = $m->lines();
-        $this->assertNotEmpty($lines);
+        // Exact geometry (2026-11-03 strengthened pin): prefix + suffix leave
+        // no content width, so the item degrades to a single blank row rather
+        // than throwing or overflowing the viewport.
+        $this->assertSame([''], $lines);
+    }
+
+    // -------------------------------------------------------------------------
+    // Scroll-end frame geometry (viewport tail-collapse fix wave, 2026-11-03)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Invariant sweep: for every combination of height 1..10, cursor 0..6 and
+     * cursorOffset {0, 2, 5, 100} over seven single-line items, lines() must
+     * (a) never exceed the viewport height, (b) always contain the cursor
+     * item's row, and (c) fill the frame whenever the list has enough rows.
+     *
+     * The old algorithm violated (b) for every cursor >= height at the list
+     * tail and collapsed the end-of-list window to a single row; these
+     * combinations reproduce that space exhaustively.
+     */
+    public function testScrollEndGeometrySweep(): void
+    {
+        $items = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+        foreach ([1, 2, 3, 5, 10] as $height) {
+            foreach ([0, 2, 5, 100] as $offset) {
+                foreach (range(0, count($items) - 1) as $cursor) {
+                    $m = Model::new()
+                        ->setViewport(40, $height)
+                        ->setCursorOffset($offset)
+                        ->addItemsFromArray($items)
+                        ->setCursor($cursor);
+                    $lines = $m->lines();
+                    $this->assertLessThanOrEqual($height, count($lines),
+                        "frame overflow at h={$height} offset={$offset} cursor={$cursor}");
+                    $this->assertContains($items[$cursor], $lines,
+                        "cursor row missing at h={$height} offset={$offset} cursor={$cursor}");
+                    $expected = min($height, count($items));
+                    $this->assertCount($expected, $lines,
+                        "frame not full at h={$height} offset={$offset} cursor={$cursor}");
+                    $this->assertSame(count($lines), count(array_unique($lines)),
+                        "duplicate row at h={$height} offset={$offset} cursor={$cursor}");
+                    // Window is a contiguous slice of the list.
+                    $indexes = array_map(fn(string $l): int => array_search($l, $items, true), $lines);
+                    for ($i = 1; $i < count($indexes); $i++) {
+                        $this->assertSame($indexes[$i - 1] + 1, $indexes[$i],
+                            "non-contiguous window at h={$height} offset={$offset} cursor={$cursor}");
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Multi-line items make the window LINE-based, not item-based: each item
+     * occupies several rows and the cursor row (its item's first row) must
+     * always be inside a full frame, including at the list tail.
+     */
+    public function testScrollEndGeometryWithMultiLineItems(): void
+    {
+        $m = Model::new()
+            ->setViewport(20, 4)
+            ->setCursorOffset(1)
+            ->addItemsFromArray(["a1\na2", "b1\nb2", "c1\nc2"]);
+
+        $lines = $m->lines();
+        $this->assertCount(4, $lines);
+        $this->assertSame(['a1', 'a2', 'b1', 'b2'], $lines);
+
+        $tail = $m->setCursor(2);
+        $tailLines = $tail->lines();
+        $this->assertCount(4, $tailLines, 'tail frame must be full, not collapsed');
+        $this->assertContains('c1', $tailLines, 'cursor item first row must be visible');
+        // Scroll-end clamp: last four lines of [a1,a2,b1,b2,c1,c2] is [b1,b2,c1,c2].
+        $this->assertSame(['b1', 'b2', 'c1', 'c2'], $tailLines);
+    }
+
+    /**
+     * The stock-default shape from the report (ten items, no knob tweaks):
+     * jumping the cursor to the end must show the whole short list with the
+     * cursor row present — never the single-row frame the old code emitted.
+     */
+    public function testStockDefaultsToEndOfListShowsCursorAndContext(): void
+    {
+        $m = Model::new();
+        foreach (range(0, 9) as $i) {
+            $m = $m->addItem(new StringItem("item $i"));
+        }
+        $lines = $m->cursorToEnd()->lines();
+
+        $this->assertCount(10, $lines, 'ten short items fit the stock 24-row viewport');
+        $this->assertContains('item 9', $lines, 'cursor row must be on screen');
+        $this->assertSame('item 0', $lines[0]);
+        $this->assertSame('item 9', $lines[9]);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -645,6 +743,11 @@ final class ModelTest extends TestCase
     /**
      * Step 9: regression — when cursor is on a non-zero index, the > marker
      * must appear on the cursor item, NOT only on index 0.
+     *
+     * 2026-11-03 RE-PIN (scroll-end geometry fix): with viewport 40x5 and
+     * cursorOffset 2 the window now shows all three items (the old algorithm
+     * collapsed the tail); asserted structurally — the marker rides the row
+     * carrying the cursor item, and only that row — instead of a row index.
      */
     public function testMarkerOnNonZeroCursorItem(): void
     {
@@ -659,10 +762,17 @@ final class ModelTest extends TestCase
         // Cursor on item 2 → its first line has '>'
         $m2 = $m->setCursor(2);
         $lines = $m2->lines();
-        // The first visible line (item 2's first line) must contain '>'
-        $this->assertStringContainsString('>', $lines[0]);
-        // Other items' first lines must NOT contain '>'
-        $this->assertStringNotContainsString('>', $lines[1] ?? '');
+        $markerRows = array_filter($lines, fn(string $l): bool => str_contains($l, '>'));
+        $this->assertCount(1, $markerRows, 'exactly one row may carry the cursor marker');
+        $this->assertStringContainsString('item2', (string) reset($markerRows),
+            'the marker row must be the cursor item\'s row');
+        foreach ($lines as $line) {
+            if (str_contains($line, 'item2')) {
+                $this->assertStringContainsString('>', $line);
+            } else {
+                $this->assertStringNotContainsString('>', $line);
+            }
+        }
     }
 
     /**
@@ -1130,10 +1240,20 @@ final class ModelTest extends TestCase
         $this->assertSame('test', $lines[0]);
     }
 
+    /**
+     * Scroll-end contract at the bottom of the list.
+     *
+     * 2026-11-03 RE-PIN (named disclosure, viewport tail-collapse fix): this
+     * test previously pinned BROKEN geometry — viewport 40x5, offset 2, cursor
+     * on 'item 4' of six single-line items rendered only 3 rows (items 3-5)
+     * and the assertion froze that collapse as correct. Under the corrected
+     * scroll-end clamp the window grows UPWARD when the list runs out below,
+     * so the frame stays full: items 1-5 once each, item 0 out of the window.
+     * The anti-duplication intent of the earlier fix wave is re-pinned below
+     * and stays load-bearing.
+     */
     public function testLinesViewportFollowBottomGap(): void
     {
-        // When cursor is within cursorOffset of bottom AND more lines remain below,
-        // the viewport-follow logic shifts the window down.
         $m = Model::new()
             ->setViewport(40, 5)
             ->setCursorOffset(2)
@@ -1146,33 +1266,33 @@ final class ModelTest extends TestCase
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        // Cursor at index 0, initially visible. Move cursor near bottom.
+        // Cursor near the bottom: the frame keeps the cursor visible AND stays
+        // full by backfilling from above — it never strands the list tail.
         $m2 = $m->setCursor(4);
         $lines = $m2->lines();
-        $this->assertNotEmpty($lines);
-        // The viewport should have shifted to keep cursor 2 lines from bottom
-        $this->assertLessThanOrEqual(5, \count($lines));
-        // Exact window (audit M1 fix wave — the vacuous count-only assertion let
-        // the "D,E,F,F" tail duplication ship): the shift drops the two lines
-        // above the pre-cursor region and, with the list exhausted below, must
-        // NOT re-emit already-rendered items.
-        $this->assertCount(3, $lines, 'shifted window must hold exactly items 3-5 once');
+        $this->assertCount(5, $lines, 'frame must stay full at the list tail');
         $joined = \implode("\n", $lines);
-        foreach ([3, 4, 5] as $i) {
+        foreach ([1, 2, 3, 4, 5] as $i) {
             $this->assertSame(1, \substr_count($joined, "item $i"),
-                "item $i must appear exactly once in the shifted window");
+                "item $i must appear exactly once in the backfilled window");
         }
-        $this->assertStringNotContainsString('item 2', $joined);
+        $this->assertStringNotContainsString('item 0', $joined);
         $this->assertLessThan(\strpos($joined, 'item 5'), \strpos($joined, 'item 4'),
-            'items keep ascending order in the shifted window');
+            'items keep ascending order in the backfilled window');
         $this->assertLessThan(\strpos($joined, 'item 4'), \strpos($joined, 'item 3'));
     }
 
     /**
-     * Audit M1 regression pin — exact repro from the audit report:
-     * 6 single-line items, viewport 40×10, cursorOffset 3, cursor at index 4
-     * produced ["D","E","F","F"] (F duplicated at every end-of-list scroll).
-     * No prefixer/suffixer so lines are the bare item values.
+     * Regression pin — exact repro of the reported end-of-list corruption:
+     * 6 single-line items, viewport 40x10, cursorOffset 3, cursor at index 4
+     * once produced ["D","E","F","F"] (F duplicated at every end-of-list
+     * scroll). No prefixer/suffixer so lines are the bare item values.
+     *
+     * 2026-11-03 RE-PIN (named disclosure, viewport tail-collapse fix): the
+     * intermediate remedy clipped the frame to ["D","E","F"], which hid the
+     * rest of the list although the viewport had room for all ten rows. The
+     * corrected scroll-end clamp shows the whole six-item list exactly once;
+     * the no-duplication contract this pin exists for is asserted directly.
      */
     public function testViewportFollowEndOfListDoesNotDuplicateTail(): void
     {
@@ -1182,7 +1302,10 @@ final class ModelTest extends TestCase
             ->addItemsFromArray(['A', 'B', 'C', 'D', 'E', 'F'])
             ->setCursor(4);
 
-        $this->assertSame(['D', 'E', 'F'], $m->lines());
+        $lines = $m->lines();
+        $this->assertSame(['A', 'B', 'C', 'D', 'E', 'F'], $lines);
+        $this->assertSame(count($lines), count(array_unique($lines)),
+            'no item may be re-emitted at the end-of-list scroll');
     }
 
     /**
