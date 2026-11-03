@@ -57,6 +57,11 @@ final class TermiosFactory
     /**
      * Open a Termios for the given fd.
      *
+     * `$fd` is the raw OS descriptor — take it from
+     * {@see \SugarCraft\Pty\Contract\MasterPty::fd()}. Casting a PHP
+     * stream resource to int yields the resource ID, not the fd, and
+     * the resulting ioctls would silently target the wrong file.
+     *
      * Tries PosixTermios (FFI) first. On Throwable or when
      * SUGARCRAFT_TERMIOS=stty is set, falls back to SttyTermios.
      *

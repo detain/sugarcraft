@@ -11,7 +11,7 @@ use SugarCraft\AnsiParser\Parser\Handler;
  *
  * Feed PTY output bytes through a {@see \SugarCraft\AnsiParser\Parser\Parser}
  * that uses this handler to accumulate the current text style (colors,
- * bold, underline, etc.). Callers can then inspect {@see $state} after
+ * bold, underline, etc.). Callers can then inspect {@see self::$state} after
  * each chunk to observe style transitions.
  *
  * This handler is used by {@see AnsiOutputParser} to enable PTY consumers
@@ -96,7 +96,11 @@ final class SgrHandler implements Handler
 
     /**
      * Dispatch a completed OSC (Operating System Command) sequence.
-     * OSC 8 hyperlink is tracked here if needed.
+     *
+     * Deliberate no-op: OSC carries window titles, hyperlinks and OSC 52
+     * clipboards — none of which affect SGR color/attribute state. OSC 8
+     * hyperlink tracking, if a consumer wants it, belongs in a dedicated
+     * handler, not bolted onto this one.
      */
     public function oscDispatch(string $data): void
     {

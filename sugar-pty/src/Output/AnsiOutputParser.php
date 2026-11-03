@@ -48,7 +48,7 @@ final class AnsiOutputParser
     /**
      * Read and parse the next chunk of output bytes.
      *
-     * After this call, {@see $state} reflects the current SGR state after
+     * After this call, {@see self::state()} reflects the current SGR state after
      * consuming the bytes. The {@see SgrHandler} tracks state transitions
      * across calls, so this is safe to call repeatedly with streaming chunks.
      *

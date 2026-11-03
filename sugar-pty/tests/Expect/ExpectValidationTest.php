@@ -106,6 +106,46 @@ final class ExpectValidationTest extends TestCase
         new Expect(self::stub(), searchWindow: -5);
     }
 
+    public function testNegativeTimeoutIsRefusedOnEveryRacingEntry(): void
+    {
+        // A negative budget would otherwise mint "timed out after -5.000s"
+        // messages and skip every wait without ever observing the stream.
+        foreach ([
+            'expect' => static fn (Expect $e): Expect => $e->expect('x', -5.0),
+            'expectAny' => static fn (Expect $e): Expect => $e->expectAny(['x'], -5.0),
+            'expectPattern' => static fn (Expect $e): Expect => $e->expectPattern('/x/', -5.0),
+            'expectEof' => static fn (Expect $e): Expect => $e->expectEof(-5.0),
+        ] as $name => $call) {
+            $e = new Expect(self::stub());
+            try {
+                $call($e);
+                self::fail("{$name} accepted a negative timeoutSec");
+            } catch (\InvalidArgumentException $reason) {
+                self::assertSame('timeoutSec must be >= 0; got -5.0', $reason->getMessage());
+            }
+        }
+    }
+
+    public function testZeroTimeoutMatchesOnlyAlreadyBufferedBytes(): void
+    {
+        // >= 0, not > 0: a zero budget keeps its door open and means
+        // "scan the buffer, never wait". The loop scans buffered bytes
+        // BEFORE the deadline check, so a primed buffer matches instantly;
+        // bytes still sitting behind the master are not chased.
+        $warm = new Expect(self::stub(prime: 'IGNORED'), buffer: 'prompt> ');
+        $got = $warm->expectAny(['prompt> '], 0.0);
+
+        self::assertSame('prompt> ', $got->lastMatch);
+
+        $cold = new Expect(self::stub(prime: 'prompt> '));
+        try {
+            $cold->expectAny(['prompt> '], 0.0);
+            self::fail('zero budget must not read the master before its verdict');
+        } catch (\SugarCraft\Pty\Exception\ExpectTimeoutException $reason) {
+            self::assertStringContainsString('timed out after 0.000s', $reason->getMessage());
+        }
+    }
+
     public function testFluentSettersRouteThroughTheSameDoor(): void
     {
         $expect = Expect::on(self::stub());

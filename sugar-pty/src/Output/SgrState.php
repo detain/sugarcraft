@@ -116,7 +116,10 @@ final readonly class SgrState
 
     private function colorName(int $basic, int $c256, int $rgb, string $which): ?string
     {
-        if ($rgb !== 0) {
+        // Dispatch on the MODE sentinel, never on payload equality: an
+        // SGR 38;2 payload of 0 is legitimate black rgb(0,0,0), and a
+        // "rgb !== 0" fast path would describe it as "default".
+        if ($c256 === self::COLOR_RGB || $rgb !== 0) {
             $r = ($rgb >> 16) & 0xFF;
             $g = ($rgb >> 8) & 0xFF;
             $b = $rgb & 0xFF;

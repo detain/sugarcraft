@@ -22,7 +22,11 @@ final class PosixPtySystem implements PtySystem
     private const FD_CLOEXEC = 1;
 
     /**
-     * Open a new PTY pair and resize the master to the requested dimensions.
+     * Open a new PTY pair and best-effort resize the master to the
+     * requested dimensions. The initial resize is wrapped in a catch: a
+     * kernel-refused winsize does NOT fail the open, so geometry may
+     * surface as 0x0 until the next successful {@see MasterPty::resize()}
+     * (spawn paths with controllingTerminal re-assert it).
      *
      * The master fd is created with `FD_CLOEXEC` set so it is closed on
      * any subsequent `proc_open` in the child — without this flag the child

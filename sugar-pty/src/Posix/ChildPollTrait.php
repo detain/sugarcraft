@@ -82,9 +82,11 @@ trait ChildPollTrait
             return null;
         }
 
-        // $statusArray[0] is the int that waitpid wrote to.
-        // For normally-exited process: status = exit_code (0-255)
-        // For signal-terminated process: status = signal_number (1-127)
+        // $statusArray[0] is the int that waitpid wrote to. The raw
+        // encoding is NOT the plain exit code: a normal exit rides the
+        // HIGH byte (status == exit_code << 8), and a signal death puts
+        // the signal number in the LOW byte (status & 0x7F) with the
+        // high byte zero.
         // Convention: exit code for signal death is 128 + signal_number.
         $statusVal = (int)$statusArray[0];
         $signal = $statusVal & 0x7F;

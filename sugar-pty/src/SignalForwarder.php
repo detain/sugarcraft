@@ -36,6 +36,16 @@ use SugarCraft\Pty\Contract\MasterPty;
  * with no arguments at session teardown to detach every handler this
  * class installed and undo `pcntl_async_signals(true)` if this class
  * enabled it.
+ *
+ * ## One slot per signal
+ *
+ * Handler installation keeps a single previous-handler slot per signal
+ * class, so forwarding is not composable: attaching twice (e.g. both
+ * `attachSigwinch` calls from two sessions) lets the second install
+ * capture the FIRST handler as its "previous", and a later restore
+ * rewinds only one step. A host application that already owns
+ * SIGWINCH/SIGCHLD should not attach this class — read the size and
+ * call `resize()` itself.
  */
 final class SignalForwarder
 {
@@ -106,7 +116,8 @@ final class SignalForwarder
      * `$pty->resize()`.
      *
      * `$sizeProvider` returns `array{cols:int, rows:int}` — typically
-     * a thin wrapper over sugar-core's `Util\Tty::size()`. Any
+     * a thin wrapper over sugar-core's `Util\Tty` instance `size()`
+     * method — `(new Tty(STDIN))->size()`; `size()` is NOT static. Any
      * exception it throws is swallowed (signal handlers must not
      * propagate exceptions across the runtime).
      *

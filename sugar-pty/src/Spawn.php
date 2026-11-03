@@ -50,7 +50,9 @@ final class Spawn
      *     child still needs PATH/HOME/LANG.
      * @param bool                      $controllingTerminal  see class
      *                                  doc; opt-in because shim startup
-     *                                  costs ~5-50ms and only interactive
+     *                                  costs a few to a few tens of
+     *                                  milliseconds (an unmeasured
+     *                                  estimate) and only interactive
      *                                  shells / editors actually need it.
      * @see creack/pty.Start()
      * @see portable-pty.SlavePty.Start()

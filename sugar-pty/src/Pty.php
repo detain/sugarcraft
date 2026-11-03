@@ -10,7 +10,8 @@ use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\Posix\PosixSlavePty;
 
 /**
- * @deprecated since v0.x, use `SugarCraft\Pty\Posix\PosixPtySystem` instead
+ * @deprecated since v0.x, use `SugarCraft\Pty\Posix\PosixPtySystem` instead.
+ *             Scheduled for removal at v2.0.
  *
  * Mirrors charmbracelet/x/xpty.Open().
  *

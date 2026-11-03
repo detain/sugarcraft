@@ -294,6 +294,7 @@ final class Expect
      */
     public function expectAny(array $needles, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self
     {
+        self::assertTimeoutIsNonNegative($timeoutSec);
         if ($needles === []) {
             throw new \InvalidArgumentException('Expect::expectAny requires at least one needle');
         }
@@ -384,6 +385,7 @@ final class Expect
      */
     public function expectPattern(string $regex, float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self
     {
+        self::assertTimeoutIsNonNegative($timeoutSec);
         if ($regex === '') {
             throw new \InvalidArgumentException('Expect::expectPattern regex must be non-empty');
         }
@@ -461,6 +463,7 @@ final class Expect
      */
     public function expectEof(float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self
     {
+        self::assertTimeoutIsNonNegative($timeoutSec);
         $deadline = \microtime(true) + $timeoutSec;
         $buffer = $this->buffer;
 
@@ -511,6 +514,19 @@ final class Expect
      * which may softly exceed a tighter `maxBuffer` (bounded by the
      * heuristic) rather than run away.
      */
+    /**
+     * A negative budget cannot be raced: it would mint timeout messages
+     * like 'timed out after -5.000s' while silently disabling all waits.
+     */
+    private static function assertTimeoutIsNonNegative(float $timeoutSec): void
+    {
+        if ($timeoutSec < 0) {
+            throw new \InvalidArgumentException(
+                'timeoutSec must be >= 0; got ' . \var_export($timeoutSec, true)
+            );
+        }
+    }
+
     private function trimBuffer(string $buffer, int $needleLen): string
     {
         if ($this->maxBuffer === null || \strlen($buffer) <= $this->maxBuffer) {

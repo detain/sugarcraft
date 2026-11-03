@@ -35,13 +35,14 @@ namespace SugarCraft\Pty\Windows;
  * {@see WAIT_FAILED} are therefore spelled differently on purpose, and every
  * method that can return one says which.
  *
- * ## Scope of this step
+ * ## Reachability
  *
- * This contract and its FFI implementation are the primitives only. Nothing
- * here satisfies sugar-pty's {@see \SugarCraft\Pty\Contract\PtySystem} or
- * {@see \SugarCraft\Pty\Contract\Process} yet — that adapter layer is the
- * follow-up step, and until it lands this namespace is unreachable from
- * `PtySystemFactory` on any host. {@see supported()} is the door it will open.
+ * These primitives are wrapped by the shipped adapter layer:
+ * {@see \SugarCraft\Pty\Windows\ConPtySystem} implements
+ * {@see \SugarCraft\Pty\Contract\PtySystem} on top of them, and
+ * `PtySystemFactory` reaches it automatically on Windows hosts (the
+ * {@see supported()} probe is exactly that door). Off-Windows the whole
+ * namespace stays inert by design — the Win32 FFI calls cannot bind.
  *
  * Mirrors the Windows console-API subset charmbracelet/x/xpty needs, which
  * itself follows the ConPTY sample at

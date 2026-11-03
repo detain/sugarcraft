@@ -49,7 +49,7 @@ final class ControllingTerminal
 
         if ($libc->setsid() === -1) {
             throw new PtyException(
-                'ControllingTerminal::claim setsid() failed (already a session leader?)',
+                'ControllingTerminal::claim setsid() failed (already a session leader, or the calling process is a group leader)',
             );
         }
 
