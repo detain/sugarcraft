@@ -175,6 +175,27 @@ final class CommandLineTest extends TestCase
         self::assertSame('', $out, 'no escape sequences may reach a piped stdout');
     }
 
+    public function testTheLauncherSpeaksTheUsersLocale(): void
+    {
+        // A stray argument under LANG=de proves T::setLocale(T::detect()) runs
+        // before the first translated string is emitted: without that call the
+        // lang/ catalogue stays dead code and every refusal ships in English
+        // no matter what the environment says (audit A15).
+        [$exit, , $err] = self::spawn(['--nope'], null, ['LANG' => 'de_DE.UTF-8', 'PATH' => '/usr/bin:/bin']);
+
+        self::assertSame(2, $exit);
+        self::assertStringContainsString('unbekanntes Argument', $err);
+        self::assertStringNotContainsString('unknown argument', $err);
+    }
+
+    public function testTheLocaleFallsBackToEnglishInANeutralEnvironment(): void
+    {
+        [$exit, , $err] = self::spawn(['--nope'], null, ['LANG' => 'C', 'LC_ALL' => 'C', 'PATH' => '/usr/bin:/bin']);
+
+        self::assertSame(2, $exit);
+        self::assertStringContainsString('unknown argument', $err);
+    }
+
     // ------------------------------------------------------------- plumbing
 
     /**

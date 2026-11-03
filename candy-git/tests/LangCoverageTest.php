@@ -56,6 +56,12 @@ final class LangCoverageTest extends TestCase
         $langFile = __DIR__ . '/../lang/en.php';
         $translations = require $langFile;
         $this->assertArrayHasKey('ui.error_prefix', $translations);
+        // The chrome catalogue (audit A16): pane/frame titles and the scroll
+        // indicators must be addressable, not hardcoded in the renderer.
+        $this->assertArrayHasKey('ui.pane.status', $translations);
+        $this->assertArrayHasKey('ui.title.app', $translations);
+        $this->assertArrayHasKey('viewport.above', $translations);
+        $this->assertArrayHasKey('viewport.below', $translations);
     }
 
     public function testAllStatusKeysPresent(): void

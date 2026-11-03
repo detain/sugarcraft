@@ -43,7 +43,7 @@ final class Renderer
         $body = Layout::joinHorizontal(Position::TOP, $left, '  ', $right);
 
         $header = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-            ->render(' CandyGit ')
+            ->render(Lang::t('ui.title.app'))
             . '   '
             . Style::new()->foreground(Color::hex('#a78bfa'))
                 ->render($a->branchSummary !== '' ? "[{$a->branchSummary}]" : '');
@@ -143,7 +143,7 @@ final class Renderer
         [$start, $shown, $above, $below] = self::rowWindow(count($a->status), $a->statusCursor, $a->statusBodyRows());
         $rows = [];
         if ($above > 0) {
-            $rows[] = self::scrollHint('+' . $above . ' above');
+            $rows[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
         }
         foreach (array_slice($a->status, $start, $shown, true) as $i => $row) {
             $idx  = $row['index_status'] ?? ' ';
@@ -165,9 +165,9 @@ final class Renderer
                 ->render(Lang::t('status.clean'));
         }
         if ($below > 0) {
-            $rows[] = self::scrollHint('+' . $below . ' below');
+            $rows[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
         }
-        return self::frame($a, Pane::Status, ' status ', implode("\n", $rows), $a->paneWidth());
+        return self::frame($a, Pane::Status, Lang::t('ui.pane.status'), implode("\n", $rows), $a->paneWidth());
     }
 
     private static function branchesPane(App $a): string
@@ -175,7 +175,7 @@ final class Renderer
         [$start, $shown, $above, $below] = self::rowWindow(count($a->branches), $a->branchesCursor, $a->branchesBodyRows());
         $rows = [];
         if ($above > 0) {
-            $rows[] = self::scrollHint('+' . $above . ' above');
+            $rows[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
         }
         foreach (array_slice($a->branches, $start, $shown, true) as $i => $b) {
             $marker = $b['current'] ? '* ' : '  ';
@@ -193,9 +193,9 @@ final class Renderer
             $rows[] = Lang::t('branches.empty');
         }
         if ($below > 0) {
-            $rows[] = self::scrollHint('+' . $below . ' below');
+            $rows[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
         }
-        return self::frame($a, Pane::Branches, ' branches ', implode("\n", $rows), $a->paneWidth());
+        return self::frame($a, Pane::Branches, Lang::t('ui.pane.branches'), implode("\n", $rows), $a->paneWidth());
     }
 
     private static function logPane(App $a): string
@@ -203,7 +203,7 @@ final class Renderer
         [$start, $shown, $above, $below] = self::rowWindow(count($a->log), $a->logCursor, $a->logBodyRows());
         $rows = [];
         if ($above > 0) {
-            $rows[] = self::scrollHint('+' . $above . ' above');
+            $rows[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
         }
         foreach (array_slice($a->log, $start, $shown, true) as $i => $entry) {
             $sha     = Style::new()->foreground(Color::hex('#fde68a'))->render($entry['sha']);
@@ -224,9 +224,9 @@ final class Renderer
             $rows[] = Lang::t('log.empty');
         }
         if ($below > 0) {
-            $rows[] = self::scrollHint('+' . $below . ' below');
+            $rows[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
         }
-        return self::frame($a, Pane::Log, ' log ', implode("\n", $rows), $a->paneWidth());
+        return self::frame($a, Pane::Log, Lang::t('ui.pane.log'), implode("\n", $rows), $a->paneWidth());
     }
 
     private static function truncate(string $s, int $max): string
@@ -317,9 +317,9 @@ final class Renderer
     private static function helpOverlay(App $a): string
     {
         $lines = [
-            Style::new()->bold()->foreground(Color::hex('#fde68a'))->render(' Help '),
+            Style::new()->bold()->foreground(Color::hex('#fde68a'))->render(Lang::t('ui.title.help')),
             '',
-            Style::new()->foreground(Color::hex('#c5b6dd'))->render('General:'),
+            Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('ui.group.general')),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('?') . '  ' . Lang::t('help.context_general'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('q') . '  ' . Lang::t('help.quit'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('R') . '  ' . Lang::t('help.refresh'),
@@ -330,12 +330,18 @@ final class Renderer
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('d') . '  ' . Lang::t('help.discard'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('P') . '  ' . Lang::t('help.diff_viewer'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('u') . '  ' . Lang::t('help.undo'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('ctrl+r') . '  ' . Lang::t('help.redo'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('S') . '  ' . Lang::t('help.stash'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('V') . '  ' . Lang::t('help.cherry_pick'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('w') . '  ' . Lang::t('help.worktrees'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('i') . '  ' . Lang::t('help.interactive_rebase'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('M') . '  ' . Lang::t('help.merge'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('r') . '  ' . Lang::t('help.rebase'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('esc') . '  ' . Lang::t('help.close_help'),
             '',
             Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_navigation')),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('j/k') . '  ' . Lang::t('help.move_cursor'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('PgUp/PgDn/Home/End') . '  ' . Lang::t('help.viewport'),
             '',
         ];
 
@@ -375,7 +381,7 @@ final class Renderer
         $lines = [];
         $titleBox = self::overlayWidth($a, 72);
         $lines[] = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-            ->render(' diff: ' . self::truncate(self::sanitize($dv->path), max(6, $titleBox - 10)) . ' ');
+            ->render(Lang::t('ui.diff_prefix') . self::truncate(self::sanitize($dv->path), max(6, $titleBox - 10)) . ' ');
 
         // Syntax pass: accent recognised-language tokens inside diff
         // bodies. '' language (or an unaccentable line) keeps the plain
@@ -395,7 +401,7 @@ final class Renderer
             max(1, $a->overlayBodyRows() - 3),
         );
         if ($above > 0) {
-            $lines[] = self::scrollHint('+' . $above . ' above');
+            $lines[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
         }
 
         // The selected-hunk bounds are loop-invariant; hoist them out (A27).
@@ -446,7 +452,7 @@ final class Renderer
             $lines[] = $row;
         }
         if ($below > 0) {
-            $lines[] = self::scrollHint('+' . $below . ' below');
+            $lines[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
         }
 
         $hint = Style::new()->foreground(Color::hex('#7d6e98'))
@@ -487,7 +493,7 @@ final class Renderer
         $cherry = $a->rebaseMenuKind === 'cherry';
         $lines = [
             Style::new()->bold()->foreground(Color::hex('#a78bfa'))
-                ->render($cherry ? ' cherry-pick ' : ' rebase '),
+                ->render($cherry ? Lang::t('ui.title.cherry') : Lang::t('ui.title.rebase')),
             '',
             Style::new()->foreground(Color::hex('#c5b6dd'))
                 ->render(Lang::t($cherry ? 'rebase.cherry_prompt' : 'rebase.prompt')),
@@ -519,7 +525,7 @@ final class Renderer
         if ($sm === null) return '';
 
         $lines = [
-            Style::new()->bold()->foreground(Color::hex('#a78bfa'))->render(' stashes '),
+            Style::new()->bold()->foreground(Color::hex('#a78bfa'))->render(Lang::t('ui.title.stashes')),
             '',
         ];
 
@@ -535,7 +541,7 @@ final class Renderer
                 count($sm->stashes), $sm->cursor, max(1, $a->overlayBodyRows() - 9)
             );
             if ($above > 0) {
-                $lines[] = self::scrollHint('+' . $above . ' above');
+                $lines[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
             }
             foreach (array_slice($sm->stashes, $start, $shown, true) as $i => $entry) {
                 $line = self::truncate(self::sanitize($entry->displayLine()), $inner);
@@ -546,7 +552,7 @@ final class Renderer
                 $lines[] = '  ' . $st->render($line);
             }
             if ($below > 0) {
-                $lines[] = self::scrollHint('+' . $below . ' below');
+                $lines[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
             }
         }
 
@@ -577,14 +583,14 @@ final class Renderer
         $boxW = self::overlayWidth($a, 64);
         $inner = max(10, $boxW - 5);
         $lines = [
-            Style::new()->bold()->foreground(Color::hex('#a78bfa'))->render(' worktrees '),
+            Style::new()->bold()->foreground(Color::hex('#a78bfa'))->render(Lang::t('ui.title.worktrees')),
             '',
         ];
 
         if ($wt->adding === TRUE) {
             $lines[] = Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('worktree.add_prompt'));
-            $lines[] = '  path: ' . Style::new()->foreground(Color::hex('#fde68a'))->render(self::truncate(self::sanitize($wt->newPath), $inner - 8)) . '_';
-            $lines[] = '  branch: ' . Style::new()->foreground(Color::hex('#fde68a'))->render(self::truncate(self::sanitize($wt->newBranch ?: 'HEAD'), $inner - 10)) . '_';
+            $lines[] = '  ' . Lang::t('ui.label.path') . Style::new()->foreground(Color::hex('#fde68a'))->render(self::truncate(self::sanitize($wt->newPath), $inner - 8)) . '_';
+            $lines[] = '  ' . Lang::t('ui.label.branch') . Style::new()->foreground(Color::hex('#7d6e98'))->render(self::truncate(self::sanitize($wt->newBranch !== '' ? $wt->newBranch : Lang::t('worktree.branch_head_default')), $inner - 10));
             $lines[] = '';
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('worktree.confirm_add');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('c') . '  ' . Lang::t('help.close_help');
@@ -602,7 +608,7 @@ final class Renderer
                     count($wt->worktrees), $wt->cursor, max(1, $a->overlayBodyRows() - 9)
                 );
                 if ($above > 0) {
-                    $lines[] = self::scrollHint('+' . $above . ' above');
+                    $lines[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
                 }
                 foreach (array_slice($wt->worktrees, $start, $shown, true) as $i => $entry) {
                     $line = self::truncate(self::sanitize($entry->path), $inner);
@@ -616,7 +622,7 @@ final class Renderer
                     $lines[] = '  ' . $st->render($line);
                 }
                 if ($below > 0) {
-                    $lines[] = self::scrollHint('+' . $below . ' below');
+                    $lines[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
                 }
             }
             $lines[] = '';
@@ -649,13 +655,13 @@ final class Renderer
         $inner = max(10, $boxW - 5);
 
         $lines = [
-            Style::new()->bold()->foreground(Color::hex('#a78bfa'))->render(' interactive rebase '),
+            Style::new()->bold()->foreground(Color::hex('#a78bfa'))->render(Lang::t('ui.title.interactive_rebase')),
             '',
         ];
 
         if ($ir->selectingN === TRUE) {
             $lines[] = Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('rebase_i.select_count'));
-            $lines[] = '  ' . Style::new()->foreground(Color::hex('#fde68a'))->render('n = ' . ($ir->countInput !== '' ? $ir->countInput : '_'));
+            $lines[] = '  ' . Style::new()->foreground(Color::hex('#fde68a'))->render(Lang::t('ui.count.n') . ($ir->countInput !== '' ? $ir->countInput : '_'));
             $lines[] = '';
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('enter') . '  ' . Lang::t('rebase_i.confirm_count');
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . Lang::t('help.close_help');
@@ -669,7 +675,7 @@ final class Renderer
                     count($ir->commits), $ir->cursor, max(1, $a->overlayBodyRows() - 10)
                 );
                 if ($above > 0) {
-                    $lines[] = self::scrollHint('+' . $above . ' above');
+                    $lines[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
                 }
                 foreach (array_slice($ir->commits, $start, $shown, true) as $i => $commit) {
                     $actionColor = match ($commit->action) {
@@ -694,7 +700,7 @@ final class Renderer
                     $lines[] = $line;
                 }
                 if ($below > 0) {
-                    $lines[] = self::scrollHint('+' . $below . ' below');
+                    $lines[] = self::scrollHint(Lang::t('viewport.below', ['n' => $below]));
                 }
             }
             $lines[] = '';

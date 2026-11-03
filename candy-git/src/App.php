@@ -1277,7 +1277,7 @@ final class App implements Model
         try {
             $this->git->rebaseContinue();
             return $this->withRebaseMenu(false)->refresh()->withAll(
-                successMessage: Lang::t('rebase.success', ['action' => 'continue'])
+                successMessage: Lang::t('rebase.success', ['action' => Lang::t('rebase.continue')])
             );
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -1289,7 +1289,7 @@ final class App implements Model
         try {
             $this->git->rebaseAbort();
             return $this->withRebaseMenu(false)->refresh()->withAll(
-                successMessage: Lang::t('rebase.success', ['action' => 'abort'])
+                successMessage: Lang::t('rebase.success', ['action' => Lang::t('rebase.abort')])
             );
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -1301,7 +1301,7 @@ final class App implements Model
         try {
             $this->git->rebaseSkip();
             return $this->withRebaseMenu(false)->refresh()->withAll(
-                successMessage: Lang::t('rebase.success', ['action' => 'skip'])
+                successMessage: Lang::t('rebase.success', ['action' => Lang::t('rebase.skip')])
             );
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -1313,7 +1313,7 @@ final class App implements Model
         try {
             $this->git->cherryPickContinue();
             return $this->withRebaseMenu(false)->refresh()->withAll(
-                successMessage: Lang::t('rebase.success', ['action' => 'continue'])
+                successMessage: Lang::t('rebase.success', ['action' => Lang::t('rebase.continue')])
             );
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -1325,7 +1325,7 @@ final class App implements Model
         try {
             $this->git->cherryPickAbort();
             return $this->withRebaseMenu(false)->refresh()->withAll(
-                successMessage: Lang::t('rebase.success', ['action' => 'abort'])
+                successMessage: Lang::t('rebase.success', ['action' => Lang::t('rebase.abort')])
             );
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());

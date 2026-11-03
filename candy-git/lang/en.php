@@ -25,6 +25,24 @@ return [
 
     // UI labels
     'ui.error_prefix'  => 'error: ',
+    // Chrome titles routed through Lang (audit A16).
+    'ui.title.app'    => ' CandyGit ',
+    'ui.pane.status'  => ' status ',
+    'ui.pane.branches'=> ' branches ',
+    'ui.pane.log'     => ' log ',
+    'ui.title.help'   => ' Help ',
+    'ui.title.rebase' => ' rebase ',
+    'ui.title.cherry' => ' cherry-pick ',
+    'ui.title.stashes'=> ' stashes ',
+    'ui.title.worktrees'=> ' worktrees ',
+    'ui.title.interactive_rebase'=> ' interactive rebase ',
+    'ui.group.general'=> 'General:',
+    'ui.label.path'   => 'path: ',
+    'ui.label.branch' => 'branch: ',
+    'ui.count.n'      => 'n = ',
+    'ui.diff_prefix'  => ' diff: ',
+    'viewport.above'  => '+{n} above',
+    'viewport.below'  => '+{n} below',
 
     // Empty-state messages
     'status.clean'          => 'clean working tree',
@@ -50,7 +68,7 @@ return [
     'help.commit'           => 'commit (opens message input)',
     'help.amend'            => 'amend last commit',
     'help.new_branch'       => 'create new branch',
-    'help.discard'          => 'discard changes to file',
+    'help.discard'          => 'discard changes to file (press twice)',
     'help.diff_viewer'     => 'open diff viewer',
 
     // Checkout
@@ -124,6 +142,11 @@ return [
     'help.delete_branch'      => 'delete branch',
     'help.merge'             => 'merge branch',
     'help.rebase'            => 'rebase options (when in progress)',
+    'help.stash'            => 'open stash manager',
+    'help.cherry_pick'      => 'cherry-pick a commit',
+    'help.worktrees'        => 'open worktrees manager',
+    'help.interactive_rebase'=> 'interactive rebase (preview actions)',
+    'help.viewport'         => 'scroll / jump panes and hunks',
 
     // Stash
     'stash.empty'             => '(no stashes)',
@@ -148,14 +171,15 @@ return [
     'worktree.removed'      => 'removed worktree {path}',
     'worktree.add'           => 'add worktree',
     'worktree.remove'        => 'remove worktree',
+    'worktree.branch_head_default'=> '(from current HEAD)',
 
     // Interactive rebase
     'rebase_i.select_count'  => 'select number of commits to rebase:',
     'rebase_i.confirm_count' => 'confirm (enter)',
     'rebase_i.no_commits'   => '(no commits)',
     'rebase_i.todo_list'    => 'todo list:',
-    'rebase_i.cycle_action'  => 'cycle action',
-    'rebase_i.drop'          => 'drop commit',
+    'rebase_i.cycle_action'  => 'cycle action (preview)',
+    'rebase_i.drop'          => 'drop commit (preview)',
     'rebase_i.preview_only'  => 'preview only — not yet executed',
     'rebase_i.count_positive' => 'count must be > 0',
 ];

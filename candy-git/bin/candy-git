@@ -33,6 +33,7 @@ declare(strict_types=1);
     exit(1);
 })();
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Git\App;
@@ -41,6 +42,11 @@ use SugarCraft\Git\Lang;
 use SugarCraft\Git\Process;
 use SugarCraft\Git\Support\GitRequirement;
 use SugarCraft\Git\Support\Version;
+
+// Adopt the user's locale before the first translated string is emitted.
+// Without this the lang/ catalogue stays dead code: every message ships in
+// English no matter what LANG says (audit A15).
+T::setLocale(T::detect());
 
 // Answered before the repository probe: a packaging script or a bug report
 // runs these first, possibly from a directory that is not a repo at all.
