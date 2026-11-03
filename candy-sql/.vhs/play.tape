@@ -1,5 +1,6 @@
-# Drive candy-sql against a tmp sqlite seeded by examples/play.php
-# so the recording reproduces without a global DSN.
+# Drive candy-sql via examples/play.php, which seeds an IN-MEMORY
+# SQLite (sqlite::memory:) so the recording reproduces without a
+# global DSN or any on-disk database.
 Output .vhs/play.gif
 
 Set FontSize 13

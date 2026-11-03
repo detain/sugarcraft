@@ -524,13 +524,17 @@ final class App implements Model
         }
 
         // Async flavor (MySQL/Postgres): mark loading and dispatch promise.
+        // rowsLoading must be TRUE while the promise is in flight — the Rows
+        // pane renders 'loading…' from it; a false here painted "(empty)" over
+        // a still-running query (review C3), indistinguishable from a real
+        // zero-row result.
         $loading = $this->mutate([
             'browse' => $this->browse
                 ->withSelectedTable('(query)')
                 ->withRows([])
                 ->withRowCursor(0)
                 ->withResultTable(null)
-                ->withRowsLoading(false),
+                ->withRowsLoading(true),
             'query' => $this->query->withHistory($history),
             'ui' => $this->ui->withError(null)->withStatus('running query…'),
         ]);
@@ -597,7 +601,7 @@ final class App implements Model
         }
         if ($msg->error !== null) {
             return $this->mutate([
-                'browse' => $this->browse->withRows([])->withResultTable(null),
+                'browse' => $this->browse->withRows([])->withResultTable(null)->withRowsLoading(false),
                 'ui' => $this->ui->withError($msg->error)->withStatus(null),
             ]);
         }
@@ -605,7 +609,8 @@ final class App implements Model
             'browse' => $this->browse
                 ->withRows($msg->rows)
                 ->withRowCursor(0)
-                ->withResultTable(ResultTable::fromRows($msg->rows)),
+                ->withResultTable(ResultTable::fromRows($msg->rows))
+                ->withRowsLoading(false),
             'ui' => $this->ui->withError(null)->withStatus(count($msg->rows) . ' rows'),
         ]);
     }

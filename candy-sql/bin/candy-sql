@@ -227,9 +227,10 @@ EXAMPLES
   candy-sql --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb
 
 HISTORY
-  By default every admin poll is recorded to
-  $HOME/.candy-sql/history.db (0700 dir / 0600 file), powering the
-  Dashboard sparklines and the query-history reports.
+  By default every admin poll snapshot is recorded to
+  $HOME/.candy-sql/history.db (0700 dir / 0600 file) as an offline
+  audit trail. The in-app Dashboard and Reports pages do not read
+  from this file — they poll the live server.
 
   --no-history
     Disable recording entirely (nothing is written to disk).
@@ -244,9 +245,10 @@ KEYBOARD SHORTCUTS (TUI)
   Ctrl+Enter  Execute the current query
   Ctrl+R      Execute the current query
   Ctrl+E      Execute the current query
-  Ctrl+F      Save the current query to the favorites store
+  Ctrl+F      Add the current query to the favorites list (session
+              state only — no pane browses it, and it is not persisted)
   1-8         Jump to an admin pane (only while the Admin pane is focused)
-  q           Quit
+  q           Quit from the Tables/Rows panes; returns to Tables from Admin
 
 SEE ALSO
   https://github.com/sugarcraft/candy-sql

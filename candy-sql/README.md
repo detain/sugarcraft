@@ -39,7 +39,7 @@ bin/candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
 # Password via environment instead of argv (keeps it out of /proc/<pid>/cmdline)
 CANDY_SQL_PASS=secret bin/candy-sql --driver=mysql --user=root --db=mydb
 
-# Query history: on by default at $HOME/.candy-sql/history.db
+# Status-snapshot history: on by default at $HOME/.candy-sql/history.db
 bin/candy-sql app.sqlite --no-history
 bin/candy-sql app.sqlite --history=/var/tmp/my-history.db
 ```
@@ -48,7 +48,7 @@ Supported drivers are `sqlite`, `mysql` and `pgsql` (`ConnectionFactory::SUPPORT
 `sqlsrv://` DSNs — throws at parse time.
 
 `App::start($db, Flavor $flavor = Flavor::Sqlite, ?HistoryRecorder $historyRecorder = null, ?string $sslMode = null)` accepts an
-optional `$flavor` override, an optional history recorder (the launcher builds one itself — see Query History), and an optional
+optional `$flavor` override, an optional history recorder (the launcher builds one itself — see Status-Snapshot History), and an optional
 `$sslMode` override: unset, the MySQL ssl-mode is derived from a real `MysqlDatabase` handle to feed the TLS gate (see MySQL SSL
 above); the explicit string exists as a test seam because `MysqlDatabase` is final with a private constructor.
 
@@ -61,7 +61,7 @@ above); the explicit string exists as a test seam because `MysqlDatabase` is fin
 | `Enter` / `Space`  | Load the highlighted table into the rows pane   |
 | `Ctrl+R`           | Run the SQL in the query pane                   |
 | `Ctrl+E`           | Run the SQL in the query pane                   |
-| `Ctrl+F`           | Save the query pane's text to the favorites list |
+| `Ctrl+F`           | Save the query pane's text to the favorites list (session state — see disclosure below) |
 | `Ctrl+Shift+F` | Remove the current query from favorites |
 | `Backspace`        | Delete last character (query pane)              |
 | `q` / `Esc`        | Quit (except inside the query pane — `q` types) |
@@ -79,9 +79,17 @@ above); the explicit string exists as a test seam because `MysqlDatabase` is fin
 | `[f]`              | Toggle hide-sleeping filter (Connections page)  |
 | `[c]`              | Commit pending changes (PerfSchema page)        |
 | `[c]`              | Toggle column unit formatting (Reports page)    |
-| `[x]`              | Export report to CSV (Reports page)             |
+| `[x]`              | Build CSV of the current report into page state — not written to disk (Reports page; see disclosure below) |
 | `[a]`              | Dismiss all pending alerts (Dashboard)          |
 | `1` – `8`          | Switch admin page (see digit map below)         |
+
+**Session-state-only surfaces (disclosed):** `Ctrl+F`/`Ctrl+Shift+F` add and remove
+the current editor text in a session-scoped favorites list inside `QueryState`, but no
+pane renders that list yet and `↑`/`↓` do **not** recall favorites or past queries —
+closing the app drops them. Likewise `[x]` on the Reports page regenerates
+`ReportsPage::exportToCsv()` into the page object (readable via `lastExportCsv()`);
+it never touches the filesystem — writing `.csv` files is the separate
+`Db\Export\CsvExporter` API described under Exporters.
 
 The admin page's own `Tab`/`[1]`/`[2]`/`[3]` detail-tab handlers exist in the page code but are currently unreachable:
 `Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached and kept only for standalone (non-app) use.
@@ -403,7 +411,7 @@ The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) d
 | `[` / `]` | Previous/next report within the current category (wraps) |
 | `,` / `.` | Previous/next column index (for future per-column unit cycling; `[c]` is the global unit toggle) |
 | `r` | Refresh current report (async — queues a new query) |
-| `x` | Export current report to CSV (RFC-4180, formula-safe) |
+| `x` | Build the current report as CSV (RFC-4180, formula-safe) into page state — no file is written |
 | `c` | Toggle unit display for time/byte columns (global; `selectedColumnIndex` is tracked for future per-column targeting) |
 | `q` | Quit (exits the application) |
 
@@ -625,7 +633,7 @@ try {
 
 When `pcntl` is unavailable, `StatementTimeout::execute()` runs the statement with no enforcement — silently. The degraded state is decided once in the constructor (`function_exists` probes), and neither construction nor execution logs anything; a host without pcntl has simply-uncapped queries, and the caller cannot tell the difference from the return value.
 
-## Query History (default-on in the launcher)
+## Status-Snapshot History (default-on in the launcher)
 
 The launcher records the admin poll snapshots to SQLite — on by default, opt out with `--no-history`. Default location is
 `$HOME/.candy-sql/history.db` (created with dir 0700 / file 0600; if `HOME` is unset the recorder stays disabled);
@@ -739,10 +747,6 @@ The `HistoryRecorder` implements `StatusSnapshotProviderInterface`, so it slots 
 ### SQL query execution
 
 ![play](.vhs/play.gif)
-
-### Query history cycling
-
-![query-history](.vhs/query-history.gif)
 
 ## DatabaseInterface
 

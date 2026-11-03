@@ -34,13 +34,14 @@ use SugarCraft\Sql\CellValue;
  * - Left tree: reports grouped by category (problems, schema, io, memory, etc.)
  * - Right grid: sortable, paginated data from sys schema views
  * - Per-column unit toggle for time/byte columns
- * - CSV export of current report results
+ * - In-state CSV rendering of current report results (lastExportCsv();
+ *   the [x] key never writes a file — file export is the Db\Export API)
  * - PS + sys schema validation gate
  *
  * Keyboard shortcuts:
  *   [j/k]     - navigate rows down/up
  *   [r]       - refresh current report
- *   [x]       - export to CSV
+ *   [x]       - rebuild the CSV string into page state (no file write)
  *   [c]       - toggle unit display (time columns)
  *   [q]       - quit to previous view
  *
