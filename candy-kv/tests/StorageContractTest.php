@@ -268,4 +268,39 @@ final class StorageContractTest extends TestCase
 
         $this->assertContains('we[ir]d', $store->listDatabases());
     }
+
+    public function testWalSidecarsAreTightenedAroundWritesAndCleanedOnClose(): void
+    {
+        $umask = \umask(0o022);
+        try {
+            $path = $this->tmpDir . '/wal.db';
+            $db = new Database($path, 'wal');
+            \clearstatcache(true, $path);
+            $this->assertSame(0, \fileperms($path) & 0o077, 'the database must be owner-only at ctor return');
+
+            $db->set('secret', 'token');
+            foreach ([$path . '-wal', $path . '-shm'] as $sidecar) {
+                \clearstatcache(true, $sidecar);
+                if (\is_file($sidecar)) {
+                    $this->assertSame(0, \fileperms($sidecar) & 0o077, "sidecar {$sidecar} must never sit at the umask");
+                }
+            }
+
+            $db->close();
+            \clearstatcache(true, $path . '-wal');
+            $this->assertFileDoesNotExist($path . '-wal', 'a clean close checkpoints and removes the WAL sidecar');
+
+            // A legacy/crash residue at the umask must be tightened on the next open.
+            \chmod($path, 0o644);
+            \file_put_contents($path . '-wal', 'dirty residue');
+            \chmod($path . '-wal', 0o644);
+            $again = new Database($path, 'wal');
+            \clearstatcache(true, $path);
+            $this->assertSame(0, \fileperms($path) & 0o077);
+            $this->assertSame(0, \fileperms($path . '-wal') & 0o077);
+            $again->close();
+        } finally {
+            \umask($umask);
+        }
+    }
 }
