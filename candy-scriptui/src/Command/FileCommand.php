@@ -68,7 +68,7 @@ final class FileCommand extends Command
         $header = (string) $input->getOption('header');
         if ($header !== '') {
             // UI chrome, not result data — rides the paint stream (CC2).
-            InteractiveRuntime::paint($header . "\n");
+            InteractiveRuntime::paint(\SugarCraft\Core\Util\Sanitize::cellValue($header) . "\n");
         }
 
         $model   = FileModel::newPrompt(
@@ -115,7 +115,7 @@ final class FileCommand extends Command
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
         }
-        $output->writeln((string) $final->selected());
+        $output->write((string) $final->selected(), true, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 }

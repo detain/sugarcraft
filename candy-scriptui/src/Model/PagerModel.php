@@ -38,6 +38,9 @@ final class PagerModel implements Model
         // Auto height reserves one row for the hint footer; the historical
         // 20-row fallback (no knowable size) keeps pinned output stable.
         $height = $height > 0 ? $height : ($rows !== null ? max(1, $rows - 1) : 20);
+        // Multi-line untrusted paint: control/escape bytes out, CR mapped to
+        // LF so overwrite tricks cannot reach the viewport (cluster 12).
+        $content = \SugarCraft\Core\Util\Sanitize::untrustedForDisplay($content);
         if ($showLineNumbers) {
             $content = self::numberLines($content);
         }

@@ -29,6 +29,14 @@ final class WriteModel implements Model
         bool $showLineNumbers = false,
         string $header = '',
     ): self {
+        // Untrusted paint (cluster 12).
+        $placeholder = \SugarCraft\Core\Util\Sanitize::cellValue($placeholder);
+        $prompt = \SugarCraft\Core\Util\Sanitize::cellValue($prompt);
+        // The body is multi-line text: real newlines are data here, so the
+        // sanitizer keeps LF (everything else folds to its visible form).
+        $value = \SugarCraft\Core\Util\Sanitize::cellValue($value, preserveNewlines: true);
+        $header = \SugarCraft\Core\Util\Sanitize::cellValue($header);
+
         $area = TextArea::new()->withPlaceholder($placeholder);
         if ($width  > 0)            { $area = $area->withWidth($width); }
         if ($height > 0)            { $area = $area->withHeight($height); }

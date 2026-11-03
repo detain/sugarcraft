@@ -50,6 +50,13 @@ final class FilterModel implements Model
         ?FuzzyMatcher $matcher = null,
         int $width = 0,
     ): self {
+        // Untrusted paint (cluster 12): same sweep as ChooseModel plus the
+        // pre-filled filter value, which lands in the filter input line.
+        $options    = array_map(static fn (string $s): string => \SugarCraft\Core\Util\Sanitize::cellValue($s), $options);
+        $header     = \SugarCraft\Core\Util\Sanitize::cellValue($header);
+        $preselected = array_map(static fn (string $s): string => \SugarCraft\Core\Util\Sanitize::cellValue($s), $preselected);
+        $value       = \SugarCraft\Core\Util\Sanitize::cellValue($value);
+
         // 0 = auto width: terminal columns when knowable, else the
         // historical 60-cell list (see ChooseModel for the same rule).
         $auto  = $width <= 0;

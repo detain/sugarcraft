@@ -27,6 +27,11 @@ final class ConfirmModel implements Model
         string $affirmative = 'Yes',
         string $negative = 'No',
     ): self {
+        // Untrusted paint (cluster 12).
+        $title = \SugarCraft\Core\Util\Sanitize::cellValue($title);
+        $affirmative = \SugarCraft\Core\Util\Sanitize::cellValue($affirmative);
+        $negative = \SugarCraft\Core\Util\Sanitize::cellValue($negative);
+
         $field = Confirm::new('confirm', $default)
             ->withLabels($affirmative, $negative);
         if ($title !== '') {

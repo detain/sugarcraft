@@ -59,7 +59,7 @@ final class ConfirmCommand extends Command
         if ($defaultRaw !== '' && !in_array($defaultRaw, ['yes', 'y', 'no', 'n'], true)) {
             // A typo'd default must not silently flip to "no" — refusing is
             // the only honest reading of an unknown answer word.
-            $output->writeln('<error>' . Lang::t('confirm.unknown_default', ['value' => $defaultRaw]) . '</error>');
+            fwrite(STDERR, Lang::t('confirm.unknown_default', ['value' => $defaultRaw]) . "\n");
             return Command::FAILURE;
         }
         $defaultYes = (bool) $input->getOption('default-yes')
@@ -71,7 +71,7 @@ final class ConfirmCommand extends Command
         $header = (string) $input->getOption('header');
         if ($header !== '') {
             // UI chrome, not result data — rides the paint stream (CC2).
-            InteractiveRuntime::paint($header . "\n");
+            InteractiveRuntime::paint(\SugarCraft\Core\Util\Sanitize::cellValue($header) . "\n");
         }
 
         $model   = ConfirmModel::newPrompt(
@@ -114,7 +114,7 @@ final class ConfirmCommand extends Command
             return self::EXIT_ABORT;
         }
         if ($input->getOption('show-output')) {
-            $output->writeln($final->answer() ? $affirm : $negate);
+            $output->write($final->answer() ? $affirm : $negate, true, OutputInterface::OUTPUT_RAW);
         }
         return $final->answer() ? self::EXIT_YES : self::EXIT_NO;
     }

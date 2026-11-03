@@ -70,7 +70,7 @@ final class FilterCommand extends Command
             return Command::FAILURE;
         }
         if ($input->getOption('select-if-one') && count($lines) === 1) {
-            $output->write($lines[0] . "\n");
+            $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($lines[0]), true, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
 
@@ -148,12 +148,12 @@ final class FilterCommand extends Command
             return Command::FAILURE;
         }
         if ($printQuery) {
-            $output->write($final->list->filterValue() . "\n");
+            $output->write($final->list->filterValue(), true, OutputInterface::OUTPUT_RAW);
         }
         if ($final->isMulti()) {
-            $output->write(implode($delim, $final->selectedAll()) . "\n");
+            $output->write(implode($delim, $final->selectedAll()), true, OutputInterface::OUTPUT_RAW);
         } else {
-            $output->write((string) $final->selected() . "\n");
+            $output->write((string) $final->selected(), true, OutputInterface::OUTPUT_RAW);
         }
         return Command::SUCCESS;
     }

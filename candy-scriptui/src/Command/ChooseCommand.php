@@ -70,7 +70,7 @@ final class ChooseCommand extends Command
 
         // Auto-pick when exactly one option is supplied.
         if ($selectIfOne && count($options) === 1) {
-            $output->write($options[0] . "\n");
+            $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($options[0]), true, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
 
@@ -146,14 +146,14 @@ final class ChooseCommand extends Command
         // don't suddenly start failing.
         if ($final->isAborted() || !$final->isSubmitted() || ($noSelectedMessage !== null && $empty)) {
             if ($noSelectedMessage !== null) {
-                $output->write($noSelectedMessage . "\n");
+                $output->write($noSelectedMessage, true, OutputInterface::OUTPUT_RAW);
             }
             return Command::FAILURE;
         }
         if ($final->isMulti()) {
-            $output->write(implode($delim, $final->selectedAll()) . "\n");
+            $output->write(implode($delim, $final->selectedAll()), true, OutputInterface::OUTPUT_RAW);
         } else {
-            $output->write((string) $final->selected() . "\n");
+            $output->write((string) $final->selected(), true, OutputInterface::OUTPUT_RAW);
         }
         return Command::SUCCESS;
     }

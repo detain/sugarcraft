@@ -45,6 +45,14 @@ final class ChooseModel implements Model
         ?string $unselectedPrefix = null,
         int $width = 0,
     ): self {
+        // Untrusted paint (review 2026-11-02 cluster 12): items, header and
+        // the preselection list are all painted into the frame — fold them
+        // through the cell sanitizer AT ENTRY so view(), the selection
+        // matcher and every later reader see the same neutralised bytes.
+        $options    = array_map(static fn (string $s): string => \SugarCraft\Core\Util\Sanitize::cellValue($s), $options);
+        $header     = \SugarCraft\Core\Util\Sanitize::cellValue($header);
+        $preselected = array_map(static fn (string $s): string => \SugarCraft\Core\Util\Sanitize::cellValue($s), $preselected);
+
         // 0 (and any negative) means auto: take the terminal width when it
         // is knowable, else keep the historical 60-cell list so piped or
         // cron contexts render exactly what they always did.

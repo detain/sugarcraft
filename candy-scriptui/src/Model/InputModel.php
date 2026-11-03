@@ -27,6 +27,12 @@ final class InputModel implements Model
         int $width = 0,
         string $header = '',
     ): self {
+        // Untrusted paint (cluster 12).
+        $placeholder = \SugarCraft\Core\Util\Sanitize::cellValue($placeholder);
+        $prompt = \SugarCraft\Core\Util\Sanitize::cellValue($prompt);
+        $value = \SugarCraft\Core\Util\Sanitize::cellValue($value);
+        $header = \SugarCraft\Core\Util\Sanitize::cellValue($header);
+
         $ti = TextInput::new()
             ->withPlaceholder($placeholder)
             ->withPrompt($prompt);

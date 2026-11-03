@@ -31,6 +31,10 @@ final class SpinModel implements Model
         ?SpinStyle $style = null,
         string $align = 'left',
     ): self {
+        // Untrusted paint (cluster 12): the title is echoed beside the
+        // spinner every frame — fold escape/control bytes out at entry.
+        $title = \SugarCraft\Core\Util\Sanitize::cellValue($title);
+
         return new self(
             Spinner::new($style ?? SpinStyle::dot()),
             $process,
