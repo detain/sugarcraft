@@ -10,7 +10,7 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-Lightweight telemetry primitives for SugarCraft / SugarSshServer servers. Counters, gauges, histograms with pluggable backends — drop-in middleware for SSH session metrics.
+Lightweight telemetry primitives for SugarCraft / SugarSshServer servers. Six instrument kinds — counters, gauges, histograms, up/down counters, async counters and async gauges — with pluggable backends and drop-in middleware for SSH session metrics.
 
 > Formerly published as `sugarcraft/candy-metrics` (renamed 2026-10). <!-- @rename-keep -->
 
@@ -22,40 +22,66 @@ composer require sugarcraft/sugar-metrics
 
 | Primitive        | Behaviour                                                                                                                               |
 |------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| Counter          | Monotonic value that accumulates (connect counts, errors).                                                                             |
+| Counter          | Monotonic value that accumulates (connect counts, errors). Negative samples are refused.                                               |
 | Gauge            | Instantaneous value that replaces on set (queue depth, RSS).                                                                            |
-| Histogram        | Distribution of samples (latency, payload size); Prometheus backend emits 14 classic `le` buckets +Inf.                          |
+| Histogram        | Distribution of samples (latency, payload size). Negative samples are refused; the Prometheus backend emits 14 cumulative `le` buckets — the 11 classic client_golang boundaries extended with 25/50/100 — plus `+Inf`. |
 | UpDownCounter    | Synchronous counter that supports positive *and* negative increments — used for values that go up and down (active connections).     |
-| AsyncCounter     | Asynchronous counter backed by a callback; you call `observe()` whenever you want the current external reading emitted.                |
-| AsyncGauge       | Asynchronous gauge backed by a callback; you call `observe()` to emit an instantaneous external reading (memory, queue depth). |
+| AsyncCounter     | Counter backed by a callback; call `observe()` (optionally with per-call tags) whenever you want the current external reading emitted.  |
+| AsyncGauge       | Gauge backed by a callback; call `observe($tags)` to emit an instantaneous external reading (memory, queue depth, pool size).          |
 
-A `Registry` is the application-facing facade; it forwards every emit to the configured `Backend`. Backends decide how to persist or forward.
+A `Registry` is the application-facing facade; it forwards every emit to the configured `Backend`. Backends decide how to persist or forward. In this library a *tag* is a key/value pair attached to an emit; the Prometheus text format calls the same thing a *label* (`PrometheusFileBackend` translates).
 
 ## Instrument factory helpers
 
 The registry exposes dedicated factory methods that return instrument objects — useful when an instrument is held for repeated `add()` / `observe()` calls:
 
 ```php
+$reg = new Registry($backend);
 $connCounter = $reg->newUpDownCounter('server.active_connections', 'Active server connections', ['host' => $host]);
 $connCounter->add(1);    // connection opened
 // ... later ...
 $connCounter->add(-1);   // connection closed
 ```
 
-Factory tags are *static instrument tags*: the `$tags` you pass to a factory ride on **every** `add()` / `observe()` from that instrument, and per-call tags merge on top (per-call wins on conflicts). The `$help` string is metadata carried by the instrument (`name()` / `help()`); the `# HELP` lines in the Prometheus textfile come from `Descriptor` registration below, not from factory calls.
+Factory tags are *static instrument tags*: the `$tags` you pass to a factory ride on **every** `add()` / `observe()` from that instrument, and per-call tags merge on top (per-call wins on conflicts). `observe()` on the async instruments accepts an optional tag array for exactly that merge. The `$help` string is metadata carried by the instrument (`name()` / `help()`); the `# HELP` lines in the Prometheus textfile come from `Descriptor` registration below, not from factory calls.
 
 Async instruments accept a callback that reads the external value each time you sample it:
 
 ```php
 $gcCount = $reg->newAsyncCounter('jvm.gc.count', 'JVM garbage collection count', fn() => $jvm->gcCount());
 $gcCount->observe();   // invokes the callback and emits the reading now — nothing sweeps automatically
+$pool = $reg->newAsyncGauge('db.pool.size', 'Open database connections', fn() => $pdo->poolSize());
+$pool->observe(['shard' => 'eu']);   // static + per-call tags merge on this one sample
 ```
+
+Direct emits for every kind exist too — `$reg->upDownCounter()`, `$reg->asyncCounter()`, `$reg->asyncGauge()` take the value (and tags) inline without an instrument object.
+
+## Names on the wire
+
+Metric names and tag keys are *not* free text on every wire, and the folds differ per backend:
+
+- **StatsD** (`StatsdBackend`): the metric name may keep dots (`http.requests` is idiomatic) but colons are flattened to `_` because `:` separates value from type on the wire. Tag keys keep letters/digits/dots/underscores; everything else the token sweep (below) replaces.
+- **Prometheus textfile** (`PrometheusFileBackend`): metric names keep `:` (a legal Prometheus name character) and fold every other illegal rune (including `.`) to `_`; label names never keep `:` — illegal runes become `_`.
+- **JSON stream**: names are emitted verbatim inside a JSON string — the encoding itself is the framing.
+
+Because the name/label folds are many-to-one, `PrometheusFileBackend` refuses silent collisions: two *distinct* raw series that fold onto the same metric name or the same label key throw a `RuntimeException` at the second write (see Cardinality management), instead of merging — or silently nuking the exposition — behind your back.
+
+Kind mapping to wire tokens:
+
+| Registry kind    | StatsD                        | Textfile `# TYPE` | JSON `kind`       |
+|------------------|-------------------------------|-------------------|-------------------|
+| counter          | `\|c`                         | `counter`         | `counter`         |
+| gauge            | `\|g`                         | `gauge`           | `gauge`           |
+| histogram        | `\|h` (DogStatsD timer)       | `histogram`       | `histogram`       |
+| upDownCounter    | signed `\|g`                  | `gauge`           | `up_down_counter` |
+| asyncCounter     | absolute `\|g`                | `counter`         | `async_counter`   |
+| asyncGauge       | `\|g`                         | `gauge`           | `async_gauge`     |
 
 ## Cardinality management
 
 Every unique label-value combination is a distinct time series. High-cardinality labels (e.g. `user_id`, `request_id`) can exhaust memory if left unchecked.
 
-The registry tracks per-metric cardinality and, when the limit (default: 10 000) is exceeded, evicts the **oldest** combination (FIFO) — dropping it from the tracker *and* reclaiming that series from the backend, so a tag flood cannot grow backend memory without bound. The cardinality key is built from sorted, backslash-escaped `k=v` pairs (see `Util::tagKey()`), so lookalike tag sets such as `['x' => 'a|y=b']` and `['x' => 'a', 'y' => 'b']` stay distinct series.
+The registry tracks per-metric cardinality and, when the limit (default: 10 000, must be ≥ 1 — anything else throws at construction) is exceeded, evicts the **oldest** combination (FIFO) — dropping it from the tracker *and* reclaiming that series from the backend, so a tag flood cannot grow backend memory without bound. The cardinality key is built from sorted, backslash-escaped `k=v` pairs (see `Util::tagKey()`), so lookalike tag sets such as `['x' => 'a|y=b']` and `['x' => 'a', 'y' => 'b']` stay distinct series. The tracker bounds *series per metric name*; the set of metric names itself is unbounded — treat untrusted strings as label values, never as metric names. A registry cloned with `withTags()` tracks its own budget independently of its parent.
 
 ```php
 // Default limit of 10 000 label combinations per metric
@@ -64,8 +90,9 @@ $reg = new Registry($backend);
 // Custom limit
 $reg = new Registry($backend, [], 500);
 
-// Inspect current cardinality
-$reg->cardinality('http.requests');   // → int
+// Inspect current cardinality, and the configured ceiling
+$reg->cardinality('http.requests');      // → int
+$reg->cardinalityLimit();                // → int (500)
 
 // Drop one tracker entry only (default tags are merged in first, so you
 // pass just the per-emit tags):
@@ -73,9 +100,12 @@ $reg->deleteLabelValues('http.requests', ['route' => '/logout']);
 
 // Reclaim tracker entry AND the backend series:
 $reg->remove('http.requests', ['route' => '/logout']);
+
+// Push the current state to the backend (textfile durability — see below)
+$reg->flush();
 ```
 
-Backends bound their own storage too: `InMemoryBackend` caps histogram samples per series (`maxSamplesPerKey`, default 4 096, reservoir-sampled) and `PrometheusFileBackend` caps series per family (`maxSeriesPerFamily`, default 10 000, oldest dropped FIFO). `Backend::clear()` resets a backend's accumulated state; the registry exposes it via `$reg->backend()->clear()`.
+Backends bound their own storage too. `InMemoryBackend` caps histogram samples per series (`maxSamplesPerKey`, default 4 096, reservoir-sampled) and — since this release — total series (`maxSeries`, default 0 = uncapped, oldest dropped FIFO when set). `PrometheusFileBackend` caps series per family (`maxSeriesPerFamily`, default 10 000, oldest dropped FIFO) and refuses a limit below 1. `Backend::clear()` resets a backend's accumulated state; the registry exposes it via `$reg->backend()->clear()`.
 
 ## Descriptor registration
 
@@ -100,7 +130,9 @@ handleRequest();
 $elapsed = $stop();   // emits the duration and returns it (float seconds)
 ```
 
-`register()` is idempotent — registering the same metric name twice is a no-op. A `summary` descriptor emits only the family's `TYPE`/`HELP` lines; the quantile/`_sum`/`_count` samples remain your responsibility.
+The constructor validates its input: a non-empty name matching `[a-zA-Z_:][a-zA-Z0-9_:]*`, non-empty help free of control bytes, a type in `counter|gauge|histogram|summary`, and non-empty string label keys — violations throw. `register()` is idempotent *only for identical re-registration*: same type **and** same help is a no-op; anything else throws rather than silently picking a winner. A `summary` descriptor emits only the family's `TYPE`/`HELP` lines; the quantile/`_sum`/`_count` samples remain your responsibility.
+
+`time()` returns a stop-fn that samples exactly once — a second call returns the same elapsed reading without recording a second observation.
 
 ## Usage
 
@@ -125,39 +157,45 @@ $req = $reg->withTags(['request_id' => $rid, 'user' => $userId]);
 $req->counter('events');   // tagged with request_id + user automatically
 ```
 
+If `$rid` / `$userId` come from untrusted callers, treat them like any other tag value: the backends sweep them for wire framing, but cardinality-wise every distinct value is a new series — hash or bucket before tagging.
+
 ## Backends
 
 ### `InMemoryBackend`
 
-Useful for tests and for fanning out to multiple backends. Counters add up, gauges hold the last value, histograms keep a bounded reservoir of samples per series (default 4 096; once full, older samples may be replaced by newer ones).
+Useful for tests and as one arm of a fan-out. Counters add up, gauges hold the last value, histograms keep a bounded reservoir of samples per series (default 4 096; once full, each new sample replaces a uniformly random existing one — Algorithm R, so the retained set stays an unbiased sample). Set `maxSeries` to bound the total number of series (FIFO eviction; 0 leaves it uncapped).
 
 ### `JsonStreamBackend`
 
-Newline-delimited JSON, one event per line. The simplest, most diagnostic-friendly target. Default writes to `stderr`.
+Newline-delimited JSON, one event per line. The simplest, most diagnostic-friendly target. Default writes to `stderr`. Non-finite values render as the strings `"NaN"`, `"+Inf"`, `"-Inf"` (JSON has no number literal for them).
 
 ```jsonl
 {"ts":"2026-05-02T16:30:00+00:00","kind":"counter","name":"hits","value":1,"tags":{"route":"/x"}}
 ```
 
-A string file target's parent directory must exist and be writable — construction throws a `RuntimeException` naming the path otherwise.
+A string file target's parent directory must exist and be writable — construction throws a `RuntimeException` naming the path otherwise. When `throwOnError` is set (the default), an unencodable emit or a failed flush throws instead of vanishing; with `throwOnError: false` the same conditions drop the event silently.
 
 ### `StatsdBackend`
 
-UDP datagrams in the etsy / DogStatsD wire format. Tags emitted as `|#k:v,...` (drop with `dogstatsd: false` for legacy servers). Every wire token (metric name, tag keys and values) is flattened at the send chokepoint: control bytes and `|` become `_`, so untrusted label values cannot forge extra datagram lines or inject wire fields.
+UDP datagrams in the etsy / DogStatsD wire format. Tags emit as `|#k:v,...`; with `dogstatsd: false` tags are dropped entirely (legacy StatsD has no tag channel). Every wire token is flattened at the send chokepoint so untrusted label values can never forge a second field, pair or line: in metric names, control bytes, DEL, the C1 range, `|`, `,`, space — and `:` — become `_`; in tag keys the same sweep applies plus `=`; in tag values `|`, `,`, space and control/C1 bytes become `_` while `:` is kept (safe, since a pair token can no longer contain a separator). Colons inside a tag *value* therefore survive; colons in the *name* do not.
 
 ```
 hits:1|c|#route:/x,env:prod
 ```
 
+Type tokens follow the table in *Names on the wire*; notably async counters emit an absolute `|g` (StatsD `\|c` is itself a monotonic counter, so re-publishing a cumulative external reading as `|c` would double-count it).
+
 ### `PrometheusFileBackend`
 
-Atomically rewrites a `.prom` textfile-collector file with the current state of every metric. Pairs with `node_exporter --collector.textfile.directory=…`. Each `flush()` stages a fresh body into a unique per-writer temp file (`<path>.tmp.<pid>…`), flock-guarded, and publishes it with an atomic `rename()` — concurrent writers never share staging and a reader never sees a half-written body; simultaneous flushes resolve last-writer-wins. The parent directory of the target must exist and be writable; `flush()` throws a `RuntimeException` naming the staged path if it is not. Counter values accumulate across `flush()`s; histograms emit all 14 classic cumulative bucket boundaries (`le="0.005"` … `le="100"`) plus `le="+Inf"`, alongside `_count` and `_sum`. Series per family are capped (`maxSeriesPerFamily`, default 10 000, oldest dropped FIFO), and `remove()` / `clear()` reclaim accumulated series from memory so a tag flood cannot grow the backend without bound.
+Atomically rewrites a `.prom` textfile-collector file with the current state of every metric. Pairs with `node_exporter --collector.textfile.directory=…`. Each `flush()` stages a fresh body into a *uniquely named* per-writer temp file (`<path>.tmp.<uniqid>`), fsyncs it, and publishes it with an atomic `rename()` — rename(2) is what carries the atomicity (a reader either sees the old file or the new one, never a half-written body), while the flock guards the staging handle against interleaved writes from the same writer. Simultaneous flushes resolve last-writer-wins; a crashed flush leaves at most one stale `.tmp.*` behind and never corrupts the target. The staged file's mode follows the process umask (as with any `fopen`), so run the collector writer with a umask your node exporter can read. The parent directory of the target must exist and be writable; `flush()` throws a `RuntimeException` naming the staged path if it is not.
 
-**Always call `flush()` explicitly** to guarantee delivery and surface errors. The destructor invokes `flush()` automatically, but errors during the atomic rename are silently swallowed in `__destruct`. Explicit calls throw a `RuntimeException` on failure. `clear()` resets accumulated state but does not delete the already-written `.prom` file — the next `flush()` rewrites whatever remains.
+Counter values accumulate across `flush()`s; histograms emit the 14 cumulative bucket boundaries (`le="0.005"` … `le="100"` — the classic client_golang set extended with 25/50/100) plus `le="+Inf"`, alongside `_count` and `_sum`. Bucket boundaries passed to the constructor must be finite and strictly increasing. A caller-supplied `le` tag is refused on histograms — it would forge a second bucket label. Series per family are capped (`maxSeriesPerFamily`, default 10 000, oldest dropped FIFO), and `remove()` / `clear()` reclaim accumulated series from memory so a tag flood cannot grow the backend without bound. Exposition integrity is guarded at flush time: two series with identical emitted name+labels (possible only through a sanitizing fold the registry could not see, or one metric name used as two kinds, or a counter colliding with a histogram's derived `_count`/`_sum`) throw a loud `RuntimeException` naming the offender instead of publishing a file Prometheus will reject wholesale.
+
+**Always call `flush()` explicitly** — e.g. on every scrape-adjacent tick or session close — to guarantee delivery and surface errors; the library arms no timers of its own. The destructor invokes `flush()` automatically, but errors during the atomic rename are silently swallowed in `__destruct`. Explicit calls throw a `RuntimeException` on failure (including a short write, a failed fsync, or staging residue). `clear()` resets accumulated state but does not delete the already-written `.prom` file — the next `flush()` rewrites whatever remains.
 
 ### `MultiBackend`
 
-Fan out to multiple backends — e.g. live StatsD plus a JSON audit trail.
+Fan out to multiple backends — e.g. live StatsD plus a JSON audit trail. Constructing it with zero children throws.
 
 ```php
 $reg = new Registry(new MultiBackend(
@@ -166,7 +204,7 @@ $reg = new Registry(new MultiBackend(
 ));
 ```
 
-Error isolation: with the plain constructor the fan-out stops at the first failing child and that failure propagates unchanged. Build with `MultiBackend::withContinueOnError(...)` instead and every child gets a turn: all failures are collected and rethrown as one `MultiBackendException`, whose `errors()` method returns the collected `Throwable`s. `remove()` / `clear()` are idempotent cleanup and always swallow child errors regardless of mode.
+Error isolation: with the plain constructor the fan-out stops at the first failing child and that failure propagates unchanged. Build with `MultiBackend::withContinueOnError(...)` instead and every child gets a turn: all failures are collected and rethrown as one `MultiBackendException`, whose `errors()` method returns the collected `Throwable`s. The rule holds for *every* operation — emits, `remove()` and `clear()` alike: `remove()` / `clear()` propagate the first child failure by default and aggregate under `withContinueOnError`.
 
 ## SugarSshServer session middleware
 
@@ -178,7 +216,7 @@ use SugarCraft\Metrics\Registry;
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 
-$reg = new Registry(new PrometheusFileBackend('/var/lib/wish/metrics.prom'));
+$reg = new Registry(new PrometheusFileBackend('/var/lib/ssh/metrics.prom'));
 
 Server::new()
     ->use(new SessionMetrics($reg))
@@ -190,17 +228,27 @@ Per session this emits:
 
 | Metric                    | Type      | Tags                              |
 |---------------------------|-----------|-----------------------------------|
-| `wish.session.connect`    | counter   | `user`, `term`                    |
-| `wish.session.duration`   | histogram | `user`, `term`                    |
-| `wish.session.error`      | counter   | `user`, `term`, `exception`       |
+| `ssh.session.connect`     | counter   | `user`, `term`                    |
+| `ssh.session.duration`    | histogram | `user`, `term`                    |
+| `ssh.session.error`       | counter   | `user`, `term`, `exception`       |
 
-`user` and `term` are attacker-controllable, so they are normalised to `[A-Za-z0-9._:@/-]` (everything else collapses to `_`) and clamped to 64 bytes. The `exception` tag carries the raw throwable class name, and values you add via `extraTags` are passed through unmodified — sanitise them yourself if they can contain hostile input.
+`user` and `term` are attacker-controllable, so they are normalised to `[A-Za-z0-9._:@/-]` (everything else collapses to `_`) and clamped to 64 bytes. The `exception` tag carries the throwable class name normalised the same way (namespace backslashes fold to `_`); it is assigned *after* `extraTags` merge, so an `extraTags` closure can never shadow it. Values you add via `extraTags` are otherwise passed through unmodified — sanitise them yourself if they can contain hostile input.
 
 Pass `extraTags` (a callable receiving the `Session`) to add things like client subnet, geo, build version.
 
+## Localization
+
+Every exception message in this library goes through `SugarCraft\Core\I18n\Lang`, so failures render in the operator's locale. Select one at startup:
+
+```php
+\SugarCraft\Core\I18n\Lang::setLocale('de');   // messages arrive in German
+```
+
+Sixteen locales ship: `ar`, `cs`, `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `nl`, `pl`, `pt`, `pt-br`, `ru`, `tr`, `zh-cn`. Locale parity is pinned by the test suite.
+
 ## Status
 
-Complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 196 tests (0.15s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
+Feature-complete and in production use: UpDownCounter, AsyncCounter and AsyncGauge instrument kinds, Registry cardinality tracking with FIFO eviction and backend reclaim, exposition-integrity guards, fsync-before-rename durability, and five backends — `InMemory`, `JsonStream`, `Statsd`, `PrometheusFile` and `Multi`. 228 tests (≈3 s baseline suite: Registry, each backend, SessionMetrics middleware, wire-format and tag-key collision pins, hex-level forgery pins, i18n locale parity across all 16 shipped locales, and example smoke checks).
 
 ## Breaking changes
 
@@ -209,3 +257,42 @@ the library's bare-accessor convention (no `get` prefix). A repo-wide grep
 found no call sites outside sugar-metrics itself, so the rename landed complete
 in one pass; external code still calling `getErrors()` must switch to
 `errors()`.
+
+**Wire-integrity hardening (2026-11).** These were silent-corruption or
+silent-loss behaviours; they are now loud:
+
+- StatsD lines: colons in metric *names* are flattened to `_` (they forged the
+  value/type separator), and `,`, space, pipe, control bytes and the C1 range
+  are swept out of every wire token — attacker-influenced tag values can no
+  longer forge pairs, fields or datagram lines.
+- `PrometheusFileBackend` refuses, at write time, two distinct raw names/tag
+  keys whose sanitising fold would collide (previously one silently overwrote
+  the other, or the fold produced a duplicate label that made the *entire*
+  exposition scrapable-nothing); duplicate emitted series (same name used as
+  two kinds, a metric name clashing with a histogram's derived `_count`/`_sum`,
+  or the old silent `newUpDownCounter` tag-drop replaying as a re-type) now
+  throw at flush instead of poisoning the file.
+- Histograms reject a caller-supplied `le` tag; bucket-boundary lists must be
+  finite and strictly increasing (validated in the constructor).
+- `Registry` cardinality limits below 1 throw at construction; negative values
+  on monotonic counters and histograms throw (gauges, up/down counters and
+  async instruments still accept negatives); re-`register()` with a different
+  type or help throws instead of first-write-wins.
+- `Descriptor` constructor validates name charset, help text, type and label
+  keys (previously six literal `throw`s with unvalidated input landing in the
+  exposition).
+- `MultiBackend` with zero children throws; `remove()` / `clear()` now honour
+  the error mode (they previously swallowed child failures even in default
+  mode).
+- `JsonStreamBackend`: the `updowncounter` kind string is now
+  `up_down_counter`, and an unencodable payload throws in loud mode instead of
+  dropping the record.
+- `Registry::flush()` is public — long-lived textfile deployments should drive
+  it (the library still never arms timers of its own).
+- `observe()` on `AsyncCounter`/`AsyncGauge` takes optional per-call tags
+  merged over the instrument's static tags.
+- SessionMetrics metrics renamed `wish.session.*` → `ssh.session.*` (the wish
+  lineage name predated the 2026-10 rename); `InMemoryBackend` gained a
+  `maxSeries` cap knob; `StatsdBackend` async counters emit absolute `|g`
+  instead of signed `|c` deltas (StatsD counters are monotonic — publishing a
+  cumulative external reading as `|c` double-counted it).

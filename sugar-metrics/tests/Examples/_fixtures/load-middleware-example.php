@@ -68,7 +68,7 @@ $session = new Session(
 
 $nextCalled = false;
 try {
-    $greeting = new HelloMetrics();
+    $greeting = new HelloMetrics($registry);
     $greeting->handle(
         Context::background(),
         $session,

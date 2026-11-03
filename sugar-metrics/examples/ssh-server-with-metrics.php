@@ -22,16 +22,35 @@ use SugarCraft\SshServer\Server;
 use SugarCraft\SshServer\Session;
 
 /**
- * Terminal middleware of the chain: greet the user, then stop. The
- * signature mirrors {@see \SugarCraft\Metrics\Middleware\SessionMetrics}
+ * Sweep control bytes out of anything attacker-influenced (usernames,
+ * folded tag values in storage keys) before it reaches a terminal —
+ * a labelled metric must never forge escape sequences or line breaks.
+ */
+function displaySafe(string $text): string
+{
+    return \preg_replace('/[\x00-\x1F\x7F]/', '_', $text) ?? '';
+}
+
+/**
+ * Terminal middleware of the chain: greet the user, flush the textfile
+ * so the Prometheus node exporter sees this session's totals, then stop.
+ * The signature mirrors {@see \SugarCraft\Metrics\Middleware\SessionMetrics}
  * — the {@see Middleware} contract is handle(Context, Session, callable).
  */
 final class HelloMetrics implements Middleware
 {
+    public function __construct(private readonly Registry $registry)
+    {
+    }
+
     public function handle(Context $ctx, Session $session, callable $next): void
     {
-        echo "Hello, {$session->user}!\n";
+        echo 'Hello, ' . displaySafe($session->user) . "!\n";
         $next($ctx, $session);
+        // Long-lived servers must drive Registry::flush() themselves —
+        // the library arms no timers. Flushing per session keeps the
+        // textfile current between scrapes.
+        $this->registry->flush();
     }
 }
 
@@ -48,14 +67,14 @@ $registry = new Registry(new MultiBackend(
 Server::new()
     ->use(new Logger())
     ->use(new SessionMetrics($registry))
-    ->use(new HelloMetrics())
+    ->use(new HelloMetrics($registry))
     ->serve();
 
 fwrite(STDERR, "\n--- session totals ---\n");
 foreach ($tally->counters() as $key => $val) {
-    fwrite(STDERR, "  counter   {$key}  {$val}\n");
+    fwrite(STDERR, '  counter   ' . displaySafe((string) $key) . "  {$val}\n");
 }
 foreach ($tally->histograms() as $key => $samples) {
     $sum = array_sum($samples);
-    fwrite(STDERR, sprintf("  histogram %s  count=%d sum=%.6f\n", $key, count($samples), $sum));
+    fwrite(STDERR, sprintf("  histogram %s  count=%d sum=%.6f\n", displaySafe((string) $key), count($samples), $sum));
 }

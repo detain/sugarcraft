@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-metrics",
-    "description": "Telemetry primitives for SugarCraft / SugarSshServer \u2014 counters, gauges, histograms with pluggable backends (in-memory, StatsD UDP, Prometheus textfile, JSON stream). Drop-in middleware for SSH session metrics.",
+    "description": "Telemetry primitives for SugarCraft / SugarSshServer \u2014 six instrument kinds (counter, gauge, histogram, up/down counter, async counter, async gauge) with pluggable backends (in-memory, StatsD UDP, Prometheus textfile, JSON stream, multi fan-out). Drop-in middleware for SSH session metrics.",
     "type": "library",
     "license": "MIT",
     "keywords": [

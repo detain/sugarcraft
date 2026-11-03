@@ -20,15 +20,15 @@ $tally = new InMemoryBackend();
 $registry = new Registry($tally);
 
 // Simulate a handful of TUI sessions.
-$registry->counter('wish.sessions.opened', tags: ['app' => 'demo']);
-$registry->counter('wish.sessions.opened', tags: ['app' => 'demo']);
-$registry->counter('wish.sessions.opened', tags: ['app' => 'docs']);
+$registry->counter('ssh.sessions.opened', tags: ['app' => 'demo']);
+$registry->counter('ssh.sessions.opened', tags: ['app' => 'demo']);
+$registry->counter('ssh.sessions.opened', tags: ['app' => 'docs']);
 
-$registry->gauge('wish.sessions.active', 2, tags: ['app' => 'demo']);
-$registry->gauge('wish.sessions.active', 1, tags: ['app' => 'docs']);
+$registry->gauge('ssh.sessions.active', 2, tags: ['app' => 'demo']);
+$registry->gauge('ssh.sessions.active', 1, tags: ['app' => 'docs']);
 
 foreach ([0.012, 0.020, 0.018, 0.041, 0.009] as $latency) {
-    $registry->histogram('wish.session.duration_s', $latency, tags: ['app' => 'demo']);
+    $registry->histogram('ssh.session.duration_s', $latency, tags: ['app' => 'demo']);
 }
 
 // time() returns a stop-fn — invoke it to record elapsed seconds.
@@ -36,14 +36,33 @@ $stop = $registry->time('demo.work_s');
 usleep(7_500);  // 7.5 ms of fake work
 $stop();
 
+/**
+ * Storage keys fold caller-supplied tag values in, and those values can
+ * carry hostile bytes (usernames, request ids). Sweep control characters
+ * before printing so a labelled metric can never forge terminal escape
+ * sequences or line breaks into the demo output.
+ */
+function displayKey(string $key): string
+{
+    return preg_replace('/[\x00-\x1F\x7F]/', '_', $key) ?? '';
+}
+
+/** Left-pad to a display width that counts East-Asian wide glyphs as 2. */
+function padCell(string $text, int $width): string
+{
+    return $text . \str_repeat(' ', max(0, $width - mb_strwidth($text)));
+}
+
 echo "=== Counters ===\n";
 foreach ($tally->counters() as $key => $val) {
-    echo "  {$key}  →  {$val}\n";
+    $shown = displayKey((string) $key);
+    echo "  {$shown}  →  {$val}\n";
 }
 
 echo "\n=== Gauges ===\n";
 foreach ($tally->gauges() as $key => $val) {
-    echo "  {$key}  →  {$val}\n";
+    $shown = displayKey((string) $key);
+    echo "  {$shown}  →  {$val}\n";
 }
 
 echo "\n=== Histograms ===\n";
@@ -51,7 +70,7 @@ foreach ($tally->histograms() as $key => $samples) {
     $sum   = array_sum($samples);
     $count = count($samples);
     $avg   = $count > 0 ? $sum / $count : 0.0;
-    echo sprintf("  %-44s  count=%d  sum=%.6f  avg=%.6f\n", $key, $count, $sum, $avg);
+    echo '  ' . padCell(displayKey((string) $key), 44) . sprintf('  count=%d  sum=%.6f  avg=%.6f', $count, $sum, $avg) . "\n";
 }
 
 echo "\nBackends ship: InMemoryBackend, JsonStreamBackend, StatsdBackend,\n";
