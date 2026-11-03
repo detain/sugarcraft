@@ -7,9 +7,12 @@ namespace SugarCraft\Video\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Video\Reel;
 use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Subtitle\WebVtt;
+use SugarCraft\Video\Tests\Concerns\CapturesErrorLog;
 
 final class ReelTest extends TestCase
 {
+    use CapturesErrorLog;
     public function testOpenRecordsThePath(): void
     {
         $this->assertSame('/tmp/x.mp4', Reel::open('/tmp/x.mp4')->path());
@@ -375,4 +378,97 @@ final class ReelTest extends TestCase
         $reel = Reel::open('/tmp/x.mp4')->withFps(30.0)->withFps(null);
         $this->assertNull($reel->fps());
     }
+
+    /**
+     * @testdox M25: a missing subtitle file is announced on the error log, never silent
+     */
+    public function testAMissingSubtitleFileIsAnnouncedNotSilent(): void
+    {
+        $missing = sys_get_temp_dir() . '/no-such-' . uniqid('', true) . '.vtt';
+        $reader = new \ReflectionMethod(Reel::class, 'readSubtitleFile');
+        $result = null;
+        $log = $this->captureErrorLog(function () use ($reader, $missing, &$result): void {
+            $result = $reader->invoke(null, $missing);
+        });
+        $this->assertNull($result);
+        $this->assertStringContainsString('could not be read', $log);
+        $this->assertStringContainsString('.vtt', $log);
+    }
+
+    /**
+     * @testdox M25: an oversized subtitle file is refused with an announcement
+     */
+    public function testAnOversizedSubtitleFileIsRefusedWithALog(): void
+    {
+        $path = sys_get_temp_dir() . '/fat-' . uniqid('', true) . '.vtt';
+        $h = fopen($path, 'wb');
+        fseek($h, Reel::MAX_SUBTITLE_BYTES);
+        fwrite($h, 'x');
+        fclose($h);
+
+        try {
+            $reader = new \ReflectionMethod(Reel::class, 'readSubtitleFile');
+            $result = null;
+            $log = $this->captureErrorLog(function () use ($reader, $path, &$result): void {
+                $result = $reader->invoke(null, $path);
+            });
+            $this->assertNull($result, 'the over-cap file must not be read into memory');
+            $this->assertStringContainsString('exceeds the', $log);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * @testdox M25: a normal subtitle file reads through without any announcement
+     */
+    public function testAGoodSubtitleFileReadsThroughQuietly(): void
+    {
+        $path = sys_get_temp_dir() . '/good-' . uniqid('', true) . '.vtt';
+        $bytes = "WEBVTT\n\n00:00.000 --> 00:01.000\nhi\n";
+        file_put_contents($path, $bytes);
+
+        try {
+            $reader = new \ReflectionMethod(Reel::class, 'readSubtitleFile');
+            $result = null;
+            $log = $this->captureErrorLog(function () use ($reader, $path, &$result): void {
+                $result = $reader->invoke(null, $path);
+            });
+            $this->assertSame($bytes, $result);
+            $this->assertSame('', $log, 'a good read must not cry wolf');
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * @testdox M25: a track truncated at the cue cap announces the drop
+     */
+    public function testHittingTheCueCapAnnounces(): void
+    {
+        $blocks = [];
+        for ($i = 1; $i <= 10005; $i++) {
+            $minutes = intdiv($i, 60);
+            $seconds = $i % 60;
+            $blocks[] = sprintf(
+                '%02d:%02d:%02d.000 --> %02d:%02d:%02d.500' . "\ncue %d\n\n",
+                intdiv($minutes, 60), $minutes % 60, $seconds,
+                intdiv($minutes, 60), $minutes % 60, $seconds,
+                $i
+            );
+        }
+        $huge = "WEBVTT\n\n" . implode('', $blocks);
+
+        $doc = null;
+        $log = $this->captureErrorLog(function () use ($huge, &$doc): void {
+            $doc = WebVtt::parse($huge);
+        });
+        $this->assertNotNull($doc);
+        $this->assertStringContainsString('truncated at 10000', $log);
+
+        $small = "WEBVTT\n\n00:00.000 --> 00:01.000\na\n\n00:01.000 --> 00:02.000\nb\n\n00:02.000 --> 00:03.000\nc\n";
+        $log2 = $this->captureErrorLog(static fn () => WebVtt::parse($small));
+        $this->assertStringNotContainsString('truncated', $log2);
+    }
+
 }

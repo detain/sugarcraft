@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Subtitle;
 
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Video\Lang;
 
 /**
  * A parsed WebVTT subtitle track — a time-sorted list of {@see Cue}s with an
@@ -78,15 +79,22 @@ final class WebVtt
         $text = str_replace(["\r\n", "\r"], "\n", $text);
 
         $cues = [];
+        $truncated = false;
         foreach (preg_split('/\n[ \t]*\n/', $text) ?: [] as $block) {
-            // DoS guard: stop once the cue cap is reached; the rest is truncated.
+            // DoS guard: stop once the cue cap is reached; the rest is
+            // truncated — and the truncation is ANNOUNCED, never silent (M25).
             if (count($cues) >= self::MAX_CUES) {
+                $truncated = true;
                 break;
             }
             $cue = self::parseBlock($block);
             if ($cue !== null) {
                 $cues[] = $cue;
             }
+        }
+
+        if ($truncated) {
+            error_log(Lang::t('subtitle.cue_cap', ['max' => (string) self::MAX_CUES]));
         }
 
         // Sort by start time ascending so binary search is valid and the

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Video;
 
 use SugarCraft\Core\Program;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Video\Render\AutoMode;
 use SugarCraft\Video\Render\Mode;
@@ -12,6 +13,7 @@ use SugarCraft\Video\Render\RendererFactory;
 use SugarCraft\Video\Source\HttpHeaders;
 use SugarCraft\Video\Support\FfmpegCommandBuilder;
 use SugarCraft\Video\Subtitle\WebVtt;
+use SugarCraft\Video\Lang;
 
 /**
  * Terminal video player facade — plays a video file by decoding frames on the
@@ -368,6 +370,51 @@ final class Reel
     }
 
     /**
+     * Ceiling for a subtitle file read through {@see withSubtitles()} (M25).
+     *
+     * Real caption tracks are tens of kilobytes; anything megabyte-sized is a
+     * mistake or an attack, and reading it unbounded (the old shape) let a
+     * hostile path stall the build with a giant slurp before MAX_CUES ever
+     * mattered.
+     */
+    public const MAX_SUBTITLE_BYTES = 4 * 1024 * 1024;
+
+    /**
+     * Read a configured subtitle file, BOUNDED and LOUD (M25/m6).
+     *
+     * Returns the raw text, or null when the path is missing, oversized, or
+     * unreadable — every refusal names the path (control-swept, length-capped)
+     * on the error log instead of the old silent `@file_get_contents` shrug.
+     */
+    private static function readSubtitleFile(string $path): ?string
+    {
+        $describe = static fn(): string => mb_strcut(trim(Sanitize::cellValue($path)), 0, 160);
+
+        if (!is_file($path)) {
+            error_log(Lang::t('subtitle.unreadable', ['path' => $describe()]));
+            return null;
+        }
+
+        clearstatcache(true, $path);
+        $size = filesize($path);
+        if ($size === false || $size > self::MAX_SUBTITLE_BYTES) {
+            error_log(Lang::t('subtitle.too_large', [
+                'path' => $describe(),
+                'max' => (string) self::MAX_SUBTITLE_BYTES,
+            ]));
+            return null;
+        }
+
+        $raw = @file_get_contents($path);
+        if (!is_string($raw) || $raw === '') {
+            error_log(Lang::t('subtitle.unreadable', ['path' => $describe()]));
+            return null;
+        }
+
+        return $raw;
+    }
+
+    /**
      * Restrict remote (http(s)) playback to a set of trusted hosts.
      *
      * This is the config seam for the SSRF surface described on {@see openUrl()}:
@@ -487,12 +534,13 @@ final class Reel
         // Resolve auto-mode to the best available mode at runtime.
         $resolvedMode = $this->mode ?? RendererFactory::autoMode();
 
-        // Parse the subtitle track if a subtitle file was configured.
-        // A missing/unreadable file is silently treated as no subtitles.
+        // Parse the subtitle track if a subtitle file was configured. A
+        // missing, oversized, or unreadable file is announced on the error log
+        // and playback continues without captions (never silent).
         $subtitles = null;
         if ($this->subtitlePath !== null) {
-            $raw = @file_get_contents($this->subtitlePath);
-            if (is_string($raw) && $raw !== '') {
+            $raw = self::readSubtitleFile($this->subtitlePath);
+            if ($raw !== null) {
                 $subtitles = WebVtt::parse($raw);
             }
         }
@@ -552,12 +600,13 @@ final class Reel
         // Resolve auto-mode to the best available mode at runtime.
         $resolvedMode = $this->mode ?? RendererFactory::autoMode();
 
-        // Parse the subtitle track if a subtitle file was configured.
-        // A missing/unreadable file is silently treated as no subtitles.
+        // Parse the subtitle track if a subtitle file was configured. A
+        // missing, oversized, or unreadable file is announced on the error log
+        // and playback continues without captions (never silent).
         $subtitles = null;
         if ($this->subtitlePath !== null) {
-            $raw = @file_get_contents($this->subtitlePath);
-            if (is_string($raw) && $raw !== '') {
+            $raw = self::readSubtitleFile($this->subtitlePath);
+            if ($raw !== null) {
                 $subtitles = WebVtt::parse($raw);
             }
         }

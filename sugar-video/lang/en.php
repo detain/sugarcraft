@@ -10,6 +10,9 @@ declare(strict_types=1);
 
 return [
     // Decoder errors
+    'subtitle.unreadable' => 'sugar-video: subtitle file could not be read ({path}) — playback continues without captions',
+    'subtitle.too_large' => 'sugar-video: subtitle file ({path}) exceeds the {max}-byte ceiling — ignored',
+    'subtitle.cue_cap' => 'sugar-video: subtitle track truncated at {max} cues',
     'decoder.ffmpeg_missing' => 'ffmpeg not found on this host; mp4/avi/webm playback requires ffmpeg',
     'decoder.ffmpeg_exit' => 'sugar-video: ffmpeg exited with code {code} before the stream ended ({source})',
     'source.unparseable' => 'sugar-video: ffprobe could not decode any video stream from {source} (exit code {code}) — the file is corrupt or not a video',
