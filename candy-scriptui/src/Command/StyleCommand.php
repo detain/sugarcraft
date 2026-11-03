@@ -15,13 +15,13 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Apply Sprinkles styling to its argument text (or stdin when no
+ * Apply ANSI styling to its argument text (or stdin when no
  * arguments are given) and print the result.
  *
  * Non-interactive — no Program loop required.
  */
 #[Example('candy-scriptui style --bold --foreground 213 hi', 'Bold pink text.')]
-#[AsCommand(name: 'style', description: 'Apply Sprinkles styling to text and print it.')]
+#[AsCommand(name: 'style', description: 'Apply ANSI styling to text and print it.')]
 final class StyleCommand extends Command
 {
     protected function configure(): void

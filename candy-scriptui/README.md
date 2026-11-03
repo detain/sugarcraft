@@ -47,7 +47,8 @@ candy-scriptui confirm "Really delete $file?" && rm "$file"
 
 ## Subcommands
 
-All 13 gum subcommands ship. Run `candy-scriptui <cmd> --help` for the full
+All 13 presentation subcommands ship, plus `completion` — 14 in the table
+below. Run `candy-scriptui <cmd> --help` for the full
 flag list per command.
 
 ## Auto-discovery
@@ -157,14 +158,16 @@ and does not trigger autoloading.
 | `log`      | Levelled / structured log output (text · json · logfmt). |
 | `pager`    | Scrollable viewer for long input. |
 | `spin`     | Run an external command behind a spinner. |
-| `style`    | Apply Sprinkles styling to argv (or stdin). |
+| `style`    | Apply ANSI styling to argv (or stdin). |
 | `table`    | Render a CSV / TSV table. |
 | `write`    | Multi-line text editor. |
 
 ## Flag reference (selected highlights)
 
-Some flags from the original `gum` CLI surface are not wired here yet; the
-shipped surface covers the 80 % case for shell scripts. Common
+Some `gum` flags exist here under different spellings and a few niche knobs
+were dropped rather than shipped as silent no-ops: every flag listed by
+`--help` is live. The shipped surface covers the 80 % case for shell
+scripts. Common
 flags across commands:
 
 - `--limit N` / `--no-limit` / `--selected="a,b"` — multi-select on
@@ -361,7 +364,10 @@ behavioural differences:
 
 - `format` accepts `-t/--type` (`markdown`, `code`, `template`, `emoji`)
   alongside `--theme`. Template support is the lightweight `{{VAR}}`
-  expansion — Go template-function helpers are not implemented.
+  expansion — Go template-function helpers are not implemented. Expansion
+  is fail-closed: only variables named in `--allow-env=A,B` are read from
+  the environment, and a placeholder that resolves to nothing is announced
+  on STDERR instead of vanishing silently.
 - `--timeout`, `--show-help`, and `--strip-ansi` work on the commands that
   accept them: `--timeout` arms a real deadline (exit `124`) on every
   interactive command including `file`, `--show-help` is honoured as an
@@ -375,7 +381,7 @@ behavioural differences:
 - `confirm --default=yes|no` is the form to use; the older `--default-yes`
   alias is preserved.
 
-## Test
+## Testing
 
 ```sh
 cd candy-scriptui && composer install && vendor/bin/phpunit
@@ -445,7 +451,8 @@ Runnable examples live in [`examples/`](examples/):
 ## Shared foundations
 
 The `filter` command uses [sugar-fuzzy](../sugar-fuzzy/README.md) for
-fuzzy-matching via `FilterModel` → `SmithWatermanMatcher`. The
+opt-in fuzzy-matching (`--fuzzy`; the default is substring) via
+`FilterModel` → `SmithWatermanMatcher`. The
 `SubStyleParser` utility parses gum-style `element.prop=value` entries
 into per-element `Style` maps for **extension** commands; no built-in
 command consumes it today, and `choose`'s `--cursor`/`--header` flags are
