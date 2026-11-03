@@ -177,12 +177,20 @@ final class Buffer
      *
      * Faithful extraction of the IL walk that {@see
      * \SugarCraft\Vterm\Handler\ScrollHandler::insertLines()} and the renderer's
-     * CsiHandlerImpl::il() each carried inline (E736/vt-6.4). Guards kept
+     * CsiHandlerImpl::il() each carried inline (extracted so both engines
+     * share one walk). Guards kept
      * verbatim from those walks: no-op when $from lies outside the region;
      * $count coerced to at least 1 and clamped to the rows from $from down
      * ($count <= 0 therefore shifts exactly ONE row — public CSI entry
      * points floor explicit 0 earlier, at the dispatch layer). Blank fill
      * is plain {@see Cell::empty()}, no pen.
+     *
+     * The walk itself is a ROW SPLICE, not a per-cell copy loop: every
+     * cell of a shifted region moves in one array operation and the dirty
+     * box extends once. Per-cell replay re-extended the box cols times per
+     * row and made long scrolls churn (a throughput floor test keeps the
+     * splice shape). Grid content is identical either way — the pins are
+     * unchanged.
      *
      * Buffer holds no cursor or DECSTBM state, so the region arrives as
      * parameters; the defaults ([0, rows-1] anchored at row 0) make the
@@ -195,22 +203,19 @@ final class Buffer
      */
     public function insertRows(int $count, int $from = 0, ?int $top = null, ?int $bottom = null): void
     {
-        $top ??= 0;
-        $bottom ??= $this->rows - 1;
+        [$top, $bottom] = $this->clampRegion($top, $bottom);
         if ($from < $top || $from > $bottom) {
             return;
         }
-        $shift = min(max(1, $count), $bottom - $from + 1);
-        for ($r = $bottom; $r >= $from + $shift; $r--) {
-            for ($c = 0; $c < $this->cols; $c++) {
-                $this->put($r, $c, $this->cell($r - $shift, $c));
-            }
-        }
-        for ($r = $from; $r < $from + $shift; $r++) {
-            for ($c = 0; $c < $this->cols; $c++) {
-                $this->put($r, $c, Cell::empty());
-            }
-        }
+        $height = $bottom - $from + 1;
+        $shift = min(max(1, $count), $height);
+        $region = array_splice($this->grid, $from, $height);
+        // Blanks join the top of the region; the same number of the
+        // original rows overflow past $bottom and are dropped.
+        array_splice($region, 0, 0, array_fill(0, $shift, $this->blankRow()));
+        array_splice($region, $height);
+        array_splice($this->grid, $from, 0, $region);
+        $this->markRowsDirty($from, $bottom);
     }
 
     /**
@@ -219,7 +224,8 @@ final class Buffer
      *
      * Faithful extraction of the DL walk — same guard roster as {@see
      * self::insertRows()} (region test, one-row floor on $count, region
-     * clamp). Rows above $from are never touched.
+     * clamp), and the same row-splice shape: the shift moves whole rows
+     * and the dirty box extends once. Rows above $from are never touched.
      *
      * Mirrors charmbracelet/x/vt `Screen.DeleteLine` (handlers.go DL).
      *
@@ -228,22 +234,57 @@ final class Buffer
      */
     public function deleteRows(int $count, int $from = 0, ?int $top = null, ?int $bottom = null): void
     {
-        $top ??= 0;
-        $bottom ??= $this->rows - 1;
+        [$top, $bottom] = $this->clampRegion($top, $bottom);
         if ($from < $top || $from > $bottom) {
             return;
         }
-        $shift = min(max(1, $count), $bottom - $from + 1);
-        for ($r = $from; $r <= $bottom - $shift; $r++) {
-            for ($c = 0; $c < $this->cols; $c++) {
-                $this->put($r, $c, $this->cell($r + $shift, $c));
-            }
-        }
-        for ($r = $bottom - $shift + 1; $r <= $bottom; $r++) {
-            for ($c = 0; $c < $this->cols; $c++) {
-                $this->put($r, $c, Cell::empty());
-            }
-        }
+        $height = $bottom - $from + 1;
+        $shift = min(max(1, $count), $height);
+        $region = array_splice($this->grid, $from, $height);
+        // The first $shift rows fall off the top of the region; blanks
+        // refill the same number at its bottom.
+        array_splice($region, 0, $shift);
+        array_splice($region, $height - $shift, 0, array_fill(0, $shift, $this->blankRow()));
+        array_splice($this->grid, $from, 0, $region);
+        $this->markRowsDirty($from, $bottom);
+    }
+
+    /**
+     * Snap a requested scroll region into the grid. Callers pass DECSTBM
+     * values already inside the viewport; clamping here keeps a stray
+     * out-of-range region from splicing past either edge.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function clampRegion(?int $top, ?int $bottom): array
+    {
+        return [
+            max(0, $top ?? 0),
+            min($bottom ?? $this->rows - 1, $this->rows - 1),
+        ];
+    }
+
+    /**
+     * A full row of plain empty cells (no pen) — the fill both row shifts
+     * land in the freed space.
+     *
+     * @return list<Cell>
+     */
+    private function blankRow(): array
+    {
+        return array_fill(0, $this->cols, Cell::empty());
+    }
+
+    /**
+     * Extend the dirty box over every column of [$fromRow, $toRow] in one
+     * step (the row-level counterpart of put()'s per-cell tracking).
+     */
+    private function markRowsDirty(int $fromRow, int $toRow): void
+    {
+        $this->minRow = min($this->minRow, $fromRow);
+        $this->maxRow = max($this->maxRow, $toRow);
+        $this->minCol = min($this->minCol, 0);
+        $this->maxCol = max($this->maxCol, $this->cols - 1);
     }
 
     /**

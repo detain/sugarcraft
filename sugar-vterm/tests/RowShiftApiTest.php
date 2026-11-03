@@ -13,7 +13,7 @@ use SugarCraft\Vterm\Terminal\Terminal as Emulator;
 
 /**
  * Buffer::insertRows()/deleteRows() — the row-shift public API extracted from
- * the duplicated IL/DL/SU/SD walks (E736/vt-6.4), plus the structural census
+ * the duplicated IL/DL/SU/SD walks, plus the structural census
  * that keeps those walks from respreading at the call sites.
  *
  * Frame pins follow the house cell-grid style (lettered rows read back per
@@ -173,16 +173,71 @@ final class RowShiftApiTest extends TestCase
 
     public function testRowShiftInsertExtendsDirtyRegionLikeTheWalkDid(): void
     {
-        // The extraction kept per-cell put() writes, so the dirty bounding box
-        // still grows over every touched row/col — a row-splice shortcut would
-        // desync incremental-render consumers.
-        $b = new Buffer(4, 5); // pristine: sentinels until the walk writes via put()
+        // The row splice must dirty EXACTLY the rows the original per-cell
+        // walk touched — incremental-render consumers read this box.
+        $b = new Buffer(4, 5); // pristine: sentinels until the shift dirties rows
         $b->insertRows(1, 3, 0, 4); // copy touches row 4, blank fill touches row 3
         $dirty = $b->dirtyRegion();
         $this->assertSame(3, $dirty['minRow']);
         $this->assertSame(4, $dirty['maxRow']);
         $this->assertSame(0, $dirty['minCol']);
         $this->assertSame(3, $dirty['maxCol']);
+    }
+
+    public function testRowShiftDeleteDirtiesTheWholeTouchedRegionSpan(): void
+    {
+        $b = new Buffer(4, 5);
+        $b->deleteRows(2, 1, 1, 3); // pull-up touches rows 1..3, blanks land inside
+        $dirty = $b->dirtyRegion();
+        $this->assertSame(1, $dirty['minRow']);
+        $this->assertSame(3, $dirty['maxRow']);
+        $this->assertSame(0, $dirty['minCol']);
+        $this->assertSame(3, $dirty['maxCol']);
+    }
+
+    public function testRowShiftNoOpOutsideRegionLeavesTheSentinelsAlone(): void
+    {
+        $b = new Buffer(4, 5);
+        $b->insertRows(1, 0, 1, 3);
+        $b->deleteRows(1, 4, 1, 3);
+        $dirty = $b->dirtyRegion();
+        $this->assertSame(PHP_INT_MAX, $dirty['minRow']);
+        $this->assertSame(-1, $dirty['maxRow']);
+    }
+
+    public function testRowShiftClampsRegionPastTheGridWithoutGrowingIt(): void
+    {
+        $b = $this->lettered();
+        $b->deleteRows(1, 0, 0, 99); // bottom beyond the grid clamps to rows-1
+        $this->assertSame(['bbbb', 'cccc', 'dddd', 'eeee', '    '], $this->rows($b));
+
+        $b = $this->lettered();
+        $b->insertRows(1, 0, -9, 4); // negative top clamps to 0, insert at row 0
+        $this->assertSame(['    ', 'aaaa', 'bbbb', 'cccc', 'dddd'], $this->rows($b));
+
+        $b = $this->lettered();
+        $b->insertRows(1, -2, 0, 4); // $from itself is guarded, not clamped
+        $this->assertSame(['aaaa', 'bbbb', 'cccc', 'dddd', 'eeee'], $this->rows($b));
+        // Grid height is never grown by a splice:
+        $this->assertCount(5, $this->rows($b));
+    }
+
+    public function testRowShiftThroughputStaysAtSpliceCost(): void
+    {
+        // 4k IL/DL pairs on a full-size viewport. The per-cell walk this
+        // replaced needed ~15M put()/dirty updates for the same work; the
+        // splice does 8k array operations. The ceiling discriminates.
+        $b = new Buffer(80, 24);
+        $start = microtime(true);
+        for ($i = 0; $i < 4000; $i++) {
+            $b->insertRows(1, 0, 0, 23);
+            $b->deleteRows(1, 0, 0, 23);
+        }
+        $elapsed = microtime(true) - $start;
+        $this->assertLessThan(1.0, $elapsed, sprintf(
+            '4k row-shift pairs took %.3fs — the walk regressed to per-cell churn',
+            $elapsed
+        ));
     }
 
     // ─── Renderer façade (CsiHandlerImpl path) ─────────────────────────────
@@ -266,21 +321,27 @@ final class RowShiftApiTest extends TestCase
         return $out;
     }
 
-    // ─── Structural census (E730 sole-site pattern) ────────────────────────
+    // ─── Structural census (sole-site pattern) ────────────────────────────
 
     public function testRelativeRowShiftWalkIsConfinedToBuffer(): void
     {
+        // The shift is a row splice inside Buffer::insertRows()/deleteRows().
+        // A per-cell walk respread anywhere — including back inside Buffer,
+        // which would silently undo the splice — lands on these two legs:
+        // no relative-cell shift reads exist anywhere, and Buffer carries
+        // exactly one splice per shift method.
         $hits = [];
+        $splices = 0;
         foreach ($this->sourceFiles() as $file) {
             if (preg_match_all('/->cell\(\$r [-+]/', $file['text'], $m) > 0) {
                 $hits[$file['path']] = count($m[0]);
             }
+            if (str_ends_with($file['path'], 'Buffer/Buffer.php')) {
+                $splices = substr_count($file['text'], 'array_splice($this->grid');
+            }
         }
-        $this->assertSame(
-            ['Buffer/Buffer.php' => 2], // one read per walk: insert ($r - $shift) + delete ($r + $shift)
-            $hits,
-            'relative-row shift reads must live ONLY inside Buffer::insertRows()/deleteRows() — respreading the walk at a call site reddens this pin',
-        );
+        $this->assertSame([], $hits, 'relative-row shift walks must not exist — the shift is spliced in Buffer');
+        $this->assertSame(4, $splices, 'Buffer must carry exactly the two region splices (splice-out + splice-back per shift method)');
     }
 
     public function testRowShiftApiCallSitesMatchTheRoster(): void
