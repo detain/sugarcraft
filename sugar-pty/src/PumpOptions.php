@@ -109,7 +109,13 @@ final class PumpOptions
     public readonly \Closure|null $onIdle;
 
     /**
-     * Called on SIGWINCH with new dimensions (cols, rows).
+     * Called with new dimensions (cols, rows) when the pump OBSERVES a
+     * size change on an idle tick — PosixPump/ReactPump poll
+     * {@see MasterPty::size()} between reads. It is a size-diff
+     * observer, not a signal hook: the signal itself is consumed by the
+     * consumer's SignalForwarder, and a session that opened at 0x0
+     * (lastKnownCols === 0) never fires it until a size is established.
+     * MultiPump::tick() does not deliver it at all.
      * Null when no callback is registered.
      *
      * @var (\Closure(int, int): void)|null

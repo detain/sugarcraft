@@ -19,6 +19,13 @@ final class MultiPumpSession
     private bool $done = false;
 
     /**
+     * Bytes read from this session's master that its stdout sink has not
+     * taken yet (short write). Non-empty parks the session in writability
+     * watching instead of master reading — the sync-path back-pressure.
+     */
+    public string $pendingSink = '';
+
+    /**
      * First wall-clock timestamp at which `tick()` observed the child
      * as exited. Used to bound the post-child master drain to
      * `opts->flushDeadlineSec`. Null until that moment.

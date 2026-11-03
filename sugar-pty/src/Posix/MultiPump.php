@@ -44,8 +44,10 @@ final class MultiPump
      * to {@see remove()} or look up the exit code in {@see run()}'s
      * return value.
      *
-     * The master is flipped into non-blocking mode so reads never block
-     * other sessions.
+     * The master's blocking mode is deliberately NOT touched: every read
+     * happens only after select (or the finite default read timeout) has
+     * established there are bytes, so no flip is needed and the caller's
+     * stream configuration survives the multiplexer.
      *
      * @param resource $stdoutSink  open writable stream — STDOUT, a
      *                              per-pane buffer, a network socket.
@@ -59,7 +61,6 @@ final class MultiPump
         if (!\is_resource($stdoutSink)) {
             throw new \InvalidArgumentException('MultiPump::add requires a resource $stdoutSink');
         }
-        \stream_set_blocking($master->stream(), false);
         $id = $this->nextId++;
         $this->sessions[$id] = new MultiPumpSession(
             id: $id,
@@ -200,9 +201,16 @@ final class MultiPump
 
     /**
      * Single iteration of the multiplexer: select across every live
-     * master, drain bytes from those that are ready, fire idle
-     * callbacks otherwise. Returns the number of ready masters that
-     * were drained on this tick (0 on idle / no live sessions).
+     * master (and every owed sink), drain bytes from those that are
+     * ready, fire idle callbacks otherwise. Returns the number of ready
+     * masters that were drained on this tick (0 on idle / no live
+     * sessions).
+     *
+     * Callback reach of the SYNC path: only {@see PumpOptions::$keepalive}
+     * fires on idle ticks here. onIdle / onSigwinch / onChildExit are
+     * PosixPump and ReactPump hooks — a multiplexed caller wanting them
+     * drives runAsync() (one ReactPump per session) or observes children
+     * around tick() itself.
      */
     public function tick(): int
     {
@@ -225,11 +233,23 @@ final class MultiPump
                 $session->markChildExitedAt($now);
             }
 
-            // Past the flush deadline → child long gone and the master
-            // has been quiet — mark done so the loop can finish.
+            // Past the flush deadline → one LAST finite read so bytes that
+            // landed inside the final window are not silently discarded,
+            // then mark done so the loop can finish.
             if ($session->childExitedAt() !== null
                 && $now - $session->childExitedAt() > $session->opts->flushDeadlineSec
             ) {
+                if ($session->pendingSink !== '') {
+                    @\fwrite($session->stdoutSink, $session->pendingSink);
+                    $session->pendingSink = '';
+                }
+                $tail = $session->master->read($session->opts->chunkBytes, 0.01);
+                if ($tail !== null && $tail !== '') {
+                    if ($session->opts->recorder !== null) {
+                        $session->opts->recorder->recordOutput($tail);
+                    }
+                    @\fwrite($session->stdoutSink, $tail);
+                }
                 $session->markDone();
                 continue;
             }
@@ -241,16 +261,29 @@ final class MultiPump
         }
 
         $r = [];
+        $w = [];
+        $masterByFd = [];
+        $sinkByFd = [];
         $timeoutUs = self::DEFAULT_IDLE_TIMEOUT_US;
         foreach ($live as $session) {
-            $r[] = $session->master->stream();
             if ($session->opts->selectTimeoutUs < $timeoutUs) {
                 $timeoutUs = $session->opts->selectTimeoutUs;
             }
+            $stream = $session->master->stream();
+            $masterByFd[(int) $stream] = $session;
+            if ($session->pendingSink === '') {
+                $r[] = $stream;
+            } else {
+                // Back-pressure: this session owes bytes to its sink; watch
+                // writability and hold off reading its master.
+                $w[] = $session->stdoutSink;
+                $sinkByFd[(int) $session->stdoutSink] = $session;
+            }
         }
-        $w = null;
+        // retryOnEintr narrows the by-reference sets to the READY subset.
+        $wArg = $w === [] ? null : $w;
         $e = null;
-        $ready = PosixMasterPty::retryOnEintr($r, $w, $e, 0, $timeoutUs);
+        $ready = PosixMasterPty::retryOnEintr($r, $wArg, $e, 0, $timeoutUs);
 
         if ($ready === false) {
             return 0;
@@ -265,20 +298,26 @@ final class MultiPump
         }
 
         $drained = 0;
-        foreach ($live as $session) {
-            $sessionStream = $session->master->stream();
-            $isReady = false;
-            foreach ($r as $readyStream) {
-                if ($readyStream === $sessionStream) {
-                    $isReady = true;
-                    break;
+        foreach ($r as $readyStream) {
+            $session = $masterByFd[(int) $readyStream] ?? null;
+            if ($session !== null) {
+                $this->drainSession($session);
+                $drained++;
+            }
+        }
+        foreach ($wArg ?? [] as $readySink) {
+            $session = $sinkByFd[(int) $readySink] ?? null;
+            if ($session !== null && $session->pendingSink !== '') {
+                $written = @\fwrite($session->stdoutSink, $session->pendingSink);
+                if ($written === false) {
+                    $session->pendingSink = '';
+                    $session->markDone(); // sink reader is gone (M7 teardown)
+                    continue;
+                }
+                if ($written > 0) {
+                    $session->pendingSink = (string) \substr($session->pendingSink, $written);
                 }
             }
-            if (!$isReady) {
-                continue;
-            }
-            $this->drainSession($session);
-            $drained++;
         }
         return $drained;
     }
@@ -301,6 +340,9 @@ final class MultiPump
 
     private function drainSession(MultiPumpSession $session): void
     {
+        if ($session->pendingSink !== '') {
+            return; // handled by the writability arm
+        }
         $bytes = $session->master->read($session->opts->chunkBytes);
         if ($bytes === null) {
             return;
@@ -315,6 +357,15 @@ final class MultiPump
         if ($session->opts->recorder !== null) {
             $session->opts->recorder->recordOutput($bytes);
         }
-        @\fwrite($session->stdoutSink, $bytes);
+        $written = @\fwrite($session->stdoutSink, $bytes);
+        if ($written === false) {
+            // The sink's reader is gone (EPIPE): tear this session down
+            // instead of pumping the next session's bytes into nowhere.
+            $session->markDone();
+            return;
+        }
+        if ($written < \strlen($bytes)) {
+            $session->pendingSink = (string) \substr($bytes, $written);
+        }
     }
 }

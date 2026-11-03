@@ -48,6 +48,14 @@ final class PosixPump implements PumpContract
     private string $pendingStdin = '';
 
     /**
+     * Bytes read from the master that STDOUT has not taken yet (partial
+     * fwrite). The mirror of {@see $pendingStdin} on the output side: the
+     * loop stops reading the master while this is non-empty (back-pressure
+     * instead of an unbounded in-RAM remainder) and re-arms on writability.
+     */
+    private string $pendingSink = '';
+
+    /**
      * Run the byte pump until pump conditions trigger: child exits,
      * STDOUT hits EPIPE, or STDIN reaches EOF and the post-EOF grace
      * window elapses.
@@ -90,12 +98,33 @@ final class PosixPump implements PumpContract
         // A remainder parked by a previous run() on this instance belongs to
         // that run's master, never this one.
         $this->pendingStdin = '';
+        $this->pendingSink = '';
 
-        \stream_set_blocking($master->stream(), false);
+        // Non-blocking mode is CALLER state on caller-owned streams: the
+        // pump borrows it for the duration of one run() and hands it back,
+        // so a stream the pump touched is not silently left in a mode the
+        // caller never chose.
+        $masterStream = $master->stream();
+        $masterWasBlocking = (bool) (\stream_get_meta_data($masterStream)['blocked'] ?? true);
+        $stdinWasBlocking = (bool) (\stream_get_meta_data($stdinStream)['blocked'] ?? true);
+        \stream_set_blocking($masterStream, false);
         \stream_set_blocking($stdinStream, false);
 
-        $this->pump($master, $stdinStream, $stdoutStream, $child, $opts);
-        $this->flushMaster($master, $stdoutStream, $child, $opts);
+        try {
+            $this->pump($master, $stdinStream, $stdoutStream, $child, $opts);
+            $this->flushMaster($master, $stdoutStream, $child, $opts);
+        } finally {
+            @\stream_set_blocking($masterStream, $masterWasBlocking);
+            @\stream_set_blocking($stdinStream, $stdinWasBlocking);
+            if ($this->pendingSink !== '') {
+                // One last delivery attempt against the caller's own
+                // (typically blocking) stdout mode; a remainder that STILL
+                // does not fit is dropped here, not carried into the next
+                // run().
+                @\fwrite($stdoutStream, $this->pendingSink);
+                $this->pendingSink = '';
+            }
+        }
 
         if ($child === null) {
             return 0;
@@ -184,12 +213,23 @@ final class PosixPump implements PumpContract
             // next became readable -- a caller that wrote all of its input
             // and closed stdin left the tail undelivered forever.
             $draining = $this->pendingStdin !== '' || $veofOwed !== '';
-            $r = ($stdinClosed || $draining) ? [$masterStream] : [$stdinStream, $masterStream];
-            $w = $draining ? [$masterStream] : null;
+            if ($this->pendingSink !== '') {
+                // stdout clogged: hold off reading the master (and stdin —
+                // flow control propagates) and watch the sink only.
+                $r = [];
+                $w = [$stdoutStream];
+            } else {
+                $r = ($stdinClosed || $draining) ? [$masterStream] : [$stdinStream, $masterStream];
+                $w = $draining ? [$masterStream] : null;
+            }
             $e = null;
             $ready = PosixMasterPty::retryOnEintr($r, $w, $e, 0, $opts->selectTimeoutUs);
 
             if ($ready === false) {
+                // A select FAILURE (not EINTR — retryOnEintr absorbs those)
+                // is treated as a stop, not an error channel: the classic
+                // cause is EBADF from a stream the caller closed mid-run.
+                // run() still flushes and restores modes on this path.
                 return;
             }
 
@@ -218,7 +258,17 @@ final class PosixPump implements PumpContract
                 continue;
             }
 
-            if ($w !== null && $w !== []) {
+            if ($w !== null && \in_array($stdoutStream, $w, true) && $this->pendingSink !== '') {
+                $written = @\fwrite($stdoutStream, $this->pendingSink);
+                if ($written === false) {
+                    return; // EPIPE: the reader is gone
+                }
+                if ($written > 0) {
+                    $this->pendingSink = (string) \substr($this->pendingSink, $written);
+                }
+            }
+
+            if ($w !== null && \in_array($masterStream, $w, true)) {
                 if ($this->drainPendingStdin($master, $opts) > 0 && $stdinClosed) {
                     $stdinClosedDeadline = \microtime(true) + $opts->stdinEofGraceSec;
                 }
@@ -313,6 +363,17 @@ final class PosixPump implements PumpContract
     ): void {
         $flushDeadline = \microtime(true) + $opts->flushDeadlineSec;
         while (\microtime(true) < $flushDeadline) {
+            if ($this->pendingSink !== '') {
+                $written = @\fwrite($stdoutStream, $this->pendingSink);
+                if ($written === false) {
+                    return; // EPIPE: nothing left to flush to
+                }
+                if ($written > 0) {
+                    $this->pendingSink = (string) \substr($this->pendingSink, $written);
+                }
+                \usleep(1_000);
+                continue;
+            }
             $tail = $master->read($opts->chunkBytes);
             if ($tail === null || $tail === '') {
                 // Nothing to drain right now. Only sleep-and-retry while a
@@ -326,7 +387,13 @@ final class PosixPump implements PumpContract
                 \usleep(20_000);
                 continue;
             }
-            @\fwrite($stdoutStream, $tail);
+            $written = @\fwrite($stdoutStream, $tail);
+            if ($written === false) {
+                return;
+            }
+            if ($written < \strlen($tail)) {
+                $this->pendingSink = (string) \substr($tail, $written);
+            }
         }
     }
 
@@ -395,7 +462,16 @@ final class PosixPump implements PumpContract
             $opts->recorder->recordOutput($bytes);
         }
         $written = @\fwrite($stdoutStream, $bytes);
-        return $written !== false;
+        if ($written === false) {
+            return false; // EPIPE: the reader is gone
+        }
+        if ($written < \strlen($bytes)) {
+            // Short write: the remainder is OWED, not lost. Back-pressure
+            // (empty $r, stdout in $w) keeps it bounded until the sink
+            // catches up.
+            $this->pendingSink = (string) \substr($bytes, $written);
+        }
+        return true;
     }
 
     // Design note — SIGWINCH detection lives in the consumer:

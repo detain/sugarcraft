@@ -155,6 +155,21 @@ final class ReactPump
     /** Buffered stdin bytes not yet written to master (partial-write remainder). */
     private string $pendingStdin = '';
 
+    /** Bytes read from the master that STDOUT has not taken yet. */
+    private string $pendingSink = '';
+
+    private bool $sinkWriteAttached = false;
+
+    private bool $masterReadHeld = false;
+
+    /** Caller-visible blocking modes borrowed for one run() (restored by finish()). */
+    private ?bool $masterWasBlocking = null;
+
+    private ?bool $stdinWasBlocking = null;
+
+    /** @var resource|null stdin resource kept past onStdinEof() for the mode restore. */
+    private $stdinStreamOrig = null;
+
     /** Set once the child was observed as exited; drains tail bytes until finish. */
     private bool $flushing = false;
 
@@ -224,6 +239,9 @@ final class ReactPump
         $this->stdoutStream = $stdoutStream;
         $this->onData = $onData;
         $this->pendingStdin = '';
+        $this->pendingSink = '';
+        $this->sinkWriteAttached = false;
+        $this->masterReadHeld = false;
         $this->flushing = false;
         $this->sawIo = false;
         $this->pumpDeadlineAt = $opts->pumpDeadlineUs === null
@@ -236,10 +254,15 @@ final class ReactPump
             $this->stop();
         });
 
+        // Non-blocking mode is caller state on caller streams: capture it
+        // now; finish() hands it back.
+        $this->masterWasBlocking = (bool) (\stream_get_meta_data($this->masterStream)['blocked'] ?? true);
         \stream_set_blocking($this->masterStream, false);
         $this->loop->addReadStream($this->masterStream, fn () => $this->onMasterReadable());
 
         if ($this->stdinStream !== null) {
+            $this->stdinStreamOrig = $this->stdinStream;
+            $this->stdinWasBlocking = (bool) (\stream_get_meta_data($this->stdinStream)['blocked'] ?? true);
             \stream_set_blocking($this->stdinStream, false);
             $this->loop->addReadStream($this->stdinStream, fn () => $this->onStdinReadable());
         }
@@ -317,6 +340,14 @@ final class ReactPump
                 $this->finish();
                 return;
             }
+            if ($written < \strlen($bytes)) {
+                // Short write: the remainder is OWED, not lost. Hold master
+                // reads (back-pressure beats an unbounded in-RAM remainder)
+                // and wait for stdout writability to finish the delivery.
+                $this->pendingSink = (string) \substr($bytes, $written);
+                $this->holdMasterRead();
+                $this->attachSinkWrite();
+            }
         }
         if ($this->onData !== null) {
             ($this->onData)($bytes);
@@ -349,7 +380,11 @@ final class ReactPump
     {
         $this->loop->removeReadStream($this->stdinStream);
         $this->stdinStream = null;
-        @\fwrite($this->masterStream, $this->opts->veof);
+        // Short-write-safe: a bare fwrite dropped VEOF whenever the
+        // master queue was momentarily full (would-block or partial
+        // write), losing the end-of-input signal without a trace.
+        // writeToMaster parks the remainder and re-arms on writable.
+        $this->writeToMaster($this->opts->veof);
         if ($this->deadlineTimer === null) {
             $this->deadlineTimer = $this->loop->addTimer(
                 $this->opts->stdinEofGraceSec,
@@ -400,6 +435,73 @@ final class ReactPump
         $this->writeToMaster($pending);
         if ($this->pendingStdin === '') {
             $this->detachMasterWrite();
+        }
+    }
+
+    private function attachSinkWrite(): void
+    {
+        if ($this->sinkWriteAttached || $this->stdoutStream === null) {
+            return;
+        }
+        $this->sinkWriteAttached = true;
+        $this->loop->addWriteStream($this->stdoutStream, fn () => $this->onSinkWritable());
+    }
+
+    private function detachSinkWrite(): void
+    {
+        if (!$this->sinkWriteAttached) {
+            return;
+        }
+        $this->sinkWriteAttached = false;
+        if ($this->stdoutStream !== null) {
+            $this->loop->removeWriteStream($this->stdoutStream);
+        }
+    }
+
+    /**
+     * Back-pressure: while the sink remainder is owed, master reads are
+     * held (watcher removed) so memory stays bounded by one chunk.
+     */
+    private function holdMasterRead(): void
+    {
+        if ($this->masterReadHeld || !$this->running) {
+            return;
+        }
+        $this->masterReadHeld = true;
+        $this->loop->removeReadStream($this->masterStream);
+    }
+
+    private function resumeMasterRead(): void
+    {
+        if (!$this->masterReadHeld) {
+            return;
+        }
+        $this->masterReadHeld = false;
+        if ($this->running) {
+            $this->loop->addReadStream($this->masterStream, fn () => $this->onMasterReadable());
+        }
+    }
+
+    private function onSinkWritable(): void
+    {
+        if (!$this->running || $this->pendingSink === '') {
+            $this->detachSinkWrite();
+            $this->resumeMasterRead();
+            return;
+        }
+        $written = $this->stdoutStream === null ? false : @\fwrite($this->stdoutStream, $this->pendingSink);
+        if ($written === false) {
+            $this->pendingSink = '';
+            $this->detachSinkWrite();
+            $this->finish();
+            return;
+        }
+        if ($written > 0) {
+            $this->pendingSink = (string) \substr($this->pendingSink, $written);
+        }
+        if ($this->pendingSink === '') {
+            $this->detachSinkWrite();
+            $this->resumeMasterRead();
         }
     }
 
@@ -499,6 +601,24 @@ final class ReactPump
             $this->stdinStream = null;
         }
         $this->detachMasterWrite();
+        $this->detachSinkWrite();
+        if ($this->pendingSink !== '' && $this->stdoutStream !== null) {
+            // One last synchronous attempt before the caller's blocking
+            // mode is restored; a stream that still refuses is dropped,
+            // not carried into the next run().
+            @\fwrite($this->stdoutStream, $this->pendingSink);
+            $this->pendingSink = '';
+        }
+        $this->masterReadHeld = false;
+        if ($this->masterWasBlocking !== null) {
+            @\stream_set_blocking($this->masterStream, $this->masterWasBlocking);
+            $this->masterWasBlocking = null;
+        }
+        if ($this->stdinWasBlocking !== null && \is_resource($this->stdinStreamOrig)) {
+            @\stream_set_blocking($this->stdinStreamOrig, $this->stdinWasBlocking);
+        }
+        $this->stdinWasBlocking = null;
+        $this->stdinStreamOrig = null;
         if ($this->pollTimer !== null) {
             $this->loop->cancelTimer($this->pollTimer);
             $this->pollTimer = null;
