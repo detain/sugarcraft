@@ -14,6 +14,7 @@ return [
     'git.timeout'             => 'git: 명령이 {seconds}초 후 시간 초과되었습니다',
     'git.unsafe_path'         => 'git: 안전하지 않은 worktree 경로: {path}',
     'git.unsafe_merge_driver' => 'git: 리포지토리가 안전하게 비활성화할 수 없는 병합 드라이버를 정의하여 병합을 거부했습니다',
+    'git.unsafe_filter_driver' => 'git: 리포지토리가 필터 드라이버를 정의하여 엄격한 필터 모드에서 명령을 거부했습니다',
     'cli.not_a_repo'          => 'candy-git: git 저장소가 아닙니다: {cwd}',
     'cli.unknown_flag'        => 'candy-git: 알 수 없는 인수: {flag}',
     'cli.no_git'              => 'candy-git: git 을 사용할 수 없습니다 -- git 을 설치하고 PATH 에 있는지 확인하세요',

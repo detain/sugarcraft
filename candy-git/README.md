@@ -116,7 +116,7 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 | `RebaseCommit`      | Immutable rebase todo entry — `sha`, `subject`, `action` + `withAction()` / `displayLine()`.                                      |
 | `InteractiveRebase` | Immutable interactive-rebase state — `commits` todo list, `cursor`, `selectingN`/`countInput`, `cycleAction()`, `dropCurrent()`.    |
 
-`CandyGit` shells out to `git` directly via the system, so users keep their existing commit hooks and signing config — while the repo-controlled executable hooks that could fire unasked (`core.fsmonitor`, `diff.external`, and any `merge.<name>.driver` the repository's own config defines) are switched off, per **Trust boundary**.
+`CandyGit` shells out to `git` directly via the system, so users keep their existing commit hooks and signing config — while the repo-controlled executable hooks that could fire unasked (`core.fsmonitor`, `diff.external`, and any `merge.<name>.driver` the repository's own config defines) are switched off, and git filter drivers (`filter.*.clean|smudge|process`) are detected and announced rather than switched off — disarming those would break git-lfs-class tooling. See **Trust boundary**.
 
 **Note:** All git operations are synchronous and block the event loop. This is by design for v1 — a TTY application naturally runs synchronously at the terminal. Async git operations are planned for v2 (see `GitDriver` interface for deprecation notes).
 
@@ -178,7 +178,9 @@ $msg = Lang::t('git.error', ['stderr' => $stderr]);
 
 Opening a repository executes its configuration unless told otherwise, and git
 has several config keys that name **executables**. CandyGit runs every git
-call through a fixed argument prelude that closes the clone-time surfaces:
+call through a fixed argument prelude that disarms the repo-controlled
+execution channels it can neutralize without breaking legitimate tooling;
+what it cannot disarm safely, it detects and discloses:
 
 - `-c core.fsmonitor=false` — `core.fsmonitor` (in the cloned repo's
   `.git/config`) names a program git invokes on the very first `status`; a
@@ -196,10 +198,28 @@ call through a fixed argument prelude that closes the clone-time surfaces:
   `merge.*.driver` key in the merged config scope and overrides each one with
   `false` (git's inert exit-1 builtin): a hostile clone then produces a plain
   CONFLICT instead of code execution. If a driver key exists in a shape that
-  cannot be re-expressed as an override, the merge is *refused*, not run.
-  Side effect, disclosed on purpose: **your own** custom merge drivers —
-  global, system, or repo — never execute under CandyGit merges; plain `git`
-  in a terminal is unaffected.
+  cannot be re-expressed as an override, the merge is *refused*, not run —
+  and because the enumeration reads the merged config scope, such a key in
+  *your own* global or system config refuses CandyGit merges in every
+  repository you open; plain `git` in a terminal is unaffected. A second
+  side effect, disclosed on purpose: **your own** legitimate custom merge
+  drivers — global, system, or repo — never execute under CandyGit merges.
+- Filter drivers (`filter.<name>.clean|smudge|process`) are the same class of
+  repo-controlled executable — `git add`, `commit`, a branch-switching
+  `checkout`, `reset`, `restore`, `stash apply` and friends fire them through
+  `.gitattributes`. They are **detected and announced, not disarmed**, on
+  purpose: git-lfs and other real filter users depend on their drivers
+  *working*, and silently forcing every filter to `false` would corrupt the
+  files those tools manage — a worse defect than the disclosed trust gap.
+  So: on every filter-capable command CandyGit enumerates the merged config
+  scope; if any user-defined filter driver exists, it prints a one-shot
+  notice to stderr naming the drivers and continues (the drivers run, exactly
+  as plain `git` would). Set `CANDY_GIT_STRICT_FILTERS=1` (env) or
+  `withStrictFilters()` (API) to switch that posture to a hard refusal of any
+  command that could execute a repo filter. Threat model: a hostile clone
+  that ships `.gitattributes` + filter config gets code execution the moment
+  you stage or check out — clone, open, and operate only what you trust, and
+  use strict mode if you script CandyGit over untrusted directories.
 - Child environment is pinned: `GIT_TERMINAL_PROMPT=0`, `GIT_PAGER=cat`,
   `GIT_EDITOR`/`GIT_SEQUENCE_EDITOR=true` (no credential, pager, or editor
   can hijack the TUI's terminal), and `LC_ALL=C`/`LANG=C` because the

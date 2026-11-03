@@ -23,17 +23,24 @@ use SugarCraft\Git\Git;
  * - the funnel itself loses a prelude overlay;
  * - the merge-capable dispatch table sheds a verb whose machinery can reach
  *   `merge.<name>.driver`;
- * - the per-invocation driver disarm stops emitting its `=false` overrides.
+ * - the per-invocation driver disarm stops emitting its `=false` overrides;
+ * - the filter-capable dispatch table (the detect-and-announce channel) sheds
+ *   a verb that fires clean/smudge/process drivers, the filter guard vanishes
+ *   from the argv assembler, or the guard starts MUTATING argv — its contract
+ *   is side effects only (refuse or one-shot notice), so the zero-driver
+ *   common case stays byte-identical to the plain prelude.
  *
  * Roster genre, fleet-consistent (StderrEmitterCensusTest upstream): the
  * expected call-site COUNT is pinned so new spawn sites force a deliberate
  * revisit instead of slipping through a "some subset of sites is guarded"
- * reading.
+ * reading. The walk is RECURSIVE over src/ (review m-2): a site planted in a
+ * nested directory like src/Support/ must be censused too, and
+ * testTheRecursiveWalkCatchesANestedRawSpawnSite pins that with a live plant.
  */
 final class GitSpawnPreludeGuardTest extends TestCase
 {
-    /** Every Process::run() spawn site in src/, by design. */
-    private const EXPECTED_SPAWN_SITES = 5;
+    /** Every Process::run() spawn site in src/ (recursively), by design. */
+    private const EXPECTED_SPAWN_SITES = 6;
 
     public function testEveryGitSpawnIsAssembledFromThePreludeFunnel(): void
     {
@@ -60,6 +67,45 @@ final class GitSpawnPreludeGuardTest extends TestCase
                 "{$where}: call site hand-assembles git argv instead of composing the funnel's",
             );
         }
+    }
+
+    /**
+     * Non-vacuity of the recursive walk (review m-2): plant a throwaway file
+     * under src/Support/ carrying exactly the evasion shape — a raw
+     * `Process::run(['git', ...])` beside the funnel — and prove the census
+     * sees it and the funnel predicate rejects it. The plant is deleted in
+     * finally and never committed.
+     */
+    public function testTheRecursiveWalkCatchesANestedRawSpawnSite(): void
+    {
+        $dir   = dirname((string) (new \ReflectionClass(Git::class))->getFileName());
+        $name  = 'GuardProbePlant' . bin2hex(random_bytes(4));
+        $plant = $dir . '/Support/' . $name . '.php';
+
+        try {
+            file_put_contents($plant, "<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Git\\Support;\n\nuse SugarCraft\\Git\\Process;\n\nfinal class {$name}\n{\n    public static function evaded(): array\n    {\n        return Process::run(['git', 'status'], null, 1.0);\n    }\n}\n");
+            self::assertFileExists($plant);
+
+            $sites = $this->spawnSites();
+            $found = null;
+            foreach ($sites as $where => $argvSlice) {
+                if (str_starts_with((string) $where, $name . '.php::')) {
+                    $found = $argvSlice;
+                }
+            }
+            self::assertNotNull($found, 'a Process::run() site planted in src/Support/ evaded the census walk');
+
+            // And it is exactly a violation under the same predicate
+            // testEveryGitSpawnIsAssembledFromThePreludeFunnel applies:
+            self::assertFalse(
+                str_contains($found, 'gitBase(') || str_contains($found, 'argv(') || str_contains($found, 'argvWithDisarms('),
+                'planted site unexpectedly looks funnel-routed — the predicate is vacuous',
+            );
+            self::assertStringContainsString("'git'", $found, 'planted site must carry the raw git token the predicate accuses');
+        } finally {
+            @unlink($plant);
+        }
+        self::assertFileDoesNotExist($plant, 'the plant must never survive the test, let alone be committable');
     }
 
     public function testTheFunnelCarriesTheFullTrustPreludeByteExactly(): void
@@ -89,8 +135,64 @@ final class GitSpawnPreludeGuardTest extends TestCase
         self::assertContains('pop', $table['stash']);
     }
 
-    public function testRunAndRunPatchRouteThroughTheDisarmingAssembler(): void
+    public function testFilterCapableDispatchTableNamesEveryCleanSmudgeVerb(): void
     {
+        $constant = (new \ReflectionClass(Git::class))->getReflectionConstant('FILTER_CAPABLE_DISPATCH');
+        self::assertNotFalse($constant, 'FILTER_CAPABLE_DISPATCH vanished from Git.php');
+        /** @var array<string,?list<string>> $table */
+        $table = $constant->getValue();
+
+        // Ordered key set: the measured firing surface on git 2.43 (add,
+        // commit, branch-switching checkout, diff, restore, reset, merge,
+        // cherry-pick, rebase, stash apply/pop, worktree add), with the
+        // head-level conservative overs disclosed in the table's docblock.
+        self::assertSame(
+            ['add', 'checkout', 'commit', 'diff', 'restore', 'reset', 'merge', 'cherry-pick', 'rebase', 'stash', 'worktree'],
+            array_keys($table),
+        );
+        self::assertSame(['__not_abort__'], $table['cherry-pick']);
+        self::assertSame(['__not_abort__'], $table['rebase']);
+        self::assertContains('apply', $table['stash']);
+        self::assertContains('pop', $table['stash']);
+        self::assertContains('add', $table['worktree']);
+    }
+
+    public function testTheFilterGuardIsWiredAndNeverMutatesArgv(): void
+    {
+        $src = $this->sourceOf(Git::class);
+
+        // The assembler calls the guard for filter-capable verbs...
+        self::assertStringContainsString('guardFilterChannel(', $this->functionBody($src, 'argvWithDisarms'));
+
+        // ...and the guard is SIDE EFFECTS ONLY: it refuses (strict mode) or
+        // announces (sticky one-shot notice), never edits the argv. The pin
+        // that makes "default users see nothing / byte-identity with the old
+        // prelude" structural rather than a one-time behavioral photo: an
+        // `-c`-inventing guard is exactly the disarm-the-ruling rejected.
+        $guard = $this->functionBody($src, 'guardFilterChannel');
+        self::assertStringNotContainsString("'-c'", $guard, 'guardFilterChannel must never add argv overrides');
+        self::assertStringNotContainsString('array_merge', $guard);
+
+        // Detection uses the merged config scope (a --local probe would miss
+        // include.path/config.worktree lanes) MINUS the user's global/system
+        // baseline (the operator's own git-lfs must never be nagged or
+        // refused), and the lanes parse the same key shape.
+        $lanes = $this->functionBody($src, 'filterDriverLanes');
+        self::assertStringContainsString('filterConfigProbe(', $lanes);
+        self::assertStringContainsString("'--global'", $lanes);
+        self::assertStringContainsString("'--system'", $lanes);
+        self::assertStringNotContainsString("'--local'", $lanes);
+        $probe = $this->functionBody($src, 'filterConfigProbe');
+        self::assertStringContainsString("'config'", $probe);
+        self::assertStringContainsString("'--get-regexp'", $probe);
+        self::assertStringContainsString('.(clean|smudge|process)', $probe);
+        self::assertStringNotContainsString("'--local'", $probe);
+
+        // One-shot latch: the notice has an emitted-flag gate (per instance).
+        self::assertStringContainsString('filterNoticeEmitted', $guard);
+    }
+
+    public function testRunAndRunPatchRouteThroughTheDisarmingAssembler(): void    {
         $src = $this->sourceOf(Git::class);
 
         self::assertStringContainsString('Process::run($this->argvWithDisarms($args), null, $this->timeout)', $src);
@@ -183,13 +285,31 @@ final class GitSpawnPreludeGuardTest extends TestCase
         return $slice;
     }
 
-    /** @return list<string> */
+    /** @return list<string> every .php under src/, recursively */
     private function sourceFiles(): array
     {
-        $dir   = dirname((string) (new \ReflectionClass(Git::class))->getFileName()) . '/';
-        $files = glob($dir . '*.php');
-        self::assertIsArray($files);
+        $dir = dirname((string) (new \ReflectionClass(Git::class))->getFileName());
+        /** @var list<string> $files */
+        $files = [];
+        $walk  = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST,
+        );
+        foreach ($walk as $entry) {
+            if ($entry->isFile() && strtolower($entry->getExtension()) === 'php') {
+                $files[] = $entry->getPathname();
+            }
+        }
+        sort($files);
         self::assertNotEmpty($files, 'src/ walk found nothing');
+        // The walk must actually reach nested directories (review m-2): a
+        // top-level-only glob reads like a pass while src/Support/** is
+        // invisible to it. Pin that a known nested source file is enumerated.
+        self::assertContains(
+            $dir . '/Support/Version.php',
+            $files,
+            'the src/ walk is not recursive — nested spawn sites would evade the roster',
+        );
 
         return $files;
     }

@@ -19,10 +19,52 @@ final class Git implements GitDriver
     /** Wall-clock ceiling (seconds) for a single git invocation before it is killed. */
     public const DEFAULT_TIMEOUT = 30.0;
 
+    /**
+     * Environment switch for strict filter mode: a truthy value (1, true, yes)
+     * makes every filter-capable command REFUSE to run when the repository
+     * defines any `filter.<name>.clean|smudge|process` driver, instead of
+     * executing-and-announcing it. Read at construction; the constructor
+     * argument overrides it per instance.
+     */
+    public const STRICT_FILTERS_ENV = 'CANDY_GIT_STRICT_FILTERS';
+
+    /**
+     * One-shot stderr notice when filter drivers are detected (announce mode).
+     * English by design, like Process::CAPTURE_NOTICE — it is a trust-boundary
+     * warning about THIS library's behavior, not UI chrome; the strict-mode
+     * refusal (lang key git.unsafe_filter_driver) IS localized.
+     */
+    public const FILTER_NOTICE_FORMAT = "candy-git: notice: this repository defines git filter drivers (%s) that execute whenever files move between the worktree and the index. candy-git runs them, because tools like git-lfs depend on their filters working; see the \"Trust boundary\" section of candy-git's README.md, or set %s=1 to refuse such commands instead.\n";
+
+    /** Hard mode: refuse (typed) instead of announce (sticky) filter-capable commands. */
+    public readonly bool $strictFilters;
+
+    /** @var bool one-shot latch for FILTER_NOTICE_FORMAT (per instance) */
+    private bool $filterNoticeEmitted = false;
+
     public function __construct(
         public readonly string $cwd,
         public readonly float $timeout = self::DEFAULT_TIMEOUT,
-    ) {}
+        ?bool $strictFilters = null,
+    ) {
+        $this->strictFilters = $strictFilters ?? self::strictFiltersFromEnv();
+    }
+
+    /** Immutable derive: the same instance in strict (or relaxed) filter mode. */
+    public function withStrictFilters(bool $strict = true): self
+    {
+        return new self($this->cwd, $this->timeout, $strict);
+    }
+
+    private static function strictFiltersFromEnv(): bool
+    {
+        $raw = getenv(self::STRICT_FILTERS_ENV);
+        if (!is_string($raw)) {
+            return false;
+        }
+
+        return in_array(strtolower($raw), ['1', 'true', 'yes'], true);
+    }
 
     public function status(): array
     {
@@ -466,16 +508,58 @@ final class Git implements GitDriver
     ];
 
     /**
+     * Commands whose machinery can invoke a CLEAN or SMUDGE FILTER:
+     * `filter.<name>.clean|smudge|process` is a repo-configurable key naming
+     * an executable, reached by a matching `.gitattributes` entry
+     * (`*.txt filter=lfs`) — the same class of attacker-controlled-repo code
+     * execution as the merge drivers above, but fired by the checkin/checkout
+     * machinery: stage, commit, branch-switching checkout, reset, restore,
+     * stash apply, worktree add (measured on git 2.43; abort/teardown shapes
+     * never merge, so they are excluded like in MERGE_CAPABLE_DISPATCH).
+     *
+     * Unlike merge drivers these channels are NOT disarmed: git-lfs and every
+     * other legitimate filter user depends on its drivers WORKING, so a
+     * blanket `-c filter.X.clean=false` would be a worse product defect than
+     * the disclosed trust gap. The posture here is DETECT + ANNOUNCE (sticky,
+     * one-shot notice per instance) and REFUSE only when the caller opts into
+     * strict filter mode. See README "Trust boundary".
+     *
+     * Entries are deliberately head-level where a flag makes the verb inert
+     * (e.g. `diff --cached`, `reset --soft`, `restore --staged` measure as
+     * non-firing on git 2.43): the conservative over-detection is the safe
+     * side — announce mode only adds a notice line, strict mode never
+     * executes repo filters at all.
+     */
+    private const FILTER_CAPABLE_DISPATCH = [
+        'add'         => null,
+        'checkout'    => null,
+        'commit'      => null,
+        'diff'        => null,
+        'restore'     => null,
+        'reset'       => null,
+        'merge'       => null,
+        'cherry-pick' => ['__not_abort__'],
+        'rebase'      => ['__not_abort__'],
+        'stash'       => ['apply', 'pop'],
+        'worktree'    => ['add'],
+    ];
+
+    /**
      * Assemble argv for run()/runPatch(): the fixed prelude PLUS, for the
      * merge-capable verbs, per-invocation overrides that neutralize every
      * `merge.<name>.driver` git would consult for this repository (see
-     * {@see self::mergeDriverDisarms()}).
+     * {@see self::mergeDriverDisarms()}). Filter-capable verbs first pass
+     * through {@see self::guardFilterChannel()}, which never changes the
+     * argv — it only refuses (strict mode) or announces (default mode).
      *
      * @param list<string> $args
      * @return list<string>
      */
     private function argvWithDisarms(array $args): array
     {
+        if (self::isFilterCapable($args)) {
+            $this->guardFilterChannel();
+        }
         if (!self::isMergeCapable($args)) {
             return $this->argv($args);
         }
@@ -486,11 +570,31 @@ final class Git implements GitDriver
     /** @param list<string> $args */
     private static function isMergeCapable(array $args): bool
     {
+        return self::dispatchMatches(self::MERGE_CAPABLE_DISPATCH, $args);
+    }
+
+    /** @param list<string> $args */
+    private static function isFilterCapable(array $args): bool
+    {
+        return self::dispatchMatches(self::FILTER_CAPABLE_DISPATCH, $args);
+    }
+
+    /**
+     * Shared tail-matcher for the two dispatch tables: null tails mean the
+     * verb matches in any argument shape, `['__not_abort__']` matches every
+     * shape except the explicit abort teardown, and a literal list matches
+     * the verb's second token.
+     *
+     * @param array<string, list<string>|null> $table
+     * @param list<string> $args
+     */
+    private static function dispatchMatches(array $table, array $args): bool
+    {
         $head = $args[0] ?? '';
-        if (!array_key_exists($head, self::MERGE_CAPABLE_DISPATCH)) {
+        if (!array_key_exists($head, $table)) {
             return false;
         }
-        $tails = self::MERGE_CAPABLE_DISPATCH[$head];
+        $tails = $table[$head];
         if ($tails === null) {
             return true;
         }
@@ -500,6 +604,146 @@ final class Git implements GitDriver
         }
 
         return in_array($next, $tails, true);
+    }
+
+    /**
+     * Detect the repository's filter drivers on every filter-capable command
+     * and apply the posture: in strict filter mode the command is REFUSED
+     * (typed refusal) when at least one driver exists; in default mode a
+     * one-shot stderr notice names the drivers, and the command proceeds —
+     * the drivers still run (git-lfs-class tooling must keep working).
+     *
+     * This method NEVER mutates the argv that argvWithDisarms() returns: with
+     * zero drivers defined (the common case) nothing at all changes — no
+     * extra flags, no notice. The enumeration is a fresh read-only spawn on
+     * EVERY filter-capable invocation, never memoized: a repo that mutates
+     * its own config between two commands must not be able to run under a
+     * stale detection result (symmetric with the merge-disarm posture).
+     */
+    private function guardFilterChannel(): void
+    {
+        $lanes = $this->filterDriverLanes();
+        if ($lanes === []) {
+            return;
+        }
+        if ($this->strictFilters) {
+            throw new \RuntimeException(Lang::t('git.unsafe_filter_driver'));
+        }
+        if ($this->filterNoticeEmitted) {
+            return;
+        }
+        $this->filterNoticeEmitted = true;
+        \fwrite(STDERR, \sprintf(self::FILTER_NOTICE_FORMAT, self::summarizeLanes($lanes), self::STRICT_FILTERS_ENV));
+    }
+
+    /**
+     * Enumerate the filter lanes THIS REPOSITORY defines — `filter.<name>.
+     * clean|smudge|process` keys visible to git for this cwd, minus the
+     * user's own baseline.
+     *
+     * The merged config scope is what git would actually consult (repo
+     * `.git/config`, `config.worktree`, and files included from either —
+     * `--local` alone is blind to include.path, the same lesson the
+     * merge-driver enumeration learned on git 2.43). But merged scope also
+     * carries `filter.lfs.*` from the USER's global/system gitconfig, and
+     * nagging (or refusing) for the operator's own git-lfs would be exactly
+     * the git-lfs-class breakage the disarm ruling rejected. So: lanes whose
+     * key AND value byte-match the global or system chain are the user's own
+     * trusted baseline and drop out; anything else — a new key, a repo-side
+     * OVERRIDE of a global key (shadow attack), or an include reachable only
+     * through the repo — counts as a lane. A repo re-defining a driver with
+     * the byte-identical global value runs the user's own binary: nothing new
+     * executes, nothing to announce.
+     *
+     * An unnamed key shape (subsection the parser cannot name) lands as the
+     * '<unnamed>' lane: its driver still executes at git's side, so it must
+     * not stay silent. @return list<string>
+     */
+    private function filterDriverLanes(): array
+    {
+        $merged = $this->filterConfigProbe();
+        if ($merged === []) {
+            return [];
+        }
+
+        $baseline = [];
+        foreach ([
+            $this->filterConfigProbe('--global'),
+            $this->filterConfigProbe('--system'),
+        ] as $scopeLines) {
+            foreach ($scopeLines as $line) {
+                $baseline[$line] = true;
+            }
+        }
+
+        $lanes = [];
+        foreach ($merged as $line) {
+            if (isset($baseline[$line])) {
+                continue; // the operator's own driver, byte-identical
+            }
+            if (preg_match('/^filter\.([A-Za-z0-9._-]+)\.(clean|smudge|process)(?= |$)/i', $line, $m) === 1) {
+                $lanes[$m[1] . '.' . strtolower($m[2])] = true;
+                continue;
+            }
+            if (preg_match('/^filter\./i', $line) === 1
+                && preg_match('/\.(clean|smudge|process)(?= |$)/i', $line) === 1) {
+                // A key git printed that we cannot cleanly name (subsection
+                // carrying spaces/odd bytes, or a key-shaped value
+                // continuation). Its driver still EXECUTES at git's side, so
+                // it counts: announce says '<unnamed>', strict refuses —
+                // fail closed rather than stay silent about a lane we saw.
+                $lanes['<unnamed>'] = true;
+            }
+        }
+
+        return array_keys($lanes);
+    }
+
+    /**
+     * One read-only `git config --get-regexp` for the filter lanes, optionally
+     * restricted to a scope flag (--global/--system) for the trusted
+     * baseline. Timeout fails closed (strict mode must not wave an unknown
+     * repo through); exit 1 means no lanes; other non-zero (128-class,
+     * corrupt config) yields [] and lets the real git command surface its own
+     * more specific error.
+     *
+     * @return list<string> matched "key value" lines
+     */
+    private function filterConfigProbe(string $scope = ''): array
+    {
+        $probe = Process::run(array_merge(
+            self::gitBase($this->cwd),
+            ['config'],
+            $scope === '' ? [] : [$scope],
+            ['--get-regexp', '^filter\\..*\\.(clean|smudge|process)$'],
+        ), null, $this->timeout);
+        if ($probe['timedOut']) {
+            throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => $this->timeout]));
+        }
+        if ($probe['exit'] !== 0) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            explode("\n", rtrim($probe['stdout'], "\n")),
+            static fn(string $line): bool => $line !== '',
+        ));
+    }
+
+    /**
+     * Display form for the notice: at most 5 lanes, then a "+N more" tail.
+     *
+     * @param list<string> $lanes
+     */
+    private static function summarizeLanes(array $lanes): string
+    {
+        $shown = array_slice($lanes, 0, 5);
+        $rest  = count($lanes) - count($shown);
+        if ($rest > 0) {
+            $shown[] = '+' . $rest . ' more';
+        }
+
+        return implode(', ', $shown);
     }
 
     /**
@@ -534,11 +778,11 @@ final class Git implements GitDriver
         $probe = Process::run(
             array_merge(self::gitBase($this->cwd), ['config', '--get-regexp', '^merge\\..*\\.driver$']),
             null,
-            self::DEFAULT_TIMEOUT,
+            $this->timeout,
         );
         if ($probe['timedOut']) {
             // Cannot verify which drivers exist => cannot allow one to run.
-            throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => self::DEFAULT_TIMEOUT]));
+            throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => $this->timeout]));
         }
         if ($probe['exit'] === 1) {
             return []; // no merge.<name>.driver defined anywhere — nothing to disarm

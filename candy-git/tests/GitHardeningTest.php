@@ -412,6 +412,248 @@ final class GitHardeningTest extends TestCase
         return $method->invoke(new Git($cwd), $args);
     }
 
+    // ------------------------------------------- filter channel (real git, round 2 M-1)
+
+    /**
+     * Shared setup for the filter pins: a repo whose LOCAL config routes
+     * *.txt through `filter.evil.clean` + `filter.evil.smudge` executables
+     * (each touches $sentinel and pipes content through), .gitattributes
+     * committed so git actually consults the filter. Under $worktreeScope the
+     * smudge lane lives only in `.git/config.worktree` (extensions.
+     * worktreeConfig) — reachable by git, invisible to --local.
+     */
+    private function makeFilterDriverRepo(string $sentinel, bool $worktreeScope = false): string
+    {
+        $repo   = $this->makeRepo();
+        $driver = $this->writeExecutable($this->cwd(), 'evil-filter-' . bin2hex(random_bytes(4)) . '.sh',
+            "#!/bin/sh\ntouch " . escapeshellarg($sentinel) . "\nexec cat\n");
+
+        if ($worktreeScope) {
+            exec('git -C ' . escapeshellarg($repo) . ' config extensions.worktreeConfig true 2>/dev/null');
+            exec('git -C ' . escapeshellarg($repo) . ' config --worktree filter.wt.smudge '
+                . escapeshellarg($driver) . ' 2>/dev/null');
+        } else {
+            exec('git -C ' . escapeshellarg($repo) . ' config filter.evil.clean ' . escapeshellarg($driver) . ' 2>/dev/null');
+            exec('git -C ' . escapeshellarg($repo) . ' config filter.evil.smudge ' . escapeshellarg($driver) . ' 2>/dev/null');
+        }
+
+        // chr(42): a glued '*.txt ...' literal is glob-shaped and would drift
+        // the PathGlob corpus census (GlobDialect law).
+        file_put_contents($repo . '/.gitattributes', chr(42) . '.txt filter=' . ($worktreeScope ? 'wt' : 'evil') . "\n");
+        exec('git -C ' . escapeshellarg($repo) . ' add .gitattributes 2>/dev/null');
+        exec('git -C ' . escapeshellarg($repo) . ' commit -m attrs 2>/dev/null');
+        // Setup's own add/commit can touch the sentinel; the pins below measure
+        // EXECUTION DURING THE TESTED COMMAND only, so hand over a clean slate.
+        @unlink($sentinel);
+
+        return $repo;
+    }
+
+    /** Path of the stderr-capturing child fixture (see the file for its contract). */
+    private static function filterNoticeChild(): string
+    {
+        return __DIR__ . '/Support/FilterNoticeChild.php';
+    }
+
+    private function callFilterLanes(string $cwd): array
+    {
+        $method = new \ReflectionMethod(Git::class, 'filterDriverLanes');
+        $method->setAccessible(true);
+
+        return $method->invoke(new Git($cwd));
+    }
+
+    public function testFilterDriversAreAnnouncedOnceAndStillExecuteInDefaultMode(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/filterdrv_fired.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $repo = $this->makeFilterDriverRepo($sentinel);
+        file_put_contents($repo . '/file.txt', "line 1\nline 2\ndirty\n");
+
+        // Control: the vulnerability R2 measured is real on this build — a
+        // plain `git add` fires filter.clean. Without it the pins below would
+        // pass vacuously, so skip.
+        exec('git -C ' . escapeshellarg($repo) . ' add -A 2>/dev/null');
+        if (!file_exists($sentinel)) {
+            $this->markTestSkipped('this git build does not fire filter.clean on add');
+        }
+        @unlink($sentinel);
+        exec('git -C ' . escapeshellarg($repo) . ' reset -q 2>/dev/null');
+
+        // The lib path: a child process so STDERR is capturable. Two
+        // filter-capable commands on ONE Git instance must produce EXACTLY
+        // one notice (per-instance latch), and the drivers still RUN — the
+        // posture is detect+announce, never silent, never disarmed (git-lfs
+        // rationale; the blanket disarm was rejected by ruling).
+        $r = Process::run(['php', $this->filterNoticeChild(), $repo], null, 30.0);
+
+        self::assertSame(0, $r['exit'], 'child failed: ' . $r['stderr']);
+        self::assertSame("EXIT-OK\n", $r['stdout']);
+        self::assertSame(
+            1,
+            substr_count($r['stderr'], 'candy-git: notice:'),
+            'filter notice must fire exactly once per instance across both filter-capable commands; stderr was: ' . $r['stderr'],
+        );
+        self::assertStringContainsString('evil.clean', $r['stderr'], 'notice must name the detected lanes');
+        self::assertStringContainsString('evil.smudge', $r['stderr']);
+        self::assertStringContainsString(Git::STRICT_FILTERS_ENV, $r['stderr'], 'notice must point at the strict-mode opt-in');
+        self::assertFileExists($sentinel, 'default mode announces but must still run the drivers (git-lfs-class tooling)');
+    }
+
+    public function testZeroFilterDriverReposSeeNoNoticeAndUntouchedArgv(): void
+    {
+        $this->requireGit();
+
+        $repo = $this->makeRepo();
+        self::assertSame([], $this->callFilterLanes($repo));
+
+        // Critical posture: the overwhelmingly common case changes NOTHING.
+        $r = Process::run(['php', $this->filterNoticeChild(), $repo, 'zero'], null, 30.0);
+        self::assertSame(0, $r['exit'], $r['stderr']);
+        self::assertSame('', $r['stderr'], 'a repo without filter drivers must never see a notice');
+
+        // Byte-identity of argv: the guard has no channel into the command.
+        self::assertSame([
+            'git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', '-C', $repo,
+            'add', '-A',
+        ], $this->callDisarmedArgv($repo, ['add', '-A']));
+    }
+
+    public function testFilterDriversPresentStillNeverAlterArgv(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/filterdrv_argv.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $repo = $this->makeFilterDriverRepo($sentinel);
+
+        // The BYTE-IDENTITY pin (with lanes DETECTED the command line stays
+        // exactly the plain prelude — no -c filter overrides, ever).
+        self::assertSame([
+            'git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', '-C', $repo,
+            'add', '-A',
+        ], $this->callDisarmedArgv($repo, ['add', '-A']));
+        self::assertSame([
+            'git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', '-C', $repo,
+            'diff', '--no-color', '--no-ext-diff', '--', 'file.txt',
+        ], $this->callDisarmedArgv($repo, ['diff', '--no-color', '--no-ext-diff', '--', 'file.txt']));
+
+        // On a verb that IS merge-capable too, only the merge disarms ride —
+        // never a filter override (that is the rejected-by-ruling shape).
+        exec('git -C ' . escapeshellarg($repo) . ' config merge.evil.driver "/bin/true %A %O %B" 2>/dev/null');
+        $merged = $this->callDisarmedArgv($repo, ['merge', '--no-edit', '--', 'x']);
+        self::assertContains('merge.evil.driver=false', $merged);
+        self::assertStringNotContainsString('filter.', implode("\0", $merged));
+    }
+
+    public function testFilterLanesEnumerateNamedDriversFromMergedScope(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/filterdrv_lanes.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $repo = $this->makeFilterDriverRepo($sentinel);
+
+        $lanes = $this->callFilterLanes($repo);
+        sort($lanes);
+        self::assertSame(['evil.clean', 'evil.smudge'], $lanes, 'each named filter lane is name.kind, deduplicated');
+
+        // config.worktree is part of the merged scope git consults — a
+        // --local enumeration would miss this lane (the merge pins learned
+        // this on git 2.43; same probe, same scope).
+        $wtSentinel = $this->cwd() . '/filterdrv_wt.' . bin2hex(random_bytes(4));
+        $this->trash[] = $wtSentinel;
+        $wtRepo = $this->makeFilterDriverRepo($wtSentinel, true);
+        self::assertContains('wt.smudge', $this->callFilterLanes($wtRepo));
+    }
+
+    public function testStrictEnvRefusesFilterCapableCommandsAndRunsNothing(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/filterdrv_strict.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $repo = $this->makeFilterDriverRepo($sentinel);
+
+        putenv(Git::STRICT_FILTERS_ENV . '=1');
+        try {
+            try {
+                (new Git($repo))->stageAll();
+                self::fail('expected typed refusal under strict filter mode');
+            } catch (\RuntimeException $e) {
+                self::assertSame(\SugarCraft\Git\Lang::t('git.unsafe_filter_driver'), $e->getMessage());
+            }
+            self::assertFalse(file_exists($sentinel), 'strict mode must refuse BEFORE the command (and its filters) run');
+
+            // Strict + zero-driver repo: nothing to refuse — commands proceed
+            // untouched (strict must not tax honest repositories).
+            (new Git($this->makeRepo()))->stageAll();
+        } finally {
+            putenv(Git::STRICT_FILTERS_ENV);
+        }
+    }
+
+    public function testWithStrictFiltersDerivesBothDirections(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/filterdrv_derive.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $repo = $this->makeFilterDriverRepo($sentinel);
+
+        $base = new Git($repo);
+        self::assertFalse($base->strictFilters);
+
+        // Opt IN: the derived instance refuses with the typed message...
+        $strict = $base->withStrictFilters();
+        self::assertTrue($strict->strictFilters);
+        self::assertFalse($base->strictFilters, 'derive must be immutable');
+        try {
+            $strict->stageAll();
+            self::fail('expected typed refusal from withStrictFilters()');
+        } catch (\RuntimeException $e) {
+            self::assertSame(\SugarCraft\Git\Lang::t('git.unsafe_filter_driver'), $e->getMessage());
+        }
+
+        // Opt OUT again (env was strict): explicit false beats the env.
+        file_put_contents($repo . '/file.txt', "line 1\nline 2\ndirty\n");
+        putenv(Git::STRICT_FILTERS_ENV . '=yes');
+        try {
+            self::assertTrue((new Git($repo))->strictFilters, 'yes must read as truthy');
+            $relaxed = (new Git($repo))->withStrictFilters(false);
+            self::assertFalse($relaxed->strictFilters);
+            $relaxed->stageAll(); // announces (parent-stderr noise is fine), never throws
+            self::assertFileExists($sentinel);
+        } finally {
+            putenv(Git::STRICT_FILTERS_ENV);
+        }
+    }
+
+    public function testUnrepresentableFilterKeyCountsAsUnnamedLaneAndRefusesInStrict(): void
+    {
+        $this->requireGit();
+
+        $repo = $this->makeRepo();
+        // Hand-written so the subsection carries a character the lane parser
+        // cannot name — the driver still executes at git's side, so the lane
+        // exists and must not stay silent (fail closed in strict mode).
+        $cfg = (string) file_get_contents($repo . '/.git/config');
+        file_put_contents($repo . '/.git/config', $cfg . "\n[filter \"bad name\"]\n\tprocess = /bin/true\n");
+
+        self::assertSame(['<unnamed>'], $this->callFilterLanes($repo));
+
+        putenv(Git::STRICT_FILTERS_ENV . '=1');
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage(\SugarCraft\Git\Lang::t('git.unsafe_filter_driver'));
+            (new Git($repo))->stageAll();
+        } finally {
+            putenv(Git::STRICT_FILTERS_ENV);
+        }
+    }
+
     // ------------------------------------------- A6: honest failure detail (real git)
 
     public function testMergeConflictFailureCarriesGitsOwnExplanation(): void

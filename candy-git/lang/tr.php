@@ -14,6 +14,7 @@ return [
     'git.timeout'             => 'git: komut {seconds}s sonra zaman aşımına uğradı',
     'git.unsafe_path'         => 'git: güvensiz worktree yolu: {path}',
     'git.unsafe_merge_driver' => 'git: depo, güvenle devre dışı bırakılamayan bir birleştirme sürücüsü tanımlıyor; birleştirme reddedildi',
+    'git.unsafe_filter_driver' => 'git: depo bir filtre sürücüsü tanımlıyor; katı filtre modu komutu reddetti',
     'cli.not_a_repo'          => 'candy-git: git deposu değil: {cwd}',
     'cli.unknown_flag'        => 'candy-git: bilinmeyen bağımsız değişken: {flag}',
     'cli.no_git'              => 'candy-git: git kullanılamıyor -- git kurun ve PATH içinde olduğundan emin olun',
