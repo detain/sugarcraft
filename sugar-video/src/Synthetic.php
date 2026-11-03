@@ -46,10 +46,11 @@ final class Synthetic
     ): string {
         // GD-absent fallback: emit the same 1×1 transparent GIF bytes that
         // Reel.php has used historically.  Callers treat any returned path
-        // as a valid GIF, so this single-frame fallback is safe.
+        // as a valid GIF, so this single-frame fallback is safe — and the
+        // returned path, not the requested one, is the source of truth
+        // (a refused symlink target yields a private stand-in path).
         if (!extension_loaded('gd')) {
-            self::writeAtomic($path, self::FALLBACK_GIF);
-            return $path;
+            return self::writeAtomic($path, self::FALLBACK_GIF);
         }
 
         // ── Build frame payloads via GD + output-buffer ──────────────────────
@@ -87,8 +88,7 @@ final class Synthetic
 
         // If GD produced no usable frames, fall back to the 1×1 transparent GIF.
         if ($frameBytes === []) {
-            self::writeAtomic($path, self::FALLBACK_GIF);
-            return $path;
+            return self::writeAtomic($path, self::FALLBACK_GIF);
         }
 
         // ── Assemble GIF89a ──────────────────────────────────────────────────
@@ -127,13 +127,13 @@ final class Synthetic
         // Close with a single GIF trailer.
         $gif .= "\x3B";
 
-        self::writeAtomic($path, $gif);
-
-        return $path;
+        return self::writeAtomic($path, $gif);
     }
 
     /**
-     * Write data atomically to a path using O_EXCL + rename.
+     * Write data atomically to a path using O_EXCL + rename; RETURN the path
+     * actually written (identical to $path unless a planted symlink forced a
+     * private stand-in — see {@see writeSafeStandIn()}).
      *
      * First attempts to create a temp file with `fopen($path.'.'.getmypid().'.tmp', 'xb')`
      * which fails if the file already exists (prevents symlink attacks). On failure,
@@ -141,7 +141,7 @@ final class Synthetic
      *
      * The final rename() is atomic on POSIX so the path always holds complete data.
      */
-    private static function writeAtomic(string $path, string $data): void
+    private static function writeAtomic(string $path, string $data): string
     {
         $dir = dirname($path) ?: sys_get_temp_dir();
         $tmp = $path . '.' . getmypid() . '.tmp';
@@ -154,23 +154,53 @@ final class Synthetic
             // every collision to the direct write and left the fresh tempnam
             // file behind in $dir.
             if ($tmp === '') {
-                // tempnam also failed — last resort: direct write (non-atomic, but better than fatal).
-                file_put_contents($path, $data);
-                return;
+                return self::writeSafeStandIn($dir, $path, $data);
             }
-            $fp = fopen($tmp, 'wb');
+            $fp = @fopen($tmp, 'wb');
             if ($fp === false) {
                 @unlink($tmp);
-                file_put_contents($path, $data);
-                return;
+                return self::writeSafeStandIn($dir, $path, $data);
             }
         }
         fwrite($fp, $data);
         fclose($fp);
-        if (!@rename($tmp, $path)) {
-            @unlink($tmp);
-            file_put_contents($path, $data);
+        if (@rename($tmp, $path)) {
+            return $path;
         }
+        @unlink($tmp);
+        return self::writeSafeStandIn($dir, $path, $data);
+    }
+
+    /**
+     * Direct-write fallback that never writes THROUGH a planted symlink (M13).
+     *
+     * The old fallback landed the bytes at $path itself with a plain
+     * file_put_contents(): on a shared /tmp an attacker who symlinks the
+     * default synthetic path to any writable file turns every bare
+     * `play.php` run into a rewrite of THEIR chosen target. rename() onto
+     * $path (the primary path) is safe — it replaces the link itself, not
+     * its target — but a write is not. So this last resort only writes
+     * directly when lstat says $path is absent or already a regular file;
+     * otherwise the bytes go to a fresh private temp file whose path is
+     * returned, and callers treat the return value as the source of truth.
+     */
+    private static function writeSafeStandIn(string $dir, string $path, string $data): string
+    {
+        clearstatcache(true, $path);
+        $stat = @lstat($path);
+        $safeDirect = $stat === false || ((($stat['mode'] ?? 0) & 0170000) === 0100000);
+        if ($safeDirect && @file_put_contents($path, $data) !== false) {
+            return $path;
+        }
+
+        $standIn = @tempnam($dir, 'sugar-video-synthetic-');
+        if ($standIn === false || @file_put_contents($standIn, $data) === false) {
+            if ($standIn !== false) {
+                @unlink($standIn);
+            }
+            throw new \RuntimeException('sugar-video: synthetic pattern could not be written safely in ' . $dir);
+        }
+        return $standIn;
     }
 
     /**

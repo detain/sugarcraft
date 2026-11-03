@@ -276,4 +276,50 @@ final class SyntheticTest extends TestCase
         // Confirm the synthetic pattern message was printed.
         $this->assertStringContainsString('synthetic test pattern', (string) $stderr);
     }
+
+    /**
+     * M13: a planted symlink at the target path must never be written through
+     * — the rename path replaces the link itself, and the stand-in fallback
+     * refuses to follow it.
+     */
+    public function testGenerateNeverWritesThroughAPlantedSymlink(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+
+        $dir = $this->scratchDir();
+        $victim = $dir . '/victim.txt';
+        $link = $dir . '/link.gif';
+        file_put_contents($victim, 'ORIGINAL');
+        symlink($victim, $link);
+
+        $written = Synthetic::generate($link, 8, 4, 2, 1);
+
+        $this->assertStringStartsWith('GIF8', (string) file_get_contents($written));
+        $this->assertFalse(is_link($written), 'the returned path is a regular file, not a link');
+        $this->assertSame('ORIGINAL', (string) file_get_contents($victim), 'the symlink target must be untouched');
+    }
+
+    /**
+     * M13: the stand-in writer, called directly on a live symlink, diverts to
+     * a fresh file in the same directory instead of following the link.
+     */
+    public function testTheSafeStandInRefusesToWriteThroughALink(): void
+    {
+        $dir = $this->scratchDir();
+        $victim = $dir . '/v2.txt';
+        $link = $dir . '/v2-link.bin';
+        file_put_contents($victim, 'ORIGINAL');
+        symlink($victim, $link);
+
+        $method = new \ReflectionMethod(Synthetic::class, 'writeSafeStandIn');
+
+        $written = $method->invoke(null, $dir, $link, 'BYTES');
+
+        $this->assertNotSame($link, $written);
+        $this->assertSame('ORIGINAL', (string) file_get_contents($victim));
+        $this->assertSame('BYTES', (string) file_get_contents($written));
+        @unlink($written);
+    }
 }
