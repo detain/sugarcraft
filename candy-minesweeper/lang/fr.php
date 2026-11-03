@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  déplacer  ·  espace / entrée  révéler',
     'ui.help_board' => 'f  drapeau  ·  c / clic du milieu  accord  ·  clic droit  drapeau',
     'ui.help_session' => 'r  recommencer  ·  S  sauvegarder  ·  L  charger  ·  q / Esc / Ctrl+C  quitter',
+    'ui.saved' => 'Partie sauvegardée',
+    'ui.restarted' => 'Plateau relancé',
+    'ui.loaded' => 'Sauvegarde chargée',
+    'ui.no_save' => 'Aucune sauvegarde à charger',
+    'ui.load_refused' => 'Sauvegarde refusée (illisible ou altérée)',
+    'ui.save_failed' => 'Échec de la sauvegarde',
+    'ui.resume' => 'Une sauvegarde attend — appuyez sur L pour la charger',
 ];
