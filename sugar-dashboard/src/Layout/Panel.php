@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Output\Truncate;
 use SugarCraft\Dashboard\Foundation\Drawable;
 use SugarCraft\Dashboard\Foundation\Theme;
 
@@ -121,8 +122,15 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Top border with title or header
         $result .= $tl;
         if ($this->title !== null) {
-            $titleWidth = Width::string($this->title);
-            $paddingWidth = $useWidth - 2 - $titleWidth;
+            $title = $this->title;
+            $titleWidth = Width::string($title);
+            // A title wider than the frame used to drive the border padding
+            // negative and crash str_repeat (finding C-5). Clip it instead.
+            if ($titleWidth > $useWidth - 2) {
+                $title = Truncate::truncate($title, max(1, $useWidth - 2));
+                $titleWidth = Width::string($title);
+            }
+            $paddingWidth = max(0, $useWidth - 2 - $titleWidth);
             $leftPad = (int) floor($paddingWidth / 2);
             $rightPad = $paddingWidth - $leftPad;
 
@@ -130,7 +138,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($this->titleColor !== null) {
                 $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
             }
-            $result .= $this->title;
+            $result .= $title;
             if ($this->borderColor !== null) {
                 $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
             }
@@ -138,7 +146,11 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
         } elseif ($this->header !== null) {
             $headerStr = $this->header instanceof \SugarCraft\Dashboard\Foundation\Item ? $this->header->render() : $this->header;
             $headerWidth = Width::string($headerStr);
-            $paddingWidth = $useWidth - 2 - $headerWidth;
+            if ($headerWidth > $useWidth - 2) {
+                $headerStr = Truncate::truncate($headerStr, max(1, $useWidth - 2));
+                $headerWidth = Width::string($headerStr);
+            }
+            $paddingWidth = max(0, $useWidth - 2 - $headerWidth);
             $leftPad = (int) floor($paddingWidth / 2);
             $rightPad = $paddingWidth - $leftPad;
 
@@ -197,6 +209,15 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
             $lines = explode("\n", $rendered);
             return array_map(function ($line) use ($contentWidth) {
                 $lineWidth = Width::string($line);
+                // Over-wide lines desynced the frame (they used to pass
+                // through unsized). Clipping costs a colored line its SGR
+                // on this degenerate path; frame integrity wins. Fitting
+                // lines pass through byte-identical. (Panel is Truncate's
+                // first production consumer — finding M-25.)
+                if ($lineWidth > $contentWidth) {
+                    $line = Truncate::truncate($line, $contentWidth);
+                    $lineWidth = Width::string($line);
+                }
                 if ($lineWidth < $contentWidth) {
                     $line .= str_repeat(' ', $contentWidth - $lineWidth);
                 }
@@ -213,6 +234,10 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         return array_map(function ($line) use ($contentWidth) {
             $lineWidth = Width::string($line);
+            if ($lineWidth > $contentWidth) {
+                $line = Truncate::truncate($line, $contentWidth);
+                $lineWidth = Width::string($line);
+            }
             if ($lineWidth < $contentWidth) {
                 $line .= str_repeat(' ', $contentWidth - $lineWidth);
             }

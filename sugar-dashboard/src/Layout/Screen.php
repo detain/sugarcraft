@@ -59,26 +59,16 @@ final class Screen implements \SugarCraft\Dashboard\Foundation\SizedItem
     }
 
     /**
-     * Render the screen with all escape sequences.
+     * Render one frame: clear, home, content.
+     *
+     * Alternate-screen entry, cursor hiding and mouse tracking are the
+     * setup()/teardown() session bracket, never per-frame bytes — a render
+     * that enters and leaves the alternate screen every frame strobes the
+     * terminal on real hardware (finding M-30).
      */
     public function render(): string
     {
         $result = '';
-
-        // Enter alternate screen if enabled
-        if ($this->alternateScreen) {
-            $result .= Ansi::altScreenEnter();
-        }
-
-        // Hide cursor if disabled
-        if (!$this->showCursor) {
-            $result .= Ansi::cursorHide();
-        }
-
-        // Enable mouse tracking if enabled
-        if ($this->enableMouse) {
-            $result .= Ansi::mouseAllOn();
-        }
 
         // Clear screen
         $result .= Ansi::eraseScreen();
@@ -93,17 +83,50 @@ final class Screen implements \SugarCraft\Dashboard\Foundation\SizedItem
         }
         $result .= $content->render();
 
-        // Show cursor if enabled
-        if ($this->showCursor) {
-            $result .= Ansi::cursorShow();
-        }
-
-        // Return from alternate screen if enabled
-        if ($this->alternateScreen) {
-            $result .= Ansi::altScreenLeave();
-        }
-
         return $result;
+    }
+
+    /**
+     * Session preamble: enter the alternate screen, hide the cursor, enable
+     * mouse tracking. Emit ONCE before the first render().
+     */
+    public function setup(): string
+    {
+        $sequence = '';
+
+        if ($this->alternateScreen) {
+            $sequence .= Ansi::altScreenEnter();
+        }
+
+        if (!$this->showCursor) {
+            $sequence .= Ansi::cursorHide();
+        }
+
+        if ($this->enableMouse) {
+            $sequence .= Ansi::mouseAllOn();
+        }
+
+        return $sequence;
+    }
+
+    /**
+     * Session trailer matching setup(): restore the cursor and leave the
+     * alternate screen. Pair with the same configuration the preamble was
+     * built from.
+     */
+    public function teardown(): string
+    {
+        $sequence = '';
+
+        if (!$this->showCursor) {
+            $sequence .= Ansi::cursorShow();
+        }
+
+        if ($this->alternateScreen) {
+            $sequence .= Ansi::altScreenLeave();
+        }
+
+        return $sequence;
     }
 
     /**

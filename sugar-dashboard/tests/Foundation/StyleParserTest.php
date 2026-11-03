@@ -599,4 +599,22 @@ final class StyleParserTest extends TestCase
         $this->assertTrue($cells[0]->style->bold);
         $this->assertTrue($cells[0]->style->italic);
     }
+
+    public function testColonLessAttributeIsTreatedAsNoColor(): void
+    {
+        // Finding M-22: a colon-less fg/bg attribute used to hand null into
+        // parseColor(string) and raise a TypeError.
+        $cells = StyleParser::parse('[text](fg)', $this->defaultStyle);
+
+        $this->assertCount(4, $cells);
+        foreach ($cells as $cell) {
+            $this->assertNull($cell->style->foreground);
+        }
+
+        $cells = StyleParser::parse('[text](bg)', $this->defaultStyle);
+        foreach ($cells as $cell) {
+            $this->assertNull($cell->style->background);
+        }
+    }
+
 }

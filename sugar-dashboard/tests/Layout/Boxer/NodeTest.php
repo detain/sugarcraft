@@ -177,8 +177,10 @@ final class NodeTest extends TestCase
         $node = Node::leaf('0')->setSize(0, 0);
         $updated = $node->updateSizeRecursive(-1, 24);
 
-        // The node is returned with width set via setSize (no clamping in setSize)
-        $this->assertSame(-1, $updated->getWidth());
+        // A non-positive budget clamps the node own size and collapses the whole
+        // subtree (finding C-11): stale child dimensions from a prior pass used to
+        // survive the early return and desync later resizes.
+        $this->assertSame(0, $updated->getWidth());
     }
 
     public function testImplementsItemInterface(): void
@@ -187,4 +189,23 @@ final class NodeTest extends TestCase
 
         $this->assertInstanceOf(Item::class, $node);
     }
+
+    public function testNonPositiveBudgetCollapsesWholeStaleSubtree(): void
+    {
+        $root = Node::horizontal(Node::leaf('0'), Node::leaf('1'))->setSize(0, 0);
+        $seeded = $root->updateSizeRecursive(40, 10);
+
+        $children = (new \ReflectionProperty(Node::class, 'children'))->getValue($seeded);
+        foreach ($children as $child) {
+            $this->assertGreaterThan(0, $child->getWidth());
+        }
+
+        $collapsed = $seeded->updateSizeRecursive(0, 10);
+        $children = (new \ReflectionProperty(Node::class, 'children'))->getValue($collapsed);
+        foreach ($children as $child) {
+            $this->assertSame(0, $child->getWidth());
+        }
+        $this->assertSame(0, $collapsed->getWidth());
+    }
+
 }

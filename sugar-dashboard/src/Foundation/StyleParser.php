@@ -220,8 +220,13 @@ final class StyleParser
     /**
      * Parse a color value string to a Color, or null if unknown.
      */
-    private static function parseColor(string $value): ?Color
+    private static function parseColor(?string $value): ?Color
     {
+        // A colon-less attribute ('…;fg') yields null: treated as no color
+        // rather than a TypeError (finding M-22).
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
         $value = trim($value);
 
         // Named ANSI colors

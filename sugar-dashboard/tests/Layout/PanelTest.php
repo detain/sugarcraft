@@ -8,6 +8,7 @@ use SugarCraft\Dashboard\Layout\Panel;
 use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class PanelTest extends TestCase
@@ -248,4 +249,41 @@ final class PanelTest extends TestCase
 
         $this->assertStringContainsString('日本語コンテンツ', $rendered);
     }
+
+    public function testLongTitleAtNarrowWidthRendersWithoutThrowing(): void
+    {
+        $rendered = Panel::titled('body', 'A VERY LONG TITLE HERE')->setSize(7, 3)->render();
+
+        $this->assertIsString($rendered);
+        $this->assertStringContainsString("\u{2026}", $rendered);
+        foreach (explode("\n", $rendered) as $line) {
+            $this->assertSame(7, Width::string($line));
+        }
+    }
+
+    public function testWideContentItemIsClippedToFrame(): void
+    {
+        $item = new class implements Item {
+            public function render(): string
+            {
+                return str_repeat('x', 40);
+            }
+        };
+
+        $rendered = Panel::new($item)->setSize(12, 4)->render();
+
+        foreach (explode("\n", $rendered) as $line) {
+            $this->assertSame(12, Width::string($line));
+        }
+    }
+
+    public function testOverWideHeaderIsClipped(): void
+    {
+        $rendered = Panel::new('ok')->withHeader(str_repeat('H', 30))->setSize(10, 4)->render();
+
+        foreach (explode("\n", $rendered) as $line) {
+            $this->assertSame(10, Width::string($line));
+        }
+    }
+
 }

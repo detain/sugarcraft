@@ -9,6 +9,7 @@ use SugarCraft\Dashboard\Foundation\Item;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\Theme;
 use SugarCraft\Dashboard\State\Persistence;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -192,11 +193,13 @@ final class Boxer implements Item, Sizer
         $result = $this->root->renderTree($this->modelMap, $this->width, $this->height);
 
         if ($result instanceof SizeError) {
-            return 'size error: ' . $result->getMessage();
+            // SizeError messages embed the offending model line verbatim —
+            // hostile content must not reach the terminal raw (finding M-6).
+            return 'size error: ' . Sanitize::untrustedForDisplay($result->getMessage());
         }
 
         if ($result instanceof \Throwable) {
-            return 'error: ' . $result->getMessage();
+            return 'error: ' . Sanitize::untrustedForDisplay($result->getMessage());
         }
 
         return implode("\n", $result);

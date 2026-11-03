@@ -116,8 +116,13 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             return '';
         }
 
-        // Calculate sizes for all children
-        $sizes = $this->calculateHorizontalSizes($width, $height);
+        // Per-pass memo (finding M-4): non-Sizer children are rendered once
+        // to measure their natural size; the paint loop below reuses that
+        // exact string instead of invoking render() a second time per frame.
+        // Lifetime is this pass only, so stateful content still re-renders
+        // freshly on the next frame.
+        $renderMemo = [];
+        $sizes = $this->calculateHorizontalSizes($width, $height, $renderMemo);
 
         // Render each child and collect lines
         $lines = array_fill(0, $height, '');
@@ -132,8 +137,10 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             $content = $child->content;
             if ($content instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
                 $content = $content->setSize($childWidth, $childHeight);
+                $rendered = $content->render();
+            } else {
+                $rendered = $renderMemo[spl_object_id($content)] ?? $content->render();
             }
-            $rendered = $content->render();
 
             // Split into lines
             $childLines = explode("\n", $rendered);
@@ -180,8 +187,9 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             return '';
         }
 
-        // Calculate sizes for all children
-        $sizes = $this->calculateVerticalSizes($width, $height);
+        // Per-pass memo (finding M-4) — see the horizontal variant.
+        $renderMemo = [];
+        $sizes = $this->calculateVerticalSizes($width, $height, $renderMemo);
 
         // Render each child and collect lines
         $lines = [];
@@ -195,8 +203,10 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             $content = $child->content;
             if ($content instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
                 $content = $content->setSize($childWidth, $childHeight);
+                $rendered = $content->render();
+            } else {
+                $rendered = $renderMemo[spl_object_id($content)] ?? $content->render();
             }
-            $rendered = $content->render();
 
             // Split into lines
             $childLines = explode("\n", $rendered);
@@ -246,7 +256,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return list<array{width:int,height:int}>
      */
-    private function calculateHorizontalSizes(int $totalWidth, int $totalHeight): array
+    private function calculateHorizontalSizes(int $totalWidth, int $totalHeight, array &$renderMemo = []): array
     {
         $sizes = [];
         $totalGapWidth = ($this->gap * max(0, count($this->children) - 1));
@@ -268,8 +278,9 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($child->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
                 [$childWidth, $childHeight] = $child->content->getInnerSize();
             } else {
-                // Non-Sizer: render to measure natural size
-                $rendered = $child->content->render();
+                // Non-Sizer: render to measure natural size (memoised for
+                // this pass — the paint loop reuses the same string).
+                $rendered = $renderMemo[spl_object_id($child->content)] ??= $child->content->render();
                 $lines = explode("\n", $rendered);
                 $childHeight = count($lines);
                 $childWidth = 0;
@@ -323,7 +334,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return list<array{width:int,height:int}>
      */
-    private function calculateVerticalSizes(int $totalWidth, int $totalHeight): array
+    private function calculateVerticalSizes(int $totalWidth, int $totalHeight, array &$renderMemo = []): array
     {
         $sizes = [];
         $totalGapHeight = ($this->gap * max(0, count($this->children) - 1));
@@ -345,8 +356,9 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
             if ($child->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
                 [$childWidth, $childHeight] = $child->content->getInnerSize();
             } else {
-                // Non-Sizer: render to measure natural size
-                $rendered = $child->content->render();
+                // Non-Sizer: render to measure natural size (memoised for
+                // this pass — the paint loop reuses the same string).
+                $rendered = $renderMemo[spl_object_id($child->content)] ??= $child->content->render();
                 $lines = explode("\n", $rendered);
                 $childHeight = count($lines);
                 $childWidth = 0;

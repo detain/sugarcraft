@@ -418,4 +418,17 @@ final class BoxerTest extends TestCase
         $this->assertSame('original', $original->getItem('0')->render());
         $this->assertSame('modified', $modified->getItem('0')->render());
     }
+
+    public function testSizeErrorMessageCannotLeakControlBytes(): void
+    {
+        // Finding M-6: SizeError messages embed the offending model line verbatim -
+        // hostile content must not reach the terminal raw through the frame.
+        $boxer = Boxer::leaf('0', $this->strItem("\x1b[31m" . str_repeat('E', 40) . "\x1b[0m"));
+
+        $rendered = $boxer->setSize(5, 2)->render();
+
+        $this->assertStringContainsString('size error', $rendered);
+        $this->assertSame(0, substr_count($rendered, "\x1b"));
+    }
+
 }

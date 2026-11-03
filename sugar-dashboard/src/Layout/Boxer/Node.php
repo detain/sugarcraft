@@ -297,7 +297,11 @@ final class Node implements Item
 
         // Check if we have enough space
         if ($totalWidth <= 0 || $totalHeight <= 0) {
-            return $node;
+            // A non-positive budget must collapse the WHOLE subtree.
+            // Returning the node as-is kept the children's previous-pass
+            // dimensions, so a later resize rendered from stale sizes
+            // (finding C-11).
+            return $node->collapseSubtree();
         }
 
         // If leaf, we're done (size was set above)
@@ -360,6 +364,28 @@ final class Node implements Item
         }
 
         return $node->withChildren($newChildren);
+    }
+
+    /**
+     * Clamps this node to a non-negative size and zeroes every descendant.
+     * A non-positive budget must collapse the WHOLE subtree: returning here
+     * with the children's previous-pass dimensions left stale sizes that a
+     * later resize rendered from, desynchronising the grid.
+     */
+    private function collapseSubtree(): self
+    {
+        $node = $this->setSize(0, 0);
+
+        if ($node->isLeaf() || $node->children === []) {
+            return $node;
+        }
+
+        $collapsed = [];
+        foreach ($node->children as $child) {
+            $collapsed[] = $child->collapseSubtree();
+        }
+
+        return $node->withChildren($collapsed);
     }
 
     // ─── Rendering ─────────────────────────────────────────────────

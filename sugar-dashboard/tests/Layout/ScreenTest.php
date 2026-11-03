@@ -52,8 +52,11 @@ final class ScreenTest extends TestCase
         $screen = Screen::new(Text::new('test'));
         $rendered = $screen->render();
 
-        // Should contain alternate screen enter sequence
-        $this->assertStringContainsString("\x1b[?1049h", $rendered);
+        // Alternate-screen chrome belongs to the session boundary, not per-frame
+        // render output (finding M-30: enter AND leave inside every frame strobed real
+        // terminals, and the host Program already writes the same bytes itself).
+        $this->assertStringNotContainsString("\x1b[?1049h", $rendered);
+        $this->assertStringContainsString("\x1b[?1049h", $screen->setup());
     }
 
     public function testRenderContainsClearScreenSequence(): void
@@ -74,10 +77,10 @@ final class ScreenTest extends TestCase
         $screen = Screen::new(Text::new('test'));
         $rendered = $screen->render();
 
-        // Should enter alternate screen
-        $this->assertStringContainsString("\x1b[?1049h", $rendered);
-        // Should leave alternate screen
-        $this->assertStringContainsString("\x1b[?1049l", $rendered);
+        $this->assertStringContainsString("\x1b[?1049h", $screen->setup());
+        $this->assertStringContainsString("\x1b[?1049l", $screen->teardown());
+        $this->assertStringNotContainsString("\x1b[?1049h", $rendered);
+        $this->assertStringNotContainsString("\x1b[?1049l", $rendered);
     }
 
     public function testAlternateScreenDisabled(): void
@@ -88,6 +91,8 @@ final class ScreenTest extends TestCase
         // Should NOT contain alternate screen sequences
         $this->assertStringNotContainsString("\x1b[?1049h", $rendered);
         $this->assertStringNotContainsString("\x1b[?1049l", $rendered);
+        $this->assertStringNotContainsString("\x1b[?1049h", $screen->setup());
+        $this->assertStringNotContainsString("\x1b[?1049l", $screen->teardown());
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -99,8 +104,8 @@ final class ScreenTest extends TestCase
         $screen = Screen::new(Text::new('test'));
         $rendered = $screen->render();
 
-        // Should hide cursor
-        $this->assertStringContainsString("\x1b[?25l", $rendered);
+        $this->assertStringContainsString("\x1b[?25l", $screen->setup());
+        $this->assertStringNotContainsString("\x1b[?25l", $rendered);
     }
 
     public function testCursorShownWhenEnabled(): void
@@ -108,8 +113,10 @@ final class ScreenTest extends TestCase
         $screen = Screen::new(Text::new('test'))->withShowCursor(true);
         $rendered = $screen->render();
 
-        // Should show cursor
-        $this->assertStringContainsString("\x1b[?25h", $rendered);
+        // showCursor:true means there is no cursor chrome at all in any leg.
+        $this->assertStringNotContainsString("\x1b[?25h", $rendered);
+        $this->assertStringNotContainsString("\x1b[?25l", $screen->setup());
+        $this->assertStringNotContainsString("\x1b[?25h", $screen->teardown());
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -121,8 +128,8 @@ final class ScreenTest extends TestCase
         $screen = Screen::new(Text::new('test'));
         $rendered = $screen->render();
 
-        // Should NOT enable mouse tracking
         $this->assertStringNotContainsString("\x1b[?1000h", $rendered);
+        $this->assertStringNotContainsString("\x1b[?1000h", $screen->setup());
     }
 
     public function testMouseEnabledWhenRequested(): void
@@ -130,8 +137,8 @@ final class ScreenTest extends TestCase
         $screen = Screen::new(Text::new('test'))->withEnableMouse(true);
         $rendered = $screen->render();
 
-        // Should enable mouse tracking
-        $this->assertStringContainsString("\x1b[?1000h", $rendered);
+        $this->assertStringContainsString("\x1b[?1000h", $screen->setup());
+        $this->assertStringNotContainsString("\x1b[?1000h", $rendered);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -258,21 +265,30 @@ final class ScreenTest extends TestCase
 
         $rendered = $screen->render();
 
-        $this->assertStringContainsString("\x1b[?25h", $rendered);
-        $this->assertStringContainsString("\x1b[?1000h", $rendered);
+        $setup = $screen->setup();
+
+        $this->assertStringNotContainsString("\x1b[?25l", $setup);
+        $this->assertStringContainsString("\x1b[?1000h", $setup);
+        $this->assertStringNotContainsString("\x1b[?1000h", $rendered);
     }
 
-    public function testAlternateScreenEnterAndLeave(): void
+    public function testSetupTeardownPairBracketASession(): void
     {
+        // Re-adjudicated (finding M-30): the old pins locked alt-screen enter AND
+        // leave inside every render() - that strobed real terminals frame by frame,
+        // and the host Program already emits the same bytes via ProgramOptions.
         $screen = Screen::new(Text::new('test'));
+        $setup = $screen->setup();
         $rendered = $screen->render();
+        $teardown = $screen->teardown();
 
-        // Should have enter before content and leave after
-        $enterPos = strpos($rendered, "\x1b[?1049h");
-        $leavePos = strpos($rendered, "\x1b[?1049l");
-
-        $this->assertNotFalse($enterPos);
-        $this->assertNotFalse($leavePos);
-        $this->assertLessThan($leavePos, $enterPos);
+        $this->assertStringContainsString("\x1b[?1049h", $setup);
+        $this->assertStringContainsString("\x1b[?25l", $setup);
+        $this->assertStringNotContainsString("\x1b[?1049h", $rendered);
+        $this->assertStringNotContainsString("\x1b[?1049l", $rendered);
+        $this->assertStringContainsString('test', $rendered);
+        $this->assertStringContainsString("\x1b[2J", $rendered);
+        $this->assertStringContainsString("\x1b[?1049l", $teardown);
+        $this->assertStringContainsString("\x1b[?25h", $teardown);
     }
 }
