@@ -18,8 +18,24 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Kv\Store;
 
 $tmp = sys_get_temp_dir() . '/candy-kv-binary-demo-' . uniqid();
+// A Store touches nothing on disk by design — the demo directory is ours
+// to create (construction used to mkdir as a side effect; that ended with
+// the reads-never-create contract).
+\mkdir($tmp, 0o700, true);
 $store = new Store($tmp);
-register_shutdown_function(fn() => @array_map('unlink', glob("{$tmp}/*.db") ?: []));
+register_shutdown_function(static function () use ($tmp): void {
+    foreach ((array) glob("{$tmp}/*") as $file) {
+        if (\is_dir($file)) {
+            foreach ((array) glob("{$file}/*") as $inner) {
+                @\unlink($inner);
+            }
+            @\rmdir($file);
+        } else {
+            @\unlink($file);
+        }
+    }
+    @\rmdir($tmp);
+});
 
 // Create a test "binary" file (normally you'd use a real image/file)
 $imgPath = $tmp . '/test.bin';

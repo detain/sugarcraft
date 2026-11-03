@@ -25,6 +25,7 @@ $entries = [
     'user-alice'   => 'alice@example.com',
     'user-bob'     => 'bob@example.com',
     'user-carol'   => 'carol@example.com',
+    'user-z'       => 'zed@example.com', // single char — the `user-?` section demos it
     'admin-dave'   => 'dave@example.com',
     'config-host'  => 'prod.internal',
     'config-port'  => '8080',
