@@ -15,6 +15,7 @@ return [
     'config.not_found'         => 'Configuratiebestand niet gevonden: {path}',
     'config.read_failed'       => 'Kon configuratie niet lezen: {path}',
     'ssh.user_cannot_create'   => 'Gebruiker {viewer} kan geen opslagplaatsen maken',
+    'ssh.invalid_repo_name'    => 'Ongeldige repoid: {name}',
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
     'cli.starting_servers'     => 'Servers starten...',

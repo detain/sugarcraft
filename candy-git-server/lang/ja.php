@@ -15,6 +15,7 @@ return [
     'config.not_found'         => '設定ファイルが見つかりません：{path}',
     'config.read_failed'       => '設定の読み取りに失敗：{path}',
     'ssh.user_cannot_create'   => 'ユーザー {viewer} はリポジトリを作成できません',
+    'ssh.invalid_repo_name'    => '無効なリポジトリ名: {name}',
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
     'cli.starting_servers'     => 'サーバーを起動中...',

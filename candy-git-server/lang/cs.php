@@ -15,6 +15,7 @@ return [
     'config.not_found'         => 'Konfigurační soubor nenalezen: {path}',
     'config.read_failed'       => 'Nelze číst konfiguraci: {path}',
     'ssh.user_cannot_create'   => 'Uživatel {viewer} nemůže vytvářet repozitáře',
+    'ssh.invalid_repo_name'    => 'Neplatný název repozitáře: {name}',
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
     'cli.starting_servers'     => 'Spouštění serverů...',

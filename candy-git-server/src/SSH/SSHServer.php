@@ -106,9 +106,11 @@ final class SSHServer
         $path   = \rtrim($m[2], '/');
         $repoName = \basename($path);  // e.g. "/repos/foo.git" -> "foo.git"
 
-        // Validate repo name to prevent path traversal via ".." after basename()
-        // Only allow alphanumeric, dots, hyphens, and underscores
-        if (\preg_match('/^[a-zA-Z0-9._-]+$/', $repoName) !== 1) {
+        // Validate repo name to prevent path traversal: basename() of '/..'
+        // is '..' and the old charset gate let it through, addressing the
+        // parent of the repos root (and creating repos there on push).
+        // isJailSafeName rejects the all-dots names that the charset allows.
+        if (!Repo::isJailSafeName($repoName)) {
             \fwrite(\STDERR, "Invalid repo name: {$repoName}\n");
             return 1;
         }
@@ -200,6 +202,12 @@ final class SSHServer
      */
     private function createRepo(string $name, ?User $user): Repo
     {
+        if (!Repo::isJailSafeName($name)) {
+            // Defence in depth: every caller gates first, but this method is
+            // what actually touches the filesystem.
+            throw new \RuntimeException(Lang::t('ssh.invalid_repo_name', ['name' => $name]));
+        }
+
         $ac = AccessControl::getInstance();
         if (!$ac->canCreateRepos($user)) {
             $viewer = $user?->username;

@@ -15,6 +15,7 @@ return [
     'config.not_found'         => '구성 파일을 찾을 수 없음: {path}',
     'config.read_failed'       => '구성 읽기 실패: {path}',
     'ssh.user_cannot_create'   => '사용자 {viewer}은(는) 저장소를 생성할 수 없습니다',
+    'ssh.invalid_repo_name'    => '잘못된 저장소 이름: {name}',
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
     'cli.starting_servers'     => '서버 시작 중...',

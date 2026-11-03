@@ -15,6 +15,7 @@ return [
     'config.not_found'         => 'Archivo de configuración no encontrado: {path}',
     'config.read_failed'       => 'Error al leer la configuración: {path}',
     'ssh.user_cannot_create'   => 'El usuario {viewer} no puede crear repositorios',
+    'ssh.invalid_repo_name'    => 'Nombre de repositorio no válido: {name}',
 
     // bin/candy-git-server — banner + status output
     'cli.banner'               => 'CandyGitServer v{version}',

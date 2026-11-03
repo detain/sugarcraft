@@ -110,10 +110,20 @@ final class GitDaemonReceivePackTest extends TestCase
      */
     private function driveReceivePack(GitDaemon $daemon, Repo $repo, string $buffer): void
     {
+        $this->driveReceivePackCapturing($daemon, $repo, $buffer);
+    }
+
+    /**
+     * Same seam, but the socket is a file:// handle so the caller receives
+     * the exact packet bytes written before close.
+     */
+    private function driveReceivePackCapturing(GitDaemon $daemon, Repo $repo, string $buffer): string
+    {
         $stdinFile = $this->tmpDir . '/recv-stdin-' . \uniqid();
         \file_put_contents($stdinFile, $buffer);
 
-        $socket = \fopen('php://temp', 'r+');
+        $outFile = $this->tmpDir . '/recv-wire-' . \uniqid();
+        $socket  = \fopen('file://' . $outFile, 'wb');
         $this->assertIsResource($socket);
 
         try {
@@ -125,6 +135,9 @@ final class GitDaemonReceivePackTest extends TestCase
             \fclose($socket);
             @\unlink($stdinFile);
         }
+        \clearstatcache();
+
+        return (string) \file_get_contents($outFile);
     }
 
     private function gitRc(string $repoPath, string $args): int
@@ -194,5 +207,63 @@ final class GitDaemonReceivePackTest extends TestCase
         // Neither the object nor the ref may exist — the push had no objects.
         $this->assertNotSame(0, $this->gitRc($repo->path(), 'cat-file -e ' . $push['commit']));
         $this->assertNotSame(0, $this->gitRc($repo->path(), 'rev-parse --verify refs/heads/master'));
+    }
+
+    // -------------------------------------------------------------------------
+    // Create must compare-and-swap, and grammar violations must be REPORTED
+    // -------------------------------------------------------------------------
+
+    public function testDaemonCreateOfExistingRefIsRefusedWithNg(): void
+    {
+        $push = $this->buildPush();
+        $repo = $this->initBareRepo('cas');
+        $daemon = new GitDaemon($this->config);
+        $daemon->registerRepo($repo);
+
+        // Land the ref first (create + pack), exactly like the happy path.
+        $first = "git-receive-pack /cas\n"
+            . \str_repeat('0', 40) . ' ' . $push['commit'] . " refs/heads/master\n"
+            . "0000"
+            . $push['pack'];
+        $this->driveReceivePack($daemon, $repo, $first);
+        $this->assertSame(0, $this->gitRc($repo->path(), 'rev-parse --verify refs/heads/master'));
+
+        // Second CREATE of the same ref: with the zeros old-value git enforces
+        // 'ref must not exist' and the client gets an 'ng' line. Without the
+        // CAS arg the old code rewrote the ref and reported 'ok'.
+        $second = "git-receive-pack /cas\n"
+            . \str_repeat('0', 40) . ' ' . $push['commit'] . " refs/heads/master\n"
+            . "0000"
+            . $push['pack'];
+        $bytes = $this->driveReceivePackCapturing($daemon, $repo, $second);
+
+        $this->assertStringContainsString('ng ', $bytes, 'second create must report ng, got: ' . \addcslashes($bytes, "\x00..\x1f"));
+        $this->assertStringNotContainsString('ok refs/heads/master', $bytes);
+    }
+
+    public function testDaemonGrammarViolationReportsNgInsteadOfSilentSkip(): void
+    {
+        $push = $this->buildPush();
+        $repo = $this->initBareRepo('gram');
+        $daemon = new GitDaemon($this->config);
+        $daemon->registerRepo($repo);
+
+        // Land master first so the delete command below is pack-free (new ==
+        // zeros never needs a pack), reaching the per-command grammar gate.
+        $first = "git-receive-pack /gram\n"
+            . \str_repeat('0', 40) . ' ' . $push['commit'] . " refs/heads/master\n"
+            . "0000"
+            . $push['pack'];
+        $this->driveReceivePack($daemon, $repo, $first);
+
+        // Delete command with a traversal refname: pre-fix code set $rc/$out
+        // and `continue`d — the 'ng' was never written, so the client saw an
+        // all-ok flush for a ref operation that silently did nothing.
+        $buffer = "git-receive-pack /gram\n"
+            . $push['commit'] . ' ' . \str_repeat('0', 40) . " ../escaped\n";
+        $bytes = $this->driveReceivePackCapturing($daemon, $repo, $buffer);
+
+        $this->assertStringContainsString('ng ', $bytes, 'escaping ref must be reported ng, got: ' . \addcslashes($bytes, "\x00..\x1f"));
+        $this->assertStringContainsString('refusing invalid ref name', $bytes);
     }
 }

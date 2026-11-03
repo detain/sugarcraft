@@ -15,6 +15,7 @@ return [
     'config.not_found'         => '配置文件未找到：{path}',
     'config.read_failed'       => '读取配置失败：{path}',
     'ssh.user_cannot_create'   => '用户 {viewer} 无法创建仓库',
+    'ssh.invalid_repo_name'    => '无效的仓库名称：{name}',
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
     'cli.starting_servers'     => '正在启动服务器...',

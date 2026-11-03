@@ -95,7 +95,10 @@ final class RepoTest extends TestCase
         // The metadata writes land INSIDE the Git dir now, not beside it.
         $this->assertTrue(is_file($path . '/.git/description'));
         $this->assertStringContainsString('roundtrip', (string) file_get_contents($path . '/.git/description'));
-        $this->assertTrue(is_file($path . '/.git/git-daemon-export-ok'));
+        // init() must NOT drop a git-daemon-export-ok marker: that file
+        // opts the repo into anonymous read-export for any co-hosted stock
+        // git-daemon, so it is an operator decision, never automatic.
+        $this->assertFalse(is_file($path . '/.git/git-daemon-export-ok'));
         $this->assertTrue(is_dir($path . '/.git/hooks'));
         // Real git commands run against $path (git -C path works on this layout).
         $this->assertSame([], $r->branches());

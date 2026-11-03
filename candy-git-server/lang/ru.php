@@ -15,6 +15,7 @@ return [
     'config.not_found'         => 'Файл конфигурации не найден: {path}',
     'config.read_failed'       => 'Не удалось прочитать конфигурацию: {path}',
     'ssh.user_cannot_create'   => 'Пользователь {viewer} не может создавать репозитории',
+    'ssh.invalid_repo_name'    => 'Недопустимое имя репозитория: {name}',
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
     'cli.starting_servers'     => 'Запуск серверов...',

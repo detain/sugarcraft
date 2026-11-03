@@ -504,7 +504,9 @@ function cmdRepoCreate(array $args): int
     $dataPath = $args[1] ?? \getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server';
     $name     = $args[0];
 
-    if (!\preg_match('/^[a-zA-Z0-9._-]+$/', $name)) {
+    if (!Repo::isJailSafeName($name)) {
+        // The charset regex alone let '.' and '..' through — those address
+        // the parent of the repositories jail, not a repo inside it.
         return error(Lang::t('cli.repo_invalid_name', ['name' => $name]) . "\n");
     }
 

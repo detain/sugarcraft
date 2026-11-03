@@ -577,6 +577,27 @@ final class GitDaemon
             $repoPath = $matches[2];
             $repoName = \ltrim(\pathinfo($repoPath, \PATHINFO_BASENAME) ?: \basename($repoPath), '/');
 
+            // Containment: basename() of '/..' is '..', which the old charset
+            // gate accepted — that addressed (and auto-init could CREATE)
+            // repositories outside the repos jail over a socket with no
+            // authentication whatsoever.
+            if (!Repo::isJailSafeName($repoName)) {
+                $this->writePacket($client['socket'], "err Invalid repository name\n");
+                $this->closeClient($idx);
+                return;
+            }
+
+            // The git daemon protocol carries no authentication, so serving
+            // receive-pack here means UNAUTHENTICATED writes the moment a
+            // repo is public with push allowed. The daemon is read-only by
+            // construction; pushes go over an authenticated transport (HTTP
+            // Basic / SSH). Refuse before any repo-existence oracle.
+            if ($gitCmd === 'git-receive-pack') {
+                $this->writePacket($client['socket'], "err git-receive-pack is not served over the anonymous daemon; push over authenticated HTTP or SSH\n");
+                $this->closeClient($idx);
+                return;
+            }
+
             // Find repo
             $repo = $this->repos[$repoName] ?? $this->findRepoByPath($repoPath);
 
@@ -867,10 +888,17 @@ final class GitDaemon
             $oldHash = $cmd['old'];
             $newHash = $cmd['new'];
             $ref = $cmd['ref'];
-            // Validate ref name against git ref naming rules to prevent shell injection
-            if (\preg_match('/^refs\/[a-zA-Z0-9._\/.-]+$/', $ref) !== 1) {
-                $out = ["Invalid ref name: {$ref}"];
-                $rc = 128;
+            // Grammar-gate the client-controlled refname before handing it to
+            // git: the old charset regex accepted '..' components (file
+            // traversal inside the refs store) and said nothing about a
+            // leading '-' being an option TO git update-ref itself.
+            if (!RefGrammar::isValidRefName($ref)) {
+                // Grammar violation: report 'ng' for this ref and keep
+                // processing the batch. The old branch set $out/$rc then
+                // `continue`d — the failure was never reported, so the
+                // client saw an all-ok flush for a ref that was not applied.
+                $safeRef = \trim((string) \preg_replace('/[\x00-\x1f\s]+/', ' ', $ref));
+                $this->writePacket($socket, "ng {$safeRef}: refusing invalid ref name");
                 continue;
             }
             $escapedRef = \escapeshellarg($ref);
@@ -884,9 +912,12 @@ final class GitDaemon
                 $updateRefCmd = "git -C {$repoPath} update-ref -d {$escapedRef} {$escapedOld} 2>&1";
                 \exec($updateRefCmd, $out, $rc);
             } elseif ($oldHash === \str_repeat('0', 40)) {
-                // Create: git update-ref <ref> <new> (no old arg)
+                // Create: pass the zeros old-value so git enforces
+                // compare-and-swap ("ref must not exist") — without it a race
+                // silently clobbers a ref another push just created.
                 $escapedNew = \escapeshellarg($newHash);
-                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} 2>&1";
+                $escapedOld = \escapeshellarg($oldHash);
+                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} {$escapedOld} 2>&1";
                 \exec($updateRefCmd, $out, $rc);
             } else {
                 // Update: git update-ref <ref> <new> <old>

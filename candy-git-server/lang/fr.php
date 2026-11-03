@@ -15,6 +15,7 @@ return [
     'config.not_found'         => 'Fichier de configuration introuvable : {path}',
     'config.read_failed'       => 'Échec de la lecture de la configuration : {path}',
     'ssh.user_cannot_create'   => 'L\'utilisateur {viewer} ne peut pas créer de dépôts',
+    'ssh.invalid_repo_name'    => 'Nom de dépôt invalide : {name}',
 
     // bin/candy-git-server — banner + status output
     'cli.banner'               => 'CandyGitServer v{version}',

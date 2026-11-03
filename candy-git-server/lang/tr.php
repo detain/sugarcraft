@@ -15,6 +15,7 @@ return [
     'config.not_found'         => 'Yapılandırma dosyası bulunamadı: {path}',
     'config.read_failed'       => 'Yapılandırma okunamadı: {path}',
     'ssh.user_cannot_create'   => '{viewer} kullanıcısı depo oluşturamaz',
+    'ssh.invalid_repo_name'    => 'Geçersiz depo adı: {name}',
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
     'cli.starting_servers'     => 'Sunucular başlatılıyor...',

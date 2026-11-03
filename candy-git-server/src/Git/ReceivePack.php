@@ -130,9 +130,19 @@ final class ReceivePack
             $ref     = $cmd['ref'];
             $escapedRef = \escapeshellarg($ref);
 
-            // Validate hash format
-            if (!\ctype_xdigit(\ltrim($newHash, '0')) && $newHash !== \str_repeat('0', 40)) {
-                $this->reportError("invalid new object name: {$newHash}");
+            // Validate hash format. The old ltrim-then-ctype check accepted
+            // any 40-char string whose first non-zero character was a hex
+            // digit ('0000…00g' passed); git needs strict 40-hex on both.
+            if (\preg_match('/^[0-9a-fA-F]{40}$/', $newHash) !== 1
+                || \preg_match('/^[0-9a-fA-F]{40}$/', $oldHash) !== 1) {
+                $this->reportError('invalid object name in push command');
+                return 1;
+            }
+
+            // Grammar-gate the client-controlled refname (traversal '..',
+            // option-injection '-', illegal shapes) before git ever sees it.
+            if (!RefGrammar::isValidRefName($ref)) {
+                $this->reportError("invalid ref name: {$ref}");
                 return 1;
             }
 
@@ -145,9 +155,12 @@ final class ReceivePack
                 $updateRefCmd = "git -C {$repoPath} update-ref -d {$escapedRef} {$escapedOld} 2>&1";
                 \exec($updateRefCmd, $out, $rc);
             } elseif ($oldHash === \str_repeat('0', 40)) {
-                // Create: git update-ref <ref> <new> (no old arg)
+                // Create: pass the zeros old-value so git enforces
+                // compare-and-swap ("ref must not exist") — without it a race
+                // silently clobbers a ref another push just created.
                 $escapedNew = \escapeshellarg($newHash);
-                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} 2>&1";
+                $escapedOld = \escapeshellarg($oldHash);
+                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} {$escapedOld} 2>&1";
                 \exec($updateRefCmd, $out, $rc);
             } else {
                 // Update: git update-ref <ref> <new> <old>

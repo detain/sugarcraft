@@ -20,6 +20,7 @@ return [
     'config.tls_not_supported' => 'http.tls_key_path/tls_cert_path are set but no HTTPS listener is wired yet; setting them does NOT enable TLS. Remove them until TLS is supported.',
     'jobs.invalid_schedule'    => 'Invalid job schedule "{schedule}": {reason}',
     'ssh.user_cannot_create'   => 'User {viewer} cannot create repos',
+    'ssh.invalid_repo_name'    => 'Invalid repo name: {name}',
 
     // bin/candy-git-server — banner + status output
     'cli.banner'               => 'CandyGitServer v{version}',

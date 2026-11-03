@@ -68,6 +68,32 @@ final class Repo
         return new self($name, $path);
     }
 
+    /**
+     * Is $name safe to use as a single repository directory component?
+     *
+     * The charset gate alone is NOT containment: '.' and '..' pass
+     * /^[a-zA-Z0-9._-]+$/ and, appended to the repos root, would address the
+     * parent directory — reading or creating repositories outside the jail
+     * (anonymous on the daemon, on-demand-creating on the SSH path). Reject
+     * every all-dots name; everything else in the charset is a plain
+     * filesystem component with no traversal meaning.
+     */
+    public static function isJailSafeName(string $name): bool
+    {
+        if ($name === '') {
+            return false;
+        }
+        if (\preg_match('/^[a-zA-Z0-9._-]+$/', $name) !== 1) {
+            return false;
+        }
+        // Leading '.' or '-' names invite confusion (option-looking tokens,
+        // hidden entries); the jail requires plain names.
+        if ($name[0] === '.' || $name[0] === '-') {
+            return false;
+        }
+        return \preg_match('/^\.+$/', $name) !== 1;
+    }
+
     // -------------------------------------------------------------------------
     // Builder
     // -------------------------------------------------------------------------
@@ -185,8 +211,11 @@ final class Repo
         // Set description
         \file_put_contents($gitDir . '/description', $this->description ?: 'Unnamed repository');
 
-        // Disable anonymous push
-        \file_put_contents($gitDir . '/git-daemon-export-ok', '');
+        // Deliberately NO 'git-daemon-export-ok' marker: that file ENABLES
+        // anonymous read-export of this repo to any co-hosted stock
+        // git-daemon process — writing it on every init is a booby trap for
+        // the host. A repo is shared anonymously only when the operator
+        // opts that marker in by hand.
 
         // Set hooks dir (shared)
         $hooksSrc = $gitDir . '/hooks';

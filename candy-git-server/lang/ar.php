@@ -15,6 +15,7 @@ return [
     'config.not_found'         => 'ملف التكوين غير موجود: {path}',
     'config.read_failed'       => 'فشل قراءة التكوين: {path}',
     'ssh.user_cannot_create'   => 'المستخدم {viewer} لا يمكنه إنشاء مستودعات',
+    'ssh.invalid_repo_name'    => 'اسم مستودع غير صالح: {name}',
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
     'cli.starting_servers'     => 'جاري بدء الخوادم...',
