@@ -68,6 +68,8 @@ final class App implements Model
         public readonly bool $showRebaseMenu = false,
         /** Which sequencer the overlay is resuming: 'rebase' | 'cherry' | 'merge'. */
         public readonly string $rebaseMenuKind = 'rebase',
+        /** Key of the destructive action armed for a second confirming press. */
+        public readonly ?string $pendingConfirm = null,
         /** Command history for undo/redo. */
         public readonly ?HistoryManager $history = null,
         /** Stash manager overlay (shown when 'S' is pressed). */
@@ -113,6 +115,9 @@ final class App implements Model
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q' && !$this->isTyping())
             || ($msg->ctrl && $msg->rune === 'c')) {
+            if ($this->pendingConfirm !== null) {
+                return [$this->clearConfirm(), null];
+            }
             if ($this->collectingCommit) {
                 return [$this->withCommitCollection(false, ''), null];
             }
@@ -596,6 +601,8 @@ final class App implements Model
         string $mergeTarget = null,
         bool $showRebaseMenu = null,
         string $rebaseMenuKind = null,
+        ?string $pendingConfirm = null,
+        bool $pendingConfirmSet = false,
         ?StashManager $stashManager = null,
         bool $stashManagerSet = false,
         ?CherryPick $cherryPick = null,
@@ -630,6 +637,7 @@ final class App implements Model
             mergeTarget: $mergeTarget ?? $this->mergeTarget,
             showRebaseMenu: $showRebaseMenu ?? $this->showRebaseMenu,
             rebaseMenuKind: $rebaseMenuKind ?? $this->rebaseMenuKind,
+            pendingConfirm: $pendingConfirmSet ? $pendingConfirm : ($pendingConfirm ?? $this->pendingConfirm),
             stashManager: $stashManagerSet ? $stashManager : ($stashManager ?? $this->stashManager),
             cherryPick: $cherryPickSet ? $cherryPick : ($cherryPick ?? $this->cherryPick),
             worktrees: $worktreesSet ? $worktrees : ($worktrees ?? $this->worktrees),
@@ -655,6 +663,17 @@ final class App implements Model
     }
 
     /** Runs `git restore --worktree -- <path>` via the GitDriver, then refreshes. */
+    /** Arms a destructive action: the stored key warns in red and a matching repeat press executes. */
+    private function armConfirm(string $key, string $warning): self
+    {
+        return $this->withAll(pendingConfirm: $key, pendingConfirmSet: true, error: $warning);
+    }
+
+    private function clearConfirm(): self
+    {
+        return $this->withAll(pendingConfirm: null, pendingConfirmSet: true);
+    }
+
     private function discard(): self
     {
         if ($this->pane !== Pane::Status) {
@@ -664,11 +683,19 @@ final class App implements Model
         if (!is_array($row) || !isset($row['path'])) {
             return $this;
         }
+        // Audit K6/A3: discarding worktree bytes is unrecoverable - git has no
+        // undo for it either. One press arms (naming the target), the same
+        // press on the same target executes; Escape cancels.
+        $arm = 'discard:' . $row['path'];
+        if ($this->pendingConfirm !== $arm) {
+            return $this->armConfirm($arm, Lang::t('confirm.discard', ['path' => (string) $row['path']]));
+        }
+        $base = $this->clearConfirm();
         try {
             $this->git->discard($row['path']);
-            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::discard($row['path'])))->refresh();
+            return $base->withAll(history: $base->requireHistory()->push(HistoryEntry::discard($row['path'])))->refresh();
         } catch (\RuntimeException $e) {
-            return $this->withError($e->getMessage());
+            return $base->withError($e->getMessage());
         }
     }
 
@@ -1028,17 +1055,23 @@ final class App implements Model
         if ($branch['current'] ?? false) {
             return $this->withError(Lang::t('branch.delete_current'));
         }
+        // Audit A3: branch deletion needs the same armed second press as discard.
+        $arm = 'branch:' . $branch['name'];
+        if ($this->pendingConfirm !== $arm) {
+            return $this->armConfirm($arm, Lang::t('confirm.delete_branch', ['name' => (string) $branch['name']]));
+        }
+        $base = $this->clearConfirm();
         try {
             $this->git->deleteBranch($branch['name']);
-            return $this
-                ->withAll(history: $this->requireHistory()->push(HistoryEntry::deleteBranch(
+            return $base
+                ->withAll(history: $base->requireHistory()->push(HistoryEntry::deleteBranch(
                     (string) $branch['name'],
                     (string) ($branch['sha'] ?? ''),
                 )))
                 ->refresh()
                 ->withAll(successMessage: Lang::t('branch.deleted', ['name' => $branch['name']]));
         } catch (\RuntimeException $e) {
-            return $this->withError($e->getMessage());
+            return $base->withError($e->getMessage());
         }
     }
 
@@ -1226,14 +1259,20 @@ final class App implements Model
         if ($sm === null) return $this;
         $current = $sm->current();
         if ($current === null) return $this;
+        // Audit A3: dropping a stash discards its only copy - arm first.
+        $arm = 'stash:' . $current->stashRef();
+        if ($this->pendingConfirm !== $arm) {
+            return $this->armConfirm($arm, Lang::t('confirm.stash_drop', ['ref' => $current->stashRef()]));
+        }
+        $base = $this->clearConfirm();
         try {
             $this->git->stashDrop($current->stashRef());
             $freshStashes = $this->git->stashList();
-            return $this->withStashManager(new StashManager($freshStashes))->withAll(
+            return $base->withStashManager(new StashManager($freshStashes))->withAll(
                 successMessage: Lang::t('stash.dropped', ['ref' => $current->stashRef()])
             );
         } catch (\RuntimeException $e) {
-            return $this->withError($e->getMessage());
+            return $base->withError($e->getMessage());
         }
     }
 

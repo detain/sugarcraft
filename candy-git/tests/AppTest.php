@@ -445,6 +445,7 @@ final class AppTest extends TestCase
         $a = App::start($g);
         $this->assertSame([], $g->discards);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
         $this->assertSame(['src/A.php'], $g->discards);
     }
 
@@ -507,7 +508,8 @@ final class AppTest extends TestCase
     {
         $g = $this->git();
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));   // discard src/A.php
+                [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));   // arm + confirm discard src/A.php
         $this->assertSame(['src/A.php'], $g->discards);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
         $this->assertNotNull($a->error);
@@ -588,6 +590,7 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
         $this->assertSame(1, $a->branchesCursor);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'D'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'D'));
         $this->assertSame(['feature'], $g->branchDeletions);
     }
 
@@ -621,6 +624,7 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'D'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'D'));
         $this->assertSame(['feature'], $g->branchDeletions);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
         $this->assertSame([['name' => 'feature', 'sha' => 'def2']], $g->restoredBranches);
@@ -652,6 +656,7 @@ final class AppTest extends TestCase
     public function testCannotUndoMessageUsesHumanizedOp(): void
     {
         $a = App::start($this->git());
+                [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));   // discard src/A.php
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
         $this->assertStringContainsString('cannot undo discard', (string) $a->error);
@@ -991,6 +996,7 @@ final class AppTest extends TestCase
         $g->throwOn['discard'] = new \RuntimeException('boom');
         $a = App::start($g);
         // Cursor 0 on the status pane is src/A.php; 'd' discards it.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
         $this->assertNotNull($a->error);
         $this->assertStringContainsString('boom', $a->error);

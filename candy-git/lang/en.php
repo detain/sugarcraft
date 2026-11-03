@@ -97,6 +97,9 @@ return [
     'merge.empty_target'     => 'merge: target branch required',
     'merge.success'           => 'merged {branch}',
     'merge.conflict'          => 'could not merge {branch}: unresolved conflicts',
+    'confirm.discard'         => 'discard {path}: press d again to discard (unrecoverable)',
+    'confirm.delete_branch'   => 'delete branch {name}: press D again to delete',
+    'confirm.stash_drop'      => 'drop stash {ref}: press d again to drop (unrecoverable)',
 
     // Rebase
     'rebase.prompt'          => 'rebase: [c]ontinue [a]bort [s]kip',
