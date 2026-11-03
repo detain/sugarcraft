@@ -411,6 +411,41 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('capped at <code>MAX_RESPONSE_BYTES</code>', $flatBody);
     }
 
+    public function testTheProgramExamplePairShipsBothHalves(): void
+    {
+        $examples = \dirname(__DIR__) . '/examples';
+        // The supervisor execs this path; a tour that names a file nobody ships
+        // is how MAJOR 16 started.
+        $this->assertFileExists(
+            $examples . '/run-program.php',
+            'examples/spawn-program.php execs a wrapper that has to exist'
+        );
+
+        $supervisor = (string) \file_get_contents($examples . '/spawn-program.php');
+        $this->assertStringNotContainsString(
+            'MyApp',
+            $supervisor,
+            'the wrapper survived for a while as a comment around a class nobody ships'
+        );
+        $this->assertStringContainsString('Logger::auto()', $supervisor);
+
+        $bubbleTea = (string) \file_get_contents($examples . '/../src/Middleware/BubbleTea.php');
+        $this->assertStringContainsString(
+            'examples/run-program.php',
+            $bubbleTea,
+            'the class that teaches a wrapper command must point at the real file'
+        );
+
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+        $this->assertStringContainsString(
+            '[`examples/run-program.php`](examples/run-program.php)',
+            $readme
+        );
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

@@ -11,10 +11,11 @@
  *      with a factory that returns the path to a tiny wrapper
  *      script that runs the actual Program.
  *
- *   2. `run-program.php` (the wrapper) — a few lines that
- *      autoload sugar-core, instantiate the user's Model, and
- *      call `(new Program($model))->run()`. Lives next to this
- *      file in production deployments.
+ *   2. `run-program.php` (the wrapper, next to this file) —
+ *      a few lines that autoload sugar-core, instantiate the
+ *      user's Model, and call `(new Program($model))->run()`.
+ *      This is the file the factory below returns, so the pair
+ *      has to stay together in a deployment.
  *
  * The wrapper runs as a subprocess under the sugar-pty PTY, so
  * Ctrl+C / Ctrl+Z / SIGWINCH all behave correctly via the
@@ -36,7 +37,7 @@ use SugarCraft\SshServer\Session;
 $wrapper = __DIR__ . '/run-program.php';
 
 exit(Server::new()
-    ->use(new Logger())
+    ->use(Logger::auto())
     ->use(new Spawn(fn (Session $s) => [
         'cmd' => [PHP_BINARY, $wrapper, $s->user, (string) $s->cols, (string) $s->rows],
         'env' => [
@@ -48,20 +49,12 @@ exit(Server::new()
     ->serve());
 
 /*
- * Example wrapper (`run-program.php`):
+ * The wrapper this supervisor execs is a sibling file:
+ * {@see ./run-program.php}. Run the pair with:
  *
- * ----------
- * #!/usr/bin/env php
- * <?php
- * declare(strict_types=1);
+ *   php examples/spawn-program.php
  *
- * require __DIR__ . '/../vendor/autoload.php';
+ * or the wrapper alone, on a plain terminal, with:
  *
- * use SugarCraft\Core\Program;
- *
- * [$user, $cols, $rows] = [$argv[1] ?? 'guest', (int) ($argv[2] ?? 80), (int) ($argv[3] ?? 24)];
- *
- * $model = new MyApp(user: $user, cols: $cols, rows: $rows);
- * (new Program($model))->run();
- * ----------
+ *   php examples/run-program.php alice 80 24
  */

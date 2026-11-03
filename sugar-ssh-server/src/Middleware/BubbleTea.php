@@ -37,7 +37,7 @@ use SugarCraft\SshServer\TransportAware;
  *      Keeps the pre-PTY-upgrade behaviour, no subprocess overhead.
  *
  *   2. **Use Spawn middleware** with a tiny wrapper script that
- *      runs the Program: `Server::new()->use(new Spawn(fn () => ['cmd' => ['php', 'run-program.php']]))`.
+ *      runs the Program: `Server::new()->use(new Spawn(fn () => ['cmd' => ['php', 'run-program.php']] (the wrapper: see `examples/run-program.php`)))`.
  *      Lets you keep the in-process default while still mounting
  *      a SugarCraft Program — at the cost of subprocess startup.
  *

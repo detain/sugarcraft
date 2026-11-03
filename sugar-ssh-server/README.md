@@ -797,6 +797,8 @@ Runnable examples:
 - [`examples/showcase.php`](examples/showcase.php) — middleware-stack tour.
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — interactive bash through `Spawn`.
 - [`examples/spawn-program.php`](examples/spawn-program.php) — arbitrary child program through `Spawn`.
+- [`examples/spawn-program.php`](examples/spawn-program.php) — arbitrary child program through `Spawn`.
+- [`examples/run-program.php`](examples/run-program.php) — the wrapper that pair execs: a `Program` mounted on its own PTY process.
 
 ## Credits & inspiration
 
