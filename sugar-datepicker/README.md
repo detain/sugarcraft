@@ -17,8 +17,9 @@ sugar-datepicker — an interactive date picker component for terminal UIs, for 
 
 ## Features
 
-- **Month/year navigation** — programmatic `GoTo*` steps; the view window is
-  clamped to the calendar floor (January 0001) and to optional `min`/`max` bounds
+- **Month/year navigation** — programmatic `GoTo*` steps, and `PageUp`/`PageDown`
+  month steps driven through the `Model`; the view window is clamped to the
+  calendar floor (January 0001) and to optional `min`/`max` bounds
 - **Keyboard handling** — `handleKey()` for arrow keys, Home/End, Enter to
   select, Esc to clear (works in both single and range modes)
 - **Date selection** — select/clear a single date, or a start/end range
@@ -29,7 +30,7 @@ sugar-datepicker — an interactive date picker component for terminal UIs, for 
   into an optional `EventStore`
 - **Today highlight** — show the reference "today" distinctly; `withoutToday()`
   drops the pinned reference again
-- **Selected date and range styling** — five SGR style setters, validated
+- **Selected date and range styling** — seven SGR style setters, validated
 - **Pure renderer** — outputs ANSI strings, no external TUI framework needed
 
 ## Install
@@ -46,7 +47,7 @@ use SugarCraft\DatePicker\DatePicker;
 $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
 $picker = $picker->handleKey(DatePicker::KEY_ENTER);  // select the cursor date
 
-echo $picker->View();  // render calendar
+echo $picker->View();  // render the month grid
 $selected = $picker->SelectedDate();  // 2026-05-01
 ```
 
@@ -54,7 +55,7 @@ Or drive it as a TEA model:
 
 ```php
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Core\Msg\KeyType;
+use SugarCraft\Core\KeyType;
 use SugarCraft\DatePicker\Model;
 
 $model = Model::new(new \DateTimeImmutable('2026-05-15'));
@@ -139,27 +140,33 @@ unchanged); an existing selection is never retroactively cleared. Setting
 
 ```php
 $picker = $picker->withToday(new \DateTimeImmutable('2026-05-15')); // pin "today"
-$picker = $picker->withoutToday();                                  // no today marker
+$picker = $picker->withoutToday();  // drop the pin (falls back to the real clock)
 ```
 
-`GoToToday()` navigates to the pinned date and has no effect while no today is
-set.
+`withoutToday()` removes only the pinned reference — the picker then treats the
+real wall-clock as "today", so the highlight keeps rendering (it is not a way to
+hide the marker; set `WithTodayStyle('')` to suppress it). `GoToToday()` always
+navigates to the pinned date, or to the real current day when nothing is pinned.
 
 ## Rendering
 
 ```php
 echo $picker->View();                 // default 21 columns, no week numbers
-echo $picker->View(30, true);         // 30 columns with ISO week-number column
+echo $picker->View(30, true);         // 34 columns: 30-wide grid + 4-cell week column
 ```
 
-`View()` takes a column `width` and a `showWeekNumbers` flag. Widths outside
-15–63 are silently clamped into that range (not rejected).
+`View()` takes a column `width` and a `showWeekNumbers` flag. The TOTAL width —
+the `width`-wide calendar area plus the optional 4-cell ISO week column — is
+clamped into `[natural grid: 21 without a week column / 25 with one, 63]` and
+never rejected. The floor guarantees all seven day columns stay visible (a
+narrower request would amputate the Friday/Saturday columns while leaving their
+days selectable), so the rendered width is never below the natural grid.
 
 ## Styling
 
-Five style setters accept bare SGR digit strings (e.g. `'7'`, `'1;31'`,
-`'38;5;226'`); anything containing escape sequences or dangling delimiters is
-rejected with an `InvalidArgumentException`:
+Seven style setters accept bare SGR digit strings (e.g. `'7'`, `'1;31'`,
+`'4;35'`); the extended-colour introducers `38`/`48`, escape sequences and
+dangling delimiters are rejected with an `InvalidArgumentException`:
 
 ```php
 $picker = $picker
@@ -178,9 +185,37 @@ Unrecognized keys are ignored (the receiver is returned unchanged). The `Model`
 wrapper translates sugar-core `KeyMsg` messages into these strings, so a TEA
 application never calls `handleKey()` directly.
 
-Honest limitations: there is no month-wrap on arrow keys, no page-up/page-down
-month jumps, and no typeahead year entry — navigation between months and years
-goes through the `GoTo*` methods.
+Honest limitations: there is no month-wrap on arrow keys (they clamp at the grid
+edge and can rest on empty lead-in/trailing cells, where Enter falls back to the
+first of the month), and no typeahead year entry. `PageUp`/`PageDown` step one
+month through the `Model`; larger jumps between months and years go through the
+`GoTo*` methods.
+
+## API surface
+
+Beyond `DatePicker` itself, the shipped public classes are:
+
+- **`DateRange`** — an immutable start/end value object: `contains($date)`
+  (compares calendar days, timezone-safe), `durationInDays(?$now = null)` (an
+  optional clock seam; a null end measures against `$now`), and `isComplete()`.
+- **`EventStore`** / **`EventStoreInterface`** — the host-facing transition
+  channel: `record($type, $payload)`, `release()` (drain-and-clear),
+  `hasEvents()`, `count()`. It keeps a bounded ring of `MAX_EVENTS` (1000) and
+  evicts the oldest records beyond that, so a host that never drains cannot grow
+  memory without limit.
+- **`Navigation::gridIndexToDate($index, $month, $year)`** — maps a raw grid
+  index to a date; it throws when `month` is outside 1–12 or `year` is below 1,
+  which the picker's view floor prevents from ever reaching it in normal use.
+- **`Model`** — the TEA wrapper (`init()`/`update($msg)`/`view()`/
+  `subscriptions()`). Its `update()` command is **always null** — a host learns
+  the outcome by polling `picker()->SelectedDate()`/`rangeStart()`/`rangeEnd()`
+  (or the `EventStore`) after each update, never from a returned command. Because
+  the shared `Core\Model::view()` contract is argless, a framework-driven host
+  renders the default 21×9 grid; call `picker()->View($width, $showWeekNumbers)`
+  directly for a sized render.
+- **`DatePicker` accessors** — `minDate()`, `maxDate()`, `isRangeMode()`,
+  `CursorIndex()`, `ViewMonth()`, `ViewYear()`, `dateAtCursor()`, and
+  `MoveToDate()` (aim the cursor at an existing value).
 
 ## Internationalization
 
@@ -193,8 +228,8 @@ set.
 ## Shared foundations
 
 - **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — month grid
-  rendered as a 7-column × N-row `Buffer`; events placed into target cells;
-  `Buffer::toAnsi()` produces canonical ANSI SGR output.
+  rendered as a 7-column × N-row `Buffer`; the day cells are laid out by
+  `DatePicker`, and `Buffer::toAnsi()` serialises them to canonical ANSI SGR output.
 - **[sugar-core](https://github.com/sugarcraft/sugar-core)** — `Util\Width` is the
   canonical display-width oracle (the picker delegates its cell placement
   widths to it); `I18n\Lang` powers the translations above.

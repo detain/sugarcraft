@@ -53,12 +53,16 @@ machinery.
 ## [pattern:configurable-viewport] Viewport width is configurable; out-of-range is clamped
 
 The `View()` method accepts a `$width` parameter (default 21) and a
-`$showWeekNumbers` flag. Widths outside 15-63 are silently CLAMPED into
-that range, not rejected — the clamp is the contract.
-Week number column adds 4 characters when enabled.
+`$showWeekNumbers` flag. The clamp is on the TOTAL width (the `width`-wide
+calendar area plus the optional 4-cell week column): it is bounded BELOW by the
+natural grid (21 without a week column, 25 with one) and ABOVE by 63. Requests
+outside that band are silently CLAMPED, not rejected — the clamp is the contract.
+The lower bound guarantees all seven day columns stay visible; a narrower request
+can no longer amputate the Friday/Saturday columns.
 
 Cell layout: 3 characters per day column (2 for day number + 1 space).
-A width of 21 gives exactly 7 day columns. Minimum 15 allows 5 columns.
+A width of 21 gives exactly 7 day columns; below the natural grid the request is
+raised to it.
 
 Source: ai/sugar-datepicker-phase6 — wording corrected 2026-10-23
 docs-fix-1023 E2 (range "bounds" were always clamps; now pinned by
@@ -68,10 +72,11 @@ docs-fix-1023 E2 (range "bounds" were always clamps; now pinned by
 
 ## [pattern:api-casing-debt] PascalCase and camelCase coexist in the public API
 
-DatePicker mixes two casings: the legacy charmbracelet-port surface is
-PascalCase (`GoToPreviousMonth`, `SelectDate`, `View`, `SetTime`,
+DatePicker mixes two casings: the legacy antecedent-derived surface
+(design antecedent EthanEFung/bubble-datepicker) is PascalCase
+(`GoToPreviousMonth`, `SelectDate`, `View`, `SetTime`,
 `MoveCursor*`, `With*Style`, `IsSelecting`) while the house immutable/setter
-surface is camelCase (`withMinDate`, `handleKey`, `rangeMode`, `inBounds`,
+surface is camelCase (`withMinDate`, `handleKey`, `isRangeMode`, `inBounds`,
 `withoutToday`). This is documented debt, NOT to be "fixed" silently — the
 PascalCase names are the published Packagist surface and renaming them is a
 hard break. New methods follow camelCase (house convention); when a rename

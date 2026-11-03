@@ -95,9 +95,13 @@ final class DatePickerTest extends TestCase
 
     public function testCursorLeftBoundary(): void
     {
-        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->MoveCursorLeft()
-            ->MoveCursorLeft();
+        // The raw arrow clamp is the grid floor 0 (not the first valid day —
+        // arrows deliberately may rest on a lead-in blank; only Home/End snap
+        // to a real day). Walk well past the left edge and confirm the clamp.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        for ($i = 0; $i < 8; $i++) {
+            $dp = $dp->MoveCursorLeft();
+        }
 
         $this->assertSame(0, $dp->CursorIndex());
     }
@@ -157,26 +161,27 @@ final class DatePickerTest extends TestCase
 
     public function testDateAtCursorAfterNavigation(): void
     {
+        // D9: the constructor now seeds the cursor on the viewed date, so a
+        // fresh May-1 picker shows May 1 at the cursor rather than an empty
+        // cell. This is the fix for "new(date) opened focus-invisible".
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         $date = $dp->dateAtCursor();
 
-        $this->assertNull($date); // cursor is at index 0 (outside month)
+        $this->assertNotNull($date); // cursor seeded on the real first day
+        $this->assertSame('2026-05-01', $date?->format('Y-m-d'));
     }
 
-    public function testDateAtCursorAfterMovingIn(): void
+    public function testDateAtCursorOnEmptyLeadCellIsNull(): void
     {
-        // Move cursor to first day of May 2026 (offset depends on first day of week)
+        // The empty lead-in cell (before the 1st) is still reachable by arrow
+        // and yields null — Enter from it falls back to the first of month.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        $firstOfMay2026 = \DateTimeImmutable::createFromFormat('Y-m-d', '2026-05-01');
-        $firstDow = (int) $firstOfMay2026->format('w'); // day of week offset
-
-        // Move cursor to the first day cell
-        for ($i = 0; $i < $firstDow; $i++) {
-            $dp = $dp->MoveCursorRight();
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorLeft(); // idx5 (May1) -> idx0 (Sun blank)
         }
 
-        $date = $dp->dateAtCursor();
-        $this->assertSame('2026-05-01', $date?->format('Y-m-d'));
+        $this->assertSame(0, $dp->CursorIndex());
+        $this->assertNull($dp->dateAtCursor());
     }
 
     public function testViewRendersHeader(): void
@@ -253,20 +258,21 @@ final class DatePickerTest extends TestCase
 
     public function testHandleKeyLeft(): void
     {
+        // D9: the constructor seeds the cursor on the viewed date (May 1 →
+        // grid index 5 for a Friday-start May 2026), no longer on cell 0.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        // cursor starts at 0, move right first then left
         $dp = $dp->handleKey('right');
-        $this->assertSame(1, $dp->CursorIndex());
+        $this->assertSame(6, $dp->CursorIndex());
 
         $dp = $dp->handleKey('left');
-        $this->assertSame(0, $dp->CursorIndex());
+        $this->assertSame(5, $dp->CursorIndex());
     }
 
     public function testHandleKeyRight(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         $dp = $dp->handleKey('right');
-        $this->assertSame(1, $dp->CursorIndex());
+        $this->assertSame(6, $dp->CursorIndex());
     }
 
     public function testHandleKeyUp(): void
@@ -281,36 +287,36 @@ final class DatePickerTest extends TestCase
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         $dp = $dp->handleKey('down');
-        $this->assertSame(7, $dp->CursorIndex());
+        $this->assertSame(12, $dp->CursorIndex());
     }
 
     public function testHandleKeyHome(): void
     {
+        // D21: Home jumps to the first valid day (May 1 = index 5), never a raw
+        // leading cell that may be blank.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->MoveCursorDown()
             ->MoveCursorRight();
 
         $dp = $dp->handleKey('home');
-        $this->assertSame(0, $dp->CursorIndex());
+        $this->assertSame(5, $dp->CursorIndex());
     }
 
     public function testHandleKeyEnd(): void
     {
+        // D21: End lands on the last day of the month (May 31 = index 35), not
+        // the raw grid floor of 41.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
         $dp = $dp->handleKey('end');
-        $this->assertSame(41, $dp->CursorIndex());
+        $this->assertSame(35, $dp->CursorIndex());
     }
 
     public function testHandleKeyEnterSetsRangeStart(): void
     {
+        // D9: the cursor is already on May 1 at construction, so Enter arms the
+        // range on the first day directly (no lead-in walk needed).
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withRangeMode(true);
-
-        // Navigate to a valid day cell
-        $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
-        for ($i = 0; $i < $firstDow; $i++) {
-            $dp = $dp->MoveCursorRight();
-        }
 
         $dp = $dp->handleKey('enter');
 
@@ -324,11 +330,7 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withRangeMode(true);
 
-        // Navigate to May 1
-        $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
-        for ($i = 0; $i < $firstDow; $i++) {
-            $dp = $dp->MoveCursorRight();
-        }
+        // Cursor seeds on May 1; arm the start there.
         $dp = $dp->handleKey('enter');
 
         // Navigate to May 5
@@ -363,14 +365,13 @@ final class DatePickerTest extends TestCase
 
     public function testRangeSelectionNormalizesStartEnd(): void
     {
-        // May 2026: firstDow = 5 (Fri), so index 5 = May 1, index 14 = May 10
-        // Start at index 5 (May 1) and navigate to May 10
-        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
-        for ($i = 0; $i < 14; $i++) {
-            $dp = $dp->MoveCursorRight();
-        }
+        // May 2026: firstDow = 5 (Fri), so index 5 = May 1, index 14 = May 10.
+        // Aim the cursor directly at the intended days (D9 seeds the cursor on
+        // the viewed date, so a fixed count of rights would drift).
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true)
+            ->MoveToDate(new \DateTimeImmutable('2026-05-10'));
 
-        $dp = $dp->withRangeMode(true);
         $dp = $dp->handleKey('enter'); // rangeStart = May 10
 
         // Navigate back to May 5 (index 9)
@@ -461,11 +462,8 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'));
 
-        // Navigate to a valid day first: index 5 = May 1 (May 2026 starts Friday)
-        for ($i = 0; $i < 5; $i++) {
-            $dp = $dp->MoveCursorRight();
-        }
-
+        // D9: the constructor already seeds the cursor on May 1 (grid index 5
+        // for a Friday-start May 2026), so Enter selects it directly.
         $dp = $dp->handleKey('enter');
 
         $this->assertTrue($dp->IsSelecting(),
@@ -481,8 +479,8 @@ final class DatePickerTest extends TestCase
         // single mode (it already did in range mode, clearing the range).
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'))
-            ->handleKey('end')   // index 41
-            ->handleKey('home'); // index 0
+            ->handleKey('end')   // D21: last valid day of May (index 35)
+            ->handleKey('home'); // D21: first valid day, May 1 (index 5)
 
         $dp = $dp->SelectDate();
         $this->assertTrue($dp->IsSelecting());
@@ -542,7 +540,9 @@ final class DatePickerTest extends TestCase
     public function testViewWidthIsClampedNotRejected(): void
     {
         // 2026-10-23 (docs-fix-1023 E2): the docblock used to claim "must be";
-        // the real law is a silent clamp to 15-63.
+        // the real law is a silent clamp. D20: the clamp is on the TOTAL width
+        // into [natural grid (21 without a week column), 63], so a request
+        // below the floor still renders the full seven day columns.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
 
         $this->assertSame($dp->View(15), $dp->View(5));
@@ -553,15 +553,16 @@ final class DatePickerTest extends TestCase
 
     public function testClampCursorAfterNavigatingToShorterMonth(): void
     {
-        // Start on May 2026 (31 days, firstDow=5), cursor at index 41 (End)
+        // D21: End jumps to the LAST VALID day, not the raw grid corner. May
+        // 2026 (31 days, firstDow=5) → End = May 31 at index 35, never 41.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'))
-            ->handleKey('end');  // cursorIndex = 41
+            ->handleKey('end');  // cursorIndex = 35 (May 31, last valid day)
 
-        $this->assertSame(41, $dp->CursorIndex());
+        $this->assertSame(35, $dp->CursorIndex());
 
         // Navigate to April 2026 (30 days, firstDow=3)
-        // After navigation, clampCursor should pull index 41 back to 3 + 30 - 1 = 32
+        // After navigation, clampCursor should pull index 35 back to 3 + 30 - 1 = 32
         $dp2 = $dp->GoToPreviousMonth();
 
         // April 30 is at index 3 + 29 = 32 (firstDow=3, lastDayIndex=32)
@@ -607,7 +608,10 @@ final class DatePickerTest extends TestCase
     public function testViewWeekNumbersCrossYearBoundary(): void
     {
         // Jan 2026: firstDow=4 (Thu). The first displayed (Sunday-first) week
-        // row begins Sun 2025-12-28 → ISO week 52 of 2025, then week 1 of 2026.
+        // row begins Sun 2025-12-28. Its ISO representative is the row's
+        // Wednesday (2025-12-31), which — because 2026-W01 spans Mon 2025-12-29
+        // to Sun 2026-01-04 — is week 1 of 2026, not week 52 of 2025. The old
+        // Sunday-based read under-labelled Sunday-start rows by one (D-MT10).
         // Regression: a malformed "+-4 days" offset used to shift these forward.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
             ->withToday(new \DateTimeImmutable('2026-01-15'));
@@ -627,10 +631,10 @@ final class DatePickerTest extends TestCase
             }
         }
         $this->assertNotNull($firstWeekRow, 'first week grid row must be present');
-        $this->assertStringStartsWith('52', \ltrim($firstWeekRow),
-            'Week row crossing the year boundary must be ISO week 52, not shifted');
-        $this->assertStringContainsString('52', $plain,
-            'Boundary ISO week 52 must appear in the week-number column');
+        $this->assertStringStartsWith('1', \ltrim($firstWeekRow),
+            'The Wed-based top row (2025-12-31) is 2026-W01, not the old Sunday read of 52');
+        $this->assertStringContainsString(' 2 ', $plain,
+            'The following row is 2026-W02 under the Wednesday-representative rule (MT10)');
     }
 
     // -------------------------------------------------------------------------
@@ -640,6 +644,11 @@ final class DatePickerTest extends TestCase
     public function testDateAtCursorDelegatesToNavigation(): void
     {
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        // D9: the constructor seeds the cursor on May 1 (index 5). Pull it back
+        // to grid index 0 so the sweep compares every index against Navigation.
+        for ($k = 0; $k < 5; $k++) {
+            $dp = $dp->MoveCursorLeft();
+        }
         for ($i = 0; $i < 41; $i++) {
             $expected = Navigation::gridIndexToDate($i, 5, 2026);
             $actual = $dp->dateAtCursor();
@@ -655,11 +664,12 @@ final class DatePickerTest extends TestCase
 
     public function testClampCursorMarchToFebruary(): void
     {
-        // March 2026 (31 days, firstDow=0), cursor at End (index 41).
+        // D21: End jumps to the LAST VALID day of March (Mar 31, index 30),
+        // not the raw grid corner 41.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-03-10'))
             ->withToday(new \DateTimeImmutable('2026-03-15'))
             ->handleKey('end');
-        $this->assertSame(41, $dp->CursorIndex());
+        $this->assertSame(30, $dp->CursorIndex());
 
         // → Feb 2026 (28 days, firstDow=0): last valid index = 0 + 28 - 1 = 27.
         $feb = $dp->GoToPreviousMonth();
@@ -712,11 +722,16 @@ final class DatePickerTest extends TestCase
 
     public function testHandleRangeEnterWithNullDateIsNoOp(): void
     {
-        // Cursor at index 0 (empty cell before May 1, 2026)
+        // D9: the constructor seeds the cursor on May 1 (index 5). Step back
+        // five cells into the empty Sunday lead-in (index 0) so Enter has no
+        // real day and must be a no-op.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withRangeMode(true);
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorLeft();
+        }
+        $this->assertSame(0, $dp->CursorIndex(), 'cursor rests on the empty lead-in cell');
 
-        // Cursor is at 0 (empty cell), Enter should be a no-op
         $dp = $dp->handleKey('enter');
 
         $this->assertNull($dp->rangeStart(),
@@ -730,10 +745,8 @@ final class DatePickerTest extends TestCase
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withRangeMode(true);
 
-        $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
-        for ($i = 0; $i < $firstDow; $i++) {
-            $dp = $dp->MoveCursorRight();
-        }
+        // D9: the constructor already seeds the cursor on May 1 (index 5); the
+        // old firstDow pre-walk is removed so the first Enter lands there.
         // First Enter: rangeStart = May 1
         $dp = $dp->handleKey('enter');
 
@@ -771,8 +784,8 @@ final class DatePickerTest extends TestCase
             ->withToday(new \DateTimeImmutable('2026-05-15'));
 
         // Navigate to May 15 (firstDow=5 for May 1, so May 15 is at index 5+14=19)
-        for ($i = 0; $i < 19; $i++) {
-            $dp = $dp->MoveCursorRight();
+        for ($i = 0; $i < 14; $i++) {
+            $dp = $dp->MoveCursorRight(); // D9 seed idx5 + 14 = idx19 = May 15
         }
 
         // Verify we're on May 15
@@ -815,8 +828,10 @@ final class DatePickerTest extends TestCase
         // The empty-cell fallback is now also a BOUND-checked candidate
         // (docs-fix-1023 E2): with no bound set it selects May 1 from index 0.
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->withToday(new \DateTimeImmutable('2026-05-15'))
-            ->handleKey('home');
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorLeft(); // D9 seed idx5 -> empty Sunday idx0
+        }
 
         $this->assertNull($dp->dateAtCursor(), 'Index 0 is an empty lead-in cell');
 

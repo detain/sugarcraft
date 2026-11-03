@@ -9,9 +9,16 @@ namespace SugarCraft\DatePicker;
  *
  * An optional clock closure (returns int seconds) makes timestamps
  * deterministic in tests; the default is real wall-clock time().
+ *
+ * The ring is bounded: a host that never drains via {@see release()} cannot
+ * grow this without limit — once MAX_EVENTS are held, the oldest event is
+ * evicted on each new record.
  */
 final class EventStore implements EventStoreInterface
 {
+    /** Largest number of undrained events kept before the oldest is evicted. */
+    public const MAX_EVENTS = 1000;
+
     /** @var list<array{type: string, payload: array, time: int}> */
     private array $events = [];
 
@@ -24,6 +31,10 @@ final class EventStore implements EventStoreInterface
     {
         $time = $this->clock !== null ? ($this->clock)() : time();
         $this->events[] = ['type' => $type, 'payload' => $payload, 'time' => $time];
+
+        if (\count($this->events) > self::MAX_EVENTS) {
+            \array_shift($this->events);
+        }
     }
 
     /**

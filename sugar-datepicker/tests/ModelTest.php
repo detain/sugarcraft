@@ -109,18 +109,22 @@ final class ModelTest extends TestCase
         $keyMsg = new KeyMsg(KeyType::Home);
         [$nextModel, $cmd] = $model->update($keyMsg);
 
-        $this->assertSame(0, $nextModel->picker()->CursorIndex());
+        // Home jumps to the first valid day (May 1 at index 5 — May 2026 opens
+        // on Friday, so the Sunday lead-in cell 0 is never landed on).
+        $this->assertSame(5, $nextModel->picker()->CursorIndex());
         $this->assertNull($cmd);
     }
 
-    public function testUpdateWithEndSetsCursorToFortyOne(): void
+    public function testUpdateWithEndSetsCursorToLastValidDay(): void
     {
         $model = Model::new(new \DateTimeImmutable('2026-05-01'));
 
         $keyMsg = new KeyMsg(KeyType::End);
         [$nextModel, $cmd] = $model->update($keyMsg);
 
-        $this->assertSame(41, $nextModel->picker()->CursorIndex());
+        // End lands on the last valid day (May 31 at index 35), not the raw
+        // grid position 41 that may be a blank trailing cell.
+        $this->assertSame(35, $nextModel->picker()->CursorIndex());
         $this->assertNull($cmd);
     }
 
@@ -151,38 +155,120 @@ final class ModelTest extends TestCase
         $this->assertSame('cursor_moved', $events[0]['type']);
     }
 
-    public function testModelRecordsDateSelectedInRangeMode(): void
+    public function testModelRecordsRangeStartedThenDateSelectedInRangeMode(): void
     {
+        // D4/MT4: arming the range start is its own observable event (the old
+        // wrapper was event-silent until BOTH ends were set, so a host could
+        // not see the anchor). The constructor seeds the cursor on May 1 (the
+        // viewed date), so the first Enter lands there directly.
         $store = new EventStore();
-        // Build a model with a picker that has range mode enabled and cursor on a valid day.
-        // For May 2026, the first day (Friday May 1) is at grid index 5.
         $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withRangeMode(true);
+        $model = new Model($picker, $store);
 
-        // Use GoToPreviousMonth/GoToNextMonth to find a month where the 1st is at index 0.
-        // Actually, let's just use SetTime to navigate to a known state.
-        // Alternatively, directly test the underlying picker to ensure our assumptions are correct.
-        $testPicker = $picker->handleKey(DatePicker::KEY_HOME);
-        for ($i = 0; $i < 5; $i++) {
-            $testPicker = $testPicker->MoveCursorRight();
-        }
-        // Now testPicker is at index 5 (May 1) with range mode
-
-        $model = new Model($testPicker, $store);
-
-        // First Enter: sets rangeStart (first date in range)
+        // First Enter: arms rangeStart and records range_started.
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
-        $this->assertFalse($store->hasEvents(), 'No event on first Enter (rangeStart set, no date_selected yet)');
+        $armed = $store->release();
+        $this->assertNotEmpty($armed, 'arming the range must record an event');
+        $this->assertSame('range_started', $armed[0]['type']);
         $this->assertNotNull($model->picker()->rangeStart(), 'rangeStart should be set');
 
-        // Move to a new day and press Enter again to set rangeEnd
+        // Second Enter on a later day: completes the range, records date_selected
+        // carrying BOTH endpoints.
         $model = new Model($model->picker()->MoveCursorRight(), $store);
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
-
-        $this->assertTrue($store->hasEvents(), 'date_selected should be recorded after rangeEnd is set');
         $events = $store->release();
-        $this->assertCount(1, $events);
-        $this->assertSame('date_selected', $events[0]['type']);
+        $selected = array_values(array_filter($events, static fn(array $e): bool => $e['type'] === 'date_selected'));
+        $this->assertCount(1, $selected, 'date_selected should be recorded after rangeEnd is set');
+        $this->assertSame('2026-05-01', $selected[0]['payload']['rangeStart'],
+            'the completed-range payload must carry the start');
+        $this->assertSame('2026-05-02', $selected[0]['payload']['rangeEnd']);
+    }
+
+    public function testPageDownAndPageUpStepTheMonth(): void
+    {
+        // D5: month navigation was keyboard-dead on the TEA path (only eight
+        // KEY_* were mapped); PageUp/PageDown now bridge to the picker's
+        // GoTo{Previous,Next}Month so a README-only embedder can leave the
+        // launch month.
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'));
+        $this->assertSame(5, $model->picker()->ViewMonth());
+
+        [$next, $cmd] = $model->update(new KeyMsg(KeyType::PageDown));
+        $this->assertSame(6, $next->picker()->ViewMonth());
+        $this->assertNull($cmd);
+
+        [$prev, ] = $model->update(new KeyMsg(KeyType::PageUp));
+        $this->assertSame(4, $prev->picker()->ViewMonth());
+    }
+
+    public function testChordedEnterIsIgnored(): void
+    {
+        // MT2: the wrapper matched only the key type, so Ctrl+Enter / Alt+Enter
+        // — chords a host may reserve — silently triggered selection. They are
+        // now dropped; the unmodified Enter still selects.
+        $store = new EventStore();
+        $ctrl = Model::new(new \DateTimeImmutable('2026-05-01'), $store)
+            ->update(new KeyMsg(KeyType::Enter, ctrl: true))[0];
+        $this->assertFalse($ctrl->picker()->IsSelecting(), 'Ctrl+Enter must not select');
+        $this->assertNull($ctrl->picker()->SelectedDate());
+
+        $alt = Model::new(new \DateTimeImmutable('2026-05-01'), $store)
+            ->update(new KeyMsg(KeyType::Enter, alt: true))[0];
+        $this->assertFalse($alt->picker()->IsSelecting(), 'Alt+Enter must not select');
+
+        $plain = Model::new(new \DateTimeImmutable('2026-05-01'), $store)
+            ->update(new KeyMsg(KeyType::Enter))[0];
+        $this->assertTrue($plain->picker()->IsSelecting(), 'plain Enter still selects');
+    }
+
+    public function testEscapeInSingleModeRecordsDateCleared(): void
+    {
+        // MT4: clearing a selection was event-silent; a host watching the store
+        // could not tell "cleared" from "never picked".
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];   // select
+        $store->release();                                        // discard the date_selected
+        $model = $model->update(new KeyMsg(KeyType::Escape))[0];  // clear
+
+        $cleared = array_values(array_filter(
+            $store->release(),
+            static fn(array $e): bool => $e['type'] === 'date_cleared',
+        ));
+        $this->assertCount(1, $cleared);
+        $this->assertNull($model->picker()->SelectedDate());
+    }
+
+    public function testSelectingADifferentDateRecordsAgain(): void
+    {
+        // D4: date_selected fires on a VALUE change, not the false→true edge of
+        // IsSelecting. Re-picking a DIFFERENT date emits a second event (the old
+        // flag-edge logic dropped it, persisting a stale first pick); re-picking
+        // the SAME date stays a single event.
+        $store = new EventStore();
+        $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];           // May 1
+        $model = new Model($model->picker()->MoveCursorRight(), $store);
+        $model = $model->update(new KeyMsg(KeyType::Enter))[0];           // May 2 (different)
+
+        $selected = array_values(array_filter(
+            $store->release(),
+            static fn(array $e): bool => $e['type'] === 'date_selected',
+        ));
+        $this->assertCount(2, $selected, 'a changed selection must re-record');
+        $this->assertSame('2026-05-01', $selected[0]['payload']['date']);
+        $this->assertSame('2026-05-02', $selected[1]['payload']['date']);
+
+        // Re-pressing Enter on the same date adds nothing.
+        $store2 = new EventStore();
+        $same = Model::new(new \DateTimeImmutable('2026-05-01'), $store2);
+        $same = $same->update(new KeyMsg(KeyType::Enter))[0];
+        $same = $same->update(new KeyMsg(KeyType::Enter))[0];
+        $this->assertCount(1, array_filter(
+            $store2->release(),
+            static fn(array $e): bool => $e['type'] === 'date_selected',
+        ), 're-selecting the same date must not duplicate');
     }
 
     public function testModelDoesNotRecordEventWhenNoStore(): void
@@ -288,11 +374,10 @@ final class ModelTest extends TestCase
     public function testEnterInSingleModeSelectsThroughTheTeaLoop(): void
     {
         $store = new EventStore();
-        // May 2026 starts Friday (firstDow=5) → May 1 sits at grid index 5.
+        // The constructor now seeds the cursor on the viewed date (May 1, 2026
+        // sits at grid index 5), so Enter on a fresh picker selects it directly
+        // — the previous edit-existing-value path had no cursor aim.
         $model = Model::new(new \DateTimeImmutable('2026-05-01'), $store);
-        for ($i = 0; $i < 5; $i++) {
-            $model = $model->update(new KeyMsg(KeyType::Right))[0];
-        }
 
         $model = $model->update(new KeyMsg(KeyType::Enter))[0];
 

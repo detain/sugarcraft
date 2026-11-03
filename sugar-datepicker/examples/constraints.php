@@ -27,12 +27,12 @@ echo "Two months back (May 2026 — the min month):\n";
 echo $march->View() . "\n";
 $still = $march->GoToPreviousMonth();
 echo "One more step back stays put: "
-    . $still->ViewYear() . '-' . $still->ViewMonth() . "\n\n";
+    . \sprintf('%04d-%02d', $still->ViewYear(), $still->ViewMonth()) . "\n\n";
 
 // Selection outside the window is refused; the picker comes back unchanged.
 $beforeBound = $march
-    ->handleKey(DatePicker::KEY_HOME)          // cursor onto the empty lead-in
-    ->handleKey(DatePicker::KEY_LEFT);         // stays at 0
+    ->handleKey(DatePicker::KEY_HOME)          // cursor onto the first valid day (May 10, the min)
+    ->handleKey(DatePicker::KEY_LEFT);         // clamps into the empty lead-in
 $refused = $beforeBound->handleKey(DatePicker::KEY_ENTER);
 echo "Enter on the empty lead-in cell (fallback = May 1, before the bound): "
     . ($refused->IsSelecting() ? 'SELECTED?!' : 'refused') . "\n";
@@ -50,4 +50,4 @@ echo "Enter on the bound itself: "
 // Lifting a bound restores free navigation in that direction.
 $unlocked = $accepted->withoutMinDate()->GoToPreviousMonth();
 echo "After withoutMinDate(), one month back lands in April 2026: "
-    . $unlocked->ViewYear() . '-' . $unlocked->ViewMonth() . "\n";
+    . \sprintf('%04d-%02d', $unlocked->ViewYear(), $unlocked->ViewMonth()) . "\n";

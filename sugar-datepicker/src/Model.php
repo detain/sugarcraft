@@ -24,9 +24,9 @@ final class Model implements \SugarCraft\Core\Model
     }
 
     /**
-     * Factory: build a new calendar model.
+     * Factory: build a new date-picker model.
      *
-     * Mirrors charmbracelet/bubble-datepicker's construction pattern.
+     * Mirrors the EthanEFung/bubble-datepicker construction pattern.
      */
     public static function new(?\DateTimeImmutable $time = null, ?EventStoreInterface $store = null): self
     {
@@ -44,10 +44,18 @@ final class Model implements \SugarCraft\Core\Model
     /**
      * Handle a KeyMsg, returning [nextModel, optionalCmd].
      *
-     * Maps arrow keys to cursor movement, Enter to SelectDate (non-range
-     * mode) or range-start/end (range mode), Escape to ClearDate, and
-     * Home/End to cursor bounds. Records events to the EventStore when
-     * one is injected.
+     * Maps arrow keys to cursor movement, PageUp/PageDown to previous/next
+     * month, Enter to SelectDate (non-range mode) or range-start/end (range
+     * mode), Escape to ClearDate, and Home/End to the first/last valid day.
+     * Records events to the EventStore when one is injected.
+     *
+     * Chorded Enter/Escape/PageUp/PageDown (Ctrl or Alt held) are ignored so a
+     * host's reserved chords are not hijacked; bare arrow keys always act.
+     *
+     * The command is permanently null: this widget never drives side effects of
+     * its own. A host that wants "picked, now quit" must inspect
+     * {@see picker()}'s SelectedDate()/IsSelecting() after update() and emit
+     * its own Cmd — do not wait for a selection command that will not arrive.
      *
      * @return array{0: Model, 1: ?\Closure}
      */
@@ -57,58 +65,97 @@ final class Model implements \SugarCraft\Core\Model
             return [$this, null];
         }
 
-        $key = $this->keyToString($msg);
+        $prev = $this->picker;
+        $next = $this->applyKey($prev, $msg);
 
-        // Map KeyType to DatePicker methods; leave Char (text) alone.
-        $next = match ($msg->type) {
-            KeyType::Left   => $this->picker->MoveCursorLeft(),
-            KeyType::Right  => $this->picker->MoveCursorRight(),
-            KeyType::Up     => $this->picker->MoveCursorUp(),
-            KeyType::Down   => $this->picker->MoveCursorDown(),
-            KeyType::Home   => $this->picker->handleKey(DatePicker::KEY_HOME),
-            KeyType::End    => $this->picker->handleKey(DatePicker::KEY_END),
-            KeyType::Enter  => $this->picker->handleKey(DatePicker::KEY_ENTER),
-            KeyType::Escape => $this->picker->handleKey(DatePicker::KEY_ESCAPE),
-            default         => $this->picker,
-        };
+        $this->recordTransitions($prev, $next);
 
-        // Record date_selected when a range selection completes (rangeEnd is set)
-        // or when a single date is picked via SelectDate() (IsSelecting becomes true).
-        if ($msg->type === KeyType::Enter) {
-            if ($this->picker->isRangeMode()
-                && $this->picker->rangeEnd() === null
-                && $next->rangeEnd() !== null
-            ) {
-                // Second Enter in range mode: range completed
-                $this->store?->record('date_selected', [
-                    'date' => $next->rangeEnd()?->format('Y-m-d'),
-                ]);
-            } elseif (!$this->picker->isRangeMode()
-                && !$this->picker->IsSelecting()
-                && $next->IsSelecting()
-            ) {
-                // Enter in non-range mode entered selecting state
-                $this->store?->record('date_selected', [
-                    'date' => $next->SelectedDate()?->format('Y-m-d'),
-                ]);
-            }
-        }
-
-        // Record navigation events (cursor moved to a different index).
-        if ($key !== null && $next->CursorIndex() !== $this->picker->CursorIndex()) {
-            $this->store?->record('cursor_moved', [
-                'index' => $next->CursorIndex(),
-            ]);
-        }
-
-        // Return [newModel, null]. The selection Cmd is intentionally omitted —
-        // callers inspect SelectedDate() after update() if they need the value.
         return [new self($next, $this->store), null];
     }
 
     /**
-     * Render the calendar view as an ANSI string, delegating the layout
-     * options to DatePicker::View() (width is clamped there to 15-63).
+     * The single keyboard dispatch table. Both cursor movement and month
+     * stepping resolve here, so there is exactly one source of truth for the
+     * key → action mapping (no second hand-restated table).
+     */
+    private function applyKey(DatePicker $picker, KeyMsg $msg): DatePicker
+    {
+        $chorded = $msg->ctrl || $msg->alt;
+
+        return match (true) {
+            $msg->type === KeyType::Left   => $picker->MoveCursorLeft(),
+            $msg->type === KeyType::Right  => $picker->MoveCursorRight(),
+            $msg->type === KeyType::Up     => $picker->MoveCursorUp(),
+            $msg->type === KeyType::Down   => $picker->MoveCursorDown(),
+            $msg->type === KeyType::Home   => $picker->handleKey(DatePicker::KEY_HOME),
+            $msg->type === KeyType::End    => $picker->handleKey(DatePicker::KEY_END),
+            $msg->type === KeyType::PageUp   && !$chorded => $picker->GoToPreviousMonth(),
+            $msg->type === KeyType::PageDown && !$chorded => $picker->GoToNextMonth(),
+            $msg->type === KeyType::Enter  && !$chorded => $picker->handleKey(DatePicker::KEY_ENTER),
+            $msg->type === KeyType::Escape && !$chorded => $picker->handleKey(DatePicker::KEY_ESCAPE),
+            default                       => $picker,
+        };
+    }
+
+    /**
+     * Emit events for state TRANSITIONS (value change), never for flag edges:
+     * re-selecting a different date must notify, re-selecting the same one
+     * must not double-notify.
+     */
+    private function recordTransitions(DatePicker $prev, DatePicker $next): void
+    {
+        if ($this->store === null) {
+            return;
+        }
+
+        if ($next->CursorIndex() !== $prev->CursorIndex()) {
+            $this->store->record('cursor_moved', [
+                'index' => $next->CursorIndex(),
+            ]);
+        }
+
+        if ($next->isRangeMode()) {
+            // range start armed (was unset, now set): the start transition.
+            if ($prev->rangeStart() === null && $next->rangeStart() !== null) {
+                $this->store->record('range_started', [
+                    'date' => $next->rangeStart()?->format('Y-m-d'),
+                ]);
+            }
+            // range completed (start set, end just became non-null).
+            if ($next->rangeEnd() !== null && $prev->rangeEnd() === null) {
+                $this->store->record('date_selected', [
+                    'date'       => $next->rangeEnd()?->format('Y-m-d'),
+                    'rangeStart' => $next->rangeStart()?->format('Y-m-d'),
+                    'rangeEnd'   => $next->rangeEnd()?->format('Y-m-d'),
+                ]);
+            }
+        } else {
+            $prevDate = $prev->SelectedDate();
+            $nextDate = $next->SelectedDate();
+
+            if ($nextDate !== null && self::day($nextDate) !== self::day($prevDate)) {
+                $this->store->record('date_selected', [
+                    'date' => $nextDate->format('Y-m-d'),
+                ]);
+            } elseif ($nextDate === null && $prevDate !== null) {
+                $this->store->record('date_cleared', []);
+            }
+        }
+    }
+
+    private static function day(?\DateTimeImmutable $d): string
+    {
+        return $d?->format('Y-m-d') ?? '';
+    }
+
+    /**
+     * Render the date-picker view as an ANSI string, delegating the layout
+     * options to DatePicker::View() (the total width is clamped there).
+     *
+     * NOTE: the Core\Model contract declares view() with no parameters, so a
+     * host driving this model through the framework gets the 21×9 default.
+     * To choose a width or the week-number column, call View() on the picker
+     * (or this view() with arguments) directly rather than via the contract.
      */
     public function view(int $width = 21, bool $showWeekNumbers = false): string
     {
@@ -125,34 +172,13 @@ final class Model implements \SugarCraft\Core\Model
 
     /**
      * Expose the wrapped picker for direct inspection by callers that
-     * prefer the imperative API.
+     * prefer the imperative API — including month/year navigation reached
+     * through `GoToNextMonth()` and friends, which have no dedicated key
+     * beyond PageUp/PageDown.
      */
     public function picker(): DatePicker
     {
         return $this->picker;
-    }
-
-    // -------------------------------------------------------------------------
-    // Internal
-    // -------------------------------------------------------------------------
-
-    /**
-     * Convert a KeyMsg to the string key name that DatePicker::handleKey
-     * accepts, or null for unhandled Char keys.
-     */
-    private function keyToString(KeyMsg $msg): ?string
-    {
-        return match ($msg->type) {
-            KeyType::Left   => DatePicker::KEY_LEFT,
-            KeyType::Right  => DatePicker::KEY_RIGHT,
-            KeyType::Up     => DatePicker::KEY_UP,
-            KeyType::Down   => DatePicker::KEY_DOWN,
-            KeyType::Home   => DatePicker::KEY_HOME,
-            KeyType::End    => DatePicker::KEY_END,
-            KeyType::Enter  => DatePicker::KEY_ENTER,
-            KeyType::Escape => DatePicker::KEY_ESCAPE,
-            default         => null,
-        };
     }
 
 }

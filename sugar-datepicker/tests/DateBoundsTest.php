@@ -67,9 +67,8 @@ final class DateBoundsTest extends TestCase
             ->GoToPreviousMonth();  // April → March 2026
         $this->assertSame(3, $dp->ViewMonth());
 
-        // Home puts the cursor on grid cell 0 (empty lead-in) → Enter falls
-        // back to first-of-month (Mar 1), which is BEFORE the bound →
-        // refusal, receiver unchanged.
+        // Home lands on the first VALID day of the viewed month (Mar 1).
+        // Mar 1 is BEFORE the bound → selection refusal, receiver unchanged.
         $dp = $dp->handleKey('home');
         $refused = $dp->handleKey('enter');
         $this->assertFalse($refused->IsSelecting());
@@ -92,9 +91,10 @@ final class DateBoundsTest extends TestCase
             ->withMaxDate(new \DateTimeImmutable('2026-05-20'));
 
         // May 2026 starts Friday (firstDow=5): May 20 is grid index 24,
-        // May 21 is index 25.
+        // May 21 is index 25. Home lands on May 1 (index 5); 20 rights reach
+        // the first out-of-bound day.
         $dp = $dp->handleKey('home');
-        for ($i = 0; $i < 25; $i++) {
+        for ($i = 0; $i < 20; $i++) {
             $dp = $dp->MoveCursorRight();
         }
         $this->assertSame('2026-05-21', $dp->dateAtCursor()?->format('Y-m-d'));
@@ -192,14 +192,15 @@ final class DateBoundsTest extends TestCase
             ->withMinDate(new \DateTimeImmutable('2026-05-10'))
             ->withMaxDate(new \DateTimeImmutable('2026-05-20'))
             ->withRangeMode(true)
-            ->handleKey('home'); // cursor 0 → empty cell → null date
+            ->handleKey('home'); // May 1 — a real day, but BEFORE the bound
 
         $dp = $dp->handleKey('enter');
         $this->assertNull($dp->rangeStart(),
-            'Empty cell cannot anchor a range even in range mode');
+            'Out-of-bound day cannot anchor a range even in range mode');
 
-        // May 2026 starts Friday (firstDow=5): May 9 is grid index 13.
-        for ($i = 0; $i < 13; $i++) {
+        // May 2026 starts Friday (firstDow=5): home lands on May 1 (index 5),
+        // May 9 is grid index 13 — 8 rights past it.
+        for ($i = 0; $i < 8; $i++) {
             $dp = $dp->MoveCursorRight();
         }
         $this->assertSame('2026-05-09', $dp->dateAtCursor()?->format('Y-m-d'));
@@ -228,8 +229,8 @@ final class DateBoundsTest extends TestCase
     {
         // Documented law: existing selections survive a tightened bound —
         // bounds govern FUTURE navigation/selection only.
-        $dp = self::may()->handleKey('home');
-        $dp = $dp->handleKey('enter'); // selects May 1 (empty cell fallback)
+        $dp = self::may()->handleKey('home'); // lands on May 1 (first valid day)
+        $dp = $dp->handleKey('enter'); // selects May 1
         $this->assertSame('2026-05-01', $dp->SelectedDate()?->format('Y-m-d'));
 
         $tightened = $dp->withMinDate(new \DateTimeImmutable('2026-05-10'));

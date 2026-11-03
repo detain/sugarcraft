@@ -20,7 +20,8 @@ use SugarCraft\Core\Util\Width;
  * All navigation and selection methods are immutable: they return a new
  * instance and never mutate the receiver.
  *
- * Port of EthanEFung/bubble-datepicker.
+ * Design antecedent: EthanEFung/bubble-datepicker, implemented as a native
+ * PHP component (there is no Go runtime dependency).
  *
  * @see https://github.com/EthanEFung/bubble-datepicker
  */
@@ -28,13 +29,31 @@ final class DatePicker
 {
     private const DAYS_IN_WEEK = 7;
 
+    /** Day columns each occupy 3 cells (2 for the number + 1 space). */
+    private const CELL_CHARS = 3;
+
+    /** Total grid cells: 6 week rows × 7 days. */
+    private const GRID_CELLS = 42;
+
+    /** Largest buffer width View() accepts before clamping. */
+    private const MAX_TOTAL_WIDTH = 63;
+
+    /** Characters reserved for the optional ISO week-number column. */
+    private const WEEK_COL_CHARS = 4;
+
+    /** Longest SGR string any style setter accepts. */
+    private const SGR_MAX_LEN = 32;
+
     /**
      * Lower month-position bound of the calendar itself: January 0001
-     * (position encoding is year*12 + month-1). The library has no dates
-     * below year 1 — decrementing past it used to underflow the view into
-     * year 0, where date construction throws (docs-fix-1023 E2 / M4).
+     * (position encoding is year*12 + month-1). The library represents no
+     * dates below year 1 — the view floors there so grid dates stay valid
+     * and the cursor never lands on an unrepresentable month.
      */
     private const VIEW_FLOOR_POS = 12;
+
+    /** Maximum month-position bound (year 10000, the upper tolerated edge). */
+    private const DAY_INDEX_MAX = 41;
 
     // Key constants for handleKey()
     public const KEY_LEFT  = 'left';
@@ -42,6 +61,9 @@ final class DatePicker
     public const KEY_UP    = 'up';
     public const KEY_DOWN  = 'down';
     public const KEY_ENTER = 'enter';
+    // The value string is the handleKey() wire contract; sugar-core spells the
+    // same key KeyType::Escape = 'escape'. The two are reconciled in Model,
+    // never compared to the raw core spelling here.
     public const KEY_ESCAPE = 'esc';
     public const KEY_HOME  = 'home';
     public const KEY_END   = 'end';
@@ -80,13 +102,13 @@ final class DatePicker
     private ?\DateTimeImmutable $maxDate = null;
 
     /** Styling (SGR ANSI codes). */
-    private string $headerStyle       = '1;37';  // bold white
-    private string $dayNameStyle      = '90';    // bright black
-    private string $todayStyle        = '1;32';  // bold green
-    private string $selectedStyle     = '1;36';  // bold cyan
-    private string $selectedTodayStyle = '1;33'; // bold yellow
-    private string $cursorStyle       = '7';     // reverse
-    private string $rangeStyle        = '1;35'; // bold magenta (range highlight)
+    private string $headerStyle        = '1;37';  // bold white
+    private string $dayNameStyle       = '90';    // bright black
+    private string $todayStyle         = '1;32';  // bold green
+    private string $selectedStyle      = '1;36';  // bold cyan
+    private string $selectedTodayStyle = '1;33';  // bold yellow
+    private string $cursorStyle        = '7';     // reverse
+    private string $rangeStyle         = '1;35';  // bold magenta (range highlight)
 
     // -------------------------------------------------------------------------
     // i18n helpers
@@ -115,8 +137,14 @@ final class DatePicker
     public function __construct(?\DateTimeImmutable $time = null)
     {
         $t = $time ?? new \DateTimeImmutable();
-        $this->viewMonth = (int) $t->format('n');
-        $this->viewYear  = (int) $t->format('Y');
+        [$this->viewYear, $this->viewMonth] = self::flooredView(
+            (int) $t->format('Y'),
+            (int) $t->format('n'),
+        );
+        // Aim the cursor at the initial date when it falls inside the viewed
+        // month (edit-existing-value integrations), else at the first valid
+        // day — the picker never opens focus-invisible on an empty cell.
+        $this->cursorIndex = $this->cursorForDate($t);
     }
 
     public static function new(?\DateTimeImmutable $time = null): self
@@ -181,21 +209,39 @@ final class DatePicker
 
     /**
      * Clamp a target year/month (optionally shifted by $deltaMonths) into
-     * the viewable window: never below January 0001, never outside the
-     * configured min/max months. Pure — reads only.
+     * the viewable window: never outside the configured min/max months, and
+     * finally never below January 0001.
+     *
+     * The calendar floor is applied LAST so a `maxDate` earlier than year 1
+     * can never drag the view under it into an unrepresentable month (a zero
+     * date is exactly what bare MySQL/hosting rows yield). Pure — reads only.
      *
      * @return array{0:int,1:int} [viewYear, viewMonth]
      */
     private function boundedView(int $year, int $month, int $deltaMonths = 0): array
     {
         $pos = $year * 12 + ($month - 1) + $deltaMonths;
-        $pos = max(self::VIEW_FLOOR_POS, $pos);
         if ($this->minDate !== null) {
             $pos = max($pos, self::monthPos($this->minDate));
         }
         if ($this->maxDate !== null) {
             $pos = min($pos, self::monthPos($this->maxDate));
         }
+        $pos = max(self::VIEW_FLOOR_POS, $pos);
+
+        return [intdiv($pos, 12), ($pos % 12) + 1];
+    }
+
+    /**
+     * Floor a raw year/month pair to the calendar floor (January 0001) and a
+     * valid month. Used at construction where no bounds exist yet.
+     *
+     * @return array{0:int,1:int} [viewYear, viewMonth]
+     */
+    private static function flooredView(int $year, int $month): array
+    {
+        $pos = $year * 12 + ($month - 1);
+        $pos = max(self::VIEW_FLOOR_POS, $pos);
 
         return [intdiv($pos, 12), ($pos % 12) + 1];
     }
@@ -212,7 +258,9 @@ final class DatePicker
     // Bounds clamp navigation to the containing months and refuse selection
     // of dates outside them. Existing selections are NOT retroactively
     // cleared when a bound is tightened — the bounds govern future
-    // navigation and selection only.
+    // navigation and selection only. All comparisons are made on the calendar
+    // day (Y-m-d), never the absolute instant, so a bound expressed in one
+    // zone and a probe in another agree when they show the same wall date.
     // -------------------------------------------------------------------------
 
     /**
@@ -223,7 +271,7 @@ final class DatePicker
      */
     public function withMinDate(\DateTimeImmutable $min): self
     {
-        if ($this->maxDate !== null && self::midnight($min) > self::midnight($this->maxDate)) {
+        if ($this->maxDate !== null && self::dayKey($min) > self::dayKey($this->maxDate)) {
             throw new \InvalidArgumentException('minDate must not be after maxDate');
         }
 
@@ -244,7 +292,7 @@ final class DatePicker
      */
     public function withMaxDate(\DateTimeImmutable $max): self
     {
-        if ($this->minDate !== null && self::midnight($max) < self::midnight($this->minDate)) {
+        if ($this->minDate !== null && self::dayKey($max) < self::dayKey($this->minDate)) {
             throw new \InvalidArgumentException('maxDate must not be before minDate');
         }
 
@@ -270,17 +318,22 @@ final class DatePicker
     /** Whether $date lies inside the configured bounds (inclusive). */
     public function inBounds(\DateTimeImmutable $date): bool
     {
-        $d = self::midnight($date);
-        if ($this->minDate !== null && $d < self::midnight($this->minDate)) {
+        $d = self::dayKey($date);
+        if ($this->minDate !== null && $d < self::dayKey($this->minDate)) {
             return false;
         }
 
-        return !($this->maxDate !== null && $d > self::midnight($this->maxDate));
+        return !($this->maxDate !== null && $d > self::dayKey($this->maxDate));
     }
 
-    private static function midnight(\DateTimeImmutable $date): \DateTimeImmutable
+    /**
+     * Stable calendar-day key (Y as 4 digits + m + d) for timezone-safe
+     * comparison: two dates showing the same wall date compare equal
+     * regardless of the zone each \DateTimeImmutable carries.
+     */
+    private static function dayKey(\DateTimeImmutable $date): int
     {
-        return $date->setTime(0, 0, 0);
+        return (int) $date->format('Ymd');
     }
 
     /** Shared write path for the bound setters; re-clamps the view. */
@@ -302,7 +355,9 @@ final class DatePicker
     public function withToday(\DateTimeImmutable $today): self
     {
         $clone = clone $this;
-        $clone->today = $today;        return $clone;
+        $clone->today = $today;
+
+        return $clone;
     }
 
     /** Drop the pinned "today" reference (back to real wall-clock now). */
@@ -323,11 +378,25 @@ final class DatePicker
     public function SetTime(\DateTimeImmutable $t): self
     {
         $clone = clone $this;
-        [$clone->viewYear, $clone->viewMonth] = $this->boundedView(
+        [$clone->viewYear, $clone->viewMonth] = $clone->boundedView(
             (int) $t->format('Y'),
             (int) $t->format('n'),
         );
-        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
+        $clone->cursorIndex = $clone->cursorForDate($t);
+
+        return $clone;
+    }
+
+    /**
+     * Aim the cursor at an arbitrary date (the edit-existing-value recipe):
+     * when $date falls inside the currently viewed month the cursor lands on
+     * its cell; otherwise the view is unchanged and the cursor keeps its
+     * clamped position. Immutable.
+     */
+    public function MoveToDate(\DateTimeImmutable $date): self
+    {
+        $clone = clone $this;
+        $clone->cursorIndex = $clone->cursorForDate($date);
 
         return $clone;
     }
@@ -337,33 +406,44 @@ final class DatePicker
     //
     // NOTE: Cursor navigation is GRID-INDEX based (0-41), not date-based like
     // upstream bubbles/calendar (which uses DateTimeImmutable cursor). When at
-    // index 0 and pressing Left, the cursor stays at 0 (no month-boundary wrap).
-    // When at index 41 and pressing Right, the cursor stays at 41.
+    // the first valid day and pressing Left, the cursor steps into the empty
+    // lead-in cell and stays there (no month-boundary wrap); the same on the
+    // trailing edge. Arrow keys therefore CAN rest on empty cells — Enter
+    // falls back to the first of the month from a lead-in blank — while Home
+    // and End always land on a real day.
     // This is an architectural difference from upstream.
     // -------------------------------------------------------------------------
 
     public function MoveCursorLeft(): self
     {
         $clone = clone $this;
-        $clone->cursorIndex = \max(0, $clone->cursorIndex - 1);        return $clone;
+        $clone->cursorIndex = \max(0, $clone->cursorIndex - 1);
+
+        return $clone;
     }
 
     public function MoveCursorRight(): self
     {
         $clone = clone $this;
-        $clone->cursorIndex = \min(41, $clone->cursorIndex + 1);        return $clone;
+        $clone->cursorIndex = \min(self::DAY_INDEX_MAX, $clone->cursorIndex + 1);
+
+        return $clone;
     }
 
     public function MoveCursorUp(): self
     {
         $clone = clone $this;
-        $clone->cursorIndex = \max(0, $clone->cursorIndex - self::DAYS_IN_WEEK);        return $clone;
+        $clone->cursorIndex = \max(0, $clone->cursorIndex - self::DAYS_IN_WEEK);
+
+        return $clone;
     }
 
     public function MoveCursorDown(): self
     {
         $clone = clone $this;
-        $clone->cursorIndex = \min(41, $clone->cursorIndex + self::DAYS_IN_WEEK);        return $clone;
+        $clone->cursorIndex = \min(self::DAY_INDEX_MAX, $clone->cursorIndex + self::DAYS_IN_WEEK);
+
+        return $clone;
     }
 
     // -------------------------------------------------------------------------
@@ -378,7 +458,7 @@ final class DatePicker
      * Early exit: when no date can be resolved (month beyond 4-digit
      * representation) or the resolved date lies outside the configured
      * [minDate, maxDate] bounds, selection is REFUSED — the receiver is
-     * returned unchanged.
+     * returned unchanged (same reference, not a copy).
      */
     public function SelectDate(): self
     {
@@ -401,7 +481,9 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->selecting = false;
-        $clone->selectedDate = null;        return $clone;
+        $clone->selectedDate = null;
+
+        return $clone;
     }
 
     public function ToggleSelection(): self
@@ -420,7 +502,9 @@ final class DatePicker
         if (!$mode) {
             $clone->rangeStart = null;
             $clone->rangeEnd = null;
-        }        return $clone;
+        }
+
+        return $clone;
     }
 
     public function rangeStart(): ?\DateTimeImmutable
@@ -448,37 +532,40 @@ final class DatePicker
      *             fallback and min/max refusal)
      * Escape:     range mode — clear the range; single mode — clear the
      *             selection (same as ClearDate())
-     * Home/End:   jump to first/last cell
+     * Home/End:   jump to the first / last valid day of the viewed month
+     *
+     * An unrecognized key returns a functionally identical copy; a refused
+     * selection returns the receiver itself. Callers must compare on state,
+     * not object identity, to detect a no-op.
      */
     public function handleKey(string $key): self
     {
-        $clone = clone $this;
-
         if ($key === self::KEY_LEFT) {
-            return $clone->MoveCursorLeft();
+            return $this->MoveCursorLeft();
         }
         if ($key === self::KEY_RIGHT) {
-            return $clone->MoveCursorRight();
+            return $this->MoveCursorRight();
         }
         if ($key === self::KEY_UP) {
-            return $clone->MoveCursorUp();
+            return $this->MoveCursorUp();
         }
         if ($key === self::KEY_DOWN) {
-            return $clone->MoveCursorDown();
+            return $this->MoveCursorDown();
         }
         if ($key === self::KEY_HOME) {
-            $clone->cursorIndex = 0;            return $clone;
+            return $this->jumpToFirstValidDay();
         }
         if ($key === self::KEY_END) {
-            $clone->cursorIndex = 41;            return $clone;
+            return $this->jumpToLastValidDay();
         }
         if ($key === self::KEY_ENTER) {
             return $this->rangeMode
-                ? $this->handleRangeEnter($clone)
+                ? $this->handleRangeEnter()
                 : $this->SelectDate();
         }
         if ($key === self::KEY_ESCAPE) {
             if ($this->rangeMode) {
+                $clone = clone $this;
                 $clone->rangeStart = null;
                 $clone->rangeEnd = null;
 
@@ -488,23 +575,42 @@ final class DatePicker
             return $this->ClearDate();
         }
 
+        // Unrecognized key: no state to change — return the receiver.
+        return $this;
+    }
+
+    private function jumpToFirstValidDay(): self
+    {
+        $clone = clone $this;
+        $clone->cursorIndex = $clone->firstValidIndex();
+
         return $clone;
     }
 
-    private function handleRangeEnter(self $clone): self
+    private function jumpToLastValidDay(): self
+    {
+        $clone = clone $this;
+        $clone->cursorIndex = $clone->lastValidIndex();
+
+        return $clone;
+    }
+
+    private function handleRangeEnter(): self
     {
         $date = $this->dateAtCursor();
         if ($date === null || !$this->inBounds($date)) {
             // Early exit: empty cell or out-of-bounds date cannot anchor a range.
-            return $clone;
+            return $this;
         }
+
+        $clone = clone $this;
 
         if ($this->rangeStart === null) {
             $clone->rangeStart = $date;
             $clone->rangeEnd = null;
         } elseif ($this->rangeEnd === null) {
             // Set end to cursor date; ensure start <= end
-            if ($date < $this->rangeStart) {
+            if (self::dayKey($date) < self::dayKey($this->rangeStart)) {
                 $clone->rangeEnd = $this->rangeStart;
                 $clone->rangeStart = $date;
             } else {
@@ -514,7 +620,9 @@ final class DatePicker
             // Both set — start fresh
             $clone->rangeStart = $date;
             $clone->rangeEnd = null;
-        }        return $clone;
+        }
+
+        return $clone;
     }
 
     // -------------------------------------------------------------------------
@@ -551,8 +659,9 @@ final class DatePicker
      * sits on an empty cell (before the 1st of the month or past the last
      * day in the 6×7 grid).
      *
-     * Delegates to Navigation::gridIndexToDate() — the single source of truth
-     * for grid-index → date math (viewMonth is always 1-12, so it never throws).
+     * Delegates to Navigation::gridIndexToDate(). The constructor and
+     * SetTime floor the view year to >= 1 and clamp the month to 1-12, so the
+     * delegated call never receives out-of-range input and cannot throw.
      */
     public function dateAtCursor(): ?\DateTimeImmutable
     {
@@ -569,23 +678,79 @@ final class DatePicker
         return $d === false ? null : $d;
     }
 
+    /**
+     * Grid index of the day-number within the viewed month, or null when the
+     * date is not in this month (so the cursor cannot be aimed at it).
+     */
+    private function gridIndexOf(?\DateTimeImmutable $date): ?int
+    {
+        if ($date === null) {
+            return null;
+        }
+        if ((int) $date->format('n') !== $this->viewMonth || (int) $date->format('Y') !== $this->viewYear) {
+            return null;
+        }
+        $firstOfMonth = $this->firstOfViewMonth();
+        if ($firstOfMonth === null) {
+            return null;
+        }
+        $firstDow = (int) $firstOfMonth->format('w');
+
+        return $this->clampedCursor($firstDow + (int) $date->format('j') - 1);
+    }
+
+    /** Cursor index for a seed date: its cell if in-month, else the first valid day. */
+    private function cursorForDate(?\DateTimeImmutable $date): int
+    {
+        return $this->gridIndexOf($date) ?? $this->firstValidIndex();
+    }
+
+    /** Grid index of the viewed month's first day (its weekday column). */
+    private function firstValidIndex(): int
+    {
+        $firstOfMonth = $this->firstOfViewMonth();
+        if ($firstOfMonth === null) {
+            return 0;
+        }
+
+        return $this->clampedCursor((int) $firstOfMonth->format('w'));
+    }
+
+    /** Grid index of the viewed month's last day. */
+    private function lastValidIndex(): int
+    {
+        $firstOfMonth = $this->firstOfViewMonth();
+        if ($firstOfMonth === null) {
+            return self::DAY_INDEX_MAX;
+        }
+        $firstDow     = (int) $firstOfMonth->format('w');
+        $daysInMonth  = (int) $firstOfMonth->format('t');
+
+        return \min(self::DAY_INDEX_MAX, $firstDow + $daysInMonth - 1);
+    }
+
     // -------------------------------------------------------------------------
     // Rendering
     // -------------------------------------------------------------------------
 
     /**
-     * Render the calendar view as an ANSI string using a Buffer.
+     * Render the date-picker view as an ANSI string using a Buffer.
      *
-     * @param int $width    Terminal width in characters (default 21 = 7 days × 3 chars).
-     *                      Values outside 15-63 are CLAMPED to that range
-     *                      (15 = 5 columns minimum, 63 = 21 columns maximum).
+     * @param int $width    Requested calendar-area width in characters
+     *                      (default 21 = 7 day columns × 3 cells). The TOTAL
+     *                      buffer width (calendar area + the optional 4-cell
+     *                      week column) is clamped into [natural, 63]: the
+     *                      floor guarantees all seven day columns stay visible
+     *                      (21 without a week column, 25 with one); the ceiling
+     *                      is 63. Widths outside that band are silently
+     *                      clamped, never rejected.
      * @param bool $showWeekNumbers Show ISO week number column on the left (default false).
      */
     public function View(int $width = 21, bool $showWeekNumbers = false): string
     {
-        $width = \max(15, \min(63, $width));
-        $weekColWidth = $showWeekNumbers ? 4 : 0; // 3 chars for week number + 1 space
-        $totalWidth = $width + $weekColWidth;
+        $weekColWidth = $showWeekNumbers ? self::WEEK_COL_CHARS : 0;
+        $minTotal = self::DAYS_IN_WEEK * self::CELL_CHARS + $weekColWidth;
+        $totalWidth = \max($minTotal, \min(self::MAX_TOTAL_WIDTH, $width + $weekColWidth));
         $height = 9; // header + day-names + sep + 6 week rows
 
         $buffer = Buffer::new($totalWidth, $height);
@@ -595,8 +760,8 @@ final class DatePicker
         $buffer = $this->placeStringAt($buffer, $weekColWidth, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
 
         // Row 1: day-name row
-        for ($dow = 0; $dow < 7; $dow++) {
-            $col = $weekColWidth + $dow * 3; // 3-char cells
+        for ($dow = 0; $dow < self::DAYS_IN_WEEK; $dow++) {
+            $col = $weekColWidth + $dow * self::CELL_CHARS; // 3-char cells
             $dayName = self::dayName($dow);
             $buffer = $this->placeStringAt($buffer, $col, 1, $dayName, $this->sgrToBufferStyle($this->dayNameStyle));
         }
@@ -615,20 +780,21 @@ final class DatePicker
         for ($week = 0; $week < 6; $week++) {
             $row = 3 + $week;
 
-            // Optional week number column
-            if ($showWeekNumbers) {
+            // Optional week number column — omitted on rows with no in-month
+            // day (a ghost week number over an all-blank row is meaningless).
+            if ($showWeekNumbers && $this->weekRowHasDay($cells, $week)) {
                 $weekNum = $this->isoWeekNumber($week);
                 $buffer = $this->placeStringAt($buffer, 0, $row, $weekNum, $this->sgrToBufferStyle('90'));
             }
 
             // Day cells — each day is a 2-char number centered in a 3-char cell
-            for ($dow = 0; $dow < 7; $dow++) {
-                $idx = $week * 7 + $dow;
+            for ($dow = 0; $dow < self::DAYS_IN_WEEK; $dow++) {
+                $idx = $week * self::DAYS_IN_WEEK + $dow;
                 [$plain, $style] = $cells[$idx] ?? ['  ', null];
                 if ($plain === '  ' && $style === null) {
                     continue;
                 }
-                $col = $weekColWidth + $dow * 3;
+                $col = $weekColWidth + $dow * self::CELL_CHARS;
                 $buffer = $this->placeStringAt($buffer, $col, $row, $plain, $style);
             }
         }
@@ -636,11 +802,27 @@ final class DatePicker
         return $buffer->toAnsi();
     }
 
+    /** Whether a displayed week row (0-5) contains at least one real day. */
+    private function weekRowHasDay(array $cells, int $week): bool
+    {
+        for ($dow = 0; $dow < self::DAYS_IN_WEEK; $dow++) {
+            $idx = $week * self::DAYS_IN_WEEK + $dow;
+            if (isset($cells[$idx]) && \trim($cells[$idx][0]) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Compute the ISO week number for a given grid row (0-5).
      *
-     * Uses the ISO week number algorithm: week 1 is the first week of the
-     * year with at least 4 days in the new year (Mon-Sun week start).
+     * A displayed row is a Sunday-start week, but ISO weeks run Monday to
+     * Sunday: the row's Sunday belongs to the PRECEDING ISO week, so reading
+     * the week number off the Sunday under-labels Sunday-start rows by one.
+     * Every day of a Monday-Sunday week shares one ISO number, so the row's
+     * Wednesday is used as the unambiguous representative.
      *
      * @param int $weekRow 0-based week row index (0 = first week displayed)
      */
@@ -656,12 +838,13 @@ final class DatePicker
         // (step back to the row's Sunday). String-concatenating "+" with a
         // negative int yields the malformed "+-4 days", which PHP mis-parses
         // as +4, shifting every week number a full week forward.
-        $firstDayOfWeekRow = $firstOfMonth->modify(
-            \sprintf('%+d days', -$firstDow + $weekRow * 7)
+        $sundayOfWeekRow = $firstOfMonth->modify(
+            \sprintf('%+d days', -$firstDow + $weekRow * self::DAYS_IN_WEEK)
         );
+        // ISO week representative: the Wednesday of this displayed row.
+        $midWeek = $sundayOfWeekRow->modify('+3 days');
 
-        // ISO week: Mon=1 … Sun=7, week 1 contains Jan 4
-        $isoWeek = (int) $firstDayOfWeekRow->format('W');
+        $isoWeek = (int) $midWeek->format('W');
         return \sprintf('%2d ', $isoWeek);
     }
 
@@ -673,35 +856,63 @@ final class DatePicker
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->headerStyle = $s;        return $clone;
+        $clone->headerStyle = $s;
+
+        return $clone;
+    }
+
+    public function WithDayNameStyle(string $s): self
+    {
+        self::assertSgr($s);
+        $clone = clone $this;
+        $clone->dayNameStyle = $s;
+
+        return $clone;
     }
 
     public function WithTodayStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->todayStyle = $s;        return $clone;
+        $clone->todayStyle = $s;
+
+        return $clone;
     }
 
     public function WithSelectedStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->selectedStyle = $s;        return $clone;
+        $clone->selectedStyle = $s;
+
+        return $clone;
+    }
+
+    public function WithSelectedTodayStyle(string $s): self
+    {
+        self::assertSgr($s);
+        $clone = clone $this;
+        $clone->selectedTodayStyle = $s;
+
+        return $clone;
     }
 
     public function WithCursorStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->cursorStyle = $s;        return $clone;
+        $clone->cursorStyle = $s;
+
+        return $clone;
     }
 
     public function WithRangeStyle(string $s): self
     {
         self::assertSgr($s);
         $clone = clone $this;
-        $clone->rangeStyle = $s;        return $clone;
+        $clone->rangeStyle = $s;
+
+        return $clone;
     }
 
     // -------------------------------------------------------------------------
@@ -712,22 +923,56 @@ final class DatePicker
      * Validate an SGR code string — must be empty, or digit groups joined by
      * single semicolons (e.g. "1;31", "7", ""). Dangling or empty parameter
      * shapes (";", "1;", "1;;2") are refused: sgrToBufferStyle() explodes on
-     * ';' and would silently mis-parse them. Throws if a full escape sequence
-     * is passed, which would mangle that parsing.
+     * ';' and would silently mis-parse them. The extended-colour introducers
+     * 38 and 48 are refused too: sgrToBufferStyle() has no way to consume the
+     * trailing colour parameters, so "38;5;226" would drop 38 and 226 and
+     * leave the bare 5 to be misread as ATTR_BLINK — accepting then
+     * mis-decoding is worse than a loud refusal. Throws if a full escape
+     * sequence is passed, which would mangle that parsing. The offending
+     * input is control-byte-escaped in the message so a forged ESC can never
+     * reach the terminal through the error path.
      *
      * @throws \InvalidArgumentException
      */
     private static function assertSgr(string $s): void
     {
-        if ($s !== '' && !\preg_match('/^(?:\d+(?:;\d+)*)$/', $s)) {
+        if ($s === '') {
+            return;
+        }
+
+        $quoted = '"' . \addcslashes($s, "\x00..\x1f\x7f\"\\") . '"';
+
+        if (\strlen($s) > self::SGR_MAX_LEN) {
             throw new \InvalidArgumentException(
-                'SGR code must be empty or digits/semicolons only, got: ' . $s
+                'SGR code exceeds ' . self::SGR_MAX_LEN . ' characters, got: ' . $quoted
             );
+        }
+
+        // \z (not $) so a trailing newline is not silently accepted; no
+        // unbounded digit runs beyond the length cap above.
+        if (!\preg_match('/\A(?:\d+(?:;\d+)*)\z/', $s)) {
+            throw new \InvalidArgumentException(
+                'SGR code must be empty or digits/semicolons only, got: ' . $quoted
+            );
+        }
+
+        foreach (\explode(';', $s) as $code) {
+            $n = (int) $code;
+            if ($n === 38 || $n === 48) {
+                throw new \InvalidArgumentException(
+                    'SGR extended-colour codes 38/48 are not supported, got: ' . $quoted
+                );
+            }
         }
     }
 
     /**
      * Place a string into the buffer at (col, row), handling wide chars.
+     *
+     * C0 control bytes and DEL are dropped before they reach the buffer: the
+     * cell grid only suppresses zero-width clusters, but a control character
+     * such as TAB is scored width 4 and would otherwise land on the wire,
+     * so untrusted translated text cannot smuggle control codes into output.
      *
      * @return Buffer
      */
@@ -741,6 +986,11 @@ final class DatePicker
         foreach ($clusters as $cluster) {
             if ($colCursor >= $buf->width()) {
                 break;
+            }
+            $ord = \mb_ord($cluster, 'UTF-8');
+            if ($ord !== false && ($ord < 0x20 || $ord === 0x7f)) {
+                // Control byte: drop it, consuming no column.
+                continue;
             }
             $gw = $this->graphemeWidth($cluster);
             if ($gw === 0) {
@@ -822,7 +1072,7 @@ final class DatePicker
      * SugarCraft\Core\Util\Width table (Unicode 16.0 East_Asian_Width +
      * Emoji_Presentation). The former hand-rolled range fork here was a
      * stale copy that scored modern emoji as 1 cell and misjudged CJK
-     * punctuation (docs-fix-1023 E2 / r9x family fix).
+     * punctuation.
      */
     private function graphemeWidth(string $g): int
     {
@@ -836,55 +1086,89 @@ final class DatePicker
      */
     private function buildCells(): array
     {
+        // Leading "!" per the firstOfViewMonth law: the grid must not inherit
+        // the wall-clock time-of-day from createFromFormat.
         $firstOfMonth = \DateTimeImmutable::createFromFormat(
-            'Y-m-d', \sprintf('%04d-%02d-01', $this->viewYear, $this->viewMonth)
+            '!Y-m-d', \sprintf('%04d-%02d-01', $this->viewYear, $this->viewMonth)
         );
         if ($firstOfMonth === false) return [];
 
         $daysInMonth = (int) $firstOfMonth->format('t');
         $firstDow    = (int) $firstOfMonth->format('w'); // 0=Sun
 
-        $today = $this->today();
-        $todayDay = (int) $today->format('j');
-        $todayMonth = (int) $today->format('n');
-        $todayYear  = (int) $today->format('Y');
-
-        $selectedDay = $this->selectedDate !== null
-            ? (int) $this->selectedDate->format('j') : 0;
+        $todayKey    = self::dayKey($this->today());
+        $selectedKey = $this->selectedDate !== null
+            ? self::dayKey($this->selectedDate) : 0;
 
         $range = $this->buildRange();
 
         $cells = [];
 
-        for ($i = 0; $i < 42; $i++) {
+        for ($i = 0; $i < self::GRID_CELLS; $i++) {
             $dayNum = $i - $firstDow + 1;
 
-            if ($dayNum < 1 || $dayNum > $daysInMonth) {
-                $cells[] = ['  ', null];
+            $cellDate = ($dayNum >= 1 && $dayNum <= $daysInMonth)
+                ? $firstOfMonth->modify('+' . ($dayNum - 1) . ' days')
+                : null;
+
+            // Cursor override is applied to EVERY cell the cursor rests on —
+            // including empty lead-in/trailing cells — so the single focus
+            // cue stays visible wherever the cursor lands.
+            $isCursor = $i === $this->cursorIndex;
+
+            if ($cellDate === null) {
+                $cells[] = ['  ', $isCursor ? $this->applyCursorStyle(null) : null];
                 continue;
             }
 
-            $isToday   = $dayNum === $todayDay && $this->viewMonth === $todayMonth && $this->viewYear === $todayYear;
+            $dayKey   = self::dayKey($cellDate);
+            $isToday  = $dayKey === $todayKey;
 
-            $cellDate = $firstOfMonth->modify('+' . ($dayNum - 1) . ' days');
-            $isInRange = $range !== null && $range->contains($cellDate);
+            $isInRange   = $range !== null && $range->contains($cellDate);
+            $isRangeEdge = $range !== null
+                && (self::dayKey($this->rangeStart) === $dayKey
+                    || self::dayKey($this->rangeEnd) === $dayKey);
+            // In-progress anchor: range start armed but not yet completed.
+            $isRangeArm = $this->rangeMode
+                && $range === null
+                && $this->rangeStart !== null
+                && $dayKey === self::dayKey($this->rangeStart);
 
             $text = \sprintf('%2d', $dayNum);
-            $style = null;
 
-            if ($isToday && $dayNum === $selectedDay) {
+            if ($isToday && $dayKey === $selectedKey) {
                 $style = $this->sgrToBufferStyle($this->selectedTodayStyle);
             } elseif ($isInRange) {
                 $style = $this->sgrToBufferStyle($this->rangeStyle);
-            } elseif ($dayNum === $selectedDay && $this->selecting) {
+            } elseif ($isRangeArm) {
+                $style = $this->sgrToBufferStyle($this->selectedStyle);
+            } elseif ($dayKey === $selectedKey && $this->selecting) {
                 $style = $this->sgrToBufferStyle($this->selectedStyle);
             } elseif ($isToday) {
                 $style = $this->sgrToBufferStyle($this->todayStyle);
+            } else {
+                $style = null;
+            }
+
+            // Range endpoints keep a textual/underline cue distinct from the
+            // fill so the start/end are visible, not two identical magenta days.
+            if ($isRangeEdge && $style !== null) {
+                $style = new Style(
+                    $style->fg(),
+                    $style->bg(),
+                    $style->attrs() | Style::ATTR_UNDERLINE,
+                );
+            }
+
+            // Out-of-bounds (disabled) days are dimmed so a host shows the
+            // difference between an unselectable day and a selectable one.
+            if (!$this->inBounds($cellDate) && $style === null) {
+                $style = new Style(null, null, Style::ATTR_FAINT);
             }
 
             // Apply cursor as final override — compose reverse attr onto existing style
             // so the cursor is visible even on today/selected/range cells.
-            if ($i === $this->cursorIndex) {
+            if ($isCursor) {
                 $style = $this->applyCursorStyle($style);
             }
 
@@ -923,34 +1207,38 @@ final class DatePicker
         // the range starts entirely after the last of this month.
         $firstOfMonth = $this->firstOfViewMonth();
         if ($firstOfMonth === null) return null;
-        $lastOfMonth = $firstOfMonth->modify('last day of this month')->setTime(23, 59, 59);
+        $lastOfMonth = $firstOfMonth->modify('last day of this month');
 
-        if ($this->rangeEnd < $firstOfMonth || $this->rangeStart > $lastOfMonth) {
+        if (self::dayKey($this->rangeEnd) < self::dayKey($firstOfMonth)
+            || self::dayKey($this->rangeStart) > self::dayKey($lastOfMonth)) {
             return null;
         }
         return new DateRange($this->rangeStart, $this->rangeEnd);
     }
 
     /**
-     * Compute the clamped cursor index for the current view month.
+     * Compute the clamped cursor index for the current view month: pulled
+     * into the [first day, last day] window so a view change never leaves the
+     * cursor resting on an empty lead-in or trailing cell.
+     *
      * Pure: returns the clamped value without mutating $this.
      *
-     * When the month itself is unconstructable (view year beyond the
-     * 4-digit %04d representation — reachable historically by decrementing
-     * past year 1 before the navigation floor existed), fall back to the
-     * raw grid clamp instead of dereferencing a false createFromFormat()
-     * result (docs-fix-1023 E2 / M4).
+     * When the month itself is unconstructable (view year beyond the 4-digit
+     * %04d representation), fall back to the raw grid clamp instead of
+     * dereferencing a false createFromFormat() result.
      */
     private function clampedCursor(int $idx): int
     {
         $firstOfMonth = $this->firstOfViewMonth();
         if ($firstOfMonth === null) {
-            return \min(41, \max(0, $idx));
+            return \min(self::DAY_INDEX_MAX, \max(0, $idx));
         }
 
+        $firstDow     = (int) $firstOfMonth->format('w');
         $daysInMonth  = (int) $firstOfMonth->format('t');
-        $lastIndex    = (int) $firstOfMonth->format('w') + $daysInMonth - 1;
+        $firstIndex   = $firstDow;
+        $lastIndex    = $firstDow + $daysInMonth - 1;
 
-        return \min($idx, \max(0, $lastIndex));
+        return \min(\max($idx, $firstIndex), $lastIndex);
     }
 }

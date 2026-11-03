@@ -3,6 +3,15 @@
 /**
  * English (default) translations for sugar-datepicker.
  *
+ * Contract (MT12): the day.0–day.6 keys are POSITIONAL, SUNDAY-FIRST weekday
+ * abbreviations — the index equals PHP's date('w') weekday number, so index 0 is
+ * Sunday and index 6 is Saturday. Every day cell renders at a FIXED 3-column
+ * width (2 digit cells + 1 separator), so a translation must fit within that
+ * budget. firstDayOfWeek is NOT configurable: the grid always begins on Sunday,
+ * and the key domain bakes in that Sunday-first + index-weekday identity. Resolve
+ * a week-start knob BEFORE shipping any locale whose convention is Monday-first,
+ * or the day names will be attached to the wrong columns.
+ *
  * @return array<string, string>
  */
 

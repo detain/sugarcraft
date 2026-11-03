@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-datepicker",
-    "description": "PHP port of EthanEFung/bubble-datepicker \u2014 interactive date picker component for terminal UIs. Supports month/year navigation with min/max selection constraints, single and range selection via a TEA-ready model wrapper, keyboard navigation with visual cursor, i18n month/day names, and customizable styling.",
+    "description": "Interactive date picker component for terminal UIs. Supports month/year navigation with min/max selection constraints, single and range selection via a TEA-ready model wrapper, keyboard navigation with a visible cursor, i18n month/day names, and customizable styling. Design antecedent: EthanEFung/bubble-datepicker, implemented natively in PHP.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -26,6 +26,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-cellbuffer": "dev-master"
     },

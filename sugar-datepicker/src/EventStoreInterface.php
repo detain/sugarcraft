@@ -17,4 +17,7 @@ interface EventStoreInterface
     public function release(): array;
 
     public function hasEvents(): bool;
+
+    /** Number of events currently held (before the next drain). */
+    public function count(): int;
 }

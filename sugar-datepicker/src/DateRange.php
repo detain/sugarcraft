@@ -6,6 +6,11 @@ namespace SugarCraft\DatePicker;
 
 /**
  * Represents a date range with start and end dates.
+ *
+ * Membership is decided on the calendar day (Y-m-d), never the absolute
+ * instant: a start, end, or probe carrying a different time zone compares
+ * equal when it shows the same wall date, matching how the picker renders
+ * whole days.
  */
 final readonly class DateRange
 {
@@ -29,33 +34,40 @@ final readonly class DateRange
         if ($this->start === null) {
             return false;
         }
-        $d = $date->setTime(0, 0, 0);
-        $s = $this->start->setTime(0, 0, 0);
-        if ($d < $s) {
+        $d = self::dayKey($date);
+        if ($d < self::dayKey($this->start)) {
             return false;
         }
-        if ($this->end !== null) {
-            $e = $this->end->setTime(0, 0, 0);
-            if ($d > $e) {
-                return false;
-            }
+        if ($this->end !== null && $d > self::dayKey($this->end)) {
+            return false;
         }
+
         return true;
     }
 
-    public function durationInDays(): ?int
+    /**
+     * Whole days from start to end (inclusive of the calendar span). With an
+     * open-ended range, $now supplies the closing date; it defaults to real
+     * wall-clock now so the pure-integer math stays testable without a clock
+     * injection when the caller wants the live figure.
+     */
+    public function durationInDays(?\DateTimeImmutable $now = null): ?int
     {
         if ($this->start === null) {
             return null;
         }
-        $s = $this->start->setTime(0, 0, 0);
-        $e = ($this->end ?? new \DateTimeImmutable())->setTime(0, 0, 0);
-        // Both endpoints are midnight; diff->days is always an integer day count.
-        return $e->diff($s)->days;
+        $end = $this->end ?? $now ?? new \DateTimeImmutable();
+        // Midnight-normalised operands keep the diff an integer day count.
+        return $end->setTime(0, 0, 0)->diff($this->start->setTime(0, 0, 0))->days;
     }
 
     public function isComplete(): bool
     {
         return $this->start !== null && $this->end !== null;
+    }
+
+    private static function dayKey(\DateTimeImmutable $date): int
+    {
+        return (int) $date->format('Ymd');
     }
 }
