@@ -1,58 +1,74 @@
-<p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain and legacy keys (including modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, and bracketed paste. Reentrant and fuzz-friendly. Unblocks sugar-readline migration to real-TTY input.</p>
+<p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain and legacy keys (including modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste, and a typed drain for terminal replies (DA, DSR/CPR, mode reports, Kitty flags). Reentrant, chunk-invariant, and fuzz-friendly, with counters that make dropped or discarded input observable.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-input:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Input\EscapeDecoder;
-use SugarCraft\Input\Driver\StreamInputDriver;
+    <pre class="code"><code class="language-php">use SugarCraft\Input\Driver\StreamInputDriver;
+use SugarCraft\Input\Event\FocusEvent;
 use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\Event\MouseEvent;
+use SugarCraft\Input\Event\PasteEvent;
+use SugarCraft\Input\Event\TerminalReplyEvent;
 
-$decoder = new EscapeDecoder();
-$driver  = new StreamInputDriver(STDIN);
+$driver = new StreamInputDriver(STDIN);
 
 while (true) {
     $event = $driver->read();
-    if ($event === null) continue; // non-blocking empty or EOF
+    if ($event === null) {
+        if ($driver->isEof()) break;  // stream ended and buffers drained
+        usleep(2_000);                // idle: back off, never busy-spin
+        continue;
+    }
 
     match (true) {
-        $event instanceof KeyEvent  => handleKey($event),
-        $event instanceof MouseEvent => handleMouse($event),
-        default                      => handleOther($event),
+        $event instanceof KeyEvent        => handleKey($event),
+        $event instanceof MouseEvent      => handleMouse($event),
+        $event instanceof PasteEvent      => handlePaste($event),
+        $event instanceof FocusEvent      => handleFocus($event),
+        $event instanceof TerminalReplyEvent => handleReply($event),
+        default                           => handleOther($event),
     };
 }</code></pre>
 
     <h3 style="margin-top: 32px;">EscapeDecoder</h3>
     <div class="feature-grid">
+      <div class="feature"><strong>__construct(?EscapeDecoderOptions $options = null)</strong><span>Protocol toggles at construction; null uses the defaults.</span></div>
       <div class="feature"><strong>decode(string $bytes): list&lt;Event&gt;</strong><span>Decode a byte buffer — emits 0+ Events; buffers partial sequences.</span></div>
       <div class="feature"><strong>remainder(): string</strong><span>Get unconsumed bytes that couldn't yet form a complete sequence.</span></div>
-      <div class="feature"><strong>reset(): void</strong><span>Clear the partial-sequence buffer.</span></div>
+      <div class="feature"><strong>flushDeferredEscape(): list&lt;Event&gt;</strong><span>Settle a lone trailing ESC on an input-idle timer (with deferTrailingEscape).</span></div>
+      <div class="feature"><strong>drainedReplyCount() / droppedUnknownCount() / discardedPasteBytes(): int</strong><span>Counters for terminal replies drained, frames refused, and bytes discarded after a paste overflow.</span></div>
+      <div class="feature"><strong>reset(): void</strong><span>Clear every buffer — partials, paste state, string state. The recovery lever after an unterminated forged paste.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">EscapeDecoderOptions</h3>
+    <p>Five booleans — <code>enableMouse</code>, <code>enableKitty</code>, <code>enableFocus</code>, <code>enablePaste</code> (all true by default) and <code>deferTrailingEscape</code> (false by default) — decide which protocol families the decoder interprets. A disabled family's frames are counted drops, never mis-decoded keys.</p>
 
     <h3 style="margin-top: 32px;">InputDriver</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>read(): ?Event</strong><span>Return the next Event, or null on EOF / non-blocking empty.</span></div>
+      <div class="feature"><strong>read(): ?Event</strong><span>Return the next Event, or null when the non-blocking stream is idle or at EOF.</span></div>
     </div>
+    <p><code>StreamInputDriver</code> additionally answers <code>isEof()</code> and <code>hasPending()</code> — the null alone does not distinguish idle from ended — and both the stream and React drivers expose their owned decoder via <code>escapeDecoder()</code> for <code>reset()</code>, the flush helper, and the counters.</p>
 
     <h3 style="margin-top: 32px;">Event types</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>KeyEvent</strong><span>key, modifiers, raw — plain keys, F1-F12, arrows, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Ctrl+letter</span></div>
-      <div class="feature"><strong>MouseEvent</strong><span>x, y, button, action, modifiers — SGR 1006/1016, urxvt 1015 and X10: press, release, drag, scroll (buttons 96/97 up/down, 98/99 horizontal wheel)</span></div>
-      <div class="feature"><strong>FocusEvent</strong><span>gained — terminal window focus gained/lost (DECSET 1004)</span></div>
-      <div class="feature"><strong>PasteEvent</strong><span>content, truncated, truncationNotice() — bracketed paste (CSI 200~ … CSI 201~), force-closes above the 1 MiB cap</span></div>
+      <div class="feature"><strong>KeyEvent</strong><span>key, modifiers, raw, isRelease(), isRepeat — plain keys, F1-F24, arrows, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Ctrl+letter; Kitty releases arrive as <code>ReleaseA</code> (<code>isRelease()</code>), repeats as <code>isRepeat</code></span></div>
+      <div class="feature"><strong>MouseEvent</strong><span>x, y, button, action, modifiers — SGR 1006/1016, urxvt 1015 and X10: press, release, drag, scroll (buttons 96/97 up/down, 98/99 horizontal wheel); the constructor refuses any other action</span></div>
+      <div class="feature"><strong>FocusEvent</strong><span>gained, raw — terminal window focus gained/lost (DECSET 1004)</span></div>
+      <div class="feature"><strong>PasteEvent</strong><span>content, truncated, truncationNotice(): ?string — bracketed paste (CSI 200~ … CSI 201~); above the 1 MiB cap the announcement fires once and the overflow is discarded until the real terminator, never re-decoded as keys</span></div>
+      <div class="feature"><strong>TerminalReplyEvent</strong><span>family, params, raw, body, truncated, is() — typed drain for device attributes, cursor position, DSR status, window reports, Kitty flags, mode reports, private CSI and string replies</span></div>
       <div class="feature"><strong>ResizeEvent</strong><span>cols, rows — produced by SignalResizeDriver after SIGWINCH (arm() opt-in)</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">KeyModifier</h3>
-    <p>Modifiers arrive on events and are read with <code>includes()</code> / <code>value()</code>. The constants <code>Shift</code>, <code>Ctrl</code>, <code>Alt</code>, <code>Meta</code>, <code>Super</code>, <code>Hyper</code> (plus spec-complete <code>CapsLock</code>, <code>NumLock</code>) document the wire bit layout the decoder maps from; the constructor is private, so masks are not built by hand.</p>
+    <p>Modifiers arrive on events and are read with <code>includes()</code> / <code>value()</code>. The constants <code>SHIFT</code>, <code>ALT</code>, <code>CTRL</code>, <code>META</code>, <code>SUPER</code>, <code>HYPER</code>, <code>CAPS_LOCK</code>, <code>NUM_LOCK</code> document the wire bit layout the decoder maps from — Kitty lock-state bits arrive on the explicit-event-type form — and the constructor is private, so masks are not built by hand.</p>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Real-TTY input for sugar-readline</strong> — decode raw bytes instead of symbolic key names.</li>
+      <li><strong>Real-TTY input</strong> — decode raw bytes instead of symbolic key names, on plain streams or ReactPHP loops.</li>
       <li><strong>Interactive TUI programs</strong> — keyboard and mouse input without depending on a specific runtime.</li>
       <li><strong>Kitty keyboard protocol</strong> — event frames <code>CSI code;mods u</code>, including key release events (released <code>a</code> arrives as <code>ReleaseA</code>); the flags query/reply uses the <code>CSI ?…u</code> shape and drains as a reply.</li>
-      <li><strong>Safe paste handling</strong> — bracketed paste with 1 MiB cap prevents OOM from hostile input.</li>
+      <li><strong>Safe paste handling</strong> — bracketed paste with a 1 MiB cap whose overflow is discarded, not replayed, so hostile input cannot forge keystrokes.</li>
       <li><strong>Foundation for any input-consuming lib</strong> — pure byte decoding with no event-loop requirement; drivers add stream/ReactPHP/pcntl plumbing.</li>
     </ul>
 
@@ -60,7 +76,7 @@ while (true) {
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-input">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-input/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-input/tree/main/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-input/tree/master/tests">Test suite</a></li>
       <li>Native PHP — decoding semantics follow charmbracelet/bubbletea's input handling.</li>
     </ul>
 
@@ -69,28 +85,43 @@ while (true) {
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>EscapeDecoder</td><td>__construct(?EscapeDecoderOptions $options = null)</td><td>Choose which protocol families decode</td></tr>
 <tr><td>EscapeDecoder</td><td>decode(string $bytes): list&lt;Event&gt;</td><td>Decode byte buffer, buffer partials</td></tr>
 <tr><td>EscapeDecoder</td><td>remainder(): string</td><td>Get unconsumed bytes</td></tr>
-<tr><td>EscapeDecoder</td><td>reset(): void</td><td>Clear partial buffer</td></tr>
-<tr><td>StreamInputDriver</td><td>read(): ?Event</td><td>Next event from stream, or null</td></tr>
-<tr><td>ReactInputDriver</td><td>read(): ?Event</td><td>Next buffered event from a ReactPHP readable stream, or null</td></tr>
+<tr><td>EscapeDecoder</td><td>flushDeferredEscape(): list&lt;Event&gt;</td><td>Settle a deferred lone ESC on input idle</td></tr>
+<tr><td>EscapeDecoder</td><td>drainedReplyCount(): int</td><td>Terminal replies drained as events</td></tr>
+<tr><td>EscapeDecoder</td><td>droppedUnknownCount(): int</td><td>Frames refused (unknown or disabled family)</td></tr>
+<tr><td>EscapeDecoder</td><td>discardedPasteBytes(): int</td><td>Bytes discarded after a paste overflow</td></tr>
+<tr><td>EscapeDecoder</td><td>reset(): void</td><td>Clear partial, paste and string state</td></tr>
+<tr><td>StreamInputDriver</td><td>read(): ?Event</td><td>Next event from stream, or null (idle/EOF)</td></tr>
+<tr><td>StreamInputDriver</td><td>isEof(): bool / hasPending(): bool</td><td>Distinguish ended-and-drained from idle</td></tr>
+<tr><td>StreamInputDriver</td><td>escapeDecoder(): EscapeDecoder</td><td>Seam to the owned decoder (reset/counters/flush)</td></tr>
+<tr><td>ReactInputDriver</td><td>on('data'): events</td><td>Emits decoded Events as they complete (event emitter, not a pull driver)</td></tr>
+<tr><td>ReactInputDriver</td><td>isReadable() / pause() / resume() / close()</td><td>ReadableStreamInterface surface; pause buffers, resume flushes</td></tr>
+<tr><td>ReactInputDriver</td><td>pipe(WritableStreamInterface): WritableStreamInterface</td><td>Forwards raw bytes of the wrapped stream</td></tr>
+<tr><td>ReactInputDriver</td><td>escapeDecoder(): EscapeDecoder</td><td>Seam to the owned decoder</td></tr>
 <tr><td>SignalResizeDriver</td><td>arm(): void</td><td>Opt in to SIGWINCH handling (constructor is side-effect free)</td></tr>
-<tr><td>KeyEvent</td><td>key: string</td><td>Symbolic key name (releases: Release + capitalised name)</td></tr>
+<tr><td>KeyEvent</td><td>key: string</td><td>Symbolic key name (releases: <code>Release</code> + capitalised name)</td></tr>
 <tr><td>KeyEvent</td><td>modifiers: KeyModifier</td><td>Modifier bitmask</td></tr>
 <tr><td>KeyEvent</td><td>raw: string</td><td>Raw bytes that produced this event</td></tr>
+<tr><td>KeyEvent</td><td>isRelease(): bool</td><td>True for Kitty key-release events</td></tr>
+<tr><td>KeyEvent</td><td>isRepeat: bool</td><td>True for Kitty autorepeat frames (decode as press)</td></tr>
 <tr><td>MouseEvent</td><td>x, y: int</td><td>Column and row (1-based)</td></tr>
 <tr><td>MouseEvent</td><td>button: int</td><td>Button index (0=left, 1=middle, 2=right; scroll 96=up, 97=down, 98=wheel-left, 99=wheel-right)</td></tr>
-<tr><td>MouseEvent</td><td>action: string</td><td>press | release | drag | scroll</td></tr>
+<tr><td>MouseEvent</td><td>action: string</td><td>press | release | drag | scroll (constructor refuses anything else)</td></tr>
 <tr><td>FocusEvent</td><td>gained: bool</td><td>True if focus gained, false if lost</td></tr>
+<tr><td>FocusEvent</td><td>raw: ?string</td><td>Escape sequence that produced the event</td></tr>
 <tr><td>PasteEvent</td><td>content: string</td><td>Pasted content (max 1 MiB)</td></tr>
 <tr><td>PasteEvent</td><td>truncated: bool</td><td>True when content was clipped to the cap</td></tr>
-<tr><td>PasteEvent</td><td>truncationNotice(): string</td><td>Localized one-liner explaining the clip</td></tr>
+<tr><td>PasteEvent</td><td>truncationNotice(): ?string</td><td>Localized one-liner explaining the clip, or null</td></tr>
+<tr><td>TerminalReplyEvent</td><td>family: string</td><td>One of the eight reply families (see <code>FAMILIES</code>)</td></tr>
+<tr><td>TerminalReplyEvent</td><td>params / raw / body / truncated</td><td>Parsed reply parameters and the bytes that carried them</td></tr>
+<tr><td>TerminalReplyEvent</td><td>is(string $family): bool</td><td>Family check</td></tr>
 <tr><td>ResizeEvent</td><td>cols, rows: int</td><td>New terminal dimensions</td></tr>
-<tr><td>KeyModifier</td><td>none(): self</td><td>No modifiers</td></tr>
-<tr><td>KeyModifier</td><td>shift(): self</td><td>Shift modifier</td></tr>
-<tr><td>KeyModifier</td><td>ctrl(): self</td><td>Ctrl modifier</td></tr>
-<tr><td>KeyModifier</td><td>alt(): self</td><td>Alt modifier</td></tr>
-<tr><td>KeyModifier</td><td>includes(int $flag): bool</td><td>Check if flag is set</td></tr>
+<tr><td>KeyModifier</td><td>none() / shift() / alt() / ctrl() / altShift() / ctrlShift() / altCtrl() / all()</td><td>Named factories (memoized)</td></tr>
+<tr><td>KeyModifier</td><td>fromKittyInt() / fromSgrMouse() / fromXtermParam()</td><td>Wire decoders for each protocol's modifier encoding</td></tr>
+<tr><td>KeyModifier</td><td>includes(int $flag): bool</td><td>Check if flag (e.g. <code>KeyModifier::SHIFT</code>) is set</td></tr>
+<tr><td>KeyModifier</td><td>equals(KeyModifier $other): bool</td><td>Bitmask equality</td></tr>
 <tr><td>KeyModifier</td><td>value(): int</td><td>Raw bitmask value</td></tr>
 </table>
   </div>
