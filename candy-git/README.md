@@ -48,7 +48,16 @@ candy-git    # run inside any git working tree
 | `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
 | `R`                      | Refresh from disk                                       |
 | `?`                      | Context-sensitive help                                  |
-| `q` / `Esc`              | Quit                                                    |
+| `q`                      | Quit — except while typing in a text buffer, where `q` is just a letter |
+| `Esc`                    | Cancel the innermost overlay/collection; quits when nothing is open    |
+
+### Text-entry keys
+
+While collecting text (commit message with `c`, branch name with `n`,
+merge target with `M`, cherry-pick ref with `V`, worktree path with `a`
+in the worktrees overlay): printable keys and `Space` append, `Backspace`
+deletes the last character, a bracketed `paste` inserts the (sanitized,
+newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 
 ### Diff viewer keys
 

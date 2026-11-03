@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Clamp;
 
@@ -96,13 +97,19 @@ final class App implements Model
         if ($msg instanceof WindowSizeMsg) {
             return [$this->withSize($msg->cols, $msg->rows), null];
         }
+        if ($msg instanceof PasteMsg) {
+            return $this->applyPaste($msg);
+        }
         if ($msg instanceof KeyMsg === FALSE) {
             return [$this, null];
         }
 
-        // Escape / q / Ctrl+C always quits, even during commit/branch/merge collection
+        // Escape cancels the innermost open overlay/collection and quits when
+        // idle; Ctrl+C rides the same chain. The 'q' quit key is gated on
+        // isTyping(): while a text buffer owns the keyboard the letter q must
+        // be typeable, so it falls through to the collecting arms.
         if ($msg->type === KeyType::Escape
-            || ($msg->type === KeyType::Char && $msg->rune === 'q')
+            || ($msg->type === KeyType::Char && $msg->rune === 'q' && !$this->isTyping())
             || ($msg->ctrl && $msg->rune === 'c')) {
             if ($this->collectingCommit) {
                 return [$this->withCommitCollection(false, ''), null];
@@ -142,8 +149,9 @@ final class App implements Model
             if ($msg->type === KeyType::Enter) {
                 return [$this->executeCommit(), null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune !== '') {
-                return [$this->withCommitMessage($this->commitMessage . $msg->rune), null];
+            $edited = self::editBuffer($this->commitMessage, $msg);
+            if ($edited !== null) {
+                return [$this->withCommitMessage($edited), null];
             }
             return [$this, null];
         }
@@ -170,8 +178,9 @@ final class App implements Model
             if ($msg->type === KeyType::Enter) {
                 return [$this->executeCherryPick(), null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune !== '') {
-                return [$this->withCherryPick($this->cherryPick->withChar($msg->rune)), null];
+            $edited = self::editBuffer($this->cherryPick->commitRef, $msg);
+            if ($edited !== null) {
+                return [$this->withCherryPick($this->cherryPick->withCommitRef($edited)), null];
             }
             return [$this, null];
         }
@@ -180,13 +189,14 @@ final class App implements Model
         // block above — even mid-add; the old per-branch cancelAdding arms
         // sat behind that block and were unreachable).
         if ($this->worktrees !== null) {
-            // When adding, only Enter (confirm) and Char (append to path) are processed
+            // When adding, Enter confirms and text edits (Char/Space/Backspace) append to the active field
             if ($this->worktrees->adding === TRUE) {
                 if ($msg->type === KeyType::Enter) {
                     return [$this->executeWorktreeAdd(), null];
                 }
-                if ($msg->type === KeyType::Char && $msg->rune !== '') {
-                    return [$this->withWorktrees($this->worktrees->withNewPath($this->worktrees->newPath . $msg->rune)), null];
+                $edited = self::editBuffer($this->worktrees->newPath, $msg);
+                if ($edited !== null) {
+                    return [$this->withWorktrees($this->worktrees->withNewPath($edited)), null];
                 }
                 return [$this, null];
             }
@@ -249,8 +259,9 @@ final class App implements Model
             if ($msg->type === KeyType::Enter) {
                 return [$this->executeCreateBranch(), null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune !== '') {
-                return [$this->withBranchName($this->branchName . $msg->rune), null];
+            $edited = self::editBuffer($this->branchName, $msg);
+            if ($edited !== null) {
+                return [$this->withBranchName($edited), null];
             }
             return [$this, null];
         }
@@ -260,8 +271,9 @@ final class App implements Model
             if ($msg->type === KeyType::Enter) {
                 return [$this->executeMerge(), null];
             }
-            if ($msg->type === KeyType::Char && $msg->rune !== '') {
-                return [$this->withMergeTarget($this->mergeTarget . $msg->rune), null];
+            $edited = self::editBuffer($this->mergeTarget, $msg);
+            if ($edited !== null) {
+                return [$this->withMergeTarget($edited), null];
             }
             return [$this, null];
         }
@@ -418,6 +430,81 @@ final class App implements Model
     public function logSubjectWidth(): int
     {
         return max(1, $this->paneWidth() - 10);
+    }
+
+    /**
+     * Whether a text-collection buffer currently owns the keyboard: in these
+     * states printable keys belong to the buffer, and global quit keys that
+     * collide with letters (q) must not fire. Escape/Ctrl+C still cancel via
+     * the global chain — only the letter collision is gated.
+     */
+    private function isTyping(): bool
+    {
+        return $this->collectingCommit
+            || $this->collectingBranchName
+            || $this->collectingMergeTarget
+            || ($this->cherryPick !== null && $this->cherryPick->collecting)
+            || ($this->worktrees !== null && $this->worktrees->adding);
+    }
+
+    /**
+     * Apply one text-edit key to a collecting buffer: printable Char and
+     * Space append, Backspace removes the last codepoint. Returns the new
+     * buffer, or null when the key is not an edit key (ctrl/alt chords never
+     * insert text). Space arrives as KeyType::Space from the input parser,
+     * never as Char ' ' — both shapes are handled.
+     */
+    private static function editBuffer(string $buffer, KeyMsg $msg): ?string
+    {
+        if ($msg->ctrl || $msg->alt) {
+            return null;
+        }
+        if ($msg->type === KeyType::Char && $msg->rune !== '') {
+            return $buffer . $msg->rune;
+        }
+        if ($msg->type === KeyType::Space) {
+            return $buffer . ' ';
+        }
+        if ($msg->type === KeyType::Backspace) {
+            return $buffer === '' ? '' : mb_substr($buffer, 0, mb_strlen($buffer) - 1);
+        }
+        return null;
+    }
+
+    /**
+     * Route a bracketed paste into whichever text buffer owns the keyboard;
+     * pastes outside a collecting buffer are dropped.
+     */
+    private function applyPaste(PasteMsg $msg): array
+    {
+        $text = self::flattenPaste($msg->content);
+        if ($this->collectingCommit) {
+            return [$this->withCommitMessage($this->commitMessage . $text), null];
+        }
+        if ($this->cherryPick !== null && $this->cherryPick->collecting) {
+            return [$this->withCherryPick($this->cherryPick->withCommitRef($this->cherryPick->commitRef . $text)), null];
+        }
+        if ($this->worktrees !== null && $this->worktrees->adding) {
+            return [$this->withWorktrees($this->worktrees->withNewPath($this->worktrees->newPath . $text)), null];
+        }
+        if ($this->collectingBranchName) {
+            return [$this->withBranchName($this->branchName . $text), null];
+        }
+        if ($this->collectingMergeTarget) {
+            return [$this->withMergeTarget($this->mergeTarget . $text), null];
+        }
+        return [$this, null];
+    }
+
+    /**
+     * Paste bytes arrive pre-sanitized by the input reader (embedded escape
+     * sequences neutralized); newlines and tabs are flattened to spaces so a
+     * multi-line paste can never smuggle an Enter-equivalent action through a
+     * one-line buffer.
+     */
+    private static function flattenPaste(string $content): string
+    {
+        return preg_replace('/[\r\n\t]+/', ' ', $content) ?? '';
     }
 
     private function withSize(int $width, int $height): self
