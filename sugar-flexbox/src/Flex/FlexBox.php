@@ -387,7 +387,6 @@ final class FlexBox
      * The pre-hardening hand-rolled regexes this replaces were \x1b-only: blind
      * to 8-bit C1 (`\x9b` CSI → cursor-move / sixel / title-set without ever
      * using \x1b) and they leaked unterminated DCS/APC payload text.
-     * See docs/research/ansi-tmux-ansicode-audit.md #9.
      */
     private function sanitize(string $s): string
     {

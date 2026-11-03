@@ -259,7 +259,7 @@ final class StickyViewportTest extends TestCase
     }
 
     /**
-     * Sticky + scrollbar geometry (docs-fix-1023 M8): the content was padded
+     * Sticky + scrollbar geometry: the content was padded
      * to the FULL width and paintScrollbar then appended its column — every
      * sticky row overflowed by one cell (21 wide at a request of 20), pushing
      * the terminal's last column into wrap. The scrollbar column must be

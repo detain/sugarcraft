@@ -7,7 +7,7 @@ namespace SugarCraft\Flexbox\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * README-compiles guard (docs-fix-1023 flexbox B1 genre).
+ * README-compiles guard: every fenced PHP snippet must run.
  *
  * Every fenced ```php block in README.md and every file under examples/ is
  * linted AND executed in a child `php` process with a wall-clock ceiling,

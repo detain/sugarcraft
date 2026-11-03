@@ -287,7 +287,7 @@ final class Table
 
         // Separator line — the joint between column runs is derived from the
         // configured separator's cell width so a custom separator can never
-        // desync header from ruler (docs-fix-1023). The default ' │ ' is
+        // desync header from ruler. The default ' │ ' is
         // 3 cells wide, producing '─┬─' exactly as before.
         $sepParts = [];
         foreach ($this->columns as $col) {
@@ -304,9 +304,9 @@ final class Table
                 $val = $row[$ci] ?? '';
                 $cellStr = $col->padded($val, $ri);
 
-                // Per-column style reaches every data cell (docs-fix-1023:
-                // the knob was stored but never rendered). Cursor style wraps
-                // outside it so the selected row stays visually dominant.
+                // Per-column style reaches every data cell — the knob was
+                // once stored but never rendered. Cursor style wraps outside
+                // it so the selected row stays visually dominant.
                 if ($col->ansiStyle !== '') {
                     $cellStr = $this->applyStyle($cellStr, $col->ansiStyle);
                 }
@@ -421,7 +421,7 @@ final class Table
 
     /**
      * Cell-width ruler segment joining two column runs, honoring the
-     * configured separator's display width (docs-fix-1023).
+     * configured separator's display width.
      */
     private function rulerJoint(): string
     {
@@ -437,7 +437,7 @@ final class Table
     private function padHeader(string $text, int $width, string $align): string
     {
         // Header titles carry '▲ '/'▼ ' prefixes and may hold wide (CJK) glyphs;
-        // padding must be display-cell based, not byte based (docs-fix-1023).
+        // padding must be display-cell based, not byte based.
         // For plain ASCII this is byte-identical to the old strlen path.
         $truncated = Width::truncateAnsi($text, $width);
         return match ($align) {

@@ -115,7 +115,7 @@ final readonly class Viewport
     /**
      * Forward to the canonical widgets viewport.
      *
-     * TRUTH (docs-fix-1023): this class does NOT implement
+     * TRUTH: this class does NOT implement
      * {@see \SugarCraft\Core\Model} — it has no `subscriptions()`, so
      * `instanceof Model` is false. It merely forwards the Model-shaped
      * init/update/view trio it delegates to. Compose it from your own
@@ -185,8 +185,7 @@ final readonly class Viewport
 
         // Fill each region to full width with padding. When the scrollbar is
         // shown its column is reserved (paintScrollbar appends it) — padding
-        // to the FULL width first made every sticky row one cell too wide
-        // (docs-fix-1023).
+        // to the FULL width first made every sticky row one cell too wide.
         $width = $this->inner->width;
         $contentWidth = $this->inner->showScrollbar ? max(0, $width - $this->scrollbarColumnCells()) : $width;
         $pad = fn(string $l): string => $this->padRight($l, $contentWidth);
@@ -387,7 +386,7 @@ final readonly class Viewport
      *
      * The parameter previously type-hinted the shadowing `use` import of the
      * widgets class, so passing THIS lib's Scrollbar — the documented
-     * companion — threw a TypeError (docs-fix-1023). It now accepts the
+     * companion — threw a TypeError (historically). It now accepts the
      * library's own value object and unwraps the canonical widget for the
      * delegate.
      */

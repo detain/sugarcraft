@@ -55,7 +55,7 @@ final readonly class Scrollbar
      *
      * Needed so {@see Viewport::withVerticalScrollbar()} (which delegates to
      * the widgets viewport) can accept THIS lib's Scrollbar and unwrap it —
-     * the wrapper is opaque otherwise (docs-fix-1023).
+     * the wrapper is opaque otherwise.
      */
     public function widgetScrollbar(): BitsScrollbar
     {

@@ -185,7 +185,7 @@ final class ViewportQueryTest extends TestCase
     public function testWithVerticalScrollbarReturnsNewInstance(): void
     {
         $vp = Viewport::withContent(\implode("\n", \range(1, 50)), 20, 10);
-        // The parameter is THIS lib's Scrollbar (docs-fix-1023: the shadowed
+        // The parameter is THIS lib's Scrollbar (historically: the shadowed
         // widgets import made the signature silently accept only the foreign
         // type). Unwraps to the widgets scrollbar the inner viewport stores.
         $scrollbar = \SugarCraft\Flexbox\Scrollbar::vertical();
@@ -201,7 +201,7 @@ final class ViewportQueryTest extends TestCase
     }
 
     /**
-     * Type polarity (docs-fix-1023 M7): the shadowed widgets import made the
+     * Type polarity: the shadowed widgets import made the
      * signature accept the FOREIGN scrollbar and reject the lib's own. The
      * trap is now inverted — passing the widgets type directly is a TypeError;
      * wrap it in SugarCraft\Flexbox\Scrollbar instead.

@@ -63,7 +63,7 @@ final class FlexBoxColumnTest extends TestCase
     public function testColumnWithBasisTakesFixedSpace(): void
     {
         // "fixed" takes its basis (3 lines). The remaining 5 free lines go to
-        // the only ratio item in full — the sum contract (docs-fix-1023):
+        // the only ratio item in full — the sum contract:
         // basis items are excluded from the flex ratio pool, so nothing is
         // silently dropped. Old round-based math lost 2 of 8 lines here.
         // Total: 3 (fixed, incl padding) + 5 (flexible, incl padding) = 8 lines.
@@ -215,7 +215,7 @@ final class FlexBoxColumnTest extends TestCase
     }
 
     /**
-     * Sum contract (docs-fix-1023 M2/M4) on the main axis vertical: equal
+     * Sum contract on the main axis vertical: equal
      * ratios must fill the requested height exactly — the old round-based
      * split of 10 cells across 3 ratio items rendered only 9 lines.
      */

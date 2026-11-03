@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Flexbox\Viewport;
 
 /**
- * Pins the accessor-deprecation era (2026-10-24, ruling 3b).
+ * Pins the accessor-deprecation era (the bare-accessor rename wave).
  *
  * Viewport's dimension accessors were renamed to their bare twins —
  * width()/height() were unclaimed in-lib (the mutators are the

@@ -208,7 +208,7 @@ final class ColumnTest extends TestCase
         $this->assertSame(0, $col->sortPriority());
     }
 
-    // ---- per-column style reaches the render (docs-fix-1023 B2) --------
+    // ---- per-column style reaches the render ----------------------------
 
     public function testColumnAnsiStyleIsAppliedToDataCellsAtRender(): void
     {

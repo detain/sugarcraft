@@ -191,7 +191,7 @@ final class TableRendererTest extends TestCase
     }
 
     /**
-     * Adversarial delta pin (docs-fix-1023 M9): two frames identical except
+     * Adversarial delta pin: two frames identical except
      * the cursor style's COLOR (38;2;255;0;0 vs 38;2;0;0;255 — the ONLY
      * differing parameters are the RGB components; a pair like 38;5 vs 38;2
      * would leak a difference through the stray 5/2 attribute codes).

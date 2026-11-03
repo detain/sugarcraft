@@ -742,7 +742,7 @@ final class FlexboxTest extends TestCase
     }
 
     /**
-     * Sum contract (docs-fix-1023 M2/M4): N equal-ratio items in W cells must
+     * Sum contract: N equal-ratio items in W cells must
      * use ALL W cells. The old (int)round allocation gave 3×ratio(1) at width
      * 10 only 9 displayed cells ('A  B  C  ').
      */
@@ -762,7 +762,7 @@ final class FlexboxTest extends TestCase
     }
 
     /**
-     * Column-mode padding is display-cell based (docs-fix-1023 M3): the old
+     * Column-mode padding is display-cell based: the old
      * str_pad counted BYTES, so a line holding '東' (3 bytes, 2 cells) was
      * padded to 10 bytes = 9 cells — every following glyph sat one column off.
      * Align::Start keeps the lines short on entry to the final pad (Stretch

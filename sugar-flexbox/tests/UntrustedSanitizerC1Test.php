@@ -20,7 +20,7 @@ use SugarCraft\Flexbox\Table\Column;
  * DCS/APC payloads — so a malicious cell/panel value could drive a cursor-move,
  * erase, window-title-set or sixel/Kitty graphics sequence without ever writing
  * an `\x1b`, and land verbatim on the terminal (see
- * docs/research/ansi-tmux-ansicode-audit.md #9).
+ * the canonical sanitizer contract lives in sugar-core).
  *
  * Column is driven through its public `format()` seam (which returns the
  * sanitized string) and FlexBox through `render()` with NO item style, so the

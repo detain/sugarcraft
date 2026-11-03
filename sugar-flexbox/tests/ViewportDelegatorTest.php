@@ -103,7 +103,7 @@ final class ViewportDelegatorTest extends TestCase
 
     /**
      * The unwrap contract that makes {@see Viewport::withVerticalScrollbar()}
-     * type-checkable (docs-fix-1023: the signature used to silently demand the
+     * type-checkable (historically: the signature used to silently demand the
      * widgets scrollbar despite naming the lib's own class).
      */
     public function testScrollbarWrapsAndUnwrapsTheCanonicalWidget(): void
