@@ -16,7 +16,8 @@ namespace SugarCraft\Mouse;
  *   waiting    → Release on a different zone, or onto nothing in the
  *                current frame → clear state, idle
  *   any state  → Drag   → ignored
- *   any state  → Scroll → pass-through (no click)
+ *   any state  → Scroll → ignored (no click; nothing is passed on —
+ *                a scroll must never complete a press it did not start)
  *
  * There are two ways to supply the press zone:
  *   1. Preferred (one-call):  track($event, $scanner->hit($event->x, $event->y))

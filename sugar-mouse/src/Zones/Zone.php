@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mouse\Zones;
 
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\MouseAction as CoreAction;
 use SugarCraft\Mouse\MouseAction as MouseGeometryAction;
 use SugarCraft\Mouse\MouseEvent;
 use SugarCraft\Mouse\Zone as MouseZone;
@@ -105,12 +108,45 @@ final class Zone
     }
 
     /**
-     * Bridge a Core {@see MouseMsg} into a primitive {@see MouseEvent} for
-     * geometry checks. Only x/y are read by the geometry primitive; button
-     * and action are irrelevant here, so a placeholder Press is used.
+     * Translate a Core wire message into the primitive {@see MouseEvent}
+     * vocabulary — the lib's ONE public bridge between the two action
+     * enums (Core `Press|Release|Motion` + the `MouseWheelMsg` subclass
+     * vs primitive `Press|Release|Drag|Scroll`).
+     *
+     * Motion maps to Drag (the primitive's held-move form; Core has no
+     * button-held flag on plain motion, and geometry consumers treat the
+     * two alike). Wheel reports carry Core action `Press` only because
+     * sugar-core's InputReader hardcodes it there — the `MouseWheelMsg`
+     * type is the discriminator, so it is matched FIRST. Buttons map to
+     * the X10 numbers the primitive keys on (`MouseAction::BUTTON_*`,
+     * wheel pair 64/65); unmapped Core buttons become LEFT, mirroring
+     * the placeholder the private path always used.
+     *
+     * `inBounds()` / `pos()` still read only x/y from the result, so the
+     * richer translation cannot change geometry outcomes — it exists for
+     * consumers converting events to feed `ZoneClickTracker` and friends.
      */
+    public static function toMouseEvent(MouseMsg $msg): MouseEvent
+    {
+        $action = match (true) {
+            $msg instanceof MouseWheelMsg => MouseGeometryAction::Scroll,
+            $msg->action === CoreAction::Release => MouseGeometryAction::Release,
+            $msg->action === CoreAction::Motion => MouseGeometryAction::Drag,
+            default => MouseGeometryAction::Press,
+        };
+        $button = match ($msg->button) {
+            MouseButton::Middle => MouseGeometryAction::BUTTON_MIDDLE,
+            MouseButton::Right => MouseGeometryAction::BUTTON_RIGHT,
+            MouseButton::WheelUp => 64,
+            MouseButton::WheelDown => 65,
+            default => MouseGeometryAction::BUTTON_LEFT,
+        };
+        return new MouseEvent($msg->x, $msg->y, $button, $action);
+    }
+
+    /** Geometry-only adapter; see {@see toMouseEvent()} for the full bridge. */
     private static function event(MouseMsg $msg): MouseEvent
     {
-        return new MouseEvent($msg->x, $msg->y, 0, MouseGeometryAction::Press);
+        return self::toMouseEvent($msg);
     }
 }

@@ -10,10 +10,11 @@ use SugarCraft\Core\Msg\MouseMsg;
 /**
  * Mouse-event Msg paired with the zone the click landed inside.
  *
- * Mirrors bubblezone's `MsgZoneInBounds`. Emitted by
- * {@see Manager::anyInBounds()} / {@see Manager::anyInBoundsAndUpdate()}
- * when a {@see MouseMsg} is dispatched and at least one tracked zone
- * contains the click. Models route this Msg directly to the matching
+ * Mirrors bubblezone's `MsgZoneInBounds`. Emitted solely by
+ * {@see Manager::anyInBoundsAndUpdate()} — the only path that hands a Msg
+ * back to a Model — when at least one tracked zone contains the click.
+ * {@see Manager::anyInBounds()} merely RETURNS the zone; it dispatches
+ * nothing. Models route this Msg directly to the matching
  * sub-component without doing the per-zone hit-test themselves.
  */
 final class MsgZoneInBounds implements Msg

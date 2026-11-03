@@ -7,6 +7,8 @@ namespace SugarCraft\Mouse\Tests\Zones;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Mouse\MouseAction as GeometryAction;
 use SugarCraft\Mouse\Zones\Zone;
 use PHPUnit\Framework\TestCase;
 
@@ -120,5 +122,44 @@ final class ZoneTest extends TestCase
         $b = new Zone('b', 6, 1, 10, 5);
         $this->assertFalse($a->contains($b));
         $this->assertFalse($b->contains($a));
+    }
+
+    public function testToMouseEventMapsActionsAndButtons(): void
+    {
+        $press = Zone::toMouseEvent(new MouseMsg(4, 7, MouseButton::Left, MouseAction::Press));
+        $this->assertSame(4, $press->x);
+        $this->assertSame(7, $press->y);
+        $this->assertSame(GeometryAction::Press, $press->action);
+        $this->assertSame(GeometryAction::BUTTON_LEFT, $press->button);
+
+        $release = Zone::toMouseEvent(new MouseMsg(1, 1, MouseButton::Right, MouseAction::Release));
+        $this->assertSame(GeometryAction::Release, $release->action);
+        $this->assertSame(GeometryAction::BUTTON_RIGHT, $release->button);
+
+        $middle = Zone::toMouseEvent(new MouseMsg(1, 1, MouseButton::Middle, MouseAction::Press));
+        $this->assertSame(GeometryAction::BUTTON_MIDDLE, $middle->button);
+
+        $motion = Zone::toMouseEvent(new MouseMsg(9, 2, MouseButton::Left, MouseAction::Motion));
+        $this->assertSame(GeometryAction::Drag, $motion->action);
+    }
+
+    public function testWheelMsgTranslatesToScrollNotPress(): void
+    {
+        // Core's InputReader hardcodes Press on wheel reports; the message
+        // TYPE must win the translation, not the action field.
+        $wheel = Zone::toMouseEvent(new MouseWheelMsg(2, 3, MouseButton::WheelDown, MouseAction::Press));
+        $this->assertSame(GeometryAction::Scroll, $wheel->action);
+        $this->assertSame(65, $wheel->button);
+
+        $up = Zone::toMouseEvent(new MouseWheelMsg(2, 3, MouseButton::WheelUp, MouseAction::Press));
+        $this->assertSame(GeometryAction::Scroll, $up->action);
+        $this->assertSame(64, $up->button);
+    }
+
+    public function testInBoundsUnchangedByRicherBridge(): void
+    {
+        $z = new Zone('btn', 5, 2, 10, 4);
+        $this->assertTrue($z->inBounds(new MouseMsg(6, 3, MouseButton::Right, MouseAction::Release)));
+        $this->assertFalse($z->inBounds(new MouseMsg(11, 3, MouseButton::Left, MouseAction::Motion)));
     }
 }

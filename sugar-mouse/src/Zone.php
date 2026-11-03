@@ -12,8 +12,9 @@ namespace SugarCraft\Mouse;
  * The zone is the smallest axis-aligned rectangle that contains every cell
  * occupied by the marked content.  When the marked content spans multiple
  * rows, the zone rectangle may include cells that were never part of the
- * marked content (e.g. a zone covering "AAA\nBBB" has col 1–3, row 1–2; cell
- * (5,2) is inside the bounding box but was not part of the original content).
+ * marked content (e.g. a zone opened at column 3 covering "AA\n……BB" spans
+ * col 3–8, row 1–2: cells 5–8 of row 1 and 3–4 of row 2 sit inside the
+ * bounding box although no marked glyph was ever painted there).
  * Use {@see inBounds()} with awareness that it tests a bounding box, not the
  * exact cell set.
  *
