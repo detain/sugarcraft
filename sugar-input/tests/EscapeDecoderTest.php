@@ -538,6 +538,37 @@ final class EscapeDecoderTest extends TestCase
         $this->assertTrue($m->modifiers->includes(KeyModifier::ALT));
     }
 
+    public function testSgrMouseNonNumericParamsAreRefusedNotZeroCoordinates(): void
+    {
+        // M11: (int) 'x' is 0 — without a numeric gate a forged frame lands a
+        // MouseEvent at (0,0). Every part must be digits before any cast.
+        $before = $this->decoder->droppedUnknownCount();
+        $this->assertSame([], $this->decoder->decode("\x1b[<0;x;10M"));
+        $this->assertSame([], $this->decoder->decode("\x1b[<x;10;10M"));
+        $this->assertSame([], $this->decoder->decode("\x1b[<0;10;-5M"));
+        $this->assertSame([], $this->decoder->decode("\x1b[<0;1 0;5M"));
+        $this->assertSame($before + 4, $this->decoder->droppedUnknownCount());
+
+        // The frame is consumed through its final byte: a real key after it
+        // decodes live (resync law, not a re-buffered stall).
+        $after = $this->decoder->decode("\x1b[<0;x;10MA");
+        $this->assertCount(1, $after);
+        $this->assertSame('A', $after[0]->key);
+    }
+
+    public function testSgrMouse1016ColonSubParamsDecodeFirstGroup(): void
+    {
+        // SGR 1016 sends pixel x and y as COLON sub-parameters ("640:10").
+        // Colon groups are numeric: the first group is the value — the frame
+        // must decode, not hit the M11 refusal gate.
+        $events = $this->decoder->decode("\x1b[<0;640:10;480:7M");
+        $this->assertCount(1, $events);
+        $m = $events[0];
+        $this->assertSame(640, $m->x);
+        $this->assertSame(480, $m->y);
+        $this->assertSame(MouseEvent::ACTION_PRESS, $m->action);
+    }
+
     // ─── Focus events ───────────────────────────────────────────────────────
 
     public function testFocusGained(): void

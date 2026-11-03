@@ -676,6 +676,20 @@ final class EscapeDecoder
         }
 
         [$btnRaw, $x, $y] = $parts;
+        // Every parameter must be numeric before any (int) cast, or attacker
+        // bytes silently become coordinates: (int) 'x' is 0 and a forged frame
+        // lands a MouseEvent at row/column zero. SGR 1016 legitimately carries
+        // colon sub-parameters ("640:10" pixel x), so digit groups separated by
+        // ':' are numeric too — the first group is the value, as before.
+        foreach ($parts as $part) {
+            if (preg_match('/^\d+(?::\d+)*$/', $part) !== 1) {
+                $this->droppedUnknownCount++;
+                return ['events' => [], 'remaining' => $remaining];
+            }
+        }
+        $btnRaw = explode(':', $btnRaw)[0];
+        $x = explode(':', $x)[0];
+        $y = explode(':', $y)[0];
         $event = $this->mouseFromButtonCode((int) $btnRaw, (int) $x, (int) $y, $isReleaseChar);
 
         return ['events' => [$event], 'remaining' => $remaining];
