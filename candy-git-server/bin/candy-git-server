@@ -644,11 +644,12 @@ function cmdRepoCreate(array $args): int
     }
 
     echo Lang::t('cli.repo_created', ['name' => $name, 'path' => $path]) . "\n";
-    // No clone URL is printed: nothing listens for git traffic yet, and a
-    // "Clone URL: ssh://…" line invites users to believe the repo is
-    // reachable (i18n law — raw string, all 16
-    // locales stay untouched and the cli.repo_clone_url key goes unused).
-    echo "Note: no server listens for this repository yet (status: scaffold); see README \"Known gaps\".\n";
+    // No clone URL is printed: whether anything listens depends on a
+    // running server, and a "Clone URL: ssh://…" line invites users to
+    // believe the repo is reachable before one is (i18n law — raw string,
+    // all 16 locales stay untouched and the cli.repo_clone_url key goes
+    // unused). The hint names the command that actually serves it.
+    echo "Note: start a listener to serve it: candy-git-server serve --http --repo-root {$dataPath}/repositories (private until --public; anonymous-read needs git.allow_anonymous_read).\n";
 
     return 0;
 }

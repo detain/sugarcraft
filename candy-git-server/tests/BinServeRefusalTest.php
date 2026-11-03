@@ -124,9 +124,11 @@ final class BinServeRefusalTest extends TestCase
         // Fix: the created repo must satisfy the very gate repo list/info
         // use (is_dir <path>/.git) — it used to create the bare AT <path>.
         $this->assertDirectoryExists($this->tmpDir . '/repositories/probe-repo/.git');
-        // The live lie is gone: no fabricated clone URL, honest note instead.
+        // The live lie is gone: no fabricated clone URL; the note names the
+        // command that actually serves the repo instead of claiming nothing
+        // listens (HTTP serve was wired after this pin was first written).
         $this->assertStringNotContainsString('Clone URL', $r['out']);
-        $this->assertStringContainsString('scaffold', $r['out']);
+        $this->assertStringContainsString('serve --http', $r['out']);
 
         $info = $this->runBin(['repo', 'info', 'probe-repo', $this->tmpDir]);
         $this->assertSame(0, $info['rc'], 'repo info must find a freshly created repo: ' . $info['err']);
