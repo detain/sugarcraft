@@ -8,15 +8,26 @@ namespace SugarCraft\Constraints;
  * Interface for constraint-based layout solvers.
  *
  * Solves a list of constraints against a region in the given direction,
- * returning a list of sub-regions whose widths (or heights) sum to the
- * region's total dimension.
+ * returning a list of sub-regions. For a well-constrained set the returned
+ * widths (or heights) tile the region's total dimension exactly. Two shapes
+ * deliberately fall outside that guarantee:
+ *  - an UNDER-CONSTRAINED set — nothing but fixed Length/Percentage/Ratio
+ *    whose sum is below the region — leaves an untiled gap rather than
+ *    inventing growth for constraints that asked for none;
+ *  - a solver in compatibility mode ({@see GreedySolver::compat()},
+ *    {@see GreedySolver::withoutOverflowTruncation()}) keeps every region at
+ *    its full base size when demand exceeds the area, so the layout runs
+ *    off-grid on purpose.
  *
  * Mirrors ratatui's layout constraint solving.
  *
  * The contract is `solve()` alone. Construction lives on the concrete classes
  * (`GreedySolver::new()`/`::greedy()`/`::compat()`, the deprecated
  * `CassowarySolver::new()`), so an implementer never has to know — or build —
- * any other solver.
+ * any other solver. PHP interface methods are instance methods: the static
+ * factories above are NOT part of this contract, and calling one through the
+ * interface name (`LayoutSolver::greedy()`) is a fatal error, not a polymorphic
+ * dispatch — always construct a concrete class.
  */
 interface LayoutSolver
 {

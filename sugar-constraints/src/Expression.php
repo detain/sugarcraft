@@ -8,18 +8,17 @@ namespace SugarCraft\Constraints;
  * Linear expression: sum(a_i * x_i) + c.
  *
  * Formerly the fully-public mutable builder of the retired simplex prototype.
- * As of the round-90 audit sweep $terms is frozen: private readonly, seeded by
- * the constructor and read via the bare {@see terms()} accessor (PHP array
- * value semantics make every read a defensive copy). The arithmetic methods
- * build results through the constructor, never through field writes.
+ * The coefficient map `$terms` is now frozen: private readonly, seeded by the
+ * constructor and read via the bare {@see terms()} accessor (PHP array value
+ * semantics make every read a defensive copy). The arithmetic methods build
+ * results through the constructor, never through field writes.
  *
  * $constant intentionally STAYS public and writable: the natural reader name
  * `constant()` is taken by the {@see self::constant()} static factory, and
  * inventing a second-spelling accessor would widen the API for no behaviour.
  * Externally mutating $constant does not desynchronise any cached derived
- * state, so this residual mutability is disclosed rather than frozen (the
- * round-86 keep-as-is ruling on the class, findings/plan_sugar-constraints.md row
- * 3.2, stood until a cheap freeze became available — for $terms, it did).
+ * state, so this residual mutability is disclosed rather than frozen — the
+ * asymmetry with $terms is known and accepted.
  *
  * No solver in this package consumes it any more: the Big-M simplex that built
  * its tableau rows from these expressions was retired (see

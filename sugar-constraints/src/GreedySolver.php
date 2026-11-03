@@ -15,9 +15,11 @@ use SugarCraft\Constraints\Direction;
 use SugarCraft\Constraints\Region;
 
 /**
- * Internal solver: maps a Rect + list of Constraints to a list of Rects.
+ * The package's solver: maps a Region plus a list of constraints to a list of
+ * sub-regions, ratatui-inspired but greedy rather than linear-programming
+ * (the retired simplex prototype never converged — see {@see CassowarySolver}).
  *
- * Algorithm (ratatui-inspired, simplified — no cassowary):
+ * Algorithm:
  *  1. Compute Percentage and Ratio against total area → absolute sizes.
  *  2. Sum fixed Length + computed Percentage/Ratio as reserved space.
  *  3. Min is a floor; Max is a ceiling (greedy — takes remaining space).
@@ -25,7 +27,10 @@ use SugarCraft\Constraints\Region;
  *  4. Remaining slack distributed across Fill() and Max() constraints
  *     proportionally (Max is greedy here; clamp pass reduces it).
  *  5. If no Fill/Max, slack goes to Min constraints proportionally.
- *  6. Apply Max clamp pass; reclaimed space redistributed to Min > Fill > others.
+ *  6. Apply Max clamp pass; reclaimed space redistributed to Min > Fill >
+ *     others — and, when the set has neither, to Length/Percentage/Ratio,
+ *     which inflates "fixed" sizes (the documented reclaim ladder, see
+ *     {@see applyMaxClamp()}).
  *  7. If total reserved > area, truncate proportionally; the scale pass's
  *     floor loss is handed back one cell per truncated region (earliest
  *     first, latest first under {@see withRemainderToLast()}) so the sizes
@@ -37,7 +42,13 @@ use SugarCraft\Constraints\Region;
  *     demand against the area themselves; {@see withoutOverflowTruncation()}
  *     keeps every region at its full base size instead.
  *
- * ── boxer-compat mode ──────────────────────────────────────────────────────
+ * The produced sub-regions tile the region exactly for every well-constrained
+ * set, but two shapes deliberately fall off-grid ({@see LayoutSolver} carries
+ * the carve-out): a set of nothing-but-fixed constraints under-constrains the
+ * area and leaves an untiled gap, and compatibility mode's non-truncating
+ * overflow lets demand exceed the area on purpose.
+ *
+ * ── sugar-panels compatibility mode ────────────────────────────────────────
  * The default behaviour (floor split, rounding remainder handed to the FIRST
  * region, proportional overflow truncation) diverges on three axes from
  * sugar-panels's hand-rolled distribute()/distributeFlex(). {@see compat()}
@@ -50,8 +61,8 @@ use SugarCraft\Constraints\Region;
  *   3. on overflow, each region keeps its full base size (layout runs
  *      off-grid) instead of being truncated proportionally.
  * These flags are immutable+fluent and default OFF, so the default solver is
- * unchanged. This exists only to let sugar-panels retire its duplicated solver
- * (plan_missing.md W12) with golden parity.
+ * unchanged. The mode exists so sugar-panels can retire its duplicated
+ * distribution helpers while keeping its golden frames byte-identical.
  *
  * ── min-share floor ─────────────────────────────────────────────────────────
  * sugar-panels's NON-flex distribute() carries a FOURTH quirk the three flags
@@ -67,8 +78,9 @@ use SugarCraft\Constraints\Region;
  * reservation frame (its `$used` counter is seeded with the border pad and
  * accumulates one inter-child gap per placed child), which is the only way to
  * stay byte-identical when spacing/border make the clamp bind. Default 0 → OFF,
- * so the default solver is unchanged. A 11 124-case sweep against distribute()
- * found 0 divergences (plan_missing.md W12).
+ * so the default solver is unchanged. Parity is pinned against
+ * sugar-panels's own golden tests; a full case sweep against distribute()
+ * found zero divergences.
  */
 final class GreedySolver implements LayoutSolver
 {
@@ -85,7 +97,7 @@ final class GreedySolver implements LayoutSolver
      * @param int  $reserveLead       fixed cells reserved before the first region — models a leading margin
      *                                outside the content span (sugar-panels border pad).
      *
-     * Public (not private) because sugar-style' SolverFactory and
+     * Public (not private) because sugar-style's SolverFactory and
      * CassowarySolver already construct this via `new GreedySolver()`; the
      * defaults preserve that legacy zero-arg call byte-for-byte. Prefer the
      * ::new()/::greedy()/::compat() factories for new code.
@@ -120,7 +132,10 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * @return CassowarySolver
+     * Legacy convenience returning the deprecated {@see CassowarySolver} shim
+     * (which delegates here anyway). Prefer {@see CassowarySolver::new()} if a
+     * call-site must keep naming it, and {@see GreedySolver::new()} for
+     * anything new.
      */
     public static function cassowary(): CassowarySolver
     {
@@ -130,7 +145,7 @@ final class GreedySolver implements LayoutSolver
     /**
      * sugar-panels parity mode: round-split + remainder-to-last + non-truncating
      * overflow. Opt-in seam for retiring sugar-panels's duplicated distribute()
-     * /distributeFlex() (plan_missing.md W12) without regressing its goldens.
+     * /distributeFlex() without regressing its goldens.
      */
     public static function compat(): self
     {
@@ -140,7 +155,7 @@ final class GreedySolver implements LayoutSolver
     /**
      * Round Percentage/Ratio proportional sizes with round() instead of floor().
      *
-     * Fractional-width determinism contract (lane A5 re-verify): both branches
+     * Fractional-width determinism contract: both branches
      * cast an IEEE-754 double to int with a single PHP-core function —
      * `(int) round(...)` (half away from zero) when ON, `(int) floor(...)`
      * (toward negative infinity) when OFF. The operands are integer arithmetic
@@ -186,7 +201,7 @@ final class GreedySolver implements LayoutSolver
      * across its Fill weights while reserving at least `$cells` cell(s) for every
      * region NOT yet placed, so the trailing region never collapses to 0 in a
      * tight viewport. This is the opt-in seam that lets sugar-panels retire its
-     * hand-rolled NON-flex distribute() (plan_missing.md W12) with byte parity —
+     * hand-rolled NON-flex distribute() with byte parity —
      * the fourth quirk compat()'s three flags cannot express.
      *
      * The floor path is inherently round-split + remainder-to-last, so it does
@@ -205,11 +220,25 @@ final class GreedySolver implements LayoutSolver
 
     /**
      * Instance solve — satisfies {@see LayoutSolver}.
+     *
+     * @param list<Constraint> $constraints
+     * @return list<Region>
      */
     public function solve(Region $region, Direction $dir, array $constraints): array
     {
         if ($constraints === []) {
             return [];
+        }
+
+        // The size bookkeeping below indexes rawSizes positionally and the
+        // remainder passes scan by integer offset, so a keyed or sparse array
+        // would silently mis-align constraints against their sizes (and PHP
+        // would raise "undefined key" notices per frame). The typed contract is
+        // a list — refuse anything else loudly at the boundary instead.
+        if (array_is_list($constraints) === false) {
+            throw new \InvalidArgumentException(
+                'Constraints must be a list (sequential array of Constraint); got a keyed or sparse array'
+            );
         }
 
         if ($dir === Direction::Horizontal) {
@@ -219,12 +248,18 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * Static solver — kept for golden-test parity with sugar-style. Always
-     * uses the DEFAULT (floor / remainder-first / truncating) behaviour; the
-     * boxer-compat toggles are reachable only via an instance.
+     * Static convenience for the default (floor / remainder-first / truncating)
+     * behaviour — reachable without holding an instance.
      *
-     * @param Constraint[] $constraints
-     * @return Region[]
+     * NOTE the transposed parameter order relative to {@see solve()}: this
+     * legacy entry takes (area, constraints, direction), the instance method
+     * takes (region, direction, constraints). New code should prefer solve();
+     * the signature is frozen because external call-sites already pass these
+     * three arguments positionally. The compat() toggles are reachable only
+     * via an instance.
+     *
+     * @param list<Constraint> $constraints
+     * @return list<Region>
      */
     public static function solveStatic(Region $area, array $constraints, Direction $dir): array
     {
@@ -232,8 +267,8 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * @param Constraint[] $constraints
-     * @return Region[]
+     * @param list<Constraint> $constraints
+     * @return list<Region>
      */
     private function solveHorizontal(Region $area, array $constraints): array
     {
@@ -254,24 +289,27 @@ final class GreedySolver implements LayoutSolver
         $reservedMinSum = 0;
         $fillWeightSum = 0;
         $maxWeightSum = 0;
+        $proportionalCount = 0;
 
-        foreach ($constraints as $c) {
+        foreach ($constraints as $index => $c) {
             if ($c instanceof Length) {
                 $rawSizes[] = $c->n;
                 $reservedFixed += $c->n;
             } elseif ($c instanceof Percentage) {
-                // boxer-compat rounds (distribute() uses round()); default floors.
+                // Compat mode rounds (sugar-panels distribute() uses round()); default floors.
                 $size = $this->roundSplit === true
                     ? (int) round($totalWidth * $c->n / 100)
                     : (int) floor($totalWidth * $c->n / 100);
                 $rawSizes[] = $size;
                 $reservedFixed += $size;
+                $proportionalCount++;
             } elseif ($c instanceof Ratio) {
                 $size = $this->roundSplit === true
                     ? (int) round($totalWidth * $c->numerator / $c->denominator)
                     : (int) floor($totalWidth * $c->numerator / $c->denominator);
                 $rawSizes[] = $size;
                 $reservedFixed += $size;
+                $proportionalCount++;
             } elseif ($c instanceof Min) {
                 $rawSizes[] = $c->n;
                 $reservedMinSum += $c->n;
@@ -282,17 +320,15 @@ final class GreedySolver implements LayoutSolver
                 $rawSizes[] = 0;
                 $maxWeightSum += $c->n;
             } else {
-                throw new \InvalidArgumentException('Unsupported constraint type');
+                // Name the offender and where it sits — an anonymous refusal
+                // sends the host hunting through its own constraint list.
+                throw new \InvalidArgumentException(
+                    'Unsupported constraint type at index ' . $index . ': ' . get_debug_type($c)
+                );
             }
         }
 
         $totalCount = count($constraints);
-        $proportionalCount = 0;
-        foreach ($constraints as $c) {
-            if ($c instanceof Percentage || $c instanceof Ratio) {
-                $proportionalCount++;
-            }
-        }
         $totalReserved = $reservedFixed + $reservedMinSum;
 
         // Step 2: handle overflow — total exceeds area
@@ -335,7 +371,7 @@ final class GreedySolver implements LayoutSolver
                     }
                 }
             }
-            // boxer-compat (truncateOverflow=false): leave every region at its
+            // Compat mode (truncateOverflow=false): leave every region at its
             // full base size and let the layout run off-grid — sugar-panels's
             // distribute()/distributeFlex() never shrink fixed children, and
             // truncating them here is what regressed sugar-panels's
@@ -399,7 +435,7 @@ final class GreedySolver implements LayoutSolver
                         // The proportional floor() loses up to one cell per Min;
                         // like the equal-shares branch above, the first Min
                         // recipient absorbs it so the sizes tile the area.
-                        // boxer-compat leaves it for the remainder-to-last pass
+                        // Compat mode leaves it for the remainder-to-last pass
                         // below, which already hands any diff to the last region.
                         if ($remainder > 0 && $firstMin !== null && $this->remainderToLast === false) {
                             $rawSizes[$firstMin] += $remainder;
@@ -409,7 +445,7 @@ final class GreedySolver implements LayoutSolver
                     $used = array_sum($rawSizes);
                     $diff = $totalWidth - $used;
                     if ($this->remainderToLast === true) {
-                        // boxer-compat: the LAST region absorbs the entire
+                        // Compat mode: the LAST region absorbs the entire
                         // remainder, mirroring sugar-panels distribute() where the
                         // final child = span - sum(others). The remainder can be
                         // negative (round() over-allocated); clamp the resulting
@@ -443,7 +479,7 @@ final class GreedySolver implements LayoutSolver
                 // one cell when several Fills compete (e.g. 3 fills lose up to
                 // 2 cells), so adding a fixed ±1 under-corrects and the sizes
                 // fail to tile the region — assign the full $diff instead.
-                // boxer-compat scans from the LAST Fill/Max instead of the first
+                // Compat mode scans from the LAST Fill/Max instead of the first
                 // (sugar-panels distributeFlex() lets the final flex child absorb
                 // the remainder).
                 if ($totalDistWeight > 0) {
@@ -494,7 +530,7 @@ final class GreedySolver implements LayoutSolver
 
     /**
      * Sequential min-share floor — reproduces sugar-panels's NON-flex
-     * distribute() byte-for-byte (plan_missing.md W12).
+     * distribute() byte-for-byte.
      *
      * Walks the constraints left→right, giving each region its rounded
      * proportional share of the span (`round(weight/total * span)`) but clamping
@@ -512,8 +548,8 @@ final class GreedySolver implements LayoutSolver
      * other constraint type is unsupported here and rejected loudly rather than
      * silently mis-sized.
      *
-     * @param Constraint[] $constraints
-     * @return Region[]
+     * @param list<Constraint> $constraints
+     * @return list<Region>
      */
     private function solveMinShare(Region $area, array $constraints): array
     {
@@ -565,9 +601,19 @@ final class GreedySolver implements LayoutSolver
     /**
      * Clamp sizes that exceed their Max constraint, then redistribute reclaimed space.
      *
-     * @param Constraint[] $constraints
-     * @param int[] $rawSizes
-     * @return int[]
+     * Reclaim ladder (priority order): Min first (weighted by their clamped
+     * sizes), else Fill (weighted by Fill weight), else — when the set carries
+     * neither — Length/Percentage/Ratio, weighted by their clamped sizes.
+     * The last rung deliberately INFLATES "fixed" sizes: Length(10) + Max(5)
+     * in a 100-cell region yields [95, 5], not [10, 90→5 + gap]. That is the
+     * pinned intent — tiling the area exactly beats honouring the nominal
+     * fixed size once the only alternative is an untiled gap (a set with no
+     * Min/Fill has nothing else to grow). WidthSumInvariantSweepTest carries
+     * this shape as a named exception.
+     *
+     * @param list<Constraint> $constraints
+     * @param list<int> $rawSizes
+     * @return list<int>
      */
     private function applyMaxClamp(array $constraints, array $rawSizes): array
     {
@@ -635,7 +681,7 @@ final class GreedySolver implements LayoutSolver
                 foreach ($fillRecipients as $i) {
                     $c = $constraints[$i];
                     $recipients[] = $i;
-                    $recipientWeights[] = $c instanceof Fill ? $c->weight : 1;
+                    $recipientWeights[] = $c->weight; // $fillRecipients indexes only Fill entries
                 }
             } else {
                 // No Min, no Fill — give to Length/Percentage/Ratio
@@ -682,8 +728,8 @@ final class GreedySolver implements LayoutSolver
     }
 
     /**
-     * @param Constraint[] $constraints
-     * @return Region[]
+     * @param list<Constraint> $constraints
+     * @return list<Region>
      */
     private function solveVertical(Region $area, array $constraints): array
     {

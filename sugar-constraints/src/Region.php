@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Constraints;
 
 /**
- * Own type to keep sugar-constraints a leaf package (no dep on sugar-cellbuffer).
+ * Axis-aligned rectangle within a terminal grid.
  *
- * Mirrors ratatui's `Rect` — axis-aligned rectangle within a terminal grid.
+ * Mirrors ratatui's `Rect`.
  *
  * NOTE: this is intentionally NOT the same class as {@see \SugarCraft\CellBuffer\Region}
  * in sugar-cellbuffer — a deliberate leaf-package name collision so sugar-constraints
  * stays dependency-free. The two are converted at the boundary by
- * sugar-style' `RegionBridge`; do not conflate them.
+ * sugar-style's `RegionBridge`; do not conflate them.
  */
 final readonly class Region
 {

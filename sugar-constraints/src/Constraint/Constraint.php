@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Constraints\Constraint;
 
 /**
- * Base interface for all constraint types used by {@see LayoutSolver::solve()}.
+ * Abstract base class for all constraint types used by {@see LayoutSolver::solve()}.
  *
- * Mirrors ratatui's `Constraint` enum — Length, Percentage, Min, Max,
- * Ratio, Fill — solved via either Cassowary simplex or greedy fallback.
+ * The static factories below are the public spelling; the concrete types live
+ * in this namespace (Length, Percentage, Min, Max, Ratio, Fill) and each has a
+ * value-refusing constructor.
+ *
+ * Mirrors ratatui's `Constraint` enum — solved by {@see GreedySolver}; the
+ * deprecated {@see CassowarySolver} is a shim that delegates to it.
  */
 abstract class Constraint
 {
@@ -25,7 +29,9 @@ abstract class Constraint
     }
 
     /**
-     * At least `$n` cells; takes more if space is available.
+     * At least `$n` cells — a soft floor. Grows only when slack survives every
+     * Fill and Max in the set (they eat slack first); does not guarantee `$n`
+     * when demand exceeds the area.
      *
      * Mirrors ratatui `Constraint::Min(n)`.
      */
@@ -66,7 +72,8 @@ abstract class Constraint
     }
 
     /**
-     * Upper-bound size cap; takes less if space is insufficient.
+     * Upper-bound size cap; takes slack greedily (proportional to its cap
+     * among the slack consumers) but never more than `$n`.
      *
      * Mirrors ratatui `Constraint::Max(n)`.
      */

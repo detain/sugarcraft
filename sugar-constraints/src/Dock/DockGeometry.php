@@ -14,9 +14,11 @@ use SugarCraft\Constraints\Region;
  *
  * The center pane is carried INSIDE {@see $regions} keyed by its pane id
  * (design choice: one lookup path for hosts, no special-casing) rather than a
- * separate nullable field. A degenerate frame yields a geometry with no
- * regions at all ({@see isEmpty()}) — never an exception; the host decides
- * its fallback.
+ * separate nullable field. Iteration order of $regions is insertion order:
+ * left-stack slots (top to bottom), center, right-stack slots — do not rely
+ * on it for pane identity; key by pane id. A degenerate frame yields a
+ * geometry with no regions at all ({@see isEmpty()}) — never an exception; the
+ * host decides its fallback.
  */
 final readonly class DockGeometry
 {
@@ -58,7 +60,13 @@ final readonly class DockGeometry
 
     /**
      * The region assigned to a pane, or null when the pane is absent from
-     * this geometry (dropped side, or degenerate frame).
+     * this geometry. Absent covers three distinct states — the pane was never
+     * docked, its side was dropped by the degradation ladder, or the frame was
+     * degenerate. A null alone does not say which; hosts that must distinguish
+     * a dropped side from an undocked pane compare against the input
+     * {@see DockLayout} (its slots()/columnShare() still describe intent).
+     * Note a 0-width region is NOT null: an active side planned at 0 columns
+     * keeps a width-0 region by design (see the DockLayout class notes).
      */
     public function regionFor(string $paneId): ?Region
     {

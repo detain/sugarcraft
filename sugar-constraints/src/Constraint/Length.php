@@ -14,7 +14,7 @@ final class Length extends Constraint
     public function __construct(public readonly int $n)
     {
         if ($n < 0) {
-            throw new \InvalidArgumentException('Length must be non-negative');
+            throw new \InvalidArgumentException("Length must be non-negative; got n={$n}");
         }
     }
 }

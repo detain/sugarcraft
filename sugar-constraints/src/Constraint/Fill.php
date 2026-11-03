@@ -14,7 +14,7 @@ final class Fill extends Constraint
     public function __construct(public readonly int $weight = 1)
     {
         if ($weight < 0) {
-            throw new \InvalidArgumentException('Fill weight must be non-negative');
+            throw new \InvalidArgumentException("Fill weight must be non-negative; got weight={$weight}");
         }
     }
 }
