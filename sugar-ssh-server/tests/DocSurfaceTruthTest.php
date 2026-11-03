@@ -125,6 +125,48 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('Provision the paths the stack writes', $readme);
     }
 
+    /**
+     * The pump this transport delegates to counts a short `fwrite()` as
+     * success, so a non-blocking STDOUT silently truncates terminal output.
+     * The repair belongs to sugar-pty, which means the only defence here is
+     * the contract being written down where an embedder will hit it: on the
+     * method, in the README next to the transport choice it argues for, and
+     * in the admin guide's failure list. All three, because the lib's
+     * signature defect is a truth that moved halfway.
+     */
+    public function testTheBlockingStdoutInvariantIsWrittenOnAllThreeSurfaces(): void
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__) . '/src/Transport/InProcessTransport.php');
+        $flatSource = (string) \preg_replace('/\s+/', ' ', $source);
+        $this->assertStringContainsString('PosixPump::pumpMasterToStdout()', $flatSource);
+        $this->assertStringContainsString('LEFT BLOCKING', $flatSource);
+        $this->assertStringContainsString('never retried', $flatSource);
+
+        $readme = (string) $this->readme();
+        $this->assertStringContainsString('### The byte pump needs a blocking STDOUT', $readme);
+        $flatReadme = (string) \preg_replace('/\s+/', ' ', $readme);
+        $this->assertStringContainsString('dropped on the floor', $flatReadme);
+
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            return;
+        }
+
+        $flatGuide = (string) \preg_replace('/\s+/', ' ', $guide);
+        $this->assertStringContainsString('Output can be truncated on a non-blocking STDOUT', $flatGuide);
+        $this->assertStringContainsString('loses every byte past', $flatGuide);
+    }
+
+    private function adminGuide(): ?string
+    {
+        $path = \dirname(__DIR__, 3) . '/docs/admin/sugar-ssh-server.md';
+        if (!\is_file($path)) {
+            return null;
+        }
+
+        return (string) \file_get_contents($path);
+    }
+
     private function readme(): ?string
     {
         $path = \dirname(__DIR__) . '/README.md';

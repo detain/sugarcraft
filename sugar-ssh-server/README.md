@@ -90,6 +90,27 @@ The pre-PTY-upgrade architecture: middleware run inline in the supervisor, and t
 - **`InProcessTransport`** when you want to spawn arbitrary shells (`bash -i`, `zsh`, `fish`), editors (`vim`, `less`), or compiled TUI binaries — anything that needs a controlling terminal. Subprocess overhead per connection (~50-200ms PHP cold start), but full PTY semantics.
 - **`HostSshdTransport`** when your TUI is a SugarCraft `Program` and you want zero subprocess overhead, or when you have an inline-STDIN-reading middleware (banner-style). No subprocess, but no controlling-terminal isolation.
 
+### The byte pump needs a blocking STDOUT
+
+`InProcessTransport::runChild()` flips two of its three streams to
+non-blocking — the PTY master and STDIN — because the pump polls them with
+`stream_select()`. It deliberately leaves STDOUT alone, and that is not an
+oversight: the pump it delegates to (`sugar-pty`'s `PosixPump`) writes
+whatever it reads from the master in a single `fwrite()` per chunk and
+counts a short write as success. On the blocking pipe a ForceCommand child
+inherits from sshd, a full buffer just slows the pump. On a stream you have
+flipped non-blocking — an async host that took over its own stdio, for
+example — the chunk beyond the pipe buffer is dropped on the floor and the
+user sees their terminal output cut off with no error anywhere.
+
+So: keep `$stdout` blocking when you call `runChild()`, and do not add the
+missing `stream_set_blocking($stdout, false)` line. Retrying the unwritten
+tail is `sugar-pty`'s job (buffering the remainder and re-arming on
+writability); the note in `InProcessTransport::runChild()`'s docblock names
+the upstream method that needs it. The admin guide records the same
+constraint under
+[Failure modes](../docs/admin/sugar-ssh-server.md#failure-modes).
+
 ## See also — Git serving (candy-git-server)
 
 SugarSshServer is a general SSH middleware/session framework. For serving Git

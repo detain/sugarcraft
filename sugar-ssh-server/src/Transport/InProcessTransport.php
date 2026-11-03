@@ -237,10 +237,28 @@ final class InProcessTransport implements Transport, ChildSpawner
      * that don't react to STDIN EOF (sleep, daemons) still
      * terminate when the SSH client disconnects.
      *
+     * The two streams are not treated alike, and the asymmetry is the
+     * contract (audit K9): STDIN and the PTY master are flipped to
+     * non-blocking below because the pump polls them with
+     * `stream_select()`, while `$stdout` is deliberately LEFT BLOCKING,
+     * because the pump writes whatever it reads from the master in one
+     * `fwrite()` per chunk and treats a short write as success — see
+     * `PosixPump::pumpMasterToStdout()` and `flushMaster()` in sugar-pty.
+     * A ForceCommand child inherits STDOUT from sshd in blocking mode, so
+     * a full pipe slows the pump instead of losing bytes. Hand this method
+     * a non-blocking `$stdout` (an async host that flipped its own stdio)
+     * and any chunk larger than the pipe buffer is silently truncated: the
+     * remainder is never retried. Buffering the unwritten tail and
+     * re-arming on writability is sugar-pty's fix to make; until it lands
+     * there, keep `$stdout` blocking, and do not "fix" the missing
+     * `stream_set_blocking($stdout, false)` call below — it is what keeps
+     * output intact, not an oversight.
+     *
      * @param list<string>              $cmd  argv passed to sugar-pty
      * @param array<string,string>|null $env
      * @param resource|null             $stdin   defaults to STDIN
-     * @param resource|null             $stdout  defaults to STDOUT
+     * @param resource|null             $stdout  defaults to STDOUT; must
+     *                                           stay blocking (see above)
      * @throws PtyException             if the host can't allocate a
      *                                  PTY or pcntl is missing
      */

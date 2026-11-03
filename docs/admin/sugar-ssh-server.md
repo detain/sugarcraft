@@ -385,6 +385,16 @@ ssh -o BatchMode=yes hubuser@host echo ok
 | `sshd` misconfigured (no `ForceCommand`) | PHP supervisor sees no session metadata; `Session::fromEnvironment()` returns default/zero values |
 | Child process hangs | `InProcessTransport` pump loop waits forever — set a deadline via `Context::withDeadline()` earlier in the chain to force-cleanup |
 
+**Output can be truncated on a non-blocking STDOUT (cross-lib seam).**
+`runChild()` flips the PTY master and STDIN to non-blocking because the pump
+polls them; it leaves STDOUT blocking on purpose. `sugar-pty`'s
+`PosixPump::pumpMasterToStdout()` writes each chunk with one `fwrite()` and
+treats a short write as success, so handing the transport a non-blocking
+`$stdout` (an async host that took over its own stdio) loses every byte past
+the pipe buffer — silently, with no error and no log line. Keep `$stdout`
+blocking. The retry-the-tail fix belongs upstream in `sugar-pty`; until it
+lands there, a loop-owned stdio is not a supported embedding.
+
 ---
 
 ## Backup / migration
