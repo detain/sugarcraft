@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flappy\Tests;
 
-use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Flappy\Bird;
@@ -376,12 +375,8 @@ final class GameTest extends TestCase
             $this->assertSame([7], $updated->highScores());
             $this->assertNotNull($cmd);
 
-            // Execute the batched Cmd: it fans out into the tick + persist cmds.
-            $batch = $cmd();
-            $this->assertInstanceOf(BatchMsg::class, $batch);
-            foreach ($batch->cmds as $c) {
-                $c();
-            }
+            // C1: the crash Cmd is the persist alone (no batched tick re-arm).
+            $this->assertNull($cmd());
 
             // The leaderboard was written to the configured dir …
             $this->assertFileExists($tmp . '/.candy-flappy/scores.json');
@@ -412,16 +407,54 @@ final class GameTest extends TestCase
         @rmdir($tmp);
     }
 
-    public function testInitReturnsTickCmd(): void
+    public function testInitArmsNoTimerBecauseTickingIsDeclaredInSubscriptions(): void
+    {
+        // C1 (lib-reviews-1102): an init()-armed one-shot re-armed per update
+        // multiplies tick chains on every mid-flight restart. The single
+        // source of the cadence is now subscriptions().
+        $g = Game::start(static fn(int $_max): int => 0);
+        $this->assertNull($g->init());
+    }
+
+    public function testAliveGameSubscribesToOneStableTickChain(): void
     {
         $g = Game::start(static fn(int $_max): int => 0);
-        $result = $g->init();
-        $this->assertNotNull($result);
-        // The result is a Closure that when called returns a TickRequest
-        $this->assertInstanceOf(\Closure::class, $result);
-        $tickRequest = $result();
-        // Cmd::tick returns a TickRequest wrapping the produce closure
-        $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $tickRequest);
+        $subs = $g->subscriptions();
+        $this->assertNotNull($subs);
+        $all = $subs->all();
+        $this->assertCount(1, $all);
+        $this->assertSame('game-tick', $all[0]->id);
+        $this->assertSame(\SugarCraft\Core\Kind::Tick, $all[0]->kind);
+        $this->assertSame(Game::TICK_SECONDS, $all[0]->params['seconds']);
+    }
+
+    public function testCrashedGameWantsNoTickSubscription(): void
+    {
+        // m31: a crashed board must not keep a 33 ms chain spinning forever.
+        $g = Game::start(static fn(int $_max): int => 0)->tickN(80);
+        $this->assertTrue($g->crashed);
+        $subs = $g->subscriptions();
+        $this->assertTrue($subs === null || $subs->all() === []);
+    }
+
+    public function testTickUpdateNeverReArmsATimer(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0);
+        [, $cmd] = $g->update(new TickMsg());
+        $this->assertNull($cmd);
+    }
+
+    public function testRestartWhileAliveEmitsNoFreshTimerChain(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0);
+        [$next, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertFalse($next->crashed);
+        // A restart must emit no timer at all: the Program keeps the single
+        // already-running 'game-tick' subscription because the id is stable.
+        $this->assertNull($cmd);
+        $subs = $next->subscriptions();
+        $this->assertNotNull($subs);
+        $this->assertSame(['game-tick'], array_map(static fn($s): string => $s->id, $subs->all()));
     }
 
     public function testUpdateWithUnhandledMsgTypeReturnsSelf(): void

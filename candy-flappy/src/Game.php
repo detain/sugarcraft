@@ -33,6 +33,21 @@ final class Game implements Model
     public const BIRD_COL    = 8;
     public const PIPE_EVERY  = 18;         // cells between successive pipes
 
+    /**
+     * Wall-clock tick period. Derived from {@see Bird::TICKS_PER_SEC} so the
+     * timer and the projectile's dt can never drift apart (M11): the model
+     * integrates at 1/30 s per tick, so the timer fires at 1/30 s. (The old
+     * magic `0.033` was a hand-rounded duplicate of the same number — the
+     * cadence moves ~1% slower now, which is the DRIFT being removed, not a
+     * tuning change: model time was always 1/30.)
+     */
+    public const TICK_SECONDS = 1 / Bird::TICKS_PER_SEC;
+
+    /** Stable subscription id — Program's reconcile keys on it, so a restart
+     *  mid-flight reuses the one running chain instead of arming a second
+     *  (C1: the old per-update `Cmd::tick` re-arm multiplied tick chains). */
+    public const TICK_SUBSCRIPTION = 'game-tick';
+
     private const HIGH_SCORE_FILE = '.candy-flappy/scores.json';
 
     /** Upper bound on the retained high-score leaderboard. */
@@ -197,7 +212,10 @@ final class Game implements Model
 
     public function init(): ?\Closure
     {
-        return Cmd::tick(0.033, static fn() => new TickMsg());
+        // C1: no timer is armed here. The whole cadence lives in
+        // subscriptions(), reconciled by the Program on every update cycle,
+        // so exactly one 'game-tick' chain can ever be running.
+        return null;
     }
 
     public function update(Msg $msg): array
@@ -208,8 +226,9 @@ final class Game implements Model
                 || ($msg->ctrl && $msg->rune === 'c')) {
                 return [$this, Cmd::quit()];
             }
-            if ($msg->type === KeyType::Char && $msg->rune === 'r') {
-                return [self::start($this->rand, $this->configDir), $this->init()];
+            if ($msg->type === KeyType::Char && $msg->rune === 'r' && $msg->ctrl === false) {
+                // Emit no timer: the stable-id subscription carries over.
+                return [self::start($this->rand, $this->configDir), null];
             }
             if ($this->crashed === true) {
                 return [$this, null];
@@ -242,15 +261,14 @@ final class Game implements Model
                         }
                         return null;
                     };
-                    // Batch the tick-cmd (keeps the loop alive) with the persist side-effect.
-                    return [$updated, Cmd::batch(
-                        Cmd::tick(0.033, static fn() => new TickMsg()),
-                        $persistCmd,
-                    )];
+                    // C1: persist only — the crashed model's subscriptions()
+                    // is empty, so Program's reconcile cancels the tick chain
+                    // right here (m31: no more idle re-arming after death).
+                    return [$updated, $persistCmd];
                 }
             }
-            // Schedule the next tick — fires forever until quit.
-            return [$next, Cmd::tick(0.033, static fn() => new TickMsg())];
+            // C1: no re-arm here either — the subscription owns the cadence.
+            return [$next, null];
         }
         return [$this, null];
     }
@@ -341,6 +359,16 @@ final class Game implements Model
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
-        return null;
+        // The single source of the game cadence (C1/M11). A stable id means
+        // Program's per-cycle reconcile keeps exactly one chain alive across
+        // restarts, and an empty set on the crashed board cancels it (m31).
+        if ($this->crashed === true) {
+            return new \SugarCraft\Core\Subscriptions();
+        }
+        return (new \SugarCraft\Core\Subscriptions())->withTick(
+            self::TICK_SUBSCRIPTION,
+            self::TICK_SECONDS,
+            static fn(): Msg => new TickMsg(),
+        );
     }
 }

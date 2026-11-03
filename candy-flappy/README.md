@@ -39,7 +39,7 @@ composer install
 |-----------------|--------------------------------------------------------------------------------|
 | `Bird`          | Wraps a SugarSpring `Projectile` — gravity pulls it down, `flap()` resets vertical velocity to a fixed kick, and fall speed is capped at terminal velocity. |
 | `Pipe`          | Single-column pipe pair with a centred gap. Slides left one cell per tick.     |
-| `TickMsg`       | Frame-tick message scheduled by `Cmd::tick(0.033, …)` ≈ 30 fps.                |
+| `TickMsg`       | Frame-tick message fired by the `game-tick` subscription timer (`Game::TICK_SECONDS`, 1/30 s exactly). |
 | `Game` (Model)  | Pure-state world: bird + pipes + score + crashed flag. Injects PRNG closure for deterministic gap placements in tests. |
 | `Renderer`      | Pure view — single playfield walk, ANSI-styled glyphs, rounded border.         |
 | `PipeGenerator` | Generates pipes with variable gap height — gap shrinks as score increases, raising difficulty. Gap starts at 6 cells, shrinks by 1 every 5 points, floors at 3. |
