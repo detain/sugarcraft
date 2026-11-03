@@ -15,7 +15,9 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 
 /**
- * Pins for the E736 Phase-2/2.5 performance refactors (round 86, lane v4).
+ * Pins for this lib's memoized fast paths: the Heatmap per-cell style
+ * cache, the Sixel palette memo, the shared zero-width glyph set, and
+ * the BrailleGrid bounds guard.
  *
  * The refactors are behaviour-preserving — proven by a byte-identical
  * render-dump sweep over the whole touched surface — so each pin locks a
@@ -29,7 +31,7 @@ use SugarCraft\Core\Util\Width;
 final class Phase2PerfPinsTest extends TestCase
 {
     /**
-     * E736/2.2 superseded by audit F6 (round 86+): the private ZERO_WIDTH
+     * Superseded by a later audit: the private ZERO_WIDTH
      * keyed set is gone — width now delegates to the shared sugar-core
      * table, so this pin asserts the SAME boundary answers through the
      * canon plus the documented tab flip (1 → TAB_WIDTH=4, aligning the
@@ -48,10 +50,10 @@ final class Phase2PerfPinsTest extends TestCase
     }
 
     /**
-     * E736/2.1: repeated cell colours render byte-identically through the
-     * style cache, and distinct colours must not collapse onto one entry.
+     * Heatmap style cache: repeated cell colors render byte-identically through the
+     * style cache, and distinct colors must not collapse onto one entry.
      */
-    public function testHeatmapStyleCacheIsColourDeterministic(): void
+    public function testHeatmapStyleCacheIsColorDeterministic(): void
     {
         $grid = [[0.5, 0.5, 0.5], [0.5, 0.0, 0.5]];
         $this->assertSame(
@@ -62,9 +64,9 @@ final class Phase2PerfPinsTest extends TestCase
         $this->assertNotSame(
             Heatmap::new([[0.0, 0.0]])->withSize(2, 1)->view(),
             Heatmap::new([[0.0, 1.0]])->withSize(2, 1)->view(),
-            'cache must not collapse distinct colours',
+            'cache must not collapse distinct colors',
         );
-        // Key-collision guard: two colours that share R+G but differ in B
+        // Key-collision guard: two colors that share R+G but differ in B
         // must keep distinct cells — a cache keyed on fewer than all three
         // channels would collapse them.
         $black = Color::rgb(0, 0, 0);
@@ -78,10 +80,10 @@ final class Phase2PerfPinsTest extends TestCase
     }
 
     /**
-     * E736/2.5: a repeated colour must quantise to exactly the same
+     * Sixel palette memo: a repeated color must quantise to exactly the same
      * palette index as the single-pixel encode (memo answers == scan
-     * answers) and every stripe of an all-same-colour grid references it
-     * once per colour pass — no phantom second index appears.
+     * answers) and every stripe of an all-same-color grid references it
+     * once per color pass — no phantom second index appears.
      */
     public function testSixelMemoKeepsQuantisationIdentical(): void
     {
@@ -89,23 +91,23 @@ final class Phase2PerfPinsTest extends TestCase
         $single = Sixel::encode([[$px]], 16);
         $repeated = Sixel::encode(array_fill(0, 8, array_fill(0, 4, $px)), 16);
         $this->assertSame(
-            self::firstDataColour($single),
-            self::firstDataColour($repeated),
+            self::firstDataColor($single),
+            self::firstDataColor($repeated),
             'memo hit must equal the linear-scan answer',
         );
         $this->assertCount(
             1,
-            array_unique(self::dataColours($repeated)),
-            'all-same-colour grid uses one distinct palette index',
+            array_unique(self::dataColors($repeated)),
+            'all-same-color grid uses one distinct palette index',
         );
-        // Key-collision guard: two colours sharing only the red channel
+        // Key-collision guard: two colors sharing only the red channel
         // must quantise independently — a memo keyed below full RGB would
         // force the second onto the first's index.
         $a = Color::rgb(17, 200, 5);
         $b = Color::rgb(17, 0, 220);
         $both = Sixel::encode([[$a, $b]], 64);
         $refs = [];
-        foreach (self::dataColours($both) as $r) {
+        foreach (self::dataColors($both) as $r) {
             $refs[$r] = true;
         }
         $this->assertCount(
@@ -113,15 +115,15 @@ final class Phase2PerfPinsTest extends TestCase
             $refs,
             'same-red/different-green-blue pair keeps two distinct indices through the memo',
         );
-        $idxA = self::firstDataColour(Sixel::encode([[$a]], 64));
-        $idxB = self::firstDataColour(Sixel::encode([[$b]], 64));
-        $this->assertNotSame($idxA, $idxB, 'the two colours must quantise to different indices');
+        $idxA = self::firstDataColor(Sixel::encode([[$a]], 64));
+        $idxB = self::firstDataColor(Sixel::encode([[$b]], 64));
+        $this->assertNotSame($idxA, $idxB, 'the two colors must quantise to different indices');
         $this->assertArrayHasKey($idxA, $refs);
         $this->assertArrayHasKey($idxB, $refs);
     }
 
     /**
-     * E736/2.5 (r87-w3 hardening): the former same-red/different-green-blue
+     * Sixel palette memo (hardened): the former same-red/different-green-blue
      * pair alone let a memo key that DROPS exactly one of g/b survive — the
      * pair differs in both channels, so any two-channel key still separates
      * it. Each leg here differs from its twin in exactly ONE channel and the
@@ -135,11 +137,11 @@ final class Phase2PerfPinsTest extends TestCase
         $greenOnlyPair = [Color::rgb(0, 10, 0), Color::rgb(0, 200, 0)];
         foreach ([$blueOnlyPair, $greenOnlyPair] as $i => [$a, $b]) {
             $label = $i === 0 ? 'blue-only' : 'green-only';
-            $idxA = self::firstDataColour(Sixel::encode([[$a]], 64));
-            $idxB = self::firstDataColour(Sixel::encode([[$b]], 64));
+            $idxA = self::firstDataColor(Sixel::encode([[$a]], 64));
+            $idxB = self::firstDataColor(Sixel::encode([[$b]], 64));
             $this->assertNotSame($idxA, $idxB, "the $label pair must quantise to different indices");
             $refs = [];
-            foreach (self::dataColours(Sixel::encode([[$a, $b]], 64)) as $ref) {
+            foreach (self::dataColors(Sixel::encode([[$a, $b]], 64)) as $ref) {
                 $refs[$ref] = true;
             }
             $this->assertCount(
@@ -153,7 +155,7 @@ final class Phase2PerfPinsTest extends TestCase
     }
 
     /**
-     * E736/2.5: the memo lives per encode() call — changing palette size
+     * Sixel palette memo: the memo lives per encode() call — changing palette size
      * between calls must not read a stale index.
      */
     public function testSixelMemoIsScopedPerEncodeCall(): void
@@ -167,7 +169,7 @@ final class Phase2PerfPinsTest extends TestCase
     }
 
     /**
-     * E736/2.3: COLOR_MAP equals exactly the SGR strings the former
+     * Legend color map: COLOR_MAP equals exactly the SGR strings the former
      * Ansi::fg16() calls produced (default row is sgr(39)).
      */
     public function testLegendColorMapEqualsAnsiHelpers(): void
@@ -182,7 +184,7 @@ final class Phase2PerfPinsTest extends TestCase
     }
 
     /**
-     * E736/3.4: colorToInt is boundary-typed to Color (parse, don't
+     * Picture colorToInt: colorToInt is boundary-typed to Color (parse, don't
      * validate) — the reflection signature is the pin.
      */
     public function testColorToIntIsTypedToColor(): void
@@ -198,7 +200,7 @@ final class Phase2PerfPinsTest extends TestCase
      *
      * @return list<int>
      */
-    private static function dataColours(string $encoded): array
+    private static function dataColors(string $encoded): array
     {
         $body = substr($encoded, 3, strrpos($encoded, "\x1b\\") - 3);
         $declLen = 0;
@@ -208,8 +210,8 @@ final class Phase2PerfPinsTest extends TestCase
         return array_map('intval', $refs[1]);
     }
 
-    private static function firstDataColour(string $encoded): int
+    private static function firstDataColor(string $encoded): int
     {
-        return (int) (self::dataColours($encoded)[0] ?? -1);
+        return (int) (self::dataColors($encoded)[0] ?? -1);
     }
 }

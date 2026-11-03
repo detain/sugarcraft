@@ -47,7 +47,7 @@ final class LineChartSeriesColorFnTest extends TestCase
 
         // SGR runs coalesce across adjacent equal-style cells, so a blue
         // marker may share its opener with the neighboring connector
-        // glyphs; pin the semantic: within one row, a colour opener reaches
+        // glyphs; pin the semantic: within one row, a color opener reaches
         // a '*' before the row ends (opener, then at most the '/' fill
         // glyphs and spaces, then the marker).
         $this->assertMatchesRegularExpression('/' . preg_quote(self::BLUE, '/') . "[^\n\x1b]{0,6}\\*/", $out);
@@ -66,7 +66,7 @@ final class LineChartSeriesColorFnTest extends TestCase
         $this->assertStringContainsString(self::RED, $out, 'high samples paint red');
         $this->assertStringContainsString(self::BLUE, $out, 'low samples paint blue');
         // The series' own legend color (lead cycle slot — blue since the
-        // lib-reviews-1103 colour-blind-safe reorder) is fully overridden
+        // lib-reviews-1103 color-blind-safe reorder) is fully overridden
         // because the resolver never returns null.
         $this->assertStringNotContainsString("\x1b[38;2;0;0;238m", $out);
     }
@@ -82,8 +82,8 @@ final class LineChartSeriesColorFnTest extends TestCase
 
         $this->assertStringContainsString(self::RED, $out);
         // lib-reviews-1103 M13: the lead legend cycle slot is 'blue'
-        // (0;0;238) — was 'red' (205;0;0) before the colour-blind-safe
-        // palette reorder. Null from the resolver keeps that slot colour.
+        // (0;0;238) — was 'red' (205;0;0) before the color-blind-safe
+        // palette reorder. Null from the resolver keeps that slot color.
         $this->assertStringContainsString("\x1b[38;2;0;0;238m", $out, 'null keeps the legend color');
     }
 

@@ -11,7 +11,7 @@ use SugarCraft\Charts\BarChart\BarChart;
 /**
  * docs-fix-1023 B2: BarChart value labels are a real render path (not
  * inert storage), plus the auto-bar-width and cell-width fixes. Labels
- * render only when opted in; the unlabelled default stays byte-identical.
+ * render only when opted in; the unlabeled default stays byte-identical.
  */
 final class BarChartLabelsTest extends TestCase
 {

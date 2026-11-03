@@ -8,7 +8,7 @@ use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\UntrustedText;
 
 /**
- * One labelled value for a {@see BarChart}.
+ * One labeled value for a {@see BarChart}.
  */
 final class Bar
 {

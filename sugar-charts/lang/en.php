@@ -27,7 +27,7 @@ return [
     // Heatmap/Heatmap.php
     'heatmap.dim_nonneg'       => 'heatmap width/height must be >= 0',
     'heatmap.coords_nonneg'    => 'heat point coordinates must be >= 0',
-    'heatmap.palette_min'      => 'palette needs at least 2 colours (or empty to disable)',
+    'heatmap.palette_min'      => 'palette needs at least 2 colors (or empty to disable)',
 
     // LineChart/LineChart.php
     'linechart.dim_nonneg'     => 'line chart width/height must be >= 0',

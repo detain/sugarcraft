@@ -42,7 +42,7 @@ use SugarCraft\Core\Util\Width;
  *
  * The guard is idempotent and byte-identical on ordinary printable
  * strings, so hosts that pass clean data see no change; styling applied
- * by the chart AFTER this guard (series SGR, legend colours) is the
+ * by the chart AFTER this guard (series SGR, legend colors) is the
  * library's own output and survives untouched.
  */
 final class UntrustedText
@@ -63,7 +63,7 @@ final class UntrustedText
 
     /**
      * Guard every `label` entry of a legend-item shaped list
-     * (`list<array{label: string, color: string}>`). Colours are validated
+     * (`list<array{label: string, color: string}>`). Colors are validated
      * separately at render time; only the human-readable text needs the
      * sweep.
      *

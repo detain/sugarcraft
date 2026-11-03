@@ -26,7 +26,7 @@ final class BucketByTime
         public readonly int $offsetSeconds = 0,
     ) {
         if ($intervalSeconds <= 0) {
-            throw new \InvalidArgumentException('Bucket interval must be positive');
+            throw new \InvalidArgumentException('Bucket interval must be > 0, got ' . $intervalSeconds);
         }
     }
 

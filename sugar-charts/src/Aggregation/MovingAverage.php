@@ -23,7 +23,7 @@ final class MovingAverage
         public readonly bool $centered = false,
     ) {
         if ($windowSize <= 0) {
-            throw new \InvalidArgumentException('Window size must be positive');
+            throw new \InvalidArgumentException('Window size must be > 0, got ' . $windowSize);
         }
     }
 

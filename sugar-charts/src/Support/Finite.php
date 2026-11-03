@@ -13,7 +13,7 @@ use SugarCraft\Charts\Lang;
  * maths: `$max == $min` is *false* when either operand is NaN, so the
  * divide-by-zero guards every chart relies on are defeated and a `NaN`
  * range flows into `(int) round(...)` / `(int) floor(...)`, collapsing to
- * `0` or indexing a colour palette out of bounds. Rejecting non-finite
+ * `0` or indexing a color palette out of bounds. Rejecting non-finite
  * values at the point they first enter a chart keeps those invariants
  * intact.
  *

@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * Most VHS-recordable terminals don't actually render Sixel
  * (vhs uses ttyd, which dumps the raw escape bytes). This demo
- * shows the encoded output as labelled hex so you can see the
+ * shows the encoded output as labeled hex so you can see the
  * structure even when the renderer can't paint it.
  *
  *   php examples/picture.php

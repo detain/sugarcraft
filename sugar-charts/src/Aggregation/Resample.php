@@ -26,7 +26,7 @@ final class Resample
         // zero or negative would spin their while loops forever. Siblings
         // MovingAverage/BucketByTime already guard their interval doors.
         if ($targetIntervalSeconds <= 0) {
-            throw new \InvalidArgumentException('Target interval must be positive');
+            throw new \InvalidArgumentException('Target interval must be > 0, got ' . $targetIntervalSeconds);
         }
     }
 

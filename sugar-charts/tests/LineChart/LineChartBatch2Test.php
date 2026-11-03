@@ -68,7 +68,7 @@ final class LineChartBatch2Test extends TestCase
         $this->assertStringContainsString('*', $view);
         $this->assertStringContainsString('+', $view);
         $this->assertStringContainsString('o', $view);
-        $this->assertStringNotContainsString("\x1b", $view, 'unthemed cell mode emits no colour');
+        $this->assertStringNotContainsString("\x1b", $view, 'unthemed cell mode emits no color');
     }
 
     public function testExplicitDatasetPointStillWinsOverRotation(): void
@@ -79,13 +79,13 @@ final class LineChartBatch2Test extends TestCase
         $this->assertStringContainsString('@', $chart->view());
     }
 
-    public function testDatasetPaletteIsColourBlindSafe(): void
+    public function testDatasetPaletteIsColorBlindSafe(): void
     {
         $colors = (new \ReflectionClass(LineChart::class))->getConstant('DATASET_COLORS');
         $this->assertIsArray($colors);
         // The old first pair (red, green) is the classic deutan collision;
         // the lead pair is now blue/orange — distinguishable under all three
-        // common colour-vision deficiencies. Full order pinned: a deliberate
+        // common color-vision deficiencies. Full order pinned: a deliberate
         // drift from the historic palette, so the cycle itself is the spec.
         $this->assertSame(['blue', 'orange', 'green', 'red', 'purple', 'cyan'], $colors);
 
@@ -122,9 +122,9 @@ final class LineChartBatch2Test extends TestCase
         }
     }
 
-    public function testThemeStillDrivesSeriesColoursAfterConstReorder(): void
+    public function testThemeStillDrivesSeriesColorsAfterConstReorder(): void
     {
-        // Themed path unchanged by M13: colours come from the theme
+        // Themed path unchanged by M13: colors come from the theme
         // palette, not DATASET_COLORS, so no rune/glyph rotation assertion
         // here — just prove the themed render keeps its SGR bytes.
         $chart = new LineChart(data: [1.0, 2.0], width: 8, height: 3, min: null, max: null, point: '*', theme: Theme::dark());

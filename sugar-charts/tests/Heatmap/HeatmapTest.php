@@ -36,12 +36,12 @@ final class HeatmapTest extends TestCase
     public function testEachCellWrappedInSgr(): void
     {
         $out = Heatmap::new([[0.0, 1.0]])->view();
-        // Two cells of '█' should each be coloured.
+        // Two cells of '█' should each be colored.
         $this->assertSame(2, substr_count($out, '█'));
         $this->assertStringContainsString("\x1b[38", $out);
     }
 
-    public function testColdAndHotColoursLerp(): void
+    public function testColdAndHotColorsLerp(): void
     {
         // Pin cold=black (0,0,0) and hot=white (255,255,255).
         $cold = Color::rgb(0, 0, 0);

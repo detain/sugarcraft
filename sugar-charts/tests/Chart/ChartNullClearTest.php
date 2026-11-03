@@ -14,7 +14,7 @@ use SugarCraft\Charts\OHLC\Bar as OhlcBar;
 use SugarCraft\Style\Theme;
 
 /**
- * lib-reviews-1103 batch 2, M10: every nullable text/colour/closure setter
+ * lib-reviews-1103 batch 2, M10: every nullable text/color/closure setter
  * previously treated `null` as "keep the current value" because the copy
  * helpers coalesced with `??`. Passing null now CLEARS, mirroring the
  * paired Set-flag pattern the numeric pin setters already used.

@@ -167,6 +167,10 @@ final class Sparkline
      * Empty-data contract: with no samples renders a full row of spaces
      * (GLYPHS[0]) — width×1, not '' — see BarChart::view() for the ''
      * family and EmptyRenderContractTest for the pinned shapes.
+     *
+     * Family divergence: identical series can render slightly differently
+     * here than in the column charts (baseline handling); unifying the
+     * look was DECLINED as a behavior-breaking change (lib-reviews-1103).
      */
     public function view(): string
     {

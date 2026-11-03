@@ -40,61 +40,59 @@ final class BrailleGrid
         return [$this->cols * 2, $this->rows * 4];
     }
 
-    /** Light a single dot at sub-cell position `(dx, dy)`. */
+    /**
+     * Light a single dot at sub-cell position `(dx, dy)`.
+     *
+     * NOTE: set/unset/toggle/clear mutate this buffer IN PLACE and return
+     * `$this` only for chaining — the house `with*()`-clones contract does
+     * not apply here; no copy is produced.
+     */
     public function set(int $dx, int $dy): self
     {
-        if (!$this->inBounds($dx, $dy)) {
+        $addr = $this->dotAddress($dx, $dy);
+        if ($addr === null) {
             return $this;
         }
-        $cellX = intdiv($dx, 2);
-        $cellY = intdiv($dy, 4);
-        $col   = $dx % 2;
-        $row   = $dy % 4;
-        $this->cells[$cellX][$cellY] = ($this->cells[$cellX][$cellY] ?? 0) | self::bit($col, $row);
+        [$cellX, $cellY, $bit] = $addr;
+        $this->cells[$cellX][$cellY] = ($this->cells[$cellX][$cellY] ?? 0) | $bit;
         return $this;
     }
 
     /** Clear a single dot. */
     public function unset(int $dx, int $dy): self
     {
-        if (!$this->inBounds($dx, $dy)) {
+        $addr = $this->dotAddress($dx, $dy);
+        if ($addr === null) {
             return $this;
         }
-        $cellX = intdiv($dx, 2);
-        $cellY = intdiv($dy, 4);
-        $col   = $dx % 2;
-        $row   = $dy % 4;
+        [$cellX, $cellY, $bit] = $addr;
         $cur = $this->cells[$cellX][$cellY] ?? 0;
-        $this->cells[$cellX][$cellY] = $cur & ~self::bit($col, $row);
+        $this->cells[$cellX][$cellY] = $cur & ~$bit;
         return $this;
     }
 
     /** Flip a single dot. */
     public function toggle(int $dx, int $dy): self
     {
-        if (!$this->inBounds($dx, $dy)) {
+        $addr = $this->dotAddress($dx, $dy);
+        if ($addr === null) {
             return $this;
         }
-        $cellX = intdiv($dx, 2);
-        $cellY = intdiv($dy, 4);
-        $col   = $dx % 2;
-        $row   = $dy % 4;
+        [$cellX, $cellY, $bit] = $addr;
         $cur = $this->cells[$cellX][$cellY] ?? 0;
-        $this->cells[$cellX][$cellY] = $cur ^ self::bit($col, $row);
+        $this->cells[$cellX][$cellY] = $cur ^ $bit;
         return $this;
     }
 
     /** True when the dot at `(dx, dy)` is currently lit. */
     public function isSet(int $dx, int $dy): bool
     {
-        if (!$this->inBounds($dx, $dy)) {
+        $addr = $this->dotAddress($dx, $dy);
+        if ($addr === null) {
             return false;
         }
-        $cellX = intdiv($dx, 2);
-        $cellY = intdiv($dy, 4);
-        $col   = $dx % 2;
-        $row   = $dy % 4;
-        return (($this->cells[$cellX][$cellY] ?? 0) & self::bit($col, $row)) !== 0;
+        [$cellX, $cellY, $bit] = $addr;
+        return (($this->cells[$cellX][$cellY] ?? 0) & $bit) !== 0;
     }
 
     /**
@@ -137,12 +135,23 @@ final class BrailleGrid
     /** Bit position for a given column (0 or 1) and row (0..3). */
     private static function bit(int $col, int $row): int
     {
-        // U+2800 layout:
-        //   col 0:  row0=0x01  row1=0x02  row2=0x04  row3=0x40
-        //   col 1:  row0=0x08  row1=0x10  row2=0x20  row3=0x80
-        return $col === 0
-            ? ([0x01, 0x02, 0x04, 0x40][$row])
-            : ([0x08, 0x10, 0x20, 0x80][$row]);
+        // Single source of truth shared with Graph::drawBrailleRune.
+        return Graph::BRAILLE_BITMAP[$col][$row];
+    }
+
+    /**
+     * Resolve a sub-cell dot coordinate to [cellX, cellY, bit], or null
+     * when outside the grid. Shared by set()/unset()/toggle()/isSet() so
+     * the addressing math lives in exactly one place.
+     *
+     * @return array{0:int,1:int,2:int}|null
+     */
+    private function dotAddress(int $dx, int $dy): ?array
+    {
+        if (!$this->inBounds($dx, $dy)) {
+            return null;
+        }
+        return [intdiv($dx, 2), intdiv($dy, 4), self::bit($dx % 2, $dy % 4)];
     }
 
     private function inBounds(int $dx, int $dy): bool

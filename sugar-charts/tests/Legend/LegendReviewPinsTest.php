@@ -13,7 +13,7 @@ use SugarCraft\Core\Util\Width;
  * Pins for the lib-reviews-1103 Legend fixes: the bordered side legends
  * now render closed, uniform-width boxes (previously ├/┤ tee junctions
  * left the top and bottom open and short labels ragged the frame), and
- * the NO_COLOR family suppresses the legend's raw CSI colour emission
+ * the NO_COLOR family suppresses the legend's raw CSI color emission
  * (the legend bypassed sugar-style's profile machinery entirely).
  */
 final class LegendReviewPinsTest extends TestCase
@@ -90,7 +90,7 @@ final class LegendReviewPinsTest extends TestCase
         $this->assertStringEndsWith(' │', $stripped);
     }
 
-    public function testNoColorSuppressesLegendColourEmission(): void
+    public function testNoColorSuppressesLegendColorEmission(): void
     {
         putenv('NO_COLOR=1');
         $view = $this->side([['label' => 'A', 'color' => 'blue']], Position::Left);
@@ -98,7 +98,7 @@ final class LegendReviewPinsTest extends TestCase
         $this->assertStringNotContainsString("\x1b[39m", $view);
         // The block itself is still drawn, just unstyled.
         $this->assertStringContainsString('█', $view);
-        // Hex paths are suppressed too, not just named colours.
+        // Hex paths are suppressed too, not just named colors.
         $hex = $this->side([['label' => 'A', 'color' => '#ff00ff']], Position::Left);
         $this->assertStringNotContainsString("\x1b[38;", $hex);
     }
@@ -107,7 +107,7 @@ final class LegendReviewPinsTest extends TestCase
     {
         // Fleet-canonical reading (mirrors sugar-core EnvColors and the
         // candy-mdview trilemma): an EMPTY NO_COLOR counts as unset; a
-        // non-empty value of anything disables colour.
+        // non-empty value of anything disables color.
         putenv('NO_COLOR=');
         $view = $this->side([['label' => 'A', 'color' => 'blue']], Position::Left);
         $this->assertStringContainsString("\x1b[34m", $view);

@@ -332,4 +332,13 @@ final class GraphTest extends TestCase
             Graph::linePointsWithLimit(0, 0, 6, 2, 4),
         );
     }
+
+    public function testBrailleBitmapTableIsSharedWithBrailleGrid(): void
+    {
+        $gridSource = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Canvas/BrailleGrid.php');
+        self::assertStringContainsString('Graph::BRAILLE_BITMAP', $gridSource, 'BrailleGrid must read the shared const, not restate weights');
+        $grid = new \SugarCraft\Charts\Canvas\BrailleGrid(2, 2);
+        $grid->set(1, 3);
+        self::assertSame(mb_chr(0x2880, 'UTF-8'), $grid->rune(0, 0), 'col1/row3 lights 0x80');
+    }
 }

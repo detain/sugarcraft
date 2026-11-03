@@ -16,16 +16,16 @@ use SugarCraft\Core\Util\Color;
  *
  *  1. Quantises the input pixels to a fixed palette (default 16
  *     entries via a coarse RGB cube).
- *  2. Walks the grid in 6-row stripes. For each colour active in the
+ *  2. Walks the grid in 6-row stripes. For each color active in the
  *     stripe, emits `#idx` followed by one sixel byte (`0x3f + 6-bit
  *     mask`) per column.
- *  3. Separates colour passes within a stripe with `$` (carriage
+ *  3. Separates color passes within a stripe with `$` (carriage
  *     return) and stripes with `-` (line feed).
  *
  * Output is plain ASCII bytes (no Imagick / GD required).
  *
- * Encoded size scales with pixel count and colour passes: the shipped
- * 16×6 / 16-colour demo encodes to 326 bytes, while a 320×200 image
+ * Encoded size scales with pixel count and color passes: the shipped
+ * 16×6 / 16-color demo encodes to 326 bytes, while a 320×200 image
  * runs into the tens of kilobytes — fine over local terminals, heavy
  * over slow SSH, and the encoder does no further compression.
  */
@@ -51,7 +51,7 @@ final class Sixel
 
         // Build the palette by sampling a uniform RGB cube. Larger
         // palettes don't necessarily look better — most images map
-        // to a handful of dominant colours and the quantisation is
+        // to a handful of dominant colors and the quantisation is
         // nearest-neighbour on the cube.
         [$palette, $paletteCount] = self::buildPalette($paletteSize);
 
@@ -94,21 +94,21 @@ final class Sixel
         // Walk in 6-row stripes.
         for ($stripeStart = 0; $stripeStart < $rows; $stripeStart += 6) {
             $stripeEnd = min($stripeStart + 6, $rows);
-            // Per stripe: for each colour active in the stripe, emit
-            // a colour pass.
-            $colours = [];
+            // Per stripe: for each color active in the stripe, emit
+            // a color pass.
+            $colors = [];
             for ($r = $stripeStart; $r < $stripeEnd; $r++) {
                 foreach ($quant[$r] as $idx) {
-                    $colours[$idx] = true;
+                    $colors[$idx] = true;
                 }
             }
-            $colourList = array_keys($colours);
-            sort($colourList);
+            $colorList = array_keys($colors);
+            sort($colorList);
 
             $first = true;
-            foreach ($colourList as $idx) {
+            foreach ($colorList as $idx) {
                 if (!$first) {
-                    $out .= '$';   // CR — overlay colour passes within the same stripe.
+                    $out .= '$';   // CR — overlay color passes within the same stripe.
                 }
                 $out .= '#' . $idx;
                 for ($c = 0; $c < $cols; $c++) {
@@ -140,7 +140,7 @@ final class Sixel
     private static function buildPalette(int $paletteSize): array
     {
         $paletteSize = max(2, min(256, $paletteSize));
-        // Always include the 16 ANSI colours first.
+        // Always include the 16 ANSI colors first.
         $palette = [
             [0, 0, 0],     [205, 0, 0],   [0, 205, 0],   [205, 205, 0],
             [0, 0, 238],   [205, 0, 205], [0, 205, 205], [229, 229, 229],
@@ -151,7 +151,7 @@ final class Sixel
             $palette = array_slice($palette, 0, $paletteSize);
             return [$palette, count($palette)];
         }
-        // Add cube colours up to the cap.
+        // Add cube colors up to the cap.
         $extra = $paletteSize - 16;
         $axis  = max(2, (int) ceil(pow($extra, 1 / 3)));
         $paletteCount = count($palette);

@@ -15,7 +15,7 @@ use SugarCraft\Style\Style;
 
 /**
  * 2D heatmap rendered onto a {@see Canvas}. Each grid cell becomes one
- * canvas cell whose foreground colour is linearly interpolated in RGB
+ * canvas cell whose foreground color is linearly interpolated in RGB
  * between {@see $coldColor} (low values) and {@see $hotColor} (high
  * values).
  *
@@ -41,7 +41,7 @@ final class Heatmap
 
     /**
      * @param list<list<int|float>> $grid
-     * @param list<Color>           $palette  multi-stop colour palette;
+     * @param list<Color>           $palette  multi-stop color palette;
      *                                        empty falls back to the
      *                                        cold→hot two-stop blend.
      */
@@ -72,7 +72,7 @@ final class Heatmap
     public static function new(array $grid = [], int $width = 0, int $height = 0): self
     {
         // Ingestion guard: a non-finite cell would defeat the value range
-        // scan in view() and index the colour palette out of bounds.
+        // scan in view() and index the color palette out of bounds.
         foreach ($grid as $row) {
             Finite::assertAll($row);
         }
@@ -149,7 +149,7 @@ final class Heatmap
         return $next;
     }
     /**
-     * Fill rune for coloured mode. Control bytes (escape sequences,
+     * Fill rune for colored mode. Control bytes (escape sequences,
      * newlines) are stripped: the rune is repainted on every cell, so an
      * unfiltered one would inject raw SGR into every row of the frame.
      */
@@ -164,12 +164,12 @@ final class Heatmap
     }
 
     /**
-     * Multi-stop colour palette. The value range maps linearly across
-     * the supplied colours; first colour = `min`, last = `max`,
+     * Multi-stop color palette. The value range maps linearly across
+     * the supplied colors; first color = `min`, last = `max`,
      * intermediates evenly spaced. Pass `[]` to clear and revert to
      * the cold↔hot two-stop blend. Mirrors ntcharts' `SetDefaultColorScale`.
      *
-     * @param list<Color> $stops at least 2 colours
+     * @param list<Color> $stops at least 2 colors
      */
     public function withPalette(array $stops): self
     {
@@ -191,7 +191,7 @@ final class Heatmap
 
     /**
      * Pre-styled overlay applied to every cell in addition to the
-     * computed foreground colour. Useful for setting bold / italic /
+     * computed foreground color. Useful for setting bold / italic /
      * background slots without losing the value-driven gradient.
      * Pass null to clear. Mirrors ntcharts' `WithCellStyle`.
      */
@@ -222,10 +222,10 @@ final class Heatmap
     /**
      * Monochrome density mode: each cell shows a glyph from a seven-step
      * ramp (space · : ░ ▒ ▓ █) sized to the value's position in the range
-     * instead of a colour-filled block. The reading survives terminals
-     * without colour and colour-blind viewers; the cold-end block of the
-     * coloured mode, which is nearly indistinguishable from a dark
-     * background, has no equivalent here. Default off — the coloured
+     * instead of a color-filled block. The reading survives terminals
+     * without color and color-blind viewers; the cold-end block of the
+     * colored mode, which is nearly indistinguishable from a dark
+     * background, has no equivalent here. Default off — the colored
      * gradient stays the out-of-box behaviour.
      */
     public function withMonoRamp(bool $on = true): self
@@ -320,13 +320,13 @@ final class Heatmap
 
         $canvas = new Canvas($this->width, $this->height);
         $rowCount = count($this->grid);
-        // Style objects are immutable value objects and the colour fully
+        // Style objects are immutable value objects and the color fully
         // determines the per-cell style for this render (profile and
-        // cellStyle are loop-invariant), so repeated cell colours reuse
+        // cellStyle are loop-invariant), so repeated cell colors reuse
         // one allocation instead of ~width×height of them. The palette
-        // index is part of the identity: two colours can share an RGB
+        // index is part of the identity: two colors can share an RGB
         // triple yet emit different SGR when the profile maps indexed
-        // colours by index.
+        // colors by index.
         $styleCache = [];
         $ramp = self::RAMP_GLYPHS;
         for ($y = 0; $y < $this->height; $y++) {
@@ -343,8 +343,8 @@ final class Heatmap
                 $t = $max == $min ? 0.0 : max(0.0, min(1.0, ($v - $min) / ($max - $min)));
                 if ($this->monoRamp) {
                     // Monochrome density mode: the glyph carries the value,
-                    // so the frame survives terminals without colour (and
-                    // colour-blind viewers) — no per-cell style at all
+                    // so the frame survives terminals without color (and
+                    // color-blind viewers) — no per-cell style at all
                     // beyond the optional caller overlay.
                     $glyph = $ramp[min((int) floor($t * count($ramp)), count($ramp) - 1)];
                     $canvas->setCell($x, $y, $glyph, $this->cellStyle);
@@ -417,6 +417,10 @@ final class Heatmap
 
         $stripWidth = max(0, $this->width - $minLen - $maxLen - 2);
         $strip = '';
+        // Per-color style memo for the strip: adjacent stops quantise to
+        // the same color constantly, so one Style allocation per distinct
+        // color is enough (mirrors the grid cache in view()).
+        $legendStyles = [];
         $rampCount = count(self::RAMP_GLYPHS);
         for ($i = 0; $i < $stripWidth; $i++) {
             $t = $stripWidth <= 1 ? 0.0 : $i / ($stripWidth - 1);
@@ -425,10 +429,11 @@ final class Heatmap
                 continue;
             }
             $color = $this->sample(0.0, 1.0, $t);
-            $strip .= Style::new()
-                ->foreground($color)
-                ->colorProfile($this->profile)
-                ->render($this->rune);
+            $key = (($color->ansiIndex ?? -1) << 24) | ($color->r << 16) | ($color->g << 8) | $color->b;
+            if (!isset($legendStyles[$key])) {
+                $legendStyles[$key] = Style::new()->foreground($color)->colorProfile($this->profile);
+            }
+            $strip .= $legendStyles[$key]->render($this->rune);
         }
         return $minLabel . ' ' . $strip . ' ' . $maxLabel;
     }

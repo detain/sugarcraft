@@ -275,7 +275,7 @@ final class BarChart
     /** Enable or disable the legend. */
     /**
      * Toggle the legend. When switched on with no explicit items, one entry
-     * per bar is derived (bar label + palette colour by index) so the
+     * per bar is derived (bar label + palette color by index) so the
      * switch is never a silent no-op.
      */
     public function withLegend(bool $show = true): self
@@ -423,6 +423,10 @@ final class BarChart
 
         // Drop trailing bars that don't fit the width budget.
         $bars       = $this->bars;
+        // Resize asymmetry (documented): when the frame shrinks below
+        // the bar count, BarChart keeps the FIRST bars while LineChart
+        // keeps the LAST samples — bars are an ordered category list,
+        // a line chart is usually a time series.
         $count      = count($bars);
         $withGapMax = intdiv($this->width + 1, 2);
         if ($count > $withGapMax) {
@@ -725,9 +729,9 @@ final class BarChart
      * @param list<array{label: string, color: string}> $legendItems
      */
     /**
-     * Palette for legend entries derived from bars. Colour-blind-safe
+     * Palette for legend entries derived from bars. Color-blind-safe
      * order, mirroring LineChart's dataset palette; the bars themselves are
-     * coloured by withBarColor(), so this rotation is legend-only.
+     * colored by withBarColor(), so this rotation is legend-only.
      */
     private const LEGEND_COLORS = ['blue', 'orange', 'green', 'red', 'purple', 'cyan'];
 

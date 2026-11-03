@@ -97,8 +97,8 @@ final class BrailleChartTest extends TestCase
 
     /**
      * Audit F11: per-dataset colors must reach the strokes. The first
-     * named dataset cycles to the lead palette colour — 'blue' since the
-     * lib-reviews-1103 colour-blind-safe reorder (M13; the old lead pair
+     * named dataset cycles to the lead palette color — 'blue' since the
+     * lib-reviews-1103 color-blind-safe reorder (M13; the old lead pair
      * red/green collided for deutan vision) — rendered as its truecolor
      * SGR (38;2;0;0;238); an unnamed primary series stays unstyled exactly
      * like ASCII mode.

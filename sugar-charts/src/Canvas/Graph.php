@@ -21,6 +21,18 @@ use SugarCraft\Style\Style;
 final class Graph
 {
     /**
+     * Braille dot weights shared with {@see BrailleGrid::bit()}: column 0
+     * carries 0x01/0x02/0x04/0x40 for rows 0..3, column 1 carries
+     * 0x08/0x10/0x20/0x80. Single source of truth for both rasterizers.
+     *
+     * @var array<int, array<int, int>>
+     */
+    public const BRAILLE_BITMAP = [
+        0 => [0x01, 0x02, 0x04, 0x40],
+        1 => [0x08, 0x10, 0x20, 0x80],
+    ];
+
+    /**
      * Upper bound silently clamped onto `niceNumbers()`'s `$targetTicks`, mirroring the existing lower clamp to 2. A tick
      * ladder is only ever rendered onto a terminal-sized axis; asking for
      * more than this many is a caller bug, and clamping keeps the
@@ -201,8 +213,9 @@ final class Graph
 
     /**
      * Draw a sequence of `[x, y]` points connected with thin-line
-     * runes — slopes pick the nearest of `─` / `│` / `╱` / `╲`. Used
-     * by LineChart for its connector pass.
+     * runes — slopes pick the nearest of `─` / `│` / `╱` / `╲`. A
+     * standalone helper: LineChart draws its connectors through its own
+     * private pass, not through here.
      *
      * @param list<array{0:int,1:int}> $points
      */
@@ -476,13 +489,9 @@ final class Graph
         array $dots,
         ?Style $style = null,
     ): void {
-        // U+2800 = 0x2800 = 10240. Each dot bit:
-        //   col 0:  row0=0x01  row1=0x02  row2=0x04  row3=0x40
-        //   col 1:  row0=0x08  row1=0x10  row2=0x20  row3=0x80
-        $bitmap = [
-            0 => [0x01, 0x02, 0x04, 0x40],
-            1 => [0x08, 0x10, 0x20, 0x80],
-        ];
+        // U+2800 = 0x2800 = 10240. Dot weights come from the
+        // BRAILLE_BITMAP table shared with BrailleGrid.
+        $bitmap = self::BRAILLE_BITMAP;
         $code = 0x2800;
         foreach ($dots as [$col, $row]) {
             // Skip out-of-range OR malformed dots. A non-int/"" key passes the

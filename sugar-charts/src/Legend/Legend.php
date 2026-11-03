@@ -204,7 +204,7 @@ final class Legend
     ];
 
     /**
-     * Whether this render pass must emit no colour at all.
+     * Whether this render pass must emit no color at all.
      *
      * The legend's raw-CSI and hex paths bypass {@see Style}, so they need
      * their own honouring of the de-facto standard: CLICOLOR_FORCE /
@@ -231,7 +231,12 @@ final class Legend
     }
 
     /**
-     * Wrap a block character with ANSI color codes.
+     * Wrap the indicator with ANSI color codes: named colors hit the
+     * COLOR_MAP, 3- and 6-digit hex hits the truecolor path, and
+     * anything else (typos, unknown names) renders in the terminal's
+     * default foreground. The silent fallback is deliberate: a legend
+     * swatch is decorative chrome, and a guessed color would lie harder
+     * than the default one.
      */
     private function coloredIndicator(string $color): string
     {

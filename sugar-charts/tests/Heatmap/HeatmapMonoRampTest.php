@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Color;
 
 /**
  * Pins for the review-fix batch on Heatmap: the monochrome density ramp +
- * CSV export added for colourless hosts and colour-blind viewers, the rune
+ * CSV export added for colorless hosts and color-blind viewers, the rune
  * injection guard, and the style-cache key shape.
  */
 final class HeatmapMonoRampTest extends TestCase
@@ -22,7 +22,7 @@ final class HeatmapMonoRampTest extends TestCase
         return Heatmap::new($grid)->withSize(2, 2);
     }
 
-    public function testMonoRampSubstitutesDensityGlyphsForColourBlocks(): void
+    public function testMonoRampSubstitutesDensityGlyphsForColorBlocks(): void
     {
         $view = $this->heatmap([[0.0, 1.0], [0.5, 0.2]])
             ->withMin(0.0)
@@ -38,7 +38,7 @@ final class HeatmapMonoRampTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $view);
     }
 
-    public function testMonoRampLegendCarriesNoColourSequences(): void
+    public function testMonoRampLegendCarriesNoColorSequences(): void
     {
         $view = $this->heatmap([[0.0, 1.0], [0.5, 0.2]])
             ->withMonoRamp()
@@ -95,14 +95,14 @@ final class HeatmapMonoRampTest extends TestCase
         // reachable byte-level discriminant exists through view(); the key
         // shape must nevertheless mirror LineChart's pointStyle memo, which
         // does receive indexed colors directly from datasets. A future
-        // non-blending colour path would silently collide without it.
+        // non-blending color path would silently collide without it.
         $source = (string) file_get_contents(__DIR__ . '/../../src/Heatmap/Heatmap.php');
         $this->assertMatchesRegularExpression(
             '/\$key = \(\(\$color->ansiIndex \?\? -1\) << 24\) \| \(\$color->r << 16\)/',
             $source,
         );
 
-        // Colour identity sanity: two Colors may share a triple yet differ
+        // Color identity sanity: two Colors may share a triple yet differ
         // by index — the property the key guards.
         $plain = Color::rgb(255, 0, 0);
         $indexed = Color::ansi256(196);

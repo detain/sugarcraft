@@ -11,7 +11,7 @@ use SugarCraft\Charts\BarChart\BarChart;
  * lib-reviews-1103 batch 2, M12: BarChart::withLegend(true) used to render
  * nothing because legendItems was never populated and the ChartExtras
  * render path gates on a non-empty item list. The legend now derives one
- * entry per bar (label = bar label, colour = palette rotation) when the
+ * entry per bar (label = bar label, color = palette rotation) when the
  * caller has not supplied explicit items.
  */
 final class BarChartLegendDeriveTest extends TestCase

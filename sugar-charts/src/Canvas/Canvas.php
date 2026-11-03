@@ -375,6 +375,11 @@ final class Canvas
      * share a style emit its escape sequence once for the whole run, and
      * exactly one reset closes each styled run — the frame carries no
      * per-cell reset spam.
+     *
+     * Rows assume the host cursor is at column 0 (plain "\n" joins, no
+     * absolute positioning). Hosts that must paint at arbitrary offsets
+     * should embed sugar-cellbuffer for cell-grid semantics (cross-lib
+     * seam, not wired from here).
      */
     public function view(): string
     {

@@ -18,7 +18,7 @@ use SugarCraft\Charts\Legend\Legend;
  * OHLC / candlestick chart drawn onto a {@see Canvas}. Each bar gets
  * one column: a vertical wick spanning low → high, with a thicker
  * body covering open ↔ close. Bullish bars (close > open) and bearish
- * bars (close < open) use distinct glyphs and colours so the
+ * bars (close < open) use distinct glyphs and colors so the
  * direction of motion is obvious at a glance.
  *
  * Mirrors ntcharts' `linechart/timeseries/candlestick` and the canvas/graph

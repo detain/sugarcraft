@@ -41,8 +41,8 @@ use SugarCraft\Style\Theme;
 final class LineChart extends Chart
 {
     /**
-     * Auto-legend colour cycle for {@see withDataset()}. Ordered for
-     * colour-blind safety: the old first pair (red, green) is the classic
+     * Auto-legend color cycle for {@see withDataset()}. Ordered for
+     * color-blind safety: the old first pair (red, green) is the classic
      * deuteranopia/protanopia collision, so blue/orange open the cycle
      * and red/green are kept apart.
      */
@@ -50,7 +50,7 @@ final class LineChart extends Chart
 
     /**
      * Point-glyph cycle for extra series in cell mode: unthemed renders
-     * carry no colour bytes, so a second and later series separate by
+     * carry no color bytes, so a second and later series separate by
      * RUNE (`* + o x # .`) instead of every dataset defaulting to `*`.
      */
     private const DATASET_RUNES = ['*', '+', 'o', 'x', '#', '.'];
@@ -179,7 +179,15 @@ final class LineChart extends Chart
         return $this->lineChartCopy(width: $w, height: $h);
     }
 
+    /**
+     * Pin the vertical range. Data outside the pin is CLAMPED into it —
+     * the silent exclusion from the auto-range scan is deliberate, while
+     * a `min > max` pair throws at construction (Range::pin). Passing
+     * `null` re-enables auto-scaling.
+     */
     public function withMin(?float $m): self        { return $this->lineChartCopy(min: $m, minSet: true); }
+
+    /** @see withMin() — same clamp/throw asymmetry. */
     public function withMax(?float $m): self        { return $this->lineChartCopy(max: $m, maxSet: true); }
 
     public function withPoint(string $rune): self   { return $this->lineChartCopy(point: $rune); }
@@ -259,10 +267,10 @@ final class LineChart extends Chart
      * Add or replace a named series, auto-managing its legend entry.
      *
      * REPLACE semantics: re-calling with an existing name swaps that
-     * series' values and keeps its original legend slot and colour, so a
-     * re-call never duplicates the label or shifts the colour cycle for
+     * series' values and keeps its original legend slot and color, so a
+     * re-call never duplicates the label or shifts the color cycle for
      * later series. A brand-new name appends its legend entry with the
-     * next colour in the cycle (append-only flows render identically).
+     * next color in the cycle (append-only flows render identically).
      *
      * @param list<int|float> $values
      */
@@ -274,7 +282,7 @@ final class LineChart extends Chart
         $sets[$name] = array_values($values);
 
         // Auto-add legend item with cycling colors; on replace, update the
-        // existing slot in place so label order and colour assignment stay
+        // existing slot in place so label order and color assignment stay
         // stable for the series' identity.
         $legendItems = $this->legendItems;
         $slot = array_search($name, array_column($legendItems, 'label'), true);
@@ -641,15 +649,28 @@ final class LineChart extends Chart
 
         // Compute a global axis range covering every series so each
         // line stays comparable on the same scale.
-        $allValues = $this->data;
-        foreach ($this->datasets as $values) {
-            $allValues = array_merge($allValues, $values);
+        $dataMin = null;
+        $dataMax = null;
+        // Single pass over every series: accumulating into one merged
+        // array re-copies all samples once per dataset (O(series × total)).
+        foreach ([[$this->data], array_values($this->datasets)] as $group) {
+            foreach ($group as $values) {
+                foreach ($values as $v) {
+                    $f = (float) $v;
+                    if ($dataMin === null || $f < $dataMin) {
+                        $dataMin = $f;
+                    }
+                    if ($dataMax === null || $f > $dataMax) {
+                        $dataMax = $f;
+                    }
+                }
+            }
         }
-        if ($allValues === []) {
+        if ($dataMin === null) {
             return $canvas->view();
         }
-        $min = $this->min ?? min($allValues);
-        $max = $this->max ?? max($allValues);
+        $min = $this->min ?? $dataMin;
+        $max = $this->max ?? $dataMax;
         if ($max == $min) {
             $max = $min + 1.0;
         }
@@ -705,9 +726,9 @@ final class LineChart extends Chart
                 }
                 $points  = count($values) > $plotW ? array_slice($values, -$plotW) : $values;
                 $count   = count($points);
-                // Unthemed cell mode carries no colour bytes, so extra
+                // Unthemed cell mode carries no color bytes, so extra
                 // series separate by glyph (themed runs already carry a
-                // distinct colour, so they keep the shared point rune): explicit
+                // distinct color, so they keep the shared point rune): explicit
                 // per-series runes win,
                 // otherwise rotate the default table by dataset position
                 // (the primary keeps its configured `point` rune).
@@ -727,6 +748,8 @@ final class LineChart extends Chart
 
                 $coords = [];
                 foreach ($points as $i => $v) {
+                    // A single sample (count <= 1) sits at the first data
+                    // column; two or more spread across the plot width.
                     $col = $dataLeft + ($count <= 1
                         ? 0
                         : (int) round($i * ($plotW - 1) / ($count - 1)));
@@ -734,10 +757,7 @@ final class LineChart extends Chart
                     $coords[] = [$col, $row];
                 }
                 // Only render up to maxPointIndex points (and connectors between them)
-                for ($i = 0; $i < $count; $i++) {
-                    if ($i >= $maxPointIndex) {
-                        break;
-                    }
+                for ($i = 0; $i < $count && $i < $maxPointIndex; $i++) {
                     [$x, $y] = $coords[$i];
                     // No resolver → the series default: null (unstyled)
                     // without a theme, the theme slot with one; the
@@ -1027,6 +1047,9 @@ final class LineChart extends Chart
                 $canvas->setCell($col, $row, $glyph);
             }
             $labelWidth = Width::string($mark->label);
+            // Labels vanish entirely when the plot is too narrow to hold
+            // them (a truncated axis note is worse than none); the label
+            // rides the canvas default text style.
             if ($mark->label !== '' && $plotW > $labelWidth + 2) {
                 $start = $gutterLeft + $plotW - $labelWidth;
                 // Width-aware placement: one walker for every

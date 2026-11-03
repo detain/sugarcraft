@@ -366,7 +366,7 @@ abstract class Chart
      * Apply a named color theme to the chart. The theme's palette drives
      * every series color and legend indicator: series render in
      * primary/accent/info/success/warning/secondary/error order (cycling),
-     * and the legend recolours to match. Without a theme, series render
+     * and the legend recolors to match. Without a theme, series render
      * with their default colors (cell mode: unstyled; braille mode: the
      * legend's CSS colors) — the unthemed output is byte-identical.
      * Honored by {@see LineChart}, the only class extending this base;
