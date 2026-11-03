@@ -41,7 +41,9 @@ final readonly class PosterCard
      *                                   draws a one-cell {@see ImageOverlay::marker()}
      *                                   at the poster's top-left and the runtime
      *                                   paints the bytes there. Null with an image
-     *                                   set means nothing can address the art, so
+     *                                   set means nothing can address the art —
+     *                                   an id outside ImageOverlay's paintable
+     *                                   range 0..MAX_IMAGES-1 likewise (C1) — so
      *                                   the cell renders as a skeleton and
      *                                   {@see hasPoster()} reports it unfilled.
      */
@@ -100,10 +102,14 @@ final readonly class PosterCard
      * line can smuggle a control sequence to the terminal.
      *
      * Like {@see withSafeStyledTitle()}, this guards the TEXT channel only.
-     * Private-use-area codepoints survive (they are printable glyphs to the
-     * guard — the same declared boundary candy-core's Sanitize keeps); an
-     * app that composes frames for a marker-consuming renderer sanitises the
-     * assembled frame at its own boundary, not here.
+     * Private-use-area codepoints survive as printable glyphs to the scanner —
+     * with one deliberate carve-out (gallery review M8, fleet
+     * untrusted-for-marked-frames law): the candy-mouse ZONE sentinels
+     * U+E000/U+E001 are swept, because a forged pair reads as zone markup to
+     * whatever marks or scans the frame downstream. Image-overlay markers
+     * (U+E002 and up) still survive — the same declared boundary sugar-core's
+     * Sanitize keeps; an app that composes frames for a marker-consuming
+     * renderer sanitises the assembled frame at its own boundary, not here.
      */
     public function withSafePoster(string $ansi): self
     {
@@ -119,7 +125,11 @@ final readonly class PosterCard
      * Attach a pixel-graphics poster (sixel/kitty/iTerm2 bytes) to be painted as
      * an overlay at $id. Unlike {@see withPoster()} the bytes never enter the
      * text frame — the card renders a marker block reserving the poster area, and
-     * the {@see \SugarCraft\Core\Program} paints the image on top.
+     * the {@see \SugarCraft\Core\Program} paints the image on top. The graphics
+     * bytes are stored VERBATIM and bypass the text guard — they are out-of-band
+     * payloads, not frame text: the CALLER owns their provenance (n15). An $id
+     * outside ImageOverlay's paintable range degrades the cell to an unfilled
+     * skeleton (re-queued for a fresh id) instead of throwing (C1).
      */
     public function withImage(string $bytes, int $id): self
     {
@@ -248,10 +258,57 @@ final readonly class PosterCard
      * an overlay fill. The fill policy keys on this, so it must agree with what
      * {@see render()} actually draws: an overlay blob with no id has no marker to
      * paint, renders as a skeleton, and must count as unfilled so the owner re-queues it.
+     *
+     * Two more shapes are UNFILLED under the same law (gallery review C1/M7):
+     *  - an empty inline poster — `withPoster('')` is the shape a cache or HTTP
+     *    layer leaves behind when it stored nothing, and reading it as "loaded"
+     *    would park the cell as a blank filled frame forever, outside the
+     *    re-queue policy;
+     *  - an overlay id outside {@see ImageOverlay}'s paintable range
+     *    0..MAX_IMAGES-1 — one poisoned id (a stale cache, a restored session,
+     *    a host minting its own numbering) used to throw from every frame the
+     *    grid drew and never re-queue, because {@see hasPoster()} called it
+     *    filled.
      */
     public function hasPoster(): bool
     {
-        return $this->poster !== null || ($this->posterImage !== null && $this->imageId !== null);
+        return $this->filledPoster() !== null || $this->paintableOverlayId() !== null;
+    }
+
+    /**
+     * Whether inline poster bytes exist and carry anything — as the poster
+     * string itself when filled, null when there is no art yet. The bytes are
+     * still stored VERBATIM (a pinned contract of withPoster()) — only the fill
+     * predicates treat the empty string as "no art yet".
+     */
+    private function filledPoster(): ?string
+    {
+        return $this->poster !== null && $this->poster !== '' ? $this->poster : null;
+    }
+
+    /**
+     * Whether overlay bytes are present under an id the marker scheme can
+     * address — as that id when paintable, null otherwise
+     * (see {@see overlayIdIsPaintable()}).
+     */
+    private function paintableOverlayId(): ?int
+    {
+        if ($this->posterImage === null || $this->imageId === null) {
+            return null;
+        }
+
+        return self::overlayIdIsPaintable($this->imageId) ? $this->imageId : null;
+    }
+
+    /**
+     * Range gate in front of the {@see ImageOverlay::marker()} throw site: ids
+     * are the blessed stable per-item index in 0..{@see ImageOverlay::MAX_IMAGES}-1.
+     * Out-of-range ids degrade like a null id — skeleton body, unfilled cell —
+     * so a single poisoned card can never crash the whole grid frame (C1).
+     */
+    private static function overlayIdIsPaintable(int $imageId): bool
+    {
+        return $imageId >= 0 && $imageId < ImageOverlay::MAX_IMAGES;
     }
 
     /**
@@ -309,10 +366,18 @@ final readonly class PosterCard
      */
     private function bodyRows(int $width, int $posterHeight): array
     {
-        if ($this->posterImage !== null && $this->imageId !== null) {
+        // The key branches, the draw branches and hasPoster() all consult the
+        // SAME predicates — paintableOverlayId()/filledPoster() — so a body can
+        // never be cached under a branch key its draw disagrees with (the C1/M7
+        // lesson: an unaddressable overlay or empty poster must fall through to
+        // the skeleton exactly like hasPoster() reports it).
+        $paintableOverlay = $this->paintableOverlayId();
+        $posterFilled = $this->filledPoster();
+
+        if ($paintableOverlay !== null) {
             $key = 'i|' . $this->imageId . '|' . $width . '|' . $posterHeight;
-        } elseif ($this->poster !== null) {
-            $key = 'p|' . $width . '|' . $posterHeight . '|' . strlen($this->poster) . '|' . md5($this->poster);
+        } elseif ($posterFilled !== null) {
+            $key = 'p|' . $width . '|' . $posterHeight . '|' . strlen($posterFilled) . '|' . md5($posterFilled);
         } else {
             $key = 's|' . $width . '|' . $posterHeight;
         }
@@ -322,13 +387,13 @@ final readonly class PosterCard
             return $cache[$key];
         }
 
-        if ($this->posterImage !== null && $this->imageId !== null) {
+        if ($paintableOverlay !== null) {
             // Overlay mode: reserve the poster area with blank cells and drop a
             // one-cell marker at the top-left; the runtime paints the graphics
             // bytes there on top of the text frame.
-            $lines = self::imageRows($this->imageId, $width, $posterHeight);
-        } elseif ($this->poster !== null) {
-            $lines = self::posterRows($this->poster, $width, $posterHeight);
+            $lines = self::imageRows($paintableOverlay, $width, $posterHeight);
+        } elseif ($posterFilled !== null) {
+            $lines = self::posterRows($posterFilled, $width, $posterHeight);
         } else {
             $lines = array_fill(0, $posterHeight, str_repeat('░', $width));
         }
@@ -411,7 +476,10 @@ final readonly class PosterCard
     {
         $rows = preg_split('/\r\n|\r|\n/', $poster);
         if ($rows === false) {
-            $rows = [$poster];
+            // Fail CLOSED (n16): harmonised with withSafePoster()'s `?: ['']` —
+            // a PCRE internal failure must not wave unsplit raw bytes at the
+            // terminal. The padding loop below renders the reserved area blank.
+            $rows = [];
         }
 
         if (count($rows) > $posterHeight) {

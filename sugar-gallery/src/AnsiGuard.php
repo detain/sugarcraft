@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Gallery;
 
 use InvalidArgumentException;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * The one place that decides which escape sequences a widget will echo verbatim.
@@ -122,9 +123,18 @@ final class AnsiGuard
      * passed `assertSafe()` is a no-op. An unterminated escape swallows the rest
      * of the sequence (not the rest of the string): a hostile payload gets
      * removed, not reinterpreted.
+     *
+     * One non-printable exception is swept first (gallery review M8/m19): the
+     * candy-mouse ZONE sentinels U+E000/U+E001 are printable to the scanner and
+     * would ride a TEXT run into a frame the app marks, where a forged pair
+     * reads as markup — phantom click zones or a duplicate-zone throw. The
+     * sweep is the surgical one (zone sentinels only): legitimate ImageOverlay
+     * markers (U+E002 and up) survive, exactly as {@see stripSentinels()} below.
      */
     public static function sanitize(string $ansi): string
     {
+        $ansi = Sanitize::stripZoneSentinels($ansi);
+
         if (!self::carriesAnythingEscapable($ansi)) {
             return $ansi;
         }
@@ -150,9 +160,16 @@ final class AnsiGuard
      * escapes in it is either hostile or double-encoded, and in both cases the
      * escapes are what should go. That includes TAB / CR / LF, which would
      * otherwise break the fixed-height cell the grid reserved for the card.
+     *
+     * Zone sentinels (U+E000/U+E001) are printable TEXT to the scanner, so the
+     * run walk alone would carry them through — the sweep happens up front, on
+     * both the fast and the scanned path (gallery review M8: plain titles are
+     * DB-sourced and land in frames the app zone-marks).
      */
     public static function stripControls(string $text): string
     {
+        $text = Sanitize::stripZoneSentinels($text);
+
         if (!self::carriesAnythingEscapable($text)) {
             return $text;
         }
@@ -165,6 +182,23 @@ final class AnsiGuard
         }
 
         return $plain;
+    }
+
+    /**
+     * Remove the candy-mouse zone sentinels U+E000/U+E001 — and nothing else —
+     * as the lib's public seam for the fleet's untrusted-for-marked-frames law
+     * (gallery review M8/m19). Anything the app hands to a zone-marking
+     * {@see \SugarCraft\Mouse\Zones\Manager} must have passed this sweep first:
+     * a forged sentinel pair inside marked bytes is markup to the scanner
+     * downstream, so a fresh-id pair mints a phantom hit-testable zone and a
+     * duplicate-id pair poisons the app's click path (denial of service).
+     * Delegates to sugar-core's {@see Sanitize::stripZoneSentinels()};
+     * legitimate ImageOverlay markers (U+E002 and up) and all other private-use
+     * glyphs survive untouched.
+     */
+    public static function stripSentinels(string $text): string
+    {
+        return Sanitize::stripZoneSentinels($text);
     }
 
     // ---- internals -----------------------------------------------------

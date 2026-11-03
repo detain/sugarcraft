@@ -482,9 +482,21 @@ final class PosterGrid
         }
 
         $card = $this->items[$idx] ?? null;
-        $body = $card !== null
-            ? $this->box($card->render($focused, $this->cardWidth, $this->posterHeight))
-            : $this->skeletonCell();
+        if ($card === null) {
+            // M6: the focused cursor must survive into an unloaded cell — end()
+            // and friends sync onto an index whose art has not been fetched yet,
+            // and a focus-blind skeleton silently swallowed the marker.
+            $body = $this->skeletonCell($focused);
+        } else {
+            // M8/m19: the untrusted-for-marked-frames law enforced at the choke
+            // point where text becomes a click-target. VERBATIM poster/styled-
+            // title bytes may carry forged U+E000/U+E001 zone sentinels; they
+            // are swept BEFORE box-fitting (so width accounting and the emitted
+            // frame stay consistent) and before marking, which means a hostile
+            // card can neither mint a phantom `cell:` zone nor spoof another
+            // cell's id into a duplicate-zone throw on the app's click path.
+            $body = $this->box(AnsiGuard::stripSentinels($card->render($focused, $this->cardWidth, $this->posterHeight)));
+        }
 
         return $zones !== null ? $zones->mark('cell:' . $idx, $body) : $body;
     }
@@ -550,9 +562,14 @@ final class PosterGrid
         return $count;
     }
 
-    private function skeletonCell(): string
+    private function skeletonCell(bool $focused = false): string
     {
-        $rows = array_fill(0, $this->posterHeight, str_repeat('░', $this->cardWidth));
+        // The focus marker replaces the first skeleton cell rather than adding
+        // one, so the row stays exactly cardWidth wide (the grid invariant).
+        $row = $focused
+            ? '▸' . str_repeat('░', max(0, $this->cardWidth - 1))
+            : str_repeat('░', $this->cardWidth);
+        $rows = array_fill(0, $this->posterHeight, $row);
 
         return $this->box(implode("\n", $rows));
     }

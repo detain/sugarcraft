@@ -184,8 +184,12 @@ final class MosaicPosterIntegrationTest extends TestCase
 
         self::assertNotSame($before, $afterFrame, 'splicing a real poster changes the frame');
         self::assertStringContainsString('░', $afterFrame, 'the cells still absent are still skeletons');
+        // M6 (lib review, 2026-11-03): the focus marker now rides the SKELETON
+        // too — the cursor cell already traded one ░ per poster row for ▸ in
+        // the BEFORE frame, so splicing its art removes POSTER_HEIGHT fewer
+        // skeleton pixels. Dated flip of the old exact-SKELETON_PIXELS delta.
         self::assertSame(
-            substr_count($before, '░') - self::SKELETON_PIXELS,
+            substr_count($before, '░') - (self::SKELETON_PIXELS - self::POSTER_HEIGHT),
             substr_count($afterFrame, '░'),
             'exactly one cell stopped being a skeleton',
         );
