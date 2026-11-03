@@ -7,12 +7,12 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 /**
  * Width resolution and data resampling for sparkline renderers.
  *
- * Literal twins extracted from SparklineArea and SparklineBar under E731
- * round-85 per-family follow-through: both copies of each method (and
+ * Literal twins extracted from SparklineArea and SparklineBar during the
+ * per-family duplication follow-through: both copies of each method (and
  * both docblocks) were byte-identical; both consumers are final and the
  * pair reads only the identical private state (`$data`, `$width`,
  * `$widthConstraint`) each class already carries. Precedent:
- * ChartGridGeometry (r7 `79abe8461`).
+ * ChartGridGeometry (the same extraction precedent).
  *
  * NOT here on purpose: getWidth() fallbacks DIVERGE across the wider
  * family — Sparkline's `$widthConstraint` is a non-nullable int defaulted

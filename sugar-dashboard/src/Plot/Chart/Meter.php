@@ -98,7 +98,7 @@ final class Meter implements \SugarCraft\Dashboard\Foundation\SizedItem
         private readonly ?Color $needleColor = null,
         private readonly ?Color $scaleColor = null,
     ) {
-        // E733 (round 83) — the single clamp boundary, mirroring Gauge's E726
+        // The single clamp boundary, mirroring the Gauge/GaugeCircle/ProgressRing pair
         // fold. Every ratio enters through this constructor (new() factory,
         // withRatio() wither, direct construction alike), so [0.0, 1.0] is
         // parsed into trusted state exactly once here; render() consumes it raw.
@@ -315,7 +315,7 @@ final class Meter implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withRatio(float $ratio): self
     {
-        // The constructor clamps — no re-clamp here (E733 single boundary).
+        // The constructor clamps — no re-clamp here (single boundary by design).
         return $this->mutate(['ratio' => $ratio]);
     }
 

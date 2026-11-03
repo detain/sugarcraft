@@ -9,12 +9,12 @@ use SugarCraft\Core\Util\Color;
 /**
  * Value clamping and low→high color ramp for heatmap renderers.
  *
- * Literal twins extracted from HeatMapChart and Heatmap under E731
- * round-85 per-family follow-through: both copies of each method (and
+ * Literal twins extracted from HeatMapChart and Heatmap during the
+ * per-family duplication follow-through: both copies of each method (and
  * both docblocks) were byte-identical; both consumers are final and
  * interpolateColor() reads only the identical promoted
  * `private readonly ?Color $lowColor/$highColor` pair. Precedent:
- * ChartGridGeometry (r7 `79abe8461`).
+ * ChartGridGeometry (the same extraction precedent).
  *
  * The adjacent getHeatChar() is NOT here: HeatMapChart buckets on
  * 0.2/0.4/0.6 with literal block glyphs while Heatmap thresholds at

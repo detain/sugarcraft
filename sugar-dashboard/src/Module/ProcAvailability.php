@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Module;
 
 /**
- * Probe-once availability of Linux /proc files — the E731 COMP-2 policy,
+ * Probe-once availability of Linux /proc files — probe-once-and-degrade policy,
  * option (b): probe once, degrade quietly, show a visible 'n/a' sentinel.
  *
  * The /proc pseudo-filesystem exists only on Linux; the system/uptime readers
@@ -14,9 +14,9 @@ namespace SugarCraft\Dashboard\Module;
  * absent-nvidia-smi precedent, generalized here to the /proc doors — so each
  * door costs at most one is_readable() per process lifetime.
  *
- * TEST SEAM RATIONALE (COMP-2 design): the readers' /proc paths are hardcoded,
+ * TEST SEAM RATIONALE: the readers' /proc paths are hardcoded,
  * so no test can relocate is_readable() to an unreadable stand-in; the design
- * sanctions injecting the memo directly (lane-cd reset-for-testing idiom —
+ * sanctions injecting the memo directly (the reset-for-testing idiom used
  * a static property precisely because function-local statics cannot be reset
  * across tests).
  */

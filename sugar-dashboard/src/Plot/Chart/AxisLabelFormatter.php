@@ -7,7 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 /**
  * Human-readable axis-label formatting (M / K / integer / one-decimal).
  *
- * Moved out of ChartGridGeometry under E731 round-85 per-family
+ * Moved out of ChartGridGeometry during the per-family
  * follow-through: the r7 extraction paired only Chart and Area, but
  * Bubble and Funnel carry a third and fourth copy verbatim under the
  * private name formatValue. The canonical name stays formatYLabel.
@@ -17,7 +17,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
  *
  * A trait rather than a base class: every consumer is final and the
  * helper is pure — no shared state (AGENTS.md finality rule; precedent
- * ChartGridGeometry r7 `79abe8461`).
+ * ChartGridGeometry (the same extraction precedent).
  *
  * GaugeChart's formatValue() is NOT a twin and stays put: it takes no
  * argument at all and formats via a match on the chart's own $format

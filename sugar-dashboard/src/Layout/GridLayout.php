@@ -15,7 +15,6 @@ use SugarCraft\Dashboard\Foundation\Theme;
  * - Configurable rows and columns
  * - Cell-based item placement
  * - Gap support between cells
- * - Spanning support (items can span multiple cells)
  *
  * Mirrors CSS Grid layout concepts adapted to PHP with wither-style immutable setters.
  */

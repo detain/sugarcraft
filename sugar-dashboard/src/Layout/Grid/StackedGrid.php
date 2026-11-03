@@ -92,9 +92,13 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
             return $this->renderColumn($columns[0], $this->width);
         }
 
-        $colWidth = $this->options->fitScreen
-            ? (int) floor($this->width / $colCount)
-            : $this->width;
+        // fitScreen=true divides the frame evenly; false lets columns keep
+        // their natural width BUT clamps each to its even share, so the
+        // horizontal join can never exceed the frame (finding M-33: the old
+        // false arm handed every column the FULL width, overflowing the grid
+        // by a factor of its own column count).
+        $share = (int) floor($this->width / $colCount);
+        $colWidth = $this->options->fitScreen ? $share : max(1, $share);
 
         $renderedColumns = [];
         foreach ($columns as $colItems) {

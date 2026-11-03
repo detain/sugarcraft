@@ -42,13 +42,13 @@ abstract class PluginSdk
     /**
      * Run the plugin as the main loop of its own process.
      *
-     * E723 (round 82) — exit posture on the record. This is a plugin-process
+     * Exit posture on the record. This is a plugin-process
      * entrypoint, not a composable library routine: the example at the top of
      * this class is the ENTIRE body of the plugin author's launch script, and
      * the loop consumes the process's STDIN for its whole life — an in-host
      * caller would already have lost its stdin long before the exit matters.
      * `exit(0)` at the tail is the DESIGNED terminus on stdin EOF, and it is
-     * the cooperative half of {@see ExternalModule}'s E366 teardown ladder:
+     * the cooperative half of {@see ExternalModule}'s bounded teardown ladder:
      * the host closes the pipes, the SDK sees EOF, exits on its own inside
      * the grace rung, and the host never escalates to a signal.
      *
@@ -73,7 +73,7 @@ abstract class PluginSdk
             }
 
             $line = trim($line);
-            // E726 (round 82) — PROTOCOL CONTRACT, judged against the host side
+            // PROTOCOL CONTRACT, judged against the host side
             // of the pipe: the wire is line-delimited JSON, one toJson()."\n"
             // per request (ExternalModule::sendRequest()); a blank line is
             // never a delimiter, a flush signal, or a keepalive. So a blank or

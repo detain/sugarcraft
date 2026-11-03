@@ -52,7 +52,7 @@ composer require sugarcraft/sugar-dashboard
 | `Cell` | Single terminal cell (rune + Style) — sugar-dashboard SSOT, distinct from `\SugarCraft\Vterm\Cell\Cell` | |
 | `Buffer` | Cell grid buffer for drawing — sugar-dashboard SSOT, distinct from `\SugarCraft\Vterm\Buffer\Buffer` | `cell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
 | `Rect` | Rectangle geometry (rectmath bounds model: minX/minY/maxX/maxY) — distinct from `\SugarCraft\Core\Rect` (offset+size model) | `contains()`, `intersect()`, `dx()`, `dy()` |
-| `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Style` (padding/margin/borders) | `fg()`, `bg()`, `bold()`, etc. |
+| `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Style` (padding/margin/borders) | `withForeground()`, `withBackground()`, `withBold()`, `toAnsi()` |
 | `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dashboard SSOT, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
 | `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
 | `Theme` | Pre-defined theme palettes (10 colour slots + helpers; `fg()`/`bg()` emit at the detected capability, `NO_COLOR` → empty string) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
@@ -498,7 +498,7 @@ foreach ($procs as $row => $p) {
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `StatusBar` | Status bar with left/right zones | `new()`, `withLeft()`, `withRight()`, `withSeparator()` | |
+| `StatusBar` | Status bar with left/center/right zones | `new()`, `withLeft()`, `withCenter()`, `withRight()`, `withSegments()`, `withForeground()`, `withBackground()`, `withBorders()` | |
 | `StatusIndicator` | Status indicator dot | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/status-indicator.gif) |
 
 ---
@@ -645,7 +645,7 @@ foreach ($procs as $row => $p) {
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Module` | MVC-style Model–Update–View interface aligned with `Core\Model`: `init(): ?Closure`, `update(Msg): array{0:Module,1:?Cmd}`, `view(): string`, plus `name(): string`, `minSize(): array{0:int,1:int}` |
+| `Module` | MVC-style Model–Update–View interface aligned with `Core\Model`: `init(): ?Closure`, `update(Msg): array{0:Module,1:?Cmd}`, `view(): string`, `subscriptions(): ?Subscriptions`, plus `name(): string`, `minSize(): array{0:int,1:int}` |
 | `BaseModule` | Abstract helper — `withState(array): static` for immutable state, default `update()` returns `[self,null]` |
 | `LegacyModule` | Deprecated array-state interface — superseded by `Module` |
 | `LegacyModuleAdapter` | `@internal` wrapper that adapts `LegacyModule` to the `Module` contract |
@@ -667,7 +667,7 @@ foreach ($procs as $row => $p) {
 | `Request` | Plugin request DTO |
 | `Response` | Plugin response DTO |
 | `PluginSdk` | Plugin runner loop |
-| `ExternalModule` | Wraps binary into Module interface |
+| `ExternalModule` | Spawns a plugin binary as a `LegacyModule`; the host registers it through `Registry` which wraps it in `LegacyModuleAdapter` to meet the `Module` contract |
 | `Discovery` | Plugin discovery from filesystem |
 
 > **Plugin lifecycle (what a plugin author owes).** `ExternalModule` spawns the
@@ -678,14 +678,29 @@ foreach ($procs as $row => $p) {
 > bounded: closing the three pipes gives a well-behaved plugin its graceful EOF
 > exit, a 2 s polite poll follows, then the shared TERM → grace-poll → KILL →
 > reap ladder (sugar-core `BoundedShutdown`) runs, so a wedged plugin binary can
-> never outlive the dashboard that started it.
+> never outlive the dashboard that started it. The same bounded-teardown story
+> covers `GenericModule` and `SystemModule` command runs (5 s deadline, 1 MiB
+> output cap via `BoundedCommand`) and the weather fetch (synchronous inside the
+> dispatched command, bounded by the HTTP client's 10 s timeout).
+>
+> **Color environment.** Every color emission routes through
+> `Foundation\ColorMode`: `NO_COLOR` set to any non-empty value and `TERM=dumb`
+> collapse to plain ASCII; otherwise TrueColor. `ColorMode::use($profile)`
+> overrides the detection for tests or embedding hosts.
+>
+> **Sizing.** The library never reads the terminal itself: hosts forward
+> `Core\Msg\WindowSizeMsg` to the root model, which is what `LegacyModuleAdapter`
+> and the `dashboard-live.php` demo consume (the demo falls back to the
+> `COLUMNS`/`LINES` environment when unattended). For a full assembly story —
+> event loop, Boxer layout, FocusManager, per-panel tick — read
+> `examples/dashboard-live.php` top to bottom.
 
 ## Modules Namespace (Built-in Modules)
 
 All built-in modules extend `BaseModule` and use `withState()` for immutable state updates.
 
 > **Requirements & environment.** `SystemModule`, `UptimeModule` and friends read
-> Linux interfaces — `/proc/stat`, `/proc/meminfo`, `/proc/cpuinfo`, disk stats —
+> Linux interfaces — `/proc/stat`, `/proc/meminfo`, `/proc/cpuinfo` —
 > and degrade to empty output on other kernels rather than failing. GPU rows are
 > queried through `nvidia-smi` only when that binary is present (memoized probe),
 > so non-NVIDIA machines pay nothing. `WeatherModule` reaches `wttr.in` over the
@@ -694,7 +709,7 @@ All built-in modules extend `BaseModule` and use `withState()` for immutable sta
 | Type | Description |
 |------|-------------|
 | `Clock\ClockModule` | Single-line clock |
-| `System\SystemModule` | CPU/mem/disk stats |
+| `System\SystemModule` | CPU/mem/uptime stats (+ GPU via nvidia-smi when present) |
 | `Uptime\UptimeModule` | System uptime |
 | `Greeting\GreetingModule` | Time-of-day greeting |
 | `Generic\GenericModule` | Arbitrary command runner — string commands go to the shell (trusted-input contract); array argv runs without a shell, bounded by a kill ladder |

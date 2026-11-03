@@ -33,7 +33,7 @@ final class ProgressRing implements \SugarCraft\Dashboard\Foundation\SizedItem
         private readonly ?Color $filledColor = null,
         private readonly ?Color $emptyColor = null,
     ) {
-        // E733 (round 83) — the single clamp boundary. Every ratio enters the
+        // The single clamp boundary. Every ratio enters the
         // object through this constructor (new() factory, withRatio() wither,
         // direct construction alike), so [0.0, 1.0] is parsed into trusted
         // state exactly once here; render() and friends consume it raw.
@@ -190,7 +190,7 @@ final class ProgressRing implements \SugarCraft\Dashboard\Foundation\SizedItem
      */
     public function withRatio(float $ratio): self
     {
-        // The constructor clamps — no re-clamp here (E733 single boundary).
+        // The constructor clamps — no re-clamp here (single boundary by design).
         return new self(
             ratio: $ratio,
             radius: $this->radius,

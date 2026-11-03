@@ -8,12 +8,12 @@ namespace SugarCraft\Dashboard\Plot\Chart;
  * Box-drawing border characters for bordered chart components.
  *
  * Literal-twin quintuple extracted from CandlestickChart, Funnel, OHLC,
- * Partition and Waterfall under E731 round-85 per-family follow-through:
+ * Partition and Waterfall during the per-family duplication follow-through:
  * all five copies (method AND docblock) were byte-identical. A trait
  * rather than a base class because every consumer is final (AGENTS.md:
  * public classes final unless extension is contract) and the helper is a
  * pure function of the using class's own private string $style property
- * — precedent: ChartGridGeometry (r7 `79abe8461`).
+ * — precedent: ChartGridGeometry (the same extraction precedent).
  *
  * The sibling border idiom in these five files — getInnerSize() — is
  * deliberately NOT here: each class returns its own default dimensions

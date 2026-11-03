@@ -270,4 +270,19 @@ final class StackedGridTest extends TestCase
         @rmdir($dir);
     }
 
+
+    public function testFalseFitScreenCannotOverFlowFrame(): void
+    {
+        // Finding M-33: with fitScreen=false every column used to receive the
+        // FULL grid width, so the joined frame overflowed by colCount x width.
+        $grid = new StackedGrid(new Options(fitScreen: false));
+        $grid->addItem($this->strItem(str_repeat('A', 90)), new ItemOptions(column: 0));
+        $grid->addItem($this->strItem(str_repeat('B', 90)), new ItemOptions(column: 1));
+        $grid->setSize(30, 5);
+
+        foreach (explode("\n", $grid->render()) as $line) {
+            $this->assertLessThanOrEqual(30, \SugarCraft\Core\Util\Width::string($line));
+        }
+    }
+
 }

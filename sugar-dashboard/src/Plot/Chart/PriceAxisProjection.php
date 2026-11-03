@@ -7,11 +7,11 @@ namespace SugarCraft\Dashboard\Plot\Chart;
 /**
  * Maps a price onto a chart row for the financial chart pair.
  *
- * Literal twin extracted from CandlestickChart and OHLC under E731
- * round-85 per-family follow-through: both copies (method AND docblock)
+ * Literal twin extracted from CandlestickChart and OHLC during the
+ * per-family duplication follow-through: both copies (method AND docblock)
  * were byte-identical; both consumers are final and the helper reads
  * only the identical `?float $minPrice/$maxPrice` pair each class
- * maintains. Precedent: ChartGridGeometry (r7 `79abe8461`).
+ * maintains. Precedent: ChartGridGeometry (the same extraction precedent).
  *
  * The sibling helper getInnerSize() is NOT here — it is the Dash
  * Foundation Sizer/Item contract method with a different default pair
