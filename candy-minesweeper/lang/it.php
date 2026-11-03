@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  muovi  ·  spazio / invio  rivela',
     'ui.help_board' => 'f  bandiera  ·  c / clic centrale  accordo  ·  clic destro  bandiera',
     'ui.help_session' => 'r  ricomincia  ·  S  salva  ·  L  carica  ·  q / Esc / Ctrl+C  esci',
+    'ui.saved' => 'Partita salvata',
+    'ui.restarted' => 'Griglia riavviata',
+    'ui.loaded' => 'Partita caricata',
+    'ui.no_save' => 'Nessuna partita da caricare',
+    'ui.load_refused' => 'Partita rifiutata (illeggibile o manomessa)',
+    'ui.save_failed' => 'Salvataggio non riuscito',
+    'ui.resume' => 'Una partita ti aspetta — premi L per caricarla',
 ];

@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  Space / Enter  aufdecken',
     'ui.help_board' => 'f  flaggen  ·  c / Mittelklick  chord  ·  Rechtsklick  flaggen',
     'ui.help_session' => 'r  Neustart  ·  S  speichern  ·  L  laden  ·  q / Esc / Ctrl+C  beenden',
+    'ui.saved' => 'Spiel gespeichert',
+    'ui.restarted' => 'Feld neu gestartet',
+    'ui.loaded' => 'Spielstand geladen',
+    'ui.no_save' => 'Kein Spielstand zum Laden',
+    'ui.load_refused' => 'Spielstand abgelehnt (unlesbar oder manipuliert)',
+    'ui.save_failed' => 'Speichern fehlgeschlagen',
+    'ui.resume' => 'Ein Spielstand wartet — mit L laden',
 ];

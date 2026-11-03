@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  이동  ·  space / enter  열기',
     'ui.help_board' => 'f  깃발  ·  c / 가운데 클릭  코드  ·  우클릭  깃발',
     'ui.help_session' => 'r  재시작  ·  S  저장  ·  L  불러오기  ·  q / Esc / Ctrl+C  종료',
+    'ui.saved' => '게임 저장됨',
+    'ui.restarted' => '보드 재시작',
+    'ui.loaded' => '세이브 로드됨',
+    'ui.no_save' => '로드할 세이브 없음',
+    'ui.load_refused' => '세이브 거부됨(읽을 수 없거나 변조됨)',
+    'ui.save_failed' => '저장 실패',
+    'ui.resume' => '세이브가 기다리는 중 — L로 로드',
 ];

@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  mover  ·  espacio / intro  revelar',
     'ui.help_board' => 'f  bandera  ·  c / clic central  acorde  ·  clic derecho  bandera',
     'ui.help_session' => 'r  reiniciar  ·  S  guardar  ·  L  cargar  ·  q / Esc / Ctrl+C  salir',
+    'ui.saved' => 'Partida guardada',
+    'ui.restarted' => 'Tablero reiniciado',
+    'ui.loaded' => 'Partida cargada',
+    'ui.no_save' => 'No hay partida que cargar',
+    'ui.load_refused' => 'Partida rechazada (ilegible o manipulada)',
+    'ui.save_failed' => 'Error al guardar',
+    'ui.resume' => 'Hay una partida esperándote — pulsa L para cargarla',
 ];

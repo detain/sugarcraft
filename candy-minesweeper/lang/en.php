@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  move  ·  space / enter  reveal',
     'ui.help_board' => 'f  flag  ·  c / middle-click  chord  ·  right-click  flag',
     'ui.help_session' => 'r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit',
+    'ui.saved' => 'game saved',
+    'ui.restarted' => 'board restarted',
+    'ui.loaded' => 'savegame loaded',
+    'ui.no_save' => 'no savegame to load',
+    'ui.load_refused' => 'savegame refused (unreadable or tampered)',
+    'ui.save_failed' => 'save failed',
+    'ui.resume' => 'a savegame is waiting — press L to load it',
 ];

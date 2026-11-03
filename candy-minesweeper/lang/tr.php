@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  hareket  ·  space / enter  aç',
     'ui.help_board' => 'f  bayrak  ·  c / orta tık  akor  ·  sağ tık  bayrak',
     'ui.help_session' => 'r  yeniden  ·  S  kaydet  ·  L  yükle  ·  q / Esc / Ctrl+C  çık',
+    'ui.saved' => 'Oyun kaydedildi',
+    'ui.restarted' => 'Tahta yeniden başlatıldı',
+    'ui.loaded' => 'Oyun yüklendi',
+    'ui.no_save' => 'Yüklenecek kayıt yok',
+    'ui.load_refused' => 'Kayıt reddedildi (okunamaz veya oynanmış)',
+    'ui.save_failed' => 'Kaydetme başarısız',
+    'ui.resume' => 'Bir kayıt bekliyor — yüklemek için L tuşuna bas',
 ];

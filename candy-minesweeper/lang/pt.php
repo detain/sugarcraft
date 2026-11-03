@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  mover  ·  espaço / enter  revelar',
     'ui.help_board' => 'f  bandeira  ·  c / botão do meio  acorde  ·  botão direito  bandeira',
     'ui.help_session' => 'r  reiniciar  ·  S  guardar  ·  L  carregar  ·  q / Esc / Ctrl+C  sair',
+    'ui.saved' => 'Jogo guardado',
+    'ui.restarted' => 'Tabuleiro reiniciado',
+    'ui.loaded' => 'Jogo carregado',
+    'ui.no_save' => 'Nenhum jogo para carregar',
+    'ui.load_refused' => 'Jogo recusado (ilegível ou adulterado)',
+    'ui.save_failed' => 'Falha ao guardar',
+    'ui.resume' => 'Há um jogo à espera — prima L para o carregar',
 ];

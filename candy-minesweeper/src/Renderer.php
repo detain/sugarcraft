@@ -107,7 +107,14 @@ final class Renderer
             Lang::t('ui.help_board'),
             Lang::t('ui.help_session'),
         ]);
-        return $framed . "\n" . $indent . $status . "\n" . $indent .
+        // M05 toast: save/load/restart outcomes (and the boot resume hint)
+        // ride their own line ABOVE the status, so a load that lands on a
+        // lost board still shows the boom/cleared banner underneath it.
+        $toast = $g->notice === null
+            ? ''
+            : $indent . SugarStyle::new()->foreground(Color::hex('#fde68a'))->render('» ' . $g->notice) . "\n";
+
+        return $framed . "\n" . $toast . $indent . $status . "\n" . $indent .
                SugarStyle::new()->foreground(Color::hex('#7d6e98'))->render($help) . "\n";
     }
 

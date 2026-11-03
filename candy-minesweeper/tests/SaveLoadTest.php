@@ -158,7 +158,12 @@ final class SaveLoadTest extends TestCase
     {
         $g = self::liveGame();
         [$next, ] = $g->update(self::press(KeyType::Char, 'L'));
-        $this->assertSame($g, $next, 'missing savegame is a quiet no-op');
+        // M05: the refusal keeps the exact game state but rides a fresh
+        // instance carrying the toast — 'quiet' meant silent, and silence
+        // was the defect the notice channel exists to fix.
+        $this->assertNotSame($g, $next, 'refusal now announces on a fresh instance');
+        $this->assertSame($g->board, $next->board, 'missing savegame must not touch the board');
+        $this->assertSame(\SugarCraft\Minesweeper\Lang::t('ui.no_save'), $next->notice);
     }
 
     public function testTamperedAndForeignVersionsAreRefused(): void
@@ -174,7 +179,9 @@ final class SaveLoadTest extends TestCase
         ] as $label => $raw) {
             file_put_contents($path, $raw);
             [$refused, ] = $g->update(self::press(KeyType::Char, 'L'));
-            $this->assertSame($g, $refused, "$label must not load");
+            $this->assertNotSame($g, $refused, "$label must announce on a fresh instance");
+            $this->assertSame($g->board, $refused->board, "$label must not touch the board");
+            $this->assertSame(\SugarCraft\Minesweeper\Lang::t('ui.load_refused'), $refused->notice);
         }
     }
 
@@ -185,9 +192,13 @@ final class SaveLoadTest extends TestCase
         $g = self::liveGame();
         $this->assertNull(Game::savePath());
         [$saved, ] = $g->update(self::press(KeyType::Char, 'S'));
-        $this->assertSame($g, $saved, 'save without HOME is a no-op, not a crash');
+        $this->assertNotSame($g, $saved, 'save failure now announces');
+        $this->assertSame($g->board, $saved->board, 'save without HOME is a state no-op, not a crash');
+        $this->assertSame(\SugarCraft\Minesweeper\Lang::t('ui.save_failed'), $saved->notice);
         [$loaded, ] = $g->update(self::press(KeyType::Char, 'L'));
-        $this->assertSame($g, $loaded, 'load without HOME is a no-op, not a crash');
+        $this->assertNotSame($g, $loaded, 'load failure now announces');
+        $this->assertSame($g->board, $loaded->board, 'load without HOME is a state no-op, not a crash');
+        $this->assertSame(\SugarCraft\Minesweeper\Lang::t('ui.no_save'), $loaded->notice);
     }
 
     /**

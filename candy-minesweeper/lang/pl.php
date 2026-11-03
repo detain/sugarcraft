@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  ruch  ·  spacja / enter  odkryj',
     'ui.help_board' => 'f  flaga  ·  c / środkowy przycisk  chord  ·  prawy przycisk  flaga',
     'ui.help_session' => 'r  restart  ·  S  zapisz  ·  L  wczytaj  ·  q / Esc / Ctrl+C  wyjdź',
+    'ui.saved' => 'Gra zapisana',
+    'ui.restarted' => 'Plansza zrestartowana',
+    'ui.loaded' => 'Gra wczytana',
+    'ui.no_save' => 'Brak zapisu do wczytania',
+    'ui.load_refused' => 'Zapis odrzucony (nieczytelny lub sfałszowany)',
+    'ui.save_failed' => 'Zapis nieudany',
+    'ui.resume' => 'Czeka zapis gry — naciśnij L, aby go wczytać',
 ];

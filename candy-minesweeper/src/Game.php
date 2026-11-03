@@ -63,23 +63,31 @@ final class Game implements Model
          * win/lose transition — best-effort, never fatal.
          */
         public readonly ?string $statsPath = null,
+        /**
+         * One-shot toast announced on screen (save/load/restart outcomes,
+         * the boot resume hint). It rides every clone until a state-change
+         * action dismisses it — ticks deliberately keep it, so the message
+         * stays readable while the clock pulses.
+         */
+        public readonly ?string $notice = null,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
     }
 
-    public static function start(int $width = 10, int $height = 10, int $mines = 12, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null): self
+    public static function start(int $width = 10, int $height = 10, int $mines = 12, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null, ?string $notice = null): self
     {
         return new self(
             board: Board::blank($width, $height, $mines),
             rand:  $rand,
             stats: $stats,
             statsPath: $statsPath,
+            notice: $notice,
         );
     }
 
-    public static function withDifficulty(Difficulty $d, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null): self
+    public static function withDifficulty(Difficulty $d, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null, ?string $notice = null): self
     {
-        return self::start($d->width(), $d->height(), $d->mines(), $rand, $stats, $statsPath);
+        return self::start($d->width(), $d->height(), $d->mines(), $rand, $stats, $statsPath, $notice);
     }
 
     /**
@@ -89,9 +97,9 @@ final class Game implements Model
      * {@see \SugarCraft\Minesweeper\Ui\CustomDifficulty::fromInput()} first
      * (the CLI does), which is what makes the alias safe to keep.
      */
-    public static function withCustom(int $width, int $height, int $mines, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null): self
+    public static function withCustom(int $width, int $height, int $mines, ?\Closure $rand = null, ?Stats $stats = null, ?string $statsPath = null, ?string $notice = null): self
     {
-        return self::start($width, $height, $mines, $rand, $stats, $statsPath);
+        return self::start($width, $height, $mines, $rand, $stats, $statsPath, $notice);
     }
 
     public function difficulty(): ?Difficulty
@@ -169,6 +177,7 @@ final class Game implements Model
                 'cursorY'        => 0,
                 'startedAt'      => null,
                 'elapsedSeconds' => null,
+                'notice'         => Lang::t('ui.restarted'),
             ]), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'L') {
@@ -216,6 +225,12 @@ final class Game implements Model
      */
     private function afterAction(self $next, bool $wasOver): self
     {
+        // A toast announced by S/L/r lives until the next STATE-CHANGE action
+        // dismisses it; ticks never route through here, so the message stays
+        // readable while the clock pulses.
+        if ($next->notice !== null) {
+            $next = $next->mutate(['notice' => null]);
+        }
         if ($wasOver) {
             return $next;
         }
@@ -283,7 +298,7 @@ final class Game implements Model
     {
         $path = self::savePath();
         if ($path === null) {
-            return $this;
+            return $this->withNotice(Lang::t('ui.save_failed'));
         }
         try {
             AtomicJsonFile::new($path)
@@ -297,8 +312,19 @@ final class Game implements Model
                 ]);
         } catch (\Throwable) {
             // Non-fatal by design; the in-memory game stays fully playable.
+            return $this->withNotice(Lang::t('ui.save_failed'));
         }
-        return $this;
+        return $this->withNotice(Lang::t('ui.saved'));
+    }
+
+    /**
+     * Attach a one-shot toast to the current state (M05). The renderer shows
+     * it as its own line and {@see afterAction()} clears it on the next
+     * action; the game state itself is untouched either way.
+     */
+    private function withNotice(string $notice): self
+    {
+        return $this->mutate(['notice' => $notice]);
     }
 
     /**
@@ -315,16 +341,23 @@ final class Game implements Model
     {
         $path = self::savePath();
         if ($path === null) {
-            return $this;
+            return $this->withNotice(Lang::t('ui.no_save'));
+        }
+        // Missing slot = nothing to load; present-but-garbage = refused.
+        // (read() over a non-existent file answers [], which the envelope
+        // check would otherwise mislabel as tampering.)
+        $store = AtomicJsonFile::new($path);
+        if (!$store->exists()) {
+            return $this->withNotice(Lang::t('ui.no_save'));
         }
         try {
-            $payload = AtomicJsonFile::new($path)->read();
+            $payload = $store->read();
         } catch (\Throwable) {
-            return $this;
+            return $this->withNotice(Lang::t('ui.load_refused'));
         }
         if (($payload['v'] ?? null) !== self::SAVE_VERSION
             || !is_string($payload['board'] ?? null)) {
-            return $this;
+            return $this->withNotice(Lang::t('ui.load_refused'));
         }
         $cursorX = $payload['cursorX'] ?? 0;
         $cursorY = $payload['cursorY'] ?? 0;
@@ -335,12 +368,12 @@ final class Game implements Model
         if (!is_int($cursorX) || !is_int($cursorY)
             || !($elapsed === null || is_int($elapsed) || is_float($elapsed))
             || (float) $elapsed < 0.0) {
-            return $this;
+            return $this->withNotice(Lang::t('ui.load_refused'));
         }
         try {
             $board = Board::unserialize($payload['board']);
         } catch (\InvalidArgumentException) {
-            return $this;
+            return $this->withNotice(Lang::t('ui.load_refused'));
         }
         $over = $board->exploded || $board->isWon();
         return $this->mutate([
@@ -355,6 +388,7 @@ final class Game implements Model
             // a running clock from a re-anchored start.
             'startedAt'      => $over ? null : ($elapsed !== null ? microtime(true) - (float) $elapsed : null),
             'elapsedSeconds' => $over && $elapsed !== null ? (int) $elapsed : null,
+            'notice'         => Lang::t('ui.loaded'),
         ]);
     }
 

@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  移動  ·  space / enter  開く',
     'ui.help_board' => 'f  旗  ·  c / 中クリック  和音  ·  右クリック  旗',
     'ui.help_session' => 'r  リスタート  ·  S  保存  ·  L  読込  ·  q / Esc / Ctrl+C  終了',
+    'ui.saved' => 'ゲームを保存しました',
+    'ui.restarted' => '盤面を再開始しました',
+    'ui.loaded' => 'セーブデータをロードしました',
+    'ui.no_save' => 'ロードするセーブデータがありません',
+    'ui.load_refused' => 'セーブデータを拒否しました（読込不能または改ざん）',
+    'ui.save_failed' => '保存に失敗しました',
+    'ui.resume' => 'セーブデータがあります — L でロード',
 ];

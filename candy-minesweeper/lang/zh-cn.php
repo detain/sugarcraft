@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  移动  ·  space / enter  翻开',
     'ui.help_board' => 'f  插旗  ·  c / 中键  和弦  ·  右键  插旗',
     'ui.help_session' => 'r  重开  ·  S  保存  ·  L  读取  ·  q / Esc / Ctrl+C  退出',
+    'ui.saved' => '游戏已保存',
+    'ui.restarted' => '棋盘已重新开始',
+    'ui.loaded' => '已读取存档',
+    'ui.no_save' => '没有可读取的存档',
+    'ui.load_refused' => '已拒绝存档(不可读或被篡改)',
+    'ui.save_failed' => '保存失败',
+    'ui.resume' => '有存档等待 — 按 L 读取',
 ];

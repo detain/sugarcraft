@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  spatie / enter  onthullen',
     'ui.help_board' => 'f  vlaggen  ·  c / middelste muisknop  akkoord  ·  rechtermuisknop  vlaggen',
     'ui.help_session' => 'r  herstart  ·  S  opslaan  ·  L  laden  ·  q / Esc / Ctrl+C  afsluiten',
+    'ui.saved' => 'Spel opgeslagen',
+    'ui.restarted' => 'Bord opnieuw gestart',
+    'ui.loaded' => 'Spel geladen',
+    'ui.no_save' => 'Geen opgeslagen spel om te laden',
+    'ui.load_refused' => 'Opslag geweigerd (onleesbaar of gemanipuleerd)',
+    'ui.save_failed' => 'Opslaan mislukt',
+    'ui.resume' => 'Er wacht een opgeslagen spel — druk op L om het te laden',
 ];

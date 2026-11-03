@@ -135,8 +135,13 @@ if ($statsPath !== null && is_file($statsPath)) {
     }
 }
 
+// M05 boot announcement: if a savegame sits in the slot, say so on frame
+// one — the player no longer has to remember that L exists.
+$slot = Game::savePath();
+$resumeNotice = ($slot !== null && is_file($slot)) ? Lang::t('ui.resume') : null;
+
 if ($preset !== null) {
-    $game = Game::withDifficulty($preset, stats: $stats, statsPath: $statsPath);
+    $game = Game::withDifficulty($preset, stats: $stats, statsPath: $statsPath, notice: $resumeNotice);
 } else {
     $w = (int)($positional[0] ?? 10);
     $h = (int)($positional[1] ?? 10);
@@ -150,7 +155,7 @@ if ($preset !== null) {
         fwrite(STDERR, "candy-minesweeper: {$e->getMessage()}\n");
         exit(1);
     }
-    $game = Game::start($w, $h, $m, stats: $stats, statsPath: $statsPath);
+    $game = Game::start($w, $h, $m, stats: $stats, statsPath: $statsPath, notice: $resumeNotice);
 }
 
 (new Program($game, new ProgramOptions(useAltScreen: true, mouseMode: MouseMode::CellMotion)))->run();

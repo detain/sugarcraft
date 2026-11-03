@@ -24,4 +24,11 @@ return [
     'ui.help_moves' => '↑ ↓ ← → / hjkl  pohyb  ·  mezerník / enter  odkrytí',
     'ui.help_board' => 'f  vlajka  ·  c / prostřední tlačítko  chord  ·  pravé tlačítko  vlajka',
     'ui.help_session' => 'r  restart  ·  S  uložit  ·  L  načíst  ·  q / Esc / Ctrl+C  konec',
+    'ui.saved' => 'Hra uložena',
+    'ui.restarted' => 'Plocha restartedova',
+    'ui.loaded' => 'Hra načtena',
+    'ui.no_save' => 'Žádná uložená hra k načtení',
+    'ui.load_refused' => 'Uložení zamítnuto (nečitelné nebo padělané)',
+    'ui.save_failed' => 'Uložení selhalo',
+    'ui.resume' => 'Uložená hra čeká — stiskni L pro načtení',
 ];
