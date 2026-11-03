@@ -67,7 +67,10 @@ final class Node
         int $flex = 0,
     ) {
         $this->kind        = $kind;
-        $this->content     = $content;
+        // Every string that can reach the grid enters through this choke point
+        // (leaf(), withContent() and with() all land here), so the paint
+        // boundary is applied once, here, and cannot be routed around.
+        $this->content     = Sanitize::painted($content);
         $this->children    = $children;
         $this->minWidth    = $minWidth;
         $this->maxWidth    = $maxWidth;
@@ -79,7 +82,7 @@ final class Node
         $this->spacing     = $spacing;
         $this->borderStyle = $borderStyle;
         $this->style       = $style;
-        $this->title       = $title;
+        $this->title       = Sanitize::paintedTitle($title);
         $this->margin      = $margin;
         $this->alignH       = $alignH;
         $this->alignV       = $alignV;
