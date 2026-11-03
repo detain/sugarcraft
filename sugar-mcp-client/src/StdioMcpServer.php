@@ -22,6 +22,17 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * are given — and embedders that need containment pass a $spawnPlanner
  * closure deciding the exact proc_open command and env per launch.
  *
+ * TRUST BOUNDARY, read this before running a configured server: a stdio
+ * server entry in a configuration file is arbitrary code execution AS THE
+ * INVOKING USER. The default spawn hands the child the parent's FULL
+ * environment (SSH agent sockets, cloud credentials, provider API keys and
+ * everything else exported into the process); the env: map only ADDS or
+ * OVERWRITES entries and can never remove one, and PATH is resolved by the OS
+ * at exec time from that inherited environment without verification. Nothing
+ * in this library vets the binary that answers. The README "Trust boundary"
+ * section states the consequences for config-driven embedders; narrowing is
+ * the spawn planner's job.
+ *
  * DELTA — teardown goes through sugar-core's BoundedShutdown instead of the
  * product's ProcessReaper+ProcessContainment::groupId pair.
  *
@@ -45,7 +56,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * process hangs (product-measured, rc=124). One deadline checked at the top of
  * each leg bounds the exchange as a unit instead.
  *
- * E646 discipline: DEFAULT_START_TIMEOUT_SECONDS bounds the HANDSHAKE only.
+ * Timeout discipline: DEFAULT_START_TIMEOUT_SECONDS bounds the HANDSHAKE only.
  * callTool() carries NO deadline by default — a tool call is somebody's real
  * work (a build, a fetch) and minutes are legitimate; it is bounded by child
  * liveness rather than by a wall-clock kill of in-flight work. An embedder
@@ -65,7 +76,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * that signal 0 calls alive, so the probe reads its /proc state (see
  * serverIsRunning()).
  *
- * FORK SAFETY (audit B1 / AG-1). An embedder may start a server in one process
+ * FORK SAFETY (the fork-corruption audit). An embedder may start a server in one process
  * and use the object from pcntl_fork()ed children — candy-code runs every turn
  * in a fork and parallel sub-agents in further forks. Every child inherits the
  * same pipes, so ONE server is shared by the whole process tree, and sharing
@@ -94,7 +105,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * may drain it while a child is mid-exchange — the tail may then be split
  * between processes, which loses nothing a protocol exchange depends on.
  *
- * SERVER REQUESTS (C-MCP-3). The protocol is bidirectional: a server may
+ * SERVER REQUESTS. The protocol is bidirectional: a server may
  * send requests of its own (ping, roots/list, elicitation/create) and
  * notifications (notifications/progress) mid-call, on this same pipe.
  * readResponse() answers them inline instead of skipping them: a handler
@@ -264,6 +275,12 @@ final class StdioMcpServer implements McpServer
      * @param string $command program to exec (argv[0])
      * @param list<string> $args argv after the program
      * @param array<string,string> $env extra environment; [] means inherit
+     *        the FULL parent environment, and a non-empty map is ADDITIVE —
+     *        entries override or extend the inherited copy but can never
+     *        remove a variable. See the class docblock and the README "Trust
+     *        boundary" section: a stdio server runs arbitrary code as the
+     *        invoking user with every ambient secret unless a spawn planner
+     *        narrows the environment.
      * @param float|null $startTimeoutSeconds handshake ceiling; null or <= 0
      *        falls back to DEFAULT_START_TIMEOUT_SECONDS so a bad setting can
      *        never disable the bound entirely
@@ -341,9 +358,11 @@ final class StdioMcpServer implements McpServer
             || $clientInfo['name'] === ''
             || !is_string($clientInfo['version'])
         ) {
-            $keys = implode(', ', array_map(static fn (string $k): string => "[$k]", array_keys($clientInfo)));
+            $keys = $clientInfo === []
+                ? 'got an empty list'
+                : 'got ' . implode(', ', array_map(static fn (string $k): string => "[$k]", array_keys($clientInfo)));
             throw new \InvalidArgumentException(
-                "MCP clientInfo needs a non-empty 'name' and a 'version' string, got {$keys}"
+                "MCP clientInfo needs a non-empty 'name' and a 'version' string, {$keys}"
             );
         }
     }
@@ -362,6 +381,17 @@ final class StdioMcpServer implements McpServer
      * library's plain-spawn contract byte-identical; a planner returns the
      * pair verbatim after shape validation, so a containment wrapper can own
      * the whole spawn decision (setsid wrap, scrubbed env, or null env).
+     *
+     * TRUST BOUNDARY, stated where the spawn is decided: the default env is
+     * either null (the child inherits the parent's ENTIRE environment) or the
+     * parent's full copy with {@see $env} merged over it — additive in every
+     * case, never a subtraction. A configured stdio server is therefore run
+     * arbitrary code AS THE INVOKING USER, seeing every ambient secret (SSH
+     * agent sockets, cloud credentials, provider API keys) unless the
+     * embedder wraps a spawn planner that hands back a narrowed map. PATH is
+     * resolved by the OS at exec time from that inherited environment; the
+     * binary that answers the name is whatever PATH says at that moment, and
+     * this library does not verify it.
      *
      * The command must be an argv LIST of strings, never a shell string: a
      * string spawns /bin/sh with the server as its grandchild, and stop() then

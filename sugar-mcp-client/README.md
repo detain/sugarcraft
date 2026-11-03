@@ -50,6 +50,37 @@ $result = $server->callTool('echo', ['message' => 'hi']);
 $server->stop();                     // also runs automatically on destruct
 ```
 
+## Trust boundary
+
+**A stdio server entry is arbitrary code execution as the user running this
+library.** The config you hand a `StdioMcpServer` names a command and
+arguments; `start()` spawns them, and the child speaks whatever protocol it
+likes back into your process. Treat every server you connect to the way you
+treat a shell command you paste from the internet — the quick start above runs
+`npx -y @modelcontextprotocol/server-everything`, which downloads and executes
+third-party code on first use.
+
+**The child inherits the FULL parent environment by default.** With `env: []`
+(nothing passed) the spawn carries the entire ambient environment: SSH agent
+socket paths, cloud-provider credentials, API keys — everything the invoking
+process has, not just what the server needs. `PATH` is resolved at exec time
+and never verified, so the binary that runs is simply the first match.
+
+**`env:` is additive and can never scrub.** Entries you pass override or add
+names; a name you do not mention still rides through from the parent, exactly
+as it does with no map at all (`StdioMcpServerTrustBoundaryTest` pins both
+halves of that contract). The option is for telling a server where its own
+token lives, not for withholding the rest of your environment.
+
+**To narrow, wrap `spawnPlanner`.** The planner sees the computed argv and env
+and returns the pair that actually spawns — a curated key/value map there is
+the full replacement, not a merge. This is exactly what `candy-code` does: it
+ships credential-shaped-name scrubbing on top of this library
+(`ProcessContainment`) because the ambient-secrets hazard is real in
+production. That remediation is deliberately downstream product policy here —
+this library has no list of which names are secrets, and any list it shipped
+would be wrong for someone's environment.
+
 ## Spawn directory
 
 The child's working directory is the embedder's decision, not an accident of
