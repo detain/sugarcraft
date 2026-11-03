@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\ColorProfile\Probe;
 
+use SugarCraft\ColorProfile\ColorProfile;
+use SugarCraft\ColorProfile\Env;
+
 /**
  * Readonly value object holding the result of a terminal capability probe.
  *
  * Each detected capability is stored with its source string indicating
- * how it was discovered: "env:VAR", "terminfo:cap" or "fallback".
+ * how it was discovered: "env:VAR[=value]", "terminfo:cap" or
+ * "fallback:<reason>". Sources arriving from the probe (or from a caller
+ * fabricating a report by hand) are sanitized at this boundary: TERM and
+ * friends are attacker-influenced over SSH, and reports are printed by
+ * diagnostics — no control byte may ride through here.
  *
  * Internally uses string keys (the Capability enum's string value) for
  * PHP compatibility, but exposes enum-based accessor methods. Keys are
@@ -19,6 +26,9 @@ namespace SugarCraft\ColorProfile\Probe;
  */
 final readonly class ProbeReport
 {
+    /** Sanitized map of capability string key to its source string. */
+    public array $capabilities;
+
     /**
      * @param array<string, string>  $capabilities  Map of capability string key to its source string
      * @param \DateTimeImmutable     $detectedAt    Timestamp of probe execution
@@ -26,11 +36,11 @@ final readonly class ProbeReport
      * @throws \InvalidArgumentException when a key is not a known Capability value
      */
     public function __construct(
-        public array $capabilities,
+        array $capabilities,
         public \DateTimeImmutable $detectedAt = new \DateTimeImmutable(),
     ) {
         $unknown = [];
-        foreach (array_keys($this->capabilities) as $key) {
+        foreach (array_keys($capabilities) as $key) {
             try {
                 Capability::from((string) $key);
             } catch (\ValueError) {
@@ -42,6 +52,16 @@ final readonly class ProbeReport
                 'unknown capability key(s): ' . implode(', ', $unknown),
             );
         }
+
+        // Belt sanitization (DM19): the detection chain already cleans its own
+        // source strings, but a hand-built report — e.g. one replayed from a
+        // captured hostile TERM — must not smuggle escape bytes into whatever
+        // prints this later.
+        $clean = [];
+        foreach ($capabilities as $key => $source) {
+            $clean[(string) $key] = Env::sanitize((string) $source);
+        }
+        $this->capabilities = $clean;
     }
 
     /**
@@ -56,7 +76,7 @@ final readonly class ProbeReport
      * Get the source string for a detected capability.
      *
      * Returns null if the capability was not detected.
-     * Source format: "env:VAR", "terminfo:cap" or "fallback".
+     * Source format: "env:VAR[=value]", "terminfo:cap" or "fallback:<reason>".
      */
     public function source(Capability $cap): ?string
     {
@@ -110,6 +130,28 @@ final readonly class ProbeReport
     public function hasNoColor(): bool
     {
         return $this->has(Capability::NoColor);
+    }
+
+    /**
+     * Bridge the capability set onto the emission-side profile enum.
+     *
+     * The probe reports speak capabilities; renderers speak ColorProfile.
+     * This is the canonical translation so consumers never re-derive the
+     * ladder by hand. Precedence follows the color rungs; NoColor and a
+     * bare BasicAscii floor map to their suppression/minimum arms; an
+     * empty report means nothing was observed at all, which is the chain
+     * fallback's answer (Ansi) — not a claim of monochrome.
+     */
+    public function toColorProfile(): ColorProfile
+    {
+        return match (true) {
+            $this->has(Capability::TrueColor) => ColorProfile::TrueColor,
+            $this->has(Capability::Color256) => ColorProfile::Ansi256,
+            $this->has(Capability::Color16) => ColorProfile::Ansi,
+            $this->has(Capability::NoColor) => ColorProfile::NoTTY,
+            $this->capabilities === [] => ColorProfile::Ansi,
+            default => ColorProfile::Ascii,
+        };
     }
 
     /**

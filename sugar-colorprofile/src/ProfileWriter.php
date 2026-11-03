@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace SugarCraft\ColorProfile;
+
 /**
  * ProfileWriter — stream wrapper that automatically degrades ANSI color
  * sequences to match the terminal's detected color profile.
@@ -15,17 +17,6 @@ declare(strict_types=1);
  * ProfileWriter is an object, not a stream resource — fwrite() on it is a
  * TypeError; all output must go through write()/printf().
  */
-namespace SugarCraft\ColorProfile;
-
-use SugarCraft\ColorProfile\Palette;
-
-/**
- * Wraps a stream and degrades color escape sequences to match the target profile.
- *
- * Example:
- *   $w = ProfileWriter::wrap(STDOUT, ['TERM' => 'xterm-256color']);
- *   $w->write("\x1b[38;2;100;200;50mGreenish\x1b[0m\n");
- */
 final class ProfileWriter
 {
     /** The underlying stream resource. */
@@ -34,11 +25,44 @@ final class ProfileWriter
     /** The color profile to degrade to. */
     private ColorProfile $profile;
 
-    /** Detected from environment. */
-    private static function buildProfile(array $env, $stream): ColorProfile
+    /**
+     * Hermetic env map used to build the degrade palette: every documented
+     * input is PINNED (absent or empty = unset) so palette construction is a
+     * pure function of the configured profile — ambient NO_COLOR or
+     * CLICOLOR_FORCE can never hijack what a withProfile() caller chose.
+     */
+    private const HERMETIC_ENV = [
+        'CLICOLOR_FORCE' => null,
+        'FORCE_COLOR' => '',
+        'NO_COLOR' => '',
+        'CLICOLOR' => null,
+        'TERM' => 'dumb',
+        'COLORTERM' => null,
+        'TERM_PROGRAM' => null,
+        'WT_SESSION' => null,
+        'GOOGLE_CLOUD_SHELL' => null,
+        'TMUX' => null,
+        'STY' => null,
+    ];
+
+    /**
+     * Degradation engine for the CURRENT profile, built lazily and reused by
+     * every write(). Constructing one per call re-ran the whole detection
+     * chain for identical output — and re-read ambient env each time.
+     */
+    private ?Palette $degrade = null;
+
+    /**
+     * @param resource $stream
+     * @param array<string, string|null> $env
+     */
+    public static function wrap($stream, array $env = []): self
     {
-        // Allow FORCE_COLOR / NO_COLOR / COLORTERM / TERM_PROGRAM / TERM to influence detection
-        return Palette::detect($stream, $env);
+        // A non-empty $env is a COMPLETE hermetic replacement (see Env::resolve);
+        // an empty one reads the ambient snapshot. TERM, COLORTERM, NO_COLOR,
+        // FORCE_COLOR, TERM_PROGRAM and the rest of the documented ladder
+        // inputs all apply through DetectionChain.
+        return new self($stream, Palette::detect($stream, $env));
     }
 
     /**
@@ -50,18 +74,6 @@ final class ProfileWriter
     {
         $this->stream = $stream;
         $this->profile = $profile;
-    }
-
-    /**
-     * Factory: detect environment and wrap a stream.
-     *
-     * @param resource      $stream
-     * @param array<string,string|null> $env
-     */
-    public static function wrap($stream, array $env = []): self
-    {
-        $profile = self::buildProfile($env, $stream);
-        return new self($stream, $profile);
     }
 
     /**
@@ -81,14 +93,16 @@ final class ProfileWriter
     {
         $clone = clone $this;
         $clone->profile = $profile;
+        // The degrade engine is profile-bound; the clone rebuilds it lazily.
+        $clone->degrade = null;
         return $clone;
     }
 
     /**
      * Write data to the stream, degrading color codes to match the target profile.
      *
-     * This is the main entry point — use fwrite() on the stream directly
-     * is NOT recommended; instead use $writer->write($data).
+     * This is the main entry point — writing raw bytes to the unwrapped stream
+     * bypasses degradation entirely; use $writer->write($data) instead.
      *
      * @param string $data  Raw bytes (potentially containing ANSI sequences)
      * @return int|false    Number of bytes written, or false on error
@@ -98,29 +112,7 @@ final class ProfileWriter
         if ($this->profile === ColorProfile::NoTTY) {
             $data = Palette::stripAnsi($data);
         } elseif ($this->profile !== ColorProfile::TrueColor) {
-            // Pin to the configured profile: withProfile() below discards
-            // whatever the constructor detected, so the env map is belt-
-            // braces only. NO_COLOR=1 is the one entry with a real effect —
-            // if the override were ever dropped, the palette would default
-            // to no color rather than leaking ambient env detection here.
-            // The null entries are NOT blockers: Palette::envValue treats a
-            // present-but-null key as unset and falls through to $_ENV/getenv;
-            // blocking a key requires omitting it AND clearing the ambient
-            // layers, which this call deliberately does not do.
-            // NOTE (chunk boundary): degrade() operates per write() call —
-            // an SGR sequence split across two calls is not reassembled.
-            $palette = (new Palette($this->stream, [
-                'NO_COLOR' => '1',
-                'CLICOLOR_FORCE' => null,
-                'FORCE_COLOR' => null,
-                'COLORTERM' => null,
-                'TERM_PROGRAM' => null,
-                'WT_SESSION' => null,
-                'GOOGLE_CLOUD_SHELL' => null,
-                'TMUX' => null,
-                'STY' => null,
-            ]))->withProfile($this->profile);
-            $data = $palette->degrade($data);
+            $data = $this->degradePalette()->degrade($data);
         }
 
         return \fwrite($this->stream, $data);
@@ -132,5 +124,13 @@ final class ProfileWriter
     public function printf(string $format, ...$args): int|false
     {
         return $this->write(\sprintf($format, ...$args));
+    }
+
+    /**
+     * Lazily build the profile-bound degradation palette.
+     */
+    private function degradePalette(): Palette
+    {
+        return $this->degrade ??= (new Palette(null, self::HERMETIC_ENV))->withProfile($this->profile);
     }
 }
