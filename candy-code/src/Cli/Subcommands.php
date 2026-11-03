@@ -12,6 +12,7 @@ use SugarCraft\Code\Config\ClaudeSettingsImport;
 use SugarCraft\Code\Config\ProviderKeyStore;
 use SugarCraft\Code\Host\Commands\UsageHostCommand;
 use SugarCraft\Code\Host\SpendLedger;
+use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\LSP\LspInstaller;
 use SugarCraft\Code\LSP\LspReleases;
 use SugarCraft\Code\MCP\Serve\McpServeHost;
@@ -37,6 +38,7 @@ use SugarCraft\Code\Session\SessionRow;
 use SugarCraft\Code\Session\TitleSource;
 use SugarCraft\Code\Util\Exporter;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Tty;
 
 /**
@@ -1117,7 +1119,12 @@ final class Subcommands
                 $row->archived() ? Lang::t('cli.session.show.archived', ['at' => (string) $row->archivedAt]) : null,
             ]))]) . "\n";
         }
-        echo "\n" . ($messages === [] ? Lang::t('cli.session.show.no_transcript') . "\n" : \rtrim(Exporter::toMarkdown($messages)) . "\n");
+        // M13: the transcript is untrusted stored text (tool output from a
+        // poisoned repo file gets a second life here). Control bytes other
+        // than TAB/LF read as caret notation instead of repainting the
+        // operator's terminal; the JSON arm above keeps the exact bytes,
+        // where escaping already neutralises them.
+        echo "\n" . ($messages === [] ? Lang::t('cli.session.show.no_transcript') . "\n" : Sanitize::visibleControls(rtrim(Exporter::toMarkdown($messages))) . "\n");
 
         return NonInteractive::EXIT_OK;
     }
@@ -1126,10 +1133,19 @@ final class Subcommands
      * `session rename <target> <title…>`: every word after the target is the
      * title, joined with single spaces, so it needs no quoting. Recorded as a
      * USER title, which the auto-titler never overwrites.
+     *
+     * M13: argv is as untrusted as a model's guess — a title stored raw came
+     * back executing on every read-only `session list`/`show` (OSC window
+     * titles, screen clears, forged rows through embedded newlines). It now
+     * passes through the canonical title sanitizer the auto-titler and the
+     * TUI rename already use: every escape family stripped, the first line
+     * only, clipped to {@see TitleService::TITLE_MAX_CHARS}. A title that
+     * sanitises to nothing is refused, exactly as an empty one is.
      */
     private static function sessionRename(ParsedArgs $args): int
     {
-        $title = \trim(\implode(' ', \array_slice($args->subcommandArgs, 2)));
+        $raw = \trim(\implode(' ', \array_slice($args->subcommandArgs, 2)));
+        $title = $raw === '' ? '' : TitleService::sanitizeTitle($raw);
         if (isset($args->subcommandArgs[1]) && $title === '') {
             return NonInteractive::failUsage(
                 'candy-code: ' . Lang::t('cli.session.rename.no_title'),
@@ -1549,10 +1565,15 @@ final class Subcommands
         );
     }
 
-    /** A row's name, or `(unnamed)` — raw storage, printed to a terminal the user owns. */
+    /**
+     * A row's name, or `(unnamed)`. M13: rows stored by pre-sanitiser builds
+     * still carry raw escapes on disk, so every table and header that prints
+     * this label renders control characters as caret notation — the poison
+     * stays visible evidence, never a terminal command.
+     */
     private static function sessionLabel(SessionRow $row): string
     {
-        return $row->name ?? Lang::t('cli.session.unnamed');
+        return Sanitize::visibleControls($row->name ?? Lang::t('cli.session.unnamed'), preserveLayout: false);
     }
 
     // ---------------------------------------------------------------------
