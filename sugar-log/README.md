@@ -240,7 +240,9 @@ Untrusted data can never forge or reshape a record:
 use SugarCraft\Log\Log;
 
 // Install a panic handler that catches uncaught exceptions and fatal errors,
-// restores the terminal from altscreen mode, and prints a styled panic report.
+// restores the terminal from altscreen mode, and prints a panic report —
+// styled when STDERR is a color-capable terminal (or CLICOLOR_FORCE=1),
+// plain ANSI-free text everywhere else.
 Log::installPanicHandler();
 
 // Restore terminal state manually (exit altscreen, show cursor).
@@ -248,7 +250,7 @@ Log::installPanicHandler();
 Log::restoreTerminal();
 ```
 
-The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `E_PARSE`, `E_CORE_ERROR`, `E_COMPILE_ERROR`, `E_USER_ERROR`), restores the terminal to a usable state, and prints a colorized banner with the error class, message, and backtrace. Internal frames with no file/line render honestly as `?:?`, and the report ends with a neutral footer identifying sugar-log for issue filing.
+The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `E_PARSE`, `E_CORE_ERROR`, `E_COMPILE_ERROR`, `E_USER_ERROR`), restores the terminal to a usable state, and prints a banner with the error class, message, and backtrace — colorized only when the destination supports it. The exception message is treated as untrusted input: terminal-control bytes are swept and newlines flattened, so a message that embeds user data can never forge extra report rows or emit escape sequences into whoever displays it, and `redactPaths` substrings are stripped from it as they are from frames and locals. Re-installing replaces the previous sugar-log handler instead of stacking. Internal frames with no file/line render honestly as `?:?`, and the report ends with a neutral footer identifying sugar-log for issue filing. `showLocals` dumps call arguments only for traces that carry them — PHP's engine omits `args` from exception traces, so for plain uncaught exceptions there are no locals to show; the knob is live for manually injected frame arrays.
 
 ## PSR-3 Bridge
 

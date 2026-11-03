@@ -189,4 +189,20 @@ final class RecordIntegrityTest extends TestCase
         $this->assertSame('ctx_ctx_user', RecordKeys::claim('ctx_user', $used));
         $this->assertSame(['user' => true, 'ctx_user' => true, 'ctx_ctx_user' => true], $used);
     }
+
+    public function testLineBoundaryCodepointsForceQuoting(): void
+    {
+        // [m13] U+2028/U+2029 are line boundaries to splitlines()/JS readers
+        // although they are not ASCII whitespace: a value holding one must be
+        // quoted so a downstream line-based parser still sees one record.
+        $sep = "\u{2028}";
+        $line = $this->logfmtLine(['sep' => "a{$sep}b"]);
+
+        $this->assertStringContainsString("\"a{$sep}b\"", $line);
+        $this->assertSame(1, substr_count($line, "\n"));
+
+        $ls = "\u{2029}";
+        $keyed = $this->logfmtLine(["k{$ls}v" => 'w']);
+        $this->assertStringContainsString("\"k{$ls}v\"=w", $keyed);
+    }
 }

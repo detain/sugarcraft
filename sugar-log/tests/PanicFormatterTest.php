@@ -197,9 +197,11 @@ final class PanicFormatterTest extends TestCase
 
         $out = $f->format($e);
 
-        // Long string should be truncated to 40 chars + ellipsis
+        // Long string should be truncated to 40 chars + ellipsis. The marker
+        // is ASCII '...' since [N12] — the collapse rows already use '...' and
+        // one report must not mix two ellipsis glyphs.
         $this->assertStringContainsString('xxxx', $out);
-        $this->assertStringContainsString('…', $out);
+        $this->assertStringContainsString(str_repeat('x', 40) . '...', $out);
         $this->assertStringNotContainsString($longString, $out);
     }
 
@@ -272,5 +274,92 @@ final class PanicFormatterTest extends TestCase
         // Path should be redacted
         $this->assertStringContainsString('[redacted]', $out);
         $this->assertStringNotContainsString('/etc/secrets', $out);
+    }
+
+    // -------------------------------------------------------------------------
+    // [M4] the message is untrusted input: no smuggled rows, no secret echo
+    // -------------------------------------------------------------------------
+
+    public function testHostileMessageCannotForgeReportRows(): void
+    {
+        $f = PanicFormatter::plain();
+        $e = new \RuntimeException("boom\x1b[2J\nFORGED row");
+        $out = $f->format($e);
+
+        // Plain report: zero escape bytes anywhere.
+        $this->assertStringNotContainsString("\x1b", $out);
+
+        // The embedded newline must not split the message across two report
+        // lines: 'boom' and 'FORGED' land on ONE row, and 'boom' appears in
+        // exactly one row of the report.
+        $boomLines = array_values(array_filter(
+            explode("\n", $out),
+            static fn (string $row): bool => str_contains($row, 'boom'),
+        ));
+        $this->assertCount(1, $boomLines);
+        $this->assertStringContainsString('FORGED', $boomLines[0]);
+    }
+
+    public function testMessageRespectsRedactPaths(): void
+    {
+        // [M4] redaction that only covers frames and locals still leaks a
+        // secret quoted inside the exception message itself.
+        $f = PanicFormatter::plain(false, ['/secret']);
+        $e = new \RuntimeException('failed to read /secret/key.php');
+        $out = $f->format($e);
+
+        $this->assertStringContainsString('[redacted]', $out);
+        $this->assertStringNotContainsString('/secret', $out);
+    }
+
+    public function testCollapseRowCountsHiddenFramesOnly(): void
+    {
+        // [m29] A run of 5 identical frames shows one and hides four: the
+        // collapsed row must read '... 4 more', never the total.
+        $f = PanicFormatter::plain();
+        $e = new \RuntimeException('collapse');
+        $same = [[
+            'file' => __FILE__,
+            'line' => 777,
+            'function' => 'recurse',
+            'class' => 'Deep',
+            'type' => '->',
+        ]];
+        $trace = array_merge(
+            $same, $same, $same, $same, $same,
+            [[
+                'file' => __FILE__,
+                'line' => 778,
+                'function' => 'other',
+            ]],
+        );
+        (new \ReflectionProperty(\Exception::class, 'trace'))->setValue($e, $trace);
+
+        $out = $f->format($e);
+        $this->assertMatchesRegularExpression('/\.\.\. 4 more/', $out);
+        $this->assertStringNotContainsString('... 5 more', $out);
+    }
+
+    public function testLocalsRenderOnSingleSweptLine(): void
+    {
+        $f = PanicFormatter::plain(showLocals: true);
+        $e = new \RuntimeException('locals row');
+        (new \ReflectionProperty(\Exception::class, 'trace'))->setValue($e, [[
+            'file' => __FILE__,
+            'line' => 888,
+            'function' => 'go',
+            'args' => ["x\ny\t\x1b[2Jz"],
+        ]]);
+
+        $out = $f->format($e);
+        $this->assertStringNotContainsString("\x1b", $out);
+
+        $rows = array_values(array_filter(
+            explode("\n", $out),
+            // PHP's codepoint escape is \u{...}; \x{...} is PCRE-pattern-only.
+            static fn (string $row): bool => str_contains($row, "\u{2192}"),
+        ));
+        $this->assertCount(1, $rows, 'the forged newline must not split the locals row');
+        $this->assertMatchesRegularExpression('/\x{2192} x y\s+z/u', $rows[0]);
     }
 }

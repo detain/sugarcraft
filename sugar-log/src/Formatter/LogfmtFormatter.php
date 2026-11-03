@@ -79,7 +79,13 @@ final class LogfmtFormatter implements Formatter
         $s = \str_replace(['\\', '"'], ['\\\\', '\\"'], $s);
         $s = \strtr($s, ["\n" => '\\n', "\r" => '\\r', "\t" => '\\t']);
 
-        if (\preg_match('/[\s="\\\\]/', $s)) {
+        // [m13] U+2028/U+2029 are additional line boundaries for splitlines()
+        // readers (Python) and JS string literals — an unquoted value holding
+        // one can splice a record for those consumers even though it is not
+        // an ASCII \s. The match is byte-wise on purpose: /u would make the
+        // pattern fail on invalid UTF-8 input (preg returns false) and the
+        // value would then slip out UNQUOTED — the exact hazard we quote for.
+        if (\preg_match('/[\s="\\\\]|\xe2\x80\xa8|\xe2\x80\xa9/', $s)) {
             return '"' . $s . '"';
         }
         return $s;

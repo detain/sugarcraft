@@ -65,6 +65,28 @@ final class TextFormatter implements Formatter
     ): string {
         $out = [];
 
+        // [M3] Prefix and caller join the message on the sanitizer's guest
+        // list: they reach format() from host code (Logger::withPrefix, the
+        // frame introspection), and a raw ESC sequence or a newline smuggled
+        // into either one reshapes the physical line every consumer trusts.
+        // Null/'' pass through as null so the part is skipped as before;
+        // a purely control-character prefix sanitizes to '' and is skipped
+        // too — it had no renderable content to begin with.
+        $safePrefix = ($prefix === null || $prefix === '')
+            ? null
+            : $this->sanitize($prefix);
+        $safeCaller = ($caller === null || $caller === '')
+            ? null
+            : $this->sanitize($caller);
+        // Sanitizing to nothing is the same as having nothing to show: drop
+        // the part entirely rather than style an empty token.
+        if ($safePrefix === '') {
+            $safePrefix = null;
+        }
+        if ($safeCaller === '') {
+            $safeCaller = null;
+        }
+
         foreach ($this->partsOrder->parts as $part) {
             $item = match ($part) {
                 PartsOrder::PART_TIMESTAMP => $this->reportTimestamp
@@ -75,12 +97,12 @@ final class TextFormatter implements Formatter
 
                 PartsOrder::PART_LEVEL => $this->styledLevel($level),
 
-                PartsOrder::PART_PREFIX => ($prefix !== null && $prefix !== '')
-                    ? ($this->useColors ? $this->styledPrefix($prefix) : $prefix)
+                PartsOrder::PART_PREFIX => $safePrefix !== null
+                    ? ($this->useColors ? $this->styledPrefix($safePrefix) : $safePrefix)
                     : null,
 
-                PartsOrder::PART_CALLER => ($this->reportCaller && $caller !== null)
-                    ? ($this->useColors ? $this->styledCaller($caller) : "<{$caller}>")
+                PartsOrder::PART_CALLER => ($this->reportCaller && $safeCaller !== null)
+                    ? ($this->useColors ? $this->styledCaller($safeCaller) : "<{$safeCaller}>")
                     : null,
 
                 PartsOrder::PART_MESSAGE => $this->styledMessage($this->sanitize($message)),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Log;
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Style\Style;
 
 /**
@@ -34,14 +35,23 @@ final class PanicFormatter
     /**
      * Default pretty formatter with color-coded output.
      *
-     * SECURITY: $showLocals dumps each backtrace frame's scalar arguments,
-     * which frequently include passwords, API tokens, and connection strings
-     * passed into the call that panicked. Leave it OFF for any report that may
-     * reach logs, CI output, or an end user. When it must be on, list every
-     * sensitive substring (secret values AND file paths) in $redactPaths — each
-     * is replaced with "[redacted]" in both frame paths and dumped locals.
+     * SECURITY: $showLocals dumps the scalar arguments carried by each
+     * backtrace frame, which frequently include passwords, API tokens, and
+     * connection strings passed into the call that panicked. Leave it OFF for
+     * any report that may reach logs, CI output, or an end user. When it must
+     * be on, list every sensitive substring (secret values AND file paths) in
+     * $redactPaths — each is replaced with "[redacted]" in frame paths, dumped
+     * locals, and the exception message.
      *
-     * @param list<string> $redactPaths Substrings to redact from paths and locals.
+     * ENGINE REALITY (M6): PHP's own exception traces NEVER carry an "args"
+     * key — the engine omits call arguments from exception backtraces
+     * entirely — so for a plain uncaught exception this knob renders nothing
+     * beyond the frames themselves. It is live for traces that DO carry
+     * arguments (manually captured debug_backtrace() arrays injected into a
+     * report, or frame providers that add them), and the branch is kept for
+     * those callers; it is not dead, it is engine-starved.
+     *
+     * @param list<string> $redactPaths Substrings to redact from paths, locals, and message.
      */
     public static function pretty(bool $showLocals = false, array $redactPaths = []): self
     {
@@ -89,8 +99,13 @@ final class PanicFormatter
         $lines[] = $this->titleStyle->render('  PANIC  ') . ' ' . $this->exceptionStyle->render(\get_class($e));
         $lines[] = '';
 
-        // Message
-        $lines[] = '  ' . $this->exceptionStyle->render($e->getMessage());
+        // Message — attacker-reachable text (exception messages routinely
+        // embed input). Swept for control bytes, configured secret paths are
+        // redacted here as well as in the trace, and newlines are flattened:
+        // a raw \n in the message would print as an extra box row, forging a
+        // line the report never promised (ESC[2J and friends likewise must
+        // never reach the terminal of whoever displays this report).
+        $lines[] = '  ' . $this->exceptionStyle->render($this->safeMessage($e->getMessage()));
         $lines[] = '';
 
         // Backtrace
@@ -131,14 +146,16 @@ final class PanicFormatter
                 continue;
             }
             if ($count > 1) {
-                $grouped[] = ['#' => '... ' . $count . ' more', 'collapsed' => true];
+                $grouped[] = ['#' => '... ' . ($count - 1) . ' more', 'collapsed' => true];
             }
             $grouped[] = $frame + ['#' => $sig];
             $lastFrame = $sig;
             $count = 1;
         }
         if ($count > 1) {
-            $grouped[] = ['#' => '... ' . $count . ' more', 'collapsed' => true];
+            // $count totals the run INCLUDING the one frame printed above,
+            // so the hidden remainder is $count - 1.
+            $grouped[] = ['#' => '... ' . ($count - 1) . ' more', 'collapsed' => true];
         }
 
         $lines[] = $this->backtraceStyle->render("  {$file}:{$line}");
@@ -150,8 +167,8 @@ final class PanicFormatter
                 continue;
             }
 
-            $func = ($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? '?');
-            $frameFile = $frame['file'] ?? '?';
+            $func = self::ctrl(($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? '?'));
+            $frameFile = self::ctrl($frame['file'] ?? '?');
             $frameLine = $frame['line'] ?? '?';
 
             foreach ($this->redactPaths as $path) {
@@ -176,13 +193,42 @@ final class PanicFormatter
                         }
                     }
                     if (mb_strlen($argStr) > 40) {
-                        $argStr = mb_substr($argStr, 0, 40) . '…';
+                        $argStr = mb_substr($argStr, 0, 40) . '...';
                     }
-                    $lines[] = '      ' . $this->mutedStyle->render('→ ' . $argStr);
+                    $lines[] = '      ' . $this->mutedStyle->render('→ ' . self::ctrl($argStr));
                 }
             }
         }
 
         return $lines;
+    }
+
+    /**
+     * Exception messages routinely embed user input: sweep terminal-control
+     * bytes, redact configured secret substrings (a message quoting a secret
+     * path is still a leak), and flatten newlines/tabs so one message renders
+     * as exactly one report line.
+     */
+    private function safeMessage(string $message): string
+    {
+        $s = self::ctrl($message);
+
+        foreach ($this->redactPaths as $path) {
+            if ($path !== '') {
+                $s = str_replace($path, '[redacted]', $s);
+            }
+        }
+
+        return $s;
+    }
+
+    /**
+     * Strip terminal-control bytes and flatten line breaks to spaces so a
+     * hostile string can never open a screen, split a report line, or forge
+     * a box row.
+     */
+    private static function ctrl(string $s): string
+    {
+        return str_replace(["\n", "\r", "\t"], ' ', Sanitize::untrusted($s));
     }
 }

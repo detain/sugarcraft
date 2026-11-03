@@ -470,4 +470,41 @@ final class TextFormatterTest extends TestCase
 
         $this->assertStringContainsString("\x1b[90mk=v", $line);
     }
+
+    public function testPrefixCannotSmuggleTerminalControl(): void
+    {
+        // [M3] A prefix is host-supplied but still lands on the wire between
+        // level and message: an injected clear-screen sequence must never
+        // reach the terminal, while the printable content survives.
+        $tf = new TextFormatter(false, null, false, true, new Styles());
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), null, "p\x1b[2Jx");
+
+        $this->assertStringNotContainsString("\x1b[2J", $line);
+        $this->assertStringContainsString('px', $line);
+    }
+
+    public function testCallerCannotSmuggleNewlineOrBell(): void
+    {
+        // [M3] Same contract for the caller token: one record, one line.
+        $tf = new TextFormatter(false, null, true, true, new Styles());
+        $line = $tf->format(Level::Info, 'msg', [], new \DateTimeImmutable(), "a\nb\x07c", null);
+
+        $this->assertStringNotContainsString("\x07", $line);
+        $this->assertSame(1, substr_count($line, "\n"), 'record stays on one physical line');
+        $this->assertStringContainsString('a b', $line);
+        $this->assertStringContainsString('c', $line);
+    }
+
+    public function testPureControlPrefixIsSkippedEntirely(): void
+    {
+        // [M3] A prefix whose only content is control bytes sanitizes to ''
+        // and then drops out of the render — identical bytes to no prefix.
+        $tf = new TextFormatter(false, null, false, true, new Styles());
+        $time = new \DateTimeImmutable('2026-01-01 00:00:00');
+
+        $without = $tf->format(Level::Info, 'msg', [], $time, null, null);
+        $ghost = $tf->format(Level::Info, 'msg', [], $time, null, "\x07");
+
+        $this->assertSame($without, $ghost);
+    }
 }
