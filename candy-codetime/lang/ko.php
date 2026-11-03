@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "항목이 기록되었습니다: {project} ({language}) +{duration}s",
-    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              하트비트 기록\n  push                   <project> <language> <file> [duration]  마일스톤 관리 (sqlite 전용)\n  milestone              <add|list> [name] [description]  하트비트 내보내기 (기본 7일)\n  export                 <csv|json|ics> [days]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  gaps                   [days]  30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  backup                 이 사용법 표시\n  help, --help           버전 출력\n  --version, -v          기본값: file\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "사용법: candy-codetime [--backend=file|sqlite] <command> [args]\n\n명령:\n  dashboard              TUI 대시보드를 시작합니다 (선택한 백엔드 사용)\n  push                   <project> <language> <file> [duration]  하트비트 기록\n  milestone              <add|list> [name] [description]  마일스톤 관리 (sqlite 전용)\n  export                 <csv|json|ics> [days]  하트비트 내보내기 (기본 7일)\n  gaps                   [days]  300초 이상의 추적되지 않은 공백 표시 (기본 7일)\n  backup                 30일보다 오래된 데이터 파일 보관 (복사만 하며 삭제하지 않음)\n  help, --help, -h       이 사용법 표시\n  --version, -v          버전 출력\n\n옵션:\n  --backend=file|sqlite  push/export/gaps/dashboard 의 저장 백엔드 (기본값: file)\n  CANDY_CODETIME_DIR     데이터 디렉터리 (기본값: \$XDG_DATA_HOME/candy-codetime)",
     'cli.push_usage' => "사용법: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: 필수 인자가 없습니다 (project, language, file)",
     'cli.push_ignored' => "push: {file} 이 .sugartrackignore 와 일치하여 건너뛰었습니다",
