@@ -19,7 +19,7 @@ $row = FlexBox::row(
     FlexItem::new("RIGHT\npanel")->withRatio(1)->withStyle('31'),          // red
 )->withGap(1);
 
-echo "=== FlexBox Row (ratio 1:2:1, gap=1) ===\n";
+echo "=== FlexBox Row (ratio 1:3:2, gap=1) ===\n";
 echo $row->render(70, 6) . "\n\n";
 
 // Column layout
