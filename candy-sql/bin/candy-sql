@@ -188,7 +188,8 @@ ARGUMENTS
     Or a DSN string, e.g.:  mysql://user:pass@localhost:3306/dbname
 
   When omitted entirely, a short usage line is printed and the
-  process exits with status 1; run --help for this full screen.
+  process exits with status 2 (bad invocation); run --help for this full
+  screen.
 
 OPTIONS
   --help, -h
@@ -294,7 +295,7 @@ function buildDatabase(array $argv): DatabaseInterface
     if ($args === []) {
         fwrite(STDOUT, "USAGE: candy-sql [OPTIONS] [path-or-dsn]\n");
         fwrite(STDOUT, "       candy-sql --help   # for full usage information\n");
-        exit(1);
+        exit(2);
     }
 
     // Check if first argument is a bare path (doesn't start with --)

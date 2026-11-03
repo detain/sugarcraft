@@ -755,6 +755,18 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   editor materialises every returned row into the in-process result table;
   only the schema-browse paths cap themselves (`PreviewQuery` appends
   `LIMIT 100`). Project what you need on huge tables.
+- **Reconnect automation is MySQL-only.** `ReconnectManager` folds the
+  2002/2003/2013 error codes for MySQL sessions; a PostgreSQL or SQLite
+  handle that drops stays dropped until the process relaunches.
+- **One connection per process.** The TUI runs on a single pooled
+  connection; `DatabaseInterface::databases()` has no UI caller, and admin
+  fetches, queries, and page drains all serialise onto that one handle.
+- **Sync and async runs behave differently on success.** A synchronous
+  (SQLite/TLS-verified MySQL) run clears the editor once results land, while
+  an async run preserves the drafted SQL so it can be edited and re-run.
+- **There is no in-app help pane.** The help surfaces are `--help` and this
+  README; nothing inside the TUI renders a key reference beyond the per-pane
+  footer legends.
 
 The `HistoryRecorder` implements `StatusSnapshotProviderInterface`, so it slots into the existing polling loop without coupling to the UI. The `SqliteHistoryStore` uses WAL mode for safe concurrent reads during writes.
 

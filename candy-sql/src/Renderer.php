@@ -195,7 +195,7 @@ final class Renderer
         // the outer frame: each rendered pane is paneWidth + 4 (border+padding),
         // joined with a 2-space gap, all inside the outer frame's (cols-2)
         // content area → 2*(w+4) + 2 ≤ cols-2 ⇒ w ≤ floor(cols/2) - 6.
-        $maxTableLen = $a->browse->tables !== [] ? max(array_map('strlen', $a->browse->tables)) : 0;
+        $maxTableLen = $a->browse->tables !== [] ? max(array_map('mb_strlen', $a->browse->tables)) : 0;
         // D-M8: the 24-cell comfort floor must fit the side-by-side budget —
         // below ~60 terminal columns forcing 24 wrapped the frame, so the
         // floor applies only when the budget affords it.

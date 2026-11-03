@@ -45,6 +45,28 @@ final class CsvExporterTest extends TestCase
         unlink($csvPath);
     }
 
+    /**
+     * mn-18 (2026-11-03): a mid-file failure used to leave the already
+     * inserted rows committed (autocommit, row at a time). The whole file is
+     * one transaction now: any throw rolls the batch back.
+     */
+    public function testImportRollsBackAPartialFailure(): void
+    {
+        $csvPath = tempnam(sys_get_temp_dir(), 'csv');
+        file_put_contents($csvPath, "id,name,email\n1,alice,alice@example.com\n1,bob,bob@example.com\n");
+
+        try {
+            $this->exporter->importCsv($csvPath, 'users');
+            $this->fail('a primary-key collision must surface');
+        } catch (\PDOException) {
+            // expected: the duplicate id breaks the second INSERT
+        } finally {
+            unlink($csvPath);
+        }
+
+        $this->assertCount(0, $this->db->rows('users'), 'the first row must roll back with the failed batch');
+    }
+
     public function testImportCsvThrowsOnMissingFile(): void
     {
         $this->expectException(\RuntimeException::class);
@@ -207,9 +229,14 @@ final class CsvExporterTest extends TestCase
         $exporter->importCsv($csvPath, 'users');
         unlink($csvPath);
 
-        $this->assertStringContainsString('INSERT INTO "users" ("id","name")', $db->lastExec);
-        $this->assertStringNotContainsString('`users`', $db->lastExec);
-        $this->assertStringNotContainsString('`id`', $db->lastExec);
+        // The import now runs inside a transaction (mn-18), so lastExec is
+        // COMMIT - quote-genre assertions read the full exec log instead.
+        $log = implode("\n", $db->execLog);
+        $this->assertStringContainsString('INSERT INTO "users" ("id","name")', $log);
+        $this->assertStringNotContainsString('`users`', $log);
+        $this->assertStringNotContainsString('`id`', $log);
+        $this->assertStringContainsString('BEGIN', $log);
+        $this->assertStringContainsString('COMMIT', $log);
     }
 
     public function testExportCsvGuardsTabAndCarriageReturn(): void
@@ -272,6 +299,9 @@ final class CsvExporterFakePgDb implements DatabaseInterface
 {
     public string $lastExec = '';
 
+    /** @var list<string> every exec() SQL - mn-18 wrapped imports in BEGIN/COMMIT. */
+    public array $execLog = [];
+
     public function tables(): array
     {
         return ['users'];
@@ -290,6 +320,7 @@ final class CsvExporterFakePgDb implements DatabaseInterface
     public function exec(string $sql): int
     {
         $this->lastExec = $sql;
+        $this->execLog[] = $sql;
         return 1;
     }
 

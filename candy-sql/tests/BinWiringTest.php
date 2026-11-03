@@ -79,6 +79,43 @@ final class BinWiringTest extends TestCase
      * unsupported driver fails at parse time, before any socket is opened,
      * so this stays hermetic (no live connection anywhere).
      */
+    /** Run the real bin with argv and capture (exit, stdout, stderr). */
+    private function runBin(array $argv): array
+    {
+        $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $process = \proc_open(
+            [\PHP_BINARY, self::BIN_PATH, ...$argv],
+            $descriptors,
+            $pipes,
+            \dirname(self::BIN_PATH),
+        );
+        $this->assertIsResource($process);
+        \fclose($pipes[0]);
+        $stdout = (string) \stream_get_contents($pipes[1]);
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return [\proc_close($process), $stdout, $stderr];
+    }
+
+    public function testHelpExitsZeroWithTheUsageScreen(): void
+    {
+        [$exit, $stdout] = $this->runBin(['--help']);
+        $this->assertSame(0, $exit);
+        $this->assertStringContainsString('candy-sql', $stdout);
+        $this->assertStringContainsString('USAGE', $stdout);
+    }
+
+    public function testBareInvocationExitsTwoNotOne(): void
+    {
+        // mn-18 (2026-11-03): a bare launch printed usage but exited 0-era
+        // 1; the help screen now advertises status 2 for bad invocations.
+        [$exit, $stdout] = $this->runBin([]);
+        $this->assertSame(2, $exit);
+        $this->assertStringContainsString('USAGE', $stdout);
+    }
+
     public function testLaunchFailureIsASingleLineAndExitCodeTwo(): void
     {
         $descriptors = [

@@ -68,6 +68,12 @@ final class CsvExporter
             throw new \RuntimeException("Cannot open CSV file: " . $path);
         }
 
+        // A mid-file failure used to leave the already-inserted rows
+        // committed (autocommit, row at a time) — a silently partial import.
+        // Stage the whole file in one transaction: any throw rolls the batch
+        // back so the table is either fully imported or untouched (mn-18).
+        $this->db->exec('BEGIN');
+        $imported = false;
         try {
             $headers = fgetcsv($handle);
             if ($headers === false || $headers === null) {
@@ -102,7 +108,17 @@ final class CsvExporter
 
                 $this->db->exec("INSERT INTO " . Identifier::quote($this->quoteFlavor(), $table) . " ({$columnList}) VALUES ({$valuesList})");
             }
+            $this->db->exec('COMMIT');
+            $imported = true;
         } finally {
+            if (!$imported) {
+                try {
+                    $this->db->exec('ROLLBACK');
+                } catch (\Throwable) {
+                    // A dead connection cannot roll back — report the import
+                    // error instead of masking it with the rollback failure.
+                }
+            }
             fclose($handle);
         }
     }
