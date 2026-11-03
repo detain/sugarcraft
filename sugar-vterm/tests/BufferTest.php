@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Color\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Vterm\Sgr\Sgr;
 
 final class BufferTest extends TestCase
@@ -219,7 +220,7 @@ final class BufferTest extends TestCase
         $this->assertSame('X', $buf->cell(1, 1)->grapheme);
     }
 
-    public function testResizeDoesNotMutateOriginalAndStartsUndirtied(): void
+    public function testResizeMintsAFullDirtyBoxAndLeavesOriginalUntouched(): void
     {
         $buf = new Buffer(10, 10);
         $buf->put(1, 1, new Cell(grapheme: 'X'));
@@ -229,7 +230,93 @@ final class BufferTest extends TestCase
         $this->assertNotSame($buf, $resized);
         $this->assertSame('X', $buf->cell(1, 1)->grapheme, 'original grid cell preserved');
         $this->assertSame('X', $resized->cell(1, 1)->grapheme);
-        $this->assertSame(PHP_INT_MAX, $resized->dirtyRegion()['minRow'], 'resize mints a fresh dirty box');
+        // A resize shifts every coordinate a delta renderer has cached, so
+        // the new grid reports the WHOLE viewport dirty — the repaint signal
+        // that was missing when resize returned an empty box.
+        $region = $resized->dirtyRegion();
+        $this->assertSame(0, $region['minRow']);
+        $this->assertSame(4, $region['maxRow']);
+        $this->assertSame(0, $region['minCol']);
+        $this->assertSame(4, $region['maxCol']);
+    }
+
+    // ─── resize() wide-cell boundary repair + geometry guards ───
+
+    public function testResizeWidthShrinkNeverStrandsAWideBaseAtTheEdge(): void
+    {
+        // 'ab漢cd' on a 10-wide row: 漢 occupies columns 2-3 (base + tail).
+        $buf = new Buffer(10, 1);
+        $buf->put(0, 0, new Cell(grapheme: 'a'));
+        $buf->put(0, 1, new Cell(grapheme: 'b'));
+        $han = new Cell(grapheme: '漢');
+        $buf->put(0, 2, $han);
+        $buf->put(0, 3, Cell::continuation($han));
+        $buf->put(0, 4, new Cell(grapheme: 'c'));
+        $buf->put(0, 5, new Cell(grapheme: 'd'));
+
+        $narrow = $buf->resize(3, 1);
+
+        // Column 2 was the wide base whose tail fell past the cut — erased,
+        // not orphaned. The rendered line is 2 cells wide, not 3.
+        $this->assertSame(' ', $narrow->cell(0, 2)->grapheme);
+        $this->assertFalse($narrow->cell(0, 2)->continuation);
+        $this->assertSame('a', $narrow->cell(0, 0)->grapheme);
+        $this->assertSame('b', $narrow->cell(0, 1)->grapheme);
+
+        // Sweep every possible width: no row may end on a head whose tail
+        // was cut, and a continuation may never appear without its base.
+        for ($w = 1; $w <= 10; $w++) {
+            $sweep = $buf->resize($w, 1);
+            for ($r = 0; $r < $sweep->rows; $r++) {
+                for ($c = 0; $c < $sweep->cols; $c++) {
+                    if ($sweep->cell($r, $c)->continuation) {
+                        $this->assertFalse(
+                            $sweep->cell($r, max(0, $c - 1))->continuation,
+                            "width {$w}: continuation at {$c} has a non-base neighbour"
+                        );
+                    }
+                    if ($c === $sweep->cols - 1 && !$sweep->cell($r, $c)->continuation) {
+                        // A base in the LAST column must be single-width:
+                        // its tail position does not exist.
+                        $this->assertTrue(
+                            Width::of($sweep->cell($r, $c)->grapheme) <= 1,
+                            "width {$w}: wide base stranded at the edge"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    public function testWidePairFullyInsideTheCutSurvivesResize(): void
+    {
+        $buf = new Buffer(10, 1);
+        $han = new Cell(grapheme: '漢');
+        $buf->put(0, 2, $han);
+        $buf->put(0, 3, Cell::continuation($han));
+
+        $kept = $buf->resize(4, 1);
+
+        $this->assertSame('漢', $kept->cell(0, 2)->grapheme);
+        $this->assertTrue($kept->cell(0, 3)->continuation, 'intact pair at the boundary stays paired');
+    }
+
+    public function testZeroAndNegativeGeometryFailFast(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Buffer(0, 5);
+    }
+
+    public function testZeroRowsFailFast(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new Buffer(80, -5);
+    }
+
+    public function testResizeToZeroGeometryFailsFast(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new Buffer(10, 10))->resize(0, 10);
     }
 
     // ─── equals() (absorbed from CellGrid) ───

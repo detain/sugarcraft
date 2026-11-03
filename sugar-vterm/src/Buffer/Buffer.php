@@ -42,6 +42,15 @@ final class Buffer
         public readonly int $cols,
         public readonly int $rows,
     ) {
+        if ($cols < 1 || $rows < 1) {
+            // A zero/negative grid is not a degenerate-but-usable state:
+            // every write silently no-ops and every read answers empty, so
+            // a mis-plumbed terminal looks alive while dropping all output.
+            // Fail at construction instead.
+            throw new \InvalidArgumentException(
+                "Buffer dimensions must be >= 1x1, got {$cols}x{$rows}"
+            );
+        }
         $this->grid = $this->makeGrid($cols, $rows);
     }
 
@@ -79,11 +88,26 @@ final class Buffer
 
     /**
      * Resize the grid, preserving existing content.
-     * Columns/rows beyond the new bounds are discarded.
-     * New cells are filled with empty cells.
+     * Columns/rows beyond the new bounds are DISCARDED — dropped rows are
+     * not fed to the scrollback ring (the emulator's resizeBuffers keeps the
+     * ring separately; a resize is a viewport change, not a scroll). The
+     * whole new grid is marked dirty so a delta renderer repaints every cell
+     * instead of trusting stale coordinates.
+     *
+     * Wide-cell invariant: a wide base whose continuation column falls past
+     * the width cut is erased at the boundary (it cannot occupy two columns
+     * in a one-column space), so no row ever ends with a lone head and
+     * {@see \SugarCraft\Sprinkles\Width::of} on a rendered line never
+     * exceeds the new width.
      */
     public function resize(int $cols, int $rows): self
     {
+        if ($cols < 1 || $rows < 1) {
+            throw new \InvalidArgumentException(
+                "Buffer dimensions must be >= 1x1, got {$cols}x{$rows}"
+            );
+        }
+
         $clone = new self($cols, $rows);
 
         $maxRows = min($this->rows, $rows);
@@ -93,7 +117,24 @@ final class Buffer
             for ($c = 0; $c < $maxCols; $c++) {
                 $clone->grid[$r][$c] = $this->grid[$r][$c];
             }
+            // Width shrink: if the first dropped column held a wide
+            // continuation, its base now sits in the last kept column
+            // without a partner — erase the orphaned head.
+            if ($cols < $this->cols
+                && isset($this->grid[$r][$cols])
+                && $this->grid[$r][$cols]->continuation
+                && !$this->grid[$r][$cols - 1]->continuation
+            ) {
+                $clone->grid[$r][$cols - 1] = Cell::empty();
+            }
         }
+
+        // Full-repaint signal: coordinates shifted, content was cut or the
+        // tail was blanked — an incremental renderer must redraw everything.
+        $clone->minRow = 0;
+        $clone->maxRow = $rows - 1;
+        $clone->minCol = 0;
+        $clone->maxCol = $cols - 1;
 
         return $clone;
     }

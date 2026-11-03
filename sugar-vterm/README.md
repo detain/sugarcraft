@@ -140,7 +140,9 @@ $grid->put(0, 1, new Cell(char: 'i'));
 echo $grid->cell(0, 0)->char;         // 'H'
 echo implode(',', $grid->dirtyRegion()); // minRow, maxRow, minCol, maxCol
 $grid = $grid->clear();                // NEW empty grid, same size; dirty box resets
-$grid = $grid->resize(100, 40);        // NEW grid, content preserved; dirty box resets
+$grid = $grid->resize(100, 40);        // NEW grid; content within bounds kept,
+                                       // cuts discarded, edge wide-base erased,
+                                       // whole viewport marked dirty for repaint
 
 // Cursor — row + col + shape + visibility
 $cursor = new Cursor(row: 0, col: 0, shape: 0, visible: true);
