@@ -27,7 +27,7 @@ use SugarCraft\Core\Program;
         require $autoload;
         return;
     }
-    fwrite(STDERR, "candy-starter: cannot find composer autoload.php — did you `composer install`?\n");
+    fwrite(STDERR, "bin/start: cannot find composer autoload.php — did you `composer install`?\n");
     exit(1);
 })();
 
@@ -43,7 +43,24 @@ use SugarCraft\Core\Program;
 
 // Harness tunables live in ProgramOptions (framerate, alt-screen,
 // mouse tracking, raw-mode details) — pass one as the second argument
-// when you need them:
-// (new Program(new Counter(), new \SugarCraft\Core\ProgramOptions(framerate: 30.0)))->run();
+// when you need them, keeping the same run + stopSignal() shape at the
+// tail of this file:
+// $program = new Program(new Counter(), new \SugarCraft\Core\ProgramOptions(framerate: 30.0));
 
-(new Program(new Counter()))->run();
+$program = new Program(new Counter());
+$program->run();
+
+// -----------------------------------------------------------------------
+// Exit-code tail — the shell's convention for signal deaths. run() stops
+// cooperatively (Cmd::quit(), a model-raised InterruptMsg) and on OS
+// signals alike; stopSignal() answers an int ONLY for the signal arms.
+// Cooperative quits therefore keep the conventional 0, while a SIGINT /
+// SIGTERM / SIGHUP-stopped run exits 128+N — 130 / 143 / 129 — so
+// supervisors, scripts and CI signal checks read this app the same way
+// they read any signal-terminated child. Discarding the stop reason (the
+// template's pre-2026-11 shape) made every fork exit 0 after a kill.
+// -----------------------------------------------------------------------
+$stoppedBySignal = $program->stopSignal();
+if ($stoppedBySignal !== null) {
+    exit(128 + $stoppedBySignal);
+}
