@@ -116,4 +116,12 @@ final class DiagnosticsAndRawChannelTest extends TestCase
         self::assertStringContainsString('SC_B11_MISSING', $stderr,
             'a placeholder that expanded to nothing must be named, never vanish silently');
     }
+
+    public function testUnknownStyleBorderRefusesWithAllowedList(): void
+    {
+        [$status, $stdout, $stderr] = $this->runBinChild(['style', '--border=fancy', 'hi']);
+        self::assertNotSame(0, $status);
+        self::assertSame('', $stdout);
+        self::assertStringContainsString('Allowed: normal|rounded|thick|double|block|hidden', $stderr);
+    }
 }

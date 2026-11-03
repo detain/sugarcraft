@@ -77,4 +77,22 @@ final class WriteModelTest extends TestCase
         $view = $m->view();
         $this->assertNotEmpty($view);
     }
+
+    public function testEndOfBufferCharacterReachesTheTextArea(): void
+    {
+        $m = WriteModel::newPrompt(endOfBufferCharacter: '>');
+        $this->assertSame('>', $m->area->endOfBufferCharacter);
+    }
+
+    public function testEndOfBufferCharacterDefaultStaysTilde(): void
+    {
+        $m = WriteModel::newPrompt();
+        $this->assertSame('~', $m->area->endOfBufferCharacter);
+    }
+
+    public function testEndOfBufferEscapeBytesGetVisibleStandIns(): void
+    {
+        $m = WriteModel::newPrompt(endOfBufferCharacter: "\x1b[31m");
+        $this->assertStringNotContainsString("\x1b", $m->area->endOfBufferCharacter);
+    }
 }

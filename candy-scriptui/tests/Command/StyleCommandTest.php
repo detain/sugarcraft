@@ -42,4 +42,17 @@ final class StyleCommandTest extends TestCase
         $display = preg_replace('/\r?\n$/', "\n", $tester->getDisplay());
         $this->assertSame("\x1b[1mhello\x1b[0m\n", $display);
     }
+
+    public function testUnknownBorderIsRefusedWithTheAllowedSet(): void
+    {
+        $app = new Application();
+        $tester = new CommandTester($app->find('style'));
+        $status = $tester->execute(['text' => ['hi'], '--border' => 'fancy']);
+
+        self::assertSame(1, $status, 'an unlisted border preset must fail, not render unbordered');
+        self::assertSame('', $tester->getDisplay(), 'the refusal is diagnostics: never the data stream');
+
+        $src = (string) \file_get_contents(__DIR__ . '/../../src/Command/StyleCommand.php');
+        self::assertStringContainsString("'allowed' => 'normal|rounded|thick|double|block|hidden'", $src);
+    }
 }
