@@ -8,7 +8,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Mouse\Zones\Zone;
 
 /**
- * Emitted when the mouse button is released, ending a drag sequence.
+ * Emitted when the drag button is released, ending a drag sequence.
  *
  * Mirrors bubblezone's zone drag-end event.
  */
@@ -16,12 +16,14 @@ final class ZoneDragEndMsg implements Msg
 {
     /**
      * @param Zone $originZone The zone the drag started from.
-     * @param Zone $currentZone The zone the mouse cursor was in at
-     *                          release (may differ from originZone if
-     *                          the cursor crossed zones during the drag).
+     * @param ?Zone $currentZone The zone the mouse cursor was in at the
+     *                           release itself (may differ from originZone
+     *                           if the cursor crossed zones during the drag;
+     *                           null when the release happened outside every
+     *                           tracked zone).
      */
     public function __construct(
         public readonly Zone $originZone,
-        public readonly Zone $currentZone,
+        public readonly ?Zone $currentZone,
     ) {}
 }

@@ -337,25 +337,33 @@ if ($msg instanceof ZoneDragStartMsg) {
 } elseif ($msg instanceof ZoneDragMoveMsg) {
     // cursor crossed from $msg->originZone into $msg->currentZone
 } elseif ($msg instanceof ZoneDragEndMsg) {
-    // drag ended; started at $msg->originZone, released at $msg->currentZone
+    // drag ended; started at $msg->originZone, released over
+    // $msg->currentZone (null when the release was outside every zone)
 }
 ```
 
 **Origin vs. current zone:** the origin zone is fixed for the entire
 drag and never changes. The current zone updates whenever the cursor
-crosses a zone boundary during the drag.
+crosses a zone boundary during the drag. The end message's current zone
+is resolved from the release event itself — the zone under the cursor at
+release, or null outside all zones — not the last crossed one.
 
 **Boundary crossing:** moving directly from zone A to zone B while
-dragging produces a move message for A first; call `update()` again to
-receive the move for B. This two-step pattern lets the Program animate
-the transition before routing the next enter.
+dragging emits ONE `ZoneDragMoveMsg(originZone: A, currentZone: B)` in
+that same `update()` call.
+
+**Button identity:** the Press records which button started the drag; a
+Release of a different button is inert. Releasing the drag button always
+ends the drag, even when the origin zone has vanished from the manager
+(that end is silent, but the tracker clears instead of wedging).
 
 **State accessors:**
 - `originZoneId()` / `originZone()` — zone the drag started from, or null
 - `currentZoneId()` / `currentZone()` — zone the cursor is in, or null
-- `withManager(Manager)` — rebind to a different manager
+- `dragButton()` — button that started the drag, or null
+- `withManager(Manager)` — rebind to a different manager (state carried)
 - `withZoneIds(?string $origin, ?string $current)` — restore from
-  a serialized state
+  a serialized id snapshot (button identity is not carried by ids)
 
 ### Click tracking
 

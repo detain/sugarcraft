@@ -142,4 +142,18 @@ final class MsgTypesTest extends TestCase
         $this->assertSame('a', $msg->originZone->id);
         $this->assertSame('b', $msg->currentZone->id);
     }
+
+    /**
+     * MAJOR-8: releasing outside every tracked zone ends the drag with a
+     * null current zone — the contract is "where the cursor was at release",
+     * not a fallback to the origin.
+     */
+    public function testZoneDragEndMsgAcceptsNullCurrentZone(): void
+    {
+        $origin = new Zone('a', 1, 1, 3, 1);
+        $msg = new ZoneDragEndMsg($origin, null);
+
+        $this->assertSame($origin, $msg->originZone);
+        $this->assertNull($msg->currentZone);
+    }
 }

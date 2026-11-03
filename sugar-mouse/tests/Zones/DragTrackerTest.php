@@ -17,9 +17,9 @@ use PHPUnit\Framework\TestCase;
 
 final class DragTrackerTest extends TestCase
 {
-    private function press(int $x, int $y): MouseMsg
+    private function press(int $x, int $y, MouseButton $button = MouseButton::Left): MouseMsg
     {
-        return new MouseMsg($x, $y, MouseButton::Left, MouseAction::Press);
+        return new MouseMsg($x, $y, $button, MouseAction::Press);
     }
 
     private function move(int $x, int $y): MouseMsg
@@ -27,9 +27,9 @@ final class DragTrackerTest extends TestCase
         return new MouseMsg($x, $y, MouseButton::Left, MouseAction::Motion);
     }
 
-    private function release(int $x, int $y): MouseMsg
+    private function release(int $x, int $y, MouseButton $button = MouseButton::Left): MouseMsg
     {
-        return new MouseMsg($x, $y, MouseButton::Left, MouseAction::Release);
+        return new MouseMsg($x, $y, $button, MouseAction::Release);
     }
 
     /**
@@ -287,9 +287,10 @@ final class DragTrackerTest extends TestCase
     }
 
     /**
-     * When a zone is removed from the manager mid-drag (e.g. re-render without the zone),
-     * release emits no message and leaves tracker state unchanged (the zone id
-     * strings remain even though the zones are gone from the manager).
+     * MAJOR-7: when a zone is removed from the manager mid-drag (e.g. a
+     * re-render without the zone), release emits no message but MUST still
+     * clear the tracker — the old behaviour kept the stale origin forever,
+     * wedging the tracker so it swallowed every later release.
      */
     public function testReleaseAfterZoneRemovedFromManagerEmitsNoMsg(): void
     {
@@ -303,13 +304,85 @@ final class DragTrackerTest extends TestCase
         // Simulate zone being removed from manager (e.g. component re-rendered without zone).
         $m->clear('a');
 
-        // Release should not emit (origin zone no longer in manager) and returns unchanged tracker.
+        // Release emits nothing (origin unresolvable) but the drag state is dropped.
         [$next, $msg] = $tracker->update($this->release(2, 1));
 
         $this->assertNull($msg);
-        // Tracker state unchanged since emit was suppressed due to missing zone.
-        $this->assertSame('a', $next->originZoneId());
-        $this->assertSame('a', $next->currentZoneId());
+        $this->assertNull($next->originZoneId());
+        $this->assertNull($next->currentZoneId());
+        $this->assertNull($next->dragButton());
+
+        // Re-registering the zone lets the next press start a fresh drag —
+        // no wedge residue survived the silent end.
+        $m->scan($m->mark('a', 'AAA') . '|' . $m->mark('b', 'BBB'));
+        [$after, $msg2] = $next->update($this->press(2, 1));
+        $this->assertInstanceOf(ZoneDragStartMsg::class, $msg2);
+    }
+
+    /**
+     * m3: a Release of a button OTHER than the one that started the drag
+     * neither ends the drag nor clears state.
+     */
+    public function testReleaseOfDifferentButtonDoesNotEndDrag(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        [$tracker] = $tracker->update($this->press(2, 1));
+        $this->assertSame(MouseButton::Left, $tracker->dragButton());
+
+        // Right-button release while the left drag is active: inert.
+        [$stuck, $msg] = $tracker->update($this->release(2, 1, MouseButton::Right));
+        $this->assertNull($msg);
+        $this->assertSame('a', $stuck->originZoneId());
+        $this->assertSame(MouseButton::Left, $stuck->dragButton());
+
+        // The matching left release ends it normally.
+        [$done, $msg2] = $stuck->update($this->release(2, 1));
+        $this->assertInstanceOf(ZoneDragEndMsg::class, $msg2);
+        $this->assertNull($done->originZoneId());
+    }
+
+    /**
+     * MAJOR-8: releasing outside every tracked zone emits End with a null
+     * current zone (the old code fell back to the origin, lying about where
+     * the release happened).
+     */
+    public function testReleaseOutsideAllZonesEmitsEndWithNullCurrent(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        [$tracker] = $tracker->update($this->press(2, 1));
+        [$tracker] = $tracker->update($this->move(50, 1));
+
+        [$next, $msg] = $tracker->update($this->release(50, 1));
+
+        $this->assertInstanceOf(ZoneDragEndMsg::class, $msg);
+        $this->assertSame('a', $msg->originZone->id);
+        $this->assertNull($msg->currentZone);
+        $this->assertNull($next->originZoneId());
+    }
+
+    /**
+     * MAJOR-8: the end message names the zone under the cursor AT RELEASE,
+     * not the stale last-crossed zone (drag A→B then release back in A ends
+     * with current A).
+     */
+    public function testEndMsgUsesZoneUnderCursorAtReleaseNotStaleCurrent(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        [$tracker] = $tracker->update($this->press(2, 1));
+        [$tracker] = $tracker->update($this->move(6, 1));
+        $this->assertSame('b', $tracker->currentZoneId());
+
+        [, $msg] = $tracker->update($this->release(2, 1));
+
+        $this->assertInstanceOf(ZoneDragEndMsg::class, $msg);
+        $this->assertSame('a', $msg->originZone->id);
+        $this->assertSame('a', $msg->currentZone?->id);
     }
 
     /**
