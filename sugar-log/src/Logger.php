@@ -21,6 +21,13 @@ use SugarCraft\Style\Style;
  * `errorStreamAt` (default {@see Level::Error}) go to the error stream,
  * everything else to the main stream.
  *
+ * Color destination gate: ANSI styling is delivered only to destinations
+ * that can render it. When a record's target stream is not a terminal, a
+ * {@see TextFormatter} is transparently swapped for its plain (useColors:
+ * false) mirror, so log files never bake SGR bytes. `CLICOLOR_FORCE=1`
+ * overrides the gate; JSON and logfmt formatters emit no ANSI anyway and
+ * pass through untouched.
+ *
  * Hooks: {@see Hook\HookRegistry} callbacks fire only when records pass
  * through a {@see PsrBridge}; the core Logger::log() path does not dispatch
  * hooks (deliberate — the emit path stays synchronous and allocation-free).
@@ -49,6 +56,14 @@ final class Logger
 
     /** Whether colors are enabled based on terminal capabilities. */
     private bool $useColors;
+
+    /**
+     * Plain mirror (useColors:false) of the current TextFormatter, built once
+     * per formatter identity and reused — the C2 destination gate hands file
+     * and pipe targets this instead of the styled formatter.
+     */
+    private ?Formatter $plainVariant = null;
+    private ?TextFormatter $plainSource = null;
 
     /** Parts order for text formatter. */
     private ?PartsOrder $partsOrder;
@@ -177,12 +192,22 @@ final class Logger
 
         $caller = $this->reportCaller ? CallerFormatter::find() : null;
         $time = new \DateTimeImmutable();
-        $line = $this->formatter->format($level, $message, $merged, $time, $caller, $this->prefix);
 
         $target = $this->stream;
         if ($this->errorStream !== null && $level->value >= $this->errorStreamAt?->value) {
             $target = $this->errorStream;
         }
+
+        // C2 destination gate: ANSI never bakes into file/pipe output. A
+        // TextFormatter aimed at a destination that cannot render styling is
+        // swapped for its cached plain mirror; CLICOLOR_FORCE=1 opts back in.
+        $formatter = $this->formatter;
+        if ($formatter instanceof TextFormatter && !ColorGate::allowsColor($target)) {
+            $formatter = $this->plainMirrorOf($formatter);
+        }
+
+        $line = $formatter->format($level, $message, $merged, $time, $caller, $this->prefix);
+
         \fwrite($target, $line);
 
         if ($level === Level::Fatal) {
@@ -213,6 +238,21 @@ final class Logger
     public function fatal(string $message, array $context = []): void
     {
         $this->log(Level::Fatal, $message, $context);
+    }
+
+    /**
+     * Cached useColors:false mirror of $source. Rebuilt only when the Logger's
+     * formatter identity changes (a new setFormatter()/withFormatter() value),
+     * so the gate costs one identity compare per emit.
+     */
+    private function plainMirrorOf(TextFormatter $source): Formatter
+    {
+        if ($this->plainSource !== $source || $this->plainVariant === null) {
+            $this->plainVariant = $source->withUseColors(false);
+            $this->plainSource = $source;
+        }
+
+        return $this->plainVariant;
     }
 
     /**

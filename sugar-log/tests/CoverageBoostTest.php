@@ -115,7 +115,11 @@ final class CoverageBoostTest extends TestCase
         $l->setReportCaller(false);
         $l->setReportTimestamp(false);
         $l->setStyles(Styles::default());
-        $l->setFormatter(new TextFormatter(false, null, false));
+        // [M10 flip] useColors pinned explicitly true: the standalone default
+        // is now a Probe reference. The C2 destination gate may still deliver
+        // plain bytes on this file stream — every assertion here is a text
+        // substring, which survives either styling.
+        $l->setFormatter(new TextFormatter(false, null, false, true));
         $l->debug('x');
         $this->assertStringContainsString('[svc]', $read());
         $this->assertSame(Level::Debug, $l->styles() instanceof Styles ? Level::Debug : Level::Debug);

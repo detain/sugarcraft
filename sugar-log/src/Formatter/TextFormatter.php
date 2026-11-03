@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Log\Formatter;
 
+use SugarCraft\ColorProfile\Probe;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Log\Formatter;
@@ -27,18 +28,29 @@ final class TextFormatter implements Formatter
     private Styles $styles;
     private PartsOrder $partsOrder;
 
+    /**
+     * @param ?bool $useColors Tri-state (M10): null = consult the terminal
+     *                         profile ({@see Probe::colorProfile()}) at
+     *                         construction — the documented "auto" behavior;
+     *                         true/false = explicit opt-in/opt-out that the
+     *                         probe never overrides. Note that a {@see Logger}
+     *                         still degrades an opted-in formatter to plain
+     *                         output when its destination cannot render
+     *                         ANSI (file sinks, pipes — the C2 gate); only a
+     *                         terminal (or CLICOLOR_FORCE=1) receives styling.
+     */
     public function __construct(
         bool $reportTimestamp = true,
         ?string $timeFormat = null,
         bool $reportCaller = false,
-        bool $useColors = true,
+        ?bool $useColors = null,
         ?Styles $styles = null,
         ?PartsOrder $partsOrder = null,
     ) {
         $this->reportTimestamp = $reportTimestamp;
         $this->timeFormat = $timeFormat;
         $this->reportCaller = $reportCaller;
-        $this->useColors = $useColors;
+        $this->useColors = $useColors ?? Probe::colorProfile()->allowsColor();
         $this->styles = $styles ?? Styles::default();
         $this->partsOrder = $partsOrder ?? PartsOrder::default();
     }
@@ -123,7 +135,10 @@ final class TextFormatter implements Formatter
         if (!$this->useColors) {
             return $label;
         }
-        $style = $this->pick($this->styles->keyStyle('level'), $this->styles->levels[$level->value]);
+        // ?? Style::new() parity with keyStyle(): a sparse custom palette that
+        // omits a level falls back to the identity style instead of throwing
+        // "Undefined array key" mid-emit.
+        $style = $this->pick($this->styles->keyStyle('level'), $this->styles->levels[$level->value] ?? Style::new());
 
         return $style?->render($label) ?? $label;
     }
@@ -229,6 +244,19 @@ final class TextFormatter implements Formatter
     {
         $child = clone $this;
         $child->partsOrder = $partsOrder;
+        return $child;
+    }
+
+    /**
+     * Create a new TextFormatter with coloring switched, preserving all other
+     * settings. Used by {@see \SugarCraft\Log\Logger}'s destination gate to
+     * deliver a plain mirror of the configured formatter when the target
+     * stream cannot render ANSI (C2).
+     */
+    public function withUseColors(bool $useColors): self
+    {
+        $child = clone $this;
+        $child->useColors = $useColors;
         return $child;
     }
 }

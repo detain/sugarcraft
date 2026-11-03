@@ -17,6 +17,15 @@ final class Log
 {
     private static ?Logger $default = null;
 
+    /**
+     * Handler chained ahead of OUR panic wrapper (never our own wrapper —
+     * re-install replaces, it does not stack). Null until first install.
+     */
+    private static mixed $panicPrevious = null;
+
+    /** Monotonic install epoch; stale shutdown hooks self-retire (m5). */
+    private static int $panicEpoch = 0;
+
     /** Get (or lazily create) the process-wide default logger. */
     public static function default(): Logger
     {
@@ -84,7 +93,16 @@ final class Log
      *
      * Mirrors ratatui ecosystem's `color_eyre` handler.
      *
-     * @param PanicFormatter|null $formatter  Defaults to PanicFormatter::pretty().
+     * The report goes to STDERR. When $formatter is omitted it is chosen by
+     * destination: {@see PanicFormatter::pretty()} on a terminal (or under
+     * CLICOLOR_FORCE=1), {@see PanicFormatter::plain()} otherwise — file-
+     * captured panic reports never bake ANSI.
+     *
+     * Re-installing REPLACES the previously installed handler and its
+     * shutdown hook (one panic reporter per process at a time); the chained
+     * "previous" handler captured at install time still runs afterwards.
+     *
+     * @param PanicFormatter|null $formatter  Defaults to pretty()/plain() by STDERR capability.
      * @param bool                $showLocals Include local variables in backtrace.
      * @param list<string>        $redactPaths Paths to redact from backtrace.
      */
@@ -93,13 +111,18 @@ final class Log
         bool $showLocals = false,
         array $redactPaths = [],
     ): void {
-        $formatter ??= PanicFormatter::pretty($showLocals, $redactPaths);
+        $formatter ??= ColorGate::allowsColor(\STDERR)
+            ? PanicFormatter::pretty($showLocals, $redactPaths)
+            : PanicFormatter::plain($showLocals, $redactPaths);
 
         // set_exception_handler() returns the previously registered handler, but
-        // only when we call it. To preserve chaining, we first register a no-op
-        // handler purely to capture what was registered before us. We then
-        // replace it with the real handler while keeping the previous one in scope.
-        $previousHandler = \set_exception_handler(static function (): void {});
+        // only when we call it. On the FIRST install we register a no-op purely
+        // to capture what was registered before us; on RE-install we reuse the
+        // foreign handler captured then, so our own earlier wrapper is replaced
+        // instead of chained to (which would print a second report per
+        // exception — m5).
+        $previousHandler = self::$panicPrevious ?? \set_exception_handler(static function (): void {});
+        self::$panicPrevious = $previousHandler;
 
         // Now register the real handler with the captured previous handler.
         \set_exception_handler(static function (\Throwable $e) use ($formatter, $previousHandler): void {
@@ -113,8 +136,14 @@ final class Log
             }
         });
 
-        // Register shutdown function for fatal errors.
-        register_shutdown_function(static function () use ($formatter): void {
+        // Register shutdown function for fatal errors. PHP offers no way to
+        // unregister one, so each hook checks the install epoch and self-retires
+        // when a later installPanicHandler() has replaced it (m5).
+        $holder = new \ArrayObject(['epoch' => ++self::$panicEpoch]);
+        register_shutdown_function(static function () use ($holder, $formatter): void {
+            if ($holder['epoch'] !== self::$panicEpoch) {
+                return;
+            }
             $err = error_get_last();
             if ($err !== null && \in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
                 self::restoreTerminal();

@@ -57,8 +57,14 @@ final class PanicFormatter
 
     /**
      * Plain formatter for non-TTY environments (e.g. files / CI).
+     *
+     * Takes the same locals/redaction knobs as {@see pretty()} — plain means
+     * "no ANSI", not "no redaction": a destination gate must never silently
+     * drop the caller's privacy settings.
+     *
+     * @param list<string> $redactPaths Substrings to redact from paths and locals.
      */
-    public static function plain(): self
+    public static function plain(bool $showLocals = false, array $redactPaths = []): self
     {
         $s = Style::new();
         return new self(
@@ -66,8 +72,8 @@ final class PanicFormatter
             exceptionStyle: $s,
             backtraceStyle: $s,
             mutedStyle: $s,
-            showLocals: false,
-            redactPaths: [],
+            showLocals: $showLocals,
+            redactPaths: $redactPaths,
         );
     }
 

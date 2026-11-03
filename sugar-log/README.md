@@ -17,7 +17,7 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 ## Features
 
 - **Leveled logging** — `Debug`, `Info`, `Warn`, `Error`, `Fatal` levels
-- **Colorful human-readable output** — terminal-styled by default (Probe-driven: respects `NO_COLOR` / `FORCE_COLOR`)
+- **Colorful human-readable output** — styled when the destination is a color-capable terminal (honors `NO_COLOR`, force with `CLICOLOR_FORCE`; plain bytes on files and pipes by design)
 - **Multiple formatters** — `TextFormatter` (default), `JsonFormatter`, `LogfmtFormatter`
 - **Structured key/value pairs** — pass arbitrary context with every log call
 - **Sub-loggers** — `with([...])` creates a child logger with persistent fields
@@ -112,9 +112,14 @@ $log = Logger::new(formatter: new JsonFormatter());
 
 ## Styling
 
-Styles are applied automatically when the terminal supports color output.
-Color is determined by `sugar-colorprofile`'s Probe — it respects the `NO_COLOR`
-and `FORCE_COLOR` environment variables.
+Styles are applied only when the destination can render them. A `Logger`
+consults `sugar-colorprofile`'s Probe and — for each write — the stream it is
+about to use: `TextFormatter` output reaches a file or a piped stream as plain
+bytes, never as baked-in ANSI escapes. Set `NO_COLOR` to force plain output on
+terminals, or `CLICOLOR_FORCE=1` to opt styling back in for captured output
+(`FORCE_COLOR` is **not** a knob this fleet reads). A standalone
+`new TextFormatter(useColors: true)` still emits SGR by contract — the gate
+lives in the `Logger`, not in the formatter.
 
 Override level styles via `Logger::styles()`:
 
@@ -188,8 +193,8 @@ use SugarCraft\Log\Logger;
 use SugarCraft\Log\Level;
 
 // 1. Custom stream — send a logger anywhere (immutable: returns a new Logger)
-$fh  = fopen('/tmp/app.log', 'a');
-$out = $log->withOutput($fh);
+$fh  = fopen('/tmp/app.log', 'a');   // plain bytes on files: styling is auto-dropped
+$out = $log->withOutput($fh);         // create with 0600 (umask) in real deployments
 
 // 2. Error-stream routing — severe records go to a second stream
 $err = fopen('php://stderr', 'w');
