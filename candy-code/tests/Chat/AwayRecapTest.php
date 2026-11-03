@@ -366,7 +366,7 @@ final class AwayRecapTest extends TestCase
      */
     private function beAway(): void
     {
-        AwayTracker::focusLost(\microtime(true) - self::AWAY);
+        AwayTracker::focusLost(\hrtime(true) / 1_000_000_000 - self::AWAY);
     }
 
     /** @param list<Message> $history */

@@ -182,7 +182,8 @@ final class DocumentAttachmentWireTest extends TestCase
     {
         $doc = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/ADDING_A_PROVIDER.md');
 
-        $this->assertStringContainsString('The three C-TOOL-2.e legs fail', $doc);
+        $this->assertStringContainsString('The three native legs fail', $doc);
+        $this->assertStringNotContainsString('C-TOOL-2', $doc, 'campaign identifiers do not live in shipped docs (docs/GLOSSARY.md policy)');
         $this->assertStringContainsString('magic-number sniff', $doc);
         $this->assertStringNotContainsString(
             'named in the text on every leg',

@@ -57,12 +57,14 @@ final class AwayTracker
     }
 
     /**
-     * Stamp an absence. `$at` is the injectable clock (microtime seconds);
-     * production calls with no argument.
+     * Stamp an absence. `$at` is the injectable clock (seconds); production
+     * calls with no argument and reads the monotonic timer, so an operator's
+     * clock adjustment (NTP slew, DST shim) can never invent or erase away
+     * time the way the wall clock could.
      */
     public static function focusLost(?float $at = null): void
     {
-        self::$lostAt = $at ?? \microtime(true);
+        self::$lostAt = $at ?? \hrtime(true) / 1_000_000_000;
     }
 
     /**
@@ -80,7 +82,7 @@ final class AwayTracker
             return null;
         }
 
-        $elapsed = ($at ?? \microtime(true)) - $lostAt;
+        $elapsed = ($at ?? \hrtime(true) / 1_000_000_000) - $lostAt;
 
         return $elapsed >= self::AWAY_SECONDS ? $elapsed : null;
     }

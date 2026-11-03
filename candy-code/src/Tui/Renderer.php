@@ -260,6 +260,19 @@ final class Renderer
 
     private static ?array $terminalSize = null;
 
+    /**
+     * Seed or pin the process's notion of the terminal box.
+     *
+     * This is the TEST seam, and the startup fallback below — production
+     * frames never call it. The live frame size rides `WindowSizeMsg` into
+     * the model ({@see \SugarCraft\Code\App\App::$cols}) and out through
+     * {@see renderView()}'s explicit arguments, which is the invariant
+     * `renderWithSplit()`'s note defends: a cached static is consulted only
+     * when a caller has no model size to thread (the pre-first-`WindowSizeMsg`
+     * window, and helper paths like {@see terminalSize()} callers). A
+     * mid-session resize therefore never writes here; pinning frames in
+     * tests can.
+     */
     public static function setSize(int $cols, int $rows): void
     {
         if ($cols > 0 && $rows > 0) {
@@ -267,6 +280,15 @@ final class Renderer
         }
     }
 
+    /**
+     * The cached terminal box — a one-shot probe, NOT a live query.
+     *
+     * Once set (by {@see setSize()} in tests, or by the first probe of the
+     * controlling tty in production, or by the documented fallback) the
+     * value never moves again for the process's life. Callers that render a
+     * frame take their size from the model instead; anything reading this
+     * after a SIGWINCH is reading the geometry the process booted with.
+     */
     public static function terminalSize(): array
     {
         if (self::$terminalSize !== null) {

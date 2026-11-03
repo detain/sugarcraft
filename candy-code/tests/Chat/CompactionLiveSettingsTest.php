@@ -287,7 +287,7 @@ final class CompactionLiveSettingsTest extends TestCase
         $toast = $chat?->settingsToast();
         self::assertNotNull($toast, 'a save always reports itself');
 
-        return trim((string) preg_replace('/[│╭╮╰╯─✔ℹ\s]+/u', ' ', Ansi::strip($toast->view('', 400, 0))));
+        return trim((string) preg_replace('/[│╭╮╰╯─✔ℹ\s]+/u', ' ', Ansi::strip($toast->view('', 400, 24))));
     }
 
     /** @return list<Message> eight older ~20k exchanges, then ten trivial ones: ~160k, condensable */

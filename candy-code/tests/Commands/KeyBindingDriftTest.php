@@ -1225,7 +1225,7 @@ final class KeyBindingDriftTest extends TestCase
                     $this->assertNotSame($was, $bool(), 'the press flips the dial the renderer reads');
                     $this->assertStringContainsString(
                         $was ? 'Verbose tool output off' : 'Verbose tool output on',
-                        (string) preg_replace('/[│╭╮╰╯─✔ℹ\s]+/u', ' ', \SugarCraft\Core\Util\Ansi::strip($first->settingsToast()?->view('', 400, 0) ?? '')),
+                        (string) preg_replace('/[│╭╮╰╯─✔ℹ\s]+/u', ' ', \SugarCraft\Core\Util\Ansi::strip($first->settingsToast()?->view('', 400, 24) ?? '')),
                         'the toast says which way it went',
                     );
                     [$second] = $first->update($k[0]);
@@ -1253,7 +1253,7 @@ final class KeyBindingDriftTest extends TestCase
                         backend: \SugarCraft\Code\Backend\EngineBackend::new(new \SugarCraft\Code\Tests\Support\ScriptedProvider([]), 'm'),
                     ))->withSize(100, 30);
                     [$toast] = $chat->update($k[0]);
-                    $view = \SugarCraft\Core\Util\Ansi::strip((string) ($toast->settingsToast()?->view('', 400, 0) ?? ''));
+                    $view = \SugarCraft\Core\Util\Ansi::strip((string) ($toast->settingsToast()?->view('', 400, 24) ?? ''));
                     $this->assertStringContainsString('voice.baseUrl', $view, 'Alt+V toasts the voice-off refusal');
                 } finally {
                     \SugarCraft\Code\Media\Voice\VoiceSession::resetForTesting();

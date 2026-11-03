@@ -114,7 +114,7 @@ final class SettingsReloadTest extends TestCase
             return '';
         }
 
-        return trim((string) preg_replace('/[\x{2502}\x{256D}\x{256E}\x{2570}\x{256F}\x{2500}\x{2714}\x{2139}\s]+/u', ' ', Ansi::strip($toast->view('', 400, 0))));
+        return trim((string) preg_replace('/[\x{2502}\x{256D}\x{256E}\x{2570}\x{256F}\x{2500}\x{2714}\x{2139}\s]+/u', ' ', Ansi::strip($toast->view('', 400, 24))));
     }
 
     public function testSettlingATurnAdoptsAHandEditOfTheme(): void

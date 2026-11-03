@@ -61,6 +61,11 @@ final class SseLineParser
 
     // ------------------------------------------------------------------
     // Stream mode state (closure mode leaves every one of these untouched)
+    //
+    // The socket members below are docblock-typed (resource|null), never
+    // signature-typed: `resource` is not a type PHP can express, and a bare
+    // `mixed` signature would type-check nothing while advertising that it
+    // does. The is_resource() guards in requireSocket() are the runtime door.
     // ------------------------------------------------------------------
 
     /** Server name, interpolated into the reader refusals exactly as the transport that moved here phrased them. */

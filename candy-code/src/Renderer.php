@@ -19,6 +19,7 @@ use SugarCraft\Code\Media\PreviewPaint;
 use SugarCraft\Code\Media\PreviewSlots;
 use SugarCraft\Code\Media\Voice\TranscribeCmd;
 use SugarCraft\Code\Media\Voice\VoiceSession;
+use SugarCraft\Code\Support\Clusters;
 use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Core\Util\Width;
@@ -485,6 +486,18 @@ final class Renderer
     /**
      * Encoded pictures, keyed by source bytes + cell box + protocol, in
      * least-recently-used-first order.
+     *
+     * SHARED-PROCESS CONTRACT (sp-m4): every static cache in this region —
+     * this one, the markdown memo, the stream/style/plain-row memos and the
+     * hidden-body memo — is process-global, not instance state the caller
+     * can clone away. Keys are content-addressed, so a forked turn child
+     * inherits a warm cache by copy-on-write, may add to its own copy, and
+     * can never poison the parent's (writes die with the child); the
+     * renderer is single-threaded per process, so no lock is owed. The one
+     * rule a future entry must keep: NEVER key anything on ambient mutable
+     * state (terminal size, theme identity) without folding that state into
+     * the key or invalidating on its change — the caches' correctness is the
+     * pure-function-of-key property this sentence defends.
      *
      * `Program::renderFrame()` calls `Chat::view()` on EVERY dirty frame - each
      * keystroke, each streaming chunk, each spinner tick - so without this an
@@ -8006,8 +8019,11 @@ final class Renderer
             return $frame;
         }
 
+        // The viewport is the real frame height: sugar-toast refuses zero or
+        // oversized dimensions, and an empty background leaves only the
+        // box rows non-blank for the overlay loop below to collect.
         $box = [];
-        foreach (explode("\n", $toast->view('', $width, 0)) as $line) {
+        foreach (explode("\n", $toast->view('', $width, max(1, substr_count($frame, "\n") + 1))) as $line) {
             // The canvas is `$width` wide; a shorter message leaves blank
             // cells after the right border that must not cover the frame.
             $line = rtrim($line, ' ');
@@ -8379,25 +8395,7 @@ final class Renderer
      */
     private static function snapToClusterStart(string $text, int $codepointOffset): int
     {
-        $total = mb_strlen($text, 'UTF-8');
-        if ($codepointOffset <= 0 || $codepointOffset >= $total) {
-            return max(0, min($codepointOffset, $total));
-        }
-
-        $prev = 0;
-        $cp   = 0;
-        $byte = 0;
-        while ($cp < $codepointOffset) {
-            $cluster = grapheme_extract($text, 1, 0, $byte, $next);
-            if ($cluster === false || $cluster === '') {
-                break;
-            }
-            $prev = $cp;
-            $cp   += mb_strlen($cluster, 'UTF-8');
-            $byte  = $next;
-        }
-
-        return $cp === $codepointOffset ? $codepointOffset : $prev;
+        return Clusters::boundaryAtOrBefore($text, $codepointOffset);
     }
 
     /**

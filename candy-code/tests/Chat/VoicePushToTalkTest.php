@@ -265,7 +265,7 @@ final class VoicePushToTalkTest extends TestCase
         return (string) preg_replace(
             '/[│╭╮╰╯─✔ℹ\s]+/u',
             ' ',
-            Ansi::strip($chat?->settingsToast()?->view('', 400, 0) ?? ''),
+            Ansi::strip($chat?->settingsToast()?->view('', 400, 24) ?? ''),
         );
     }
 

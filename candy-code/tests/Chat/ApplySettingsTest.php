@@ -263,7 +263,7 @@ final class ApplySettingsTest extends TestCase
 
         // A reload-pending save is not a success badge — the Info symbol says
         // the keymap is still waiting on the word.
-        $raw = (string) $chat->settingsToast()?->view('', 400, 0);
+        $raw = (string) $chat->settingsToast()?->view('', 400, 24);
         self::assertStringContainsString('ℹ', $raw, 'the reload bucket paints Info, not Success');
         self::assertStringNotContainsString('✔', $raw);
 
@@ -437,7 +437,7 @@ final class ApplySettingsTest extends TestCase
         $toast = $chat?->settingsToast();
         self::assertNotNull($toast, 'a save always reports itself');
 
-        return trim((string) preg_replace('/[│╭╮╰╯─✔ℹ\s]+/u', ' ', Ansi::strip($toast->view('', 400, 0))));
+        return trim((string) preg_replace('/[│╭╮╰╯─✔ℹ\s]+/u', ' ', Ansi::strip($toast->view('', 400, 24))));
     }
 
     /**

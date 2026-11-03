@@ -333,7 +333,28 @@ final class Attach
                     ->withTitleBackend(null));
             }
 
+            // tui-n1: the same last-ditch guard `bin/candy-code` registers —
+            // a fatal between setupTerminal() and teardown leaves the tty
+            // raw, in the alternate screen, mouse and paste still enabled.
+            // The normal path below still disarms it before its own pop, so
+            // this fires only when run() never returned. Attach builds no
+            // forked agent pool, but the pid latch rides along so the guard
+            // stays byte-for-byte the shape the binary's is.
+            $terminalWasRun = false;
+            $installPid = \getmypid();
+            \register_shutdown_function(static function () use (&$terminalWasRun, $installPid): void {
+                if (!$terminalWasRun || \getmypid() !== $installPid) {
+                    return;
+                }
+                // \r\n explicitly: a fatal mid-run leaves the terminal raw, where a bare
+                // \n does not return the carriage.
+                \fwrite(\STDOUT, Ansi::popKittyKeyboard() . Ansi::mouseCellMotionOff() . Ansi::mouseAllMotionOff() . Ansi::bracketedPasteOff() . Ansi::unicodeOff() . Ansi::cursorShow() . Ansi::altScreenLeave());
+                \fwrite(\STDERR, "\r\ncandy-code attach: exited abnormally — terminal restored\r\n");
+            });
+
+            $terminalWasRun = true;
             (new Program($app, Chat::programOptions()))->run();
+            $terminalWasRun = false;
             \fwrite(\STDOUT, Ansi::popKittyKeyboard());
         } finally {
             $host->close('detached');

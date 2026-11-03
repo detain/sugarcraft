@@ -43,6 +43,7 @@ use SugarCraft\Code\Tui\SessionPicker;
 use SugarCraft\Code\Tui\SessionTabs;
 use SugarCraft\Code\Tui\TextSelection;
 use SugarCraft\Code\Tui\Components\PaneLabel;
+use SugarCraft\Code\Support\Clusters;
 use SugarCraft\Code\Support\EnvBool;
 use SugarCraft\Code\Support\StartupSummary;
 use SugarCraft\Code\Support\SystemClipboard;
@@ -18909,20 +18910,7 @@ final class Chat implements Model
      */
     private static function clusterStartBefore(string $s, int $at): int
     {
-        $prev = 0;
-        $cp   = 0;
-        $byte = 0;
-        while ($cp < $at) {
-            $cluster = grapheme_extract($s, 1, 0, $byte, $next);
-            if ($cluster === false || $cluster === '') {
-                break;
-            }
-            $prev = $cp;
-            $cp   += mb_strlen($cluster, 'UTF-8');
-            $byte  = $next;
-        }
-
-        return $prev;
+        return Clusters::boundaryBefore($s, $at);
     }
 
     /**
@@ -18933,22 +18921,7 @@ final class Chat implements Model
      */
     private static function clusterEndAfter(string $s, int $at): int
     {
-        $total = mb_strlen($s, 'UTF-8');
-        $cp    = 0;
-        $byte  = 0;
-        while ($cp < $total) {
-            $cluster = grapheme_extract($s, 1, 0, $byte, $next);
-            if ($cluster === false || $cluster === '') {
-                break;
-            }
-            $cp += mb_strlen($cluster, 'UTF-8');
-            $byte = $next;
-            if ($cp > $at) {
-                return $cp;
-            }
-        }
-
-        return $total;
+        return Clusters::boundaryAfter($s, $at);
     }
 
     private function movePaletteSelection(int $direction): self

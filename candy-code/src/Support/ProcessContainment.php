@@ -426,6 +426,15 @@ final class ProcessContainment
      * tests and supervisors do it — must reach the next child, not be frozen
      * out by a stale snapshot.
      *
+     * This is the UNSCRUBBED base on purpose, and {@see scrubbedEnv()} is
+     * the credential-dropping wrapper over it. The asymmetry is the trust
+     * boundary, not an oversight: children launched from this env are
+     * programs the OPERATOR configured precisely to authenticate as them
+     * (language servers, vendor CLIs), and their output is protocol this
+     * package parses; anything whose output reaches the model as text takes
+     * scrubbedEnv() instead, so a forged prompt cannot farm the operator's
+     * keys out through a tool result.
+     *
      * @param array<string, string> $overrides
      * @return array<string, string>
      */
