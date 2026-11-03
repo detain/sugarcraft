@@ -198,18 +198,73 @@ final class ClickCounterTest extends TestCase
         $this->assertSame(1, $counter->clickIntervalMs);
     }
 
-    public function testIntervalExpiryResetsStreak(): void
+    public function testIntervalExpiryResetsStreakViaClockSeam(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m, 50); // 50ms window
+        $t = 1000.0;
+        $counter = new ClickCounter($m, 500, static function () use (&$t): float {
+            return $t;
+        });
 
-        // First click in zone A.
         [$counter] = $counter->update($this->press(2, 1));
         $this->assertSame(1, $counter->clickCount());
 
-        // Wait and click again — interval expired would need usleep which
-        // makes tests slow. We test the logic path via same-zone/zone-change instead.
-        // The actual timing is tested by verifying the state transitions.
+        // Still inside the window — the double click fires.
+        $t += 0.4;
+        [$counter, $msg] = $counter->update($this->press(2, 1));
+        $this->assertInstanceOf(DoubleClickMsg::class, $msg);
+
+        // A second and a half later the window expired — the streak restarts
+        // at 1 and nothing is emitted. (Deterministic via the clock seam; the
+        // pre-seam shape of this test slept on the wall clock.)
+        $t += 1.5;
+        [$counter, $msg] = $counter->update($this->press(2, 1));
+        $this->assertNull($msg);
+        $this->assertSame(1, $counter->clickCount());
+    }
+
+    /**
+     * The expiry boundary is exclusive (`elapsed > interval` still counts):
+     * exactly one interval window between presses is a double click.
+     */
+    public function testExactlyOneIntervalElapsedStillCountsAsDouble(): void
+    {
+        $m = $this->buildManager();
+        $t = 0.0;
+        $counter = new ClickCounter($m, 500, static function () use (&$t): float {
+            return $t;
+        });
+
+        [$counter] = $counter->update($this->press(2, 1));
+        $t = 0.5; // exactly 500ms — not GREATER than the interval
+        [$counter, $msg] = $counter->update($this->press(2, 1));
+
+        $this->assertInstanceOf(DoubleClickMsg::class, $msg);
+        $this->assertSame(2, $counter->clickCount());
+    }
+
+    /**
+     * m10: rebinding the manager carries the in-progress streak (mirrors
+     * ZoneHoverTracker::withManager) — the user's first click is not erased
+     * by a component rewire between the two clicks.
+     */
+    public function testWithManagerCarriesTheStreak(): void
+    {
+        $m = $this->buildManager();
+        $counter = new ClickCounter($m);
+        [$counter] = $counter->update($this->press(2, 1));
+        $this->assertSame(1, $counter->clickCount());
+
+        $m2 = Manager::newGlobal();
+        $m2->scan($m2->mark('a', 'AAA') . '|' . $m2->mark('b', 'BBB'));
+
+        $counter = $counter->withManager($m2);
+        $this->assertSame($m2, $counter->manager);
+        $this->assertSame(1, $counter->clickCount());
+
+        [$counter, $msg] = $counter->update($this->press(2, 1));
+        $this->assertInstanceOf(DoubleClickMsg::class, $msg);
+        $this->assertSame('a', $msg->zone->id);
     }
 
     /**
@@ -240,21 +295,24 @@ final class ClickCounterTest extends TestCase
     }
 
     /**
-     * Cover interval expiry path (line 105: elapsedMs > clickIntervalMs branch).
-     * We use a 1ms interval and wait long enough to force expiry.
+     * Cover the interval-expiry branch (elapsed > clickIntervalMs) with a
+     * 1ms window on the clock seam — no wall-clock sleeping (the pre-seam
+     * shape of this test carried two usleeps and their CI flake risk).
      */
     public function testIntervalExpiryEmitsNoMsgAndResetsStreak(): void
     {
         $m = $this->buildManager();
-        $counter = new ClickCounter($m, 1); // 1ms window
+        $t = 0.0;
+        $counter = new ClickCounter($m, 1, static function () use (&$t): float {
+            return $t;
+        });
 
         // First click in zone A.
         [$counter] = $counter->update($this->press(2, 1));
         $this->assertSame(1, $counter->clickCount());
 
-        // Wait for interval to expire (2ms > 1ms).
-        usleep(2500); // 2.5µs = 2500ns = 0.0025ms... actually we need ms
-        usleep(5000); // 5ms - enough for 1ms interval to expire
+        // Advance past the 1ms window.
+        $t = 0.0025;
 
         // Second click after expiry — should restart streak at 1, not emit double.
         [$counter, $msg] = $counter->update($this->press(2, 1));

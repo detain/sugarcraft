@@ -38,21 +38,39 @@ final class ClickCounter
     /** How many consecutive clicks have occurred in the current streak. */
     private int $clickCount = 0;
 
-    /** Timestamp (microseconds) of the last click. */
+    /** Timestamp (seconds, float) of the last click. */
     private float $lastClickTime = 0.0;
 
     /** Zone id of the last click, used to detect same-zone rapid clicks. */
     private ?string $lastClickZoneId = null;
 
+    /** Streak clock (see ctor); normalized so the property type is legal. */
+    private readonly ?\Closure $now;
+
     /**
      * @param Manager $manager Zone manager that has already run scan().
      * @param int $clickIntervalMs Window in milliseconds within which successive
      *                              clicks count toward a double/triple (default 500ms).
+     * @param ?callable $now Clock returning "now" in seconds as a float.
+     *                       Defaults to {@see microtime} when null. The seam lets
+     *                       tests drive interval expiry deterministically instead
+     *                       of sleeping (a real-sleep test is CI noise waiting to
+     *                       happen under co-shard load).
      */
     public function __construct(
         public readonly Manager $manager,
         public readonly int $clickIntervalMs = 500,
-    ) {}
+        ?callable $now = null,
+    ) {
+        // 'callable' is not a legal property type — normalize to Closure.
+        $this->now = $now === null ? null : \Closure::fromCallable($now);
+    }
+
+    private function nowSeconds(): float
+    {
+        $clock = $this->now;
+        return $clock !== null ? $clock() : microtime(true);
+    }
 
     /**
      * Read-only accessor for the current click streak count.
@@ -99,14 +117,14 @@ final class ClickCounter
 
         // Click outside any zone — no streak possible.
         if ($hit === null) {
-            return [$this->mutate(['clickCount' => 0, 'lastClickTime' => 0.0, 'lastClickZoneId' => null]), null];
+            return [$this->withState(0, 0.0, null), null];
         }
 
-        $now = microtime(true);
+        $now = $this->nowSeconds();
 
         // Detect zone change: starting a new streak.
         if ($hit->id !== $this->lastClickZoneId) {
-            return [$this->mutate(['clickCount' => 1, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), null];
+            return [$this->withState(1, $now, $hit->id), null];
         }
 
         // Same zone — check if within interval.
@@ -114,7 +132,7 @@ final class ClickCounter
 
         if ($elapsedMs > $this->clickIntervalMs) {
             // Interval expired — restart streak.
-            return [$this->mutate(['clickCount' => 1, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), null];
+            return [$this->withState(1, $now, $hit->id), null];
         }
 
         // Within interval — advance streak.
@@ -122,43 +140,46 @@ final class ClickCounter
 
         if ($newCount === 3) {
             // Triple click.
-            return [$this->mutate(['clickCount' => 3, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), new TripleClickMsg($hit)];
+            return [$this->withState(3, $now, $hit->id), new TripleClickMsg($hit)];
         }
 
         if ($newCount === 2) {
             // Double click.
-            return [$this->mutate(['clickCount' => 2, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), new DoubleClickMsg($hit)];
+            return [$this->withState(2, $now, $hit->id), new DoubleClickMsg($hit)];
         }
 
         // More than triple — just keep counting but only emit once per threshold.
-        return [$this->mutate(['clickCount' => $newCount, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), null];
+        return [$this->withState($newCount, $now, $hit->id), null];
     }
 
     /**
-     * Return a new counter with a different manager.
+     * Return a new counter with a different manager, carrying the click
+     * streak across (mirrors {@see ZoneHoverTracker::withManager()}):
+     * rebinding the manager re-points hit-testing, it does not erase the
+     * user's in-progress double-click.
      */
     public function withManager(Manager $manager): self
     {
-        return new self($manager, $this->clickIntervalMs);
+        $new = new self($manager, $this->clickIntervalMs, $this->now);
+        $new->clickCount      = $this->clickCount;
+        $new->lastClickTime   = $this->lastClickTime;
+        $new->lastClickZoneId = $this->lastClickZoneId;
+        return $new;
     }
 
     /**
-     * Clone with optional overrides via array-merge pattern.
-     *
-     * Note: ClickCounter's private mutable fields (clickCount, lastClickTime,
-     * lastClickZoneId) are not constructor parameters — they are assigned
-     * directly on the new instance after construction.  Public readonly
-     * constructor properties (manager, clickIntervalMs) come from get_object_vars().
+     * Clone with the streak state replaced. Named fields — the old
+     * array/`$new->$k = $v` shape accepted any key at runtime (a typo
+     * silently invented a property) and the docblock's "come from
+     * get_object_vars()" claim was fiction: the readonly ctor properties
+     * were set by the ctor, never by the loop.
      */
-    private function mutate(array $changes): static
+    private function withState(int $clickCount, float $lastClickTime, ?string $lastClickZoneId): self
     {
-        $new = new self(
-            manager: $this->manager,
-            clickIntervalMs: $this->clickIntervalMs,
-        );
-        foreach ($changes as $k => $v) {
-            $new->$k = $v;
-        }
+        $new = new self($this->manager, $this->clickIntervalMs, $this->now);
+        $new->clickCount      = $clickCount;
+        $new->lastClickTime   = $lastClickTime;
+        $new->lastClickZoneId = $lastClickZoneId;
         return $new;
     }
 }
