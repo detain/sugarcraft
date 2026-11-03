@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => 'تم رفض الشهادة.',
     'certificateauth.env_missing'     => 'لا توجد شهادة عميل في البيئة (تمت البحث عن: {vars})؛ لم يتحقق التوثيق بالشهادة من شيء.',
     'keyboardinteractive.auth_failed' => 'فشلت المصادقة.',
+    'keyboardinteractive.input_visible' => 'لم يتم إسكات هذا الطرفية: كل ما تكتبه هنا يظهر على الشاشة.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

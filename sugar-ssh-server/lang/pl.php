@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => 'Certyfikat odrzucony.',
     'certificateauth.env_missing'     => 'Brak certyfikatu klienta w środowisku (szukano: {vars}); uwierzytelnianie certyfikatem niczego nie zweryfikowało.',
     'keyboardinteractive.auth_failed' => 'Uwierzytelnianie nie powiodło się.',
+    'keyboardinteractive.input_visible' => 'Ten terminal nie jest wyciszony: wszystko, co tutaj wpiszesz, zostanie wyświetlone.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

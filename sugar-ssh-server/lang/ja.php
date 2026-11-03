@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => '証明書が拒否されました。',
     'certificateauth.env_missing'     => '環境内にクライアント証明書がありません（検索済み: {vars}）。証明書による認証は何も検証していません。',
     'keyboardinteractive.auth_failed' => '認証に失敗しました。',
+    'keyboardinteractive.input_visible' => 'この端末はエコーをオフにしていません: ここに入力した内容はすべて表示されます。',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

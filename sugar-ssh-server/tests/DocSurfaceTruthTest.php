@@ -372,6 +372,45 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('There is no handshake behind them', $flatDev);
     }
 
+    /**
+     * A prompt that asks for silence cannot deliver it, so the promise has to
+     * be contradicted where the user can see it (audit MAJOR 6). The class
+     * says so; the README, the admin guide and the generated site page must
+     * say so too, and none of them may keep selling the exchange as RFC 4256.
+     */
+    public function testThePromptExchangeTruthTravelsOnEverySurface(): void
+    {
+        $source = (string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware/Auth/KeyboardInteractive.php');
+        $flatSource = (string) \preg_replace('/\s+/', ' ', $source);
+        $this->assertStringContainsString('Echo is a label, not terminal state (audit MAJOR 6)', $flatSource);
+        $this->assertStringContainsString('MAX_RESPONSE_BYTES', $flatSource);
+        $this->assertStringContainsString('makeRaw()', $flatSource);
+
+        $readme = (string) \preg_replace('/\s+/', ' ', (string) $this->readme());
+        $this->assertStringNotContainsString('reads responses from STDIN (RFC 4256).', $readme);
+        $this->assertStringContainsString('is a label, not terminal state', $readme);
+        $this->assertStringContainsString('capped at `MAX_RESPONSE_BYTES`', $readme);
+
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
+        }
+
+        $flatGuide = (string) \preg_replace('/\s+/', ' ', $guide);
+        $this->assertStringNotContainsString('exchange-based (RFC 4256)', $flatGuide);
+        $this->assertStringContainsString('cannot silence the terminal', $flatGuide);
+        $this->assertStringContainsString('LoginGraceTime', $flatGuide);
+
+        $body = $this->siteBody();
+        if ($body === null) {
+            $this->markTestSkipped('no site body in a standalone checkout');
+        }
+
+        $flatBody = (string) \preg_replace('/\s+/', ' ', $body);
+        $this->assertStringNotContainsString('Challenge-response prompts (RFC 4256)', $flatBody);
+        $this->assertStringContainsString('capped at <code>MAX_RESPONSE_BYTES</code>', $flatBody);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

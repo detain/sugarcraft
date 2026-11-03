@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => '证书被拒绝。',
     'certificateauth.env_missing'     => '环境中没有客户端证书（已查找: {vars}）；证书认证未检查任何内容。',
     'keyboardinteractive.auth_failed' => '认证失败。',
+    'keyboardinteractive.input_visible' => '此终端未静音: 您在此处输入的任何内容都会被回显.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

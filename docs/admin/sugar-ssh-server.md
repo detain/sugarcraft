@@ -170,7 +170,7 @@ orthogonal — compose them based on what your deployment needs:
 | `Auth` | Username allowlist, key-fingerprint allowlist, or the paired `userKeys` map (name => that name's own keys) | `SSH_USER_KEY_FINGERPRINT`, `SSH_USER_AUTH`, `KEY_FINGERPRINT` |
 | `PasswordAuth` | Caller-supplied `callable(string $user, string $pw): bool` | `SSH_PASSWORD` |
 | `CertificateAuth` | Caller-supplied `callable(string $pemCert, Session $s): bool` | `SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE` |
-| `KeyboardInteractive` | Challenge-response prompts written to STDOUT, responses read from STDIN (RFC 4256) | — |
+| `KeyboardInteractive` | Prompts on STDOUT, one bounded line read back per prompt. RFC 4256 *shaped*, not RFC 4256: nothing here speaks SSH messages, and `echo: false` cannot silence the terminal | — |
 | `AuthMethods` | Stores the declared method list in Context under `auth.methods` for downstream inspection. The `SSH_AUTH_METHODS <list>` line on STDOUT is opt-in (`announce: true`), off by default | — |
 
 **`Auth` trust boundary — the fingerprint allowlist is NOT
@@ -242,7 +242,13 @@ banner-style stack on `HostSshdTransport` whose *own* protocol is
 your deployment notes if you turn it on; the Context record does not
 need it.
 
-**`KeyboardInteractive` operational note:** This middleware performs blocking STDIN reads during the authentication phase. The prompts and responses are exchange-based (RFC 4256) — the middleware writes all prompts to STDOUT, then reads exactly N lines from STDIN before passing control to the next middleware. It is not suitable for use with `BubbleTea` (which also consumes STDIN/STDOUT) and should only be used with `Spawn` under `InProcessTransport`.
+**`KeyboardInteractive` operational note:** This middleware performs blocking STDIN reads during the authentication phase. It writes all prompts to STDOUT, then reads one line per prompt before passing control on. Two limits are real, and three are not:
+
+- **Real bound:** each answer is capped at `KeyboardInteractive::MAX_RESPONSE_BYTES` (4096 bytes). A longer unterminated line refuses the exchange outright -- the validator is never consulted -- rather than growing the process.
+- **Real stop condition:** EOF on the stream ends the exchange, and an unfinished exchange is a refusal. Callers that need a deadline bound the stream they inject as `$stdin`.
+- **Not a deadline:** sshd's `LoginGraceTime` covers the *authentication* dialogue inside `sshd`, not your post-`ForceCommand` child. Once sshd has run your script, nothing upstream is timing your reads. Wrap the entry point in `timeout(1)` if a stalled human must not hold a process forever.
+- **Not concealment:** a prompt asking `echo: false` does not clear the terminal's echo flag. The user's keyboard is still echoed by the tty, and the answer lands in their scrollback. The middleware now says so out loud (`keyboardinteractive.input_visible`) once per exchange when any prompt asks for silence. Suppressing echo means `ECHO` off on the descriptor -- `sugar-pty`'s `Contract\Termios` currently offers only `makeRaw()`, which also drops `ICANON` and `ISIG`, so it is not a swap-in. Secret prompts belong behind `Auth` pairing, not behind this form.
+- **Not composable with `BubbleTea`:** both consume STDIN/STDOUT. Use it with `Spawn` under `InProcessTransport`.
 
 **Example — composing PasswordAuth + KeyboardInteractive:**
 

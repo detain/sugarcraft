@@ -332,4 +332,103 @@ final class KeyboardInteractiveTest extends TestCase
             stdin: 'not-a-stream',
         );
     }
+
+    public function testHiddenPromptSaysTheTerminalIsNotSilenced(): void
+    {
+        $stdin = $this->makeStdin("hunter2\n");
+        [$out] = $this->stdout();
+        [$err] = $this->stderr();
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'Password?', 'echo' => false]],
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+        $reached = false;
+        $ki->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+
+        $written = $this->readAll($out);
+        $this->assertTrue($reached);
+        // The flag is a label; the promise the user needs is the sentence.
+        $this->assertStringContainsString('not silenced', $written);
+        $this->assertStringNotContainsString('keyboardinteractive.input_visible', $written);
+    }
+
+    public function testAnEchoedExchangeNeverClaimsToBeHidden(): void
+    {
+        $stdin = $this->makeStdin("visible\n");
+        [$out] = $this->stdout();
+        [$err] = $this->stderr();
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'Asset tag?', 'echo' => true]],
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+        $ki->handle(Context::background(), $this->session(), function (): void {
+        });
+
+        // The warning is for hidden input only: attaching it to an ordinary
+        // prompt would train everyone to ignore it.
+        $this->assertStringNotContainsString('not silenced', $this->readAll($out));
+    }
+
+    public function testAnOversizedAnswerRefusesTheExchange(): void
+    {
+        $asked = [];
+        $stdin = $this->makeStdin(str_repeat('a', 5000) . "\n");
+        [$out] = $this->stdout();
+        [$err, $readErr] = $this->stderr();
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'Token?']],
+            function (array $responses) use (&$asked): bool {
+                $asked[] = $responses;
+                return true;
+            },
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+        $reached = false;
+        $ki->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+
+        // A line longer than the bound is refused rather than slurped, and
+        // the validator never sees a truncated fragment of a secret.
+        $this->assertFalse($reached);
+        $this->assertSame([], $asked);
+        $this->assertStringContainsString('Authentication failed', $readErr());
+    }
+
+    public function testABarePromptStringIsHonoured(): void
+    {
+        $stdin = $this->makeStdin("answer\n");
+        [$out] = $this->stdout();
+        [$err] = $this->stderr();
+        $ki = new KeyboardInteractive(['Token?'], null, stdout: $out, stdin: $stdin, stderr: $err);
+        $reached = false;
+        $ki->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+
+        $written = $this->readAll($out);
+        $this->assertTrue($reached);
+        $this->assertStringContainsString('Token?', $written);
+    }
+
+    public function testAMalformedChallengeIsRefusedAtConstruction(): void
+    {
+        // Operator-authored config, so a nonsense entry is a programming
+        // error: saying so at construction beats an exchange that cannot
+        // complete (audit MINOR 22).
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be a prompt string');
+
+        new KeyboardInteractive([['test' => 'wrong key']]);
+    }
 }

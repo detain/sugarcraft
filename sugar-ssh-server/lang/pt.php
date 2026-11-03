@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => 'Certificado rejeitado.',
     'certificateauth.env_missing'     => 'Nenhum certificado de cliente no ambiente (procurado: {vars}); a autenticação por certificado não verificou nada.',
     'keyboardinteractive.auth_failed' => 'Autenticação falhou.',
+    'keyboardinteractive.input_visible' => 'Este terminal não está silenciado: tudo o que escrever aqui será mostrado.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

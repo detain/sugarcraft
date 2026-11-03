@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => 'Certificaat geweigerd.',
     'certificateauth.env_missing'     => 'Geen cliëntcertificaat in de omgeving (gezocht: {vars}); certificaatauthenticatie heeft niets gecontroleerd.',
     'keyboardinteractive.auth_failed' => 'Verificatie mislukt.',
+    'keyboardinteractive.input_visible' => 'Deze terminal is niet gedempt: alles wat u hier typt wordt teruggegeven.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

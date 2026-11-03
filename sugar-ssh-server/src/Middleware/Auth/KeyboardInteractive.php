@@ -33,10 +33,31 @@ use SugarCraft\SshServer\StreamHelper;
  *      reasoning and the EOF guarantee (E727, round 82).
  *   3. Optionally validates the responses via a callback. An EOF
  *      that leaves any prompt unanswered rejects the session before
- *      the validator runs; a short exchange never authenticates. A validator
+ *      the validator runs; a short exchange never authenticates. So does
+ *      an answer longer than {@see MAX_RESPONSE_BYTES} — the exchange is
+ *      refused rather than slurped into memory without a bound. A validator
  *      that returns `false` rejects the session with a message on
  *      stderr; a validator that returns `true` (or no validator)
  *      passes control to `$next`.
+ *
+ * **Echo is a label, not terminal state (audit MAJOR 6).** `echo: false`
+ * changes nothing about how the characters reach you: the terminal that
+ * `sshd` allocated for this session is still in its own echo state, so a
+ * password typed at a `echo: false` prompt is written onto the user's
+ * screen and into their scrollback exactly like one at `echo: true`.
+ * Because that is the opposite of what the flag name promises, the class
+ * says the truth out loud at the point of typing: when any challenge
+ * carries `echo: false`, one line is appended after the prompt list
+ * warning that the terminal echoes what you type. Suppressing echo for
+ * real means clearing `ECHO` on the caller's terminal; this library does
+ * not do that, and the termios surface it depends on (sugar-pty's
+ * {@see \SugarCraft\Pty\Contract\Termios}) offers only `makeRaw()`, which
+ * additionally clears `ICANON` and `ISIG` — line editing and `Ctrl-C` —
+ * where an authenticating prompt wants `ECHO` off and everything else
+ * kept. That gap is upstream work, recorded in the library CALIBER notes;
+ * do not treat the warning line as a substitute for hiding the input.
+ * If a secret must not be visible, collect it over a channel you control
+ * instead of this one.
  *
  * Line format (RFC-4256-shaped, plaintext):
  *
@@ -44,10 +65,11 @@ use SugarCraft\SshServer\StreamHelper;
  *     Instruction\r\n
  *     NumberOfPrompts\r\n
  *     Prompt1\r\n
- *     Echo1\r\n        <-- 'true' or 'false'
+ *     Echo1\r\n        <-- 'true' or 'false', a label only
  *     Prompt2\r\n
- *     Echo2\r\n        <-- 'true' or 'false'
+ *     Echo2\r\n        <-- 'true' or 'false', a label only
  *     ...
+ *     [warning line]   <-- only when some challenge has echo: false
  *
  *     Response1\r\n
  *     Response2\r\n
@@ -55,6 +77,16 @@ use SugarCraft\SshServer\StreamHelper;
  */
 final class KeyboardInteractive implements Middleware
 {
+    /**
+     * Longest answer this middleware will accept, in bytes (audit MAJOR 6).
+     *
+     * `fgets()` without a limit will happily read as much as a peer is
+     * willing to write, and the exchange runs before any of the transport's
+     * own bounds exist. A line that overruns this budget refuses the
+     * session rather than growing an unbounded string.
+     */
+    public const MAX_RESPONSE_BYTES = 4096;
+
     /** @var list<array{prompt: string, echo: bool}> */
     private array $challenges;
 
@@ -77,7 +109,10 @@ final class KeyboardInteractive implements Middleware
     private string $instruction;
 
     /**
-     * @param list<array{prompt: string, echo?: bool}> $challenges Prompt list
+     * @param list<array{prompt: string, echo?: bool}|string> $challenges Prompt list; a bare
+     *        string is the prompt with `echo: true` (audit MAJOR 6: shapes
+     *        that used to be silently skipped at write time are refused
+     *        here instead)
      * @param callable(list<string>): bool|null        $validate   Receives responses, returns true to accept
      * @param string                                   $name       RFC-4256 Name (e.g. "Login")
      * @param string                                   $instruction RFC-4256 Instruction
@@ -94,7 +129,7 @@ final class KeyboardInteractive implements Middleware
         $stdin = null,
         $stderr = null,
     ) {
-        $this->challenges = $challenges;
+        $this->challenges = self::normaliseChallenges($challenges);
         $this->validate = $validate;
         $this->name = $name;
         $this->instruction = $instruction;
@@ -104,6 +139,41 @@ final class KeyboardInteractive implements Middleware
         $this->stdout = StreamHelper::openOrValidate($stdout, 'php://stdout');
         $this->stdin = StreamHelper::openOrValidate($stdin, 'php://stdin', 'r');
         $this->stderr = StreamHelper::openOrValidate($stderr);
+    }
+
+    /**
+     * Accept the two shapes a caller can mean and refuse every other one.
+     *
+     * Reading `$challenge['prompt']` on an entry shaped differently used to
+     * produce nothing at all: the count line promised N prompts, the loop
+     * emitted fewer, and the exchange could not complete (audit MINOR 22).
+     * A prompt list is operator-authored configuration, so a malformed
+     * entry is a programming error and is raised at construction.
+     *
+     * @param array<array-key,mixed> $challenges
+     * @return list<array{prompt: string, echo: bool}>
+     */
+    private static function normaliseChallenges(array $challenges): array
+    {
+        $normalised = [];
+        foreach ($challenges as $index => $challenge) {
+            if (\is_string($challenge)) {
+                $normalised[] = ['prompt' => $challenge, 'echo' => true];
+                continue;
+            }
+            if (\is_array($challenge) && isset($challenge['prompt']) && \is_string($challenge['prompt'])) {
+                $normalised[] = [
+                    'prompt' => $challenge['prompt'],
+                    'echo'   => (bool) ($challenge['echo'] ?? true),
+                ];
+                continue;
+            }
+            throw new \InvalidArgumentException(
+                'Challenge ' . $index . ' must be a prompt string or an array with a string'
+                . ' "prompt" key; got ' . \get_debug_type($challenge) . '.'
+            );
+        }
+        return $normalised;
     }
 
     public function handle(Context $ctx, Session $session, callable $next)
@@ -132,20 +202,27 @@ final class KeyboardInteractive implements Middleware
     }
 
     /**
-     * Write challenges to stdout in RFC 4256 format.
+     * Write challenges to stdout in the RFC 4256 *shape*.
      *
-     * Emits: Name, Instruction, Count, then per-challenge Prompt and Echo flag.
+     * Emits: Name, Instruction, Count, then per-challenge Prompt and Echo
+     * flag; when any challenge asks for hidden input, one more line saying
+     * that this prompt cannot actually hide it (audit MAJOR 6).
      */
     private function writeChallenges(): void
     {
         $count = \count($this->challenges);
+        $hidden = false;
         fwrite($this->stdout, $this->name . "\n");
         fwrite($this->stdout, $this->instruction . "\n");
         fwrite($this->stdout, (string) $count . "\n");
         foreach ($this->challenges as $challenge) {
-            $echo = ($challenge['echo'] ?? true) ? 'true' : 'false';
+            $echo = $challenge['echo'];
+            $hidden = $hidden || !$echo;
             fwrite($this->stdout, $challenge['prompt'] . "\n");
-            fwrite($this->stdout, $echo . "\n");
+            fwrite($this->stdout, ($echo ? 'true' : 'false') . "\n");
+        }
+        if ($hidden) {
+            fwrite($this->stdout, Lang::t('keyboardinteractive.input_visible') . "\n");
         }
         fflush($this->stdout);
     }
@@ -165,15 +242,22 @@ final class KeyboardInteractive implements Middleware
      *   - a client disconnect surfaces as EOF on the stdio pipe, so
      *     `fgets()` returns false and this loop ends immediately;
      *     handle() then rejects the incomplete exchange;
-     *   - dead-but-connected peers are the documented domain of the
-     *     Keepalive middleware, and the SSH login grace time is enforced
-     *     by sshd upstream. Deliberately no response timeout is imposed
-     *     here: any fixed deadline would just cap human typing latency
-     *     with a fabricated policy number.
+     *   - an answer longer than {@see MAX_RESPONSE_BYTES} ends the exchange
+     *     the same way, so a peer cannot make this read allocate without a
+     *     ceiling.
      *
-     * Callers that need bounded or non-blocking prompting inject their
-     * own `$stdin` stream via the constructor — the seam every test in
-     * this library drives.
+     * Nothing else is imposed here, and the honest statement of what that
+     * means (audit MAJOR 6): a dead-but-connected peer that never sends a
+     * newline and never disconnects holds this process open indefinitely.
+     * `sshd`'s `LoginGraceTime` does NOT cover it — that timer belongs to
+     * the pre-authentication exchange and has already expired by the time
+     * the post-authentication `ForceCommand` child starts asking questions.
+     * The Keepalive middleware is not a cure either: it writes a NUL into
+     * the child's stdin when the pump idles, which produces no newline here
+     * (see {@see \SugarCraft\SshServer\Middleware\Keepalive}). Callers that
+     * need a deadline bound the stream they inject as `$stdin` — a
+     * `stream_select()`-guarded wrapper, or `timeout(1)` around the entry
+     * script — and the README's provisioning notes say so.
      *
      * @return list<string> lines read so far — fewer than the prompt
      *                      count only when stdin hit EOF mid-exchange
@@ -183,11 +267,20 @@ final class KeyboardInteractive implements Middleware
         $responses = [];
         $count = \count($this->challenges);
         for ($i = 0; $i < $count; $i++) {
-            $line = fgets($this->stdin);
+            // +2 so a full budget plus its newline still reads as a line,
+            // and anything beyond that is detectable by length.
+            $line = fgets($this->stdin, self::MAX_RESPONSE_BYTES + 2);
             if ($line === false) {
                 break;
             }
-            $responses[] = rtrim($line, "\r\n");
+            if (\strlen($line) > self::MAX_RESPONSE_BYTES && !\str_ends_with($line, "\n")) {
+                // A peer writing past the budget is not typing an answer.
+                // Refuse the exchange by returning short; handle() turns
+                // that into the same auth_failed path as an EOF, and the
+                // validator is never fed an oversized blob.
+                break;
+            }
+            $responses[] = \rtrim($line, "\r\n");
         }
         return $responses;
     }

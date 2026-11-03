@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => 'Сертификат отклонён.',
     'certificateauth.env_missing'     => 'В окружении нет сертификата клиента (искали: {vars}); аутентификация по сертификату ничего не проверила.',
     'keyboardinteractive.auth_failed' => 'Ошибка аутентификации.',
+    'keyboardinteractive.input_visible' => 'Этот терминал не отключён: всё, что вы здесь наберёте, будет отображено.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

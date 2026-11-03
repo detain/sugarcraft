@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => 'Sertifika reddedildi.',
     'certificateauth.env_missing'     => 'Ortamda istemci sertifikası yok (aranan: {vars}); sertifika ile kimlik doğrulama hiçbir şey denetlemedi.',
     'keyboardinteractive.auth_failed' => 'Kimlik doğrulama başarısız.',
+    'keyboardinteractive.input_visible' => 'Bu uçbirim sessize alınmadı: buraya yazdığınız her şey geri yansıtılır.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

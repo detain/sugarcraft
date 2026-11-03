@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => 'Zertifikat abgelehnt.',
     'certificateauth.env_missing'     => 'Kein Client-Zertifikat in der Umgebung (gesucht: {vars}); die Zertifikatsprüfung hat nichts kontrolliert.',
     'keyboardinteractive.auth_failed' => 'Authentifizierung fehlgeschlagen.',
+    'keyboardinteractive.input_visible' => 'Dieses Terminal ist nicht stummgeschaltet: Alles, was Sie hier eingeben, wird zurückgegeben.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];

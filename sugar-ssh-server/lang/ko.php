@@ -30,5 +30,6 @@ return [
     'certificateauth.rejected'        => '증명서가 거부되었습니다.',
     'certificateauth.env_missing'     => '환경에 클라이언트 인증서가 없습니다(검색함: {vars}); 인증서 인증이 무조건 검증하지 못했습니다.',
     'keyboardinteractive.auth_failed' => '인증에 실패했습니다.',
+    'keyboardinteractive.input_visible' => '이 터미널은 음소거되지 않았습니다: 여기에 입력한 모든 내용이 표시됩니다.',
     'channel.exec_refused'            => 'Exec request refused: {program}',
 ];
