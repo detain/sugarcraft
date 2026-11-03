@@ -37,7 +37,7 @@ final class Database implements DatabaseInterface
         $instance = new self($pdo);
         // One PDO handle backs both the wrapper and its delegate; the earlier
         // SqliteDatabase::open() here left a second connection on the same
-        // file and discarded the first delegate's label (docs-review-1023 m11).
+        // file and discarded the first delegate's label (review m11).
         $instance->delegate = new SqliteDatabase($pdo, $path);
         return $instance;
     }

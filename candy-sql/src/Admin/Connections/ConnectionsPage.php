@@ -249,7 +249,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         }
 
         // 1/2/3 switch to specific detail tabs — UNREACHABLE while App
-        // maps digits 1-8 to panes (docs-review-1023 F1 seam).
+        // maps digits 1-8 to panes (review F1).
         if ($ch === '1') {
             return [$this->withDetailTab(self::DETAIL_TAB_DETAILS), null];
         }

@@ -297,7 +297,7 @@ final class WidgetCatalog
                 new InnoDBBufferPoolUsageBytes(),
                 '%.0f%%',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'InnoDB buffer pool usage percentage (bytes-based, Appendix A)',
+                'InnoDB buffer pool usage percentage (bytes-based)',
                 null,
             ],
             [

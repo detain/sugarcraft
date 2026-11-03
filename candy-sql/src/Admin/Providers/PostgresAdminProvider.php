@@ -13,7 +13,7 @@ use SugarCraft\Sql\Db\Flavor;
  *
  * Maps PostgreSQL's system catalogs onto the AdminProvider interface
  * schema: pg_stat_database for status counters, pg_settings for server
- * variables, pg_stat_activity for the processlist (docs-fix-1023 n7: this
+ * variables, pg_stat_activity for the processlist (review n7: this
  * was labelled a "stub" although every method was fully implemented).
  *
  * Operational visibility notes (permissions, not missing code):

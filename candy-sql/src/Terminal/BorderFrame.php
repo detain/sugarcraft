@@ -52,7 +52,7 @@ final class BorderFrame
     /**
      * Build the title bar content.
      *
-     * Shows: SugarSQL │ Tables: N │ dsn │ version. Only non-empty values are
+     * Shows: CandySQL │ Tables: N │ dsn │ version. Only non-empty values are
      * included.
      */
     private static function buildTitleBar(App $a): string
@@ -64,7 +64,7 @@ final class BorderFrame
         $parts = [];
 
         // App name in bold cyan.
-        $parts[] = $titleStyle->render('SugarSQL');
+        $parts[] = $titleStyle->render('CandySQL');
 
         // Table count.
         $parts[] = 'Tables: ' . count($a->browse->tables);

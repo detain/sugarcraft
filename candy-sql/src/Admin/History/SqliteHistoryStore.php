@@ -39,7 +39,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         // store readable only by its owner. mkdir()'s mode is umask-filtered
         // and SQLite creates the database file with the default 0644, so
         // re-assert the modes on anything this constructor just created
-        // (docs-review-1023 n4). Files and directories we did not create are
+        // (review n4). Files and directories we did not create are
         // left untouched.
         $fileCreated = !\is_file($dbPath);
         $this->db = new \SQLite3($dbPath);

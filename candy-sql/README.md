@@ -84,9 +84,9 @@ above); the explicit string exists as a test seam because `MysqlDatabase` is fin
 | `1` – `8`          | Switch admin page (see digit map below)         |
 
 The admin page's own `Tab`/`[1]`/`[2]`/`[3]` detail-tab handlers exist in the page code but are currently unreachable:
-`Tab` cycles the focus pane and the digits select admin pages, both at the app level. (docs-review-1023 seam, reported.)
+`Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached and kept only for standalone (non-app) use.
 
-> **Key routing** — Admin keys use a two-tier model. `App::update()` consumes `Tab` (pane cycle), `q`/`Esc`/`Ctrl+C` (quit) and `Ctrl+R`/`Ctrl+E` before any dispatch. App-level admin keys (`1`–`8`, `p`, `r`) are intercepted by `App::handleAdminKey()` next; `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All other keys are delegated to the active page's `update()` method.
+> **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, or a pending kill confirmation) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer. On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
 
 > **MySQL / PostgreSQL only** — the Admin pane needs server introspection data. On SQLite, `App::createContext()` falls back to `EmptyServerContext`, whose variable/status/processlist accessors all return empty sets (`connection()` throws and the async fetch path swallows it in a `Throwable` guard); admin pages render empty rather than crashing — run the admin panes against MySQL or PostgreSQL to see live content.
 
@@ -159,7 +159,7 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 | `ReportRunner` | Executes `SELECT * FROM sys.<view>` for report views. Uses prepared statements with backtick-quoted view names. `run()` applies time/byte unit formatting; `runRaw()` returns unformatted values. |
 | `AvailabilityChecker` | Checks which sys schema views are available via `SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'`. Caches results in-memory. `discoverViews()` catches `\Throwable` (not just `\PDOException`) because React/cached connections can surface non-PDO errors. |
 | `ReloadReportMsg` | Message dispatched by `App` after `AdminDataLoadedMsg` to trigger async report loading. `ReportsPage::update()` handles this by calling `loadCurrentReport()` which queues the query via `AsyncCachedConnection` for the next admin tick. |
-| `Calc\InnoDBBufferPoolUsageBytes` | Computes buffer pool usage percentage using bytes-based formula: `(Innodb_buffer_pool_bytes_data / Innodb_page_size) / Innodb_buffer_pool_pages_total * 100` (Appendix A). This replaces the older `(total - free) / total` page-count approximation and correctly handles partially-filled pages. |
+| `Calc\InnoDBBufferPoolUsageBytes` | Computes buffer pool usage percentage using bytes-based formula: `(Innodb_buffer_pool_bytes_data / Innodb_page_size) / Innodb_buffer_pool_pages_total * 100` (the MySQL Workbench dashboard appendix formula). This replaces the older `(total - free) / total` page-count approximation and correctly handles partially-filled pages. |
 | `Dashboard\TimeSeriesCell` | Renders a timeline sparkline using Streamline. For tuple-valued widgets (e.g. `MakeTuple` with SELECT/INSERT/UPDATE/DELETE rates), uses `max()` to show the dominant series rather than summing unrelated counters. Sliding window of `$windowSize` (default 160) data points with auto-scale "nice ceiling". |
 | `Dashboard\CounterCell` | Renders a K/M/G-scaled counter widget. Used for timeline companion counters and standalone rate widgets (SELECT/s, INSERT/s, etc.). Uses `array_sum()` for tuple-valued widgets since counters are additive by design. |
 | `Dashboard\MeterCell` | Renders round (GaugeCircle) and level (Gauge) meters. Tracks `$value` and `$max` separately for level-meter readout display. `viewLevel()` appends `sprintf($format, (int)$value, (int)$max)` when the widget's format string is non-trivial (e.g. `'%d / %d'` for Connections). |
@@ -168,7 +168,7 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 | `Calc\TableOpenCacheHitRate` | Computes Table Open Cache hit ratio: `hits / (hits + misses) * 100` from `Table_open_cache_hits/misses`. Mirrors MySQL Workbench dashboard expression. |
 | `ReconnectManager` | Detects MySQL errors 2002/2003/2013 (connection lost), stores `ConnectionConfig`, and retries via `attemptReconnect()`. Throws `ReconnectException` on failure. |
 | `ReconnectException` | Exception thrown when reconnection fails after a MySQL connection error. |
-| `StatementTimeout` | Wraps `PDOStatement::execute()` with a wall-clock timeout via `pcntl_alarm()`. Degrades gracefully (logs warning, no timeout) when pcntl is unavailable. Throws `StatementTimeoutException`. |
+| `StatementTimeout` | Wraps `PDOStatement::execute()` with a wall-clock timeout via `pcntl_alarm()`. When pcntl is unavailable the wrapper is transparent: the statement executes with no enforcement and no diagnostic. Throws `StatementTimeoutException`. |
 | `StatementTimeoutException` | Thrown when a statement exceeds its wall-clock timeout and is cancelled via `KILL CONNECTION_ID()`. |
 | `Severity` | Enum: `Info`, `Warning`, `Critical`. Maps to `ToastType` via `toToastType()` — `Info→Info`, `Warning→Warning`, `Critical→Error`. |
 | `Alert` | Immutable alert value object: severity, metric, message, value, threshold, firedAt, metricKind. Factory helpers: `::warning()`, `::critical()`, `::info()`. `toToastMessage()` formats based on `MetricKind` — `Ratio` multiplies by 100 (percentage), `Seconds` appends "s", `Count` renders as integer. |
@@ -177,8 +177,8 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 | `AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. Each alert carries a `MetricKind` (`Ratio`, `Seconds`, `Count`) that controls how its value is formatted in toast messages. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
 | `PerfSchemaPage` | Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Version-gated loading: `setup_actors` table skipped on <5.6; `setup_objects.ENABLED` column omitted on <5.6.3; `setup_timers` (mutable) used on <8.0 vs `performance_timers` (read-only) on >=8.0. Threads tab shows `INSTRUMENTED` column from `performance_schema.threads`. `[c]` commits pending changes; `[r]` reverts. |
 | `SetupTimers` | Mutable model for a PS timer entry. On MySQL <8.0, loaded from `performance_schema.setup_timers` and can be modified via `withTimerName()`. `isDirty()` tracks unsaved changes; `commitStatements()` generates `UPDATE setup_timers SET TIMER_NAME=? WHERE NAME=?`. On MySQL >=8.0, loaded from `performance_schema.performance_timers` as clean (read-only) instances. |
-| `SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (deferred wiring to STEP 5.3). |
-| `CommitPlanner` | Generates SQL statements to commit PS configuration changes. All statements are fully parameterized — returns `list<array{sql:string, params:list<mixed>}>` tuples with all values bound as `?` placeholders, not interpolated. Produces anchored `UPDATE ... RLIKE '^name$'` for instruments (regex-escaped via `preg_quote()`), `UPDATE ... IN(?)` for consumers, and `INSERT/UPDATE/DELETE` for actors and objects. SetupTimers/SetupThreads wiring deferred to STEP 5.3. |
+| `SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (wiring deferred to a planned follow-up). |
+| `CommitPlanner` | Generates SQL statements to commit PS configuration changes. All statements are fully parameterized — returns `list<array{sql:string, params:list<mixed>}>` tuples with all values bound as `?` placeholders, not interpolated. Produces anchored `UPDATE ... RLIKE '^name$'` for instruments (regex-escaped via `preg_quote()`), `UPDATE ... IN(?)` for consumers, and `INSERT/UPDATE/DELETE` for actors and objects. SetupTimers/SetupThreads wiring deferred to a planned follow-up. |
 | `HistoryStoreInterface` | Persistence interface for admin status history: `save(StatusSnapshot)`, `query(DateTimeImmutable $since, DateTimeImmutable $until): list<StatusSnapshot>`, `count()`, `prune(DateTimeImmutable $before): int`, `close()`. |
 | `SqliteHistoryStore` | `HistoryStoreInterface` via SQLite with WAL mode. Schema: `history(id INTEGER PRIMARY KEY, ts REAL, recorded_at TEXT, variables TEXT)` — `variables` is the JSON-encoded status-variable map. A freshly created store is owner-only (dir 0700 / file 0600). |
 | `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. `record(StatusSnapshot)` persists one snapshot; `recordFromProvider()` pulls from an attached provider; `pruneOlderThan($cutoff)` delegates to the store. It writes only when told — no active recording, no coupling to the UI. Records server metrics (`StatusSnapshot`), not SQL query text. |
@@ -238,7 +238,7 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 > | `` (empty) / `disable` | Plain TCP, no TLS options. |
 > | `allow` / `prefer` / `preferred` | Opportunistic TLS: `MYSQL_ATTR_SSL_CA=null`, `SSL_VERIFY_SERVER_CERT=false` — encrypts when the server supports it, verifies nothing (a downgraded connection is not reported). |
 > | `require` / `required` / `verify_ca` / `verify_identity` | TLS enforced with `SSL_VERIFY_SERVER_CERT=true`. Because no client CA is configured, verification runs against the server's system CA trust store. |
-> | anything else | Rejected with `RuntimeException: Unknown MySQL ssl-mode`. |
+> | anything else | Rejected with `InvalidArgumentException: Unknown MySQL ssl-mode` (from `MysqlDatabase::sslDriverOptions()`). |
 >
 > **Async policy (TLS gate)** — the ReactPHP transport (`ReactMysqlConnection`) builds a `mysql://` URI that carries no TLS material. Rather than let `--ssl-mode=require`/`verify_*` silently run background status/processlist fetches over plaintext, the app **refuses that transport** in any TLS-verifying mode (one predicate, `MysqlDatabase::requiresVerifiedTls()`, mirroring the sync-path table above): queries and table loads fall back to the synchronous TLS-speaking PDO connection, the admin live-refresh tick stands down, and both a one-time launcher notice (stderr, before the alt screen) and a standing in-app status line say so. The plaintext-by-agreement modes (empty / `disable` / `allow` / `prefer` / `preferred`) keep the async path exactly as before — opportunistic TLS there is the mode the caller chose.
 
@@ -415,7 +415,7 @@ The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) d
 
 The Performance Schema Setup page (`[8]` in admin) provides a tabbed interface for configuring MySQL's `performance_schema`. It is version-aware and adapts its queries and editable fields to the detected MySQL version.
 
-**EasySetupDetector (STEP 5.3):** The page uses `EasySetupDetector` (created via `EasySetupDetector::fromContext($context)` when not explicitly provided) to detect the current PS setup state as one of four values shown in the header badge:
+**EasySetupDetector:** The page uses `EasySetupDetector` (created via `EasySetupDetector::fromContext($context)` when not explicitly provided) to detect the current PS setup state as one of four values shown in the header badge:
 
 | State | Badge | Meaning |
 |-------|-------|---------|
@@ -464,11 +464,11 @@ The detector is wired from `App::adminPage()` into the `PerfSchemaPage` construc
 
 > **Timer mutation safety** — on MySQL ≥8.0 the Options tab renders `performance_timers` as read-only instances. `SetupTimers::commitStatements()` returns `[]` for these because they carry `dirty=false`. Only timers loaded from `setup_timers` on <8.0 generate `UPDATE` statements.
 
-> **Threads INSTRUMENTED** — the Threads tab reads the `INSTRUMENTED` column from `performance_schema.threads`. Per-thread toggling via `withInstrumented()` is tracked but the batch `UPDATE ... WHERE THREAD_ID IN (...)` commit is wired to STEP 5.3.
+> **Threads INSTRUMENTED** — the Threads tab reads the `INSTRUMENTED` column from `performance_schema.threads`. Per-thread toggling via `withInstrumented()` is tracked but the batch `UPDATE ... WHERE THREAD_ID IN (...)` commit is a planned follow-up.
 
-> **Instrument RLIKE fix (STEP 5.2)** — `UPDATE ... WHERE NAME RLIKE '...'` patterns are now anchored (`^name$`) and regex-escaped via `preg_quote()` so metacharacters like `.` `/` `(` `)` are matched literally. Backtick-wrapping (which caused the pattern to match literal backtick chars) is removed. The CommitPlanner generates fully parameterized statements (`sql` + `params` tuple structure) — no value string-interpolation.
+> **Instrument RLIKE anchoring** — `UPDATE ... WHERE NAME RLIKE '...'` patterns are now anchored (`^name$`) and regex-escaped via `preg_quote()` so metacharacters like `.` `/` `(` `)` are matched literally. Backtick-wrapping (which caused the pattern to match literal backtick chars) is removed. The CommitPlanner generates fully parameterized statements (`sql` + `params` tuple structure) — no value string-interpolation.
 
-> **Tree rendering (STEP 5.2)** — the Instruments tab now renders an indented tree with group nodes (path prefixes like `wait/`) showing tri-state badges (`[x]`/`[~]`/`[ ]`) representing the aggregate enabled state of their subtrees. `InstrumentTree::flattenTree()` returns `[nodeOrInstrument, depth, isGroup]` triples consumed by the renderer. Group toggle cascade methods `setChildrenEnabled()`/`setChildrenTimed()` exist on `InstrumentTree` but are not yet wired to keyboard input (DEFERRED to STEP 5.3).
+> **Tree rendering** — the Instruments tab now renders an indented tree with group nodes (path prefixes like `wait/`) showing tri-state badges (`[x]`/`[~]`/`[ ]`) representing the aggregate enabled state of their subtrees. `InstrumentTree::flattenTree()` returns `[nodeOrInstrument, depth, isGroup]` triples consumed by the renderer. Group toggle cascade methods `setChildrenEnabled()`/`setChildrenTimed()` exist on `InstrumentTree` but are not yet wired to keyboard input (planned follow-up).
 
 > **Hub-admin privileges** — modifying PS setup tables requires the `PROCESS` privilege on MySQL. `PerfSchemaPage::hasUpdatePrivilege()` tests this with a no-op `UPDATE ... SET ENABLED=ENABLED WHERE 1=0`. When the privilege is absent the page renders in read-only mode and all write actions are disabled.
 
@@ -527,21 +527,22 @@ foreach ($alerts as $alert) {
 `AlertManager` integrates into the `DashboardPage` polling loop via `checkAlerts()`:
 
 ```php
-// In DashboardPage::update() — called every 3s
+// Inside DashboardPage's poll (cadence: the 1s admin tick, throttled to
+// CacheTtl::DASHBOARD = 1.0s in handleAdminTick). checkAndDispatch returns
+// ['alerts' => array<string,Alert>, 'notifier' => AlertNotifier]; the page
+// folds the alerts into its own state — there is no footer badge, the
+// toast surface IS the notification channel.
 ['alerts' => $alerts, 'notifier' => $notifier] = $manager->checkAndDispatch($counters);
-if ($notifier->hasAlerts()) {
-    $this->showAlertBadge = true;  // displayed in footer
-}
 ```
 
-**Alert dedup (state-transition only):** `checkAlerts()` maintains a `$breachedAlertKeys` array tracking which alert keys were breached at the last poll. It computes `array_diff_key` between current and previous breach keys and only fires a toast for newly-breached entries — a threshold that persists across poll ticks does **not** re-fire the toast. This prevents alert storms for continuously-breached thresholds (e.g., a stuck connection at 90% utilization). The `[a]` key dismisses all pending alerts and resets the breach-tracking state so the same alert can re-fire if the threshold is cleared and breached again. `AlertNotifier` is mute-safe by default — running without a toast factory is a silent no-op.
+**Alert dedup (state-transition only):** `checkAlerts()` maintains a `$breachedAlertKeys` array tracking which alert keys were breached at the last poll. It computes `array_diff_key` between current and previous breach keys and only fires a toast for newly-breached entries — a threshold that persists across poll ticks does **not** re-fire the toast. This prevents alert storms for continuously-breached thresholds (e.g., a stuck connection at 90% utilization). The `[a]` key dismisses all pending alerts and resets the breach-tracking state so the same alert can re-fire if the threshold is cleared and breached again. `AlertNotifier` is mute-safe by default — running without a toast factory is a silent no-op. The live predicate is `hasActiveAlert()` (there is no `hasAlerts()`).
 
 ### Performance Dashboard
 
 `DashboardPage` renders a 3-column live monitoring view (Network / MySQL / InnoDB panels) updated every second via `ServerContext` polling (`AdminTickMsg` at 1.0s, throttled by `CacheTtl::DASHBOARD`). Each panel shows timeline sparklines, counter values, and meters.
 
 **Architecture:**
-- `pollAndUpdateCells()` measures actual wall-clock elapsed via `microtime(true)` — `$elapsed = max(0.001, $now - $lastPollAt)`. On the very first poll (when `lastPollAt` is null), a 3.0s fallback is used; thereafter `lastPollAt` is always set and real elapsed time is used.
+- the rate denominator in `pollAndUpdateCells()` is true wall-clock since the last **committed snapshot** (`$elapsed = max(0.001, $now - $lastSnapshotAt)`), never the gate stamp — the `ReloadReportMsg` arm nulls only `lastPollAt` (a throttle bypass), so a poll arriving long after the last frame divides by the real gap. Only the very first poll (no previous snapshot) falls back, to `CacheTtl::DASHBOARD` (1.0s).
 - Per-section widget lists are built once in the constructor via `buildSectionWidgetCache()` and cached in `$this->sectionWidgetCache`. Previously, `getWidgetsForSection()` called `WidgetRegistry::*()` on every render frame, causing repeated version checks.
 - Three cell types render widgets: `TimeSeriesCell` (sparkline), `CounterCell` (K/M/G-scaled counter), `MeterCell` (round/level gauge with optional value readout).
 
@@ -586,19 +587,24 @@ $notifier = AlertNotifier::withDefaults(
 `ReconnectManager` detects MySQL error codes 2002 (Can't connect to local MySQL server), 2003 (Can't connect to MySQL server), and 2013 (Lost connection during query). When `MysqlDatabase::query()` encounters one of these, it returns `null` to signal the caller that a reconnect is needed:
 
 ```php
+use SugarCraft\Sql\Db\ConnectionFactory;
 use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Admin\Resilience\ReconnectManager;
 
-$db = new MysqlDatabase($pdo, reconnectManager: new ReconnectManager());
-// On error 2002/2003/2013, query() returns null instead of throwing
-// Caller should re-fetch the connection and retry
+$config = ConnectionFactory::fromDsn('mysql://app:secret@db.internal:3306/shop');
+$db = MysqlDatabase::connect($config);
+$db->setReconnectManager(new ReconnectManager());
+// On error 2002/2003/2013 the driver detaches the PDO handle, lets the
+// manager retry the connect, and returns null — the caller should re-run
+// the statement against the (possibly restored) connection, never treat
+// null as an empty result set.
 ```
 
 ### Restart detection
 
-`ServerContext::detectReset()` is the single authoritative owner of restart detection. It compares the current `Uptime` status variable against the last observed value after each `statusVariables()` fetch; a lower uptime indicates a restart and sets `wasResetCache = true`. `Sampler` consumes this via `StatusSnapshotProviderInterface::wasReset()` (delegating to `ServerContext::wasReset()`), keeping restart detection logic centralized in one place.
+`ServerContext::detectReset()` is the single authoritative owner of restart detection. It compares the current `Uptime` status variable against the last observed value after each **successful** `statusVariables()` fetch (a failed fetch keeps the previous verdict rather than inventing one); a lower uptime indicates a restart and sets `wasResetCache = true`. `Sampler` consumes this via `StatusSnapshotProviderInterface::wasReset()` (delegating to `ServerContext::wasReset()`), keeping restart detection logic centralized in one place.
 
-The admin fetch in `App::subscriptions()` uses a manual time-based cooldown (static `$lastFetchAt`, 3.0s throttle) rather than `AsyncOps::throttle()` — `AsyncOps::throttle()` returns a void callable that cannot be awaited as a Promise in the `Cmd::promise` flow, so a simple elapsed-time guard is used instead.
+`App::subscriptions()` declares a plain 1s admin tick (it also gates on the active pane and the TLS transport refusal — facts immutable per decision, safe to test at declaration time). The refresh throttle is applied **per fire** in `App::handleAdminTick()`: the elapsed window is measured against `AdminState::$lastFetchAt`, a public readonly property on the per-App state value object (carried via `withLastFetchAt()` — no static, so concurrent App instances cannot stomp each other's cadence), and compared to `CacheTtl::DASHBOARD` (1.0s, the Workbench dashboard rate). The guard is per-fire rather than declaration-time because `Program::reconcileSubscriptions()` diffs subscriptions by tick id and would lock whichever closure installed first; `AsyncOps::throttle()` returns a void callable that cannot be awaited as a Promise in the `Cmd::promise` flow, so an elapsed-time guard is used instead.
 
 ### Statement timeout
 
@@ -617,7 +623,7 @@ try {
 }
 ```
 
-When `pcntl` is unavailable, `StatementTimeout::execute()` degrades gracefully and runs without enforcement (logs a warning at construction time).
+When `pcntl` is unavailable, `StatementTimeout::execute()` runs the statement with no enforcement — silently. The degraded state is decided once in the constructor (`function_exists` probes), and neither construction nor execution logs anything; a host without pcntl has simply-uncapped queries, and the caller cannot tell the difference from the return value.
 
 ## Query History (default-on in the launcher)
 
@@ -742,7 +748,7 @@ The `HistoryRecorder` implements `StatusSnapshotProviderInterface`, so it slots 
 
 `App` depends on `DatabaseInterface` rather than a concrete PDO/SQLite implementation. This decouples the UI from the database driver, enabling MySQL and Postgres support without changing application logic.
 
-The interface defines 12 methods:
+The interface defines 14 methods:
 
 | Method | Description |
 |--------|-------------|
@@ -758,6 +764,8 @@ The interface defines 12 methods:
 | `ping()` | Check connection is alive |
 | `databases()` | List available databases |
 | `prepare()` | Prepare a SQL statement; returns `PreparedStatementInterface|null` — a driver-neutral wrapper around PDOStatement |
+| `dsn()` | The DSN string this connection was opened with |
+| `username()` | The user the connection authenticated as |
 
 ### Deprecated: `Database` class
 

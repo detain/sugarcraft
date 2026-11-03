@@ -36,7 +36,7 @@ use SugarCraft\Sql\CellValue;
  * - Threads: Read-only list of instrumented threads
  * - Options: Timer configuration (read-only)
  *
- * **EasySetupDetector wiring (STEP 5.3)**: When an `EasySetupDetector` is provided
+ * **EasySetupDetector wiring**: When an `EasySetupDetector` is provided
  * at construction, it is used to detect the current PS setup state via four-state
  * detection: `fully` (all instruments enabled+timed, all consumers enabled),
  * `disabled` (PS inaccessible), `default` (matches MySQL 5.6 or 5.7 Appendix C
@@ -206,7 +206,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         // Tab switches tabs
         // NOTE: App consumes Tab for the pane cycle (see VariablesPage) — the
         // tab-pair below is unreachable in the live app; kept for a future
-        // dedicated in-page tab key (docs-review-1023 F1 seam).
+        // dedicated in-page tab key (review F1).
         if ($type === KeyType::Tab && !$msg->shift) {
             return [$this->withNextTab(), null];
         }

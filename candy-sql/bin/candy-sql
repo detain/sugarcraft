@@ -301,7 +301,7 @@ function buildDatabase(array $argv): DatabaseInterface
 
 /**
  * Fall back to CANDY_SQL_PASS when no --pass= was given: keeps the password
- * out of the world-readable /proc/<pid>/cmdline (docs-review-1023 m6).
+ * out of the world-readable /proc/<pid>/cmdline (review m6).
  *
  * @param array<string> $args
  * @return array<string>

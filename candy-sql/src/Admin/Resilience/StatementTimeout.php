@@ -7,8 +7,9 @@ namespace SugarCraft\Sql\Admin\Resilience;
 /**
  * Wraps a PDOStatement to enforce a wall-clock timeout.
  *
- * Uses pcntl_alarm() for timeout enforcement when available;
- * degrades gracefully (logs warning, no timeout) otherwise.
+ * Uses pcntl_alarm() for timeout enforcement when available; when pcntl
+ * is missing the wrapper is transparent — the statement runs uncapped and
+ * nothing is logged (callers cannot distinguish degraded mode by return value).
  * If the timeout fires, cancels the query and throws
  * StatementTimeoutException.
  *

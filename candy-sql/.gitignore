@@ -1,4 +1,9 @@
 /vendor/
 /.phpunit.cache/
 composer.lock
-.vhs/*.gif
+# NOTE: no `.vhs/*.gif` rule here, on purpose. CI (vhs.yml) renders the
+# demo tapes and COMMITS the GIFs back onto master; ignoring .vhs/*.gif
+# made `git add */.vhs/*.gif` match an ignored path, so every commit run
+# died on it and this lib's demo GIFs silently stopped refreshing
+# (docs-review-1023 C7). The repo-wide .gitignore is the place for GIF
+# policy, not the per-lib file.

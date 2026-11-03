@@ -207,7 +207,7 @@ final class VariablesPage extends PageBase implements RowNavigable
         // Tab key toggles between Status/System tabs
         // NOTE: App::update() consumes Tab for the global pane cycle before
         // admin delegation, so this width-toggle branch is unreachable while
-        // the sidebar keeps Tab as its escape hatch (docs-review-1023 F1).
+        // the sidebar keeps Tab as its escape hatch (review F1).
         if ($type === KeyType::Tab && !$msg->shift) {
             return [$this->withToggleTab(), null];
         }

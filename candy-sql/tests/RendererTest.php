@@ -26,7 +26,7 @@ final class RendererTest extends TestCase
     public function testRenderIncludesTitleHeader(): void
     {
         $out = Renderer::render(App::start($this->db()));
-        $this->assertStringContainsString('SugarSQL', $out);
+        $this->assertStringContainsString('CandySQL', $out);  // wordmark follows the candy-sql package name (D-M30)
     }
 
     public function testRenderShowsTablesAndRows(): void

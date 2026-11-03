@@ -366,7 +366,7 @@ final class App implements Model
         }
         // j/k or arrows navigate — but a RowNavigable page owns these keys:
         // its cursor lives inside the table, and intercepting them here made
-        // the page handlers dead code (docs-review-1023 M8). The sidebar is
+        // the page handlers dead code (review M8). The sidebar is
         // still fully reachable via digits, and arrow navigation is kept for
         // pages without row navigation (ServerStatus, Dashboard).
         if (!$this->adminPage() instanceof RowNavigable) {
