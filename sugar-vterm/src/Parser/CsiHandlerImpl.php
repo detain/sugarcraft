@@ -250,6 +250,15 @@ final class CsiHandlerImpl implements CsiHandler
         // glyph stays single-cell so the phantom-wrap geometry is untouched.
         $extra = $rendition === Rendition::DoubleWidth && $col + $width + 1 <= $this->grid->cols ? 1 : 0;
 
+        // Clear the OTHER half of any old wide pair the new glyph touches —
+        // mirrors the emulator's ScreenHandler::eraseWidePartners (xterm
+        // eraseDoubleCell in charproc.c). Without this, painting a narrow
+        // glyph over a wide base leaves a ghost continuation that inflates
+        // Width::of past the grid, and painting over a continuation orphans
+        // the old base. Runs BEFORE the writes below, while the old pairs
+        // are still in the grid.
+        $this->eraseWidePartners($row, $col, $col + $width + $extra - 1);
+
         // Write the character cell.
         $cell = new Cell(
             char: $grapheme,
@@ -288,9 +297,36 @@ final class CsiHandlerImpl implements CsiHandler
         $this->wrapPending = $nextCol >= $this->grid->cols;
     }
 
-    public function cuu(int $count = 1): void
+    /**
+     * Blank the partner cell of any wide pair whose halves fall inside or
+     * adjacent to the erased span — the renderer-side twin of
+     * {@see \SugarCraft\Vterm\Handler\ScreenHandler::eraseWidePartners()}.
+     * The renderer has no background colours on erases (no BCE), so the
+     * exposed partner goes to the shared empty cell. Must run BEFORE the
+     * new glyph is painted, while the old pairs are still in the grid.
+     */
+    private function eraseWidePartners(int $row, int $fromCol, int $toCol): void
     {
-        // Cursor motion disarms the deferred wrap (xterm reset_wrapnext);
+        for ($col = max(0, $fromCol); $col <= min($this->grid->cols - 1, $toCol); $col++) {
+            if ($this->grid->cell($row, $col)->continuation) {
+                // tail: base sits one column left
+                $head = $col - 1;
+                if ($head >= 0 && $head < $fromCol) {
+                    $this->grid->put($row, $head, Cell::empty());
+                }
+                continue;
+            }
+            // base: tail sits one column right, if any
+            $tail = $col + 1;
+            if ($tail > $toCol && $tail < $this->grid->cols
+                && $this->grid->cell($row, $tail)->continuation) {
+                $this->grid->put($row, $tail, Cell::empty());
+            }
+        }
+    }
+
+    public function cuu(int $count = 1): void
+    {        // Cursor motion disarms the deferred wrap (xterm reset_wrapnext);
         // clamp to the buffer, not the scroll region — matching the
         // emulator's CursorHandler with DECOM off (not modelled here).
         $this->wrapPending = false;

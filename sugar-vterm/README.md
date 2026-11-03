@@ -249,44 +249,50 @@ implements the superset.
 
 | Final byte | Name | Method | Behavior |
 |------------|------|--------|----------|
-| `@` | ICH | (Handler) | Insert N blank characters at cursor. |
+| `@` | ICH | `ich($n=1)` | Insert N blank characters at cursor. |
 | `A` | CUU | `cuu($n=1)` | Cursor up N, clamped to scroll region top. |
 | `B` | CUD | `cud($n=1)` | Cursor down N, clamped to scroll region bottom. |
+| `b` | REP | `rep($n=1)` | Repeat the preceding printable N times (renderer only; the emulator CSI dispatcher has no `b` arm and discards it). |
 | `C` | CUF | `cuf($n=1)` | Cursor right N, clamped to right margin. |
 | `D` | CUB | `cub($n=1)` | Cursor left N, clamped to column 0. |
 | `E` | CNL | (Handler) | Cursor down N + column 0. |
 | `F` | CPL | (Handler) | Cursor up N + column 0. |
 | `G` | CHA | (Handler) | Cursor to column N. |
 | `H` | CUP | `cup($row, $col)` | Move cursor to (row, col) 1-indexed. |
-| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops. |
-| `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback. |
+| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (emulator honours the tab-stop table; the renderer single-steps). |
+| `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback (emulator clears the ring; the renderer has no ring, so 3 blanks the grid). |
 | `K` | EL | `el($mode=0)` | Erase line: 0=cursor→eol, 1=bol→cursor, 2=full line. |
-| `L` | IL | (Handler) | Insert N blank lines at cursor. |
-| `M` | DL | (Handler) | Delete N lines at cursor. |
-| `P` | DCH | (Handler) | Delete N characters at cursor. |
-| `S` | SU | (Handler) | Scroll up N lines. |
-| `T` | SD | (Handler) | Scroll down N lines. |
+| `L` | IL | `il($n=1)` | Insert N blank lines at cursor. |
+| `M` | DL | `dl($n=1)` | Delete N lines at cursor. |
+| `P` | DCH | `dch($n=1)` | Delete N characters at cursor. |
+| `S` | SU | `su($n=1)` | Scroll up N lines. |
+| `T` | SD | `sd($n=1)` | Scroll down N lines. |
 | `X` | ECH | (Handler) | Erase N characters from cursor (preserves BCE bg). |
-| `Z` | CBT | `cbt($n=1)` | Cursor backward N tab stops. |
+| `Z` | CBT | `cbt($n=1)` | Cursor backward N tab stops (emulator honours the tab-stop table; the renderer single-steps). |
 | `d` | VPA | (Handler) | Cursor to row N. |
 | `f` | HVP | `hvp($row, $col)` | Same as CUP — move cursor to (row, col). |
-| `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all. |
+| `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all (renderer: no-op — tab stops unmodelled). |
 | `h` | SM/DECSET | `decset($mode, $prefix)` | Set mode. `?` prefix → private. `?7 h` enables DECAWM, `?12 h` BCE, `?25 h` cursor visible, `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` sync-update, `?6 h` DECOM. |
 | `l` | RM/DECRST | `decrst($mode, $prefix)` | Reset mode (mirror of `h`). |
 | `m` | SGR | `sgr($params)` | Set graphic rendition. Subparam colons (`4:1`..`4:5`) parsed. |
 | `r` | DECSTBM | `decstbm($top, $bottom)` | Set scroll region rows (1-indexed). |
-| `s` | DECSC | (Handler) | Save cursor + Sgr + origin mode. |
-| `u` | DECRC | (Handler) | Restore cursor + Sgr + origin mode. |
+| `s` | DECSC | `scosc()` | Save cursor + Sgr + origin mode (emulator); the renderer saves the cursor position only. |
+| `u` | DECRC | `scorc()` | Restore cursor + Sgr + origin mode (emulator); the renderer restores the position only. |
 | `<n> SP q` | DECSCUSR | (Handler) | Cursor shape 0–6 (block/underline/bar × blink). |
 | `<n> I/O` | Focus | (Handler) | Focus-in / focus-out report (under `?1004 h`). |
 
-`(Handler)` rows live in the full `Handler/ScreenHandler` dispatcher
-used by `SugarCraft\Vterm\Terminal\Terminal`. The renderer path
-(`SugarCraft\Vterm\Terminal`) implements the rows with an explicit
-`Method` column — the rest of the CSI sequences are ignored when the
-renderer encounters them (applications writing rendered output have already
-simplified them away). The renderer honours the same DECAWM/DECTCEM private modes, IL/DL and SGR
-set as the emulator (`Parser\CsiHandlerImpl`).
+`(Handler)` rows live in the full `Handler/ScreenHandler` dispatcher used
+by `SugarCraft\Vterm\Terminal\Terminal`; the renderer's upstream
+`HandlerAdapter` does not route those final bytes, so the renderer path
+silently discards them. Rows with an explicit `Method` are implemented by
+`Parser/CsiHandlerImpl` — the emulator implements a superset of those.
+Three asymmetries are deliberate and pinned out of
+`tests/EngineDifferentialTest.php`'s corpus: tab handling (`I`/`Z`/`g` —
+the emulator walks a tab-stop table, the renderer single-steps and
+`TBC` no-ops), `b` REP (renderer only, the emulator discards it), and BCE
+background-color erase (`X` ECH and mode-3 scrollback clearing are
+emulator-only). The renderer honours the same DECAWM/DECTCEM private
+modes, origin-mode clamps, and SGR set as the emulator.
 
 The `printable` and `execute` paths also route through the same
 adapter — printable bytes call `CsiHandlerImpl::printable()` (writes
