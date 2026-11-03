@@ -606,8 +606,11 @@ final class TabsTest extends TestCase
         $this->assertSame(4, $t->active());
         $this->assertSame(4, $t->scrollOffset);
         $this->assertSame(4, $t->scrollEnd);
-        $this->assertStringContainsString("\x1b[1m E \x1b[0m", $t->view());
-        $this->assertSame("\u{2026} \u{2502} \x1b[1m E \x1b[0m", $t->view());
+        // M9: this bar is focused (focus()[0]), so the active tab carries the
+        // focus underline alongside bold — `1;4` is the whole-point byte pair
+        // proving both the r87 survival guard AND the visible-focus affordance.
+        $this->assertStringContainsString("\x1b[1;4m E \x1b[0m", $t->view());
+        $this->assertSame("\u{2026} \u{2502} \x1b[1;4m E \x1b[0m", $t->view());
         $this->assertLessThanOrEqual(9, Width::string($t->view()));
     }
 
@@ -633,5 +636,108 @@ final class TabsTest extends TestCase
         $t = Tabs::new(["A\tB", 'C'], 11);
         $this->assertSame(1, $t->scrollEnd);
         $this->assertSame("\x1b[1m A B \x1b[0m \u{2502}  C ", $t->view());
+    }
+
+    // ── Review 1102 fixes: forgery, pricing, detach, focus, id routing ──────
+
+    /**
+     * C3 (CRITICAL): Sanitize::controlChars passes the U+E000/U+E001 zone
+     * sentinels through BY DESIGN — and view() hands the label to
+     * Manager::mark() right after. Before the cure, a label embedding
+     * OPEN.'qtab-9'.CLOSE forged an extra zone pair into the frame (proven
+     * prod-reachable via candy-sql). Now the marked-frame sweep strips the
+     * sentinels at ingress: the sentinel budget is exactly what the manager
+     * minted, and the forged id appears nowhere as a marker.
+     */
+    public function testForgedSentinelsInLabelsCannotForgeOrStealZones(): void
+    {
+        $evil = "Pro\u{E000}qtab-9\u{E001}file";
+        $t = Tabs::new(['Home', $evil], 60)->withZoneManager(\SugarCraft\Mouse\Zones\Manager::newPrefix('q'));
+        $view = $t->view();
+
+        $open = \SugarCraft\Mouse\Sentinel::OPEN;
+        $close = \SugarCraft\Mouse\Sentinel::CLOSE;
+        // Two tabs → exactly two open + two close sentinels per marker pair
+        // (open and `/id` close), nothing a forged pair can add.
+        $this->assertSame(4, substr_count($view, $open));
+        $this->assertSame(4, substr_count($view, $close));
+        $this->assertStringNotContainsString($open . 'qtab-9' . $close, $view);
+        $this->assertStringContainsString($open . 'qtab-0' . $close, $view);
+        $this->assertStringContainsString($open . 'qtab-1' . $close, $view);
+        // The visible text survives (sentinels removed, payload kept).
+        $this->assertStringContainsString('Proqtab-9file', $view);
+    }
+
+    /**
+     * M11: zone markers cost real cells (Width::string counts them), so the
+     * scroll window must price them or view()'s clip guard cuts through a
+     * marked tab. Three 3-letter tabs at width 30 fit unpriced (scrollEnd 2);
+     * each marked tab costs 13 extra cells, so only tab 0 survives the walk.
+     */
+    public function testZoneMarkerCostIsPricedIntoTheScrollWindow(): void
+    {
+        $plain = Tabs::new(['AAA', 'BBB', 'CCC'], 30);
+        $this->assertSame(2, $plain->scrollEnd);
+
+        $marked = $plain->withZoneManager(\SugarCraft\Mouse\Zones\Manager::newPrefix('test'));
+        $this->assertSame(0, $marked->scrollEnd);
+        $view = $marked->view();
+        $this->assertLessThanOrEqual(30, Width::string($view));
+        $this->assertStringContainsString('AAA', $view);
+        $this->assertStringNotContainsString('BBB', $view);
+        $this->assertStringEndsWith("\u{2026}", $view);
+    }
+
+    /**
+     * M10: withZoneManager(null) must DETACH. The copy() `?? carry` pattern
+     * made an explicit null indistinguishable from "unset", so the manager
+     * could never be removed — the paired sentinel now makes null sticky.
+     */
+    public function testWithZoneManagerNullDetaches(): void
+    {
+        $t = Tabs::new()->withZoneManager(\SugarCraft\Mouse\Zones\Manager::newPrefix('z'));
+        $this->assertNotNull($t->zoneManager);
+
+        $detached = $t->withZoneManager(null);
+        $this->assertNull($detached->zoneManager);
+        $this->assertStringNotContainsString(\SugarCraft\Mouse\Sentinel::OPEN, $detached->view());
+        // The original keeps its manager (immutability).
+        $this->assertNotNull($t->zoneManager);
+    }
+
+    /**
+     * M9: the focused flag must DRAW something. Focused and blurred frames
+     * used to be byte-identical; the active tab now carries an underline
+     * while focused, and the cell width is untouched by the SGR.
+     */
+    public function testFocusUnderlinesTheActiveTab(): void
+    {
+        [$focused, ] = Tabs::new(['Home', 'Profile'])->withWidth(200)->focus();
+        $blurred = Tabs::new(['Home', 'Profile'])->withWidth(200);
+
+        $this->assertStringContainsString("\x1b[1;4m Home \x1b[0m", $focused->view());
+        $this->assertStringNotContainsString('4m', $blurred->view());
+        $this->assertSame(
+            Width::string($blurred->view()),
+            Width::string($focused->view()),
+        );
+    }
+
+    /**
+     * N13: zone ids are minted as "[prefix]tab-N", so the LAST "tab-" is the
+     * one we wrote. A manager prefix that itself contains "tab-<digit>" made
+     * the first-occurrence walk mis-route the click to the wrong tab.
+     */
+    public function testZoneIdWithTabPrefixEmbeddedRoutesByLastSegment(): void
+    {
+        $t = Tabs::new(['A', 'B', 'C', 'D', 'E']);
+        [$t, ] = $t->focus();
+
+        // First "tab-" says 4 (valid index!), last says 1 — 1 is the truth.
+        $zone = new \SugarCraft\Mouse\Zones\Zone('tab-4table-tab-1', 7, 1, 14, 1);
+        $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
+        [$t, ] = $t->update(new \SugarCraft\Mouse\Zones\MsgZoneInBounds($zone, $mouse));
+
+        $this->assertSame(1, $t->active());
     }
 }

@@ -189,7 +189,14 @@ final class Tabs implements Model
         $segments = [];
         foreach ($this->labels as $i => $label) {
             $style = $i === $this->active ? $this->activeStyle : $this->inactiveStyle;
-            $padded = ' ' . Sanitize::controlChars($label) . ' ';
+            // M9: while focused, the active tab gains an underline. Before
+            // this the `focused` flag drew nothing — focused and blurred
+            // frames were byte-identical, so keyboard focus was invisible
+            // (an a11y affordance the flag promised but did not deliver).
+            if ($i === $this->active && $this->focused) {
+                $style = $style->underline();
+            }
+            $padded = ' ' . self::sanitizeLabel($label) . ' ';
 
             if ($this->zoneManager !== null) {
                 $padded = $this->zoneManager->mark("tab-{$i}", $padded);
@@ -324,7 +331,7 @@ final class Tabs implements Model
      */
     public function withZoneManager(?Manager $manager): self
     {
-        return $this->copy(zoneManager: $manager);
+        return $this->copy(zoneManager: $manager, zoneManagerSet: true);
     }
 
     /**
@@ -365,16 +372,23 @@ final class Tabs implements Model
     /**
      * Parse a tab zone ID (e.g. "tab-3" or "prefixtab-3") and return the
      * tab index, or null if the ID does not match the expected format.
+     *
+     * The minted segment is always the LAST "tab-" in the id (zone ids are
+     * minted as "[prefix]tab-N"); scanning for the first occurrence let a
+     * prefix containing "tab-<digits>" mis-route clicks to the wrong tab (N13).
      */
     private function tabIndexFromZoneId(string $id): ?int
     {
-        // Zone ID format: [{prefix}]tab-{index}. Strip any prefix before "tab-".
-        $pos = strpos($id, 'tab-');
-        if ($pos !== false) {
-            $idx = (int) substr($id, $pos + 4);
-            return $idx >= 0 && $idx < count($this->labels) ? $idx : null;
+        $pos = strrpos($id, 'tab-');
+        if ($pos === false) {
+            return null;
         }
-        return null;
+        $suffix = substr($id, $pos + 4);
+        if ($suffix === '' || !ctype_digit($suffix)) {
+            return null;
+        }
+        $idx = (int) $suffix;
+        return $idx >= 0 && $idx < count($this->labels) ? $idx : null;
     }
 
     /**
@@ -437,7 +451,7 @@ final class Tabs implements Model
         $cursor = $this->rendersLeftEllipsis() ? 1 + $dividerWidth : 0;
 
         for ($i = $start; $i < $count; $i++) {
-            $labelEnd = $cursor + self::paddedWidth($this->labels[$i]);
+            $labelEnd = $cursor + $this->tabWidth($i);
             // A right `…` follows every tab except the last; the clip
             // guard preserves only width-1 cells once that line overflows.
             $bound = $i < $count - 1 ? $this->width - 1 : $this->width;
@@ -458,10 +472,31 @@ final class Tabs implements Model
             && min($this->scrollOffset, count($this->labels) - 1) > 0;
     }
 
-    /** Rendered cell width of one tab: padded, control-chars stripped. */
-    private static function paddedWidth(string $label): int
+    /**
+     * Sanitise one label for the marked-frame world.
+     *
+     * `controlChars` folds C0 (newlines/tabs) and drops ESC, but by design
+     * passes the U+E000/U+E001 zone sentinels through — and view() hands the
+     * label to `Manager::mark()` right after, which wraps it in exactly those
+     * sentinels. A label carrying a forged sentinel pair could therefore open
+     * or steal a zone (sugar-widgets review C3, the same fleet cure as the
+     * other marked-frame components). `untrustedForMarkedFrames()` adds the
+     * ANSI sweep and the sentinel strip on top. tabWidth() runs
+     * the SAME pipeline so priced width and drawn width never drift.
+     */
+    private static function sanitizeLabel(string $label): string
     {
-        return Width::string(' ' . Sanitize::controlChars($label) . ' ');
+        return Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($label));
+    }
+
+    /** Rendered cell width of one tab: padded, sanitised, zone-marked if attached. */
+    private function tabWidth(int $i): int
+    {
+        $padded = ' ' . self::sanitizeLabel($this->labels[$i]) . ' ';
+        if ($this->zoneManager !== null) {
+            $padded = $this->zoneManager->mark("tab-{$i}", $padded);
+        }
+        return Width::string($padded);
     }
 
     /**
@@ -478,6 +513,7 @@ final class Tabs implements Model
         ?bool $wrap = null,
         ?int $width = null,
         ?Manager $zoneManager = null,
+        bool $zoneManagerSet = false,
         ?array $labels = null,
         ?int $scrollOffset = null,
     ): self {
@@ -490,7 +526,10 @@ final class Tabs implements Model
             focused: $focused ?? $this->focused,
             wrap: $wrap ?? $this->wrap,
             width: $width ?? $this->width,
-            zoneManager: $zoneManager ?? $this->zoneManager,
+            // The Manager is nullable, so `?? carry` could never express
+            // "detach" — withZoneManager(null) was a silent no-op (M10).
+            // The paired sentinel makes an explicit null sticky.
+            zoneManager: $zoneManagerSet ? $zoneManager : $this->zoneManager,
             labels: $labels ?? $this->labels,
             scrollOffset: $scrollOffset ?? $this->scrollOffset,
         );
