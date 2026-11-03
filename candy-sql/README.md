@@ -25,6 +25,8 @@ composer require sugarcraft/candy-sql
 ## CLI usage
 
 ```bash
+# (the `bin/candy-sql` form below assumes a monorepo checkout — installed as a
+#  composer dependency the launcher is at `vendor/bin/candy-sql`, same flags)
 # SQLite via bare path (inferred as Flavor::Sqlite)
 bin/candy-sql app.sqlite
 
@@ -336,7 +338,10 @@ Available providers:
 
 ## Result table
 
-`ResultTable` renders a SQL result set with horizontal scrolling, JSON pretty-print, and a styled NULL token:
+`ResultTable` renders a SQL result set with horizontal scrolling, JSON pretty-print, and a styled NULL token
+(the horizontal-scroll viewer is the EXECUTED-query path — a table *browsed* from the sidebar renders through the sugar-table
+grid, whose columns share a fixed per-pane budget and truncate instead of scrolling; run `SELECT * FROM …` for the scrollable
+view):
 
 ```php
 $table = ResultTable::fromRows($rows)
@@ -639,6 +644,8 @@ The launcher records the admin poll snapshots to SQLite — on by default, opt o
 `$HOME/.candy-sql/history.db` (created with dir 0700 / file 0600; if `HOME` is unset the recorder stays disabled);
 `--history=<path>` relocates it. The recorded unit is a `StatusSnapshot` (a timestamped map of server status variables) —
 SQL statement text is never persisted. The in-memory query history (`App::runQuery()` result rows) is session-scoped only.
+The store speaks through the core `SQLite3` class, so `ext-sqlite3` is a hard requirement alongside `ext-pdo_sqlite`; a corrupt
+or unwritable history file now degrades loudly (`history recording DISABLED` on stderr at launch) instead of bricking the session.
 
 ```php
 use SugarCraft\Sql\Admin\History\SqliteHistoryStore;

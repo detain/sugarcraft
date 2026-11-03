@@ -144,12 +144,17 @@ final class ConnectionFactory
         // Extract dbname — path always starts with '/'
         $dbname = isset($parsed['path']) ? ltrim($parsed['path'], '/') : '';
 
-        // Parse query string for ssl-mode
+        // Parse query string for ssl-mode. mn-4: accept the native libpq
+        // spelling (?sslmode=…) too — a pgsql DSN copied from a libpq doc used
+        // to silently keep 'prefer'. The documented hyphen form wins if both
+        // are present.
         $sslMode = 'prefer';
         if (isset($parsed['query'])) {
             parse_str($parsed['query'], $params);
             if (isset($params['ssl-mode'])) {
                 $sslMode = $params['ssl-mode'];
+            } elseif (isset($params['sslmode'])) {
+                $sslMode = $params['sslmode'];
             }
         }
 

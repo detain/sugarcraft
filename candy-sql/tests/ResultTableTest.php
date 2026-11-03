@@ -86,11 +86,16 @@ final class ResultTableTest extends TestCase
     public function testVisibleColCountDecreasesWithSmallerWidth(): void
     {
         $t = ResultTable::fromRows($this->rows());
-        // Default maxCellWidth=40, visibleWidth=120 → enough for 3 cols.
-        $this->assertGreaterThanOrEqual(3, $t->visibleColCount());
-
-        $narrow = $t->withVisibleWidth(30);
-        $this->assertLessThan($t->visibleColCount(), $narrow->visibleColCount());
+        // D-M23 flip (2026-11-03): with the cumulative fit, 30 cells genuinely
+        // hold all three columns (id 2 + name 5 + email 17 + two 1-cell gaps =
+        // 26), so the old "narrower decreases the count" expectation — an
+        // artifact of floor(width / AVERAGE-cell-width) reporting 10 visible
+        // columns at 120 and 2 at 30 — is replaced by the honest window.
+        $this->assertSame(3, $t->visibleColCount());
+        $this->assertSame(3, $t->withVisibleWidth(30)->visibleColCount());
+        // 2+1+5 = 8 fits under 12, but +1+17 does not: the email column is
+        // the first to be pushed off.
+        $this->assertSame(2, $t->withVisibleWidth(12)->visibleColCount());
     }
 
     public function testScrollLeftDecreasesOffset(): void
@@ -332,5 +337,36 @@ final class ResultTableTest extends TestCase
 
         // withOffset doesn't change rows — colWidths should be reused
         $this->assertSame($widthsBefore, $widthsAfter);
+    }
+
+    public function testUnevenColumnsFitCumulatively(): void
+    {
+        // D-M23: the average-cell-width estimate over-claimed the visible
+        // window on uneven tables; the cumulative fit is the law now.
+        $rows = [['aa' => '1', 'bb' => '2', 'cc' => '3', 'wide' => str_repeat('W', 60)]];
+        $t = ResultTable::fromRows($rows)->withVisibleWidth(30);
+        // widths: aa 2, bb 2, cc 2, wide clamped to maxCellWidth 40 →
+        // 2 + (2+1) + (2+1) = 8 fits, adding wide would need 49 > 30.
+        $this->assertSame(3, $t->visibleColCount());
+        // Scrolling may advance one column at a time but never past the last
+        // column (the old average-window maxOffset let the window strand).
+        $walk = $t;
+        for ($i = 0; $i < 6; $i++) {
+            $walk = $walk->scrollRight();
+        }
+        $this->assertLessThanOrEqual(3, $walk->offset);
+        // The window genuinely slid to the last column (its content clips to
+        // the pane with an ellipsis — the range indicator is the proof).
+        $this->assertStringContainsString('cols 4–4 of 4', $walk->render(), 'tail window reached');
+    }
+
+    public function testWidthShrinkStrandsNoOffsetPastTheColumns(): void
+    {
+        $t = ResultTable::fromRows($this->rows())
+            ->withOffset(5)
+            ->withVisibleWidth(12);
+        // three columns: offset clamped to the last column, window renders it.
+        $this->assertSame(2, $t->offset);
+        $this->assertStringContainsString('carol', $t->render());
     }
 }

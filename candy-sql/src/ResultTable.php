@@ -200,7 +200,10 @@ final class ResultTable
     {
         return new self(
             rows: $this->rows,
-            offset: $this->offset,
+            // D-M23: keep the offset inside the column list when the pane
+            // width (and with it the fitting window) shrinks — a stranded
+            // offset used to render an empty tail window.
+            offset: min($this->offset, max(0, count($this->columns) - 1)),
             visibleWidth: max(10, $width),
             maxCellWidth: $this->maxCellWidth,
             jsonPretty: $this->jsonPretty,
@@ -249,9 +252,24 @@ final class ResultTable
         if ($this->columns === []) {
             return 0;
         }
-        $totalCols = count($this->columns);
-        $cellWidth = $this->cellWidth();
-        return max(1, (int) floor($this->visibleWidth / $cellWidth));
+        // D-M23: the old estimate divided the pane by the AVERAGE column
+        // width, so an uneven table (one wide column among narrow ones)
+        // rendered past the pane it was measured for. Fit cumulatively:
+        // take columns from the offset until the next one no longer fits.
+        // The column at the offset is always shown (clipped by the pane if
+        // wider than it), so the result is never below 1.
+        $used = 0;
+        $count = 0;
+        $total = count($this->columns);
+        for ($i = $this->offset; $i < $total; $i++) {
+            $width = ($this->colWidths[$this->columns[$i]] ?? 12) + ($count > 0 ? $this->colSpacing : 0);
+            if ($count > 0 && $used + $width > $this->visibleWidth) {
+                break;
+            }
+            $used += $width;
+            $count++;
+        }
+        return max(1, $count);
     }
 
     /** Whether left-scroll is possible. */
@@ -518,13 +536,6 @@ final class ResultTable
         return $widths;
     }
 
-    /** Width of a single table cell including spacing. */
-    private function cellWidth(): int
-    {
-        // Average column width + spacing — used for visibleColCount estimate.
-        if ($this->columns === []) {
-            return 12 + $this->colSpacing;
-        }
-        return (int) (((int) array_sum($this->colWidths) / count($this->columns)) + $this->colSpacing);
-    }
+    // D-M23: the old private cellWidth() (average column width) is gone with
+    // its only consumer; visibleColCount() now fits columns cumulatively.
 }

@@ -196,7 +196,11 @@ final class Renderer
         // joined with a 2-space gap, all inside the outer frame's (cols-2)
         // content area → 2*(w+4) + 2 ≤ cols-2 ⇒ w ≤ floor(cols/2) - 6.
         $maxTableLen = $a->browse->tables !== [] ? max(array_map('strlen', $a->browse->tables)) : 0;
-        $width = max(24, min($maxTableLen, (int) floor($terminalCols / 2) - 6));
+        // D-M8: the 24-cell comfort floor must fit the side-by-side budget —
+        // below ~60 terminal columns forcing 24 wrapped the frame, so the
+        // floor applies only when the budget affords it.
+        $budget = (int) floor($terminalCols / 2) - 6;
+        $width = $budget >= 24 ? max(24, min($maxTableLen, $budget)) : max(12, $budget);
 
         if ($a->browse->tables === []) {
             $body = Style::new()->foreground(Color::hex('#7d6e98'))->render('(no tables)');
@@ -254,8 +258,14 @@ final class Renderer
 
         // Cap at floor(cols/2) - 6 (see tablesPane) so tables + rows fit the
         // outer frame side-by-side without overflowing and wrapping.
-        $width = min($numFields * 14, (int) floor($terminalCols / 2) - 6);
-        $width = max(60, $width);
+        // D-M8: the old unconditional max(60, ...) FLOOR violated that law on
+        // any terminal under ~132 cols — the pane was forced wider than its
+        // budget and the frame wrapped. The comfort floor may only apply when
+        // the budget itself affords it; a narrow terminal gets the budget
+        // (minus a hard renderable floor of 12) instead.
+        $budget = (int) floor($terminalCols / 2) - 6;
+        $natural = min($numFields * 14, $budget);
+        $width = $budget >= 60 ? max(60, $natural) : max(12, $budget);
 
         if ($a->browse->rows === []) {
             // Distinguish "no rows here" from "the async browse fetch is still

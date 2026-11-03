@@ -331,4 +331,17 @@ final class ConnectionFactoryTest extends TestCase
 
         $this->assertSame(25060, $config->port);
     }
+
+    public function testPgsqlDsnAcceptsTheNativeSslmodeSpelling(): void
+    {
+        // mn-4 (2026-11-03): a libpq-style ?sslmode=… DSN used to silently
+        // downgrade to 'prefer'; both spellings are honoured now, with the
+        // documented hyphen form winning when both appear.
+        $config = ConnectionFactory::fromDsn('pgsql://u:p@dbhost/app?sslmode=require');
+        $this->assertSame('require', $config->sslMode);
+        $this->assertStringContainsString('sslmode=verify-full', $config->dsn);
+
+        $both = ConnectionFactory::fromDsn('pgsql://u:p@dbhost/app?ssl-mode=disable&sslmode=require');
+        $this->assertSame('disable', $both->sslMode);
+    }
 }

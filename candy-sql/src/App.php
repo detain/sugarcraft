@@ -9,7 +9,9 @@ use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Forms\TextArea\TextArea;
@@ -38,6 +40,7 @@ use SugarCraft\Sql\Admin\ServerStatusSnapshotAdapter;
 use SugarCraft\Sql\Admin\Variables\Catalog;
 use SugarCraft\Sql\Admin\Variables\VariableEditor;
 use SugarCraft\Sql\Admin\Variables\VariablesPage;
+use SugarCraft\Style\Style;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\MysqlDatabase;
@@ -199,6 +202,24 @@ final class App implements Model
                 [$newPage,] = $this->admin->page->update(new ReloadReportMsg());
                 return [$this->withAdminPage($newPage), null];
             }
+            return [$this, null];
+        }
+        if ($msg instanceof PasteMsg) {
+            // D-M13: bracketed paste (enabled by bin) arrives as a PasteMsg,
+            // which the sugar-forms TextArea already understands — it inserts
+            // the text at the caret (replacing a selection) instead of letting
+            // embedded ESC bytes decode as keys. Route it to the editor the
+            // same way ordinary character keys reach it below.
+            [$editor,] = $this->editor()->update($msg);
+            return [$this->mutate(['query' => $this->query->withEditor($editor)]), null];
+        }
+        if ($msg instanceof ColorProfileMsg) {
+            // D-M14: sugar-core's ColorProfile::detect is the fleet colour
+            // authority (NO_COLOR, CLICOLOR=0, TERM=dumb, COLORTERM, pipes).
+            // The Program dispatches this once at startup; honouring it pins
+            // the process-ambient profile so every Style::new() minted
+            // afterwards renders within the terminal's real capability.
+            Style::setDefaultProfile($msg->profile);
             return [$this, null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -470,7 +491,7 @@ final class App implements Model
                     // JSON pretty, styled NULL). Cleared again on table browse.
                     ->withResultTable(ResultTable::fromRows($rows)),
                 'query' => $this->query->withEditor($this->editor()->reset())->withHistory($history),
-                'ui' => $this->ui->withError(null)->withStatus(count($rows) . ' rows'),
+                'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($rows))),
             ]);
         } catch (\PDOException | ReconnectException $e) {
             return $this->mutate([
@@ -612,7 +633,7 @@ final class App implements Model
                 ->withRowCursor(0)
                 ->withResultTable(ResultTable::fromRows($msg->rows))
                 ->withRowsLoading(false),
-            'ui' => $this->ui->withError(null)->withStatus(count($msg->rows) . ' rows'),
+            'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($msg->rows))),
         ]);
     }
 
@@ -728,7 +749,7 @@ final class App implements Model
                 ->withRowCursor(0)
                 ->withResultTable(null)
                 ->withRowsLoading(false),
-            'ui' => $this->ui->withError(null)->withStatus(count($msg->rows) . ' rows'),
+            'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($msg->rows))),
         ]);
     }
 
@@ -800,7 +821,7 @@ final class App implements Model
                     // Browsing a table → the sugar-table grid, not the query viewer.
                     ->withResultTable(null)
                     ->withRowsLoading(false),
-                'ui' => $this->ui->withError(null)->withStatus(count($rows) . ' rows'),
+                'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($rows))),
             ]);
         } catch (\PDOException | ReconnectException $e) {
             return $this->mutate([
@@ -983,6 +1004,14 @@ final class App implements Model
      * tests) needn't supply one. {@see withPane()} swaps in the focused
      * instance when the Query pane is entered.
      */
+    /**
+     * D-M25: count-aware status copy — one row reads "1 row", not "1 rows".
+     */
+    private static function rowsSummary(int $count): string
+    {
+        return $count === 1 ? '1 row' : $count . ' rows';
+    }
+
     public function editor(): TextArea
     {
         return $this->query->editor ?? self::newEditor();

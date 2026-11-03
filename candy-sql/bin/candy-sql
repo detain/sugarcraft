@@ -115,7 +115,10 @@ try {
 
     (new Program(
         App::start($database, $flavor, $historyRecorder),
-        new ProgramOptions(useAltScreen: true),
+        // D-M13: bracketed paste makes the terminal wrap pasted bytes in
+        // ESC[200~ / ESC[201~ so the decoder emits one PasteMsg instead of
+        // spraying the paste's control bytes (ESC especially) as live keys.
+        new ProgramOptions(useAltScreen: true, bracketedPaste: true),
     ))->run();
 } catch (\Throwable $e) {
     $reason = $e->getMessage() !== '' ? $e->getMessage() : $e::class;
