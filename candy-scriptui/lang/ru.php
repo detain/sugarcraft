@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => 'неподдерживаемая оболочка: {shell}',
     'confirm.unknown_default' => 'неизвестное значение --default: {value}',
     'cursor_mode.unknown' => 'неизвестный режим курсора: {mode}',
+    'runtime.no_terminal' => 'команде {command} нужен интерактивный терминал; управляющий терминал недоступен.',
 ];

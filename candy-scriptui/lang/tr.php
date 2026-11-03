@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => 'desteklenmeyen kabuk: {shell}',
     'confirm.unknown_default' => 'bilinmeyen --default değeri: {value}',
     'cursor_mode.unknown' => 'bilinmeyen imleç modu: {mode}',
+    'runtime.no_terminal' => '{command} etkileşimli bir uçbirim gerektirir; denetim uçbirimi yok.',
 ];

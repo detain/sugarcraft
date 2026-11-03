@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => 'サポートされていないシェル: {shell}',
     'confirm.unknown_default' => '不明な --default 値: {value}',
     'cursor_mode.unknown' => '不明なカーソルモード: {mode}',
+    'runtime.no_terminal' => '{command} にはインタラクティブな端末が必要です。制御端末を利用できません。',
 ];

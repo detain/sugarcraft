@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
 use SugarCraft\ScriptUi\Model\InputModel;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\CursorMode;
+use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Attribute\Example;
@@ -60,12 +60,12 @@ final class InputCommand extends Command
             header:      (string) $input->getOption('header'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $program = new Program($model, new ProgramOptions(
-            useAltScreen:    false,
-            hideCursor:      CursorMode::hidesCursor($cursorMode),
-            catchInterrupts: true,
-            loop:            $loop,
-        ));
+        $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: CursorMode::hidesCursor($cursorMode));
+        if ($options === null) {
+            fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'input']) . "\n");
+            return Command::FAILURE;
+        }
+        $program = new Program($model, $options);
         $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
         /** @var InputModel $final */
         $final = $program->run();

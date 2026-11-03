@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => '不支持的 shell：{shell}',
     'confirm.unknown_default' => '未知 --default 值：{value}',
     'cursor_mode.unknown' => '未知光标模式：{mode}',
+    'runtime.no_terminal' => '{command} 需要交互式终端；没有可用的控制终端。',
 ];

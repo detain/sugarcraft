@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => 'صدفة غير مدعومة: {shell}',
     'confirm.unknown_default' => 'قيمة --default غير معروفة: {value}',
     'cursor_mode.unknown' => 'وضع مؤشر غير معروف: {mode}',
+    'runtime.no_terminal' => '{command} يحتاج إلى طرفية تفاعلية؛ لا يوجد طرف تحكّم متاح.',
 ];

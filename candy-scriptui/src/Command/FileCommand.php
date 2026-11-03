@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
 use SugarCraft\ScriptUi\Attribute\Example;
+use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\FileModel;
+use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -58,7 +59,8 @@ final class FileCommand extends Command
 
         $header = (string) $input->getOption('header');
         if ($header !== '') {
-            $output->writeln($header);
+            // UI chrome, not result data — rides the paint stream (CC2).
+            InteractiveRuntime::paint($header . "\n");
         }
 
         $model   = FileModel::newPrompt(
@@ -70,12 +72,12 @@ final class FileCommand extends Command
             showSize:   (bool) $input->getOption('show-size'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $program = new Program($model, new ProgramOptions(
-            useAltScreen:    true,
-            hideCursor:      true,
-            catchInterrupts: true,
-            loop:            $loop,
-        ));
+        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        if ($options === null) {
+            fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'file']) . "\n");
+            return Command::FAILURE;
+        }
+        $program = new Program($model, $options);
         $seconds = min((float) $input->getOption('timeout'), self::MAX_TIMEOUT_SECONDS);
         $guard = TimeoutGuard::arm($loop, $seconds, fn () => $program->kill());
         /** @var FileModel $final */

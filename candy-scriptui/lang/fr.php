@@ -43,4 +43,5 @@ return [
     'completion.unknown_shell' => 'shell non pris en charge : {shell}',
     'confirm.unknown_default' => 'valeur --default inconnue : {value}',
     'cursor_mode.unknown' => 'mode de curseur inconnu : {mode}',
+    'runtime.no_terminal' => '{command} nécessite un terminal interactif ; aucun terminal de contrôle disponible.',
 ];

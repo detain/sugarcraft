@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => 'nieobsługiwana powłoka: {shell}',
     'confirm.unknown_default' => 'nieznana wartość --default: {value}',
     'cursor_mode.unknown' => 'nieznany tryb kursora: {mode}',
+    'runtime.no_terminal' => '{command} wymaga interaktywnego terminala; brak dostępnego terminala sterującego.',
 ];

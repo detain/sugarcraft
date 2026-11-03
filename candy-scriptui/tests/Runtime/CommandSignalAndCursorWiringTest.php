@@ -82,7 +82,7 @@ final class CommandSignalAndCursorWiringTest extends TestCase
 
         $this->assertStringContainsString('CursorMode::isKnown($cursorMode)', $src);
         $this->assertStringContainsString(
-            'hideCursor:      CursorMode::hidesCursor($cursorMode),',
+            'hideCursor: CursorMode::hidesCursor($cursorMode)',
             $src,
             $name . ' must drive ProgramOptions::hideCursor from --cursor-mode',
         );

@@ -1,0 +1,116 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\ScriptUi\Runtime;
+
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\Tty;
+
+/**
+ * Single launch chokepoint for every interactive {@see \SugarCraft\Core\Program}
+ * run in this CLI. It owns the two pipeline contract halves gum upholds:
+ *
+ * 1. KEYS ARE NEVER PIPED DATA (CC1). Before this class, commands bound the
+ *    Program to raw STDIN even when stdin was a drained pipe — so `ls |
+ *    candy-scriptui filter` deadlocked (EOF'd handle re-pollled forever under
+ *    the framerate timer) and `printf 'yes\n' | confirm` FABRICATED an answer
+ *    from piped bytes. Now: when stdout is a tty we pass `openTty: true` so
+ *    sugar-core rebinds keys to /dev/tty while the pipe stays data-only; when
+ *    stdout itself is redirected we take the read side of /dev/tty explicitly;
+ *    when no controlling terminal exists at all we refuse (null) exactly like
+ *    gum does instead of hanging.
+ *
+ * 2. UI NEVER POLLUTES THE DATA CHANNEL (CC2). With a redirected stdout the
+ *    alt-screen/SGR frame must not land on the captured stream: painting is
+ *    routed to STDERR (gum's own posture) while the answer/result keeps
+ *    stdout exclusively. On a real terminal both streams are the same
+ *    device, so behavior is unchanged for interactive users.
+ */
+final class InteractiveRuntime
+{
+    /**
+     * Program options for an interactive run, or null when NO usable input
+     * terminal exists (pipes on both ends and no /dev/tty) — callers must
+     * then refuse with a diagnostic on stderr rather than start a Program
+     * that can only deadlock or consume piped bytes as keystrokes.
+     */
+    public static function programOptions(bool $useAltScreen, bool $hideCursor): ?ProgramOptions
+    {
+        if (self::stdoutIsTerminal()) {
+            // Keys via /dev/tty when stdin is a pipe; sugar-core falls back
+            // to STDIN/STDOUT itself when /dev/tty is unavailable.
+            return new ProgramOptions(
+                useAltScreen:    $useAltScreen,
+                hideCursor:      $hideCursor,
+                catchInterrupts: true,
+                openTty:         true,
+                loop:            \React\EventLoop\Loop::get(),
+            );
+        }
+
+        $paint = self::paintStream();
+        $tty   = Tty::openTty();
+        if ($tty !== null) {
+            // Only the READ side comes from /dev/tty: the write side must be
+            // the user's stderr, never the archive-captured stdout.
+            return new ProgramOptions(
+                useAltScreen:    $useAltScreen,
+                hideCursor:      $hideCursor,
+                catchInterrupts: true,
+                input:           $tty[0],
+                output:          $paint,
+                loop:            \React\EventLoop\Loop::get(),
+            );
+        }
+
+        if (self::stdinIsTerminal()) {
+            // stdout redirected but stdin is the terminal — still viable:
+            // keys from STDIN, frame to STDERR.
+            return new ProgramOptions(
+                useAltScreen:    $useAltScreen,
+                hideCursor:      $hideCursor,
+                catchInterrupts: true,
+                output:          $paint,
+                loop:            \React\EventLoop\Loop::get(),
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * True when the UI frame will be painted somewhere OTHER than stdout —
+     * used to route pre-launch chrome (headers, prompts) onto the same
+     * stream the Program paints to.
+     */
+    public static function paintsToStderr(): bool
+    {
+        return !self::stdoutIsTerminal();
+    }
+
+    /**
+     * Write UI text (never result data) to the stream the interactive frame
+     * belongs on: STDOUT when it is the terminal, STDERR otherwise.
+     */
+    public static function paint(string $text): void
+    {
+        fwrite(self::paintStream(), $text);
+    }
+
+    /** @return resource */
+    private static function paintStream()
+    {
+        return self::stdoutIsTerminal() ? STDOUT : STDERR;
+    }
+
+    public static function stdoutIsTerminal(): bool
+    {
+        return defined('STDOUT') && is_resource(STDOUT) && @stream_isatty(STDOUT);
+    }
+
+    public static function stdinIsTerminal(): bool
+    {
+        return defined('STDIN') && is_resource(STDIN) && @stream_isatty(STDIN);
+    }
+}

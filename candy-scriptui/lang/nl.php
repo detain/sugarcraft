@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => 'niet-ondersteunde shell: {shell}',
     'confirm.unknown_default' => 'onbekende --default-waarde: {value}',
     'cursor_mode.unknown' => 'onbekende cursormodus: {mode}',
+    'runtime.no_terminal' => '{command} heeft een interactieve terminal nodig; geen sturende terminal beschikbaar.',
 ];

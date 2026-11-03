@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => 'nepodporovaný shell: {shell}',
     'confirm.unknown_default' => 'neznámá hodnota --default: {value}',
     'cursor_mode.unknown' => 'neznámý režim kurzoru: {mode}',
+    'runtime.no_terminal' => '{command} vyžaduje interaktivní terminál; řídicí terminál není dostupný.',
 ];

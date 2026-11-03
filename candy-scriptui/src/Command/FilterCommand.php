@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
+use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\FilterModel;
+use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -80,12 +81,12 @@ final class FilterCommand extends Command
             fuzzy:            (bool) $input->getOption('fuzzy'),
         );
         $loop    = \React\EventLoop\Loop::get();
-        $program = new Program($model, new ProgramOptions(
-            useAltScreen:    true,
-            hideCursor:      true,
-            catchInterrupts: true,
-            loop:            $loop,
-        ));
+        $options = InteractiveRuntime::programOptions(useAltScreen: true, hideCursor: true);
+        if ($options === null) {
+            fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'filter']) . "\n");
+            return Command::FAILURE;
+        }
+        $program = new Program($model, $options);
         $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
         /** @var FilterModel $final */
         $final = $program->run();

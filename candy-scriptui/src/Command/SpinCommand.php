@@ -13,6 +13,7 @@ use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\SpinModel;
 use SugarCraft\ScriptUi\Process\Process;
 use SugarCraft\ScriptUi\Process\RealProcess;
+use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Attribute\Example;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -66,13 +67,16 @@ final class SpinCommand extends Command
                 => RealProcess::spawn($argv, captureStdout: $captureStdout, captureStderr: $captureStderr);
 
         $this->programFactory = $programFactory
-            ?? static fn (Model $model, LoopInterface $loop): Program
-                => new Program($model, new ProgramOptions(
+            ?? static function (Model $model, LoopInterface $loop): Program {
+                $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: true);
+                return new Program($model, $options ?? new ProgramOptions(
                     useAltScreen:    false,
                     hideCursor:      true,
                     catchInterrupts: true,
                     loop:            $loop,
+                    withoutRenderer: true,
                 ));
+            };
     }
 
     protected function configure(): void

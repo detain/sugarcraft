@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => '지원하지 않는 셸: {shell}',
     'confirm.unknown_default' => '알 수 없는 --default 값: {value}',
     'cursor_mode.unknown' => '알 수 없는 커서 모드: {mode}',
+    'runtime.no_terminal' => '{command}에는 대화형 터미널이 필요합니다. 제어 터미널을 사용할 수 없습니다.',
 ];

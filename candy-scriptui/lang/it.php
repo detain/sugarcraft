@@ -30,4 +30,5 @@ return [
     'completion.unknown_shell' => 'shell non supportata: {shell}',
     'confirm.unknown_default' => 'valore --default sconosciuto: {value}',
     'cursor_mode.unknown' => 'modalità cursore sconosciuta: {mode}',
+    'runtime.no_terminal' => '{command} richiede un terminale interattivo; nessun terminale di controllo disponibile.',
 ];

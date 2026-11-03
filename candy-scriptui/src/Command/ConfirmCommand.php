@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\ScriptUi\Command;
 
 use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Model\ConfirmModel;
+use SugarCraft\ScriptUi\Runtime\InteractiveRuntime;
 use SugarCraft\ScriptUi\Runtime\SignalExit;
 use SugarCraft\ScriptUi\Runtime\TimeoutGuard;
 use SugarCraft\ScriptUi\Attribute\Example;
@@ -61,7 +61,8 @@ final class ConfirmCommand extends Command
 
         $header = (string) $input->getOption('header');
         if ($header !== '') {
-            $output->writeln($header);
+            // UI chrome, not result data — rides the paint stream (CC2).
+            InteractiveRuntime::paint($header . "\n");
         }
 
         $model   = ConfirmModel::newPrompt(
@@ -71,12 +72,12 @@ final class ConfirmCommand extends Command
             negative:    $negate,
         );
         $loop    = \React\EventLoop\Loop::get();
-        $program = new Program($model, new ProgramOptions(
-            useAltScreen:    false,
-            hideCursor:      false,
-            catchInterrupts: true,
-            loop:            $loop,
-        ));
+        $options = InteractiveRuntime::programOptions(useAltScreen: false, hideCursor: false);
+        if ($options === null) {
+            fwrite(STDERR, Lang::t('runtime.no_terminal', ['command' => 'confirm']) . "\n");
+            return Command::FAILURE;
+        }
+        $program = new Program($model, $options);
         $guard = TimeoutGuard::arm($loop, (float) $input->getOption('timeout'), fn () => $program->kill());
         /** @var ConfirmModel $final */
         $final = $program->run();
