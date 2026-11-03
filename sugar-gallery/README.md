@@ -240,7 +240,7 @@ php examples/poster-grid-mosaic.php   # …and a PHP built with ext-gd
 ```
 
 composer pulls neither automatically — `suggest` entries are advisory. The library
-itself needs **zero extensions** (its runtime deps are sugar-core, sugar-style
+itself needs **PHP >= 8.3 and zero extensions** (its runtime deps are sugar-core, sugar-style
 and sugar-mouse); ext-gd is required only by sugar-image, which the mosaic
 example and the integration tests use. Both examples are non-interactive
 one-shot dumps — no key loop (map your own keys per the Keyboard nav contract
@@ -332,7 +332,10 @@ files (or nowhere) to stay green. Locale selection follows the standard
 `LC_ALL` → `LC_MESSAGES` → `LANG` chain of `sugar-core`'s `T::detect()` — but
 detection is **opt-in**: *your app* calls `T::setLocale(T::detect())` at startup,
 and until it does the widgets answer in `en`. The library never mutates process
-locale state itself.
+locale state itself. One layout caveat: the Rail heading keeps fixed left-to-right
+order (bullet, title, counter) whatever the locale - under `ar` the notices render
+right-to-left while that line's parts stay LTR; compose the heading from the
+accessors yourself if you need a fully mirrored rail.
 
 ## API surface
 
