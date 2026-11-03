@@ -114,7 +114,71 @@ Match User wishuser
 
 Then `systemctl reload sshd`.
 
-### 2. Write the entry script
+### 2. Provision the paths the stack writes
+
+Both `Logger` and `RateLimit` write where you point them, and neither can
+do it from a directory the forced-command user cannot touch. The example
+below writes to `/var/log/wish.jsonl` and `/var/lib/wish/buckets.json`,
+so as root:
+
+```sh
+install -d -m 0750 -o wishuser -g wishuser /var/lib/wish
+install -d -m 0755 -o root -g adm         /var/log   # usually already there
+touch /var/log/wish.jsonl && chown wishuser:adm /var/log/wish.jsonl
+```
+
+If you prefer not to hand-create anything, let systemd own it — the
+service that runs your entry script (or a socket-activated wrapper) gets:
+
+```
+[Service]
+StateDirectory=wish
+LogsDirectory=wish
+```
+
+and the paths become `/var/lib/wish/state/buckets.json` and
+`/var/log/wish/wish.jsonl`, both pre-created and owned by the service
+user. `tmpfiles.d(5)` is the equivalent for a host without systemd.
+
+What happens when you skip this, in the order you will notice it:
+
+- `Logger` resolves its sink in its constructor, so an unwritable path
+  throws `RuntimeException` **before** the first session: exit 255, and
+  under `ForceCommand` the PHP trace rides the client's channel rather
+  than a log line. Loud, but at the wrong recipient — check it at
+  deploy time instead (below).
+- `RateLimit` creates its directory `0700` and its files `0600` when it
+  can. When it cannot, it announces on its `$stderr` stream — which is
+  the client-visible channel unless you injected one — and, with the
+  default `failClosed: false`, **lets the connection through**: your
+  throttle is simply off, and nobody but the prober sees it.
+
+A five-line preflight turns both into a deploy-time failure. Put it at
+the top of the entry script (or in a `--preflight` mode you run from a
+provisioning check):
+
+```php
+foreach (['/var/log/wish.jsonl', '/var/lib/wish/buckets.json'] as $path) {
+    $dir = \dirname($path);
+    if (!is_dir($dir) || !is_writable($dir)) {
+        \fwrite(STDERR, "not writable: {$dir}\n");
+        exit(1);
+    }
+    if (file_exists($path) && !is_writable($path)) {
+        \fwrite(STDERR, "not writable: {$path}\n");
+        exit(1);
+    }
+}
+
+$logger = Logger::toFile('/var/log/wish.jsonl');
+\fwrite(STDERR, 'sink: ' . $logger->target() . "\n");
+```
+
+Note that a *new* file is fine as long as its directory is writable:
+`Logger` creates it `0600` and `RateLimit` publishes its state `0600`.
+The preflight above only refuses what the process genuinely cannot open.
+
+### 3. Write the entry script
 
 **InProcessTransport (default) — spawn an interactive shell:**
 
@@ -130,7 +194,7 @@ use SugarCraft\SshServer\Middleware\Spawn;
 use SugarCraft\SshServer\Session;
 
 exit(Server::new()
-    ->use(new Logger('/var/log/wish.jsonl'))
+    ->use(Logger::toFile('/var/log/wish.jsonl'))
     ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new Auth(users: ['alice', 'bob']))
     ->use(new Spawn(fn (Session $s) => [
@@ -158,14 +222,14 @@ use SugarCraft\SshServer\Transport\HostSshdTransport;
 
 exit(Server::new()
     ->withTransport(new HostSshdTransport())
-    ->use(new Logger('/var/log/wish.jsonl'))
+    ->use(Logger::toFile('/var/log/wish.jsonl'))
     ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new Auth(users: ['alice', 'bob']))
     ->use(new BubbleTea(fn ($session) => new MyApp($session)))
     ->serve());
 ```
 
-### 3. Connect
+### 4. Connect
 
 ```
 ssh wishuser@your-host
@@ -635,7 +699,7 @@ $subsystem = new Subsystem();
 $subsystem->register('sftp', new SftpStub());
 
 exit(Server::new()
-    ->use(new Logger('/var/log/wish.jsonl'))
+    ->use(Logger::toFile('/var/log/wish.jsonl'))
     ->use(new Auth(['alice', 'bob']))
     ->use($subsystem)  // handles subsystem sftp; others pass through to Spawn
     ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))

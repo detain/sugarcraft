@@ -14,6 +14,9 @@ final class LoggerTest extends TestCase
     /** @var string|false */
     private $savedLogPath = false;
 
+    /** @var list<string> paths planted by a test, removed in tearDown */
+    private array $planted = [];
+
     protected function setUp(): void
     {
         $this->savedLogPath = getenv(Logger::LOG_PATH_ENV);
@@ -27,6 +30,13 @@ final class LoggerTest extends TestCase
         } else {
             putenv(Logger::LOG_PATH_ENV . '=' . $this->savedLogPath);
         }
+
+        foreach ($this->planted as $path) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+        $this->planted = [];
     }
 
     private function session(): Session
@@ -253,5 +263,44 @@ final class LoggerTest extends TestCase
         $this->assertStringContainsString('session.start', $contents);
         $this->assertStringContainsString('after', $contents);
         fclose($buffer);
+    }
+
+    /**
+     * Audit K7: an unprovisioned path is a constructor failure, not a silent
+     * one -- and the message has to name the path, because under ForceCommand
+     * that trace is the only record anyone gets.
+     */
+    public function testAnUnwritableTargetRefusesAtConstructionNamingThePath(): void
+    {
+        $blocked = \sys_get_temp_dir() . '/wish-logger-blocked-' . \uniqid();
+        $this->assertNotFalse(fopen($blocked, 'w'));
+        $this->planted[] = $blocked;
+        $path = $blocked . '/nested/wish.jsonl';
+
+        try {
+            Logger::toFile($path);
+            $this->fail('expected RuntimeException for an unwritable parent');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('cannot open log target', $e->getMessage());
+            $this->assertStringContainsString($path, $e->getMessage());
+        }
+    }
+
+    /** The provisioning steps are on both surfaces, not just in the commit. */
+    public function testTheProvisioningStepsAreOnTheDeploySurfaces(): void
+    {
+        $readme = \file_get_contents(\dirname(__DIR__, 2) . '/README.md');
+        $this->assertNotFalse($readme);
+        $this->assertStringContainsString('### 2. Provision the paths the stack writes', $readme);
+        $flat = (string) \preg_replace('/\s+/u', ' ', $readme);
+        $this->assertStringContainsString('install -d -m 0750', $flat);
+        $this->assertStringContainsString('StateDirectory=wish', $flat);
+
+        $admin = \file_get_contents(\dirname(__DIR__, 3) . '/docs/admin/sugar-ssh-server.md');
+        $this->assertNotFalse($admin);
+        $adminFlat = (string) \preg_replace('/\s+/u', ' ', $admin);
+        $this->assertStringContainsString('Provisioning the writable paths', $adminFlat);
+        $this->assertStringContainsString('exits 255', $adminFlat);
+        $this->assertStringContainsString('silently off', $adminFlat, 'fail-open must be named as such');
     }
 }

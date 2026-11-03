@@ -59,6 +59,51 @@ Under **HostSshdTransport** (legacy, opt-in):
 
 Neither path is written unless the corresponding middleware is registered.
 
+### Provisioning the writable paths
+
+Both files belong to the user sshd runs the forced command as, and the
+usual failure is that nobody created the parent directory with that user
+in mind. Do it at provision time, not at first login:
+
+```sh
+install -d -m 0750 -o wishuser -g wishuser /var/lib/wish
+touch /var/log/wish.jsonl && chown wishuser:adm /var/log/wish.jsonl
+```
+
+With systemd, let it own the lifecycle instead — on the unit that
+eventually execs the entry script:
+
+```
+[Service]
+StateDirectory=wish          # /var/lib/wish, created and owned by the service user
+LogsDirectory=wish           # /var/log/wish
+```
+
+`tmpfiles.d(5)` entries are the equivalent on a host without systemd.
+What you are buying is a known mode: `Logger` and `RateLimit` create a
+missing parent `0700` and stamp `0600` on a file they create, but they
+never change a mode you already set — so an inherited `0644` from a
+previous deploy stays `0644` (rate-limit state and session records both
+carry usernames and client addresses; check them with `ls -l`).
+
+**What a missing provision looks like.** These two failures are not
+symmetric, and both are cheap to catch before you ship:
+
+- `Logger` resolves its sink in the constructor. An unwritable path
+  throws `RuntimeException` immediately: the entry script exits 255 and,
+  because the child's stderr is the client's extended-data channel, the
+  PHP trace is what the connecting user reads. Nothing lands on disk.
+- `RateLimit` cannot open its lock file or decode its state → it
+  announces once on its `$stderr` stream and applies its posture:
+  `fail-open` (the default) admits the connection, so the throttle is
+  silently off; `failClosed: true` denies everything, so a full disk
+  becomes a lockout. Both notices are path-free by design, which means
+  the *operator* needs the injected stream to learn anything at all.
+
+Run a preflight at deploy time (see the README quickstart for the
+snippet): `is_writable()` on each directory and existing file, and log
+`Logger::target()` on boot so the resolved sink is on the record.
+
 ---
 
 ## Configuration
