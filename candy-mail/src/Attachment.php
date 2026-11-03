@@ -72,12 +72,10 @@ final class Attachment
     {
         $name = $filename ?? \basename($path);
 
-        // RFC 2392 Content-ID format: accepts msg-id (addr-spec) or cid:uri
-        // Valid formats: "cid:user@host", "user@host", or simple identifiers like "cid-1", "logo"
-        // Simple identifiers (no @) are widely supported by email clients despite being non-standard
-        if (!\preg_match('/^(cid:[a-zA-Z0-9\.\+\-]+@[a-zA-Z0-9\.\-]+|[a-zA-Z0-9\.\+\-]+@[a-zA-Z0-9\.\-]+|[a-zA-Z0-9\.\+\-]+)$/', $cid)) {
-            throw new \InvalidArgumentException(Lang::t('attachment.invalid_cid', ['cid' => $cid]));
-        }
+        // C2: the ctor gate below is the choke for every path, but inline()
+        // additionally checks BEFORE reading the file so a forged cid is
+        // diagnosed even when the path would fail first (pre-C2 order kept).
+        self::refuseMalformedCid($cid);
 
         $mime = self::detectMimeType($path);
         $content = self::readFileOrThrow($path);
@@ -134,6 +132,10 @@ final class Attachment
 
     /**
      * Create a copy with an updated cid (for inline embedding).
+     *
+     * @throws \InvalidArgumentException if the CID is not a valid RFC 2392
+     *     format — the ctor choke validates every assignment (C2), so the
+     *     forged-Content-ID path this method used to leave open is closed.
      */
     public function withCid(string $cid): self
     {
@@ -164,6 +166,16 @@ final class Attachment
         self::refuseHeaderInjection($filename, 'attachment filename');
         self::refuseHeaderInjection($mimeType, 'attachment MIME type');
 
+        // C2 (lib-reviews-1102): the cid is interpolated into
+        // `Content-ID: <cid>` verbatim, so it needs the SAME construction-time
+        // gate — but a stronger one than CR/LF: an unquoted `>` or space lets
+        // a crafted value close the angle bracket early and append headers on
+        // the SAME wire line without any CRLF. The RFC 2392 grammar inline()
+        // has always enforced is the allowlist; applying it in the ctor means
+        // withCid() (the open door the security probe walked through) can no
+        // longer mint an unguarded value.
+        self::refuseMalformedCid($cid);
+
         $this->filename  = $filename;
         $this->path      = $path;
         $this->content   = $content;
@@ -181,6 +193,31 @@ final class Attachment
     {
         if (\preg_match('/[\r\n]/', $value)) {
             throw new \InvalidArgumentException(Lang::t('email.crlf_in_header', ['field' => $field]));
+        }
+    }
+
+    /**
+     * Refuse a Content-ID outside the RFC 2392 addr-spec / token grammar.
+     *
+     * The grammar (the one inline() has always documented) admits only the
+     * characters a msg-id may carry: no CR/LF (header injection), no `>`
+     * (early close of the Content-ID angle bracket), no space (parameter
+     * smuggling on the same line).
+     *
+     * RFC 2392 §3 / RFC 2822 msg-id: `dot-atom-text` or `cid:` + that.
+     *
+     * @throws \InvalidArgumentException when $cid is non-null and outside the grammar
+     */
+    private static function refuseMalformedCid(?string $cid): void
+    {
+        if ($cid === null) {
+            return;
+        }
+
+        // Valid formats: "cid:user@host", "user@host", or simple identifiers like "cid-1", "logo"
+        // Simple identifiers (no @) are widely supported by email clients despite being non-standard
+        if (!\preg_match('/^(cid:[a-zA-Z0-9\.\+\-]+@[a-zA-Z0-9\.\-]+|[a-zA-Z0-9\.\+\-]+@[a-zA-Z0-9\.\-]+|[a-zA-Z0-9\.\+\-]+)$/', $cid)) {
+            throw new \InvalidArgumentException(Lang::t('attachment.invalid_cid', ['cid' => $cid]));
         }
     }
 

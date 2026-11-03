@@ -35,6 +35,8 @@ return [
     'smtp.send_cancelled'          => 'SMTP-verzending geannuleerd voordat deze begon',
     'smtp.write_error'             => 'Schrijven naar SMTP-server mislukt',
     'smtp.incomplete_write'        => 'Onvolledig schrijven naar SMTP-server',
+    'smtp.invalid_helo_host'       => 'HELO-host {helo} is geen geldige hostnaam (alleen letters, cijfers, punten en koppeltekens)',
+    'transport.not_serializable'   => 'Een transport met inloggegevens kan niet worden geserialiseerd of opnieuw geimporteeerd; bouw het waar het wordt gebruikt',
     'email.crlf_in_address'        => 'CRLF-injectie gedetecteerd in e-mailadres',
     'email.invalid_address'        => 'Ongeldig e-mailadres: {addr}',
     'email.crlf_in_header'         => 'CRLF-injectie gedetecteerd in {field}-header',

@@ -18,7 +18,7 @@ final class ResendTransport implements Transport
     /**
      * @param string $apiKey Resend API key. If empty, reads from RESEND_API_KEY env var.
      */
-    public function __construct(string $apiKey = '')
+    public function __construct(#[\SensitiveParameter] string $apiKey = '')
     {
         if ($apiKey === '') {
             $apiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true) ?: '';
@@ -77,14 +77,43 @@ final class ResendTransport implements Transport
     }
 
     /**
-     * Mask the API key so var_dump()/print_r()/reflection-based logging never
-     * exposes the credential (parity with SmtpTransport's password mask).
+     * Mask the API key so var_dump()/print_r() of live object state shows
+     * `****` (parity with SmtpTransport's password mask).
+     *
+     * C4 (lib-reviews-1102) truth-flip: the old sentence promised reflection
+     * never exposes the credential — false. serialize() and the (array) cast
+     * and ReflectionProperty::getValue all read real property bytes:
+     * serialize() is refused by __serialize() below, var_export()
+     * resurrection by __set_state(), trace arguments by
+     * #[\SensitiveParameter]; the raw text/cast/reflection read of a live
+     * object cannot be hooked and must simply not be logged.
      */
     public function __debugInfo(): array
     {
         return [
             'apiKey' => $this->apiKey === '' ? '' : '****',
         ];
+    }
+
+    /**
+     * Refuse serialization outright (C4) — the API key would ride the wire
+     * of any cache/session that stored this transport. Build it where used.
+     *
+     * @throws \RuntimeException always
+     */
+    public function __serialize(): array
+    {
+        throw new \RuntimeException(Lang::t('transport.not_serializable'));
+    }
+
+    /**
+     * Refuse var_export() resurrection (C4).
+     *
+     * @throws \RuntimeException always
+     */
+    public static function __set_state(array $properties): static
+    {
+        throw new \RuntimeException(Lang::t('transport.not_serializable'));
     }
 
     /**

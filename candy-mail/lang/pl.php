@@ -35,6 +35,8 @@ return [
     'smtp.send_cancelled'          => 'Wysyłanie SMTP anulowane przed rozpoczęciem',
     'smtp.write_error'             => 'Zapis na serwer SMTP nie powiódł się',
     'smtp.incomplete_write'        => 'Niepełny zapis na serwer SMTP',
+    'smtp.invalid_helo_host'       => 'Host HELO {helo} nie jest prawidlowa nazwa hosta (tylko litery, cyfry, kropki i mylniki)',
+    'transport.not_serializable'   => 'Transport zawierajacy dane uwierzytelniajace nie moze byc serializowany ani ponownie importowany; tworz go tam, gdzie jest uzywany',
     'email.crlf_in_address'        => 'Wykryto wstrzyknięcie CRLF w adresie e-mail',
     'email.invalid_address'        => 'Nieprawidłowy adres e-mail: {addr}',
     'email.crlf_in_header'         => 'Wykryto wstrzyknięcie CRLF w nagłówku {field}',

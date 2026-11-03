@@ -27,6 +27,8 @@ return [
     'smtp.send_cancelled'        => 'SMTP send cancelled before it started',
     'smtp.write_error'           => 'Failed to write to SMTP server',
     'smtp.incomplete_write'      => 'Incomplete write to SMTP server',
+    'smtp.invalid_helo_host'     => 'HELO host {helo} is not a valid hostname (letters, digits, dots and hyphens only)',
+    'transport.not_serializable' => 'A transport holding credentials cannot be serialized or re-imported; construct it where it is used',
 
     // Email.php
     'email.crlf_in_address'     => 'CRLF injection detected in email address',

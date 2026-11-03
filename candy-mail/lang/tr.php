@@ -35,6 +35,8 @@ return [
     'smtp.send_cancelled'          => 'SMTP gönderimi başlamadan önce iptal edildi',
     'smtp.write_error'             => 'SMTP sunucusuna yazma başarısız',
     'smtp.incomplete_write'        => 'SMTP sunucusuna eksik yazma',
+    'smtp.invalid_helo_host'       => 'HELO sunucusu {helo} gecerli bir ana bilgisayar adi degil (yalnizca harf, rakam, nokta ve tire)',
+    'transport.not_serializable'   => 'Kimlik bilgisi tasiyan bir transport serilestirilemez veya yeniden ic aktarilamaz; kullanildigi yerde olusturun',
     'email.crlf_in_address'        => 'E-posta adresinde CRLF enjeksiyonu algılandı',
     'email.invalid_address'        => 'Geçersiz e-posta adresi: {addr}',
     'email.crlf_in_header'         => '{field} başlığında CRLF enjeksiyonu algılandı',

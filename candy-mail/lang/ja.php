@@ -35,6 +35,8 @@ return [
     'smtp.send_cancelled'          => 'SMTP送信を開始する前にキャンセルされました',
     'smtp.write_error'             => 'SMTPサーバーへの書き込みに失敗しました',
     'smtp.incomplete_write'        => 'SMTPサーバーへの書き込みが不完全です',
+    'smtp.invalid_helo_host'       => 'HELO 丕スト {helo} は宍効な丕スト名ではありま亖ん(文字、数字、ドッLt、ハイフンのみ)',
+    'transport.not_serializable'   => '认证情報を保持する卜ランスホー卜はシ里ライズや再取リ込ミができません。使する場所で作亪成してください',
     'email.crlf_in_address'        => 'メールアドレスにCRLFインジェクションが検出されました',
     'email.invalid_address'        => '無効なメールアドレス: {addr}',
     'email.crlf_in_header'         => '{field}ヘッダーにCRLFインジェクションが検出されました',

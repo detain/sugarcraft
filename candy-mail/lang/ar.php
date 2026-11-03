@@ -35,6 +35,8 @@ return [
     'smtp.send_cancelled'          => 'تم إلغاء إرسال SMTP قبل بدئه',
     'smtp.write_error'             => 'فشلت الكتابة إلى خادم SMTP',
     'smtp.incomplete_write'        => 'كتابة غير مكتملة إلى خادم SMTP',
+    'smtp.invalid_helo_host'       => 'مضيف HELO {helo} ليس اسم مضيف صالحا (الحروف والارقام والنقاط والشرطات فقط)',
+    'transport.not_serializable'   => 'لا يمكن تسلسل ناقل يحمل بيانات اعتماد او استيراده مجددا؛ انشئه في مكان استخدامه',
     'email.crlf_in_address'        => 'تم رصد حقن CRLF في عنوان البريد الإلكتروني',
     'email.invalid_address'        => 'عنوان بريد إلكتروني غير صالح: {addr}',
     'email.crlf_in_header'         => 'تم رصد حقن CRLF في الترويسة {field}',

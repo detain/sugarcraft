@@ -35,6 +35,8 @@ return [
     'smtp.send_cancelled'          => 'Invio SMTP annullato prima dell’inizio',
     'smtp.write_error'             => 'Scrittura sul server SMTP non riuscita',
     'smtp.incomplete_write'        => 'Scrittura incompleta sul server SMTP',
+    'smtp.invalid_helo_host' => 'L\'host HELO {helo} non è un hostname valido (solo lettere, cifre, punti e trattini)',
+    'transport.not_serializable' => 'Un transport che contiene credenziali non può essere serializzato o reimportato; costruiscilo dove viene utilizzato',
     'email.crlf_in_address'        => 'Rilevata iniezione CRLF nell’indirizzo e-mail',
     'email.invalid_address'        => 'Indirizzo e-mail non valido: {addr}',
     'email.crlf_in_header'         => 'Rilevata iniezione CRLF nell’intestazione {field}',

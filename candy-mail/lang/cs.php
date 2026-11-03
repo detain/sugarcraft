@@ -35,6 +35,8 @@ return [
     'smtp.send_cancelled'          => 'Odeslání SMTP zrušeno před zahájením',
     'smtp.write_error'             => 'Zápis na server SMTP se nezdařil',
     'smtp.incomplete_write'        => 'Neúplný zápis na server SMTP',
+    'smtp.invalid_helo_host'       => 'Hostitel HELO {helo} neni platny nazev hostitele (pouze pismena, cislice, tecky a pomlcky)',
+    'transport.not_serializable'   => 'Transport obsahujici prihlasovaci udaje nelze serializovat ani znovu importovat; vytvorte jej tam, kde se pouziva',
     'email.crlf_in_address'        => 'V e-mailové adrese zjištěno vložení CRLF',
     'email.invalid_address'        => 'Neplatná e-mailová adresa: {addr}',
     'email.crlf_in_header'         => 'V hlavičce {field} zjištěno vložení CRLF',

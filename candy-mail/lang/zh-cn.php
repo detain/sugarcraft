@@ -35,6 +35,8 @@ return [
     'smtp.send_cancelled'          => 'SMTP 发送开始前已取消',
     'smtp.write_error'             => '写入 SMTP 服务器失败',
     'smtp.incomplete_write'        => '对 SMTP 服务器的写入不完整',
+    'smtp.invalid_helo_host'       => 'HELO 主机 {helo} 不是有效的主机名(仅允许字母、数字、点和连字符)',
+    'transport.not_serializable'   => '持有凭据的传输对象无法序列化或重新导入;请在使用它的地方构造它',
     'email.crlf_in_address'        => '在电子邮件地址中检测到 CRLF 注入',
     'email.invalid_address'        => '无效的电子邮件地址：{addr}',
     'email.crlf_in_header'         => '在 {field} 标头中检测到 CRLF 注入',

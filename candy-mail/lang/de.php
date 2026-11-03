@@ -42,6 +42,8 @@ return [
     'smtp.send_cancelled'          => 'SMTP-Versand vor dem Start abgebrochen',
     'smtp.write_error'             => 'Schreiben auf den SMTP-Server fehlgeschlagen',
     'smtp.incomplete_write'        => 'Unvollständiger Schreibvorgang auf den SMTP-Server',
+    'smtp.invalid_helo_host'       => 'HELO-Host {helo} ist kein gueltiger Hostname (nur Buchstaben, Ziffern, Punkte und Bindestriche)',
+    'transport.not_serializable'   => 'Ein Transport mit Anmeldedaten kann nicht serialisiert oder importiert werden; erstellen Sie ihn am Verwendungsort',
     'email.crlf_in_address'        => 'CRLF-Injection in E-Mail-Adresse erkannt',
     'email.invalid_address'        => 'Ungültige E-Mail-Adresse: {addr}',
     'email.crlf_in_header'         => 'CRLF-Injection im {field}-Header erkannt',

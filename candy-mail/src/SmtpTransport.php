@@ -54,10 +54,22 @@ final class SmtpTransport implements Transport
         string $host,
         int $port = 587,
         string $username = '',
+        #[\SensitiveParameter]
         string $password = '',
         int $timeout = 30,
         string $heloHost = '',
     ) {
+        // C3 (lib-reviews-1102): heloHost is interpolated verbatim into
+        // `EHLO {host}\r\n` — BEFORE STARTTLS and BEFORE AUTH — so a value
+        // carrying one CRLF pair forges whole SMTP commands (MAIL FROM /
+        // RCPT TO / DATA) on the protocol channel. The Message-ID path has
+        // always filtered the same value (messageIdHost()); construction is
+        // now the choke too: any heloHost outside the RFC 1123 hostname
+        // grammar (letters, digits, '.', '-') that the EHLO argument may
+        // legally carry is refused loudly. '' keeps the gethostname() default.
+        if ($heloHost !== '' && \preg_match('/^[A-Za-z0-9.\-]{1,253}$/', $heloHost) !== 1) {
+            throw new \InvalidArgumentException(Lang::t('smtp.invalid_helo_host', ['helo' => $heloHost]));
+        }
         $this->host        = $host;
         $this->port        = $port;
         $this->username    = $username;
@@ -125,8 +137,25 @@ final class SmtpTransport implements Transport
     }
 
     /**
-     * Mask secrets so the SMTP password never leaks through var_dump(),
-     * print_r(depth), stack traces, or logging that reflects object state.
+     * Mask secrets so the SMTP password never leaks through var_dump() or
+     * print_r() reflection of live object state.
+     *
+     * C4 (lib-reviews-1102) truth-flip: the old sentence claimed this alone
+     * covered "logging that reflects object state" — false. var_export() and
+     * serialize() read real properties, and stack traces read call arguments;
+     * those channels are sealed separately, and one honest remainder exists:
+     *  - var_dump/print_r            — masked by this method.
+     *  - serialize()/unserialize()   — refused by __serialize() below.
+     *  - var_export() resurrection   — refused by __set_state() below (the
+     *    generated `__set_state` text can never be eval'd back into a live,
+     *    credentialed transport).
+     *  - stack/trace arguments       — redacted by #[\SensitiveParameter] on
+     *    $password, even with zend.exception_ignore_args=0.
+     *  - var_export($t, true) TEXT, the (array) cast, and
+     *    ReflectionProperty::getValue — NOT sealable while the plaintext
+     *    lives in a property: each reads real property bytes and no magic
+     *    hook observes them. Treat such a dump like a dump of process
+     *    memory; do not log it.
      */
     public function __debugInfo(): array
     {
@@ -143,6 +172,30 @@ final class SmtpTransport implements Transport
             'encrypted'   => $this->encrypted,
             'connected'   => $this->socket !== null,
         ];
+    }
+
+    /**
+     * Refuse serialization outright (C4): a serialized transport is a
+     * plaintext credential on disk or in a cache, and unserialize() of it
+     * resurrected a live credentialed sender. Transports are cheap to build
+     * where they are used; there is nothing worth persisting in one.
+     *
+     * @throws \RuntimeException always
+     */
+    public function __serialize(): array
+    {
+        throw new \RuntimeException(Lang::t('transport.not_serializable'));
+    }
+
+    /**
+     * Refuse var_export() resurrection (C4) — see the __debugInfo contract
+     * above for what this does and does not seal.
+     *
+     * @throws \RuntimeException always
+     */
+    public static function __set_state(array $properties): static
+    {
+        throw new \RuntimeException(Lang::t('transport.not_serializable'));
     }
 
     /**

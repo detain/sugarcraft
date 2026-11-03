@@ -89,15 +89,49 @@ final class SmtpMimeStructureTest extends TestCase
         );
     }
 
-    public function testMessageIdHostIsSanitizedFromArbitraryHeloHost(): void
+    public function testHeloHostOutsideTheHostnameGrammarIsRefusedAtConstruction(): void
     {
-        $transport = new SmtpTransport('smtp.example.com', 587, '', '', 30, "ev]il ho@st!");
+        // C3 (lib-reviews-1102): heloHost rides `EHLO {host}\r\n` verbatim on
+        // the pre-TLS protocol channel — one CRLF pair forges whole SMTP
+        // commands. Construction is now the choke; these are the shapes the
+        // old "sanitize at Message-ID time" stance let through the door.
+        foreach ([
+            "ev]il ho@st!",
+            "ok.example.com\r\nMAIL FROM:<evil@x>",
+            'spaced host',
+            'br>acket',
+            "null\0byte.example",
+        ] as $hostile) {
+            try {
+                new SmtpTransport('smtp.example.com', 587, '', '', 30, $hostile);
+                $this->fail('hostile heloHost accepted at construction: ' . \addcslashes($hostile, "\0..\37"));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('not a valid hostname', $e->getMessage());
+            }
+        }
+
+        // The legal grammar still passes (letters/digits/dot/hyphen).
+        new SmtpTransport('smtp.example.com', 587, '', '', 30, 'mail.example.com');
+    }
+
+    public function testMessageIdHostDefensivelyFiltersTheHeloIdentity(): void
+    {
+        // With the C3 construction gate, hostile values cannot reach the
+        // property through the public API; messageIdHost() stays as
+        // defense-in-depth. Pin it by writing the property directly past the
+        // ctor — simulating any future unguarded assignment.
+        $transport = new SmtpTransport('smtp.example.com', 587, '', '', 30, 'legal.example.com');
+        $host      = new \ReflectionProperty($transport, 'heloHost');
+        $host->setValue($transport, "ev]il ho@st!");
+
+        $filter = new \ReflectionMethod($transport, 'messageIdHost');
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9.\-]+$/', $filter->invoke($transport));
+
         $mime      = $transport->buildMimeMessage(new Email(
             from: ['a@example.com'],
             to:   ['b@example.com'],
             body: 'x',
         ));
-
         $messageId = $this->headerLine($mime, 'Message-ID:');
         // Exactly one '@', angle brackets balanced, no forged header bytes.
         $this->assertSame(1, \substr_count($messageId, '@'));
