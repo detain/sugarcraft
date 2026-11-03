@@ -175,7 +175,9 @@ final class RecordIntegrityTest extends TestCase
     {
         // Decoder contract: this exact set, documented in the README. Flipping
         // it is a record-shape change and must not happen silently.
-        $this->assertSame(['level', 'msg', 'time', 'caller', 'prefix'], RecordKeys::RESERVED);
+        // [N1] '_encode_error' joined the list: it is a name the defensive
+        // encode fallback writes, so it must be forge-proof like the rest.
+        $this->assertSame(['level', 'msg', 'time', 'caller', 'prefix', '_encode_error'], RecordKeys::RESERVED);
         $this->assertSame('ctx_', RecordKeys::PREFIX);
     }
 

@@ -25,12 +25,16 @@ final class RecordKeys
     /**
      * Envelope names the machine formatters own. Reserved unconditionally —
      * even when a given run does not emit one (e.g. `time` with
-     * reportTimestamp disabled) — so the context-to-record mapping never
-     * depends on formatter flags and decoders see a stable shape.
+     * reportTimestamp disabled, or `_encode_error` outside the defensive
+     * encode path) — so the context-to-record mapping never depends on
+     * formatter flags or on which branch produced the line, and decoders see
+     * a stable shape. `_encode_error` joined the list because JsonFormatter's
+     * defensive fallback writes it: without reservation a hostile context
+     * entry could pre-empt it and mask a real encode failure.
      *
      * @var list<string>
      */
-    public const RESERVED = ['level', 'msg', 'time', 'caller', 'prefix'];
+    public const RESERVED = ['level', 'msg', 'time', 'caller', 'prefix', '_encode_error'];
 
     /** The namespace prefix prepended once per collision. */
     public const PREFIX = 'ctx_';

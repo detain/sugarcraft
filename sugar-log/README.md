@@ -214,17 +214,25 @@ Untrusted data can never forge or reshape a record:
 
 - **Sanitisation** — text reaching `TextFormatter` and `LogfmtFormatter` passes
   through `Sanitize::untrusted()`, stripping ESC-based injection (terminal
-  repositioning, hyperlinks, image markers) before anything is written; JSON
-  output is escaped by `json_encode` and falls back to a minimal safe envelope
-  if a value cannot be encoded.
+  repositioning, hyperlinks, image markers) before anything is written;
+  `JsonFormatter` sweeps the same control bytes from message, prefix, caller
+  and every context key and value before encoding (json_encode escapes C0
+  bytes but passes C1 bytes through verbatim), and substitutes invalid UTF-8
+  instead of letting it fail the encode.
 - **logfmt escaping** — backslash and double-quote inside values are escaped
   (`\\`, `\"`), newline/CR/tab become `\n`/`\r`/`\t`, and a value is quoted
   whenever it contains whitespace, `=`, `"`, or `\`.
 - **Reserved keys** — context keys colliding with the record envelope
-  (`level`, `msg`, `time`, `caller`, `prefix`) are renamed with a repeated
+  (`level`, `msg`, `time`, `caller`, `prefix`, `_encode_error`) are renamed
+  with a repeated
   `ctx_` prefix in both JSON and logfmt output (`level` → `ctx_level`,
   `ctx_level` → `ctx_ctx_level`). Decoded records therefore always carry the
   *real* level, time and message no matter what a context array contains.
+- **Hostile shapes** — reference cycles in context terminate at a depth cap
+  (`[...]`), non-finite floats become `'INF'`/`'-INF'`/`'NAN'`, a throwing
+  `__toString()` is contained (the object reports its class name), and if an
+  encode fails anyway the JSON fallback drops only the offending field — the
+  envelope and every other entry survive, flagged by `_encode_error`.
 
 ## Panic Handlers
 

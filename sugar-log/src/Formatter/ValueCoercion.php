@@ -56,11 +56,8 @@ final class ValueCoercion
             return 'resource';
         }
 
-        if (\is_callable($v)) {
-            return 'closure';
-        }
-
-        // Fallback for unknown types
+        // Fallback for unknown types (closures arrive through the object arm
+        // above and report their class name, e.g. 'Closure')
         return 'unknown';
     }
 
@@ -78,34 +75,70 @@ final class ValueCoercion
 
     private static function stringifyObject(object $v): string
     {
-        // Objects with __toString
+        // Objects with __toString — the cast is attacker-controlled code, so a
+        // throwing or recursion-cycling __toString() must never abort the
+        // record: contain it and fall through to the name representation.
         if ($v instanceof \Stringable || \method_exists($v, '__toString')) {
-            return (string) $v;
+            try {
+                return (string) $v;
+            } catch (\Throwable) {
+                return self::objectName($v);
+            }
         }
 
-        // Anonymous class or regular object - return class name
+        return self::objectName($v);
+    }
+
+    /**
+     * Name representation of an object: anonymous classes collapse to
+     * 'object' (their raw name embeds a source path and a NUL byte), named
+     * classes report get_class().
+     *
+     * Detection rides the '@anonymous' marker rather than a 'class@anonymous'
+     * prefix: PHP 8 prefixes the marker with the first implemented interface
+     * or extended class name (e.g. 'Stringable@anonymous ...'), and '@' is
+     * not a legal character in any declared class name.
+     */
+    private static function objectName(object $v): string
+    {
         $class = \get_class($v);
-        if (\strpos($class, 'class@anonymous') === 0) {
+        if (\str_contains($class, '@anonymous')) {
             return 'object';
         }
+
         return $class;
     }
 
     /**
      * Coerce a value for JSON encoding in JsonFormatter.
      *
-     * Preserves native JSON types (int, float, bool) while converting
-     * objects and arrays to formats suitable for json_encode.
-     * Resources are converted to null (json_encode default behavior).
+     * Preserves native JSON types (int, bool) and JSON-safe floats while
+     * converting everything else to formats json_encode cannot choke on:
+     *  - non-finite floats (INF/NAN make json_encode fail and would otherwise
+     *    destroy the whole record) become the strings 'INF'/'-INF'/'NAN';
+     *  - nested arrays recurse with {@see self::MAX_DEPTH} as a hard depth
+     *    cap, so a reference cycle in the context (`$ctx['self'] = &$ctx`)
+     *    terminates with '[...]' instead of overflowing the stack;
+     *  - resources become null (json_encode default behavior);
+     *  - objects collapse to their name, or to the result of __toString()
+     *    when that cast exists AND survives — a hostile __toString() that
+     *    throws is contained and the object falls back to its name.
      *
-     * Mirrors the coercion logic previously duplicated in JsonFormatter::coerceValue().
-     *
-     * @param mixed $v The value to coerce.
+     * @param mixed $v     The value to coerce.
+     * @param int   $depth Internal recursion depth (appended, additive).
      * @return mixed   Coerced value suitable for json_encode.
      */
-    public static function coerce(mixed $v): mixed
+    public static function coerce(mixed $v, int $depth = 0): mixed
     {
-        if (\is_bool($v) || \is_int($v) || \is_float($v)) {
+        if (\is_bool($v) || \is_int($v)) {
+            return $v;
+        }
+
+        if (\is_float($v)) {
+            if (!\is_finite($v)) {
+                return \is_nan($v) ? 'NAN' : ($v > 0 ? 'INF' : '-INF');
+            }
+
             return $v;
         }
 
@@ -114,7 +147,11 @@ final class ValueCoercion
         }
 
         if (\is_array($v)) {
-            return \array_map(fn($i) => self::coerce($i), $v);
+            if ($depth >= self::MAX_DEPTH) {
+                return '[...]';
+            }
+
+            return \array_map(static fn($i) => self::coerce($i, $depth + 1), $v);
         }
 
         if ($v === null) {
@@ -126,12 +163,17 @@ final class ValueCoercion
             return null;
         }
 
-        // Objects with __toString
+        // Objects with __toString — guarded cast (see stringifyObject)
         if ($v instanceof \Stringable || \method_exists($v, '__toString')) {
-            return (string) $v;
+            try {
+                return (string) $v;
+            } catch (\Throwable) {
+                return self::objectName($v);
+            }
         }
 
-        // Object without __toString — return class name
-        return \get_class($v);
+        // Object without __toString — anonymous names carry a path + NUL byte,
+        // so they collapse to 'object' exactly like the stringify path does.
+        return self::objectName($v);
     }
 }
