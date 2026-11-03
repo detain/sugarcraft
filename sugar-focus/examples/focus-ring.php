@@ -85,23 +85,32 @@ if (!stream_isatty(STDIN)) {
 }
 
 $sttyState = trim((string) shell_exec('stty -g 2>/dev/null'));
-$restore   = static function () use ($sttyState): void {
+$restored  = false;
+$restore   = static function () use ($sttyState, &$restored): void {
+    // Idempotent: reached both by the explicit call at the end of the loop and
+    // by the shutdown handler below.
+    if ($restored) {
+        return;
+    }
+    $restored = true;
+
     // Use proc_open with array args to avoid string concatenation that Codacy
     // flags as command-injection risk, even though escapeshellarg is correct.
+    //
+    // fd0 must be a tty: plain `stty` configures its OWN standard input, so the
+    // previous '/dev/null' made every restore attempt die on "Inappropriate
+    // ioctl for device" with the status ignored — the arm below took effect on
+    // the real terminal while this countermand never reached it, and the shell
+    // was left with echo off. '/dev/tty' is this process' controlling terminal,
+    // which exists here because the stream_isatty(STDIN) guard above lets only
+    // interactive runs reach this point. (GNU spells the file option -F, BSD
+    // -f; /dev/tty avoids the dialect split entirely.)
     $pipes = [];
-    if ($sttyState !== '') {
-        $process = proc_open(
-            ['stty', $sttyState],
-            [['file', '/dev/null', 'r'], ['file', '/dev/null', 'w'], ['file', '/dev/null', 'w']],
-            $pipes,
-        );
-    } else {
-        $process = proc_open(
-            ['stty', 'sane'],
-            [['file', '/dev/null', 'r'], ['file', '/dev/null', 'w'], ['file', '/dev/null', 'w']],
-            $pipes,
-        );
-    }
+    $process = proc_open(
+        $sttyState !== '' ? ['stty', $sttyState] : ['stty', 'sane'],
+        [['file', '/dev/tty', 'r'], ['file', '/dev/null', 'w'], ['file', '/dev/null', 'w']],
+        $pipes,
+    );
     if (is_resource($process)) {
         proc_close($process);
     }
@@ -109,34 +118,59 @@ $restore   = static function () use ($sttyState): void {
 };
 register_shutdown_function($restore);
 
-// Raw, unbuffered single-byte reads so Tab is seen immediately (no Enter).
-shell_exec('stty -echo -icanon min 1 time 0 2>/dev/null');
+// Raw-ish mode so Tab is seen immediately (no Enter). -isig matters as much as
+// -echo here: with signals still armed, Ctrl+C raises SIGINT, PHP dies mid-read
+// and the shutdown restore never runs — the very broken-terminal story the
+// comment above exists to prevent. With -isig, Ctrl+C arrives as an ordinary
+// byte that the loop below quits on, exiting through the same orderly path as
+// 'q'. (The `stty -g` capture above predates this arm, so the restore pair
+// covers the isig flip too.)
+shell_exec('stty -echo -icanon -isig min 1 time 0 2>/dev/null');
 fwrite(STDOUT, "\x1b[?25l"); // hide the cursor while animating
 
 $render($ring);
 
+$buffer = '';
 while (true) {
+    // Read into a persistent buffer and consume whole events from it. Matching
+    // each fread() result exactly lost two real shapes: two Tabs typed quickly
+    // arrive as one "\t\t" read (neither "\t" nor "\x1b[Z" — both presses
+    // dropped), and a shift-Tab straddling a read boundary ("\x1b[" then "Z")
+    // lost both halves.
     $chunk = fread(STDIN, 8);
     if ($chunk === '' || $chunk === false) {
-        continue;
-    }
-
-    // 'q' or Ctrl-C ends the demo.
-    if ($chunk[0] === 'q' || $chunk[0] === "\x03") {
+        // A blocking `min 1` read returns 0 bytes/false only on hangup; the
+        // previous `continue` spun hot forever once the tty closed.
         break;
     }
+    $buffer .= $chunk;
 
-    if ($chunk === "\t") {
-        $ring = $ring->next();
-        $render($ring);
-        continue;
-    }
+    while ($buffer !== '') {
+        if ($buffer[0] === "\x1b") {
+            if (strlen($buffer) === 1) {
+                break; // lone ESC so far — wait for the rest of the sequence
+            }
+            if (str_starts_with($buffer, "\x1b[Z")) {
+                $ring = $ring->previous();
+                $buffer = substr($buffer, 3);
+                $render($ring);
+                continue;
+            }
+            // Any other ESC-led byte: drop just the ESC and re-enter on the
+            // remainder, so a stray ESC before 'q' cannot eat the quit.
+            $buffer = substr($buffer, 1);
+            continue;
+        }
 
-    // ESC [ Z is Backtab — what most terminals send for Shift-Tab.
-    if ($chunk === "\x1b[Z") {
-        $ring = $ring->previous();
-        $render($ring);
-        continue;
+        $byte = $buffer[0];
+        $buffer = substr($buffer, 1);
+        if ($byte === 'q' || $byte === "\x03") {
+            break 2; // 'q' or Ctrl-C (delivered as a byte — see -isig above)
+        }
+        if ($byte === "\t") {
+            $ring = $ring->next();
+            $render($ring);
+        }
     }
 }
 
