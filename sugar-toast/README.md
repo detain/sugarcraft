@@ -290,10 +290,43 @@ $toast  = $toast->push($alert);
 $toast = $toast->alert(ToastType::Error, 'Connection lost', actions: [$action]);
 ```
 
-The library renders the `[Label]` buttons; dispatching them is the host's job.
-`Action` is a value object with `readonly string $label` and
-`readonly \Closure(): void $callback`. When the action is triggered, invoke
-`$action->callback()` directly in your key/mouse handler.
+The library renders the `[Label]` buttons; dispatching them is the host's
+job — and it ships the geometry to do it with. `Action` is a value object
+with `readonly string $label` (normalised at construction: only inline SGR
+survives, see "Security & trust boundary") and `readonly \Closure(): void
+$callback`. `actionRects()` returns a hit-test rectangle for every rendered
+button — `{action, alert, alertIndex, actionIndex, row, col, width}` in the
+same absolute frame coordinates `view()` composites in — and `actionAt()`
+answers "which action covers this cell?". sugar-toast stays zone-neutral:
+it emits no mouse zones and pulls in no mouse dependency; the host owns
+input.
+
+```php
+use SugarCraft\Toast\{Action, Alert, Position, Toast, ToastType};
+
+$toast = Toast::new(60)
+    ->withPosition(Position::TopLeft)
+    ->alert(ToastType::Error, 'Connection lost', actions: [
+        Action::new('Retry', fn () => $reconnect()),
+        Action::new('Cancel', fn () => $giveUp()),
+    ]);
+
+// Mouse: map the terminal's click to frame coords (subtract your pane
+// offset), then dispatch whatever button is under the cursor:
+$action = $toast->actionAt($clickCol, $clickRow, $background, $cols, $rows);
+if ($action !== null) {
+    ($action->callback)();
+}
+
+// Keyboard: enumerate the same rects — e.g. Alt+<n> fires the n-th button,
+// or draw a focus ring at {row, col, width} and activate on Enter.
+foreach ($toast->actionRects($background, $cols, $rows) as $n => $rect) {
+    $hotkeys['alt+' . ($n + 1)] = $rect['action'];
+}
+```
+
+`actionRects()`/`actionAt()`/`activeAlerts()` all ignore expired alerts, so
+the clickable set is exactly what is on screen.
 
 ## Styled Alerts
 

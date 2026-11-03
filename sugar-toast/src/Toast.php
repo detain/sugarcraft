@@ -597,64 +597,167 @@ final class Toast
      */
     public function view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string
     {
-        if ($this->dismissed || $this->queue === []) {
+        $layout = $this->layout($background, $viewportWidth, $viewportHeight);
+        if ($layout === null) {
             return $background;
         }
 
-        $active = \array_values(
-            \array_filter($this->queue, fn(Alert $a): bool => !$a->isExpired())
-        );
+        $viewport = $layout['viewport'];
 
+        // Region spans exactly the box, so nothing right of a narrow box is
+        // overwritten with blanks; geometry comes from the shared layout()
+        // pass — the same numbers actionRects() reports.
+        foreach ($layout['boxes'] as $placed) {
+            $box = $placed['buffer'];
+            $region = new Region(BufferPosition::new($placed['x'], $placed['y']), $box->width(), $box->height());
+            $viewport = $viewport->withRegion($region, $box);
+        }
+
+        return $viewport->toAnsi();
+    }
+
+    /**
+     * Shared geometry pass behind {@see view()}, {@see actionRects()} and
+     * {@see actionAt()} — the ONE place the box stack is computed, so the
+     * pixels and the hit-test can never disagree (lib-reviews-1102 C1:
+     * actions shipped as label+closure only, with no exported geometry to
+     * dispatch ON, while the README told hosts to wire them).
+     *
+     * Layout ONCE: each box is rendered straight to its Buffer and its
+     * height feeds both the frame growth and the placement pass, so the two
+     * passes can no longer disagree about the coordinate system.
+     *
+     * The frame is the VIEWPORT canvas, not the box width: every background
+     * column survives; only the alert box is capped at maxWidth (via
+     * renderAlert's $capWidth), and top-stacked alerts may grow the frame
+     * downward.
+     *
+     * xOffset()/yOffset() contract: the extra argument is the cumulative
+     * height of the boxes placed BEFORE this one (top families stack
+     * downward from it, bottom/middle stack upward against it), and the
+     * box's REAL width is passed to xOffset so centre/right offsets become
+     * non-zero.
+     *
+     * @return null|array{viewport:Buffer, boxes:list<array{alert:Alert,buffer:Buffer,x:int,y:int}>,frameWidth:int,contentHeight:int}
+     *         null when nothing renders (dismissed / empty / all-expired)
+     */
+    private function layout(string $background, int $viewportWidth, int $viewportHeight): ?array
+    {
+        if ($this->dismissed || $this->queue === []) {
+            return null;
+        }
+        $active = $this->activeAlerts();
         if ($active === []) {
-            return $background;
+            return null;
         }
 
         $bgLines = $this->splitLines($background);
-        $bgRowCount = \count($bgLines);
-
-        // Layout ONCE: each box is rendered straight to its Buffer and its
-        // height feeds both the frame growth and the placement pass, so the
-        // two passes can no longer disagree about the coordinate system —
-        // the old sizing pass handed yOffset() the PREVIOUS cumulative height
-        // minus the alert height, which pushed every bottom-anchored toast
-        // below the emitted frame.
         $boxes = [];
         $stackHeight = 0;
         foreach ($active as $alert) {
             $box = $this->renderAlertToBuffer($alert, $viewportWidth);
-            $boxes[] = $box;
+            $boxes[] = ['alert' => $alert, 'buffer' => $box, 'x' => 0, 'y' => 0];
             $stackHeight += $box->height();
         }
 
-        // The frame is the VIEWPORT canvas, not the box width: every
-        // background column survives; only the alert box is capped at maxWidth
-        // (via renderAlert's $capWidth), and top-stacked alerts may grow the
-        // frame downward.
         $frameWidth = max(1, $viewportWidth);
-        $contentHeight = max(max($bgRowCount, $viewportHeight), $stackHeight);
+        $contentHeight = max(max(\count($bgLines), $viewportHeight), $stackHeight);
+
+        $stackedBefore = 0;
+        foreach ($boxes as $index => $placed) {
+            $box = $placed['buffer'];
+            $boxes[$index]['x'] = max(0, $this->position->xOffset($box->width(), $frameWidth));
+            $boxes[$index]['y'] = max(0, $this->position->yOffset($box->height(), $contentHeight, $stackedBefore));
+            $stackedBefore += $box->height();
+        }
 
         $viewport = Buffer::new($frameWidth, $contentHeight);
         $viewport = $this->fillViewportFromString($viewport, $bgLines);
 
-        // xOffset()/yOffset() contract: the extra argument is the cumulative
-        // height of the boxes placed BEFORE this one (top families stack
-        // downward from it, bottom/middle stack upward against it), and the
-        // box's REAL width is passed to xOffset so centre/right offsets become
-        // non-zero — the old code always measured the full-canvas buffer,
-        // collapsing xOffset to 0 and making 6 of the 9 positions identical.
-        // The region spans exactly the box, so nothing right of a narrow box
-        // is overwritten with blanks.
-        $stackedBefore = 0;
-        foreach ($boxes as $box) {
-            $x = max(0, $this->position->xOffset($box->width(), $frameWidth));
-            $y = max(0, $this->position->yOffset($box->height(), $contentHeight, $stackedBefore));
+        return [
+            'viewport' => $viewport,
+            'boxes' => $boxes,
+            'frameWidth' => $frameWidth,
+            'contentHeight' => $contentHeight,
+        ];
+    }
 
-            $region = new Region(BufferPosition::new($x, $y), $box->width(), $box->height());
-            $viewport = $viewport->withRegion($region, $box);
-            $stackedBefore += $box->height();
+    /**
+     * The live queue exactly as {@see view()} sees it: queue order, expired
+     * alerts filtered (lib-reviews-1102 m1/m3 — before this accessor,
+     * cancelAlert()/extendAlert() indexed a RAW queue the host could not
+     * observe, so a stale expired entry silently shifted every later index).
+     *
+     * @return list<Alert>
+     */
+    public function activeAlerts(): array
+    {
+        return \array_values(
+            \array_filter($this->queue, fn(Alert $a): bool => !$a->isExpired())
+        );
+    }
+
+    /**
+     * Hit-test rectangles for every rendered action button, in the same
+     * coordinate system {@see view()} composites in (absolute frame rows /
+     * columns, 0-based). Zone-neutral by design: sugar-toast carries no
+     * sugar-mouse dependency and forges no zone sentinels — hosts map their
+     * own mouse events through actionAt() (or drive keyboards from this same
+     * surface) and invoke the returned Action's callback themselves.
+     *
+     * @return list<array{action:Action, alert:Alert, alertIndex:int, actionIndex:int, row:int, col:int, width:int}>
+     */
+    public function actionRects(string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): array
+    {
+        $layout = $this->layout($background, $viewportWidth, $viewportHeight);
+        if ($layout === null) {
+            return [];
         }
 
-        return $viewport->toAnsi();
+        $rects = [];
+        foreach ($layout['boxes'] as $alertIndex => $placed) {
+            $alert = $placed['alert'];
+            $count = \count($alert->actions);
+            if ($count === 0) {
+                continue;
+            }
+            $boxWidth = $placed['buffer']->width();
+            $boxHeight = $placed['buffer']->height();
+            $inner = \max(1, $boxWidth - 2);
+            foreach ($alert->actions as $actionIndex => $action) {
+                // renderAlert() lays actions on the final rows before the
+                // closing border, one action per row, in list order. The
+                // clickable span is the LABEL's own cells — the padding
+                // after it is background, not button.
+                $row = $placed['y'] + $boxHeight - 1 - $count + $actionIndex;
+                $shown = Ansi::strip(Width::truncateAnsi('[' . $action->label . ']', $inner));
+                $rects[] = [
+                    'action' => $action,
+                    'alert' => $alert,
+                    'alertIndex' => $alertIndex,
+                    'actionIndex' => $actionIndex,
+                    'row' => $row,
+                    'col' => $placed['x'] + 1,
+                    'width' => \max(1, Width::string($shown)),
+                ];
+            }
+        }
+        return $rects;
+    }
+
+    /**
+     * Which Action (if any) covers frame position ($col, $row)? First match
+     * in queue order wins; a position with no button returns null. This is
+     * the dispatch door the README's host-side mouse/keyboard recipe calls.
+     */
+    public function actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action
+    {
+        foreach ($this->actionRects($background, $viewportWidth, $viewportHeight) as $rect) {
+            if ($rect['row'] === $row && $col >= $rect['col'] && $col < $rect['col'] + $rect['width']) {
+                return $rect['action'];
+            }
+        }
+        return null;
     }
 
     /**
