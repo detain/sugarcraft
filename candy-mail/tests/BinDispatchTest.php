@@ -488,6 +488,109 @@ final class BinDispatchTest extends TestCase
         $this->assertStringContainsString('No transport configured', $result['err']);
     }
 
+    public function testRequireProxyExitsWithTheMainStatus(): void
+    {
+        // M-T: under a require proxy the auto-dispatch used to no-op silently
+        // (`php proxy.php --version` printed nothing with exit 0 — false
+        // success). The supported embed shape is exit(main($argv)); pinned
+        // here in both directions: the proxy must print and must fail loud.
+        $binPath = (string) realpath(__DIR__ . '/../bin/candy-mail');
+        $root    = $this->makeTree([
+            'proxy.php' => '<?php require_once ' . var_export($binPath, true) . "; exit(\\SugarCraft\\Mail\\main(\$argv));\n",
+        ]);
+        try {
+            $version = $this->runCli(['--version'], binOverride: $root . '/proxy.php');
+            $this->assertSame(0, $version['status']);
+            $this->assertNotSame('', trim($version['out']), 'a proxy must print, never silently no-op');
+
+            $bad = $this->runCli(['--frobnicate'], binOverride: $root . '/proxy.php');
+            $this->assertSame(1, $bad['status']);
+            $this->assertStringContainsString('Unknown option', $bad['err']);
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
+    public function testRenderRefusesToPreviewOverABrokenTransportConfig(): void
+    {
+        // M-V: --render swallowed EVERY transport-build error and exited 0.
+        // A typo in a security switch must still break the dry run.
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--render'],
+            stdin: 'hi',
+            env: ['CANDY_MAIL_SMTP_HOST' => 'smtp.invalid.test', 'CANDY_MAIL_SMTP_REQUIRE_TLS' => 'ture'],
+        );
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('invalid flag value', $result['err']);
+        $this->assertStringNotContainsString('MIME-Version', $result['out']);
+    }
+
+    public function testRenderStampsTheResendDivergence(): void
+    {
+        // M-V: Resend posts a JSON payload; the MIME preview must say so
+        // instead of certifying a wire format that never ships.
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--render'],
+            stdin: 'hi',
+            env: ['RESEND_API_KEY' => 're_sealed_off'],
+        );
+        $this->assertSame(0, $result['status']);
+        $this->assertStringContainsString('not what ships', $result['err']);
+        $this->assertStringContainsString('multipart/mixed', $result['out']);
+    }
+
+    public function testHeloFlagSetsTheMessageIdIdentity(): void
+    {
+        // M-Q: the Message-ID host leaked the internal machine name with no
+        // reachable seam; --helo wires what the old docblock falsely claimed.
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--render', '--helo', 'mail.example.org'],
+            stdin: 'hi',
+            env: ['CANDY_MAIL_SMTP_HOST' => 'smtp.example.test'],
+        );
+        $this->assertSame(0, $result['status']);
+        $this->assertStringContainsString('@mail.example.org>', $result['out']);
+    }
+
+    public function testTimeoutFlagIsBoundedLoudly(): void
+    {
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--timeout', '0', '--render'],
+            stdin: 'hi',
+            env: ['CANDY_MAIL_SMTP_HOST' => 'smtp.example.test'],
+        );
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('Timeout', $result['err']);
+    }
+
+    public function testCaFileMustBeAReadableRegularFile(): void
+    {
+        // M-AA: the README sells withCaFile() as THE private-CA remedy; the
+        // CLI must refuse an unusable path at configuration, not mid-handshake.
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--ca-file', '/nonexistent-ca-bundle.pem'],
+            stdin: 'hi',
+            env: ['CANDY_MAIL_SMTP_HOST' => 'smtp.invalid.test'],
+        );
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('not a readable regular file', $result['err']);
+    }
+
+    public function testCcOnlyInvocationMeansToSendNotHelp(): void
+    {
+        // qa m1: the help gate ignored cc/bcc, so a cc-only send printed the
+        // banner with exit 0 — silence-as-progress. It now falls through to
+        // the loud missing---to refusal.
+        $result = $this->runCli(
+            ['--cc', 'x@y.z'],
+            stdin: 'hi',
+            env: ['CANDY_MAIL_FROM' => 'me@example.com'],
+        );
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('No --to recipient', $result['err']);
+        $this->assertStringNotContainsString('CandyMail CLI', $result['out']);
+    }
+
     private function reapHostileServer(int $pid): void
     {
         $deadline = \microtime(true) + 5.0;

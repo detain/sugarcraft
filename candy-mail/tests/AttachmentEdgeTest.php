@@ -36,6 +36,42 @@ final class AttachmentEdgeTest extends TestCase
         Attachment::fromPath('/nonexistent/path/file.txt');
     }
 
+    public function testCharacterDevicesAreRejectedWithoutReading(): void
+    {
+        // M-F: /dev/zero exhausted memory past the exception path (a fatal,
+        // not a throw); FIFOs hung forever. The regular-file gate closes all
+        // non-regular shapes BEFORE any read is attempted.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('not a regular file');
+        Attachment::fromPath('/dev/null');
+    }
+
+    public function testOversizedFileIsRefusedBeforeTheRead(): void
+    {
+        $path = \tempnam(\sys_get_temp_dir(), 'att-cap-');
+        $this->assertIsString($path);
+        $handle = \fopen($path, 'wb');
+        $this->assertNotFalse($handle);
+        \ftruncate($handle, Attachment::MAX_BYTES + 1);
+        \fclose($handle);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('exceeds');
+            Attachment::fromPath($path);
+        } finally {
+            @\unlink($path);
+        }
+    }
+
+    public function testFromContentObeysTheSameCeiling(): void
+    {
+        // The constructor choke covers the memory path, not just disk reads.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('exceeds');
+        Attachment::fromContent(\str_repeat('A', Attachment::MAX_BYTES + 1), 'huge.bin');
+    }
+
     public function testFromPathReadsBytesEagerly(): void
     {
         // A readable file still attaches, and its bytes are captured eagerly

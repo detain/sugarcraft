@@ -23,6 +23,16 @@ final class Attachment
     public readonly ?string $cid;
 
     /**
+     * Hard local ceiling for attachment bytes (25 MiB), enforced before the
+     * eager read and again in the constructor for fromContent(). Submission
+     * servers cap messages around 25-50 MiB (RFC 1870 SIZE is advisory and
+     * this client does not read it), and the base64 MIME transfer encoding
+     * amplifies the wire by ~4/3 — an unbounded read here is memory
+     * exhaustion at the sender before the server ever says no (M-F).
+     */
+    public const MAX_BYTES = 26_214_400;
+
+    /**
      * Create from a file path.
      *
      * The file is read eagerly here: an unreadable or missing path fails
@@ -176,6 +186,13 @@ final class Attachment
         // longer mint an unguarded value.
         self::refuseMalformedCid($cid);
 
+        // M-F: content arriving from memory (fromContent/with* re-constructs)
+        // never passes readFileOrThrow's gate, so the cap is enforced here
+        // too — every constructed attachment obeys MAX_BYTES.
+        if ($content !== null && \strlen($content) > self::MAX_BYTES) {
+            throw new \RuntimeException(Lang::t('attachment.too_large', ['limit' => (string) self::MAX_BYTES]));
+        }
+
         $this->filename  = $filename;
         $this->path      = $path;
         $this->content   = $content;
@@ -234,6 +251,26 @@ final class Attachment
      */
     private static function readFileOrThrow(string $path): string
     {
+        // M-F: is_file() is true only for REGULAR files, which rejects in one
+        // gate the three probes that hurt: /dev/zero and friends (character
+        // devices whose read never yields a short count — the old code
+        // exhausted memory past the exception path), FIFOs (a permanent hang
+        // with no writer), and directories (a bare warning then false).
+        // The pre-read size check caps amplification before allocation.
+        if (!\file_exists($path)) {
+            throw new \RuntimeException(Lang::t('attachment.unreadable', ['path' => $path]));
+        }
+        if (!\is_file($path)) {
+            throw new \RuntimeException(Lang::t('attachment.not_a_file', ['path' => $path]));
+        }
+        $size = \filesize($path);
+        if ($size === false) {
+            throw new \RuntimeException(Lang::t('attachment.unreadable', ['path' => $path]));
+        }
+        if ($size > self::MAX_BYTES) {
+            throw new \RuntimeException(Lang::t('attachment.too_large', ['limit' => (string) self::MAX_BYTES]));
+        }
+
         $prev = \error_reporting(E_ALL & ~\E_WARNING);
         $content = @\file_get_contents($path);
         \error_reporting($prev);

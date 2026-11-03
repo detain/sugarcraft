@@ -439,6 +439,64 @@ final class CliTest extends TestCase
         \SugarCraft\Mail\buildEmail(['to' => ['a@b.c'], 'body' => 'Hi'], '');
     }
 
+    public function testBuildEmailLeavesSubjectNullWhenAbsent(): void
+    {
+        // m6: no --subject must produce NO header, not a fabricated '(no subject)'.
+        $email = \SugarCraft\Mail\buildEmail(['from' => 'me@example.com', 'to' => ['a@b.c'], 'body' => 'Hi'], '');
+
+        $this->assertNull($email->subject);
+    }
+
+    public function testHelpGateYieldsToCcAndBccRecipients(): void
+    {
+        // qa m1: cc/bcc-only invocations mean to send — the gate must let
+        // them through to the loud missing---to refusal.
+        $this->assertFalse(\SugarCraft\Mail\cliWantsHelp(\SugarCraft\Mail\parseArgs(['candy-mail', '--cc', 'x@y.z'])));
+        $this->assertFalse(\SugarCraft\Mail\cliWantsHelp(\SugarCraft\Mail\parseArgs(['candy-mail', '--bcc', 'x@y.z'])));
+    }
+
+    public function testTimeoutSecondsDefaultsBoundsAndRefusals(): void
+    {
+        $this->assertSame(30, \SugarCraft\Mail\timeoutSeconds(''));
+        $this->assertSame(30, \SugarCraft\Mail\timeoutSeconds(null));
+        $this->assertSame(12, \SugarCraft\Mail\timeoutSeconds('12'));
+
+        foreach (['0', '3601', 'abc', '-5', '2.5'] as $bad) {
+            try {
+                \SugarCraft\Mail\timeoutSeconds($bad);
+                $this->fail("timeout '{$bad}' must be refused");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('Timeout', $e->getMessage());
+            }
+        }
+    }
+
+    public function testEnvStringReadsBothEnvCopies(): void
+    {
+        $this->assertSame('', \SugarCraft\Mail\envString('CANDY_MAIL_SMTP_HELO'));
+
+        $_ENV['CANDY_MAIL_SMTP_HELO'] = 'via-env.example.org';
+        $this->assertSame('via-env.example.org', \SugarCraft\Mail\envString('CANDY_MAIL_SMTP_HELO'));
+        unset($_ENV['CANDY_MAIL_SMTP_HELO']);
+
+        \putenv('CANDY_MAIL_SMTP_HELO=via-putenv.example.org');
+        $this->assertSame('via-putenv.example.org', \SugarCraft\Mail\envString('CANDY_MAIL_SMTP_HELO'));
+    }
+
+    public function testBuildTransportConsumesTheFlagSeams(): void
+    {
+        // M-Q/M-AA: flags win over env; both reach the typed transport.
+        $this->setEnv('CANDY_MAIL_SMTP_HOST', 'smtp.invalid.example');
+        $this->setEnv('CANDY_MAIL_SMTP_HELO', 'env.example.org');
+
+        $flagged = \SugarCraft\Mail\buildTransport(['helo' => 'flag.example.org', 'timeout' => '45']);
+        $this->assertSame('flag.example.org', $this->readProperty($flagged, 'heloHost'), 'flags win over env');
+        $this->assertSame(45, $this->readProperty($flagged, 'timeout'));
+
+        $fromEnv = \SugarCraft\Mail\buildTransport();
+        $this->assertSame('env.example.org', $this->readProperty($fromEnv, 'heloHost'));
+    }
+
     public function testBuildEmailSurvivesUnsetSignatureEnv(): void
     {
         // getenv() answers false, not '' — an unguarded pass would fatal

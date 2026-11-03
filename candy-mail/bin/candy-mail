@@ -11,12 +11,19 @@ declare(strict_types=1);
  *   candy-mail < message.txt   (reads body from stdin; --from/--to required via flags or env)
  *
  * Flags accept both `--flag value` and `--flag=value`; repeatable flags are
- * --to/--cc/--bcc/--attach. --render prints the SMTP MIME message without any
- * network I/O; --version prints the package version.
+ * --to/--cc/--bcc/--attach. A value that begins with a dash rides the inline
+ * `--flag=VALUE` form only — the separated form refuses to steal a switch
+ * (M-G). --render prints the SMTP MIME message without any network I/O;
+ * --version prints the package version.
  *
  * Env: RESEND_API_KEY, CANDY_MAIL_FROM, CANDY_MAIL_SMTP_HOST/PORT/USERNAME/PASSWORD,
  *      CANDY_MAIL_SMTP_REQUIRE_TLS (default on), CANDY_MAIL_SMTP_IMPLICIT_TLS (default off),
+ *      CANDY_MAIL_SMTP_HELO, CANDY_MAIL_SMTP_CA_FILE, CANDY_MAIL_SMTP_TIMEOUT,
  *      CANDY_MAIL_SIGNATURE
+ *
+ * Embedding (M-T): require this file and exit(\SugarCraft\Mail\main($argv));
+ * auto-dispatch fires only when the file itself is the process entry script,
+ * so a forgotten proxy never looks like a silent success.
  */
 namespace SugarCraft\Mail;
 
@@ -72,8 +79,24 @@ if ($archive !== '') {
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Mail\{Email, Lang, Mailer, ResendTransport, SmtpTransport};
 
-// Guard: only run dispatch when called as CLI script (not when required by tests)
+// Guard: only auto-dispatch when this file IS the entry script. Embedded or
+// proxied launches (M-T) must call main($argv) and exit with its status —
+// `php proxy.php --version` used to fall through silently with exit 0, the
+// false-success anti-pattern this replaces. Tests require this file for its
+// helper functions and stay untouched by the guard.
 if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
+    exit(main($argv));
+}
+
+/**
+ * The CLI entry point: parse, build, choose transport, send.
+ *
+ * Returns the process exit status (0 success, 1 any refusal) so a proxy
+ * script can `exit(\SugarCraft\Mail\main($argv));`. Error messages follow
+ * the detected locale; usage text stays English by house design.
+ */
+function main(array $argv): int
+{
     // Error MESSAGES follow the user's locale (Lang catalog, 16 locales);
     // the CLI's own usage/help text stays English by design, like every
     // SugarCraft bin. T::detect() reads LC_ALL/LC_MESSAGES/LANG, falling
@@ -105,7 +128,7 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
         // pre-STARTTLS server lines; sugar-core's untrusted choke strips
         // SGR/OSC/BEL before they reach the terminal.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.error', ['message' => $e->getMessage()])) . "\n");
-        exit(1);
+        return 1;
     }
     // C5 (lib-reviews-1102): argv[0] is attacker-settable by any caller
     // (execve), and the usage banner echoes it to the terminal — sweep the
@@ -114,12 +137,12 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
 
     if ($args['version']) {
         fwrite(STDOUT, cliVersion() . "\n");
-        exit(0);
+        return 0;
     }
 
     if (cliWantsHelp($args)) {
         fwrite(STDOUT, help($bin));
-        exit(0);
+        return 0;
     }
 
     // Read body from STDIN if available and no --body given
@@ -140,33 +163,47 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
         // pre-STARTTLS server lines; sugar-core's untrusted choke strips
         // SGR/OSC/BEL before they reach the terminal.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.error', ['message' => $e->getMessage()])) . "\n");
-        exit(1);
+        return 1;
     }
 
-    // --render: print the RFC 822 envelope offline. Prefer the configured SMTP
-    // transport (its host feeds Message-ID); fall back to a non-connected
-    // instance so previewing never requires working credentials.
+    // --render: print the RFC 822 envelope offline (M-V/M-Q rewrite). Only a
+    // MISSING transport falls back to a non-connected localhost renderer; a
+    // BROKEN transport config is a loud error — it used to be swallowed into
+    // an exit-0 preview that certified a wire format which never ships. The
+    // Message-ID identity is --helo when given, else the local hostname —
+    // never the SMTP host itself. When the configured transport is Resend,
+    // the divergence is stamped on stderr: Resend posts a JSON payload.
     if ($args['render']) {
         try {
-            $configured = buildTransport();
-        } catch (\Throwable) {
-            $configured = null;
+            $configured = buildTransport($args['opts']);
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() !== Lang::t('cli.no_transport')) {
+                fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.transport_error', ['message' => $e->getMessage()])) . "\n");
+                return 1;
+            }
+            $configured = null; // preview without credentials stays possible
+        } catch (\Throwable $e) {
+            fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.transport_error', ['message' => $e->getMessage()])) . "\n");
+            return 1;
+        }
+        if ($configured instanceof ResendTransport) {
+            fwrite(STDERR, Lang::t('cli.render_resend_divergence') . "\n");
         }
         $renderer = $configured instanceof SmtpTransport
             ? $configured
             : new SmtpTransport(host: 'localhost');
         fwrite(STDOUT, $renderer->buildMimeMessage($email));
-        exit(0);
+        return 0;
     }
 
     // Choose transport
     try {
-        $transport = buildTransport();
+        $transport = buildTransport($args['opts']);
     } catch (\Throwable $e) {
         // C5: transport errors embed the raw SMTP greeting/response bytes —
         // attacker-controlled before STARTTLS. Sweep at the egress choke.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.transport_error', ['message' => $e->getMessage()])) . "\n");
-        exit(1);
+        return 1;
     }
 
     $mailer = new Mailer($transport);
@@ -177,7 +214,7 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
     } catch (\Throwable $e) {
         // C5: send failures carry server/Resend-response bytes verbatim.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.send_failed', ['message' => $e->getMessage()])) . "\n");
-        exit(1);
+        return 1;
     }
 }
 
@@ -209,7 +246,7 @@ function parseArgs(array $argv): array
     // flag name => opts key, split by how many values they take
     $listFlags    = ['to' => 'to', 'cc' => 'cc', 'bcc' => 'bcc', 'attach' => 'attachments'];
     $boolFlags    = ['help' => 'help', 'version' => 'version', 'render' => 'render'];
-    $scalarFlags  = ['from' => 'from', 'subject' => 'subject', 'body' => 'body', 'reply-to' => 'reply_to', 'html' => 'html'];
+    $scalarFlags  = ['from' => 'from', 'subject' => 'subject', 'body' => 'body', 'reply-to' => 'reply_to', 'html' => 'html', 'helo' => 'helo', 'ca-file' => 'ca_file', 'timeout' => 'timeout'];
     $shortAliases = ['f' => 'from', 't' => 'to', 's' => 'subject', 'a' => 'attach', 'h' => 'help'];
 
     $i = 1;
@@ -313,7 +350,11 @@ function cliWantsHelp(array $args): bool
         return true;
     }
 
-    $hasRecipients = $args['positional'] !== [] || isset($args['opts']['to']);
+    // qa m1: a cc/bcc-only invocation meant to send too — showing help with
+    // exit 0 made silence look like progress. The gate yields; buildEmail
+    // then refuses the missing --to loudly.
+    $hasRecipients = $args['positional'] !== [] || isset($args['opts']['to'])
+        || isset($args['opts']['cc']) || isset($args['opts']['bcc']);
     $hasSender     = isset($args['opts']['from']) || senderFromEnvironment() !== '';
 
     return !$hasRecipients && !$hasSender;
@@ -394,7 +435,10 @@ function buildEmail(array $opts, string $stdinBody): Email
     $email = new Email(
         from:     [$from],
         to:       $to,
-        subject:  $opts['subject'] ?? '(no subject)',
+        // m6: no --subject means NO Subject header (buildHeaders skips null),
+        // not a fabricated '(no subject)'. The Resend transport keeps its own
+        // payload default — that is an API contract, not a header forgery.
+        subject:  $opts['subject'] ?? null,
         body:     $body,
         cc:       $opts['cc'] ?? [],
         bcc:      $opts['bcc'] ?? [],
@@ -418,30 +462,84 @@ function buildEmail(array $opts, string $stdinBody): Email
     return $email;
 }
 
-function buildTransport(): Transport
+/**
+ * Choose the transport from environment and (optionally) parsed CLI flags.
+ *
+ * M-AA/M-Q: --helo/CANDY_MAIL_SMTP_HELO, --ca-file/CANDY_MAIL_SMTP_CA_FILE
+ * and --timeout/CANDY_MAIL_SMTP_TIMEOUT close the gap where the README
+ * advertised withCaFile() and the Message-ID identity while the CLI offered
+ * no way to reach either. Flags win over env; envString() normalises the
+ * getenv() false-vs-'' asymmetry.
+ *
+ * @param array<string, mixed> $flags parsed --option values (buildEmail shape)
+ */
+function buildTransport(array $flags = []): Transport
 {
     // M-P: trim the raw value first — a whitespace-only RESEND_API_KEY used
     // to hijack transport selection (resolving truthy while ignoring the
     // full SMTP config). An absent or blank key means "not configured".
-    $rawApiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true);
-    $apiKey    = \is_string($rawApiKey) ? \trim($rawApiKey) : '';
+    $apiKey = \trim(envString('RESEND_API_KEY'));
     if ($apiKey !== '') {
         return new ResendTransport($apiKey);
     }
 
-    $host = $_ENV['CANDY_MAIL_SMTP_HOST'] ?? \getenv('CANDY_MAIL_SMTP_HOST', true) ?: '';
+    $host = envString('CANDY_MAIL_SMTP_HOST');
     if ($host !== '') {
-        return (new SmtpTransport(
-            host:     $host,
-            port:     portFromEnvironment(),
-            username: $_ENV['CANDY_MAIL_SMTP_USERNAME'] ?? \getenv('CANDY_MAIL_SMTP_USERNAME', true) ?: '',
-            password: $_ENV['CANDY_MAIL_SMTP_PASSWORD'] ?? \getenv('CANDY_MAIL_SMTP_PASSWORD', true) ?: '',
+        $helo    = (string) ($flags['helo'] ?? envString('CANDY_MAIL_SMTP_HELO'));
+        $timeout = timeoutSeconds($flags['timeout'] ?? envString('CANDY_MAIL_SMTP_TIMEOUT'));
+
+        $transport = (new SmtpTransport(
+            host:      $host,
+            port:      portFromEnvironment(),
+            username:  envString('CANDY_MAIL_SMTP_USERNAME'),
+            password:  envString('CANDY_MAIL_SMTP_PASSWORD'),
+            timeout:   $timeout,
+            heloHost:  $helo,
         ))
             ->withRequireTls(envFlag('CANDY_MAIL_SMTP_REQUIRE_TLS', true))
             ->withImplicitTls(envFlag('CANDY_MAIL_SMTP_IMPLICIT_TLS', false));
+
+        $caFile = (string) ($flags['ca_file'] ?? envString('CANDY_MAIL_SMTP_CA_FILE'));
+        if ($caFile !== '') {
+            // Fail at configuration time, not mid-handshake: the docs sell
+            // withCaFile as THE private-CA remedy, so an unusable path must
+            // be a refusal the operator sees before any connect attempt.
+            if (!\is_file($caFile) || !\is_readable($caFile)) {
+                throw new \InvalidArgumentException(Lang::t('cli.ca_file_unreadable', ['file' => $caFile]));
+            }
+            $transport = $transport->withCaFile($caFile);
+        }
+
+        return $transport;
     }
 
     throw new \RuntimeException(Lang::t('cli.no_transport'));
+}
+
+/** A string env value; absent-or-false reads as '' (the getenv() trap). */
+function envString(string $name): string
+{
+    $value = $_ENV[$name] ?? \getenv($name, true);
+
+    return \is_string($value) ? $value : '';
+}
+
+/**
+ * Wire timeout in seconds: unset/'' is the transport default 30; anything
+ * outside 1..3600 is refused loudly (same discipline as portFromEnvironment).
+ */
+function timeoutSeconds(mixed $raw): int
+{
+    $value = \is_string($raw) ? \trim($raw) : (string) ($raw ?? '');
+    if ($value === '') {
+        return 30;
+    }
+
+    if (!\ctype_digit($value) || (int) $value < 1 || (int) $value > 3600) {
+        throw new \InvalidArgumentException(Lang::t('cli.invalid_timeout', ['timeout' => $value]));
+    }
+
+    return (int) $value;
 }
 
 /**
@@ -532,7 +630,8 @@ Usage:
 
   Flags accept --name value and --name=value. Body is read from STDIN if no
   --body flag is given. Unknown options are rejected, not ignored. Error
-  messages follow the LANG/LC_ALL locale (16 locales); this help is English.
+  messages follow the LC_ALL/LC_MESSAGES/LANG locale (16 locales); this
+  help is English.
 
 Options:
   --from <addr>        Sender email address
@@ -544,7 +643,13 @@ Options:
   --html <html>        HTML body alternative
   --attach <file>      Attach a file (may be repeated)
   --reply-to <addr>    Reply-to address
-  --render             Print the SMTP MIME message and exit (no network)
+  --helo <host>        HELO/EHLO identity (letters, digits, dots, hyphens);
+                       also sets the Message-ID host
+  --ca-file <path>     PEM bundle for TLS verification (private CAs)
+  --timeout <secs>     Wire timeout, 1-3600 (default 30)
+  --render             Print the SMTP MIME message and exit (no network;
+                       broken transport config is still an error, and a
+                       Resend-configured send is stamped as a divergence)
   --version            Print the package version and exit
   --help, -h           Show this help
 
@@ -554,8 +659,13 @@ Environment variables:
   CANDY_MAIL_SMTP_PORT             SMTP port (default 587, STARTTLS submission)
   CANDY_MAIL_SMTP_USERNAME         SMTP AUTH user (needs a TLS channel)
   CANDY_MAIL_SMTP_PASSWORD         SMTP AUTH password (needs a TLS channel)
-  CANDY_MAIL_SMTP_REQUIRE_TLS      Set to 0 to allow a plaintext channel (default: on)
-  CANDY_MAIL_SMTP_IMPLICIT_TLS     Set to 1 for port-465 implicit TLS (default: off)
+  CANDY_MAIL_SMTP_REQUIRE_TLS      TLS floor (default: on). Words 1/true/yes/on
+                                   turn it on, 0/false/no/off turn it off;
+                                   anything else is refused, never guessed.
+  CANDY_MAIL_SMTP_IMPLICIT_TLS     Port-465 implicit TLS (default: off; same words)
+  CANDY_MAIL_SMTP_HELO             HELO/EHLO identity (same grammar as --helo)
+  CANDY_MAIL_SMTP_CA_FILE          PEM bundle path (same checks as --ca-file)
+  CANDY_MAIL_SMTP_TIMEOUT          Wire timeout seconds (same bounds as --timeout)
   CANDY_MAIL_FROM                  Default sender address
   CANDY_MAIL_SIGNATURE             Appended to email body
 
