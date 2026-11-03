@@ -58,7 +58,11 @@ final class CompletionCommand extends Command
             // newlines or script text cannot forge extra output lines.
             $safeName = CompletionEscaper::safeName($shell);
             $shown    = $safeName ?? 'invalid-shell-name';
-            $output->writeln('<error>' . Lang::t('completion.unknown_shell', ['shell' => $shown]) . '</error>');
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option' => '--shell',
+                'value' => $shown,
+                'allowed' => implode('|', self::SUPPORTED_SHELLS),
+            ]) . "\n");
             return Command::FAILURE;
         }
 
@@ -74,7 +78,7 @@ final class CompletionCommand extends Command
             'fish' => (new FishCompletion())->generate($application),
         };
 
-        $output->writeln($completion);
+        $output->write($completion, true, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 }

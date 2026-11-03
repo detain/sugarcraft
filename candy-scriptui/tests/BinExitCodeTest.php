@@ -108,7 +108,7 @@ final class BinExitCodeTest extends TestCase
         [$status, $stdout, $stderr] = self::runBin(['confirm', '--default=maybe', 'x']);
 
         self::assertSame(1, $status, 'a refusal inside a command must reach the shell');
-        self::assertStringContainsString('unknown --default value: maybe', $stdout . $stderr);
+        self::assertStringContainsString("Invalid value for --default: 'maybe'. Allowed: yes|no.", $stdout . $stderr);
     }
 
     public function testShowHelpReachesTheTerminalThroughTheBin(): void

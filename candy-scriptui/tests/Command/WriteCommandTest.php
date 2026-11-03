@@ -96,6 +96,8 @@ final class WriteCommandTest extends TestCase
         }
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString('unknown --cursor-mode: wobble', $tester->getDisplay());
+        $this->assertStringNotContainsString('unknown --cursor-mode', $tester->getDisplay());
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/WriteCommand.php');
+        $this->assertStringContainsString("fwrite(STDERR, Lang::t('runtime.unknown_choice'", $src);
     }
 }

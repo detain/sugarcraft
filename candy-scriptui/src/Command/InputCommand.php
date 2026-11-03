@@ -54,7 +54,11 @@ final class InputCommand extends Command
 
         $cursorMode = strtolower((string) $input->getOption('cursor-mode'));
         if (!CursorMode::isKnown($cursorMode)) {
-            $output->writeln('<error>' . Lang::t('cursor_mode.unknown', ['mode' => $cursorMode]) . '</error>');
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                    'option' => '--cursor-mode',
+                    'value' => $cursorMode,
+                    'allowed' => implode('|', CursorMode::KNOWN),
+                ]) . "\n");
             return Command::FAILURE;
         }
 
@@ -103,7 +107,7 @@ final class InputCommand extends Command
         if ($input->getOption('strip-ansi')) {
             $value = \SugarCraft\Core\Util\Ansi::strip($value);
         }
-        $output->writeln($value);
+        $output->write($value, true, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 }

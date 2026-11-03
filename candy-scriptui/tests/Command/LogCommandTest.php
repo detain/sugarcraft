@@ -77,7 +77,9 @@ final class LogCommandTest extends TestCase
     {
         $tester = self::runLog(['message' => ['hello'], '--format' => '%']);
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
-        $this->assertStringContainsString('invalid --format string', $tester->getDisplay());
+        $this->assertStringNotContainsString('format string', $tester->getDisplay());
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
+        $this->assertStringContainsString("fwrite(STDERR, Lang::t('log.bad_format'", $src);
     }
 
     /**
@@ -88,7 +90,7 @@ final class LogCommandTest extends TestCase
     {
         $tester = self::runLog(['message' => ['hello'], '--format' => '%2$s']);
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
-        $this->assertStringContainsString('invalid --format string', $tester->getDisplay());
+        $this->assertStringNotContainsString('format string', $tester->getDisplay());
     }
 
     public function testValidFormatWrapsMessage(): void
@@ -123,7 +125,9 @@ final class LogCommandTest extends TestCase
         }
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString('unknown --formatter: xml', $tester->getDisplay());
+        $this->assertStringNotContainsString('unknown --formatter', $tester->getDisplay());
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
+        $this->assertStringContainsString("fwrite(STDERR, Lang::t('runtime.unknown_choice'", $src);
     }
 
     public function testFileWriteFailureIsLoudNotSilentZero(): void
@@ -142,6 +146,8 @@ final class LogCommandTest extends TestCase
         }
 
         $this->assertSame(1, $status, 'a failed --file append must not exit 0');
-        $this->assertStringContainsString('could not write to file: ' . $target, $tester->getDisplay());
+        $this->assertStringNotContainsString('could not write to file', $tester->getDisplay());
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
+        $this->assertStringContainsString("fwrite(STDERR, Lang::t('io.write_failed'", $src);
     }
 }

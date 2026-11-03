@@ -99,6 +99,10 @@ final class ConfirmCommandTest extends TestCase
         }
 
         $this->assertSame(1, $status);
-        $this->assertStringContainsString('unknown --default value: maybe', $tester->getDisplay());
+        // Refusals are DIAGNOSTICS: they belong on STDERR, never in the data
+        // channel (this command's stdout is consumed by scripts).
+        $this->assertStringNotContainsString('unknown --default', $tester->getDisplay());
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/ConfirmCommand.php');
+        $this->assertStringContainsString("fwrite(STDERR, Lang::t('runtime.unknown_choice'", $src);
     }
 }

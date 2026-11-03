@@ -57,7 +57,7 @@ final class LogCommand extends Command
             try {
                 $text = sprintf($fmt, $text);
             } catch (\ValueError | \ArgumentCountError $e) {
-                $output->writeln('<error>' . Lang::t('log.bad_format', ['format' => $fmt]) . '</error>');
+                fwrite(STDERR, Lang::t('log.bad_format', ['format' => $fmt]) . "\n");
                 return Command::FAILURE;
             }
         }
@@ -70,14 +70,18 @@ final class LogCommand extends Command
         if (!in_array($formatter, ['text', 'json', 'logfmt'], true)) {
             // formatLine() would silently fall through to the text shape for
             // any unknown name; a typo'd --formatter must be refused loudly.
-            $output->writeln('<error>' . Lang::t('log.unknown_formatter', ['name' => $formatter]) . '</error>');
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                    'option' => '--formatter',
+                    'value' => $formatter,
+                    'allowed' => 'function|json|logfmt|text',
+                ]) . "\n");
             return Command::FAILURE;
         }
 
         try {
             $line = self::formatLine($level, $text, $prefix, $time, $formatter);
         } catch (\JsonException $e) {
-            $output->writeln('<error>' . Lang::t('log.encode_failed') . '</error>');
+            fwrite(STDERR, Lang::t('log.encode_failed') . "\n");
             return Command::FAILURE;
         }
 
@@ -86,11 +90,11 @@ final class LogCommand extends Command
             // A failed append must not exit 0 pretending the line landed:
             // the whole point of --file is durability.
             if (@file_put_contents($file, $line . "\n", FILE_APPEND) === false) {
-                $output->writeln('<error>' . Lang::t('io.write_failed', ['path' => $file]) . '</error>');
+                fwrite(STDERR, Lang::t('io.write_failed', ['path' => $file]) . "\n");
                 return Command::FAILURE;
             }
         } else {
-            $output->writeln($line);
+            $output->write($line, true, OutputInterface::OUTPUT_RAW);
         }
         return $level === LogLevel::Fatal ? 1 : Command::SUCCESS;
     }

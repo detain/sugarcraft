@@ -69,7 +69,10 @@ final class CompletionCommandTest extends TestCase
         // exit non-zero (so `source <(candy-scriptui completion ...)` does
         // not silently continue) and name the rejected shell.
         $this->assertSame(1, $status);
-        $this->assertStringContainsString('unsupported shell: ksh', $output);
+        // The eval'd stream is DATA: the refusal goes to STDERR instead.
+        $this->assertStringNotContainsString('unsupported shell', $output);
+        $src = (string) file_get_contents(__DIR__ . '/../../src/CompletionCommand.php');
+        $this->assertStringContainsString("Lang::t('runtime.unknown_choice'", $src);
     }
 
     public function testNewlineBearingShellCannotForgeOutputLines(): void
@@ -87,7 +90,7 @@ final class CompletionCommandTest extends TestCase
         // CompletionEscaper, which admits nothing but [A-Za-z0-9_-].
         $this->assertStringNotContainsString('injected', $display);
         $this->assertStringNotContainsString("complete -p", $display);
-        $this->assertStringContainsString('unsupported shell: invalid-shell-name', $display);
+        $this->assertStringNotContainsString('unsupported shell', $display);
     }
 
     public function testEverySupportedShellIsNamedByTheCommand(): void

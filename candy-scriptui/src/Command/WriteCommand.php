@@ -56,7 +56,11 @@ final class WriteCommand extends Command
 
         $cursorMode = strtolower((string) $input->getOption('cursor-mode'));
         if (!CursorMode::isKnown($cursorMode)) {
-            $output->writeln('<error>' . Lang::t('cursor_mode.unknown', ['mode' => $cursorMode]) . '</error>');
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                    'option' => '--cursor-mode',
+                    'value' => $cursorMode,
+                    'allowed' => implode('|', CursorMode::KNOWN),
+                ]) . "\n");
             return Command::FAILURE;
         }
 
@@ -106,7 +110,7 @@ final class WriteCommand extends Command
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
         }
-        $output->writeln($final->value());
+        $output->write($final->value(), true, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 }

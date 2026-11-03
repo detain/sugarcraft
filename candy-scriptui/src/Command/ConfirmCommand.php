@@ -59,7 +59,11 @@ final class ConfirmCommand extends Command
         if ($defaultRaw !== '' && !in_array($defaultRaw, ['yes', 'y', 'no', 'n'], true)) {
             // A typo'd default must not silently flip to "no" — refusing is
             // the only honest reading of an unknown answer word.
-            fwrite(STDERR, Lang::t('confirm.unknown_default', ['value' => $defaultRaw]) . "\n");
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option' => '--default',
+                'value' => $defaultRaw,
+                'allowed' => 'yes|no',
+            ]) . "\n");
             return Command::FAILURE;
         }
         $defaultYes = (bool) $input->getOption('default-yes')
