@@ -290,8 +290,9 @@ final class TerminalReplyDrainTest extends TestCase
     {
         // Unmapped code — the frame is dropped (counted) but the trailing bytes
         // of the chunk must survive (old handleKitty returned remaining='' here,
-        // swallowing every later byte of the chunk).
-        $events = $this->decoder->decode("\x1b[57360;1u\x1b[C");
+        // swallowing every later byte of the chunk). 57455 is one past the
+        // spec's functional block.
+        $events = $this->decoder->decode("\x1b[57455;1u\x1b[C");
         $this->assertCount(1, $events);
         $this->assertSame('ArrowRight', $events[0]->key);
         $this->assertSame(1, $this->decoder->droppedUnknownCount());

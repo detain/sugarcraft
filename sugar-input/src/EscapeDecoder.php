@@ -1491,13 +1491,149 @@ final class EscapeDecoder
     }
 
     /**
+     * Kitty keyboard protocol functional key codes (U+E000 and above), verbatim
+     * from the spec's functional-key table — the same partition sugar-core's
+     * KeyType::kittyFunctionalKeys() carries, cross-checked by
+     * tests/KeySpecTableParityTest.
+     *
+     * Historical defect this table cures: the decoder used to INVENT arrows at
+     * 57399-57402 (the spec's Kp0..Kp3) and to borrow xterm's *tilde* numbering
+     * (1..6 / 11..34) into CSI-u space. In the CSI-u space, codes below 0xE000
+     * are TEXT codepoints only — a functional key never travels as 11 or 1;
+     * those forms now count as drops instead of mis-naming printable ASCII
+     * (11 is literally the control-K byte). Names use this lib's house
+     * vocabulary (ArrowUp, KP0, KPDecimal — not the spec's KpUp spellings) so
+     * kitty frames and their SS3/CSI equivalents decode to one name.
+     *
+     * @see https://sw.kovidgoyal.net/kitty/keyboard-protocol/ — functional key codes.
+     */
+    private const KITTY_FUNCTIONAL_KEYS = [
+        57344 => 'Escape',
+        57345 => 'Enter',
+        57346 => 'Tab',
+        57347 => 'Backspace',
+        57348 => 'Insert',
+        57349 => 'Delete',
+        57350 => 'ArrowLeft',
+        57351 => 'ArrowRight',
+        57352 => 'ArrowUp',
+        57353 => 'ArrowDown',
+        57354 => 'PageUp',
+        57355 => 'PageDown',
+        57356 => 'Home',
+        57357 => 'End',
+        57358 => 'CapsLock',
+        57359 => 'ScrollLock',
+        57360 => 'NumLock',
+        57361 => 'PrintScreen',
+        57362 => 'Pause',
+        57363 => 'Menu',
+        57364 => 'F1',
+        57365 => 'F2',
+        57366 => 'F3',
+        57367 => 'F4',
+        57368 => 'F5',
+        57369 => 'F6',
+        57370 => 'F7',
+        57371 => 'F8',
+        57372 => 'F9',
+        57373 => 'F10',
+        57374 => 'F11',
+        57375 => 'F12',
+        57376 => 'F13',
+        57377 => 'F14',
+        57378 => 'F15',
+        57379 => 'F16',
+        57380 => 'F17',
+        57381 => 'F18',
+        57382 => 'F19',
+        57383 => 'F20',
+        57384 => 'F21',
+        57385 => 'F22',
+        57386 => 'F23',
+        57387 => 'F24',
+        57388 => 'F25',
+        57389 => 'F26',
+        57390 => 'F27',
+        57391 => 'F28',
+        57392 => 'F29',
+        57393 => 'F30',
+        57394 => 'F31',
+        57395 => 'F32',
+        57396 => 'F33',
+        57397 => 'F34',
+        57398 => 'F35',
+        57399 => 'KP0',
+        57400 => 'KP1',
+        57401 => 'KP2',
+        57402 => 'KP3',
+        57403 => 'KP4',
+        57404 => 'KP5',
+        57405 => 'KP6',
+        57406 => 'KP7',
+        57407 => 'KP8',
+        57408 => 'KP9',
+        57409 => 'KPDecimal',
+        57410 => 'KPDivide',
+        57411 => 'KPMultiply',
+        57412 => 'KPSubtract',
+        57413 => 'KPAdd',
+        57414 => 'KPEnter',
+        57415 => 'KPEqual',
+        57416 => 'KPSeparator',
+        57417 => 'KPLeft',
+        57418 => 'KPRight',
+        57419 => 'KPUp',
+        57420 => 'KPDown',
+        57421 => 'KPPageUp',
+        57422 => 'KPPageDown',
+        57423 => 'KPHome',
+        57424 => 'KPEnd',
+        57425 => 'KPInsert',
+        57426 => 'KPDelete',
+        57427 => 'KPBegin',
+        57428 => 'MediaPlay',
+        57429 => 'MediaPause',
+        57430 => 'MediaPlayPause',
+        57431 => 'MediaReverse',
+        57432 => 'MediaStop',
+        57433 => 'MediaFastForward',
+        57434 => 'MediaRewind',
+        57435 => 'MediaNext',
+        57436 => 'MediaPrev',
+        57437 => 'MediaRecord',
+        57438 => 'LowerVolume',
+        57439 => 'RaiseVolume',
+        57440 => 'MuteVolume',
+        57441 => 'LeftShift',
+        57442 => 'LeftCtrl',
+        57443 => 'LeftAlt',
+        57444 => 'LeftSuper',
+        57445 => 'LeftHyper',
+        57446 => 'LeftMeta',
+        57447 => 'RightShift',
+        57448 => 'RightCtrl',
+        57449 => 'RightAlt',
+        57450 => 'RightSuper',
+        57451 => 'RightHyper',
+        57452 => 'RightMeta',
+        57453 => 'IsoLevel3Shift',
+        57454 => 'IsoLevel5Shift',
+    ];
+
+    /**
      * Map a Kitty key code to a symbolic key name.
      *
-     * @return string|null
+     * Codes below 0xE000 are TEXT codepoints (printable Unicode plus the four
+     * shared control codes and space); functional keys live exclusively at
+     * 0xE000+ per the spec table hoisted above. Anything unmapped is a
+     * complete-but-unknown code — the caller counts the drop.
+     *
+     * @see https://sw.kovidgoyal.net/kitty/keyboard-protocol/ — the CSI u encoding.
      */
     private function kittyKeyCodeToName(int $code): string|null
     {
-        // Tab, Enter, Escape, Backspace
+        // Tab, Enter, Escape, Backspace travel as their ASCII values.
         if ($code === 9)  return 'Tab';
         if ($code === 13) return 'Enter';
         if ($code === 27) return 'Escape';
@@ -1506,52 +1642,23 @@ final class EscapeDecoder
         // Space
         if ($code === 32) return 'Space';
 
-        // Letters
+        // Letters (kitty reports the shifted codepoint; we name the letter)
         if ($code >= 97 && $code <= 122) return chr($code);
         if ($code >= 65 && $code <= 90)  return chr($code + 32);
 
-        // Arrow keys (spec codes)
-        $arrowCodes = [
-            57399 => 'ArrowUp',
-            57400 => 'ArrowDown',
-            57401 => 'ArrowRight',
-            57402 => 'ArrowLeft',
-        ];
-
-        if (isset($arrowCodes[$code])) return $arrowCodes[$code];
-
-        // Function keys
-        $fKeys = [
-            11 => 'F1', 12 => 'F2', 13 => 'F3', 14 => 'F4',
-            15 => 'F5', 17 => 'F6', 18 => 'F7', 19 => 'F8',
-            20 => 'F9', 21 => 'F10', 23 => 'F11', 24 => 'F12',
-            25 => 'F13', 26 => 'F14', 28 => 'F15', 29 => 'F16',
-            31 => 'F17', 32 => 'F18', 33 => 'F19', 34 => 'F20',
-        ];
-
-        if (isset($fKeys[$code])) return $fKeys[$code];
-
-        // Special keys
-        $special = [
-            1 => 'Home', 2 => 'Insert', 3 => 'Delete', 4 => 'End',
-            5 => 'PageUp', 6 => 'PageDown',
-        ];
-
-        if (isset($special[$code])) return $special[$code];
-
-        return null;
+        return self::KITTY_FUNCTIONAL_KEYS[$code] ?? null;
     }
 
     /**
      * Resolve a modifyOtherKeys `keysym` field to a key name.
      *
      * The `CSI 27 ; <mods> ; <keysym> ~` report carries an X11 keysym, NOT a kitty
-     * functional codepoint, so it must not be fed to kittyKeyCodeToName() directly:
-     * that table's legacy 11..34 -> F1..F20 / 1..6 -> Home..PageDown entries would
-     * mis-name printable ASCII (keysym 33 '!' -> 'F19', 34 '"' -> 'F20'). Printable
-     * ASCII (32..126) is reported as the literal character so typing '!', '"' or
-     * ' ' under modifyOtherKeys=2 still reaches the app; the shared control keysyms
-     * keep their symbolic names; only the modern kitty functional range (>= 0xE000,
+     * functional codepoint, so it must not be fed to kittyKeyCodeToName() blindly:
+     * keysyms below 0xE000 are character codes, and passing them through the text
+     * leg would name control-adjacent keysyms wrong. Printable ASCII (32..126) is
+     * reported as the literal character so typing '!', '"' or ' ' under
+     * modifyOtherKeys=2 still reaches the app; the shared control keysyms keep
+     * their symbolic names; only the modern kitty functional range (>= 0xE000,
      * arrows etc.) falls back to the shared table. Anything else is unnamed -> null.
      *
      * @see xterm ctlseqs — "modifyOtherKeys".

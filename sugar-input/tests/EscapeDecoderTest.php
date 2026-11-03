@@ -700,31 +700,65 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyArrowUp(): void
     {
-        // Kitty uses code 57399 for arrow up
-        $events = $this->decoder->decode("\x1b[57399;0u");
+        // Spec functional code for Up is 57352; 57399 is KP0 (see parity pins).
+        $events = $this->decoder->decode("\x1b[57352;0u");
         $this->assertCount(1, $events);
         $this->assertSame('ArrowUp', $events[0]->key);
     }
 
     public function testKittyArrowDown(): void
     {
-        $events = $this->decoder->decode("\x1b[57400;0u");
+        $events = $this->decoder->decode("\x1b[57353;0u");
         $this->assertCount(1, $events);
         $this->assertSame('ArrowDown', $events[0]->key);
     }
 
-    public function testKittyF1(): void
+    public function testKittyArrowLeftAndRight(): void
     {
-        $events = $this->decoder->decode("\x1b[11;0u");
-        $this->assertCount(1, $events);
-        $this->assertSame('F1', $events[0]->key);
+        $this->assertSame('ArrowLeft', $this->decoder->decode("\x1b[57350;0u")[0]->key);
+        $this->assertSame('ArrowRight', $this->decoder->decode("\x1b[57351;0u")[0]->key);
     }
 
-    public function testKittyF12(): void
+    public function testKittyKeypadBlockIsNotArrows(): void
     {
-        $events = $this->decoder->decode("\x1b[24;0u");
-        $this->assertCount(1, $events);
-        $this->assertSame('F12', $events[0]->key);
+        // 57399-57402 are Kp0..Kp3 in the spec — the decoder used to invent
+        // arrows here. Boundary pinned BOTH directions: 57398 is F35, 57399 is
+        // KP0, 57408 is KP9, 57409 is KPDecimal.
+        $this->assertSame('F35', $this->decoder->decode("\x1b[57398;0u")[0]->key);
+        $this->assertSame('KP0', $this->decoder->decode("\x1b[57399;0u")[0]->key);
+        $this->assertSame('KP1', $this->decoder->decode("\x1b[57400;0u")[0]->key);
+        $this->assertSame('KP9', $this->decoder->decode("\x1b[57408;0u")[0]->key);
+        $this->assertSame('KPDecimal', $this->decoder->decode("\x1b[57409;0u")[0]->key);
+        // 57454 is the last table entry; 57455 must be a counted drop.
+        $this->assertSame('IsoLevel5Shift', $this->decoder->decode("\x1b[57454;0u")[0]->key);
+        $this->assertSame('MediaPlay', $this->decoder->decode("\x1b[57428;0u")[0]->key);
+        $this->assertSame('LeftShift', $this->decoder->decode("\x1b[57441;0u")[0]->key);
+    }
+
+    public function testKittyF1(): void
+    {
+        // CSI-u space has NO functional F1 at keysym-style 11: 11 is the Ctrl-I
+        // text codepoint region and the spec reserves <0xE000 for text. F1 is
+        // 57364; the legacy 11u form is a complete-but-unknown drop.
+        $this->assertSame('F1', $this->decoder->decode("\x1b[57364;0u")[0]->key);
+        $this->assertSame('F12', $this->decoder->decode("\x1b[57375;0u")[0]->key);
+        $this->assertSame('F35', $this->decoder->decode("\x1b[57398;0u")[0]->key);
+    }
+
+    public function testKittyLegacyTildeNumbersAreCountedDrops(): void
+    {
+        // 11;0u and 24;0u (old F1/F20/F12 pins) and 1..6 special-key forms now
+        // fall through as counted drops: they are not text codepoints we can
+        // name and not spec functional codes.
+        $before = $this->decoder->droppedUnknownCount();
+        $this->assertCount(0, $this->decoder->decode("\x1b[11;0u"));
+        $this->assertCount(0, $this->decoder->decode("\x1b[24;0u"));
+        $this->assertCount(0, $this->decoder->decode("\x1b[1;0u"));
+        $this->assertCount(0, $this->decoder->decode("\x1b[6;0u"));
+        $this->assertSame($before + 4, $this->decoder->droppedUnknownCount());
+        // 57455 sits one past the table — also a counted drop.
+        $this->assertCount(0, $this->decoder->decode("\x1b[57455;0u"));
+        $this->assertSame($before + 5, $this->decoder->droppedUnknownCount());
     }
 
     public function testKittyLetterKey(): void
@@ -911,36 +945,37 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyDeleteKey(): void
     {
-        // Delete = code 3 in Kitty
-        $events = $this->decoder->decode("\x1b[3;0u");
+        // Spec functional code for Delete is 57349 (the tilde-era number 3 is
+        // text space and no longer names keys in CSI-u frames).
+        $events = $this->decoder->decode("\x1b[57349;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Delete', $events[0]->key);
     }
 
     public function testKittyPageUp(): void
     {
-        $events = $this->decoder->decode("\x1b[5;0u");
+        $events = $this->decoder->decode("\x1b[57354;0u");
         $this->assertCount(1, $events);
         $this->assertSame('PageUp', $events[0]->key);
     }
 
     public function testKittyPageDown(): void
     {
-        $events = $this->decoder->decode("\x1b[6;0u");
+        $events = $this->decoder->decode("\x1b[57355;0u");
         $this->assertCount(1, $events);
         $this->assertSame('PageDown', $events[0]->key);
     }
 
     public function testKittyHome(): void
     {
-        $events = $this->decoder->decode("\x1b[1;0u");
+        $events = $this->decoder->decode("\x1b[57356;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Home', $events[0]->key);
     }
 
     public function testKittyEnd(): void
     {
-        $events = $this->decoder->decode("\x1b[4;0u");
+        $events = $this->decoder->decode("\x1b[57357;0u");
         $this->assertCount(1, $events);
         $this->assertSame('End', $events[0]->key);
     }
@@ -1592,67 +1627,69 @@ final class EscapeDecoderTest extends TestCase
         $this->assertInstanceOf(PasteEvent::class, $paste[0]);
     }
 
-    // ─── Kitty F13-F24 key codes ──────────────────────────────────────────
+    // ─── Kitty F13-F35 key codes (spec block 57376..) ─────────────────────
 
     public function testKittyF13(): void
     {
-        // CSI ? 25 ; Ps u — F13
-        $events = $this->decoder->decode("\x1b[25;0u");
+        $events = $this->decoder->decode("\x1b[57376;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F13', $events[0]->key);
     }
 
     public function testKittyF14(): void
     {
-        $events = $this->decoder->decode("\x1b[26;0u");
+        $events = $this->decoder->decode("\x1b[57377;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F14', $events[0]->key);
     }
 
     public function testKittyF15(): void
     {
-        $events = $this->decoder->decode("\x1b[28;0u");
+        $events = $this->decoder->decode("\x1b[57378;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F15', $events[0]->key);
     }
 
     public function testKittyF16(): void
     {
-        $events = $this->decoder->decode("\x1b[29;0u");
+        $events = $this->decoder->decode("\x1b[57379;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F16', $events[0]->key);
     }
 
     public function testKittyF17(): void
     {
-        $events = $this->decoder->decode("\x1b[31;0u");
+        $events = $this->decoder->decode("\x1b[57380;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F17', $events[0]->key);
     }
 
     public function testKittyF18IsSpace(): void
     {
-        // Note: code 32 maps to Space, not F18 (conflict in original mapping)
+        // The legacy table listed 32 => F18, shadowed by the Space text code.
+        // In the spec's CSI-u space 32 IS Space and F18 travels as 57381.
         $events = $this->decoder->decode("\x1b[32;0u");
         $this->assertCount(1, $events);
         $this->assertSame('Space', $events[0]->key);
+        $this->assertSame('F18', $this->decoder->decode("\x1b[57381;0u")[0]->key);
     }
 
     public function testKittyF19(): void
     {
-        $events = $this->decoder->decode("\x1b[33;0u");
+        $events = $this->decoder->decode("\x1b[57382;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F19', $events[0]->key);
     }
 
     public function testKittyF20(): void
     {
-        $events = $this->decoder->decode("\x1b[34;0u");
+        $events = $this->decoder->decode("\x1b[57383;0u");
         $this->assertCount(1, $events);
         $this->assertSame('F20', $events[0]->key);
     }
 
-    // F21-F24 (codes 35-38) are not in the mapping, so they return null events
+    // F21-F35 (57384-57398) are pinned row-by-row end-to-end in
+    // KeySpecTableParityTest::testTheDecoderEndToEndAgreesWithItsOwnTable.
 
     // ─── SGR mouse drag (motion flag) ─────────────────────────────────────
 
