@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Decode;
 
 use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Lang;
 use SugarCraft\Video\Source\Probe;
 
 /**
@@ -23,7 +24,10 @@ use SugarCraft\Video\Source\Probe;
  *     ffmpeg/fallback route byte-unchanged. When this PHP's GD has no WebP,
  *     the decoder raises the loud typed refusal instead of degrading.)
  *   - Else if ffmpeg is available → FfmpegDecoder
- *   - Else → GifDecoder (fallback; will fail on non-GIF source)
+ *   - Else if the bytes are real GIF magic → GifDecoder (an extensionless
+ *     or mislabelled gif is still decodable without ffmpeg)
+ *   - Else → loud ffmpeg-missing refusal (M4: the old "try GifDecoder and
+ *     let it complain" fallback blamed the GIF reader for a missing toolchain)
  */
 final class DecoderFactory
 {
@@ -63,9 +67,17 @@ final class DecoderFactory
             $decoder = new AnimatedWebpDecoder($cellPxW, $cellPxH);
         } elseif (Probe::hasFFmpeg()) {
             $decoder = new FfmpegDecoder($cellPxW, $cellPxH);
-        } else {
-            // Fallback to GIF decoder — will fail gracefully on non-GIF sources
+        } elseif (is_file($source) && GifDecoder::isGifFile($source)) {
+            // M4: no ffmpeg here, but the bytes ARE a gif (extensionless or
+            // mislabelled) — the pure-PHP reader genuinely covers it.
             $decoder = new GifDecoder($cellPxW, $cellPxH);
+        } else {
+            // M4: NOT a gif and no ffmpeg. Handing an mp4 to GifDecoder used
+            // to surface sugar-animation's "not a GIF" complaint — blaming
+            // the wrong library for the real problem, which is the missing
+            // toolchain. Fail loud with the same guidance the network route
+            // gives before ever starting playback.
+            throw new \RuntimeException(Lang::t('decoder.ffmpeg_missing'));
         }
 
         $decoder->open($source, $cellsW, $cellsH, $fps, $mode, $startSec, $headers);

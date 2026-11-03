@@ -13,12 +13,14 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\ColorProfile\Probe;
 use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\Video\Decode\Decoder;
 use SugarCraft\Video\Decode\DecoderFactory;
+use SugarCraft\Video\Decode\FfmpegDecodeFailure;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Msg\ResizeRebuildMsg;
 use SugarCraft\Video\Msg\TickMsg;
@@ -129,6 +131,7 @@ final class Player implements Model
         private readonly array $headers = [],
         private readonly float $frameBudgetMs = 0.0,
         private readonly ?WindowSizeMsg $pendingResize = null,
+        public readonly ?string $failure = null,
     ) {
     }
 
@@ -420,8 +423,27 @@ final class Player implements Model
 
     /**
      * @return array{0: Model, 1: ?\Closure}
+     *
+     * M12/M3 single choke point: a crashed ffmpeg surfaces as a typed
+     * {@see FfmpegDecodeFailure} from deep inside the pump/seek paths. It is
+     * converted here — every decoder call site at once — into an ended player
+     * carrying the failure text, instead of either killing the TEA loop with
+     * an uncaught exception or (the old behaviour) sliding silently into
+     * "[ended]". Exceptions of any other kind still propagate untouched.
      */
     public function update(Msg $msg): array
+    {
+        try {
+            return $this->updateModel($msg);
+        } catch (FfmpegDecodeFailure $failure) {
+            return [$this->onDecodeFailure($failure->getMessage()), null];
+        }
+    }
+
+    /**
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    private function updateModel(Msg $msg): array
     {
         // TickMsg: advance frame based on wall-clock sync.
         if ($msg instanceof TickMsg) {
@@ -460,6 +482,14 @@ final class Player implements Model
             // round-3 R3-1): stop() closed the decoder child this instance owned;
             // no in-flight tick — least of all a looping player's end-of-stream
             // reopen — may spawn a replacement with no one left to reap it.
+            return [$this, null];
+        }
+
+        if ($this->failure !== null) {
+            // M12: a failed session is terminal — the decoder child it died
+            // with is closed; nothing here may respawn it behind the error
+            // row (host keypresses restart through digit-seek/'0', which
+            // rebuild from the source path, not from this corpse).
             return [$this, null];
         }
 
@@ -876,6 +906,26 @@ final class Player implements Model
     }
 
     /**
+     * Convert a decode failure into a terminal, LOUD player state (M12).
+     *
+     * The message is control-swept a second time here (belt: it was minted
+     * through Sanitize on the decoder side) so whatever reaches view() — and
+     * through it, the alternate-screen stdout — cannot carry escape material
+     * regardless of which decoder variant produced the failure.
+     */
+    private function onDecodeFailure(string $message): self
+    {
+        $this->audioPlayer?->stop();
+        $this->decoder->close();
+
+        return $this->mutate([
+            'ended' => true,
+            'paused' => true,
+            'failure' => trim(Sanitize::untrusted($message)),
+        ]);
+    }
+
+    /**
      * Render the current frame to a full ANSI string.
      *
      * view() always emits the COMPLETE current frame. sugar-core's Renderer
@@ -933,6 +983,13 @@ final class Player implements Model
         // The digit restart hint ("0 restart") is only shown when totalFrames > 0
         // because digit-seek is a no-op on streams of unknown length.
         if ($this->ended) {
+            if ($this->failure !== null) {
+                // M3: the loud terminal row. The message was control-swept at
+                // both mint sites (FfmpegDecoder::describePath/stderrTail);
+                // clipToCells keeps it one pane row whatever the terminal.
+                $line = self::clipToCells('[error] ' . $this->failure, $this->cellsW);
+                return $out . "\r\n" . $line;
+            }
             $hint = $this->totalFrames > 0 ? '0 restart  q quit' : 'q quit';
             return $out . "\r\n" . '[ended]  ' . $hint;
         }
@@ -1667,6 +1724,7 @@ final class Player implements Model
             renderer: array_key_exists('renderer', $changes) ? $changes['renderer'] : $this->renderer,
             headers: $this->headers, // pinned — the source's request headers outlive any rebuild
             frameBudgetMs: $this->frameBudgetMs, // pinned for the player's lifetime
+            failure: array_key_exists('failure', $changes) ? $changes['failure'] : $this->failure,
             // Carried, not pinned: a tick, seek or mode switch that happens inside
             // the debounce window must not silently swallow the deferred rebuild, or
             // the player keeps decoding at the superseded geometry forever.

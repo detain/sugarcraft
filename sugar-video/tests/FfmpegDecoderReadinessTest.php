@@ -189,15 +189,20 @@ final class FfmpegDecoderReadinessTest extends TestCase
      * descriptor spec must keep exactly two pipes (stdin, stdout) and a
      * file sink on stderr. Flipping the sink to a pipe reads RED here in
      * bounded time, mirroring the deadlock this design avoids.
+     *
+     * Since the loud-failure work the file sink is the per-open DIAGNOSTIC
+     * capture (a tempnam'd file whose tail rides the FfmpegDecodeFailure),
+     * with the null device as the tempnam-failure fallback — a file either
+     * way, never a pipe.
      */
     public function testStderrIsAFileSinkNeverAPipe(): void
     {
         $source = (string) file_get_contents(__DIR__ . '/../src/Decode/FfmpegDecoder.php');
 
         $this->assertStringContainsString(
-            "['file', \$devNull, 'w'],",
+            "['file', \$this->stderrPath ?? \$devNull, 'w'],",
             $source,
-            'stderr must be opened on a FILE sink (the OS null device)',
+            'stderr must be opened on a FILE sink (the diagnostic capture file, never a pipe)',
         );
         $this->assertSame(
             2,

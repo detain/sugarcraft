@@ -537,4 +537,74 @@ final class VideoSourceTest extends TestCase
         $this->assertSame(25.0, $source->fps);
         $this->assertTrue($source->hasAudio, 'hasAudio should be true when any audio stream exists');
     }
+
+    /**
+     * @testdox M3: a present-but-failing ffprobe on an undecodable local file fails loudly
+     */
+    public function testAFailingFfprobeOnALocalFileThrowsInsteadOfSilentlyZeroing(): void
+    {
+        $dir = sys_get_temp_dir() . '/video-source-failing-probe-' . uniqid('', true);
+        mkdir($dir);
+        $stub = $dir . '/ffprobe';
+        file_put_contents($stub, "#!/bin/sh\nexit 1\n");
+        chmod($stub, 0755);
+        $subject = $dir . '/broken.mp4';
+        file_put_contents($subject, 'not a video');
+
+        $previous = (string) getenv('PATH');
+        putenv('PATH=' . $dir);
+        \SugarCraft\Video\Source\Probe::clearBinaryCacheForTesting();
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('corrupt or not a video');
+            VideoSource::probe($subject);
+        } finally {
+            putenv('PATH=' . $previous);
+            \SugarCraft\Video\Source\Probe::clearBinaryCacheForTesting();
+            @unlink($stub);
+            @unlink($subject);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * @testdox M3: a failing ffprobe that still reported a usable video stream degrades without a false refusal
+     */
+    public function testASalvageableFfprobeFailureDegradesWithoutAFalseRefusal(): void
+    {
+        $dir = sys_get_temp_dir() . '/video-source-salvage-' . uniqid('', true);
+        mkdir($dir);
+        $stub = $dir . '/ffprobe';
+        file_put_contents($stub, "#!/bin/sh\nprintf '%s' '{\"streams\":[{\"codec_type\":\"video\",\"width\":640,\"height\":480,\"r_frame_rate\":\"30/1\"}]}'\nexit 1\n");
+        chmod($stub, 0755);
+        $subject = $dir . '/partial.mp4';
+        file_put_contents($subject, 'x');
+
+        $previous = (string) getenv('PATH');
+        putenv('PATH=' . $dir);
+        \SugarCraft\Video\Source\Probe::clearBinaryCacheForTesting();
+
+        try {
+            $source = VideoSource::probe($subject);
+            $this->assertSame(0, $source->width, 'the failure path keeps the zeroed default shape');
+        } finally {
+            putenv('PATH=' . $previous);
+            \SugarCraft\Video\Source\Probe::clearBinaryCacheForTesting();
+            @unlink($stub);
+            @unlink($subject);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * @testdox m4: credential redaction masks URL userinfo for every log and message surface
+     */
+    public function testRedactingMasksUrlCredentials(): void
+    {
+        $redacted = \SugarCraft\Video\AudioPlayer::redactCredentials('http://user:pass@example.test/a.mp4');
+        $this->assertStringNotContainsString('user:pass', $redacted);
+        $this->assertStringContainsString('example.test', $redacted);
+        $this->assertSame('plain/path.mp4', \SugarCraft\Video\AudioPlayer::redactCredentials('plain/path.mp4'));
+    }
 }

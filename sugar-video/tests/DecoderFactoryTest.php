@@ -243,4 +243,45 @@ final class DecoderFactoryTest extends TestCase
             }
         }
     }
+
+    /**
+     * @testdox M4: no ffmpeg + a non-GIF local file fails with the ffmpeg-guidance copy, never GIF blame
+     */
+    public function testAFfmpegLessHostRejectsNonGifFilesWithTheRightBlame(): void
+    {
+        $path = sys_get_temp_dir() . '/factory-no-ffmpeg-' . uniqid('', true) . '.bin';
+        file_put_contents($path, 'NOT-A-GIF-AT-ALL');
+
+        try {
+            $message = '';
+            try {
+                self::withoutPathBinaries(static fn (): Decoder => DecoderFactory::new($path, 8, 6, 10.0));
+            } catch (\RuntimeException $e) {
+                $message = $e->getMessage();
+            }
+            $this->assertStringContainsString('ffmpeg not found', $message, 'the guidance copy must name the missing tool');
+            $this->assertStringNotContainsString('GIF', $message, 'the old fallback blamed the GIF decoder for a non-GIF file (M4)');
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * @testdox M4: an extensionless real GIF still finds the pure-PHP route without ffmpeg
+     */
+    public function testMagicSniffingRoutesRealGifsWithoutFFmpeg(): void
+    {
+        $path = sys_get_temp_dir() . '/factory-magic-' . uniqid('', true) . '.bin';
+        $img = imagecreatetruecolor(2, 2);
+        imagegif($img, $path);
+        imagedestroy($img);
+
+        try {
+            $decoder = self::withoutPathBinaries(static fn (): Decoder => DecoderFactory::new($path, 2, 2, 10.0));
+            $decoder->close();
+            $this->assertInstanceOf(GifDecoder::class, $decoder);
+        } finally {
+            @unlink($path);
+        }
+    }
 }

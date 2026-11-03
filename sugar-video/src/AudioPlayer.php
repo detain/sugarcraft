@@ -84,8 +84,11 @@ class AudioPlayer
      * notice prints the source verbatim, password included, straight into error_log.
      * Refusing to send credentials and then logging them is no refusal at all.
      */
-    private static function redactCredentials(string $source): string
+    public static function redactCredentials(string $source): string
     {
+        // Public because FfmpegDecoder redacts the same source for the same
+        // reason (header-drop log, decode-failure message) — one masking
+        // rule, two surfaces, no drift.
         // Greedy within the authority (the class excludes `/`, so it cannot cross
         // into the path): a non-conforming URL with several `@` signs masks ALL of
         // the userinfo, not just the run before the first `@`.

@@ -1175,4 +1175,112 @@ PHP;
             }
         }
     }
+
+    /**
+     * @testdox next() reports a crashed child as the typed failure with swept diagnostics
+     */
+    public function testACrashedChildAtEofThrowsTheTypedFailureWithSweptDiagnostics(): void
+    {
+        $decoder = new FfmpegDecoder();
+        $stderr = sys_get_temp_dir() . '/ffdec-stderr-' . uniqid('', true) . '.txt';
+        file_put_contents($stderr, "\x1b[31mboom\x1b[0m: Invalid data found when processing input\n");
+
+        $process = proc_open(
+            [PHP_BINARY, '-r', 'fclose(STDIN); fclose(STDOUT); exit(7);'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', $stderr, 'a']],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        fclose($pipes[0]);
+
+        foreach ([
+            'stdout' => $pipes[1],
+            'process' => $process,
+            'cellsW' => 4,
+            'frameW' => 4,
+            'frameH' => 2,
+            'frameBytes' => 24,
+            'source' => 'http://abc%40def@example.test/clip.m3u8',
+            'stderrPath' => $stderr,
+        ] as $key => $value) {
+            (new \ReflectionProperty(FfmpegDecoder::class, (string) $key))->setValue($decoder, $value);
+        }
+
+        $deadline = microtime(true) + 2.0;
+        while ((proc_get_status($process)['running'] ?? false) && microtime(true) < $deadline) {
+            usleep(10_000);
+        }
+
+        try {
+            $this->expectException(\SugarCraft\Video\Decode\FfmpegDecodeFailure::class);
+            $decoder->next();
+        } finally {
+            $decoder->close();
+            @unlink($stderr);
+        }
+    }
+
+    /**
+     * @testdox the failure copy sweeps escape bytes, keeps the tail text, and never leaks URL credentials
+     */
+    public function testTheFailureMessageIsSweptAndRedacted(): void
+    {
+        $decoder = new FfmpegDecoder();
+        $stderr = sys_get_temp_dir() . '/ffdec-tail-' . uniqid('', true) . '.txt';
+        file_put_contents($stderr, "\x1b[31mboom\x1b[0m: Invalid data found\n");
+        $process = proc_open(
+            [PHP_BINARY, '-r', 'fclose(STDIN); fclose(STDOUT); exit(7);'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', $stderr, 'a']],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        fclose($pipes[0]);
+        foreach ([
+            'stdout' => $pipes[1],
+            'process' => $process,
+            'cellsW' => 4,
+            'frameW' => 4,
+            'frameH' => 2,
+            'frameBytes' => 24,
+            'source' => 'http://abc%40def@example.test/clip.m3u8',
+            'stderrPath' => $stderr,
+        ] as $key => $value) {
+            (new \ReflectionProperty(FfmpegDecoder::class, (string) $key))->setValue($decoder, $value);
+        }
+        $deadline = microtime(true) + 2.0;
+        while ((proc_get_status($process)['running'] ?? false) && microtime(true) < $deadline) {
+            usleep(10_000);
+        }
+
+        try {
+            $message = '';
+            try {
+                $decoder->next();
+            } catch (\SugarCraft\Video\Decode\FfmpegDecodeFailure $failure) {
+                $message = $failure->getMessage();
+            }
+            $this->assertNotSame('', $message, 'the crashed child must raise the typed failure');
+            $this->assertStringContainsString('code 7', $message);
+            $this->assertStringContainsString('boom', $message, 'the stderr tail must ride the message');
+            $this->assertStringNotContainsString("\x1b", $message, 'escape bytes from the tail must be swept');
+            $this->assertStringNotContainsString('abc%40def', $message, 'URL credentials must never ride the message');
+            $this->assertStringContainsString('example.test', $message);
+        } finally {
+            $decoder->close();
+            @unlink($stderr);
+        }
+    }
+
+    /**
+     * @testdox close() unlinks the per-open stderr diagnostic file
+     */
+    public function testCloseCleansUpTheStderrDiagnosticFile(): void
+    {
+        $decoder = new FfmpegDecoder();
+        $stderr = sys_get_temp_dir() . '/ffdec-clean-' . uniqid('', true) . '.txt';
+        file_put_contents($stderr, 'tail');
+        (new \ReflectionProperty(FfmpegDecoder::class, 'stderrPath'))->setValue($decoder, $stderr);
+        $decoder->close();
+        $this->assertFileDoesNotExist($stderr, 'the diagnostic capture must not outlive the decoder');
+    }
 }

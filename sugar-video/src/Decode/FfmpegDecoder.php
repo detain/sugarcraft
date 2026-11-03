@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Decode;
 
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Video\AudioPlayer;
 use SugarCraft\Video\Lang;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Source\HttpHeaders;
@@ -30,10 +32,13 @@ use SugarCraft\Video\Support\FfmpegCommandBuilder;
  * All CLI args are passed via array to proc_open (no shell injection).
  * Partial frames at end-of-stream are silently discarded.
  *
- * ffmpeg's stderr is redirected straight to the OS null device (a file sink,
- * not a pipe). A reader-less stderr pipe deadlocks once ffmpeg fills the ~64KB
- * kernel buffer on noisy input — which then wedges our blocking fread(stdout) —
- * so we never hold an unread stderr pipe.
+ * ffmpeg's stderr is redirected to a private TEMP FILE (a file sink, never a
+ * pipe — a reader-less stderr pipe deadlocks once ffmpeg fills the ~64KB
+ * kernel buffer on noisy input, which would wedge the stdout reader). The
+ * file is not /dev/null anymore: when the child dies abnormally mid-stream,
+ * {@see next()} throws {@see FfmpegDecodeFailure} carrying the exit code AND
+ * the tail of that stderr, so the diagnostic ffmpeg already produced reaches
+ * the user instead of evaporating (M3/M12). The file is unlinked in close().
  *
  * READS ARE BOUNDED, RESUMABLE — PUMP CONTRACT (E722, round 82;
  * re-shaped same day by w4-reel). {@see next()} and {@see nextPng()} fill a
@@ -145,6 +150,23 @@ final class FfmpegDecoder implements Decoder
     private ?int $exitCode = null;
 
     /**
+     * The source string open() last spawned against — kept so a late decode
+     * failure can name the source (redacted) in its exception without the
+     * caller threading it back through.
+     */
+    private string $source = '';
+
+    /**
+     * Path of the temp file ffmpeg's stderr was pointed at for the current
+     * child, or null when the spawn fell back to the null device (tempnam
+     * failed) or after close(). Read by {@see refuseAbnormalExit()} only.
+     */
+    private ?string $stderrPath = null;
+
+    /** Bytes of ffmpeg stderr quoted into a failure message — enough for the tail of an `error`-level abort. */
+    private const STDERR_TAIL_BYTES = 400;
+
+    /**
      * Validated request headers for the current network source, empty otherwise.
      *
      * Held on the instance (not just passed to buildCommand) so {@see reopen()}
@@ -182,6 +204,7 @@ final class FfmpegDecoder implements Decoder
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
         $this->fps = $fps;
+        $this->source = $source;
         $this->graphics = $mode?->isGraphics() ?? false;
         $this->pngBuffer = '';
         $this->rawBuffer = '';
@@ -195,7 +218,11 @@ final class FfmpegDecoder implements Decoder
         if (!$this->headers->isEmpty() && !self::isNetworkSource($source)) {
             error_log(Lang::t('header.ignored_local_source', [
                 'count' => count($this->headers->pairs()),
-                'source' => $source,
+                // m4: the raw source can carry URL userinfo — the audio
+                // sibling redacts the same event; a video-side leak here
+                // would defeat it (refusing to send credentials and then
+                // logging them is no refusal at all).
+                'source' => AudioPlayer::redactCredentials($source),
             ]));
             $this->headers = HttpHeaders::none();
         }
@@ -230,7 +257,11 @@ final class FfmpegDecoder implements Decoder
         // protocols are not wired for playback through this decoder. An
         // injected test decoder that never calls open() never reaches here.
         if (!self::isNetworkSource($source) && !is_file($source)) {
-            throw new \RuntimeException("video source not found: {$source}");
+            // m5: the path is attacker-influenced content (a filename from a
+            // playlist, a CLI argument) about to be interpolated into an
+            // exception the TUI may paint — sweep control/escape bytes and
+            // bound it, same discipline as the caption row.
+            throw new \RuntimeException('video source not found: ' . self::describePath($source));
         }
 
         // Aspect-correct letterbox box. The on-screen display area for cellsW × cellsH
@@ -255,14 +286,19 @@ final class FfmpegDecoder implements Decoder
         // the boundary above, so buildCommand trusts them and only assembles argv.
         $cmd = self::buildCommand($ffmpegPath, $source, $this->frameW, $this->frameH, $fps, $startSec, $this->graphics, $padW, $padH, $this->headers);
 
-        // stderr goes to a file sink (the OS null device), never a pipe — an
-        // unread stderr pipe deadlocks ffmpeg once its ~64KB buffer fills.
+        // stderr goes to a PRIVATE TEMP FILE when we can make one, else the OS
+        // null device — never a pipe (an unread stderr pipe deadlocks ffmpeg
+        // once its ~64KB buffer fills). The temp file buys diagnostics: an
+        // abnormal exit is quoted back from it (refuseAbnormalExit), which is
+        // exactly what the old /dev/null sink threw away. close() unlinks.
         $devNull = DIRECTORY_SEPARATOR === '\\' ? '\\\\.\\NUL' : '/dev/null';
+        $stderrSink = tempnam(sys_get_temp_dir(), 'sugar-video-ffmpeg-');
+        $this->stderrPath = is_string($stderrSink) ? $stderrSink : null;
 
         $descriptorSpec = [
             ['pipe', 'r'],            // stdin
             ['pipe', 'w'],            // stdout
-            ['file', $devNull, 'w'],  // stderr → sink
+            ['file', $this->stderrPath ?? $devNull, 'w'],  // stderr → diagnostic sink
         ];
 
         $this->process = proc_open($cmd, $descriptorSpec, $pipes);
@@ -399,8 +435,11 @@ final class FfmpegDecoder implements Decoder
      *
      * E722 (post w4-reel): fills one rawvideo frame under the per-call FILL
      * deadline — see the class pump-contract paragraph. Null means the
-     * stream ended OR the fill deadline expired mid-frame (partial bytes
-     * stay buffered; the next call resumes the same frame).
+     * stream ended cleanly OR the fill deadline expired mid-frame (partial
+     * bytes stay buffered; the next call resumes the same frame). M12: a
+     * child that died abnormally no longer answers null — it throws
+     * {@see FfmpegDecodeFailure} with the exit code and stderr tail, so
+     * "crashed" can never again be mistaken for "ended".
      */
     public function next(): ?RgbFrame
     {
@@ -428,6 +467,10 @@ final class FfmpegDecoder implements Decoder
         while (strlen($this->rawBuffer) < $this->frameBytes) {
             $chunk = $this->readStdout($this->frameBytes - strlen($this->rawBuffer), $deadline);
             if ($chunk === null) {
+                // M12: null must mean "clean EOF or still waiting", never a
+                // masked crash. A dead-abnormal child throws here instead;
+                // a live-but-silent one passes the check and returns null.
+                $this->refuseAbnormalExit();
                 return null; // stalled (timeout) or EOF — partial stays buffered
             }
             $this->rawBuffer .= $chunk;
@@ -535,6 +578,9 @@ final class FfmpegDecoder implements Decoder
 
             $chunk = $this->readStdout(65536, $deadline);
             if ($chunk === null) {
+                // M12: same refusal as the raw path — a dead-abnormal ffmpeg
+                // throws rather than masquerading as end-of-stream.
+                $this->refuseAbnormalExit();
                 // EOF or stalled — the PNG buffer already holds whole frames,
                 // so returning null here neither loses a complete frame nor
                 // blocks the process (any partial trailing PNG stays buffered
@@ -609,6 +655,12 @@ final class FfmpegDecoder implements Decoder
                 error_log("FfmpegDecoder: ffmpeg exited with code {$this->exitCode}");
             }
         }
+
+        // The stderr diagnostic file belongs to the child we just reaped.
+        if ($this->stderrPath !== null) {
+            @unlink($this->stderrPath);
+            $this->stderrPath = null;
+        }
     }
 
     /**
@@ -635,6 +687,95 @@ final class FfmpegDecoder implements Decoder
     private static function isTeardownExit(int $exitCode, bool $signalled): bool
     {
         return $exitCode === self::EXIT_EPIPE || $signalled || $exitCode === -1;
+    }
+
+    /**
+     * Throw when the ffmpeg child has already died abnormally (M12).
+     *
+     * The Decoder contract says null means "no frame available" — but until
+     * now a crashed ffmpeg (unreadable input, rejected filtergraph, OOM kill
+     * that beat the reaper) answered with the SAME null as a clean end of
+     * stream, so the Player froze a black frame and called it "ended" (M3's
+     * blank-player root cause). This turns "the child is dead with a non-zero,
+     * non-teardown status" into a typed loud failure carrying ffmpeg's own
+     * stderr tail.
+     *
+     * Deliberately narrow: a still-running child (live-but-silent stream) and
+     * a reaped/closed one both pass here without throwing, so the pump
+     * contract's timeout-nulls and close()-then-next() stay exactly as pinned.
+     *
+     * @throws FfmpegDecodeFailure
+     */
+    private function refuseAbnormalExit(): void
+    {
+        if ($this->process === null || !is_resource($this->process)) {
+            return;
+        }
+
+        $status = @proc_get_status($this->process);
+        if (!is_array($status) || ($status['running'] ?? true)) {
+            return; // still alive — a timeout null, honest per the pump contract
+        }
+
+        $code = (int) ($status['exitcode'] ?? 0);
+        $signalled = ($status['signaled'] ?? false) === true;
+        if ($code === 0 || self::isTeardownExit($code, $signalled)) {
+            return; // clean end (or a disposition close() itself provoked)
+        }
+
+        $detail = self::stderrTail($this->stderrPath);
+        throw new FfmpegDecodeFailure(
+            Lang::t('decoder.ffmpeg_exit', [
+                'code' => (string) $code,
+                'source' => self::describePath(AudioPlayer::redactCredentials($this->source)),
+            ]) . ($detail !== '' ? ' — ffmpeg said: ' . $detail : '')
+        );
+    }
+
+    /**
+     * The last {@see STDERR_TAIL_BYTES} of ffmpeg's stderr file, swept to a
+     * single control-free line fit for an exception message (and onward into
+     * the TUI). Unreadable or empty → ''.
+     */
+    private static function stderrTail(?string $path): string
+    {
+        if ($path === null || !is_file($path)) {
+            return '';
+        }
+
+        $size = @filesize($path);
+        if ($size === false || $size === 0) {
+            return '';
+        }
+
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return '';
+        }
+
+        try {
+            if ($size > self::STDERR_TAIL_BYTES) {
+                @fseek($handle, -$size + self::STDERR_TAIL_BYTES, SEEK_SET);
+            }
+            $raw = (string) @fread($handle, self::STDERR_TAIL_BYTES);
+        } finally {
+            fclose($handle);
+        }
+
+        // The tail came from a child process fed hostile input — it may embed
+        // escape sequences from filenames/URLs. Sweep before it reaches any
+        // renderer (house pattern: Sanitize::cellValue = C0/C1 + newline fold).
+        return trim(Sanitize::cellValue($raw));
+    }
+
+    /**
+     * A user-presentable one-line sketch of a caller-supplied path/URL:
+     * credentials masked (caller's job — see redactCredentials), control and
+     * escape bytes swept, hard-bounded length.
+     */
+    private static function describePath(string $value): string
+    {
+        return mb_strcut(trim(Sanitize::cellValue($value)), 0, 160);
     }
 
     /**

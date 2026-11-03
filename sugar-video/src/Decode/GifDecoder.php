@@ -351,6 +351,36 @@ final class GifDecoder implements Decoder
     }
 
     /**
+     * Whether $path names an existing file whose first six bytes are the
+     * GIF87a/GIF89a signature — container magic, not file extension.
+     *
+     * Public because {@see DecoderFactory::new()} routes on it: on a host
+     * without ffmpeg only a REAL gif can be salvaged by this reader, and
+     * anything else must fail with the ffmpeg-missing guidance instead of
+     * this class's "not a GIF" blame (M4 — the file may be a perfectly good
+     * mp4 that merely has no decoder available here).
+     */
+    public static function isGifFile(string $path): bool
+    {
+        if (!is_file($path)) {
+            return false;
+        }
+
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+
+        try {
+            $signature = (string) fread($handle, 6);
+        } finally {
+            fclose($handle);
+        }
+
+        return $signature === 'GIF87a' || $signature === 'GIF89a';
+    }
+
+    /**
      * Read the whole file, once, under the same hard gates sugar-image's
      * hardening applies: the path is opened exactly one time,
      * the entry must be a regular file at BOTH the stat and the post-open

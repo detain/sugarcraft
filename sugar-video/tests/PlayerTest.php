@@ -2453,4 +2453,66 @@ final class SpyAudioPlayer extends AudioPlayer
     {
         $this->stopCallCount++;
     }
+
+    /**
+     * @testdox M12: update() converts the typed decode failure into an ended [error] state
+     */
+    public function testATypedDecodeFailureBecomesAVisibleTerminalErrorState(): void
+    {
+        $decoder = new FailingDecoder();
+        $player = Player::fromDecoder(
+            decoder: $decoder,
+            cellsW: 4,
+            cellsH: 2,
+            fps: 10.0,
+            mode: Mode::Ascii,
+            paused: false,
+        );
+        $this->assertNull($player->failure);
+
+        [$failed, $cmd] = $player->update(new TickMsg());
+
+        $this->assertNull($cmd, 'a crashed stream must schedule no follow-up tick');
+        $this->assertTrue($failed->ended, 'the failure is terminal, like EOF');
+        $this->assertNotNull($failed->failure);
+        $this->assertStringContainsString('exited with code 7', (string) $failed->failure);
+        $this->assertStringContainsString('[error]', $failed->view());
+        $this->assertStringNotContainsString('[ended]', $failed->view(), 'an error must not masquerade as a clean end');
+        $this->assertSame(1, $decoder->nextCount);
+        $this->assertSame(1, $decoder->closeCount(), 'the failure path closes the dead decoder');
+
+        [$again, $cmdAgain] = $failed->update(new TickMsg());
+        $this->assertSame(1, $decoder->nextCount, 'the terminal guard must not re-pull a dead decoder');
+        $this->assertNull($cmdAgain);
+    }
+
+    /**
+     * @testdox M12: the failure text is swept of escape material before it reaches view()
+     */
+    public function testTheFailureTextCarriesNoEscapeMaterial(): void
+    {
+        $player = Player::fromDecoder(
+            decoder: new FailingDecoder("\x1b[2Jpwned\x07"),
+            cellsW: 4,
+            cellsH: 2,
+            fps: 10.0,
+            mode: Mode::Ascii,
+            paused: false,
+        );
+        [$failed, $cmd] = $player->update(new TickMsg());
+        $this->assertNull($cmd);
+        $this->assertStringContainsString('pwned', (string) $failed->failure);
+        $this->assertStringNotContainsString("\x1b", (string) $failed->failure);
+        $this->assertStringNotContainsString("\x07", (string) $failed->failure);
+        $this->assertStringNotContainsString("\x1b[2J", $failed->view());
+    }
+
+    /**
+     * @testdox M12: the update choke catches ONLY the typed decode failure
+     */
+    public function testTheUpdateChokeCatchesOnlyTheTypedDecodeFailure(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Player.php');
+        $this->assertSame(1, substr_count($src, 'catch (FfmpegDecodeFailure'), 'exactly one choke point');
+    }
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Source;
 
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Video\Lang;
 
 /**
  * Immutable value object describing a video source probed from ffprobe JSON output.
@@ -19,6 +21,9 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * When ffprobe is absent `probe()` returns a VideoSource with zero dimensions
  * and all numeric fields at 0.0 / false — playback will degrade gracefully
  * (GIF fallback will be used if available, or a clear error message shown).
+ * A LOCAL file that ffprobe chokes on outright (non-zero exit, no salvageable
+ * video stream) is the loud exception to that rule: probe throws rather than
+ * handing Player::open() a zeroed VO that plays as a blank screen (M3).
  *
  * A hung ffprobe (a stalled remote URL, a pathological file) yields the same
  * zeroed default after {@see self::PROBE_TIMEOUT_SECONDS} rather than blocking forever.
@@ -190,6 +195,22 @@ final class VideoSource
         $exitCode = proc_close($process);
 
         if ($stdout === null || $exitCode !== 0 || $stdout === '') {
+            // M3: a LOCAL file that exists, was drained without timing out, and
+            // yields no usable video stream is a hard input error — the old
+            // zeroed default sent Player::open() into a blank "playing nothing"
+            // session. Fail loud and typed instead. A timeout (stdout null)
+            // keeps the degrade-to-default contract pinned by FINDINGS #46;
+            // an exit-0 partial JSON with a usable video stream keeps playing
+            // (salvageable damage is ffmpeg's own judgment, not ours).
+            if ($stdout !== null && $exitCode !== 0 && is_file($path)) {
+                $salvaged = self::fromFfprobeJson($path, $stdout);
+                if ($salvaged->width === 0) {
+                    throw new \RuntimeException(Lang::t('source.unparseable', [
+                        'code' => (string) $exitCode,
+                        'source' => mb_strcut(trim(Sanitize::cellValue($path)), 0, 160),
+                    ]));
+                }
+            }
             return new self($path, 0, 0, 0.0, 0.0, false);
         }
 
