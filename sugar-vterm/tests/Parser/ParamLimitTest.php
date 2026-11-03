@@ -7,6 +7,8 @@ namespace SugarCraft\Vterm\Tests\Parser;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vterm\Parser\DebugHandler;
 use SugarCraft\AnsiParser\Parser\Parser;
+use SugarCraft\Vterm\Terminal as RootTerminal;
+use SugarCraft\Vterm\Terminal\Terminal as FullTerminal;
 
 /**
  * DoS regression tests for Parser parameter and string accumulator caps.
@@ -15,6 +17,12 @@ use SugarCraft\AnsiParser\Parser\Parser;
  * - MAX_PARAMS = 32 (CSI/DCS parameter count)
  * - MAX_PARAM_VALUE = 65535 (individual param value clamp)
  * - MAX_STRING_BYTES = 1_048_576 (OSC/DCS payload size)
+ *
+ * The last bullet is the parser's OWN default; both production facades
+ * halve it to the shared 64 KiB {@see RootTerminal::MAX_STRING_BUFFER} —
+ * pinned by the facade legs at the end of this file, so deleting or
+ * widening that ceiling fails loud instead of riding green on the
+ * upstream default the other legs exercise.
  */
 final class ParamLimitTest extends TestCase
 {
@@ -160,5 +168,48 @@ final class ParamLimitTest extends TestCase
         $elapsed = microtime(true) - $start;
 
         $this->assertLessThan(1.0, $elapsed, 'Parser should process 10k params in under 1 second');
+    }
+
+    /**
+     * A parser built with the facade ceiling (as BOTH facades build theirs)
+     * truncates OSC payloads at MAX_STRING_BUFFER, not the 1 MiB default.
+     */
+    public function testFacadeStringBufferCapUsesTheSharedConstant(): void
+    {
+        // The contract is the 64 KiB value itself — widening the constant
+        // must redden this file, not move the goalposts with it.
+        $this->assertSame(65_536, RootTerminal::MAX_STRING_BUFFER);
+
+        $h = new DebugHandler();
+        $p = new Parser($h, maxStringBuffer: RootTerminal::MAX_STRING_BUFFER);
+
+        $p->feed("\x1b]52;c;" . str_repeat('A', 2_000_000) . "\x07");
+
+        $oscEntries = $h->filter('osc');
+        $this->assertCount(1, $oscEntries);
+        $payloadLen = strlen($oscEntries[0]['detail']) - strlen('52;c;');
+        $this->assertLessThanOrEqual(
+            65_536,
+            $payloadLen,
+            'facade parsers must honour the 64 KiB ceiling, not the 1 MiB default'
+        );
+    }
+
+    /**
+     * End-to-end through the emulator facade: a 2 MB OSC 2 title is stored
+     * only up to the same shared ceiling.
+     */
+    public function testEmulatorFacadeHonoursTheSharedCap(): void
+    {
+        $t = FullTerminal::new(20, 5);
+        $t->feed("\x1b]2;" . str_repeat('x', 2_000_000) . "\x07");
+
+        $title = $t->windowTitle();
+        $this->assertIsString($title);
+        $this->assertLessThanOrEqual(
+            65_536,
+            strlen($title),
+            'emulator facade accumulates titles past the 64 KiB ceiling'
+        );
     }
 }

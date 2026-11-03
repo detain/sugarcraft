@@ -19,6 +19,7 @@ use SugarCraft\Vterm\Msg\FocusOutMsg;
 use SugarCraft\Vterm\Screen\Screen;
 use SugarCraft\Vterm\Screen\Scrollback;
 use SugarCraft\Vterm\Sgr\Sgr;
+use SugarCraft\Vterm\Terminal as RootTerminal;
 
 use function React\Promise\reject;
 use function React\Promise\resolve;
@@ -58,11 +59,13 @@ final class Terminal
             onFocusEvent: $onFocusEvent,
         );
         // 64 KiB string-buffer cap (sugar-ansi-parser default) bounds OSC/DCS payload
-        // memory; reduced from the fork's 1 MiB per the W1.2 security item.
+        // memory; the ceiling is the shared
+        // \SugarCraft\Vterm\Terminal::MAX_STRING_BUFFER, reduced from
+        // sugar-ansi-parser's 1 MiB default as a security item.
         // The handler is the parser's sink AND a SubparamsAwareHandler, so the
         // colon continuation flags SGR needs arrive by push — no late-bound
         // back-reference to this parser is wired anywhere.
-        $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
+        $this->parser = new Parser($this->handler, maxStringBuffer: RootTerminal::MAX_STRING_BUFFER);
     }
 
     /**
@@ -454,7 +457,7 @@ final class Terminal
         // the clone's flags — the stale-back-reference this re-attach once
         // patched simply cannot occur any more.
         $this->handler = clone $this->handler;
-        $this->parser = new Parser($this->handler, maxStringBuffer: 65536);
+        $this->parser = new Parser($this->handler, maxStringBuffer: RootTerminal::MAX_STRING_BUFFER);
     }
 
     /** @internal */

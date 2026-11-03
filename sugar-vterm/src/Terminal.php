@@ -22,6 +22,15 @@ use SugarCraft\Vterm\Parser\RendererHandler;
  */
 final class Terminal
 {
+    /**
+     * String-buffer ceiling for the parser's OSC/DCS accumulation, shared by
+     * BOTH facade parsers (renderer here, emulator in Terminal\Terminal) so
+     * the hostile-payload memory bound is one constant, not two literals.
+     * Reduced from sugar-ansi-parser's 1 MiB default as a security item;
+     * pinned by ParamLimitTest's facade legs.
+     */
+    public const MAX_STRING_BUFFER = 65536;
+
     private Buffer $grid;
     private Cursor $cursor;
     private Parser $parser;
@@ -62,11 +71,12 @@ final class Terminal
 
         $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
         // 64 KiB string-buffer cap (sugar-ansi-parser default) bounds OSC/DCS payload
-        // memory; reduced from the fork's 1 MiB per the W1.2 security item.
+        // memory; the ceiling is self::MAX_STRING_BUFFER, reduced from
+        // sugar-ansi-parser's 1 MiB default as a security item.
         // RendererHandler is the parser's sink and a SubparamsAwareHandler, so
         // the colon continuation flags SGR needs are pushed down to CsiHandlerImpl
         // on every dispatch — no late-bound back-reference to this parser exists.
-        $parser = new Parser($handler, maxStringBuffer: 65536);
+        $parser = new Parser($handler, maxStringBuffer: self::MAX_STRING_BUFFER);
 
         return new self($cols, $rows, $grid, $cursor, $parser, $csi, $osc, $theme);
     }
