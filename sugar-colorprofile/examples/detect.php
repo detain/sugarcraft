@@ -8,27 +8,29 @@ declare(strict_types=1);
  * Run: php examples/detect.php
  *
  * This exercises:
- * - Palette::detect() from environment
+ * - Palette TTY-aware detection from STDOUT (a null stream is env-only)
  * - Palette::comment() for a human-readable description
  * - Palette::describe() for a full descriptive sentence
- * - Profile enum properties (label(), description(), maxColors(), degradedTo())
+ * - ColorProfile enum properties (label(), description(), maxColors(), degradedTo())
  */
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Palette;
-use SugarCraft\ColorProfile\Profile;
 
 echo "=== SugarColorprofile Detection Demo ===\n\n";
 
-// Detect from current environment (uses TERM, COLORTERM, NO_COLOR, etc.)
-$profile = Palette::detect();
+// Detect from the current environment (uses TERM, COLORTERM, NO_COLOR, etc.)
+// bound to STDOUT, so a piped run lands on the no-color rung like upstream.
+$palette = new Palette(STDOUT);
+$profile = $palette->profile();
 
 echo "Profile enum value : " . $profile->value . "\n";
 echo "Label              : " . $profile->label() . "\n";
 echo "Description        : " . $profile->description() . "\n";
 echo "Max colors         : " . \number_format($profile->maxColors()) . "\n";
-echo "Comment            : $profile->comment()\n";
+echo "Comment            : " . $palette->comment() . "\n";
 
 echo "\nDegradation chain:\n";
 $cursor = $profile;
@@ -38,12 +40,11 @@ while ($cursor !== null) {
 }
 
 // The Palette object also gives you a full description
-$palette = new Palette();
 echo "\n" . $palette->describe() . "\n";
 
 // Force a specific profile and comment on it
 echo "\n--- Forced profiles ---\n";
-foreach ([Profile::TrueColor, Profile::ANSI256, Profile::ANSI, Profile::Ascii, Profile::NoTTY] as $p) {
-    $forced = (new Palette())->withProfile($p);
+foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii, ColorProfile::NoTTY] as $p) {
+    $forced = $palette->withProfile($p);
     echo "  [{$p->label()}] -> \"{$forced->comment()}\"\n";
 }

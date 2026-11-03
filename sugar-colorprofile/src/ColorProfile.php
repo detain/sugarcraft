@@ -11,12 +11,10 @@ namespace SugarCraft\ColorProfile;
  * downwards:
  * TrueColor → ANSI256 → ANSI240 → ANSI → ANSI8 → FGBG → ASCII → NoTTY.
  *
- * CONSOLIDATION. This library used to carry two parallel five-level
- * enums under the same wire values — {@see Profile} (renderer-facing,
- * SCREAMING case spellings) and this one (detection-facing, CamelCase
- * spellings) — because PHP enums cannot alias cases and unifying them was a
- * BREAKING rename held back from fix commits. The deferral is now paid:
- * ColorProfile is canonical in its CamelCase spelling, and {@see Profile}
+ * CONSOLIDATION. This library once carried two parallel five-level enums
+ * under the same wire values — {@see Profile} (renderer-facing, SCREAMING
+ * case spellings) and this one (detection-facing, CamelCase spellings).
+ * ColorProfile is now canonical in its CamelCase spelling, and {@see Profile}
  * survives as a deprecated class_alias façade. The old SCREAMING spellings
  * resolve through the {@see self::ANSI256()}/{@see self::ANSI()} deprecated
  * constants below, so `Profile::ANSI256` keeps evaluating — to the very
@@ -35,13 +33,15 @@ namespace SugarCraft\ColorProfile;
  *   At the palette layer this reduces every color to black or white by
  *   perceived brightness; the actual inversion painting is a render-side
  *   policy this vocabulary only names (FgbgInvert/FgbgPlain remain future
- *   mints per the survey).
+ *   additions).
  *
  * Detection (Probe, AsyncProbe, DetectionChain, Palette::detect) never
  * EMITS the three new arms — environment probing cannot distinguish a
  * 240-color terminal from a 256-color one. They are request-side vocabulary:
  * pass them to Palette::withProfile(), Color::convert() or ProfileWriter to
- * force that degradation level.
+ * force that degradation level. The ASCII arm IS reachable from detection:
+ * a falsy FORCE_COLOR spelling (0/false/off) lands there as step 2 of the
+ * chain ladder — "disable color, keep decoration".
  *
  * @see https://github.com/charmbracelet/colorprofile
  */
