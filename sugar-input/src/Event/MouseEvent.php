@@ -39,8 +39,8 @@ final readonly class MouseEvent implements Event
      * @param int          $button    Button index (0=left, 1=middle, 2=right;
      *                                3 = X10 release code) or normalized wheel
      *                                code 96-99 (see the scroll factories)
-     * @param string       $action   press|release|drag|scroll — one of the ACTION_* constants
-     * @param KeyModifier  $modifiers
+     * @param string       $action    press|release|drag|scroll — one of the ACTION_* constants
+     * @param KeyModifier  $modifiers Modifiers held during the event
      */
     public function __construct(
         public int $x,

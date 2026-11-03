@@ -45,11 +45,21 @@ final readonly class KeyEvent implements Event
         return str_starts_with($this->key, self::RELEASE_PREFIX);
     }
 
+    /**
+     * A bare printable key: the character IS the event, so $raw defaults to
+     * $char and a null $modifiers means "no modifiers held" (KeyModifier::none()
+     * — PHP cannot default a parameter to a method call, hence the nullable).
+     */
     public static function plain(string $char, ?KeyModifier $modifiers = null): self
     {
         return new self($char, $modifiers ?? KeyModifier::none(), $char);
     }
 
+    /**
+     * A named key (ArrowUp, Enter, F5, ...). Null $modifiers means none held;
+     * empty $raw falls back to the bare ESC byte, which is honest only for
+     * Escape itself — callers with real wire bytes should pass them.
+     */
     public static function esc(string $key, ?KeyModifier $modifiers = null, string $raw = ''): self
     {
         return new self($key, $modifiers ?? KeyModifier::none(), $raw ?: "\x1b");

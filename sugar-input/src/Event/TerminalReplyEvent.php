@@ -84,16 +84,16 @@ final readonly class TerminalReplyEvent implements Event
     public readonly int $paramsDropped;
 
     /**
-     * @param string        $family One of the FAMILY_* constants above.
-     * @param list<int>     $params Numeric CSI parameters, in wire order (private-mode
-     *                              prefixes and intermediate bytes are not params).
-     * @param string        $raw    The exact bytes consumed from the stream,
-     *                              including "ESC ["/"ESC P" introducer and final byte.
-     * @param string        $body   Decoded payload for string sequences (OSC/DCS/APC/PM):
-     *                              the bytes between introducer and terminator. Empty
-     *                              for CSI-family replies.
+     * @param string        $family    One of the FAMILY_* constants above.
+     * @param list<int>     $params    Numeric CSI parameters, in wire order (private-mode
+     *                                 prefixes and intermediate bytes are not params).
+     * @param string        $raw       The exact bytes consumed from the stream,
+     *                                 including "ESC ["/"ESC P" introducer and final byte.
+     * @param string        $body      Decoded payload for string sequences (OSC/DCS/APC/PM):
+     *                                 the bytes between introducer and terminator. Empty
+     *                                 for CSI-family replies.
      * @param bool          $truncated True when a string sequence exceeded the decoder's
-     *                              size cap and its tail was discarded mid-payload.
+     *                                 size cap and its tail was discarded mid-payload.
      */
     public function __construct(
         public string $family,
