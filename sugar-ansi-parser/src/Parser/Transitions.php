@@ -85,7 +85,7 @@ final class Transitions
             // Anywhere -> Ground
             $setMany($state, [0x18, 0x1A, 0x99, 0x9A], Action::Execute->value, $g);
             $setRange($state, 0x80, 0x8F, Action::Execute->value, $g);
-            $setRange($state, 0x91, 0x97, Action::Execute->value, $g); // 0x90 is DCS (see :87)
+            $setRange($state, 0x91, 0x97, Action::Execute->value, $g); // 0x90 is the DCS introducer — see the Clear -> DcsEntry row below
             $set($state, 0x9C, Action::Execute->value, $g);
             // Anywhere -> Escape
             $set($state, 0x1B, Action::Clear->value, State::Escape->value);
@@ -158,7 +158,7 @@ final class Transitions
             $set($state, 0x19, Action::Put->value, $state);
             $setRange($state, 0x1C, 0x1F, Action::Put->value, $state);
             $setRange($state, 0x20, 0x7F, Action::Put->value, $state);
-            // C2 (lane A3a): OSC/DCS parity — raw bytes >= 0x80 belong to
+            // OSC/DCS parity — raw bytes >= 0x80 belong to
             // the payload. Left to the anywhere table, the Utf8 lead edge
             // (Collect -> Utf8) won in these three states, so a multi-byte
             // rune inside an SOS/PM/APC payload ESCAPED the sequence: the
