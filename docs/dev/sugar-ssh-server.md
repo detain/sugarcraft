@@ -303,20 +303,25 @@ environment variables (`USER`, `SSH_CONNECTION`, `TERM`, `SSH_TTY`, etc.):
 `user`, `clientHost`, `clientPort`, `serverHost`, `serverPort`, `term`,
 `cols`, `rows`, `tty`, `command`, `lang`.
 
-**Protocol fields** — populated by `withProtocolMetadata()` (called by
-transports after the SSH handshake completes):
+**Protocol fields** — populated by `withProtocolMetadata()`, which the
+transports call on the way *into* the stack with values they derived
+locally. There is no handshake behind them: this library speaks no SSH
+(audit MAJORS 3 and 21).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `sessionId` | `?string` | SSH session ID (hex string assigned by the transport) |
-| `authMethod` | `?string` | Auth method used — `publickey`, `password`, `keyboard-interactive`, etc. |
-| `keyFingerprint` | `?string` | SHA256 fingerprint of the client's host key |
-| `clientVersion` | `?string` | SSH client version string (e.g. `SSH-2.0-OpenSSH_9.0`) |
-| `serverVersion` | `?string` | SSH server version string (e.g. `SSH-2.0-OpenSSH_9.0`) |
+| `sessionId` | `?string` | Hex id **minted per process** (`bin2hex(random_bytes(16))`) — correlates this run's own lines, never another host's log |
+| `authMethod` | `?string` | Sniffed from `SSH_USER_AUTH` where a wrapper exported it: a hint about what sshd used, not proof of anything |
+| `keyFingerprint` | `?string` | No producer in this library today; pairing a key to a name is `Auth`'s job, so expect `null` |
+| `clientVersion` | `?string` | Read from `SSH_CLIENT_VERSION`, which stock OpenSSH does not export — usually `null` |
+| `serverVersion` | `?string` | Read from `SSH_SERVER_VERSION`, same story — usually `null` |
 
 Middleware that needs protocol-level information (e.g. audit logging,
-anomaly detection, rate-limiting per session ID) reads these fields after
-`withProtocolMetadata()` has been called by the transport.
+anomaly detection) reads these fields after `withProtocolMetadata()` has
+been called, and should treat an empty one as the normal case rather than
+a bug: the column says what sshd did not deliver. A plain `Logger` writes
+all of them, because `Session::toLogContext()` carries the nine fields the
+audit trail is made of.
 
 ```php
 use SugarCraft\SshServer\Context;

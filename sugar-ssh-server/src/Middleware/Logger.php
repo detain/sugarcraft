@@ -215,14 +215,67 @@ final class Logger implements Middleware
     }
 
     /**
+     * Append one record, whatever it contains.
+     *
+     * The naive shape here - encode, and `return` when the encoder says no -
+     * was audit MAJOR 3's third finding. `json_encode()` refuses the WHOLE
+     * document on a single malformed UTF-8 byte, and the fields this row
+     * carries are mostly peer-supplied strings: `TERM`,
+     * `SSH_ORIGINAL_COMMAND`, a username a wrapper exported. So one odd byte
+     * from a strange client did not degrade a log line, it deleted it,
+     * silently, from the only record that a session ever happened.
+     *
+     * Refusal is therefore retried with substitution on and the
+     * non-encodable containers flattened; the reason lands in the line as
+     * `json_error` so a reader knows the row was recovered rather than
+     * trusted. Only a document that still cannot be encoded degrades to a
+     * one-word row. Nothing about a session is allowed to be unrecordable.
+     *
      * @param array<string,mixed> $record
      */
     private function write(array $record): void
     {
         $line = json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         if ($line === false) {
-            return;
+            $line = json_encode(
+                ['json_error' => json_last_error_msg()] + self::scalarsOnly($record),
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+            );
+        }
+        if ($line === false) {
+            $line = '{"event":"unencodable_record"}';
         }
         fwrite($this->stream, $line . "\n");
+    }
+
+    /**
+     * Keep the fields a line can hold, and name the ones it cannot.
+     *
+     * Nested arrays and objects are what usually break an encoder on a
+     * recovery path (a caller passed a deeper structure with the bad byte
+     * inside), so they are replaced by their type rather than walked into:
+     * this is a fallback, not a second serialiser. Strings survive here even
+     * when they are not valid UTF-8, because the retry that uses them turns
+     * substitution on.
+     *
+     * @param array<string,mixed> $record
+     * @return array<string,null|bool|float|int|string>
+     */
+    private static function scalarsOnly(array $record): array
+    {
+        $flat = [];
+
+        foreach ($record as $key => $value) {
+            $name = (string) $key;
+
+            if ($value === null || is_bool($value) || is_int($value) || is_float($value) || is_string($value)) {
+                $flat[$name] = $value;
+                continue;
+            }
+
+            $flat[$name] = get_debug_type($value);
+        }
+
+        return $flat;
     }
 }

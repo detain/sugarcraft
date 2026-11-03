@@ -110,4 +110,44 @@ final class SessionTest extends TestCase
         $this->assertSame('100x30',                $ctx['pty']);
         $this->assertSame('wishlist',              $ctx['command']);
     }
+
+    public function testTheProtocolColumnsArePresentAndDashedBeforeAnyMetadata(): void
+    {
+        // Audit MAJOR 3: a log line used to be unable to say which
+        // authentication decision it belonged to, because the three protocol
+        // fields never reached it at all.
+        $ctx = $this->shaped()->toLogContext();
+        $this->assertSame('-', $ctx['session']);
+        $this->assertSame('-', $ctx['auth_method']);
+        $this->assertSame('-', $ctx['key_fingerprint']);
+    }
+
+    public function testTheProtocolColumnsCarryWhatTheTransportDerived(): void
+    {
+        $ctx = $this->shaped()
+            ->withProtocolMetadata('sess-1', 'publickey', null, null, null)
+            ->toLogContext();
+        $this->assertSame('sess-1',    $ctx['session']);
+        $this->assertSame('publickey', $ctx['auth_method']);
+        // Still a dash, because no transport has a fingerprint to hand over
+        // (audit K6): the column is honest about the missing delivery.
+        $this->assertSame('-', $ctx['key_fingerprint']);
+    }
+
+    private function shaped(): Session
+    {
+        return new Session(
+            user: 'carol',
+            clientHost: '203.0.113.99',
+            clientPort: 5555,
+            serverHost: '198.51.100.1',
+            serverPort: 22,
+            term: 'tmux-256color',
+            cols: 100,
+            rows: 30,
+            tty: '/dev/pts/0',
+            command: 'wishlist',
+            lang: 'en_US.UTF-8',
+        );
+    }
 }

@@ -122,27 +122,95 @@ final class LoggerTest extends TestCase
         new Logger(12345);  // integer is neither null, string, nor resource
     }
 
-    public function testWriteSilentlySkipsOnJsonEncodeFailure(): void
+    /**
+     * The pin audit MAJOR 3 asked for: a byte the encoder refuses used to
+     * delete the whole session record, quietly. The field that carries it is
+     * peer-supplied (`TERM`, a command, a username a wrapper exported), so a
+     * strange client held the operator's only audit line for that session.
+     */
+    public function testAByteThatBreaksEncodingIsSubstitutedNotDeleted(): void
     {
-        // Create a Logger and manually call write with data that JSON encode
-        // would fail on (e.g. circular reference - but our write() catches this)
-        // The write method silently returns on json_encode failure (line 92-94)
-        // We can verify this by checking that Logger doesn't throw on encoding failure
         $log = fopen('php://memory', 'w+');
         $this->assertNotFalse($log);
         $l = new Logger($log);
 
-        // Attempt to encode a value with circular reference
+        $raw = "bad" . "\xff" . "byte";
+        $session = new Session(
+            user: 'alice', clientHost: '203.0.113.7', clientPort: 5555, serverHost: '198.51.100.1',
+            serverPort: 22, term: $raw, cols: 80, rows: 24, tty: '/dev/pts/3',
+            command: null, lang: 'C.UTF-8',
+        );
+
+        $l->handle(Context::background(), $session, function (Context $c, Session $s): void {
+        });
+
+        rewind($log);
+        $text = (string) \stream_get_contents($log);
+        $lines = array_values(array_filter(explode("\n", $text), static fn (string $x): bool => $x !== ''));
+
+        $this->assertCount(2, $lines, 'both the start and the end record must arrive');
+        $this->assertStringContainsString('session.start', $lines[0]);
+        $this->assertStringContainsString('session.end', $lines[1]);
+        $this->assertStringContainsString('json_error', $lines[0], 'the recovery must announce itself');
+        $this->assertStringNotContainsString("\xff", $text, 'the raw byte must not reach the sink');
+        $this->assertStringContainsString('alice', $lines[0], 'the rest of the row survives');
+
+        fclose($log);
+    }
+
+    public function testACleanRecordIsNotMarkedAsRecovered(): void
+    {
+        $log = fopen('php://memory', 'w+');
+        $this->assertNotFalse($log);
+        $l = new Logger($log);
+
+        $l->handle(Context::background(), $this->session(), function (Context $c, Session $s): void {
+        });
+
+        rewind($log);
+        $text = (string) \stream_get_contents($log);
+
+        $this->assertStringContainsString('session.start', $text);
+        $this->assertStringNotContainsString('json_error', $text, 'honest rows must not carry the recovery tag');
+
+        fclose($log);
+    }
+
+    public function testAContainerThatCannotBeEncodedIsNamedNotLost(): void
+    {
+        $log = fopen('php://memory', 'w+');
+        $this->assertNotFalse($log);
+        $l = new Logger($log);
+
         $circular = [];
         $circular['self'] = &$circular;
 
-        // Use reflection to call the private write method
-        $reflection = new \ReflectionClass($l);
-        $method = $reflection->getMethod('write');
-        $method->setAccessible(true);
+        $write = (new \ReflectionClass($l))->getMethod('write');
+        $write->invoke($l, ['circular' => $circular]);
 
-        // write() should not throw - it silently returns on JSON encode failure
-        $method->invoke($l, ['circular' => $circular]);
+        rewind($log);
+        $line = trim((string) \stream_get_contents($log));
+
+        $this->assertNotSame('', $line, 'a record is never dropped on the floor');
+        $this->assertStringContainsString('json_error', $line);
+        $this->assertStringContainsString('array', $line, 'the field is reported by type instead of walked into');
+
+        fclose($log);
+    }
+
+    public function testARecordTheRecoveryStillCannotEncodeDegradesToOneWord(): void
+    {
+        $log = fopen('php://memory', 'w+');
+        $this->assertNotFalse($log);
+        $l = new Logger($log);
+
+        $write = (new \ReflectionClass($l))->getMethod('write');
+        $write->invoke($l, ['elapsed' => \INF]);
+
+        rewind($log);
+        $line = trim((string) \stream_get_contents($log));
+
+        $this->assertStringContainsString('unencodable_record', $line);
 
         fclose($log);
     }

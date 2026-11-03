@@ -323,6 +323,55 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('cron entry or CI step', $readme);
     }
 
+    /**
+     * Five surfaces described the protocol fields as arriving 'after the SSH
+     * handshake completes', which is a sentence about a negotiation this
+     * library never performs (audit MAJORS 3 and 21). Provenance prose is
+     * exactly the kind of sentence nobody re-reads once it has shipped, so
+     * the phrase is now forbidden on each surface and the true story is
+     * required in its place.
+     */
+    public function testTheProtocolProvenanceIsStatedOnEverySurface(): void
+    {
+        $session = (string) \file_get_contents(\dirname(__DIR__) . '/src/Session.php');
+        $flatSession = (string) \preg_replace('/\s+/', ' ', $session);
+        $this->assertStringContainsString('There is no handshake to wait for', $flatSession);
+        $this->assertStringNotContainsString('after the SSH handshake completes', $flatSession);
+
+        $transport = (string) \file_get_contents(\dirname(__DIR__) . '/src/Transport/InProcessTransport.php');
+        $flatTransport = (string) \preg_replace('/\s+/', ' ', $transport);
+        $this->assertStringContainsString('performs no SSH handshake', $flatTransport);
+        $this->assertStringContainsString('MINTED for this process', $flatTransport);
+        // Audit minor: the class pointed readers at two plan files that never
+        // shipped, one of them by campaign-stage name.
+        $this->assertStringNotContainsString('plans/sugarcraft-is-a-mono-logical-twilight', $flatTransport);
+        $this->assertStringNotContainsString("PR3's", $flatTransport);
+
+        $readme = (string) \preg_replace('/\s+/', ' ', (string) $this->readme());
+        $this->assertStringNotContainsString('After the SSH handshake completes', $readme);
+        $this->assertStringContainsString('minted per process', $readme);
+        $this->assertStringContainsString('are not audit columns', $readme);
+
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
+        }
+
+        $flatGuide = (string) \preg_replace('/\s+/', ' ', $guide);
+        $this->assertStringNotContainsString('correlating across multiple proxy hops', $flatGuide);
+        $this->assertStringContainsString('Do not plan on cross-host correlation', $flatGuide);
+        $this->assertStringContainsString('Auth *outcomes* are not in these lines either', $flatGuide);
+
+        $dev = $this->devGuide();
+        if ($dev === null) {
+            $this->markTestSkipped('no dev guide in a standalone checkout');
+        }
+
+        $flatDev = (string) \preg_replace('/\s+/', ' ', $dev);
+        $this->assertStringNotContainsString('after the SSH handshake completes', $flatDev);
+        $this->assertStringContainsString('There is no handshake behind them', $flatDev);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

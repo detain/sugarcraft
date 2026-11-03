@@ -381,10 +381,23 @@ stdin/stdout.
 
 ### Protocol metadata for audit logging
 
-After the SSH handshake, transports populate protocol metadata on the `Session`
-via `withProtocolMetadata()`: `sessionId`, `authMethod`, `keyFingerprint`,
-`clientVersion`, `serverVersion`. Custom logging middleware can read these
-fields and include them in audit logs for security analysis:
+Read the field names before you build a dashboard on them. There is no
+handshake in this stack — the library speaks no SSH — so what
+`withProtocolMetadata()` hands over is derived locally by the transport, and
+`Session::toLogContext()` has carried it on every `Logger` line since audit
+MAJOR 3 (`session`, `auth_method`, `key_fingerprint`, each `-` when not
+carried):
+
+| Field | What it actually is | Safe use |
+|-------|---------------------|----------|
+| `sessionId` | minted per process (`bin2hex(random_bytes(16))`) | tying one login's own lines together |
+| `authMethod` | sniffed from `SSH_USER_AUTH` if a wrapper exported it | a hint, never proof of what happened |
+| `keyFingerprint` | no producer in this library today | `Auth` pairing instead — see [Authentication methods](#authentication-methods) |
+| `clientVersion`, `serverVersion` | read from `SSH_CLIENT_VERSION` / `SSH_SERVER_VERSION`, names stock OpenSSH does not export (audit MAJOR 21) | a column only for a deployment that supplies one out of band |
+
+A dedicated audit sink, if you want one separate from the session log, still
+looks like this — the difference is knowing which of its columns are normally
+empty and why:
 
 ```php
 final class AuditLogger implements Middleware
@@ -393,11 +406,11 @@ final class AuditLogger implements Middleware
     {
         $audit = [
             'event'         => 'session_start',
-            'session_id'    => $s->sessionId,
-            'auth_method'   => $s->authMethod,
-            'client_fp'     => $s->keyFingerprint,
-            'client_ver'    => $s->clientVersion,
-            'server_ver'    => $s->serverVersion,
+            'session_id'    => $s->sessionId,      // this process only
+            'auth_method'   => $s->authMethod,     // usually null
+            'client_fp'     => $s->keyFingerprint, // always null today
+            'client_ver'    => $s->clientVersion,  // usually null
+            'server_ver'    => $s->serverVersion,  // usually null
             'user'          => $s->user,
             'client_host'   => $s->clientHost,
         ];
@@ -407,8 +420,20 @@ final class AuditLogger implements Middleware
 }
 ```
 
-These fields are also useful for correlating across multiple proxy hops
-(session ID remains stable across the full SSH session lifetime).
+Do not plan on cross-host correlation. The id is not issued by `sshd`, so it
+matches neither the daemon's log lines nor a bastion's record, and it changes
+on the next login; a stack that needs one identity across several hosts must
+thread it in through middleware (`Context::withValue()`) or an environment
+variable it controls.
+
+Auth *outcomes* are not in these lines either. `Logger` writes one
+`session.start` and one `session.end` per walk; a gate that refuses mid-chain
+stops the chain without emitting an event of its own, and its notice goes to
+whichever stream you handed the gate (which, under `ForceCommand`, is the
+peer's channel — see [Sinks](#sinks-who-actually-reads-what-you-write) in the
+library README). The process-level answer to a refusal is the exit code
+(`Server::EXIT_DENIED`, see [Exit status](#exit-status)); a per-event audit
+trail of denials is a seam you have to write yourself.
 
 ### Healthcheck
 

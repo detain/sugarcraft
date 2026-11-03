@@ -31,11 +31,9 @@ use SugarCraft\SshServer\TransportAware;
  *
  * The middleware stack walks like {@see HostSshdTransport} does
  * (Logger, RateLimit, Auth, etc. work unchanged). Spawning a child
- * is delegated to terminal middleware (PR3's `Spawn`) which calls
- * back into {@see runChild()} with the cmd produced from the
- * Session.
- *
- * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P2.5, P4.2)
+ * is delegated to a terminal middleware — `Spawn`, or this class's own
+ * {@see DefaultChannelHandler} — which calls back into
+ * {@see runChild()} with the cmd produced from the Session.
  */
 final class InProcessTransport implements Transport, ChildSpawner
 {
@@ -177,10 +175,17 @@ final class InProcessTransport implements Transport, ChildSpawner
             }
         }
 
-        // Build real-or-null protocol metadata from the sshd environment.
-        // In a ForceCommand deployment these vars are set by sshd; in
-        // the in-process transport (testing) they may be absent and we
-        // pass null so we don't assert false facts about the session.
+        // Protocol metadata, best-effort from the environment (audit MAJOR 3
+        // and MAJOR 21). This transport performs no SSH handshake and speaks
+        // no wire protocol, so nothing here is a fact about the peer's
+        // negotiation: the session id is MINTED for this process and is good
+        // for tying this run's own lines together and nothing more; the auth
+        // method is sniffed from a variable sshd only exports when told to
+        // (ExposeAuthInfo, and only for a publickey session); the fingerprint
+        // has no producer here at all; and the two version fields read names
+        // stock OpenSSH never sets, so on an ordinary host they arrive null.
+        // Absent means absent — a deployment that supplies one out of band
+        // owns what the value then means.
         $authMethod = null;
         $authEnv = $_SERVER['SSH_USER_AUTH'] ?? getenv('SSH_USER_AUTH') ?: '';
         if ($authEnv !== '') {

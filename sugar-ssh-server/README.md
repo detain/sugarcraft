@@ -498,15 +498,21 @@ $s->isInteractive();
 $s->toLogContext();
 ```
 
-After the SSH handshake completes, transports call `withProtocolMetadata()`
-to populate protocol-level fields:
+`s->toLogContext()` is what the bundled `Logger` writes, and since audit
+MAJOR 3 it carries nine fields: the six above plus `session`, `auth_method`
+and `key_fingerprint` (a dash stands for "not carried", so a line never loses
+the authentication column silently).
+
+There is no handshake for those to come from — this library speaks no SSH — so
+`withProtocolMetadata()` is called by the transport on the way *into* the
+stack, with values derived locally:
 
 ```php
-$s->sessionId;        // SSH session ID (hex string)
-$s->authMethod;       // 'publickey' | 'password' | 'keyboard-interactive' | ...
-$s->keyFingerprint;   // reserved: always null today — no transport populates it (verification is opt-in via Auth.php's fingerprint validator)
-$s->clientVersion;    // SSH client version string (e.g. 'SSH-2.0-OpenSSH_9.0')
-$s->serverVersion;    // SSH server version string (e.g. 'SSH-2.0-OpenSSH_9.0')
+$s->sessionId;        // minted per process: bin2hex(random_bytes(16)), not a wire id
+$s->authMethod;      // sniffed from SSH_USER_AUTH when a wrapper exported it
+$s->keyFingerprint;  // no producer in this library today — see the pairing note below
+$s->clientVersion;    // read from SSH_CLIENT_VERSION: stock OpenSSH exports neither
+$s->serverVersion;    // ...so both are usually empty and are not audit columns
 
 // Build a new Session with protocol metadata attached
 $s = $s->withProtocolMetadata(
@@ -517,6 +523,13 @@ $s = $s->withProtocolMetadata(
     serverVersion:   $serverVersion,
 );
 ```
+
+Because `sessionId` is minted here, it identifies one process's worth of lines
+to each other and nothing more: it will not match a `sshd` log line, a
+bastion's record, or the same user's next login. Treat the two version fields
+the same way — an empty one is the normal case, and a filled one means *your*
+wrapper exported it (see [What sshd actually hands your
+middleware](#what-sshd-actually-hands-your-middleware)).
 
 ## Context propagation
 

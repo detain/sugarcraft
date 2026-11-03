@@ -107,11 +107,20 @@ final class Session
     }
 
     /**
-     * Create a new Session with protocol-handshake metadata populated.
+     * Create a new Session with protocol metadata populated.
      *
-     * Called by transports after the SSH handshake completes so that
-     * middleware has visibility into sessionId, authMethod,
-     * keyFingerprint, clientVersion, and serverVersion.
+     * There is no handshake to wait for: this library speaks no SSH, so the
+     * transports call this once, on the way into the stack, with values they
+     * derived locally (audit MAJOR 3). What each of the five actually means:
+     * `$sessionId` is minted per process (`bin2hex(random_bytes(16))`), not
+     * issued by a daemon, so it correlates lines within one login and nothing
+     * beyond it; `$authMethod` is sniffed from `SSH_USER_AUTH` where a wrapper
+     * exported that; `$keyFingerprint` has no producer in this library today,
+     * so a stack that wants pairing supplies it through `Auth`'s validator;
+     * and the two version fields read environment names stock OpenSSH never
+     * exports (audit MAJOR 21), which is why they arrive here null on an
+     * ordinary host. Middleware sees the fields either way — an empty column
+     * is information about the delivery, not a broken reader.
      */
     public function withProtocolMetadata(
         ?string $sessionId,
@@ -240,17 +249,35 @@ final class Session
     }
 
     /**
+     * The fields a session-start/end record is made of.
+     *
+     * Before this method returned six keys (audit MAJOR 3): the three
+     * protocol fields were dropped, which meant a log line could not be
+     * tied back to an authentication decision at all — 'who got in, and
+     * how' was unanswerable from the file, and the admin guide's
+     * correlation advice pointed at a field that was never written.
+     *
+     * Every value here is a string, and '-' means 'not carried': the
+     * guide's grep-able shapes are the same whether or not sshd delivered
+     * the slot. Remember what K6 established about provenance — sessionId
+     * is minted per process by the transport, authMethod is sniffed from
+     * `SSH_USER_AUTH` where a wrapper exported it, and keyFingerprint has
+     * no producer in this library today.
+     *
      * @return array<string,string>
      */
     public function toLogContext(): array
     {
         return [
-            'user'        => $this->user,
-            'client_addr' => $this->clientHost . ':' . $this->clientPort,
-            'term'        => $this->term,
-            'tty'         => $this->tty ?? '-',
-            'pty'         => $this->cols . 'x' . $this->rows,
-            'command'     => $this->command ?? '',
+            'user'            => $this->user,
+            'client_addr'     => $this->clientHost . ':' . $this->clientPort,
+            'term'            => $this->term,
+            'tty'             => $this->tty ?? '-',
+            'pty'             => $this->cols . 'x' . $this->rows,
+            'command'         => $this->command ?? '',
+            'session'         => $this->sessionId ?? '-',
+            'auth_method'     => $this->authMethod ?? '-',
+            'key_fingerprint' => $this->keyFingerprint ?? '-',
         ];
     }
 }
