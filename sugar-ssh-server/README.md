@@ -206,6 +206,25 @@ final class HelloBanner implements Middleware
 }
 ```
 
+## Defaults that are open until you close them
+
+Four shipped defaults admit traffic. Each is a deliberate choice -- the
+alternative is a middleware that locks everyone out when you forget an
+argument -- but none of them is a security gate you can rely on by
+accident. `tests/SecurityDefaultsTest.php` runs all four against the
+table below.
+
+| Middleware | Default that is open | What closes it |
+| --- | --- | --- |
+| `Auth` | `new Auth()` has no user list and no fingerprint list, so **every session passes**. | Pass `users`, `keyFingerprints`, or the pairing map `userKeys` (see below). |
+| `KeyboardInteractive` | No `$validate` callable means **any answer authenticates**; the exchange is a form, not a check. | Pass a validator. There is no built-in PAM/password backend in this library. |
+| `RateLimit` | `failClosed` is `false`, so an unreadable or locked state file **lets the connection through** with a notice. | Construct with `failClosed: true` to deny when state cannot be read. |
+| `Server` | `serve()` runs exactly the middleware you `use()` -- **no auth is inserted for you** -- and an empty stack returns exit code `0`. | `->use(new Auth(...))->use(new RateLimit(...))`; treat a `0` from a stack that never spawned a child as "nothing ran". |
+
+The docblocks on those four classes say the same thing in longer words, and
+`docs/admin/sugar-ssh-server.md` describes the deployment posture. If you
+skim only this README, skim this table.
+
 ## Sinks: who actually reads what you write
 
 There is no server process to log into. The code runs as sshd's
