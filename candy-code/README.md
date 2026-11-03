@@ -2933,10 +2933,13 @@ cd candy-code && composer install && vendor/bin/phpunit
 **30,216 tests / 752,697 assertions, 0 failures, 8 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-in 22m51s (measured 2026-10-18). The two skips are expected and rostered: one
-test self-skips because its branch needs a file that exists but cannot be read
-without mocking a built-in function, and the skip-roster guard fails the suite
-on any *unrostered* skip or on a roster entry that stops skipping.
+in 22m51s (measured 2026-10-18). The skips are expected and rostered, and the
+roster is a Linux figure that moves with the platform: each skip is a gate that
+self-skips by contract — a branch needing a file that cannot be read without
+mocking a built-in, a live-smoke or built-phar opt-in, a procfs or Windows-only
+family — so the exact count is the one this run reports, not one this page can
+promise. The skip-roster guard fails the suite on any *unrostered* skip or on a
+roster entry that stops skipping.
 `failOnWarning="true"` means the run is also warning-free. How the suite grew
 to this size is in [`CHANGELOG.md`](CHANGELOG.md), not here.
 

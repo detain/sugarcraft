@@ -42,7 +42,9 @@ fallbacks, and several pins assert the fallback. Plain pipes (the shape CI
 and this guide use) answer the pinned sizes.
 
 Full-suite serial runs are slow by design; the sharded runner exists so you
-never reach for them casually:
+never reach for them casually. The script and every path in its arguments are
+MONOREPO-ROOT relatives, so invoke both lines from the repository root, not
+from `candy-code/`:
 
 ```sh
 scripts/parallel-tests.sh                       # K = min(nproc, 24), unique --out REQUIRED in practice
@@ -123,8 +125,12 @@ British English — colour, behaviour, honour, normalise — while identifiers a
 protocol vocabulary keep their upstream spelling (`Color::`, `NO_COLOR`). Docs
 describe current behaviour only: audit-era identifiers (`E###`, `ISS-###`, wave
 labels) and dated remediation narratives do not belong in prose — code
-comments carry them instead (see [GLOSSARY.md](GLOSSARY.md)). Generated
-surfaces regenerate through their real generators, never by hand:
+comments carry them instead (see [GLOSSARY.md](GLOSSARY.md)). Tagged shell
+fences say `sh`, and `bash` only where a snippet actually leans on a bashism;
+untagged stays right for console and TUI transcripts. Changelog sections are
+one shape: `## <Theme> — YYYY-MM[-DD]`, with the user-visible fact in the
+theme and no campaign names. Generated surfaces regenerate through their real
+generators, never by hand:
 `docs/COMMANDS.md` marked regions through `php tools/gen-command-docs.php
 --write`, the wire schema through `php tools/gen-protocol-schema.php
 --write`, and docs-site pages through the root `tools/gen-docs.php`.

@@ -7,7 +7,7 @@ found to contradict each other and the actual code during the remediation
 audit described below, so treat *this* file plus `git log` as the source of
 truth going forward.
 
-## Renamed: sugar-crush → candy-code (2026-10) <!-- @rename-keep -->
+## Renamed — sugar-crush → candy-code, 2026-10 <!-- @rename-keep -->
 
 Phase 8A of the rename campaign (`plan_rename.md`). The whole product moved
 name in one release; everything below is mechanical, with a compat shim where
@@ -37,7 +37,7 @@ the plan demanded one.
 See `docs/TROUBLESHOOTING.md` ("Upgrading from sugar-crush") for user-facing <!-- @rename-keep -->
 symptoms, and `docs/ENVIRONMENT.md` ("Deprecated aliases") for the env fold.
 
-## Security and one-shot hardening (2026-10-21)
+## Security and one-shot hardening — 2026-10-21
 
 A remediation wave across the permission layer, the network tools and the
 one-shot `-p` path. In user-visible terms:
@@ -110,7 +110,7 @@ one-shot `-p` path. In user-visible terms:
   `/export`, settings-help i18n, docs wash complete
   (live 25,412 tests / 606,569 assertions).
 
-## Fixed (2026-10-21 plan_comparison D1)
+## Fixed — one-shot stop-condition trailers, 2026-10-21
 
 The one-shot `-p` path discarded every stop condition the engine had folded
 onto the settled answer: a step-capped, output-limit-cut, or loop-guarded turn
@@ -123,7 +123,7 @@ line) gains the typed optional keys `steps_truncated` / `length_stopped` /
 unpriced model writes its `chat.turn.unpriced_model` notice to stderr like the
 TUI's. Exit semantics are unchanged by design: 0 still means an answer arrived.
 
-## Fixed (2026-10-14 review wave)
+## Fixed — review wave, 2026-10-14
 
 A broad multi-persona review (covering documentation, code, terminal UX,
 operations, security, accessibility and first-run experience) whose findings
@@ -170,7 +170,7 @@ were fixed in six grouped changes:
   test, a broken ARCHITECTURE anchor was fixed, and the onboarding,
   prerequisites, CI and containers sections in the READMEs were reworked.
 
-## Feature-parity pass (current) — 2026-08
+## Feature-parity pass — 2026-08
 
 Driven by an internal 12-agent comparison of
 candy-code against `opencode` and Claude Code. Its dominant finding was not
@@ -438,7 +438,7 @@ happen to share the numbers 1–4.
 
 No on-disk format changed in this pass. Sessions written before it still load.
 
-## Second audit pass — the deep code review
+## Second audit pass — the deep code review, 2026-08
 
 A second, independent 13-angle audit of the whole library. Phase 0
 is its highest-severity findings.
@@ -518,7 +518,7 @@ On-disk format: additive and backward-compatible. `checkpoint_blobs` and
 init, so an existing `session.db` migrates on its next open, and checkpoints
 written in the old inline format still read back unchanged.
 
-## Remediation pass
+## Remediation pass — 2026-08
 
 An independent line-by-line audit of the original P0–P7 build found that a
 large fraction of "complete" steps were either subtly broken, unenforced, or
@@ -705,7 +705,7 @@ One continuous, internally-ordered track (data layer before TUI):
   separate Wave-4 tracks; check `git log` for their current status rather
   than assuming this entry covers them.
 
-## Original build (P0–P7)
+## Original build — P0–P7, 2026-08
 
 Built on the existing SugarCraft chassis (`sugar-core`'s `Model`/`Program`,
 buffer-diff `Renderer`), with [`charmbracelet/crush`](https://github.com/charmbracelet/crush)
