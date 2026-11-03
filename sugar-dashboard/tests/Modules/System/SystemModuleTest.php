@@ -72,17 +72,52 @@ final class SystemModuleTest extends TestCase
         $this->assertInstanceOf(\Closure::class, $cmd);
     }
 
-    public function testUpdateWithNonRefreshMsgReturnsNewModuleWithNoCmd(): void
+    public function testUpdateWithUnrelatedMsgNeverResamples(): void
     {
         $module = new SystemModule();
         $msg = new class implements Msg {};
 
         [$nextModule, $cmd] = $module->update($msg);
 
-        // Should still get a new module (with updated system state)
-        $this->assertNotSame($module, $nextModule);
-        // No command for non-RefreshMsg messages
+        // Sampling is RefreshMsg-only: an unrelated message returns the very
+        // same instance with zero /proc reads, zero child spawns.
+        $this->assertSame($module, $nextModule);
         $this->assertNull($cmd);
+    }
+
+    public function testColdViewCarriesNoFabricatedBars(): void
+    {
+        // Before any sample the rows must read 'n/a' (and 'unknown' uptime) —
+        // a pre-first-tick 0% full-width bar was a fabricated measurement.
+        $view = (new SystemModule())->view();
+
+        $this->assertStringContainsString('CPU n/a', $view);
+        $this->assertStringContainsString('MEM n/a', $view);
+        $this->assertStringNotContainsString('░', $view);
+        $this->assertStringNotContainsString('█', $view);
+    }
+
+    public function testCpuNeedsTwoSamplesAndRemembersBaselinePerInstance(): void
+    {
+        if (!is_readable('/proc/stat')) {
+            $this->markTestSkipped('two-sample differential pin needs a /proc host (Linux)');
+        }
+        ProcAvailability::resetForTesting();
+
+        $module = new SystemModule();
+        [$first] = $module->update(new RefreshMsg());
+        [$second] = $first->update(new RefreshMsg());
+
+        // First sample only seeds the differential baseline — honest -1.0,
+        // not a fake 0.0. The second computes a real percentage.
+        $this->assertSame(ProcAvailability::UNMEASURED, $first->getState()['cpuLoad']);
+        $this->assertGreaterThanOrEqual(0.0, $second->getState()['cpuLoad']);
+
+        // A fresh instance must NOT inherit the first instance's baseline:
+        // process-global statics used to leak across modules (and tests).
+        $fresh = new SystemModule();
+        [$freshFirst] = $fresh->update(new RefreshMsg());
+        $this->assertSame(ProcAvailability::UNMEASURED, $freshFirst->getState()['cpuLoad']);
     }
 
     public function testViewReturnsNonEmptyString(): void
@@ -231,24 +266,27 @@ final class SystemModuleTest extends TestCase
         if (!is_readable('/proc/stat')) {
             $this->markTestSkipped('readable-branch integration pin needs a /proc host (Linux)');
         }
-        // Cold ambient probe: every door answers true on Linux → the pre-E731(b)
-        // render bytes are preserved on CI (the sentinel path stays dormant).
+        // Cold ambient probe: every door answers true on Linux → the real
+        // render bytes are exercised on CI (the sentinel path stays dormant).
         ProcAvailability::resetForTesting();
 
         $module = new SystemModule();
         [$first] = $module->update(new RefreshMsg());
         [$second] = $first->update(new RefreshMsg());
-        $view = $second->view();
+        [$third] = $second->update(new RefreshMsg());
+        $view = $third->view();
 
         $this->assertMatchesRegularExpression('/^CPU +\d+% [█░]{70}$/mu', $view);
         $this->assertMatchesRegularExpression('/^MEM +\d+% [█░]{70}$/mu', $view);
         $this->assertStringNotContainsString('n/a', $view);
 
-        $state = $second->getState();
+        $state = $third->getState();
         $this->assertGreaterThanOrEqual(0.0, $state['cpuLoad']);
         $this->assertGreaterThanOrEqual(0.0, $state['memLoad']);
-        // Two ticks on a readable host accumulate two samples per series.
+        // The CPU series only counts samples after the baseline seed, so a
+        // readable host accumulates two entries from three ticks; the memory
+        // series measures from the first tick (no differential needed).
         $this->assertCount(2, $state['cpuHistory']);
-        $this->assertCount(2, $state['memHistory']);
+        $this->assertCount(3, $state['memHistory']);
     }
 }

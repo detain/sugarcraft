@@ -7,32 +7,43 @@ namespace SugarCraft\Dashboard\Modules\System;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Module\BaseModule;
+use SugarCraft\Dashboard\Module\BoundedCommand;
 use SugarCraft\Dashboard\Module\ProcAvailability;
 
 /**
- * System module that displays CPU, memory, and uptime statistics.
+ * System module that displays CPU, memory, GPU, and uptime statistics.
  *
- * Mirrors the lattice system module pattern.
- * Uses Cmd::tick() for periodic refresh.
+ * Uses Cmd::tick() for periodic refresh; sampling happens ONLY on the
+ * RefreshMsg the tick mints, so an unrelated message (every keystroke)
+ * returns the module untouched — a Model update must not do /proc I/O
+ * or spawn children per event.
+ *
+ * The state array is the single source of truth for everything view()
+ * renders; the only direct properties are the internal sampler memos
+ * (CPU differential baseline, GPU spawn-failure latch) which are
+ * measurement plumbing, deliberately NOT public state.
  */
 final class SystemModule extends BaseModule
 {
     private const HISTORY_SIZE = 30;
     private const TICK_INTERVAL = 2.0;
 
-    /** @var array<int> */
-    private array $cpuHistory = [];
+    /**
+     * Differential baseline for CPU load (jiffies at the previous sample).
+     * Percentages need two samples; until the second one arrives the load
+     * carries ProcAvailability::UNMEASURED so view() renders the visible
+     * 'n/a' sentinel instead of a fabricated 0% bar.
+     */
+    private ?int $cpuIdleBase = null;
+    private ?int $cpuTotalBase = null;
 
-    /** @var array<int> */
-    private array $memHistory = [];
-
-    // Percentages carry ProcAvailability::UNMEASURED (-1.0) once a /proc door
-    // has proven itself unreadable (COMP-2 option b); the 0.0 initial value is
-    // the pre-first-tick placeholder on EVERY platform and stays as-is.
-    private float $cpuLoad = 0.0;
-    private float $memLoad = 0.0;
-    private float $gpuLoad = -1.0; // -1.0 = "no GPU present" (hides the row)
-    private string $uptime = 'unknown';
+    /**
+     * Latch for "nvidia-smi could not be started here at all" — a missing
+     * binary is deterministic, so stop attempting the spawn. Transient
+     * failures (timeout, unparsable output) do NOT latch: GPU presence is
+     * re-checked on the next tick.
+     */
+    private bool $gpuSpawnFailed = false;
 
     public function name(): string
     {
@@ -46,27 +57,31 @@ final class SystemModule extends BaseModule
 
     public function update(Msg $msg): array
     {
-        // Compute fresh state without mutating $this — withSystemState() reads
-        // /proc/* files directly and accumulates history internally.
-        $newModule = $this->withSystemState();
-        if ($msg instanceof RefreshMsg) {
-            return [$newModule, Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new RefreshMsg())];
+        // Only the tick-minted RefreshMsg samples. Everything else — keys,
+        // focus changes, resizes — passes through with zero I/O.
+        if (!$msg instanceof RefreshMsg) {
+            return [$this, null];
         }
-        return [$newModule, null];
+
+        return [
+            $this->withSystemState(),
+            Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new RefreshMsg()),
+        ];
     }
 
     public function view(): string
     {
-        $cpu = $this->cpuLoad;
-        $mem = $this->memLoad;
-        $gpu = $this->gpuLoad;
-        $uptime = $this->uptime;
+        $state = $this->state();
+        $cpu = (float) ($state['cpuLoad'] ?? ProcAvailability::UNMEASURED);
+        $mem = (float) ($state['memLoad'] ?? ProcAvailability::UNMEASURED);
+        $gpu = (float) ($state['gpuLoad'] ?? ProcAvailability::UNMEASURED);
+        $uptime = (string) ($state['uptime'] ?? 'unknown');
 
         $lines = $this->renderLoadRow('CPU', $cpu) . "\n" . $this->renderLoadRow('MEM', $mem);
 
-        // GPU keeps the older COMP-2 stance the class invented: an absent GPU
-        // (-1.0) HIDES the row entirely; CPU/MEM render the visible 'n/a'
-        // sentinel instead (E731 option (b) adoption ruling).
+        // GPU keeps the row-hiding stance this class invented: an absent GPU
+        // (negative) removes the row entirely; CPU/MEM render the visible
+        // 'n/a' sentinel instead.
         if ($gpu >= 0.0) {
             $lines .= "\n" . $this->renderLoadRow('GPU', $gpu);
         }
@@ -82,27 +97,23 @@ final class SystemModule extends BaseModule
     }
 
     /**
-     * Create a clone with updated system state in the state array.
-     *
-     * Reads fresh values from /proc/* and accumulates history without
-     * mutating $this — follows Elm-architecture immutability contract.
-     *
-     * Also updates direct properties on the clone so that view() (which reads
-     * from direct properties) gets current values.
+     * Produce a clone whose state array carries freshly sampled values and
+     * accumulated history; $this is never mutated. The internal sampler
+     * memos are carried onto the clone at this single controlled boundary
+     * (they are plumbing, not public state — see the property docblocks).
      */
     private function withSystemState(): static
     {
-        // Read fresh values directly from /proc/*
-        $cpuLoad = $this->readCpuLoad();
+        [$cpuLoad, $idle, $total] = $this->sampleCpu();
         $memLoad = $this->readMemLoad();
-        $gpuLoad = $this->readGpuLoad();
+        [$gpuLoad, $spawnFailed] = $this->sampleGpu();
         $uptime = $this->readUptime();
 
-        // Accumulate history without mutating $this
-        $cpuHistory = $this->cpuHistory;
-        $memHistory = $this->memHistory;
-        // COMP-2 (E731 option b): history must not accumulate unmeasured
-        // samples — a sentinel entry would poison trend data with fake idle.
+        // History must not accumulate unmeasured samples — a sentinel entry
+        // would poison trend data with fake idle.
+        $cpuState = $this->state();
+        $cpuHistory = (array) ($cpuState['cpuHistory'] ?? []);
+        $memHistory = (array) ($cpuState['memHistory'] ?? []);
         if ($cpuLoad >= 0.0) {
             $cpuHistory[] = (int) $cpuLoad;
         }
@@ -125,72 +136,43 @@ final class SystemModule extends BaseModule
             'memHistory' => $memHistory,
         ]);
 
-        // Update direct properties on clone so view() (which reads from
-        // direct properties) gets the current values. This is a controlled
-        // mutation at a well-defined boundary - the original $this is unchanged.
-        $clone->cpuLoad = $cpuLoad;
-        $clone->memLoad = $memLoad;
-        $clone->gpuLoad = $gpuLoad;
-        $clone->uptime = $uptime;
-        $clone->cpuHistory = $cpuHistory;
-        $clone->memHistory = $memHistory;
+        $clone->cpuIdleBase = $idle;
+        $clone->cpuTotalBase = $total;
+        $clone->gpuSpawnFailed = $spawnFailed;
 
         return $clone;
     }
 
-    private function fetchSystemData(): void
+    /**
+     * CPU busy percentage from /proc/stat deltas.
+     *
+     * @return array{0: float, 1: ?int, 2: ?int} load plus the new
+     *               (idle, total) baseline pair for the next sample
+     */
+    private function sampleCpu(): array
     {
-        $this->cpuLoad = $this->readCpuLoad();
-        $this->memLoad = $this->readMemLoad();
-        $this->gpuLoad = $this->readGpuLoad();
-        $this->uptime = $this->readUptime();
-
-        // Dormant orphan (zero callers; removal STOP-listed per E731 record) —
-        // mirrors the withSystemState no-accumulate law so any revival inherits
-        // the correct sentinel shape.
-        if ($this->cpuLoad >= 0.0) {
-            $this->cpuHistory[] = (int) $this->cpuLoad;
-        }
-        if ($this->memLoad >= 0.0) {
-            $this->memHistory[] = (int) $this->memLoad;
-        }
-        if (count($this->cpuHistory) > self::HISTORY_SIZE) {
-            array_shift($this->cpuHistory);
-        }
-        if (count($this->memHistory) > self::HISTORY_SIZE) {
-            array_shift($this->memHistory);
-        }
-    }
-
-    private function readCpuLoad(): float
-    {
-        static $lastIdle = null;
-        static $lastTotal = null;
-
-        // COMP-2 door-probe (E731 option b): /proc is Linux-only — the door is
-        // probed once per process via ProcAvailability and the answer memoized;
-        // absence carries the UNMEASURED sentinel through the model so view()
-        // renders 'n/a' instead of a fabricated 0% bar. The @ + ===false race
-        // net (r83 s2 idiom) degrades the same way WITHOUT latching: a transient
-        // probe→read failure self-heals on the next tick.
+        // The door is probed once per process via ProcAvailability and the
+        // answer memoized; absence carries the UNMEASURED sentinel through
+        // the model so view() renders 'n/a' instead of a fake 0% bar. A
+        // transient probe→read failure degrades the same way WITHOUT
+        // latching and self-heals on the next tick.
         if (!ProcAvailability::has('/proc/stat')) {
-            return ProcAvailability::UNMEASURED;
+            return [ProcAvailability::UNMEASURED, $this->cpuIdleBase, $this->cpuTotalBase];
         }
 
         $stat = @file_get_contents('/proc/stat');
         if ($stat === false) {
-            return ProcAvailability::UNMEASURED;
+            return [ProcAvailability::UNMEASURED, $this->cpuIdleBase, $this->cpuTotalBase];
         }
 
-        preg_match('/^cpu\s+(.*)$/m', $stat, $matches);
-        if (!isset($matches[1])) {
-            // Malformed proc content is not "absent" — keep the historical 0.0
-            // answer for a parse miss (only the doors gained the sentinel).
-            return 0.0;
+        if (preg_match('/^cpu\s+(.*)$/m', $stat, $matches) !== 1) {
+            // Present-but-malformed content is unmeasured, not zero — a
+            // fabricated 0.0 here would render a confidently wrong idle bar.
+            return [ProcAvailability::UNMEASURED, $this->cpuIdleBase, $this->cpuTotalBase];
         }
 
         $fields = preg_split('/\s+/', trim($matches[1]));
-        $values = array_map('intval', $fields);
+        $values = array_map('intval', (array) $fields);
 
         $user = $values[0] ?? 0;
         $nice = $values[1] ?? 0;
@@ -202,30 +184,27 @@ final class SystemModule extends BaseModule
 
         $total = $user + $nice + $system + $idle + $iowait + $irq + $softirq;
         $idleTime = $idle + $iowait;
+        $lastIdle = $this->cpuIdleBase;
+        $lastTotal = $this->cpuTotalBase;
 
         if ($lastIdle === null || $lastTotal === null) {
-            $lastIdle = $idleTime;
-            $lastTotal = $total;
-            return 0.0;
+            // First sample: baseline seeded, load not yet computable.
+            return [ProcAvailability::UNMEASURED, $idleTime, $total];
         }
 
         $totalDiff = $total - $lastTotal;
         $idleDiff = $idleTime - $lastIdle;
 
-        $lastIdle = $idleTime;
-        $lastTotal = $total;
-
         if ($totalDiff === 0) {
-            return 0.0;
+            // Window stood completely still — a legitimately idle machine.
+            return [0.0, $idleTime, $total];
         }
 
-        return min(100.0, ($totalDiff - $idleDiff) / $totalDiff * 100.0);
+        return [min(100.0, ($totalDiff - $idleDiff) / $totalDiff * 100.0), $idleTime, $total];
     }
 
     private function readMemLoad(): float
     {
-        // COMP-2 door-probe (E731 option b) — see readCpuLoad() for the
-        // probe-once/sentinel/race-net posture.
         if (!ProcAvailability::has('/proc/meminfo')) {
             return ProcAvailability::UNMEASURED;
         }
@@ -242,50 +221,55 @@ final class SystemModule extends BaseModule
         $available = (int) ($availMatches[1] ?? 0);
 
         if ($total === 0) {
-            // Parse miss on present-but-unexpected content — historical 0.0
-            // answer kept; only the availability legs carry the sentinel.
-            return 0.0;
+            // Present-but-malformed content is unmeasured, not zero.
+            return ProcAvailability::UNMEASURED;
         }
 
         return ($total - $available) / $total * 100.0;
     }
 
-    private function readGpuLoad(): float
+    /**
+     * GPU utilization via a bounded nvidia-smi argv run (no shell, deadline,
+     * output cap, guaranteed reap).
+     *
+     * @return array{0: float, 1: bool} load plus the new spawn-failure latch
+     */
+    private function sampleGpu(): array
     {
-        // Memoize "no GPU present" so nvidia-smi is not re-spawned every 2s.
-        // Once we get -1.0 (null output or non-numeric), we remember it forever
-        // for this process lifetime and never spawn the subprocess again.
-        /** @var bool */
-        static $gpuAbsent = false;
-
-        if ($gpuAbsent) {
-            return -1.0;
+        if ($this->gpuSpawnFailed) {
+            return [-1.0, true];
         }
 
-        $output = @shell_exec(
-            'nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null'
-        );
+        $result = BoundedCommand::run([
+            'nvidia-smi',
+            '--query-gpu=utilization.gpu',
+            '--format=csv,noheader,nounits',
+        ]);
 
-        if ($output === null) {
-            $gpuAbsent = true;
-            return -1.0;
+        if ($result['failure'] === 'Command could not be started') {
+            // Deterministic absence (no binary here): stop attempting spawns.
+            return [-1.0, true];
         }
 
-        $value = trim($output);
+        if ($result['failure'] !== null) {
+            // Transient (timeout/interrupted): unmeasured THIS tick, retried next.
+            return [-1.0, false];
+        }
+
+        $value = trim($result['output']);
         if (is_numeric($value)) {
-            return (float) $value;
+            return [(float) $value, false];
         }
 
-        $gpuAbsent = true;
-        return -1.0;
+        // Started fine but answered garbage — treat as transient, not absent.
+        return [-1.0, false];
     }
 
     private function readUptime(): string
     {
-        // COMP-2 door-probe (E731 option b) — see readCpuLoad(); the degraded
-        // answer is now the shared visible 'n/a' sentinel (was 'unknown'). The
-        // pre-first-tick property default 'unknown' stays: "not yet sampled"
-        // and "never measurable here" are different facts.
+        // The degraded answer is the shared visible 'n/a' sentinel. The
+        // pre-first-sample view default 'unknown' stays distinct: "not yet
+        // sampled" and "never measurable here" are different facts.
         if (!ProcAvailability::has('/proc/uptime')) {
             return ProcAvailability::UNAVAILABLE_SENTINEL;
         }
@@ -331,10 +315,10 @@ final class SystemModule extends BaseModule
     }
 
     /**
-     * The pure COMP-2 render decision for one percentage row (E731 option b):
-     * a measured value renders "<LABEL> <pct>% <bar>" exactly as before; the
-     * UNMEASURED sentinel renders "<LABEL> n/a" — visible, honest, no fake
-     * zero-length bar. Same inputs always produce the same row (no I/O).
+     * The pure render decision for one percentage row: a measured value
+     * renders "<LABEL> <pct>% <bar>"; the UNMEASURED sentinel renders
+     * "<LABEL> n/a" — visible, honest, no fake zero-length bar. Same inputs
+     * always produce the same row (no I/O).
      */
     private function renderLoadRow(string $label, float $percent): string
     {

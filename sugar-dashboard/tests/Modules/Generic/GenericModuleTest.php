@@ -98,8 +98,8 @@ final class GenericModuleTest extends TestCase
         [$nextModule] = $module->update($msg);
         $view = $nextModule->view();
 
-        // Should return 'Command failed' for empty array
-        $this->assertSame('Command failed', $view);
+        // The empty command is named as such — not the old blanket 'Command failed'.
+        $this->assertSame('No command configured', $view);
     }
 
     /**
@@ -121,18 +121,18 @@ final class GenericModuleTest extends TestCase
         [$nextModule] = $module->update(new TickMsg());
         $elapsedSeconds = (hrtime(true) - $start) / 1_000_000_000;
 
-        $this->assertLessThan(15.0, $elapsedSeconds, 'runArgv must bound the child, not wait it out');
+        $this->assertLessThan(15.0, $elapsedSeconds, 'the bounded runner must stop at the deadline, not wait the child out');
         $this->assertStringContainsString('partial', $nextModule->view());
     }
 
     /**
      * This test deliberately drives the proc_open-FAILURE path: PHP itself emits
-     * `proc_open(): posix_spawn() failed` at GenericModule.php:98, and the code
-     * under test is expected to swallow it and return 'Command failed'. The
-     * warning is the input to the contract, not a defect — so PHPUnit's error
-     * handler must not capture it as a suite issue (standing W1). Opting out via
-     * #[WithoutErrorHandler] silences only the capture; the graceful-handling
-     * assertion below still runs fully.
+     * `proc_open(): posix_spawn() failed` as an E_WARNING from the bounded
+     * runner, and the code under test is expected to swallow it and name the
+     * cause. The warning is the input to the contract, not a defect — so
+     * PHPUnit's error handler must not capture it as a suite issue. Opting out
+     * via #[WithoutErrorHandler] silences only the capture; the
+     * graceful-handling assertion below still runs fully.
      */
     #[WithoutErrorHandler]
     public function testFailedProcOpenFailsGracefully(): void
@@ -144,8 +144,8 @@ final class GenericModuleTest extends TestCase
         [$nextModule] = $module->update($msg);
         $view = $nextModule->view();
 
-        // Should return 'Command failed' when proc_open fails
-        $this->assertSame('Command failed', $view);
+        // A child that cannot start is named, not lumped into a blanket error.
+        $this->assertSame('Command could not be started', $view);
     }
 
     public function testCommandFailureReturnsErrorMessage(): void
@@ -156,8 +156,45 @@ final class GenericModuleTest extends TestCase
         [$nextModule] = $module->update($msg);
         $view = $nextModule->view();
 
-        // Should contain error indicator
-        $this->assertIsString($view);
+        // Empty output from a non-zero exit names the exit status.
+        $this->assertSame('Command failed (exit 1)', $view);
+    }
+
+    public function testStringPathIsBoundedToo(): void
+    {
+        // The string form used to run through shell_exec with NO deadline,
+        // NO output cap and NO reap — a hung shell command froze the whole
+        // UI. It now goes through the same BoundedCommand engine as argv.
+        $module = new GenericModule('sleep 30');
+
+        $start = hrtime(true);
+        [$nextModule] = $module->update(new TickMsg());
+        $elapsedSeconds = (hrtime(true) - $start) / 1_000_000_000;
+
+        $this->assertLessThan(15.0, $elapsedSeconds, 'the string path must be bounded like the argv path');
+        $this->assertSame('Command timed out', $nextModule->view());
+    }
+
+    public function testSuccessfulEmptyOutputIsBlankNotAnError(): void
+    {
+        // A command that ran fine and printed nothing is a SUCCESS with
+        // nothing to show — the old argv path disguised it as 'Command failed'.
+        $module = new GenericModule(['/usr/bin/true']);
+
+        [$nextModule] = $module->update(new TickMsg());
+
+        $this->assertSame('', $nextModule->view());
+    }
+
+    public function testStderrIsMergedIntoOutput(): void
+    {
+        $module = new GenericModule(['sh', '-c', 'echo to-stdout; echo to-stderr >&2']);
+
+        [$nextModule] = $module->update(new TickMsg());
+        $view = $nextModule->view();
+
+        $this->assertStringContainsString('to-stdout', $view);
+        $this->assertStringContainsString('to-stderr', $view);
     }
 
     public function testIntervalIsUsedInTick(): void
