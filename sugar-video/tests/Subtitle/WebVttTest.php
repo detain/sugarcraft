@@ -38,11 +38,14 @@ final class WebVttTest extends TestCase
         self::assertSame('Hello, world.', $first->text);
     }
 
-    public function testStripsInlineTagsAndKeepsLineBreaks(): void
+    public function testStripsInlineTagsAndCollapsesLineBreaks(): void
     {
+        // The old pin kept the LF — "collapse to single-line text" is what the
+        // docblock promised and what Player's one-row-per-pane invariant
+        // requires; a two-line subtitle must never shift the frame rows.
         $vtt = WebVtt::parse($this->sample());
 
-        self::assertSame("Second line here\nwrapped", $vtt->cues()[1]->text, 'tags stripped, wrap preserved');
+        self::assertSame('Second line here wrapped', $vtt->cues()[1]->text, 'tags stripped, wrap collapsed');
     }
 
     public function testDecodesEntities(): void
@@ -260,5 +263,104 @@ final class WebVttTest extends TestCase
         self::assertSame('Second', $vtt->cueAt(5.5), 'inside second cue');
         self::assertNull($vtt->cueAt(7.5),  'in second gap');
         self::assertSame('Third', $vtt->cueAt(9.5), 'inside third cue');
+    }
+
+    /** Build a single-cue track and hand back its caption text. */
+    private function captionOf(string $body): string
+    {
+        $vtt = WebVtt::parse("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n" . $body);
+        $cues = $vtt->cues();
+
+        return $cues === [] ? '' : $cues[0]->text;
+    }
+
+    /**
+     * C1 (security+qa convergence): the old cleanText stripped `<…>` spans
+     * BEFORE entity decoding, so an entity-encoded tag survived as live
+     * markup. A double-encoded span must settle through the fixpoint loop —
+     * nothing angle-bracketed reaches the cue no matter how many &amp; coats
+     * hide it.
+     */
+    public function testDoubleEncodedTagsCannotSurviveTheDecodeFixpoint(): void
+    {
+        // The visible residue after strip+decode is the inert word, never markup.
+        self::assertStringNotContainsString('<', $this->captionOf('&amp;lt;script&amp;gt;'));
+        self::assertStringNotContainsString('>', $this->captionOf('&amp;lt;script&amp;gt;'));
+        self::assertStringNotContainsString('<', $this->captionOf('&lt;em&gt;note&lt;/em&gt;'));
+        self::assertSame('note', $this->captionOf('&lt;em&gt;note&lt;/em&gt;'));
+    }
+
+    /**
+     * C1: `&#10;`/`&#27;`/CR/TAB decoded to LF/ESC/CR/TAB used to sail into
+     * the composed ANSI frame. No control byte may survive: ESC must never
+     * appear, newlines and tabs are collapsed (the row invariant), and the
+     * OSC-8/SGR spellings must not be executable.
+     */
+    public function testDecodedControlBytesNeverReachCueText(): void
+    {
+        $caption = $this->captionOf("a&#10;b&#13;c&#9;d\x1b[31mred\x1b]8;;http://evil\x07tail\x07end");
+
+        self::assertStringNotContainsString("\x1b", $caption, 'no ESC introducer survives');
+        self::assertStringNotContainsString("\n", $caption, 'no LF survives');
+        self::assertStringNotContainsString("\r", $caption, 'no CR survives');
+        self::assertStringNotContainsString("\t", $caption, 'no TAB survives');
+        self::assertStringNotContainsString("\x07", $caption, 'no BEL survives');
+        self::assertMatchesRegularExpression('/^[\x20-\x7e\x{80}-\x{10FFFF}]*$/u', $caption, 'printable UTF-8 only');
+
+        // Raw in-file control bytes (not entity spellings) get the same sweep.
+        self::assertStringNotContainsString("\x1b", $this->captionOf("live\x9bCSI and raw\x00nul\x7fdel"));
+    }
+
+    /**
+     * C1 (8th-lib zone-sentinel family): a forged sugar-mouse U+E000/U+E001
+     * pair in a caption would register as an attacker-authored click target
+     * in any host that zones around the player frame.
+     */
+    public function testForgedZoneSentinelsAreSwept(): void
+    {
+        $caption = $this->captionOf("click\u{E000}mouse:evil\u{E001}here");
+
+        self::assertStringNotContainsString("\xEE\x80\x80", $caption, 'OPEN sentinel gone');
+        self::assertStringNotContainsString("\xEE\x80\x81", $caption, 'CLOSE sentinel gone');
+        // Entity spellings of the same codepoints, likewise.
+        $viaEntity = $this->captionOf('&#xE000;forged&#xE001;');
+        self::assertStringNotContainsString("\xEE\x80\x80", $viaEntity);
+    }
+
+    /**
+     * Invalid UTF-8 in a caption is repaired to U+FFFD, never dropped and
+     * never left as raw bytes (the measurement said non-UTF-8 passed through
+     * the old path untouched).
+     */
+    public function testInvalidUtf8IsRepairedNotPassedThrough(): void
+    {
+        $caption = $this->captionOf("ok\xFF\xFE tail");
+
+        self::assertTrue(mb_check_encoding($caption, 'UTF-8'), 'caption is valid UTF-8');
+        self::assertStringNotContainsString("\xFF", $caption);
+        self::assertStringContainsString("\u{FFFD}", $caption, 'a visible stand-in marks the repair');
+    }
+
+    /** A legitimate caption keeps its text — the sweep is not a black hole. */
+    public function testBenignCaptionsAreUnharmed(): void
+    {
+        self::assertSame('Tom & Jerry — 你好 🎬', $this->captionOf('Tom &amp; Jerry — 你好 🎬'));
+        self::assertSame('3 < 5? fine.', $this->captionOf('3 &lt; 5? fine.'), 'a lone decoded lt is inert text, no tag survives');
+    }
+
+    /**
+     * The egress re-assert is idempotent: Player calls sanitizeForTerminal()
+     * on text the parser already swept, and legitimate glyphs must not be
+     * mangled a second time (defense-in-depth must not become defense-in-the-
+     * way). PUA beyond the zone pair (image markers U+E002+) passes by design.
+     */
+    public function testSanitizeForTerminalIsIdempotentAndKeepsOtherPua(): void
+    {
+        $once = WebVtt::sanitizeForTerminal("a\u{E000}b\u{E002}c&#10;plain");
+        $twice = WebVtt::sanitizeForTerminal($once);
+
+        self::assertSame($once, $twice, 'idempotent');
+        self::assertStringNotContainsString("\xEE\x80\x80", $once, 'sentinels swept');
+        self::assertStringContainsString("\xEE\x80\x82", $once, 'U+E002 image marker survives by design');
     }
 }

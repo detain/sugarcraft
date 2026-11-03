@@ -1429,6 +1429,106 @@ final class PlayerTest extends TestCase
         $this->assertNotEmpty(trim($player->view()));
     }
 
+    /**
+     * C1 egress leg: a hostile .vtt (ESC payload, entity-newline, forged zone
+     * sentinels, CJK + emoji) must produce a caption row that is printable-
+     * only AND stays exactly one row — the frame + caption total must be
+     * cellsH + 1 rows, never shifted by smuggled LFs.
+     */
+    public function testHostileCaptionKeepsOneRowAndCarriesNoControlBytes(): void
+    {
+        $vtt = \SugarCraft\Video\Subtitle\WebVtt::parse(
+            "WEBVTT\n\n00:00:00.000 --> 00:01:00.000\n"
+            . "\x1b[31mpwn\u{E000}zone\u{E001} 你好 🎬 &#10;second&#9;line"
+        );
+        $player = Player::fromDecoder(
+            new FakeDecoder([
+                $this->makeFrame(str_repeat("\xff\x00\x00", 80 * 6), 80, 6),
+                $this->makeFrame(str_repeat("\x00\xff\x00", 80 * 6), 80, 6),
+            ]),
+            80,
+            6,
+            30.0,
+            Mode::Ascii,
+            2,
+            '',
+            false,
+            'standard',
+            null,
+            null,
+            false, // start playing
+            subtitles: $vtt,
+        );
+        [$player] = $player->update(new TickMsg()); // pulls frame 1, videoTime stays inside the cue
+
+        $out = $player->view();
+        $rows = preg_split("/\r\n|\n/", $out) ?: [];
+
+        // 6 frame rows + exactly one caption row; no LF smuggled from the cue.
+        $this->assertCount(7, $rows, 'caption occupies exactly one additional row');
+        $caption = end($rows);
+        $this->assertStringNotContainsString("\x1b", $caption);
+        $this->assertStringNotContainsString("\xEE\x80\x80", $caption, 'zone sentinel gone at egress');
+        $this->assertMatchesRegularExpression('/^[\x20-\x7e\x{80}-\x{10FFFF}]*$/u', rtrim($caption), 'printable-only caption row');
+    }
+
+    /**
+     * C1 mis-pad leg: the caption must be padded to the CELL width, not the
+     * byte/codepoint count — a wide-glyph caption previously overflowed the
+     * row. mb_str_split + Width::of of the caption row must equal cellsW.
+     */
+    public function testCaptionRowIsPaddedToCellWidthForWideGlyphs(): void
+    {
+        $vtt = \SugarCraft\Video\Subtitle\WebVtt::parse(
+            "WEBVTT\n\n00:00:00.000 --> 00:01:00.000\n"
+            . '你好世界' // 8 cells
+        );
+        $player = Player::fromDecoder(
+            new FakeDecoder([$this->makeFrame(str_repeat("\xff\x00\x00", 10 * 6), 10, 6), $this->makeFrame(str_repeat("\x00\xff\x00", 10 * 6), 10, 6)]),
+            10,
+            6,
+            30.0,
+            Mode::Ascii,
+            2,
+            '',
+            false,
+            'standard',
+            null,
+            null,
+            false,
+            subtitles: $vtt,
+        );
+        [$player] = $player->update(new TickMsg());
+
+        $rows = preg_split("/\r\n|\n/", $player->view()) ?: [];
+        $caption = rtrim(end($rows));
+
+        $this->assertSame(8, \SugarCraft\Core\Util\Width::of($caption), 'CJK caption keeps its 8 cells');
+
+        // And an over-long wide caption is CLIPPED at the cell budget (10 cells).
+        $wide = \SugarCraft\Video\Subtitle\WebVtt::parse("WEBVTT\n\n00:00:00.000 --> 00:01:00.000\n你好世界你好世界"); // 16 cells
+        $player2 = $player::fromDecoder(
+            new FakeDecoder([$this->makeFrame(str_repeat("\xff\x00\x00", 10 * 6), 10, 6), $this->makeFrame(str_repeat("\x00\xff\x00", 10 * 6), 10, 6)]),
+            10,
+            6,
+            30.0,
+            Mode::Ascii,
+            2,
+            '',
+            false,
+            'standard',
+            null,
+            null,
+            false,
+            subtitles: $wide,
+        );
+        [$player2] = $player2->update(new TickMsg());
+        $rows2 = preg_split("/\r\n|\n/", $player2->view()) ?: [];
+        $clip = rtrim(end($rows2));
+        $this->assertSame(10, \SugarCraft\Core\Util\Width::of($clip), 'clipped never past the cell budget');
+        $this->assertSame('你好世界你', $clip, 'clip lands on a whole codepoint boundary');
+    }
+
     // -------------------------------------------------------------------------
     // F9: end-of-stream handling + optional loop
     // -------------------------------------------------------------------------

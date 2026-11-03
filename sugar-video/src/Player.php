@@ -13,6 +13,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\ColorProfile\Probe;
 use SugarCraft\ColorProfile\Probe\Capability;
@@ -914,9 +915,14 @@ final class Player implements Model
         if ($this->subtitles !== null) {
             $caption = $this->subtitles->cueAt($this->videoTime);
             if ($caption !== null) {
-                // Truncate to cellsW to respect the one-line-per-row invariant.
-                $caption = mb_strcut($caption, 0, $this->cellsW, 'UTF-8');
-                $caption = str_pad($caption, $this->cellsW, ' ', STR_PAD_RIGHT);
+                // Egress re-assert of the WebVtt trust contract (idempotent on
+                // text the parser already swept) plus a CELL-aware clip: the
+                // old mb_strcut byte cut counted neither CJK/emoji double
+                // widths nor pad columns, so wide-glyph captions overflowed
+                // the row and broke the one-row-per-pane invariant below.
+                $caption = WebVtt::sanitizeForTerminal($caption);
+                $caption = self::clipToCells($caption, $this->cellsW);
+                $caption .= str_repeat(' ', max(0, $this->cellsW - Width::of($caption)));
                 $out .= "\r\n" . $caption;
             }
         }
@@ -929,6 +935,30 @@ final class Player implements Model
         if ($this->ended) {
             $hint = $this->totalFrames > 0 ? '0 restart  q quit' : 'q quit';
             return $out . "\r\n" . '[ended]  ' . $hint;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Clip $text to at most $cells terminal display cells (East-Asian Width
+     * aware — CJK/emoji cost 2, composing marks 0), never splitting a
+     * codepoint. The byte-wise mb_strcut this replaces counted neither.
+     */
+    private static function clipToCells(string $text, int $cells): string
+    {
+        if (Width::of($text) <= $cells) {
+            return $text;
+        }
+        $out = '';
+        $used = 0;
+        foreach (mb_str_split($text, 1, 'UTF-8') as $char) {
+            $width = Width::of($char);
+            if ($used + $width > $cells) {
+                break;
+            }
+            $out .= $char;
+            $used += $width;
         }
 
         return $out;

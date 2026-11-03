@@ -4,18 +4,36 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Subtitle;
 
+use SugarCraft\Core\Util\Sanitize;
+
 /**
  * A parsed WebVTT subtitle track — a time-sorted list of {@see Cue}s with an
  * O(log n) `cueAt()` lookup for the caption showing at a given playback time.
  *
  * Parsing is lenient: it skips the `WEBVTT` header and any `NOTE`/`STYLE`/
  * `REGION` blocks, ignores per-cue identifiers and cue settings, strips inline
- * tags (`<i>`, `<c.foo>`, …) and decodes basic entities. It also tolerates
- * SRT-style input (numeric index lines and `,` millisecond separators), so the
- * same parser covers both formats a media server might hand back.
+ * tags (`<i>`, `<c.foo>`, …) and decodes entities. It also tolerates SRT-style
+ * input (numeric index lines and `,` millisecond separators), so the same
+ * parser covers both formats a media server might hand back.
+ *
+ * Trust boundary: caption text is UNTRUSTED (subtitle files arrive with the
+ * media, from servers and downloads the user did not vet). {@see cleanText()}
+ * is the single ingress every cue passes through, and it guarantees each
+ * {@see Cue::$text} is single-line, ESC-free (no CSI/OSC/DCS/APC introducer
+ * survives), free of C0/DEL/C1 control bytes, free of the sugar-mouse zone
+ * sentinels U+E000/U+E001, and valid UTF-8 — so a host can write the composed
+ * frame straight to the terminal. This closes the strip-then-decode ordering
+ * hole where `&lt;`/`&#10;`/`&#27;` re-admitted markup, newlines, and raw
+ * escape bytes into {@see \SugarCraft\Video\Player::view()}'s ANSI stream.
  */
 final class WebVtt
 {
+    /**
+     * Upper bound on the tag-strip/entity-decode fixpoint loop. Two passes
+     * suffice for any real double-encoding (`&amp;lt;` needs one extra decode
+     * than `&lt;`); the cap keeps a pathological `&amp;amp;…` chain O(1).
+     */
+    private const DECODE_FIXPOINT_PASSES = 4;
     /**
      * Upper bound on the number of cues parsed from a single track.
      *
@@ -153,6 +171,10 @@ final class WebVtt
         }
 
         $textLines = array_slice($lines, $timingIndex + 1);
+        // cleanText() both sanitises AND collapses to a single line, so the
+        // line structure of the cue body is irrelevant by the time a Cue is
+        // built — a two-line subtitle becomes one row, honouring Player's
+        // one-row-per-pane invariant instead of silently shifting it.
         $text = self::cleanText(implode("\n", $textLines));
         if ($text === '') {
             return null;
@@ -205,12 +227,61 @@ final class WebVtt
         return (float) $h * 3600.0 + (float) $m * 60.0 + (float) $s;
     }
 
-    /** Strip inline tags, decode basic entities, and collapse to single-line text. */
+    /**
+     * Strip inline tags, decode entities, and collapse to single-line text
+     * that is safe to write to a terminal verbatim.
+     *
+     * Ordering is the load-bearing part. Stripping `<…>` spans BEFORE entity
+     * decoding re-admits angle brackets (`&lt;i&gt;x&lt;/i&gt;` decoded after
+     * the strip yields markup that was never stripped), and decoding is itself
+     * re-entrant (`&amp;lt;` needs a second pass to surface its `<`). So the
+     * strip+decode pair runs to a fixpoint under a bounded cap; only when the
+     * text has settled does the terminal-safety sweep run, guaranteeing it
+     * sees every byte any decode pass could produce:
+     *
+     *  1. fixpoint: strip `<[^>]*>` spans, then `html_entity_decode`
+     *     (ENT_HTML5) — repeat until stable, at most
+     *     {@see DECODE_FIXPOINT_PASSES} passes;
+     *  2. newline/tab normalisation to spaces (single-line contract);
+     *  3. {@see Sanitize::untrustedForMarkedFrames()} — removes every
+     *     ESC-introduced sequence (CSI/OSC/SGR), the 8-bit C1 spellings, and
+     *     forged sugar-mouse zone sentinels U+E000/U+E001;
+     *  4. {@see Sanitize::cellValue()} — repairs invalid UTF-8 to U+FFFD and
+     *     sweeps any remaining C0/DEL byte to the visible · stand-in.
+     *
+     * {@see Player::view()} additionally passes every caption through the
+     * public {@see sanitizeForTerminal()} re-assert of steps 2-4 before
+     * compositing, so the egress contract holds even if a future refactor
+     * ever lets Cue text bypass this parser.
+     */
     private static function cleanText(string $text): string
     {
-        $text = preg_replace('/<[^>]*>/', '', $text) ?? $text; // <i>, <c.classname>, <00:00:01.000>
-        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        for ($pass = 0; $pass < self::DECODE_FIXPOINT_PASSES; $pass++) {
+            $stripped = preg_replace('/<[^>]*>/', '', $text) ?? $text; // <i>, <c.classname>, <00:00:01.000>
+            $decoded = html_entity_decode($stripped, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            if ($decoded === $text) {
+                break;
+            }
+            $text = $decoded;
+        }
 
-        return trim($text);
+        return self::sanitizeForTerminal($text);
+    }
+
+    /**
+     * The terminal-safety half of {@see cleanText()} on already tag-stripped
+     * text: newline/tab collapse, escape-sequence and zone-sentinel sweep,
+     * C0/DEL/C1 removal, and UTF-8 repair. Idempotent — running it over its
+     * own output changes nothing.
+     *
+     * Public so {@see \SugarCraft\Video\Player::view()} can re-assert the
+     * contract at the egress without re-parsing the track.
+     */
+    public static function sanitizeForTerminal(string $text): string
+    {
+        $text = str_replace(["\r\n", "\r", "\n", "\t"], ' ', $text);
+        $text = Sanitize::untrustedForMarkedFrames($text);
+
+        return trim(Sanitize::cellValue($text));
     }
 }
