@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => 'interval stopek musí být > 0',
     'timer.duration_nonneg'       => 'trvání timeru musí být >= 0',
     'timer.interval_positive'     => 'interval timeru musí být > 0',
+    'paginator.arabic_format_invalid' => 'arabský formát musí být platný sprintf se dvěma celými čísly',
 ];

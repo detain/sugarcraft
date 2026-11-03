@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => 'Stoppuhr-Intervall muss > 0 sein',
     'timer.duration_nonneg'       => 'Timer-Dauer muss >= 0 sein',
     'timer.interval_positive'     => 'Timer-Intervall muss > 0 sein',
+    'paginator.arabic_format_invalid' => 'Arabiles Format muss ein gültiges sprintf mit zwei Ganzzahlen sein',
 ];

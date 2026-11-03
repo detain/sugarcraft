@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => '스톱워치 간격은 > 0이어야 합니다',
     'timer.duration_nonneg'       => '타이머 지속 시간은 >= 0이어야 합니다',
     'timer.interval_positive'     => '타이머 간격은 > 0이어야 합니다',
+    'paginator.arabic_format_invalid' => '아랍어 형식은 두 정수의 유효한 sprintf이어야 합니다',
 ];

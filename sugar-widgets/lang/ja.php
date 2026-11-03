@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => 'ストップウォッチの間隔は > 0 である必要があります',
     'timer.duration_nonneg'       => 'タイマーの持続時間は >= 0 である必要があります',
     'timer.interval_positive'     => 'タイマーの間隔は > 0 である必要があります',
+    'paginator.arabic_format_invalid' => 'アラビア数字形式は2つの整数の有効なsprintfでなければなりません',
 ];

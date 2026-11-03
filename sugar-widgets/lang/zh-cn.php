@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => '秒表间隔必须 > 0',
     'timer.duration_nonneg'       => '计时器持续时间必须 >= 0',
     'timer.interval_positive'     => '计时器间隔必须 > 0',
+    'paginator.arabic_format_invalid' => '阿拉伯数字格式必须是包含两个整数的有效 sprintf',
 ];

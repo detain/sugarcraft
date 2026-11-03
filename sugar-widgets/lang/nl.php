@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => 'stopwatch-interval moet > 0 zijn',
     'timer.duration_nonneg'       => 'timer-duur moet >= 0 zijn',
     'timer.interval_positive'     => 'timer-interval moet > 0 zijn',
+    'paginator.arabic_format_invalid' => 'Arabische notatie moet een geldige sprintf met twee gehele getallen zijn',
 ];

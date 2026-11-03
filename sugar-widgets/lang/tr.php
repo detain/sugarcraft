@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => 'stopwatch aralığı > 0 olmalıdır',
     'timer.duration_nonneg'       => 'zamanlayıcı süresi >= 0 olmalıdır',
     'timer.interval_positive'     => 'zamanlayıcı aralığı > 0 olmalıdır',
+    'paginator.arabic_format_invalid' => 'Arapça biçim, iki tamsayı için geçerli bir sprintf olmalıdır',
 ];

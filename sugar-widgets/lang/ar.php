@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => 'فترة stopwatch يجب أن تكون > 0',
     'timer.duration_nonneg'       => 'مدة المؤقت يجب أن تكون >= 0',
     'timer.interval_positive'     => 'فترة المؤقت يجب أن تكون > 0',
+    'paginator.arabic_format_invalid' => 'يجب أن يكون التنسيق العربي sprintf صالحًا لعددين صحيحين',
 ];

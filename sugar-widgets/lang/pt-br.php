@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => 'o intervalo do cronômetro deve ser > 0',
     'timer.duration_nonneg'       => 'a duração do temporizador deve ser >= 0',
     'timer.interval_positive'     => 'o intervalo do temporizador deve ser > 0',
+    'paginator.arabic_format_invalid' => 'o formato arábico deve ser um sprintf válido de dois inteiros',
 ];

@@ -8,6 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Widgets\Lang;
 
 /**
  * Pagination state + renderer.
@@ -24,6 +25,17 @@ use SugarCraft\Core\Msg\KeyMsg;
  */
 final class Paginator implements Model
 {
+    /**
+     * Upper bound on dots rendered by the Dots type. Beyond it the row
+     * windows to first … neighbours … last instead of growing with the
+     * page count (C6: the old renderer scaled with totalPages, so a
+     * 100k-item list emitted a ~10k-dot line into the frame).
+     */
+    private const MAX_VISIBLE_DOTS = 11;
+
+    /** Marks a run of hidden pages in the windowed dot row. */
+    private const DOT_ELLIPSIS = '…';
+
     private function __construct(
         public readonly int $page,
         public readonly int $perPage,
@@ -76,10 +88,16 @@ final class Paginator implements Model
 
     public function view(): string
     {
-        $total = max(1, $this->totalPages());
+        $total = $this->totalPages();
+        // An empty list renders nothing: the old max(1, ...) showed a
+        // lone active dot (or "1/1") claiming a page exists when it does
+        // not (m25). Hosts that want a placeholder render their own.
+        if ($total <= 0) {
+            return '';
+        }
         return match ($this->type) {
             Type::Dots => $this->renderDots($total),
-            Type::Arabic => sprintf($this->arabicFormat, $this->page + 1, $total),
+            Type::Arabic => sprintf($this->arabicFormat, min($this->page + 1, $total), $total),
         };
     }
 
@@ -147,7 +165,18 @@ final class Paginator implements Model
         return $clone;
     }
 
-    public function withPerPage(int $n): self    { return $this->mutate(perPage: max(1, $n)); }
+    public function withPerPage(int $n): self
+    {
+        $clone = $this->mutate(perPage: max(1, $n));
+        // Shrinking the page size shrinks the page count: a stale page
+        // index would render dots for page 46 of 5 and hand out inverted
+        // slice bounds (M3). Clamp exactly like withTotalItems().
+        $last = max(0, $clone->totalPages() - 1);
+        if ($clone->page > $last) {
+            $clone = $clone->mutate(page: $last);
+        }
+        return $clone;
+    }
     public function withPage(int $p): self
     {
         $last = max(0, $this->totalPages() - 1);
@@ -165,9 +194,22 @@ final class Paginator implements Model
      * Default `'%d/%d'` (e.g. `"3/8"`); upstream Bubbles defaults to
      * `'%d/%d'` for ASCII contexts but lets callers swap it for e.g.
      * `'Page %d of %d'`. Mirrors `ArabicFormat`.
+     *
+     * The format is parsed at the boundary: it must be a valid sprintf
+     * template consuming at most two integer arguments, so view() can
+     * trust it later (an unchecked `'%s/%s'` would throw a ValueError
+     * mid-frame at render time — M21).
      */
     public function withArabicFormat(string $fmt): self
     {
+        // Parse at the boundary (M21): view() feeds exactly two integers,
+        // so a bad specifier or over-large arity must raise here — not as
+        // a ValueError/ArgumentCountError mid-frame at render time.
+        try {
+            sprintf($fmt, 1, 1);
+        } catch (\ValueError | \ArgumentCountError) {
+            throw new \InvalidArgumentException(Lang::t('paginator.arabic_format_invalid'));
+        }
         return $this->mutate(arabicFormat: $fmt);
     }
 
@@ -181,12 +223,22 @@ final class Paginator implements Model
      * which keeps the existing arithmetic consistent. Mirrors
      * `SetTotalPages`.
      */
-    public function setTotalPages(int $pages): self
+    public function withTotalPages(int $pages): self
     {
         $pages = max(0, $pages);
         // Choose a totalItems that evaluates to exactly $pages via
         // ceil(totalItems / perPage). The simplest is `pages * perPage`.
         return $this->withTotalItems($pages * max(1, $this->perPage));
+    }
+
+    /**
+     * @deprecated The `set`-prefixed name suggests mutation; this class is
+     *     immutable and returns a new instance. Use {@see withTotalPages()}.
+     *     Kept as a BC alias for external callers.
+     */
+    public function setTotalPages(int $pages): self
+    {
+        return $this->withTotalPages($pages);
     }
 
     /**
@@ -203,12 +255,38 @@ final class Paginator implements Model
         return max(0, min($this->perPage, $this->totalItems - $start));
     }
 
+    /**
+     * Render the dot row, windowed to {@see MAX_VISIBLE_DOTS}: below the
+     * cap every page gets a dot (byte-identical to the historical
+     * output); beyond it the row becomes `first … neighbours … last` so
+     * the geometry stops scaling with the page count (C6).
+     */
     private function renderDots(int $total): string
     {
-        $out = [];
-        for ($i = 0; $i < $total; $i++) {
-            $out[] = $i === $this->page ? $this->activeDot : $this->inactiveDot;
+        if ($total <= self::MAX_VISIBLE_DOTS) {
+            $out = [];
+            for ($i = 0; $i < $total; $i++) {
+                $out[] = $i === $this->page ? $this->activeDot : $this->inactiveDot;
+            }
+            return implode(' ', $out);
         }
+
+        $dot  = fn(int $i): string => $i === $this->page ? $this->activeDot : $this->inactiveDot;
+        $last = $total - 1;
+        $out  = [$dot(0), self::DOT_ELLIPSIS];
+
+        $window = self::MAX_VISIBLE_DOTS - 4;
+        $lo     = match (true) {
+            $this->page === 0    => 1,
+            $this->page === $last => $last - $window,
+            default              => max(1, min($this->page - intdiv($window, 2), $last - $window)),
+        };
+        for ($i = $lo; $i < $lo + $window; $i++) {
+            $out[] = $dot($i);
+        }
+
+        $out[] = self::DOT_ELLIPSIS;
+        $out[] = $dot($last);
         return implode(' ', $out);
     }
 

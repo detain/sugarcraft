@@ -22,4 +22,5 @@ return [
     'stopwatch.interval_positive' => 'интервал секундомера должен быть > 0',
     'timer.duration_nonneg'       => 'длительность таймера должна быть >= 0',
     'timer.interval_positive'     => 'интервал таймера должен быть > 0',
+    'paginator.arabic_format_invalid' => 'арабский формат должен быть допустимым sprintf с двумя целыми числами',
 ];
