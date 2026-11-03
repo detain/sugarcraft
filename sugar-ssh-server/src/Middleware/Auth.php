@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshServer\Middleware;
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\SshServer\Context;
 use SugarCraft\SshServer\Lang;
 use SugarCraft\SshServer\Middleware;
@@ -85,6 +86,17 @@ final class Auth implements Middleware
      * rather than shipping a bare `'*'` that a reader may take for a glob.
      */
     public const ANY_KEY = '*';
+
+    /**
+     * Longest peer-influenced string this gate will echo back.
+     *
+     * The username and the fingerprint blob are whatever the caller
+     * asserted; the notice they end up inside is read by a human and,
+     * under ForceCommand, by the peer. A name is not a place to paste an
+     * 8 KiB payload, so anything longer arrives truncated with an
+     * ellipsis. (audit MINOR 1)
+     */
+    public const MAX_ECHOED_BYTES = 128;
 
     /** @var list<string> */
     private array $users;
@@ -233,23 +245,44 @@ final class Auth implements Middleware
     }
 
     /**
-     * Strip C0/C1 control characters and ANSI ESC sequences from a
-     * string before it is written to a shared output stream (stderr).
+     * Make a peer-influenced string safe to write into the notice.
      *
-     * This prevents a malicious client from injecting ANSI escape
-     * sequences into logs or terminal output via the username or
-     * fingerprint fields.
+     * The old version here hand-rolled two passes: a byte-wise C0/DEL/C1
+     * replacement, then a CSI strip. The order made the second pass dead
+     * code — the first pass had already turned the ESC byte into a '?' —
+     * and the byte range was worse than useless on real text: it deletes
+     * bytes, not characters. Any codepoint with a continuation byte in
+     * `\x80–\x9f` lost pieces — a typographic apostrophe (`U+2019` is
+     * `\xe2\x80\x99`) turned `O’Brien` into a replacement character plus
+     * two literal `?`s, which is not just ugly: it is invalid UTF-8, and
+     * an invalid byte in any field is what makes `json_encode` refuse a
+     * log record (see the Logger's own recovery path). It matched only
+     * the CSI shape too, so an OSC payload (`ESC ] 0 ; … BEL`) sailed
+     * through as literal text. (audit MINOR 1)
+     *
+     * This now delegates the strip to sugar-core's canonical
+     * {@see Sanitize::untrusted()}, which removes CSI *and* OSC in both
+     * their 8-bit and UTF-8-encoded forms without corrupting a
+     * continuation byte. What it deliberately keeps — line feeds and
+     * tabs, because it is a general display sanitizer — is folded away
+     * here, because a username that can contain a newline can add lines
+     * to the rejection this method feeds. And the whole thing is bounded:
+     * the field is whatever the peer asserted, and an 8 KiB "username"
+     * has no business being echoed at anyone.
      *
      * @param string $s Raw user-supplied value
      */
     private function sanitize(string $s): string
     {
-        // Replace C0 (0x00–0x1F), DEL (0x7F), and C1 (0x80–0x9F) with '?'
-        $s = preg_replace('/[\x00-\x1f\x7f-\x9f]/', '?', $s) ?: $s;
-        // Strip ESC-based ANSI CSI sequences: ESC [ … letter
-        // Covers sequences with any intermediate digits/semicolons
-        // e.g. \x1b[0m, \x1b[31m, \x1b[1;2;3m, \x1b[0;1;31m
-        $s = preg_replace('/\x1b\[[0-9;]*[a-zA-Z]/', '?', $s) ?: $s;
+        $s = Sanitize::untrusted($s);
+        $s = \str_replace(["\r\n", "\n", "\r", "\t", "\x0b", "\x0c"], ' ', $s);
+
+        if (\strlen($s) > self::MAX_ECHOED_BYTES) {
+            // Cut on a character boundary, then mark that a cut happened.
+            $cut = \preg_match('/^.{0,' . (self::MAX_ECHOED_BYTES - 1) . '}/us', $s, $m);
+            $s = ($cut === 1 ? $m[0] : \substr($s, 0, self::MAX_ECHOED_BYTES - 1)) . "\u{2026}";
+        }
+
         return $s;
     }
 

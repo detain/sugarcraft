@@ -171,8 +171,113 @@ final class AuthTest extends TestCase
         $output = $readErr();
         // The ESC bytes must not appear in stderr output
         $this->assertStringNotContainsString("\x1b", $output);
-        // The literal 'eve' characters should be present (ESC sequences replaced with '?')
+        // The literal 'eve' characters should be present; the escape
+        // sequences themselves are removed, not masked in place
+        // (audit MINOR 1 — the hand-rolled pass replaced them with '?').
         $this->assertStringContainsString('eve', $output);
+        $this->assertStringNotContainsString('?', $output);
+    }
+
+    public function testANameWithRealAccentsArrivesUnharmed(): void
+    {
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth(['alice'], [], $err);
+        $reached = false;
+        $a->handle(Context::background(), new Session(
+            // 'O'Brien' with a typographic apostrophe (U+2019), plus a
+            // plain accented name as the control that the old pass got
+            // right by luck: U+00E9's bytes sit outside \x7f-\x9f.
+            user: "O\u{2019}Brien caf\xc3\xa9",
+            clientHost: '127.0.0.1', clientPort: 1, serverHost: '127.0.0.1',
+            serverPort: 22, term: 'xterm', cols: 80, rows: 24, tty: null,
+            command: null, lang: 'C.UTF-8',
+        ), function () use (&$reached): void {
+            $reached = true;
+        });
+
+        $this->assertFalse($reached);
+        $output = $readErr();
+        // The old byte-wise range deleted continuation bytes, not
+        // characters: the apostrophe arrived as U+FFFD plus two '?', and
+        // the result was invalid UTF-8 — enough on its own to make the
+        // logger's json_encode refuse the record.
+        $this->assertStringContainsString("O\u{2019}Brien caf\xc3\xa9", $output);
+        $this->assertTrue(\mb_check_encoding($output, 'UTF-8'), 'the notice must stay encodable: ' . \bin2hex($output));
+        $this->assertStringNotContainsString('?', $output);
+    }
+
+    public function testAnOscPayloadIsStrippedRatherThanEchoedAsText(): void
+    {
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth(['alice'], [], $err);
+        $reached = false;
+        // ESC ] 0 ; … BEL — the CSI-only second pass never matched this,
+        // and the first pass left the payload behind as plain text.
+        $a->handle(Context::background(), new Session(
+            user: 'a' . "\x1b" . ']0;evil' . "\x07" . 'b',
+            clientHost: '127.0.0.1', clientPort: 1, serverHost: '127.0.0.1',
+            serverPort: 22, term: 'xterm', cols: 80, rows: 24, tty: null,
+            command: null, lang: 'C.UTF-8',
+        ), function () use (&$reached): void {
+            $reached = true;
+        });
+
+        $this->assertFalse($reached);
+        $output = $readErr();
+        $this->assertStringNotContainsString('evil', $output);
+        $this->assertStringNotContainsString("\x1b", $output);
+        $this->assertStringContainsString('ab', $output);
+    }
+
+    public function testAPeerAssertedNameCannotForgeAnExtraLine(): void
+    {
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth(['alice'], [], $err);
+        $reached = false;
+        $a->handle(Context::background(), new Session(
+            user: "mallory\nsecond line",
+            clientHost: '127.0.0.1', clientPort: 1, serverHost: '127.0.0.1',
+            serverPort: 22, term: 'xterm', cols: 80, rows: 24, tty: null,
+            command: null, lang: 'C.UTF-8',
+        ), function () use (&$reached): void {
+            $reached = true;
+        });
+
+        $this->assertFalse($reached);
+        $output = $readErr();
+        // Sanitize::untrusted() keeps newlines on purpose (it is a display
+        // sanitizer); a rejection notice may not. One trailing newline, no
+        // matter what the name contained.
+        $this->assertSame(1, \substr_count($output, "\n"));
+        $this->assertStringContainsString('mallory second line', $output);
+    }
+
+    public function testAnOverlongNameIsBoundedInTheNotice(): void
+    {
+        [$err, $readErr] = $this->stderr();
+        $a = new Auth(['alice'], [], $err);
+        $reached = false;
+        $a->handle(Context::background(), new Session(
+            user: \str_repeat('x', 5000),
+            clientHost: '127.0.0.1', clientPort: 1, serverHost: '127.0.0.1',
+            serverPort: 22, term: 'xterm', cols: 80, rows: 24, tty: null,
+            command: null, lang: 'C.UTF-8',
+        ), function () use (&$reached): void {
+            $reached = true;
+        });
+
+        $this->assertFalse($reached);
+        $output = $readErr();
+        // The name stops at the cap and the cut is marked; the wrapper
+        // ('Unauthorized. (user not allowed: …)' plus a newline) is the
+        // only thing past it.
+        $this->assertStringContainsString(\str_repeat('x', Auth::MAX_ECHOED_BYTES - 1) . "\u{2026}", $output);
+        $this->assertStringNotContainsString(\str_repeat('x', Auth::MAX_ECHOED_BYTES), $output);
+        $this->assertLessThanOrEqual(
+            \strlen('user not allowed: ') + Auth::MAX_ECHOED_BYTES + 32,
+            \strlen($output),
+            'a 5000-byte asserted name must not arrive whole in the notice',
+        );
     }
 
     public function testRejectionMessageSanitizesFingerprintWithAnsi(): void
