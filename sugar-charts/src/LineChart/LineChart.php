@@ -41,7 +41,20 @@ use SugarCraft\Style\Theme;
  */
 final class LineChart extends Chart
 {
-    private const DATASET_COLORS = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan'];
+    /**
+     * Auto-legend colour cycle for {@see withDataset()}. Ordered for
+     * colour-blind safety: the old first pair (red, green) is the classic
+     * deuteranopia/protanopia collision, so blue/orange open the cycle
+     * and red/green are kept apart.
+     */
+    private const DATASET_COLORS = ['blue', 'orange', 'green', 'red', 'purple', 'cyan'];
+
+    /**
+     * Point-glyph cycle for extra series in cell mode: unthemed renders
+     * carry no colour bytes, so a second and later series separate by
+     * RUNE (`* + o x # .`) instead of every dataset defaulting to `*`.
+     */
+    private const DATASET_RUNES = ['*', '+', 'o', 'x', '#', '.'];
 
     /**
      * Series name the unnamed primary `$data` series is plotted under —
@@ -127,6 +140,22 @@ final class LineChart extends Chart
         // legal and mean "auto" — including autoAdjustRange()'s all-null.
         Range::pin($min, $max, 'Y');
         Range::pin($xMin, $xMax, 'X');
+
+        // `view()` plots the unnamed primary series under
+        // PRIMARY_SERIES and merges `$datasets` on top of it with the
+        // `+` operator — a caller dataset carrying the same key would be
+        // silently discarded. Fail loudly at every ingress instead (all
+        // doors rebuild through this constructor).
+        if (array_key_exists(self::PRIMARY_SERIES, $datasets)) {
+            throw new \InvalidArgumentException(
+                'dataset name ' . self::PRIMARY_SERIES . ' is reserved for the primary data series',
+            );
+        }
+        if (array_key_exists(self::PRIMARY_SERIES, $datasetPoints)) {
+            throw new \InvalidArgumentException(
+                'dataset-point name ' . self::PRIMARY_SERIES . ' is reserved for the primary data series',
+            );
+        }
     }
 
     /** @param list<int|float> $data */
@@ -639,7 +668,11 @@ final class LineChart extends Chart
             $gutterLeft   = max(2, $maxYLabel + 1);
             $gutterBottom = $xLabels !== [] ? 2 : 1;
         }
-        $plotW = max(1, $this->width  - $gutterLeft);
+        // The axis line itself occupies the gutter's first column when
+        // drawn; samples start one column right of it so the x-minimum
+        // point never sits under the frame that paints over the series.
+        $dataLeft = $this->showAxes ? $gutterLeft + 1 : $gutterLeft;
+        $plotW = max(1, $this->width  - $dataLeft);
         $plotH = max(1, $this->height - $gutterBottom);
 
         // Plot primary + named series on the same axes.
@@ -649,7 +682,7 @@ final class LineChart extends Chart
             // (2×4 dots per cell) so per-dataset legend colors reach the
             // strokes. MarkLines and the axis frame still compose in cell
             // space above/below the dot region.
-            $this->renderBrailleSeries($canvas, $allSeries, (float) $min, (float) $max, $gutterLeft, $plotW, $plotH, $progress);
+            $this->renderBrailleSeries($canvas, $allSeries, (float) $min, (float) $max, $dataLeft, $plotW, $plotH, $progress);
         } else {
             /** @var array<string,Style> $pointStyleMemo */
             $pointStyleMemo = [];
@@ -668,9 +701,14 @@ final class LineChart extends Chart
                 }
                 $points  = count($values) > $plotW ? array_slice($values, -$plotW) : $values;
                 $count   = count($points);
+                // Unthemed cell mode carries no colour bytes, so extra
+                // series separate by glyph: explicit per-series runes win,
+                // otherwise rotate the default table by dataset position
+                // (the primary keeps its configured `point` rune).
                 $rune    = $name === self::PRIMARY_SERIES
                     ? $this->point
-                    : ($this->datasetPoints[$name] ?? $this->point);
+                    : ($this->datasetPoints[$name]
+                        ?? self::DATASET_RUNES[($seriesIndex - 1) % count(self::DATASET_RUNES)]);
 
                 // Compute max point index based on animation progress
                 // Clamp to [0, count] to ensure we don't try to access beyond array bounds
@@ -681,7 +719,7 @@ final class LineChart extends Chart
 
                 $coords = [];
                 foreach ($points as $i => $v) {
-                    $col = $gutterLeft + ($count <= 1
+                    $col = $dataLeft + ($count <= 1
                         ? 0
                         : (int) round($i * ($plotW - 1) / ($count - 1)));
                     $row = self::rowForValue((float) $v, (float) $min, (float) $max, $plotH);
@@ -722,19 +760,22 @@ final class LineChart extends Chart
         // wins over point/connector cells) but UNDER the axis frame. The
         // default [] skips the pass entirely → byte-identical output.
         if ($this->markLines !== []) {
-            $this->drawMarkLines($canvas, (float) $min, (float) $max, $gutterLeft, $plotW, $plotH);
+            $this->drawMarkLines($canvas, (float) $min, (float) $max, $dataLeft, $plotW, $plotH);
         }
 
         if ($this->showAxes) {
-            // Origin = bottom-left of the plot region.
+            // Origin = bottom-left of the plot region. The axis column
+            // keeps the gutter's last cell; samples were mapped from
+            // $dataLeft, one column right of the frame, so the x-minimum
+            // point is never overwritten by the axis painted after it.
             $xOrigin = $gutterLeft;
             $yOrigin = $plotH; // axis row sits one row below the topmost data
             Graph::drawXYAxis(
-                $canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1,
+                $canvas, $xOrigin, $yOrigin, $plotW, $plotH,
                 null, $this->lineStyle ?? Graph::LINE_THIN,
             );
             Graph::drawXYAxisLabel(
-                $canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1,
+                $canvas, $xOrigin, $yOrigin, $plotW, $plotH,
                 $xLabels, $yLabels,
             );
         }
