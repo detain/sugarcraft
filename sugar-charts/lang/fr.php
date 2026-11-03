@@ -41,4 +41,6 @@ return [
 
     // Scatter/Scatter.php
     'scatter.dim_nonneg'       => 'la largeur/hauteur du nuage de points doit être >= 0',
+    'chart.dim_nonneg'         => 'la largeur/hauteur du graphique doit être >= 0',
+    'finite.non_finite'        => 'la valeur du graphique doit être finie, valeur reçue : {value}',
 ];

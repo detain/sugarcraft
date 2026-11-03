@@ -24,4 +24,6 @@ return [
     'waveline.dim_nonneg'      => 'szerokość/wysokość linii falowej musi być >= 0',
     'ohlc.dim_nonneg'          => 'szerokość/wysokość wykresu OHLC musi być >= 0',
     'scatter.dim_nonneg'       => 'szerokość/wysokość wykresu punktowego musi być >= 0',
+    'chart.dim_nonneg'         => 'szerokość/wysokość wykresu musi wynosić >= 0',
+    'finite.non_finite'        => 'wartość wykresu musi być skończona, otrzymano {value}',
 ];

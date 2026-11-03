@@ -24,4 +24,6 @@ return [
     'waveline.dim_nonneg'      => 'golfijn breedte/hoogte moet >= 0 zijn',
     'ohlc.dim_nonneg'          => 'OHLC-diagram breedte/hoogte moet >= 0 zijn',
     'scatter.dim_nonneg'       => 'spreidingsdiagram breedte/hoogte moet >= 0 zijn',
+    'chart.dim_nonneg'         => 'breedte/hoogte van de grafiek moet >= 0 zijn',
+    'finite.non_finite'        => 'de grafiekwaarde moet eindig zijn, gekregen {value}',
 ];

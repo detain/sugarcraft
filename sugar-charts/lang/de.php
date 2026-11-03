@@ -41,4 +41,6 @@ return [
 
     // Scatter/Scatter.php
     'scatter.dim_nonneg'       => 'Streudiagramm-Breite/-Höhe muss >= 0 sein',
+    'chart.dim_nonneg'         => 'Diagrammbreite/-höhe muss >= 0 sein',
+    'finite.non_finite'        => 'Diagrammwert muss endlich sein, erhalten: {value}',
 ];

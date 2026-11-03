@@ -86,7 +86,7 @@ final class ScatterTest extends TestCase
 
     public function testWithYLabelPrependsToEachLine(): void
     {
-        $out = Scatter::new([[1, 4], [2, 7]], 10, 3)
+        $out = Scatter::new([[1, 4], [2, 7]], 28, 3) // lib-reviews-1103 M5: y-label budget is a quarter of the width
             ->withYLabel('Y Value')
             ->view();
         $lines = explode("\n", $out);

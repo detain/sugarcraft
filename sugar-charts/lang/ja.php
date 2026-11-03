@@ -24,4 +24,6 @@ return [
     'waveline.dim_nonneg'      => '波線の高さ/幅は >= 0 である必要があります',
     'ohlc.dim_nonneg'          => 'OHLC チャートの幅/高さは >= 0 である必要があります',
     'scatter.dim_nonneg'       => '散布図の幅/高さは >= 0 である必要があります',
+    'chart.dim_nonneg'         => 'チャートの幅/高さは >= 0 である必要があります',
+    'finite.non_finite'        => 'チャートの値は有限である必要があります。取得値: {value}',
 ];

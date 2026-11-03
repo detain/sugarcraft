@@ -41,4 +41,6 @@ return [
 
     // Scatter/Scatter.php
     'scatter.dim_nonneg'       => 'el ancho/alto del diagrama de dispersión debe ser >= 0',
+    'chart.dim_nonneg'         => 'el ancho/alto del gráfico debe ser >= 0',
+    'finite.non_finite'        => 'el valor del gráfico debe ser finito, se obtuvo {value}',
 ];

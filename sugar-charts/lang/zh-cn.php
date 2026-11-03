@@ -24,4 +24,6 @@ return [
     'waveline.dim_nonneg'      => '波形线宽/高必须 >= 0',
     'ohlc.dim_nonneg'          => 'OHLC 图宽/高必须 >= 0',
     'scatter.dim_nonneg'       => '散点图宽/高必须 >= 0',
+    'chart.dim_nonneg'         => '图表宽度/高度必须 >= 0',
+    'finite.non_finite'        => '图表值必须是有限值，实际为 {value}',
 ];

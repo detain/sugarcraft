@@ -5,16 +5,21 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Chart;
 
 use SugarCraft\Charts\Legend\Legend;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Shared legend / title / axis-label composition logic.
  *
- * Extracted from Chart (base class) and duplicated verbatim in
- * BarChart, Scatter, and OHLCChart. Each using class must
- * provide the property getters that this trait's methods reference.
+ * Shared composition logic for the renderers that do not extend Chart
+ * (BarChart, Scatter, OHLCChart); Chart carries a private fork of the same
+ * layout. Each using class supplies the property getters this trait's
+ * methods reference.
  */
 trait ChartExtras
 {
+    /** yLabel rides every row; cap it to width / this divisor so a long label cannot multiply out the canvas. */
+    private const Y_LABEL_WIDTH_FRACTION_DIVISOR = 4;
+
     /** @param list<string> $chart */
     protected function buildChartWithExtras(string $chart): array
     {
@@ -34,7 +39,7 @@ trait ChartExtras
         }
 
         if ($this->chartExtrasGetXLabel() !== null) {
-            $lines[] = $this->chartExtrasGetXLabel();
+            $lines[] = Width::truncate($this->chartExtrasGetXLabel(), $this->chartExtrasGetWidth());
         }
 
         return $lines;
@@ -80,9 +85,9 @@ trait ChartExtras
             $legendLine = $legendLines[$i] ?? '';
 
             if ($legendOnRight) {
-                $result[] = str_pad($chartLine, $this->chartExtrasGetWidth(), ' ', STR_PAD_RIGHT) . ' ' . $legendLine;
+                $result[] = Width::padRight($chartLine, $this->chartExtrasGetWidth()) . ' ' . $legendLine;
             } else {
-                $result[] = $legendLine . ' ' . str_pad($chartLine, $this->chartExtrasGetWidth(), ' ', STR_PAD_RIGHT);
+                $result[] = $legendLine . ' ' . Width::padRight($chartLine, $this->chartExtrasGetWidth());
             }
         }
 
@@ -93,8 +98,7 @@ trait ChartExtras
     protected function chartExtrasAddTitle(array $lines): array
     {
         $title = $this->chartExtrasGetTitle();
-        $titleLen = mb_strlen($title, 'UTF-8');
-        $centered = str_pad($title, $this->chartExtrasGetWidth(), ' ', STR_PAD_BOTH);
+        $centered = Width::padCenter(Width::truncate($title, $this->chartExtrasGetWidth()), $this->chartExtrasGetWidth());
 
         return match ($this->chartExtrasGetTitlePosition()) {
             Position::Top    => [$centered, ...$lines],
@@ -106,8 +110,11 @@ trait ChartExtras
     /** @param list<string> $lines */
     protected function chartExtrasAddYLabel(array $lines): array
     {
+        $budget = max(1, intdiv($this->chartExtrasGetWidth(), self::Y_LABEL_WIDTH_FRACTION_DIVISOR));
+        $label = Width::truncate($this->chartExtrasGetYLabel(), $budget);
+
         return array_map(
-            fn(string $line) => $this->chartExtrasGetYLabel() . ' ' . $line,
+            fn(string $line) => $label . ' ' . $line,
             $lines,
         );
     }

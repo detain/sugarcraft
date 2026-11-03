@@ -232,7 +232,7 @@ final class BarChartTest extends TestCase
 
     public function testWithYLabelPrependsToEachLine(): void
     {
-        $out = BarChart::new([['a', 0.5], ['b', 1.0]], 10, 3)
+        $out = BarChart::new([['a', 0.5], ['b', 1.0]], 24, 3) // lib-reviews-1103 M5: widened so the y-label fits its quarter-width budget
             ->withShowLabels(false)
             ->withYLabel('Usage')
             ->view();
@@ -244,7 +244,7 @@ final class BarChartTest extends TestCase
 
     public function testXLabelAndYLabelCanBeCombined(): void
     {
-        $out = BarChart::new([['a', 0.5]], 8, 3)
+        $out = BarChart::new([['a', 0.5]], 24, 3) // lib-reviews-1103 M5: axes labels are budget-clipped to the chart footprint
             ->withShowLabels(false)
             ->withXLabel('X axis')
             ->withYLabel('Y axis')

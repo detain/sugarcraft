@@ -36,6 +36,40 @@ final class LangTest extends TestCase
         self::assertTrue(method_exists($lang, 't'));
     }
 
+    public function testEveryLocaleCarriesTheSameKeySetAsEnglish(): void
+    {
+        // M16 (lib-reviews-1103): 'chart.dim_nonneg' and 'finite.non_finite'
+        // shipped in en.php only; every locale must move with the source of
+        // truth or fallbacks silently mask the gap from translators.
+        $en = require __DIR__ . '/../lang/en.php';
+        self::assertNotEmpty($en);
+
+        foreach (glob(__DIR__ . '/../lang/*.php') as $file) {
+            $locale = require $file;
+            $name = basename($file);
+            self::assertSame(
+                array_keys($en),
+                array_keys($locale),
+                "locale {$name} key set drifted from en.php",
+            );
+            self::assertStringContainsString(
+                '{value}',
+                (string) $locale['finite.non_finite'],
+                "locale {$name} dropped the {value} placeholder",
+            );
+        }
+    }
+
+    public function testFiniteRejectionMessageResolvesThroughLang(): void
+    {
+        $lang = new Lang();
+        self::assertNotSame(
+            'finite.non_finite',
+            $lang::t('finite.non_finite', ['value' => 'NAN']),
+            'key must resolve to a message, not echo raw',
+        );
+    }
+
     public function testTWithUnknownKeyReturnsKeyWhenNotTranslated(): void
     {
         $lang = new Lang();

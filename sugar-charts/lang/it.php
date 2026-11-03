@@ -24,4 +24,6 @@ return [
     'waveline.dim_nonneg'      => 'la larghezza/altezza della waveline deve essere >= 0',
     'ohlc.dim_nonneg'          => 'la larghezza/altezza del grafico OHLC deve essere >= 0',
     'scatter.dim_nonneg'       => 'la larghezza/altezza del grafico a dispersione deve essere >= 0',
+    'chart.dim_nonneg'         => 'larghezza/altezza del grafico devono essere >= 0',
+    'finite.non_finite'        => 'il valore del grafico deve essere finito, ottenuto {value}',
 ];

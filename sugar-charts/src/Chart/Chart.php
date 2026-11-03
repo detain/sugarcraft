@@ -8,6 +8,7 @@ use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Theme;
 
 /**
@@ -21,6 +22,9 @@ use SugarCraft\Style\Theme;
  */
 abstract class Chart
 {
+    /** yLabel rides every row; cap it to width / this divisor so a long label cannot multiply out the canvas. */
+    private const Y_LABEL_WIDTH_FRACTION_DIVISOR = 4;
+
     protected function __construct(
         protected int $width,
         protected int $height,
@@ -107,7 +111,7 @@ abstract class Chart
         }
 
         if ($this->xLabel !== null) {
-            $lines[] = $this->xLabel;
+            $lines[] = Width::truncate($this->xLabel, $this->width);
         }
 
         return $lines;
@@ -185,8 +189,6 @@ abstract class Chart
     private function mergeLegend(array $chartLines, Legend $legend): array
     {
         $legendLines = explode("\n", $legend->view());
-        $chartHeight = count($chartLines);
-        $legendHeight = count($legendLines);
 
         return match ($this->legendPosition) {
             Position::Top => [...$legendLines, ...$chartLines],
@@ -211,9 +213,9 @@ abstract class Chart
             $legendLine = $legendLines[$i] ?? '';
 
             if ($legendOnRight) {
-                $result[] = str_pad($chartLine, $this->width, ' ', STR_PAD_RIGHT) . ' ' . $legendLine;
+                $result[] = Width::padRight($chartLine, $this->width) . ' ' . $legendLine;
             } else {
-                $result[] = $legendLine . ' ' . str_pad($chartLine, $this->width, ' ', STR_PAD_RIGHT);
+                $result[] = $legendLine . ' ' . Width::padRight($chartLine, $this->width);
             }
         }
 
@@ -226,7 +228,7 @@ abstract class Chart
      */
     private function addTitle(array $lines): array
     {
-        $centered = str_pad($this->title, $this->width, ' ', STR_PAD_BOTH);
+        $centered = Width::padCenter(Width::truncate((string) $this->title, $this->width), $this->width);
 
         return match ($this->titlePosition) {
             Position::Top => [$centered, ...$lines],
@@ -241,8 +243,11 @@ abstract class Chart
      */
     private function addYLabel(array $lines): array
     {
+        $budget = max(1, intdiv($this->width, self::Y_LABEL_WIDTH_FRACTION_DIVISOR));
+        $label = Width::truncate((string) $this->yLabel, $budget);
+
         return array_map(
-            fn(string $line) => $this->yLabel . ' ' . $line,
+            fn(string $line) => $label . ' ' . $line,
             $lines,
         );
     }

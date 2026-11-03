@@ -24,4 +24,6 @@ return [
     'waveline.dim_nonneg'      => '파동선 너비/높이는 >= 0이어야 합니다',
     'ohlc.dim_nonneg'          => 'OHLC 차트 너비/높이는 >= 0이어야 합니다',
     'scatter.dim_nonneg'       => '산점도 너비/높이는 >= 0이어야 합니다',
+    'chart.dim_nonneg'         => '차트 너비/높이는 0 이상이어야 합니다',
+    'finite.non_finite'        => '차트 값은 유한해야 하며, 다음 값을 받았습니다: {value}',
 ];

@@ -24,4 +24,6 @@ return [
     'waveline.dim_nonneg'      => 'dalga çizgisi genişlik/yüksekliği >= 0 olmalıdır',
     'ohlc.dim_nonneg'          => 'OHLC grafiği genişlik/yüksekliği >= 0 olmalıdır',
     'scatter.dim_nonneg'       => 'dağılım grafiği genişlik/yüksekliği >= 0 olmalıdır',
+    'chart.dim_nonneg'         => 'grafik genişliği/yüksekliği >= 0 olmalıdır',
+    'finite.non_finite'        => 'grafik değeri sonlu olmalıdır, alınan: {value}',
 ];

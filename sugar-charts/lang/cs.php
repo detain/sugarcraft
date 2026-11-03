@@ -24,4 +24,6 @@ return [
     'waveline.dim_nonneg'      => 'šířka/výška waveline musí být >= 0',
     'ohlc.dim_nonneg'          => 'šířka/výška OHLC grafu musí být >= 0',
     'scatter.dim_nonneg'       => 'šířka/výška bodového grafu musí být >= 0',
+    'chart.dim_nonneg'         => 'šířka/výška grafu musí být >= 0',
+    'finite.non_finite'        => 'hodnota grafu musí být konečná, získáno {value}',
 ];

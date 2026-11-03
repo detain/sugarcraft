@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Support;
 
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Trust boundary for every string this library can echo to a terminal.
@@ -46,6 +47,8 @@ use SugarCraft\Core\Util\Sanitize;
  */
 final class UntrustedText
 {
+    /** Cell budget for legend labels (M5, lib-reviews-1103). */
+    public const MAX_LABEL_CELLS = 64;
     /**
      * Make `$value` safe to render inside a fixed-width chart frame.
      */
@@ -70,7 +73,11 @@ final class UntrustedText
     public static function guardItems(array $items): array
     {
         foreach ($items as $key => $item) {
-            $items[$key]['label'] = self::guard($item['label']);
+            // M5 (lib-reviews-1103): labels also get a cell budget — the legend box is
+            // composed against the chart width and an unbounded label breaks the side
+            // panels just as surely as an escape sequence does. 64 cells stays far
+            // above any legitimate series name.
+            $items[$key]['label'] = Width::truncate(self::guard($item['label']), self::MAX_LABEL_CELLS);
         }
 
         return $items;

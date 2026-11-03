@@ -129,7 +129,7 @@ final class ChartTest extends TestCase
 
     public function testWithTitleAddsTitle(): void
     {
-        $chart = TestChart::new(10, 3)
+        $chart = TestChart::new(16, 3) // lib-reviews-1103 M5: title clips to the chart width
             ->withTitle('My Chart Title');
         $out = $chart->view();
         $this->assertStringContainsString('My Chart Title', $out);
@@ -137,7 +137,7 @@ final class ChartTest extends TestCase
 
     public function testWithTitleAndPositionBottom(): void
     {
-        $chart = TestChart::new(10, 3)
+        $chart = TestChart::new(16, 3) // lib-reviews-1103 M5: title clips to width
             ->withTitle('Bottom Title', Position::Bottom);
         $out = $chart->view();
         $this->assertStringContainsString('Bottom Title', $out);
@@ -145,7 +145,7 @@ final class ChartTest extends TestCase
 
     public function testWithXLabelAddsLabel(): void
     {
-        $chart = TestChart::new(10, 3)
+        $chart = TestChart::new(16, 3) // lib-reviews-1103 M5: x-label clips to width
             ->withXLabel('X Axis Label');
         $out = $chart->view();
         // X label is appended at bottom of chart lines
@@ -154,7 +154,7 @@ final class ChartTest extends TestCase
 
     public function testWithYLabelAddsLabel(): void
     {
-        $chart = TestChart::new(10, 3)
+        $chart = TestChart::new(48, 3) // lib-reviews-1103 M5: y-label budget is a quarter of the width
             ->withYLabel('Y Axis Label');
         $out = $chart->view();
         // Y label is prepended to each line of the chart
@@ -198,7 +198,7 @@ final class ChartTest extends TestCase
 
     public function testShortFormAliases(): void
     {
-        $chart = TestChart::new(10, 3)
+        $chart = TestChart::new(24, 3) // lib-reviews-1103 M5: y-label budget is a quarter of the width
             ->legendItems([['label' => 'A', 'color' => 'blue']])
             ->legend(true)
             ->legendPos(Position::Bottom)

@@ -63,7 +63,7 @@ final class OHLCChartTest extends TestCase
     public function testWithXLabelAddsLabelAtBottom(): void
     {
         $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
-        $out = OHLCChart::new([$bar], 6, 3)
+        $out = OHLCChart::new([$bar], 12, 3) // lib-reviews-1103 M5: x-label clips to width
             ->withXLabel('Trading Day')
             ->view();
         $this->assertStringEndsWith("\nTrading Day", $out);
@@ -72,7 +72,7 @@ final class OHLCChartTest extends TestCase
     public function testWithYLabelPrependsToEachLine(): void
     {
         $bar = new Bar(open: 100.0, high: 110.0, low: 95.0, close: 108.0);
-        $out = OHLCChart::new([$bar], 6, 3)
+        $out = OHLCChart::new([$bar], 28, 3) // lib-reviews-1103 M5: y-label budget is a quarter of the width
             ->withYLabel('Price $')
             ->view();
         $lines = explode("\n", $out);
