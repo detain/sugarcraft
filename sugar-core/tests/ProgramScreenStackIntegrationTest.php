@@ -71,8 +71,192 @@ final class ScreenStackRecordingModel implements Model, ScreenStackCapable
     }
 }
 
+/**
+ * A child screen that folds '+' keystrokes into a counter — the exact
+ * shape lib-reviews-1102 C6 proved was silently discarded.
+ */
+final class CountingScreenModel implements Model
+{
+    use SubscriptionCapable;
+
+    public function __construct(public readonly int $n = 0) {}
+
+    public function init(): ?\Closure { return null; }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof KeyMsg && $msg->rune === '+') {
+            return [new self($this->n + 1), null];
+        }
+        return [$this, null];
+    }
+
+    public function view(): string { return "n={$this->n}"; }
+}
+
+/** Root with a writable public stack and NO withScreens() — property route. */
+final class PropertyWriteRoot implements Model, ScreenStackCapable
+{
+    use SubscriptionCapable;
+
+    public function __construct(public ScreenStack $screens = new ScreenStack()) {}
+
+    public function screens(): ScreenStack { return $this->screens; }
+
+    public function init(): ?\Closure { return null; }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof ScreenStackPushedMsg) {
+            return [new self($this->screens->push($msg->screen)), null];
+        }
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        return $this->screens->isEmpty() ? 'base' : (string) $this->screens->current()->model->view();
+    }
+}
+
+/** Root that refuses both write channels — the fail-loud contract. */
+final class UnwritableRoot implements Model, ScreenStackCapable
+{
+    use SubscriptionCapable;
+
+    public function __construct(private readonly ScreenStack $screens = new ScreenStack()) {}
+
+    public function screens(): ScreenStack { return $this->screens; }
+
+    public function init(): ?\Closure { return null; }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof ScreenStackPushedMsg) {
+            return [new self($this->screens->push($msg->screen)), null];
+        }
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        return $this->screens->isEmpty() ? 'base' : (string) $this->screens->current()->model->view();
+    }
+}
+
 final class ProgramScreenStackIntegrationTest extends TestCase
 {
+    /** Drive one dispatch synchronously without entering the loop. */
+    private function sendThroughDispatch(Program $program, Msg $msg): void
+    {
+        $dispatch = new \ReflectionMethod(Program::class, 'dispatch');
+        $dispatch->invoke($program, $msg);
+    }
+
+    private function dispatchTo(Program $program): Model
+    {
+        $prop = new \ReflectionProperty(Program::class, 'model');
+        return $prop->getValue($program);
+    }
+
+    /**
+     * C6 keystone (lib-reviews-1102): the ux-designer probe — push a
+     * counting screen, feed it three keys, and the child's folded state
+     * must be what the runtime keeps, not a frozen snapshot.
+     */
+    public function testAPushedScreenKeepsItsOwnUpdatedModelAcrossDispatches(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $root = new RootModelWithScreenStack();
+        $program = new Program($root, $this->makeOptions($in, $out, $loop));
+
+        $this->sendThroughDispatch($program, new ScreenStackPushedMsg(
+            new Screen(new CountingScreenModel(), title: 'Count')
+        ));
+
+        $this->sendThroughDispatch($program, new KeyMsg(\SugarCraft\Core\KeyType::Char, '+'));
+        $this->sendThroughDispatch($program, new KeyMsg(\SugarCraft\Core\KeyType::Char, '+'));
+        $this->sendThroughDispatch($program, new KeyMsg(\SugarCraft\Core\KeyType::Char, '+'));
+
+        $finalRoot = $this->dispatchTo($program);
+        $this->assertInstanceOf(RootModelWithScreenStack::class, $finalRoot);
+        $active = $finalRoot->screens()->current()->model;
+        $this->assertInstanceOf(CountingScreenModel::class, $active);
+        $this->assertSame(3, $active->n, 'pushed screen state must persist across updates (C6)');
+        $this->assertSame('n=3', (string) $active->view());
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** The public-writable-property root route persists too. */
+    public function testAPropertyStyleRootAlsoPersistsChildState(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $program = new Program(new PropertyWriteRoot(), $this->makeOptions($in, $out, $loop));
+        $this->sendThroughDispatch($program, new ScreenStackPushedMsg(
+            new Screen(new CountingScreenModel(), title: 'Count')
+        ));
+        $this->sendThroughDispatch($program, new KeyMsg(\SugarCraft\Core\KeyType::Char, '+'));
+        $this->sendThroughDispatch($program, new KeyMsg(\SugarCraft\Core\KeyType::Char, '+'));
+
+        $root = $this->dispatchTo($program);
+        $this->assertInstanceOf(PropertyWriteRoot::class, $root);
+        $this->assertSame(2, $root->screens()->current()->model->n);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** A root with NO write channel fails loudly instead of dropping silently. */
+    public function testARootWithoutAWriteChannelRefusesLoudly(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $program = new Program(new UnwritableRoot(), $this->makeOptions($in, $out, $loop));
+        $this->sendThroughDispatch($program, new ScreenStackPushedMsg(
+            new Screen(new CountingScreenModel(), title: 'Count')
+        ));
+
+        $this->expectException(\LogicException::class);
+        $this->sendThroughDispatch($program, new KeyMsg(\SugarCraft\Core\KeyType::Char, '+'));
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** Screen/ScreenStack value-object copy semantics. */
+    public function testReplaceCurrentModelPreservesTitleHooksAndLeavesLowerScreens(): void
+    {
+        $onEnter = static function (): void {};
+        $stack = (new ScreenStack())
+            ->push(new Screen(new CountingScreenModel(1), title: 'bottom'))
+            ->push(new Screen(new CountingScreenModel(2), title: 'top', onEnter: $onEnter));
+
+        $replaced = $stack->replaceCurrentModel(new CountingScreenModel(9));
+
+        $this->assertNotSame($stack, $replaced, 'replacement must be a copy');
+        $this->assertSame(2, $stack->current()->model->n, 'original stack untouched');
+        $this->assertSame(9, $replaced->current()->model->n);
+        $this->assertSame('top', $replaced->current()->title, 'title preserved');
+        $this->assertSame($onEnter, $replaced->current()->onEnter, 'hooks preserved');
+        $this->assertSame(1, $replaced->pop()->current()->model->n, 'lower screens untouched');
+        $live = new ScreenStack();
+        $this->assertSame(
+            $live,
+            $live->replaceCurrentModel(new CountingScreenModel(0)),
+            'empty stack no-ops (same object)',
+        );
+    }
+
     /** @return array{0:resource, 1:resource, 2:resource} */
     private function pipes(): array
     {

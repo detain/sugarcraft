@@ -718,6 +718,68 @@ final class Program
         return $this->model;
     }
 
+    /**
+     * Where each ScreenStackCapable root class expects its stack to be
+     * written back: 'method' (a withScreens() clone route), 'property'
+     * (a public writable $screens), or 'none' (refused, loudly).
+     *
+     * @var array<class-string, string>
+     */
+    private static array $screenStackRoutes = [];
+
+    /**
+     * Store a pushed screen's next model in the owning root's stack.
+     *
+     * The immutable law holds everywhere except the write channel: a
+     * root either rebuilds itself via withScreens() or exposes a public
+     * writable $screens property (the shipped RootModelWithScreenStack
+     * and every in-tree pattern do the latter). A root with neither
+     * cannot persist child state — say so at the first keystroke instead
+     * of silently discarding updates (lib-reviews-1102 C6 named the
+     * silence as the defect).
+     */
+    private function persistScreenModel(ScreenStackCapable $root, Model $nextModel): void
+    {
+        $class = $root::class;
+        $route = self::$screenStackRoutes[$class] ?? $this->resolveScreenStackRoute($class);
+        $nextStack = $root->screens()->replaceCurrentModel($nextModel);
+        if ($route === 'method') {
+            $candidate = $root->withScreens($nextStack);
+            if ($candidate instanceof Model) {
+                $this->model = $candidate;
+            }
+            return;
+        }
+        if ($route === 'property') {
+            /** @psalm-suppress MixedPropertyAssignment */
+            $root->screens = $nextStack;
+            return;
+        }
+        throw new \LogicException(sprintf(
+            'Screen stack root %s can neither be cloned (no public withScreens()) nor written '
+            . '(no public writable $screens property) — pushed screens cannot persist their state. '
+            . 'Add withScreens(ScreenStack): static or make $screens a public writable property.',
+            $class
+        ));
+    }
+
+    /**
+     * @param class-string $class
+     */
+    private function resolveScreenStackRoute(string $class): string
+    {
+        if (method_exists($class, 'withScreens')) {
+            return self::$screenStackRoutes[$class] = 'method';
+        }
+        if (property_exists($class, 'screens')) {
+            $property = new \ReflectionProperty($class, 'screens');
+            if ($property->isPublic() && !$property->isReadOnly()) {
+                return self::$screenStackRoutes[$class] = 'property';
+            }
+        }
+        return self::$screenStackRoutes[$class] = 'none';
+    }
+
     private function dispatch(Msg $msg): void
     {
         if ($msg instanceof BatchMsg) {
@@ -880,6 +942,11 @@ final class Program
             // Active model is the root model (not a nested screen), so
             // its update() returned the updated root model.
             $this->model = $nextModel;
+        } elseif ($this->model instanceof ScreenStackCapable) {
+            // A pushed screen produced its next model — persist it into
+            // the root's stack. Before lib-reviews-1102 C6 this result
+            // was dropped on the floor: routed, updated, thrown away.
+            $this->persistScreenModel($this->model, $nextModel);
         }
         $this->dirty = true;
         if ($cmd !== null) {
@@ -1381,7 +1448,14 @@ final class Program
         // detaches cleanly, and never returns has a down latch the hook
         // checks — registration itself is one-shot, so the ordering just
         // keeps the "armed" latch honest with the first real acquisition.
-        $this->armTerminalReleaseHook();
+        // Gated on catchPanics (lib-reviews-1102 M1): the knob was
+        // documented as the WithoutCatchPanics mirror but never read, so
+        // the backstop registered regardless. Default true keeps every
+        // existing behavior; only an explicit `catchPanics: false` (or a
+        // debugger owner that does its own state capture) opts out.
+        if ($this->options->catchPanics) {
+            $this->armTerminalReleaseHook();
+        }
     }
 
     /**
@@ -1859,9 +1933,15 @@ final class Program
      */
     private function wantedSubscriptions(): ?Subscriptions
     {
+        // The ProgramOptions closure (when set) sees the ROOT — it is an
+        // app-level override. The model route follows the ACTIVE model:
+        // a pushed screen's subscriptions are consulted while it is on
+        // top, and the base layer's resume when it is popped
+        // (lib-reviews-1102 M11 — root-only consultation made nested
+        // subscription declarations structurally dead).
         return $this->options->subscriptions !== null
             ? ($this->options->subscriptions)($this->model)
-            : $this->model->subscriptions();
+            : $this->activeModel()->subscriptions();
     }
 
     /**

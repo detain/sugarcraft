@@ -34,6 +34,18 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
         return $this->screens;
     }
 
+    /**
+     * Immutable write channel honoured by {@see Program} when persisting
+     * an active screen's next model (lib-reviews-1102 C6).
+     */
+    public function withScreens(ScreenStack $screens): self
+    {
+        $next = clone $this;
+        $next->screens = $screens;
+        $next->currentModel = $screens->isEmpty() ? null : $screens->current()->model;
+        return $next;
+    }
+
     public function init(): ?\Closure
     {
         return null;
@@ -78,6 +90,12 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
 
     public function view(): string
     {
+        // Delegate to the live top of the stack — currentModel is a
+        // convenience mirror, and after a write-back (C6) the stack is
+        // the authority.
+        if (!$this->screens->isEmpty()) {
+            return (string) $this->screens->current()->model->view();
+        }
         return $this->currentModel?->view() ?? '';
     }
 }

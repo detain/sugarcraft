@@ -76,6 +76,26 @@ final class ScreenStack implements \Countable
     }
 
     /**
+     * Return a copy of the stack with the CURRENT (topmost) screen's model
+     * replaced — title and hooks preserved (audit lib-reviews-1102 C6).
+     *
+     * This is how {@see Program} persists a pushed screen's next model:
+     * without it, the update() result of every non-root screen was
+     * silently dropped. On an empty stack, returns the stack unchanged —
+     * a late write-back can never mint a screen out of nothing.
+     */
+    public function replaceCurrentModel(Model $model): self
+    {
+        if ($this->screens === []) {
+            return $this;
+        }
+        $top = count($this->screens) - 1;
+        $next = $this->screens;
+        $next[$top] = $next[$top]->withModel($model);
+        return new self($next);
+    }
+
+    /**
      * Return the number of screens in the stack.
      */
     public function count(): int

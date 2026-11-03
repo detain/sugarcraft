@@ -24,4 +24,18 @@ final class Screen
         public readonly ?\Closure $onExit = null,
     ) {
     }
+
+    /**
+     * Return a copy of this screen carrying $model in place of the
+     * current one (title and enter/exit hooks preserved).
+     *
+     * Used by {@see Program} to persist a screen's next model after its
+     * update() — the immutability leg that lets pushed screens fold
+     * state instead of having their results thrown away (audit
+     * lib-reviews-1102 C6).
+     */
+    public function withModel(Model $model): self
+    {
+        return new self($model, $this->title, $this->onEnter, $this->onExit);
+    }
 }

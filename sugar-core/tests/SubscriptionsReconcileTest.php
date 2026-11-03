@@ -300,7 +300,181 @@ final class SubscriptionsReconcileTest extends TestCase
      */
     public function testProgramCancelsSubscriptionWhenModelRemovesIt(): void
     {
-        $this->markTestSkipped('Subscription cancellation timing edge case — core functionality verified by other tests');
+        [$in, $out, $writer] = $this->pipes();
+        $model = new class () implements \SugarCraft\Core\Model {
+            public int $cycles = 0;
+            use SubscriptionCapable;
+            public function init(): ?\Closure { return null; }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                $this->cycles++;
+                return [$this, null];
+            }
+            public function view(): string { return ''; }
+            public function subscriptions(): ?Subscriptions
+            {
+                return $this->cycles === 0
+                    ? (new Subscriptions())->withTick('gone-next', 60.0, static fn () => null)
+                    : null;
+            }
+        };
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            input: $in,
+            output: $out,
+            loop: new StreamSelectLoop(),
+        ));
+
+        $reconcile = new \ReflectionMethod(Program::class, 'reconcileWantedSubscriptions');
+        $activeProp = new \ReflectionProperty(Program::class, 'activeSubscriptions');
+
+        $reconcile->invoke($program);
+        self::assertCount(1, $activeProp->getValue($program), 'model request starts the tick');
+
+        $model->cycles = 1; // subscriptions() now answers null
+        $reconcile->invoke($program);
+        self::assertCount(0, $activeProp->getValue($program), 'removal cancels the timer');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * M11 (lib-reviews-1102): while a screen is pushed, its OWN
+     * subscriptions are the wanted set; after the pop, the root's are
+     * again. Reverting to root-only consultation reddens both legs.
+     */
+    public function testNestedSubscriptionsFollowTheActiveScreen(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+
+        $root = new class () implements \SugarCraft\Core\Model, \SugarCraft\Core\ScreenStackCapable {
+            use SubscriptionCapable;
+            public function __construct(public \SugarCraft\Core\ScreenStack $screens = new \SugarCraft\Core\ScreenStack()) {}
+            public function screens(): \SugarCraft\Core\ScreenStack { return $this->screens; }
+            public function init(): ?\Closure { return null; }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                if ($msg instanceof \SugarCraft\Core\Msg\ScreenStackPushedMsg) {
+                    return [new self($this->screens->push($msg->screen)), null];
+                }
+                if ($msg instanceof \SugarCraft\Core\Msg\ScreenStackPoppedMsg) {
+                    return [new self($this->screens->pop()), null];
+                }
+                return [$this, null];
+            }
+            public function view(): string { return 'root'; }
+        };
+        $screen = new class () implements \SugarCraft\Core\Model {
+            use SubscriptionCapable;
+            public function init(): ?\Closure { return null; }
+            public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
+            public function view(): string { return 'screen'; }
+            public function subscriptions(): ?Subscriptions
+            {
+                return (new Subscriptions())->withTick('screen-tick', 60.0, static fn () => null);
+            }
+        };
+
+        $program = new Program($root, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            input: $in,
+            output: $out,
+            loop: new StreamSelectLoop(),
+        ));
+
+        $dispatch = new \ReflectionMethod(Program::class, 'dispatch');
+        $reconcile = new \ReflectionMethod(Program::class, 'reconcileWantedSubscriptions');
+        $activeProp = new \ReflectionProperty(Program::class, 'activeSubscriptions');
+
+        $dispatch->invoke($program, new \SugarCraft\Core\Msg\ScreenStackPushedMsg(
+            new \SugarCraft\Core\Screen($screen)
+        ));
+        $reconcile->invoke($program);
+        $active = $activeProp->getValue($program);
+        self::assertArrayHasKey('screen-tick', $active, 'the pushed screen owns the wanted set');
+
+        $dispatch->invoke($program, new \SugarCraft\Core\Msg\ScreenStackPoppedMsg());
+        $reconcile->invoke($program);
+        self::assertCount(0, $activeProp->getValue($program), 'the base layer takes its subscriptions back');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * M12 (lib-reviews-1102): ids are the identity — a same-id-different-
+     * closure reconciliation keeps the FIRST handle alive (the lock
+     * hazard sugar-query once tripped over), and duplicate ids inside a
+     * single set start exactly one timer.
+     */
+    public function testSameIdDifferentClosureKeepsTheFirstHandle(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $program = new Program($this->nullModel(), new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            input: $in,
+            output: $out,
+            loop: new StreamSelectLoop(),
+        ));
+        $reconcile = new \ReflectionMethod(Program::class, 'reconcileSubscriptions');
+        $activeProp = new \ReflectionProperty(Program::class, 'activeSubscriptions');
+
+        $first = static fn () => null;
+        $second = static fn () => null;
+        $reconcile->invoke($program, (new Subscriptions())->withTick('same', 1.0, $first));
+        $reconcile->invoke($program, (new Subscriptions())->withTick('same', 2.0, $second));
+
+        $active = $activeProp->getValue($program);
+        self::assertCount(1, $active, 'same-id re-reconcile does not start a second timer');
+        self::assertSame(1.0, $active['same'][1]->params['seconds'], 'the FIRST handle stays live');
+
+        $dupes = (new Subscriptions())->withTick('x', 3.0, $first)->withTick('x', 4.0, $second);
+        self::assertCount(2, $dupes->all());
+        $reconcile->invoke($program, $dupes);
+        $active = $activeProp->getValue($program);
+        self::assertSame(3.0, $active['x'][1]->params['seconds'], 'duplicate ids collapse to the first entry');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * M13 (lib-reviews-1102): a SubscribeCmd-installed set is transient —
+     * the next model reconciliation cancels anything the model itself
+     * does not declare. This is documented behaviour; this arm pins it.
+     */
+    public function testCmdArmedSubscriptionsAreCancelledByTheNextModelReconcile(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $program = new Program($this->nullModel(), new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            input: $in,
+            output: $out,
+            loop: new StreamSelectLoop(),
+        ));
+        $dispatch = new \ReflectionMethod(Program::class, 'dispatch');
+        $activeProp = new \ReflectionProperty(Program::class, 'activeSubscriptions');
+
+        $cmd = new \SugarCraft\Core\Cmd\SubscribeCmd(
+            (new Subscriptions())->withTick('cmd-armed', 60.0, static fn () => null)
+        );
+        $dispatch->invoke($program, $cmd());
+        self::assertArrayHasKey('cmd-armed', $activeProp->getValue($program), 'the Cmd installs immediately');
+
+        $dispatch->invoke($program, new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'k'));
+        self::assertCount(0, $activeProp->getValue($program), 'model parity reclaims the Cmd-armed sub');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
     }
 
     public function testSubscriptionProducesCorrectMsg(): void

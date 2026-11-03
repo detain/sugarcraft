@@ -209,6 +209,38 @@ final class ProgramTerminalRecoveryTest extends TestCase
         fclose($out);
     }
 
+    /**
+     * M1 (lib-reviews-1102): catchPanics was a byte-for-byte inert knob —
+     * documented as the WithoutCatchPanics mirror while setupTerminal()
+     * armed the shutdown backstop unconditionally. Now the flag decides;
+     * the default (true) keeps every existing run pinned to the hook.
+     */
+    public function testCatchPanicsGatesTheShutdownBackstopRegistration(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $armed = new \ReflectionProperty(Program::class, 'terminalReleaseHookArmed');
+        $setup = new \ReflectionMethod(Program::class, 'setupTerminal');
+
+        $latched = new Program($this->noopModel(), $this->options($in, $out, $loop));
+        $setup->invoke($latched);
+        $this->assertTrue($armed->getValue($latched), 'default catchPanics:true arms the backstop');
+
+        $unlatched = new Program($this->noopModel(), new ProgramOptions(
+            useAltScreen: true,
+            catchPanics: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+        $setup->invoke($unlatched);
+        $this->assertFalse($armed->getValue($unlatched), 'catchPanics:false skips the registration');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
     public function testTeardownAfterRunIsANoOp(): void
     {
         [$in, $out, $writer] = $this->pipes();
