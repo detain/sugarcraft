@@ -5,9 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\TreeList;
 
 use Psr\Log\LoggerInterface;
-use SugarCraft\CellBuffer\Buffer;
-use SugarCraft\CellBuffer\Cell;
-use SugarCraft\CellBuffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
@@ -52,18 +49,19 @@ final class Model
     // -------------------------------------------------------------------------
 
     /**
-     * Upper bound for a single viewport dimension. Guards {@see bufferFromOutput()}
-     * — which allocates width×height cells — against a memory-exhaustion DoS from
-     * an absurd dimension. Far larger than any real terminal (a few thousand cells).
+     * Upper bound for a single viewport dimension. Guards view()/lines() —
+     * which lay out up to width × height of content — against a
+     * memory-exhaustion DoS from an absurd dimension. Far larger than any
+     * real terminal (a few thousand cells).
      */
     public const MAX_DIMENSION = 100000;
 
     /**
      * Upper bound for the viewport AREA (width × height) accepted by the fluent
      * setters. {@see MAX_DIMENSION} alone guards each axis independently, so
-     * 100000×100000 would pass while {@see bufferFromOutput()} still tries to
-     * allocate 10 billion cells — the per-axis cap does not achieve its stated
-     * DoS purpose without a product cap (audit M8 fix wave). 4M cells ≈ 2000×2000,
+     * 100000×100000 would pass while a full repaint still tries to allocate
+     * 10 billion characters — the per-axis cap does not achieve its stated
+     * DoS purpose without a product cap. 4M cells ≈ 2000×2000,
      * far beyond any real terminal while keeping a full repaint comfortably cheap.
      */
     public const MAX_TOTAL_CELLS = 4_000_000;
@@ -116,8 +114,17 @@ final class Model
      * colliding IDs. Use itemIds() for stable in-model identity only. */
     private int $idCounter = 0;
 
-    /** @var Buffer|null Previous rendered frame for diff-based emission */
-    private ?Buffer $previousFrame = null;
+    /**
+     * Rows of the last frame emitted by view() — the row-granular delta memo.
+     *
+     * Each entry is one complete styled row (the exact bytes a full frame
+     * would write on that screen line, SGR included). null means "no memo:
+     * the next view() writes a full frame". This is render bookkeeping, not
+     * item data: it never affects lines(), only the framing of view().
+     *
+     * @var list<string>|null
+     */
+    private ?array $previousRows = null;
 
     /** @var int|null Previous output width for resize detection */
     private ?int $prevWidth = null;
@@ -188,7 +195,7 @@ final class Model
      * Reject an out-of-range viewport dimension.
      *
      * A negative dimension is invalid input; an absurdly large one would make
-     * {@see bufferFromOutput()} allocate width×height cells and exhaust memory
+     * a full repaint lay out width×height characters and exhaust memory
      * (DoS). Zero is permitted — {@see lines()} rejects a zero viewport at
      * render time with a RuntimeException, which existing callers rely on.
      *
@@ -211,7 +218,7 @@ final class Model
      *
      * Complements the per-axis assertDimension(): two individually-valid axes
      * can still multiply into a memory-exhaustion allocation in
-     * bufferFromOutput(). Zero on either axis passes (no allocation; lines()
+     * the renderer. Zero on either axis passes (no allocation; lines()
      * rejects a zero viewport at render time).
      *
      * @throws \InvalidArgumentException when width×height exceeds MAX_TOTAL_CELLS.
@@ -348,7 +355,7 @@ final class Model
         $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
         // Reset diff state so the next view() emits a full frame, not a delta
         // against the pre-filter frame (which has a different line set).
-        $clone->previousFrame = null;
+        $clone->previousRows = null;
         $clone->prevWidth = null;
         $clone->prevHeight = null;
         return $clone;
@@ -379,7 +386,7 @@ final class Model
         $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
         // Reset diff state so the next view() emits a full frame, not a delta
         // against the pre-unfilter frame (which has a different line set).
-        $clone->previousFrame = null;
+        $clone->previousRows = null;
         $clone->prevWidth = null;
         $clone->prevHeight = null;
         return $clone;
@@ -751,41 +758,77 @@ final class Model
     /**
      * Render the list and return as a single newline-joined string.
      *
-     * On the first render (or after a resize), emits the full output.
-     * On subsequent renders with the same dimensions, emits only the
-     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     * On the first render (or after a resize or a failed frame) emits the
+     * FULL output. On subsequent renders with the same dimensions emits a
+     * row-granular delta: each row whose bytes changed is rewritten at its
+     * absolute screen position (CUP to column 1) followed by erase-to-end,
+     * so stale content of any previous length on that row is cleared.
+     * Unchanged rows cost nothing, which is what keeps SSH traffic small
+     * for cursor moves; a style-only change (the cursor moving on a styled
+     * list) repaints exactly the affected rows because rows are compared
+     * as complete styled strings.
+     *
+     * The delta is deliberately ROW-granular rather than cell-granular.
+     * sugar-cellbuffer's Cell/Style model cannot round-trip SGR spellings
+     * other than RGB, and its cell grid has nowhere honest to put the
+     * escape bytes a styled row carries — an earlier cell projection
+     * leaked them as printable runes and corrupted every delta frame on
+     * styled lists. Writing whole rows sidesteps the whole class of
+     * problem: no style transport is needed, wide glyphs are never split,
+     * and each repaint is positionally self-contained.
      *
      * @param LoggerInterface|null $logger If provided, errors are logged at WARNING level
      */
     public function view(?LoggerInterface $logger = null): string
     {
         try {
-            // Detect window resize — reset diff state so we emit a full frame.
+            // Detect window resize — reset the row memo so we emit a full frame.
             if ($this->prevWidth !== null && ($this->prevWidth !== $this->width || $this->prevHeight !== $this->height)) {
-                $this->previousFrame = null;
+                $this->previousRows = null;
             }
             $this->prevWidth = $this->width;
             $this->prevHeight = $this->height;
 
             $lines = $this->lines();
-            $fullOutput = \implode("\n", $lines) . "\n";
 
-            // First frame or resize: emit full output and store as previousFrame.
-            if ($this->previousFrame === null) {
-                $this->previousFrame = $this->bufferFromOutput($fullOutput, $this->width, $this->height);
-                return $fullOutput;
+            // First frame or resize: emit full output and memoise its rows.
+            if ($this->previousRows === null) {
+                $this->previousRows = $lines;
+                return \implode("\n", $lines) . "\n";
             }
 
-            // Subsequent frames with same dimensions: compute diff and emit delta.
-            $currentFrame = $this->bufferFromOutput($fullOutput, $this->width, $this->height);
-            $ops = $currentFrame->diff($this->previousFrame);
-            $this->previousFrame = $currentFrame;
+            // Subsequent frames with the same dimensions: rewrite only the
+            // changed rows. Each write opens with an absolute CUP, so the
+            // delta makes no assumption about where the cursor sits.
+            $previous = $this->previousRows;
+            $this->previousRows = $lines;
 
-            $encoder = new DiffEncoder();
-            return $encoder->encode($ops);
+            $delta = '';
+            $rowCount = \max(\count($lines), \count($previous));
+            for ($row = 0; $row < $rowCount; $row++) {
+                $newRow = $lines[$row] ?? '';
+                if ($newRow === ($previous[$row] ?? '')) {
+                    continue;
+                }
+                // CSI <row>;1 H homes the write; CSI K clears the stale tail.
+                $delta .= Ansi::CSI . ($row + 1) . ';1H' . $newRow . Ansi::CSI . 'K' . "\n";
+            }
+
+            return $delta;
         } catch (\Throwable $e) {
+            // A failed frame never reached the screen, so its rows must not
+            // sit in the memo — a stale memo would make every later delta
+            // skip rows the terminal never saw. Drop the memo (and the size
+            // stamp) and the next successful view() repaints in full.
+            $this->previousRows = null;
+            $this->prevWidth = null;
+            $this->prevHeight = null;
             $logger?->warning('View rendering failed: {message}', ['message' => $e->getMessage()]);
-            return $e->getMessage() . "\n";
+            // Exception prose is untrusted text and this return value is
+            // frame content: it goes through the same marked-frames sweep
+            // as item values so no control byte or forged zone sentinel
+            // can ride the error sink.
+            return Sanitize::untrustedForMarkedFrames($e->getMessage()) . "\n";
         }
     }
 
@@ -1010,63 +1053,24 @@ final class Model
     }
 
     /**
-     * Build a Buffer from a multi-line string output.
-     *
-     * All cells are created with null style — the diff algorithm will
-     * still work correctly for detecting changed character positions.
-     *
-     * @param string $output Multi-line string from view()
-     * @param int    $width  Buffer width in cells
-     * @param int    $height Buffer height in rows
-     */
-    private function bufferFromOutput(string $output, int $width, int $height): Buffer
-    {
-        // Bulk construction (audit M3 fix wave): the previous implementation
-        // called Buffer::withCellAt() once per cell, and every such call copies
-        // the ENTIRE grid — O((width×height)²). A 500×200 frame exceeded 120 s.
-        // Building the flat cell list once and handing it to Buffer::fromGrid()
-        // (the sugar-cellbuffer bulk API) makes this O(width×height).
-        //
-        // Cell model is UNCHANGED from the prior implementation, byte for byte:
-        // one code point per cell, width 1, SGR escapes ride the grid as plain
-        // runes so style-only frame changes still register in diff(). (Wide
-        // glyphs therefore occupy a single cell here — a known, documented
-        // simplification of this projection; splitOverWidth() handles their
-        // layout at the text level.)
-        $lines = \explode("\n", $output);
-        $blank = Cell::new(' ', null, null, 1);
-        $grid = [];
-
-        for ($row = 0; $row < $height; $row++) {
-            $line = $lines[$row] ?? '';
-            $chars = \mb_str_split($line, 1, 'UTF-8');
-            $visible = \array_slice($chars, 0, $width); // truncate overflow columns, as before
-            foreach ($visible as $char) {
-                $grid[] = Cell::new($char, null, null, 1);
-            }
-            // Pad the rest of the row with the shared blank cell (Cell is a
-            // readonly value object, so one instance per frame is safe).
-            for ($col = \count($visible); $col < $width; $col++) {
-                $grid[] = $blank;
-            }
-        }
-
-        return Buffer::fromGrid($width, $height, $grid);
-    }
-
-    /**
-     * Reset the previous-frame buffer, forcing the next view() to emit
+     * Reset the previous-frame row memo, forcing the next view() to emit
      * a full frame (used on window resize or cursor-position-lost events).
      *
      * This method intentionally mutates the internal state for performance
      * reasons in the event-stream context. The alternative (returning a new
-     * model with previousFrame=null) would require callers to track the
+     * model with previousRows=null) would require callers to track the
      * returned instance, which breaks the typical event-handler pattern
      * where the same model instance is reused across frames. The mutation
-     * is safe because it only affects diff computation, not item data.
+     * is safe because it only affects delta framing, not item data.
+     *
+     * The memo travels with the instance lineage: mutate()-built clones
+     * inherit it, so rendering DIFFERENT lineages alternately onto one
+     * terminal without a reset here produces deltas against the other
+     * lineage's rows. Call resetPreviousFrame() on the model you are about
+     * to paint whenever you switch which instance owns the screen.
      */
     public function resetPreviousFrame(): void
     {
-        $this->previousFrame = null;
+        $this->previousRows = null;
     }
 }

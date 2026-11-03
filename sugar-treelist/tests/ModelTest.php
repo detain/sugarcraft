@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\TreeList\Tests;
 
 use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, StringItem};
+use SugarCraft\TreeList\Tests\Support\RowDeltaAssertions;
 use PHPUnit\Framework\TestCase;
 
 final class ModelTest extends TestCase
 {
+    use RowDeltaAssertions;
+
     private Model $model;
 
     protected function setUp(): void
@@ -799,53 +802,80 @@ final class ModelTest extends TestCase
         $this->assertStringContainsString('cherry', $out);
         $this->assertStringContainsString("\x1b[1m", $out);
         $this->assertStringContainsString('╭', $out);
-        // Second frame: cursor move produces a delta (shorter than full render)
+        // Second frame: moving the cursor rewrites exactly the two rows the
+        // highlight touches, and replaying that delta over the first frame
+        // rebuilds what a fresh instance paints. (2026-11-03 fix wave: this
+        // pin used to assert "delta shorter than full", a size heuristic that
+        // stayed green while the cell projection shipped SGR bytes as glyph
+        // cells.)
         $m2 = $m->setCursor(1);
         $out2 = $m2->view();
         $this->assertIsString($out2);
-        $this->assertLessThan(\strlen($out), \strlen($out2));
+        $this->assertDeltaWritesRows($out2, 2);
+        $this->assertStringNotContainsString('cherry', $out2);
+        $this->assertSame($this->snapshotFixture(1)->view(), $this->applyRowDelta($out, $out2));
+    }
+
+    /** Fresh 40×5/offset-2 fixture with the cursor on $cursor (memo-less). */
+    private function snapshotFixture(int $cursor = 0): Model
+    {
+        return Model::new()
+            ->setViewport(40, 5)
+            ->setCursorOffset(2)
+            ->addItem(new StringItem('apple'))
+            ->addItem(new StringItem('banana'))
+            ->addItem(new StringItem('cherry'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setCurrentStyle("\x1b[1m")
+            ->setCursor($cursor);
     }
 
     /**
-     * Step 11: diff-correctness — cursor-only move produces a delta that
-     * is shorter than a full re-render but still contains all visible text.
-     * Uses 80×24 viewport where full frame is large enough for delta to be smaller.
+     * Step 11: diff-correctness — a cursor-only move rewrites exactly the
+     * rows whose bytes changed. The old pin asserted "delta shorter than
+     * full"; with the row-granular delta the load-bearing property is
+     * structural: unchanged rows are absent from the stream and the changed
+     * rows replay to a byte-identical frame (2026-11-03 fix wave).
      */
     public function testDiffOpsDescribeOnlyChangedCells(): void
     {
-        $m = Model::new()
+        $build = static fn(int $cursor): Model => Model::new()
             ->setViewport(80, 24)
             ->addItem(new StringItem('item 0'))
             ->addItem(new StringItem('item 1'))
+            ->addItem(new StringItem('item 2'))
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
-            ->setLineStyle("\x1b[2m");
+            ->setLineStyle("\x1b[2m")
+            ->setCursor($cursor);
 
+        $m = $build(0);
         $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
 
         $m2 = $m->setCursor(1);
         $frame2Out = $m2->view();
 
-        $this->assertLessThan(\strlen($frame1Out), \strlen($frame2Out));
+        // Rows 0 and 1 swap faint/plain+marker; row 2 stays faint-unchanged.
+        $this->assertDeltaWritesRows($frame2Out, 2);
+        $this->assertStringNotContainsString('item 2', $frame2Out);
         $this->assertStringContainsString('item 1', $frame2Out);
+        $this->assertDeltaRebuildsFullFrame($frame1Out, $frame2Out, $build(1));
     }
 
     /**
      * Step 12a: filter → View must emit a FULL frame, not a delta against
      * the pre-filter frame (the line set is completely different after filtering).
      *
-     * Detecting "full frame" without the previousFrame accessor: we render the
-     * unfiltered model (which stores a previousFrame), filter, and render again.
-     * If the fix is absent (previousFrame aliased), the second render computes
-     * a delta vs the unfiltered frame and produces ~20-30 bytes. With the fix,
-     * it produces a full frame of ~43 bytes (1 visible line × 40 wide).
-     * We also verify via direct comparison: rendering the filtered model directly
-     * (no prior frame) must produce the same output.
+     * Applying a filter clears the row memo on the new lineage, so the next
+     * render paints every row — and must be byte-identical to a fresh
+     * instance that never had a memo at all. (2026-11-03 fix wave: replaced
+     * the old ≥35-byte "is it full" size heuristic with that byte-equality.)
      */
     public function testFilterTriggersFullFrameNotDelta(): void
     {
-        $m = Model::new()
+        $build = static fn(): Model => Model::new()
             ->setViewport(40, 5)
             ->addItem(new StringItem('apple'))
             ->addItem(new StringItem('banana'))
@@ -853,55 +883,42 @@ final class ModelTest extends TestCase
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        // Render unfiltered model first (stores previousFrame in $m)
+        // Render unfiltered model first (stores the row memo in $m)
+        $m = $build();
         $m->view();
 
         // Apply filter: different line set → next View() must be full, not delta
         $filtered = $m->withFilterFn(fn($v) => (string) $v === 'banana');
         $frame2 = $filtered->view();
 
-        // With the fix: first filtered View() = full frame (~43 bytes, 1 line).
-        // Without the fix: delta vs unfiltered frame (~20-30 bytes).
-        // A full filtered frame at 40×5 with 1 visible item is ~43 bytes.
-        // The threshold 35 distinguishes full (≥35) from delta (<35).
-        $this->assertGreaterThanOrEqual(35, \strlen($frame2),
-            'Filtered View() must emit a full frame (≥35 bytes), not a delta');
         $this->assertStringContainsString('banana', $frame2);
 
-        // Also verify: a fresh filtered model (no prior frame) produces the
-        // same first-frame output as the filtered model above.
-        $freshFiltered = Model::new()
-            ->setViewport(40, 5)
-            ->addItem(new StringItem('apple'))
-            ->addItem(new StringItem('banana'))
-            ->addItem(new StringItem('cherry'))
-            ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer())
-            ->withFilterFn(fn($v) => (string) $v === 'banana');
-        $freshFrame = $freshFiltered->view();
-        $this->assertSame(\strlen($freshFrame), \strlen($frame2));
+        // A fresh filtered model (no prior frame) produces byte-identical
+        // first-frame output — proof this is a full paint, not a delta.
+        $freshFrame = $build()->withFilterFn(fn($v) => (string) $v === 'banana')->view();
+        $this->assertSame($freshFrame, $frame2);
     }
 
     /**
      * Step 12b: cursor-only move (content unchanged, only highlight changes)
-     * produces a non-empty delta.
-     *
-     * Note: the delta encoding (ANSI cursor movement + style sequences) is
-     * often LONGER than a full re-render for short content because escape
-     * sequences have overhead. The meaningful property is that delta is
-     * non-empty, not that it is shorter than full re-render.
+     * produces a non-empty delta that rewrites exactly the two rows whose
+     * bytes differ — and nothing else. The old pin tolerated "item" and
+     * "one" scattered through escape noise; the row-granular delta writes
+     * each changed row as one contiguous run (2026-11-03 fix wave).
      */
     public function testCursorMoveStyleOnlyDeltaIsNonEmpty(): void
     {
-        $m = Model::new()
+        $build = static fn(int $cursor): Model => Model::new()
             ->setViewport(40, 5)
             ->addItem(new StringItem('item zero'))
             ->addItem(new StringItem('item one'))
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
             ->setLineStyle('')
-            ->setCurrentStyle("\x1b[7m");
+            ->setCurrentStyle("\x1b[7m")
+            ->setCursor($cursor);
 
+        $m = $build(0);
         $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
 
@@ -909,38 +926,41 @@ final class ModelTest extends TestCase
         $frame2Out = $m2->view();
 
         $this->assertNotEmpty($frame2Out);
-        // The delta contains "item one" but fragmented across ANSI sequences
-        // e.g. "item" then ESC sequences then "one". Use regex to match across.
-        $this->assertMatchesRegularExpression('/item(?:[\x1b\x07][^m]*m?)*one/', $frame2Out);
+        $this->assertDeltaWritesRows($frame2Out, 2);
+        $this->assertStringContainsString('item one', $frame2Out);
+        $this->assertDeltaRebuildsFullFrame($frame1Out, $frame2Out, $build(1));
     }
 
     /**
      * Step 13a: resize triggers full frame repaint, not a delta against
-     * the pre-resize frame.
+     * the pre-resize frame. (Byte-equality with a fresh instance at the new
+     * width is the structural proof; the old pin only compared lengths.)
      */
     public function testResizeTriggersFullFrameRepaint(): void
     {
-        $m = Model::new()
-            ->setViewport(40, 5)
+        $build = static fn(int $width, int $cursor): Model => Model::new()
+            ->setViewport($width, 5)
             ->addItem(new StringItem('item 0'))
             ->addItem(new StringItem('item 1'))
             ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->setSuffixer(new DefaultSuffixer())
+            ->setCursor($cursor);
 
+        $m = $build(40, 0);
         $frame1Out = $m->view();
         $this->assertNotEmpty($frame1Out);
-        $len1 = \strlen($frame1Out);
 
-        // Same dimensions → delta
+        // Same dimensions → delta over the two marker-touched rows.
         $m2 = $m->setCursor(1);
         $frame2Out = $m2->view();
-        $this->assertLessThan($len1, \strlen($frame2Out));
+        $this->assertDeltaWritesRows($frame2Out, 2);
+        $this->assertDeltaRebuildsFullFrame($frame1Out, $frame2Out, $build(40, 1));
 
-        // Resize to wider viewport → must emit FULL frame
+        // Resize to wider viewport → must emit the FULL frame at the new width.
         $m3 = $m2->setViewport(60, 5);
         $frame3Out = $m3->view();
-        $this->assertGreaterThan($len1, \strlen($frame3Out));
-        $this->assertStringContainsString('item 0', $frame3Out);
+        $this->assertSame($build(60, 1)->view(), $frame3Out);
+        $this->assertStringNotContainsString("\x1b[", $frame3Out); // plain rows: full paint has no CUP preamble
     }
 
     /**
@@ -949,24 +969,27 @@ final class ModelTest extends TestCase
      */
     public function testResetPreviousFrameForcesFullFrame(): void
     {
-        $m = Model::new()
+        $build = static fn(int $cursor): Model => Model::new()
             ->setViewport(40, 5)
             ->addItem(new StringItem('item 0'))
             ->addItem(new StringItem('item 1'))
             ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->setSuffixer(new DefaultSuffixer())
+            ->setCursor($cursor);
 
+        $m = $build(0);
         $frame1Out = $m->view();
-        $len1 = \strlen($frame1Out);
 
         $m2 = $m->setCursor(1);
         $frame2Out = $m2->view();
-        $this->assertLessThan($len1, \strlen($frame2Out));
+        $this->assertDeltaWritesRows($frame2Out, 2);
 
-        // Reset → next frame must be full
+        // Reset → next frame must be the full paint, byte-identical to a
+        // fresh instance holding the same state.
         $m2->resetPreviousFrame();
         $frame3Out = $m2->view();
-        $this->assertGreaterThan(\strlen($frame2Out), \strlen($frame3Out));
+        $this->assertNotSame($frame2Out, $frame3Out);
+        $this->assertSame($build(1)->view(), $frame3Out);
     }
 
     /**

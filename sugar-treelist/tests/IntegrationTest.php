@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\TreeList\Tests;
 
 use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, StringItem};
+use SugarCraft\TreeList\Tests\Support\RowDeltaAssertions;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -22,6 +23,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class IntegrationTest extends TestCase
 {
+    use RowDeltaAssertions;
     /**
      * Full lifecycle: model creation through rendering with cursor navigation.
      * Verifies that after creating a model, adding items, and navigating,
@@ -61,36 +63,45 @@ final class IntegrationTest extends TestCase
     }
 
     /**
-     * Diff pipeline: first View() emits full output, subsequent frames
-     * with same dimensions emit smaller delta-encoded output.
+     * Diff pipeline: first View() emits the full frame; later frames carry
+     * only the rows whose bytes changed, and replaying them reconstructs a
+     * fresh render byte for byte. (The old "delta is smaller than full"
+     * length heuristic was replaced in the 2026-11-03 fix wave — size says
+     * nothing about correctness.)
      */
     public function testDiffPipelineEmitsFullThenDelta(): void
     {
-        $m = Model::new()
+        $build = static fn(int $cursor): Model => Model::new()
             ->setViewport(80, 24)
             ->addItem(new StringItem('item 0'))
             ->addItem(new StringItem('item 1'))
             ->addItem(new StringItem('item 2'))
             ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->setSuffixer(new DefaultSuffixer())
+            ->setCursor($cursor);
 
         // Frame 1: full output
+        $m = $build(0);
         $frame1 = $m->view();
-        $bytes1 = \strlen($frame1);
         $this->assertNotEmpty($frame1);
         $this->assertStringContainsString('item 0', $frame1);
 
-        // Frame 2: cursor move → delta (smaller than full)
+        // Frame 2: cursor move → delta rewriting the two touched rows only
         $m2 = $m->setCursor(1);
         $frame2 = $m2->view();
         $this->assertNotEmpty($frame2);
-        $this->assertLessThan($bytes1, \strlen($frame2));
+        $this->assertDeltaWritesRows($frame2, 2);
+        $this->assertStringNotContainsString('item 2', $frame2);
+        $this->assertDeltaRebuildsFullFrame($frame1, $frame2, $build(1));
 
-        // Frame 3: another cursor move → delta
+        // Frame 3: another cursor move → delta chained over the rebuilt screen
         $m3 = $m2->setCursor(2);
         $frame3 = $m3->view();
         $this->assertNotEmpty($frame3);
-        $this->assertLessThan($bytes1, \strlen($frame3));
+        $this->assertDeltaWritesRows($frame3, 2);
+        $this->assertStringNotContainsString('item 0', $frame3);
+        $screen = $this->applyRowDelta($frame1, $frame2);
+        $this->assertSame($build(2)->view(), $this->applyRowDelta($screen, $frame3));
     }
 
     /**
@@ -158,31 +169,35 @@ final class IntegrationTest extends TestCase
 
     /**
      * Viewport resize triggers full frame repaint, not a delta against
-     * the pre-resize frame.
+     * the pre-resize frame (byte-equality with a fresh instance at the new
+     * width, 2026-11-03 fix wave).
      */
     public function testResizeTriggersFullRepaint(): void
     {
-        $m = Model::new()
-            ->setViewport(40, 5)
+        $build = static fn(int $width, int $cursor): Model => Model::new()
+            ->setViewport($width, 5)
             ->addItem(new StringItem('item 0'))
             ->addItem(new StringItem('item 1'))
             ->addItem(new StringItem('item 2'))
             ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->setSuffixer(new DefaultSuffixer())
+            ->setCursor($cursor);
 
+        $m = $build(40, 0);
         $frame1 = $m->view();
-        $len1 = \strlen($frame1);
 
-        // Cursor move → delta (smaller)
+        // Cursor move → delta over the two marker-touched rows
         $m2 = $m->setCursor(1);
         $frame2 = $m2->view();
-        $this->assertLessThan($len1, \strlen($frame2));
+        $this->assertDeltaWritesRows($frame2, 2);
+        $this->assertDeltaRebuildsFullFrame($frame1, $frame2, $build(40, 1));
 
-        // Resize to wider viewport → full frame
+        // Resize to wider viewport → full frame at the new width
         $m3 = $m2->setViewport(80, 5);
         $frame3 = $m3->view();
-        $this->assertGreaterThan($len1, \strlen($frame3));
+        $this->assertSame($build(80, 1)->view(), $frame3);
         $this->assertStringContainsString('item 0', $frame3);
+        $this->assertStringNotContainsString("\x1b[", $frame3);
     }
 
     /**
@@ -268,29 +283,34 @@ final class IntegrationTest extends TestCase
     }
 
     /**
-     * resetPreviousFrame() forces full frame on next render.
+     * resetPreviousFrame() forces full frame on next render (byte-equality
+     * with a fresh instance; the old length heuristic was retired in the
+     * 2026-11-03 fix wave).
      */
     public function testResetPreviousFrameForcesFullFrame(): void
     {
-        $m = Model::new()
+        $build = static fn(int $cursor): Model => Model::new()
             ->setViewport(40, 5)
             ->addItem(new StringItem('item 0'))
             ->addItem(new StringItem('item 1'))
             ->setPrefixer(new DefaultPrefixer())
-            ->setSuffixer(new DefaultSuffixer());
+            ->setSuffixer(new DefaultSuffixer())
+            ->setCursor($cursor);
 
+        $m = $build(0);
         $frame1 = $m->view();
-        $len1 = \strlen($frame1);
 
-        // Move cursor → delta
+        // Move cursor → delta over the two marker-touched rows
         $m2 = $m->setCursor(1);
         $frame2 = $m2->view();
-        $this->assertLessThan($len1, \strlen($frame2));
+        $this->assertDeltaWritesRows($frame2, 2);
+        $this->assertDeltaRebuildsFullFrame($frame1, $frame2, $build(1));
 
-        // Reset and render again → full frame
+        // Reset and render again → full frame, byte-identical to a fresh paint
         $m2->resetPreviousFrame();
         $frame3 = $m2->view();
-        $this->assertGreaterThan(\strlen($frame2), \strlen($frame3));
+        $this->assertNotSame($frame2, $frame3);
+        $this->assertSame($build(1)->view(), $frame3);
     }
 
     /**
