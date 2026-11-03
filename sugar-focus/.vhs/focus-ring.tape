@@ -11,6 +11,12 @@ Tab Sleep 900ms
 Tab Sleep 900ms
 Tab Sleep 900ms
 Tab Sleep 900ms
+Type "x"
+Sleep 900ms
+Tab Sleep 900ms
+Tab Sleep 900ms
+Type "x"
+Sleep 900ms
 Sleep 600ms
 Type "q"
 Sleep 500ms

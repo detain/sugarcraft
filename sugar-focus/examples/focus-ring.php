@@ -8,7 +8,9 @@ declare(strict_types=1);
  * Registers four labeled panels in a {@see FocusRing} and draws them side by
  * side. The focused panel gets a bright accent border; Tab advances focus
  * (Shift-Tab / Backtab reverses it) and the ring wraps around at either end.
- * Press q to quit.
+ * Press x to toggle whether the focused panel takes part in traversal — the
+ * accent follows `isFocused() && isEnabled()`, so a parked focus on a
+ * disabled panel shows grey. Press q to quit.
  *
  *   php examples/focus-ring.php
  *
@@ -28,19 +30,25 @@ $esc   = "\x1b";
 $reset = "{$esc}[0m";
 
 /**
- * Build one panel as an array of text rows. The focused panel is drawn with a
- * bold bright-cyan border + label; the rest are dimmed grey.
+ * Build one panel as an array of text rows. A panel drawn with the bright
+ * cyan border + bold label is the FOCUSED **and ENABLED** one — the same
+ * `isFocused() && isEnabled()` conjunction the README tells consumers to
+ * paint with, so a focus parked on a disabled panel stays grey.
  *
  * @return list<string>
  */
-$panel = static function (string $label, bool $focused) use ($esc, $reset): array {
+$panel = static function (string $label, bool $focused, bool $enabled) use ($esc, $reset): array {
     $inner  = 13;
-    $border = $focused ? "{$esc}[1;96m" : "{$esc}[90m";
-    $title  = $focused ? "{$esc}[1;97m" : "{$esc}[37m";
-    $mark   = $focused ? "{$esc}[96m"   : "{$esc}[90m";
+    $lit    = $focused && $enabled;
+    $border = $lit ? "{$esc}[1;96m" : "{$esc}[90m";
+    $title  = $lit ? "{$esc}[1;97m" : "{$esc}[37m";
+    $mark   = $lit ? "{$esc}[96m"   : "{$esc}[90m";
 
     $labelRow  = str_pad('  ' . $label, $inner);
-    $statusRow = str_pad('  ' . ($focused ? '> FOCUS' : 'idle'), $inner);
+    $statusRow = str_pad(
+        $focused ? ($enabled ? '  > FOCUS' : '  > parked') : ($enabled ? '  idle' : '   off'),
+        $inner,
+    );
     $line      = str_repeat('─', $inner);
 
     return [
@@ -55,10 +63,10 @@ $render = static function (FocusRing $ring) use ($regions, $panel, $esc, $reset)
     // Home the cursor and clear the screen so each redraw overwrites the last.
     $out = "{$esc}[H{$esc}[2J";
     $out .= "{$esc}[1msugar-focus — FocusRing traversal{$reset}\n";
-    $out .= "{$esc}[90mTab: next   Shift-Tab: previous   q: quit{$reset}\n\n";
+    $out .= "{$esc}[90mTab: next   Shift-Tab: previous   x: toggle focusable   q: quit{$reset}\n\n";
 
     $panels = array_map(
-        static fn(string $id): array => $panel($id, $ring->isFocused($id)),
+        static fn(string $id): array => $panel($id, $ring->isFocused($id), $ring->isEnabled($id)),
         $regions,
     );
 
@@ -71,8 +79,11 @@ $render = static function (FocusRing $ring) use ($regions, $panel, $esc, $reset)
     }
 
     $current = $ring->current() ?? '(none)';
-    $out .= "\n{$esc}[96m● focused: {$current}{$reset}  {$esc}[90m(region " .
-        ($ring->index() + 1) . ' of ' . $ring->count() . "){$reset}\n";
+    $footer  = 'region ' . ($ring->index() + 1) . ' of ' . $ring->count();
+    if ($ring->disabledCount() > 0) {
+        $footer .= ', enabled ' . $ring->enabledCount();
+    }
+    $out .= "\n{$esc}[96m● focused: {$current}{$reset}  {$esc}[90m({$footer}){$reset}\n";
 
     fwrite(STDOUT, $out);
 };
@@ -164,8 +175,21 @@ while (true) {
 
         $byte = $buffer[0];
         $buffer = substr($buffer, 1);
-        if ($byte === 'q' || $byte === "\x03") {
-            break 2; // 'q' or Ctrl-C (delivered as a byte — see -isig above)
+        if ($byte === 'q' || $byte === "\x03" || $byte === "\x04") {
+            break 2; // 'q', Ctrl-C or Ctrl-D (all delivered as bytes — see -isig above)
+        }
+        if ($byte === 'x') {
+            // Toggle the focused region's participation. Disabling it parks
+            // the focus there — the panel goes grey and reads "parked" — and
+            // the next Tab demonstrates traversal skipping the disabled id.
+            $focused = $ring->current();
+            if ($focused !== null) {
+                $ring = $ring->isEnabled($focused)
+                    ? $ring->disable($focused)
+                    : $ring->enable($focused);
+                $render($ring);
+            }
+            continue;
         }
         if ($byte === "\t") {
             $ring = $ring->next();
