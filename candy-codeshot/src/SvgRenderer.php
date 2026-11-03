@@ -133,9 +133,11 @@ final class SvgRenderer
      *
      * @param int $start 1-based start line (inclusive)
      * @param int $end   1-based end line (inclusive)
-     * @param string $color CSS colour string (default: #fffbe6, a soft yellow)
+     * @param ?string $color CSS colour string; null (default) resolves to the
+     *                       theme's {@see Theme::$highlight} band, falling back
+     *                       to #fffbe6 on themes that carry no band colour.
      */
-    public function withHighlight(int $start, int $end, string $color = '#fffbe6'): self
+    public function withHighlight(int $start, int $end, ?string $color = null): self
     {
         if ($start < 1) {
             throw new \InvalidArgumentException("Highlight start must be >= 1, got {$start}");
@@ -253,7 +255,7 @@ final class SvgRenderer
             // Line-highlight background (--highlight range).
             if ($this->highlight !== null) {
                 [$start, $end] = $this->highlight['range'];
-                $hlColor = $this->highlight['color'];
+                $hlColor = $this->highlight['color'] ?? $this->theme->highlight ?? '#fffbe6';
                 if ($lineNumber >= $start && $lineNumber <= $end) {
                     $svg .= sprintf(
                         '<rect x="%d" y="%.2f" width="%d" height="%.2f" fill="%s" />' . "\n",

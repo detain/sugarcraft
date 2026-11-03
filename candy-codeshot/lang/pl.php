@@ -48,11 +48,12 @@ Opcje:
   --font <ścieżka>        Ścieżka do pliku czcionki TTF/OTF/WOFF/WOFF2 do osadzenia w SVG (tylko SVG)
   --unsafe-paths          Zezwól na ścieżki wejścia/--font/--output poza CWD
   --highlight <start:koniec[:kolor]>
-                          Podświetl linie start:koniec z opcjonalnym kolorem (domyślny kolor: #fffbe6; tylko SVG)
+                          Podświetl linie start:koniec z opcjonalnym kolorem (domyślny kolor: kolor podświetlenia motywu; tylko SVG)
   --format <svg|png>      Format wyjściowy (domyślnie: svg; png wymaga ext-gd)
   -t, --type <język>      Wymuś język podświetlania składni (domyślnie: nazwa pliku, shebang, treść)
   -o, --output <ścieżka>  Zapisz wyjście do pliku zamiast na stdout
   -h, --help              Pokaż ten komunikat pomocy
+  -v, --version           Wypisz wersję i zakończ
 
 Uwagi:
   Ścieżki wejścia i wyjścia muszą pozostać w bieżącym katalogu roboczym,
@@ -61,8 +62,8 @@ Uwagi:
 
 Kody wyjścia:
   0  sukces
-  1  brakujący autoload composera (problem z instalacją)
-  2  błąd użycia lub wejścia (zła flaga, nieodczytywalna ścieżka, odrzucone podświetlenie, ...)
+  1  błąd I/O (nieczytelne wejście, niezapisywalne wyjście, brakujący autoload)
+  2  błąd użycia lub wejścia (zła flaga, odrzucona ścieżka, odrzucone podświetlenie, ...)
 
 Przykłady:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Przykłady:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: ścieżka wejściowa "{path}" jest katalogiem - podaj plik albo prześlij przez stdin',
+    'cli.png_to_tty'          => 'candy-codeshot: odmowa zapisu surowych bajtów PNG na terminal (użyj --output <plik.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: czytam ze stdin - podaj plik lub prześlij dane (Ctrl-D kończy)',
 ];

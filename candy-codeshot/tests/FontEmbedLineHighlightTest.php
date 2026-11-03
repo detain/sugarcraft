@@ -166,11 +166,25 @@ final class FontEmbedLineHighlightTest extends TestCase
         $this->assertSame(3, substr_count($svg, 'fill="#fffbe6"'));
     }
 
-    public function testWithHighlightDefaultsToYellow(): void
+    public function testWithHighlightDefaultsToThemeColour(): void
     {
-        // The default color in withHighlight is #fffbe6.
+        // Omitting the colour stores null; render resolves it from the theme's
+        // own highlight band (Theme::$highlight), falling back to #fffbe6 only
+        // for themes that carry no highlight slot.
         $r = SvgRenderer::dark()->withHighlight(1, 1);
-        $this->assertSame('#fffbe6', $r->highlight['color']);
+        $this->assertNull($r->highlight['color']);
+
+        $dark = SvgRenderer::dark()
+            ->withHighlight(1, 1)
+            ->withWindow(false)
+            ->render("line\n");
+        $this->assertStringContainsString('fill="#2d333b"', $dark);
+
+        $light = SvgRenderer::light()
+            ->withHighlight(1, 1)
+            ->withWindow(false)
+            ->render("line\n");
+        $this->assertStringContainsString('fill="#fff9c4"', $light);
     }
 
     public function testNoHighlightRectWhenHighlightNotSet(): void

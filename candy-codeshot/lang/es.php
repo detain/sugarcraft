@@ -48,11 +48,12 @@ Opciones:
   --font <ruta>           Ruta a un archivo de fuente TTF/OTF/WOFF/WOFF2 para incrustar en el SVG (solo SVG)
   --unsafe-paths          Permitir rutas de entrada/--font/--output fuera del CWD
   --highlight <inicio:fin[:color]>
-                          Resalta líneas inicio:fin con color opcional (color por defecto: #fffbe6; solo SVG)
+                          Resalta líneas inicio:fin con color opcional (color por defecto: el color de resaltado del tema; solo SVG)
   --format <svg|png>      Formato de salida (por defecto: svg; png requiere ext-gd)
   -t, --type <idioma>     Fuerza el idioma del resaltado de sintaxis (por defecto: nombre de archivo, shebang, contenido)
   -o, --output <ruta>     Escribir la salida a un archivo en lugar de stdout
   -h, --help              Mostrar este mensaje de ayuda
+  -v, --version           Imprimir la versión y salir
 
 Notas:
   Las rutas de entrada y salida deben permanecer dentro del directorio de trabajo
@@ -61,8 +62,8 @@ Notas:
 
 Códigos de salida:
   0  éxito
-  1  autoload de composer ausente (problema de instalación)
-  2  error de uso o de entrada (bandera inválida, ruta ilegible, resaltado rechazado, ...)
+  1  fallo de E/S (entrada ilegible, salida no escribible, autoload ausente)
+  2  error de uso o de entrada (opción desconocida, ruta rechazada, resaltado rechazado, ...)
 
 Ejemplos:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Ejemplos:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: la ruta de entrada "{path}" es un directorio - pase un archivo o enrútelo por stdin',
+    'cli.png_to_tty'          => 'candy-codeshot: rechaza escribir bytes PNG sin procesar en un terminal (use --output <archivo.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: leyendo de stdin - pase un archivo o enrute la entrada (Ctrl-D para terminar)',
 ];

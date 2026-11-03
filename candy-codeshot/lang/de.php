@@ -48,11 +48,12 @@ Optionen:
   --font <pfad>           Pfad zu einer TTF/OTF/WOFF/WOFF2-Schriftdatei zum Einbetten ins SVG (nur SVG)
   --unsafe-paths          Eingabe-/--font-/--output-Pfade außerhalb des CWD erlauben
   --highlight <start:end[:farbe]>
-                          Zeilen start:end mit optionaler Farbe hervorheben (Standardfarbe: #fffbe6; nur SVG)
+                          Zeilen start:end mit optionaler Farbe hervorheben (Standardfarbe: die Highlight-Farbe des Themas; nur SVG)
   --format <svg|png>      Ausgabeformat (Standard: svg; png benötigt ext-gd)
   -t, --type <sprache>    Sprache für Syntax-Highlighting erzwingen (Standard: Dateiname, Shebang, Inhalt)
   -o, --output <pfad>     Ausgabe in Datei statt nach stdout schreiben
   -h, --help              Diese Hilfe anzeigen
+  -v, --version           Version anzeigen und beenden
 
 Hinweise:
   Eingabe- und Ausgabepfade müssen innerhalb des aktuellen Arbeitsverzeichnisses
@@ -61,8 +62,8 @@ Hinweise:
 
 Exit-Codes:
   0  Erfolg
-  1  fehlender Composer-Autoload (Installationsproblem)
-  2  Benutzungs- oder Eingabefehler (ungültiges Flag, unlesbarer Pfad, abgelehntes Highlight, ...)
+  1  E/A-Fehler (unlesbare Eingabe, nicht schreibbare Ausgabe, fehlender Autoload)
+  2  Benutzungs- oder Eingabefehler (ungültiger Flag, abgelehnter Pfad, abgelehnte Hervorhebung, ...)
 
 Beispiele:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Beispiele:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: Eingabepfad "{path}" ist ein Verzeichnis - bitte eine Datei übergeben oder über stdin pipe-n',
+    'cli.png_to_tty'          => 'candy-codeshot: rohe PNG-Daten werden nicht auf ein Terminal geschrieben (--output <Datei.png> verwenden)',
+    'cli.stdin_tty'           => 'candy-codeshot: lese von stdin - Datei übergeben oder Eingabe pipe-n (Strg-D beendet)',
 ];

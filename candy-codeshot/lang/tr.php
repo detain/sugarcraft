@@ -48,11 +48,12 @@ Seçenekler:
   --font <yol>            SVG'ye yerleştirilecek TTF/OTF/WOFF/WOFF2 yazı tipi dosyası yolu (yalnız SVG)
   --unsafe-paths          girdi/--font/--output yollarının CWD dışına çıkmasına izin ver
   --highlight <baş:bitiş[:renk]>
-                          baş:bitiş satırlarını isteğe bağlı renkle vurgula (varsayılan renk: #fffbe6; yalnız SVG)
+                          baş:bitiş satırlarını isteğe bağlı renkle vurgula (varsayılan renk: temanın vurgu rengi; yalnız SVG)
   --format <svg|png>      Çıkış biçemi (varsayılan: svg; png, ext-gd gerektirir)
   -t, --type <dil>        Sözdizimi vurgulama dilini zorla (varsayılan: dosya adı, shebang, içerik)
   -o, --output <yol>      Çıktıyı stdout yerine dosyaya yaz
   -h, --help              Bu yardım mesajını göster
+  -v, --version           Sürümü yaz ve çık
 
 Notlar:
   Girdi ve çıktı yolları --unsafe-paths verilmedikçe geçerli çalışma dizininin
@@ -61,8 +62,8 @@ Notlar:
 
 Çıkış kodları:
   0  başarılı
-  1  composer autoload eksik (kurulum sorunu)
-  2  kullanım veya girdi hatası (geçersiz bayrak, okunamayan yol, reddedilen vurgu, ...)
+  1  G/Ç hatası (okunamayan girdi, yazılamayan çıktı, eksik autoload)
+  2  kullanım veya girdi hatası (bilinmeyen bayrak, reddedilen yol, reddedilen vurgu, ...)
 
 Örnekler:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Notlar:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: girdi yolu "{path}" bir dizin - bir dosya verin veya stdin ile pipe edin',
+    'cli.png_to_tty'          => 'candy-codeshot: ham PNG baytları terminale yazılmıyor (--output <dosya.png> kullanın)',
+    'cli.stdin_tty'           => 'candy-codeshot: stdin\'den okunuyor - bir dosya verin veya girdi pipe\'layın (bitirmek için Ctrl-D)',
 ];

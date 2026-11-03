@@ -9,7 +9,8 @@ use SugarCraft\Core\Util\Palettes;
 /**
  * Visual theme shared by {@see SvgRenderer} and {@see PngRenderer}.
  * Carries the colours of every surface the renderers paint
- * (background, foreground, frame chrome, window controls), plus
+ * (background, foreground, frame chrome, window controls, line
+ * highlight band), plus
  * typographic settings (font family, size, line height). The active
  * window-chrome style lives on the renderers, not the theme.
  *
@@ -30,6 +31,7 @@ final class Theme
         public readonly string $fontFamily   = 'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
         public readonly float  $fontSize     = 14.0,
         public readonly float  $lineHeight   = 1.4,
+        public readonly ?string $highlight = null,
     ) {}
 
     /** Default dark theme (charm-ish). */
@@ -44,6 +46,7 @@ final class Theme
             windowRed:    '#ff5f56',
             windowYellow: '#ffbd2e',
             windowGreen:  '#27c93f',
+            highlight:    '#2d333b',
         );
     }
 
@@ -58,6 +61,7 @@ final class Theme
             windowRed:    '#ff5f56',
             windowYellow: '#ffbd2e',
             windowGreen:  '#27c93f',
+            highlight:    '#fff9c4',
         );
     }
 
@@ -74,6 +78,7 @@ final class Theme
             // this differs from sugar-style' 'warning' → 'orange' mapping.
             windowYellow: Palettes::DRACULA['yellow'],
             windowGreen:  Palettes::DRACULA['green'],
+            highlight:    '#44475a',
         );
     }
 
@@ -88,6 +93,7 @@ final class Theme
             windowRed:    '#f7768e',
             windowYellow: '#e0af68',
             windowGreen:  '#9ece6a',
+            highlight:    '#2f334d',
         );
     }
 
@@ -102,6 +108,7 @@ final class Theme
             windowRed:    '#bf616a',
             windowYellow: '#ebcb8b',
             windowGreen:  '#a3be8c',
+            highlight:    '#3b4252',
         );
     }
 }

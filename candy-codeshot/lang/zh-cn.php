@@ -48,11 +48,12 @@ candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
   --font <path>           要嵌入 SVG 的 TTF/OTF/WOFF/WOFF2 字体文件路径（仅限 SVG）
   --unsafe-paths          允许输入/--font/--output 路径位于当前目录之外
   --highlight <start:end[:color]>
-                          以可选颜色高亮行 start:end（默认颜色：#fffbe6；仅限 SVG）
+                          以可选颜色高亮行 start:end（默认颜色：主题高亮色；仅限 SVG）
   --format <svg|png>      输出格式（默认：svg；png 需要 ext-gd）
   -t, --type <lang>       强制指定语法高亮语言（默认：文件名、shebang、内容）
   -o, --output <path>     将输出写入文件而非 stdout
   -h, --help              显示此帮助信息
+  -v, --version           打印版本并退出
 
 注意:
   除非提供 --unsafe-paths，输入和输出路径必须保持在当前工作目录内。
@@ -60,8 +61,8 @@ candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
 
 退出码:
   0  成功
-  1  缺少 composer autoload（安装问题）
-  2  用法或输入错误（无效标志、不可读路径、被拒绝的高亮等）
+  1  I/O 失败 (不可读输入、不可写输出、缺少 autoload)
+  2  用法或输入错误 (无效参数、被拒路径、被拒高亮...)
 
 示例:
   cat script.php | candy-codeshot --theme dracula
@@ -69,4 +70,7 @@ candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: 输入路径 "{path}" 是目录 - 请传入文件或经 stdin 管道输入',
+    'cli.png_to_tty'          => 'candy-codeshot: 拒绝向终端写入原始 PNG 字节 (使用 --output <file.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: 正在从 stdin 读取 - 请传入文件或管道输入 (Ctrl-D 结束)',
 ];

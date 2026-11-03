@@ -48,11 +48,12 @@ Options:
   --font <path>           Path to a TTF/OTF/WOFF/WOFF2 font file to embed in the SVG (SVG only)
   --unsafe-paths          Allow input/--font/--output paths outside the CWD
   --highlight <start:end[:color]>
-                          Highlight lines start:end with optional color (default color: #fffbe6; SVG only)
+                          Highlight lines start:end with optional color (default: the theme's highlight colour; SVG only)
   --format <svg|png>      Output format (default: svg; png requires ext-gd)
   -t, --type <lang>       Force language for syntax highlighting (default: filename, shebang, content)
   -o, --output <path>     Write output to file instead of stdout
   -h, --help              Show this help message
+  -v, --version           Print version and exit
 
 Notes:
   Input and output paths must stay inside the current working directory
@@ -61,8 +62,8 @@ Notes:
 
 Exit codes:
   0  success
-  1  missing composer autoload (installation problem)
-  2  usage or input error (bad flag, unreadable path, refused highlight, ...)
+  1  I/O failure (unreadable input, unwritable output, missing autoload)
+  2  usage or input error (bad flag, refused path, refused highlight, ...)
 
 Examples:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Examples:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: input path "{path}" is a directory - pass a file, or pipe via stdin',
+    'cli.png_to_tty'          => 'candy-codeshot: refusing to write raw PNG bytes to a terminal (use --output <file.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: reading from stdin - pass a file or pipe input (Ctrl-D when done)',
 ];

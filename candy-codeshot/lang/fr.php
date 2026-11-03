@@ -48,11 +48,12 @@ Options :
   --font <chemin>         Chemin d'un fichier de police TTF/OTF/WOFF/WOFF2 à intégrer dans le SVG (SVG uniquement)
   --unsafe-paths          Autoriser les chemins entrée/--font/--output hors du répertoire courant
   --highlight <debut:fin[:couleur]>
-                          Surbrillance des lignes debut:fin avec couleur optionnelle (couleur par défaut : #fffbe6 ; SVG uniquement)
+                          Surbrillance des lignes debut:fin avec couleur optionnelle (couleur par défaut : la couleur de surbrillance du thème ; SVG uniquement)
   --format <svg|png>      Format de sortie (défaut : svg ; png requiert ext-gd)
   -t, --type <langue>     Force la langue de la coloration syntaxique (défaut : nom de fichier, shebang, contenu)
   -o, --output <chemin>   Écrire la sortie dans un fichier au lieu de stdout
   -h, --help              Afficher ce message d'aide
+  -v, --version           Afficher la version et quitter
 
 Remarques :
   Les chemins d'entrée et de sortie doivent rester dans le répertoire de travail
@@ -61,8 +62,8 @@ Remarques :
 
 Codes de sortie :
   0  succès
-  1  autoload composer manquant (problème d'installation)
-  2  erreur d'utilisation ou d'entrée (indicateur invalide, chemin illisible, surbrillance refusée, ...)
+  1  échec d'E/S (entrée illisible, sortie non inscriptible, autoload manquant)
+  2  erreur d'utilisation ou d'entrée (option inconnue, chemin refusé, surlignage refusé, ...)
 
 Exemples :
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Exemples :
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: le chemin d\'entrée "{path}" est un répertoire - indiquez un fichier ou transmettez par stdin',
+    'cli.png_to_tty'          => 'candy-codeshot: refus d\'écrire des octets PNG bruts sur un terminal (utilisez --output <fichier.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: lecture depuis stdin - indiquez un fichier ou transmettez l\'entrée (Ctrl-D pour terminer)',
 ];

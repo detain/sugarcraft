@@ -71,6 +71,12 @@ use SugarCraft\CodeShot\SvgRenderer;
 use SugarCraft\CodeShot\Support\Version;
 use SugarCraft\CodeShot\Theme;
 
+// The catalogs ship sixteen locales, but nothing used to SELECT one — every
+// translated string stayed dormant behind the built-in default. Pick the
+// locale from the environment (LC_ALL → LC_MESSAGES → LANG) once, before the
+// first Lang::t() call below.
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
 /**
  * Real filesystem path of the running phar archive, or '' outside one. The
  * bin file IS the archive stub, so both identities must be consulted: under
@@ -162,17 +168,23 @@ function candy_codeshot_flag_value(string $option, ?string $value): string
 /**
  * Numeric flags are digit-only and non-negative by contract. The old
  * `(int) array_shift(...)` silently turned `--padding wide` into 0 — an
- * unrequested layout change with no diagnostic.
+ * unrequested layout change with no diagnostic. The optional ceiling keeps
+ * absurd values (a megapixel of padding) from reaching the renderer, where
+ * they blow up the geometry maths or the image allocation.
  */
-function candy_codeshot_int_flag(string $option, ?string $value): int
+function candy_codeshot_int_flag(string $option, ?string $value, int $max = PHP_INT_MAX): int
 {
     $raw = candy_codeshot_flag_value($option, $value);
-    if (preg_match('/^\d+$/', $raw) !== 1) {
+    if (preg_match('/^\d+$/', $raw) !== 1 || (int) $raw > $max) {
         fwrite(STDERR, Lang::t('cli.bad_number', ['option' => $option, 'value' => $raw]) . "\n");
         exit(2);
     }
     return (int) $raw;
 }
+
+/** Ceilings for the numeric geometry flags (generous: nobody wants 512px of padding). */
+const MAX_PADDING       = 512;
+const MAX_BORDER_RADIUS = 64;
 
 $argv = $_SERVER['argv'] ?? $argv ?? [];
 array_shift($argv);
@@ -199,16 +211,17 @@ $unsafePaths    = false;
 $sawLigatures = false;
 $sawFont      = false;
 $sawHighlight = false;
+$sawBorderRadius = false;
 
 while (($arg = array_shift($argv)) !== null) {
     switch ($arg) {
         case '--theme':         $themeName    = candy_codeshot_flag_value('--theme', array_shift($argv)); break;
-        case '--padding':       $padding      = candy_codeshot_int_flag('--padding', array_shift($argv)); break;
+        case '--padding':       $padding      = candy_codeshot_int_flag('--padding', array_shift($argv), MAX_PADDING); break;
         case '--no-window':     $window       = false; break;
         case '--no-shadow':     $shadow       = false; break;
         case '--no-border':     $border       = false; break;
         case '--line-numbers':  $lineNumbers  = true;  break;
-        case '--border-radius': $borderRadius = candy_codeshot_int_flag('--border-radius', array_shift($argv)); break;
+        case '--border-radius': $borderRadius = candy_codeshot_int_flag('--border-radius', array_shift($argv), MAX_BORDER_RADIUS); $sawBorderRadius = true; break;
         case '--window-style':
             $styleRaw = candy_codeshot_flag_value('--window-style', array_shift($argv));
             $valid = ['macos', 'windows-terminal', 'iterm', 'hyper', 'none'];
@@ -234,7 +247,7 @@ while (($arg = array_shift($argv)) !== null) {
             }
             $start = (int) $m[1];
             $end   = (int) $m[2];
-            $color = $m[3] ?? '#fffbe6';
+            $color = $m[3] ?? null;
             $highlight = [$start, $end, $color];
             $sawHighlight = true;
             break;
@@ -321,6 +334,20 @@ if ($fontPath !== null) {
     }
 }
 
+// An input path that exists but is a directory: file_get_contents() answers
+// '' (measured) so the read guard below never fires — we would silently
+// render an empty frame. Refuse the shape by name instead.
+if ($inputPath !== null && is_dir($inputPath)) {
+    fwrite(STDERR, Lang::t('cli.is_directory', ['path' => $inputPath]) . "\n");
+    exit(2);
+}
+
+// Reading from an interactive terminal (no piped stdin, no file argument)
+// would otherwise hang with no feedback until Ctrl-D — say what we are doing.
+if ($inputPath === null && stream_isatty(STDIN)) {
+    fwrite(STDERR, Lang::t('cli.stdin_tty') . "\n");
+}
+
 $text = $inputPath !== null
     ? @file_get_contents($inputPath)
     : stream_get_contents(STDIN);
@@ -355,12 +382,14 @@ if (strpos($text, "\x1b") === false && $language !== 'text' && $language !== '')
 }
 
 if ($format === 'png') {
-    // The PNG backend draws with GD bitmap fonts: three options have no PNG
-    // equivalent. Announce every dropped one instead of silently ignoring it.
+    // The PNG backend draws with GD bitmap fonts on a square canvas: these
+    // options have no PNG equivalent. Announce every dropped one instead of
+    // silently rendering without them.
     $dropped = [];
-    if ($sawLigatures) { $dropped[] = '--ligatures'; }
-    if ($sawFont)      { $dropped[] = '--font'; }
-    if ($sawHighlight) { $dropped[] = '--highlight'; }
+    if ($sawLigatures)     { $dropped[] = '--ligatures'; }
+    if ($sawFont)          { $dropped[] = '--font'; }
+    if ($sawHighlight)     { $dropped[] = '--highlight'; }
+    if ($sawBorderRadius)  { $dropped[] = '--border-radius'; }
     if ($dropped !== []) {
         fwrite(STDERR, Lang::t('cli.png_ignores', ['options' => implode(', ', $dropped)]) . "\n");
     }
@@ -417,7 +446,16 @@ if ($windowStyle !== null) {
     $renderer = $renderer->withWindowStyle($windowStyle);
 }
 
-$result = $renderer->render($text);
+try {
+    $result = $renderer->render($text);
+} catch (\Throwable $e) {
+    // Mid-render engine refusals (PNG pixel ceiling, unreadable or oversized
+    // font files) must exit with a diagnostic, not an uncaught fatal — the
+    // autoload notice above sets the raw-message precedent (engine reasons
+    // are not catalog material).
+    fwrite(STDERR, 'candy-codeshot: rendering failed: ' . $e->getMessage() . "\n");
+    exit(2);
+}
 
 if ($output !== null) {
     // `-o shot.png` without `--format png` used to write SVG bytes into a
@@ -435,5 +473,12 @@ if ($output !== null) {
         exit(1);
     }
 } else {
+    // PNG bytes are binary; a terminal will render them as garbage (and can be
+    // exploited by the raw high-bit byte sequences). Refuse to spray a raster
+    // at a tty — the operator must route it to a file with --output.
+    if ($format === 'png' && stream_isatty(STDOUT)) {
+        fwrite(STDERR, Lang::t('cli.png_to_tty') . "\n");
+        exit(2);
+    }
     echo $result;
 }

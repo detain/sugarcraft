@@ -48,11 +48,12 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
   --font <path>           SVG에 포함할 TTF/OTF/WOFF/WOFF2 글꼴 파일 경로 (SVG 전용)
   --unsafe-paths          입력/--font/--output 경로의 CWD 외부 접근 허용
   --highlight <start:end[:color]>
-                          시작:끝 줄을 선택적 색으로 강조 (기본 색: #fffbe6; SVG 전용)
+                          시작:끝 줄을 선택적 색으로 강조 (기본 색: 테마의 강조 색; SVG 전용)
   --format <svg|png>      출력 형식 (기본: svg; png는 ext-gd 필요)
   -t, --type <lang>       구문 강조 언어 강제 (기본: 파일명, shebang, 내용)
   -o, --output <path>     stdout 대신 파일로 출력
   -h, --help              이 도움말 표시
+  -v, --version           버전 출력 후 종료
 
 주의:
   입력 및 출력 경로는 --unsafe-paths가 없으면 현재 작업 디렉터리 내에
@@ -61,8 +62,8 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
 
 종료 코드:
   0  성공
-  1  composer autoload 없음 (설치 문제)
-  2  사용법 또는 입력 오류 (잘못된 플래그, 읽을 수 없는 경로, 거부된 강조 등)
+  1  I/O 실패 (입력 읽기 실패, 출력 쓰기 실패, autoload 없음)
+  2  사용법 또는 입력 오류 (잘못된 플래그, 거부된 경로, 거부된 강조 표시...)
 
 예시:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: 입력 경로 "{path}"는 디렉터리입니다 - 파일을 전달하거나 stdin으로 파이프하세요',
+    'cli.png_to_tty'          => 'candy-codeshot: 원시 PNG 바이트를 터미널에 쓰는 것을 거부합니다 (--output <file.png> 사용)',
+    'cli.stdin_tty'           => 'candy-codeshot: stdin에서 읽는 중 - 파일을 전달하거나 입력을 파이프하세요 (Ctrl-D로 종료)',
 ];

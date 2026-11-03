@@ -48,11 +48,12 @@ Volby:
   --font <cesta>          Cesta ke souboru písma TTF/OTF/WOFF/WOFF2 pro vložení do SVG (pouze SVG)
   --unsafe-paths          Povolit cesty vstupu/--font/--output mimo CWD
   --highlight <start:konec[:barva]>
-                          Zvýraznit řádky start:konec s volitelnou barvou (výchozí barva: #fffbe6; pouze SVG)
+                          Zvýraznit řádky start:konec s volitelnou barvou (výchozí barva: zvýrazňovací barva tématu; pouze SVG)
   --format <svg|png>      Formát výstupu (výchozí: svg; png vyžaduje ext-gd)
   -t, --type <jazyk>      Vynutit jazyk zvýraznění syntaxe (výchozí: název souboru, shebang, obsah)
   -o, --output <cesta>    Zapsat výstup do souboru místo na stdout
   -h, --help              Zobrazit tuto nápovědu
+  -v, --version           Vypsat verzi a skončit
 
 Poznámky:
   Cesty vstupu a výstupu musí zůstat uvnitř aktuálního pracovního adresáře,
@@ -61,8 +62,8 @@ Poznámky:
 
 Návratové kódy:
   0  úspěch
-  1  chybějící composer autoload (problém s instalací)
-  2  chyba použití nebo vstupu (špatný příznak, nečitelná cesta, zamítnuté zvýraznění, ...)
+  1  chyba I/O (nečitelný vstup, nezapisovatelný výstup, chybějící autoload)
+  2  chyba použití nebo vstupu (neznámý příznak, zamítnutá cesta, zamítnuté zvýraznění, ...)
 
 Příklady:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Příklady:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: vstupní cesta "{path}" je adresář - zadejte soubor, nebo vstup převeďte přes stdin',
+    'cli.png_to_tty'          => 'candy-codeshot: odmítám zapisovat surová PNG data do terminálu (použijte --output <soubor.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: čtu ze stdin - zadejte soubor nebo převeďte vstup (Ctrl-D ukončí)',
 ];

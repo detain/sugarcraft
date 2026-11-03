@@ -48,11 +48,12 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
   --font <path>           SVGに埋め込むTTF/OTF/WOFF/WOFF2フォントファイルのパス（SVGのみ）
   --unsafe-paths          入力/--font/--outputパスのCWD外へのアクセスを許可
   --highlight <start:end[:color]>
-                          指定行 start:end を任意の色でハイライト（既定色: #fffbe6; SVGのみ）
+                          指定行 start:end を任意の色でハイライト（既定色: テーマのハイライト色; SVGのみ）
   --format <svg|png>      出力形式（既定: svg; pngにはext-gdが必要）
   -t, --type <lang>       構文ハイライトの言語を強制（既定: ファイル名、シェバン、内容）
   -o, --output <path>     stdoutの代わりにファイルへ出力
   -h, --help              このヘルプを表示
+  -v, --version           バージョンを表示して終了
 
 注意:
   入力・出力パスは --unsafe-paths を指定しない限り現在の作業ディレクトリ内に
@@ -61,8 +62,8 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
 
 終了コード:
   0  成功
-  1  composer autoloadが見つからない（インストールの問題）
-  2  使い方または入力のエラー（不正なフラグ、読めないパス、拒否されたハイライトなど）
+  1  I/O 失敗 (入力読み込み不可、出力書き込み不可、autoload 欠落)
+  2  使い方のエラーまたは入力エラー (不正なフラグ、拒否されたパス、拒否されたハイライト...)
 
 例:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ candy-codeshot - コードやターミナル出力をSVGまたはPNGのスクリ
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: 入力パス "{path}" はディレクトリです - ファイルを渡すか stdin でパイプしてください',
+    'cli.png_to_tty'          => 'candy-codeshot: 生の PNG バイトを端末に書き込むことは拒否されました (--output <file.png> を使用)',
+    'cli.stdin_tty'           => 'candy-codeshot: stdin から読み込み中 - ファイルを渡すか入力してください (Ctrl-D で終了)',
 ];

@@ -30,7 +30,10 @@ final class CliTest extends TestCase
             2 => ['pipe', 'w'],
         ];
 
-        $handle = proc_open($cmd, $desc, $pipes, $cwd);
+        // Pin English output deterministically: the bin now activates the host
+        // locale (T::detect), so child runs must not inherit a translated LANG.
+        $env = array_merge((array) getenv(), ['LANG' => 'C', 'LC_ALL' => 'C']);
+        $handle = proc_open($cmd, $desc, $pipes, $cwd, $env);
 
         try {
             if ($stdin !== null) {
@@ -415,6 +418,48 @@ final class CliTest extends TestCase
         preg_match('/height="(\d+)"/', $none['stdout'], $a);
         preg_match('/height="(\d+)"/', $macos['stdout'], $b);
         $this->assertSame(36, (int) $b[1] - (int) $a[1], 'WindowStyle::None must collapse the 36px header band');
+    }
+
+    public function testVersionFlagsExitZeroWithPrefix(): void
+    {
+        foreach (['--version', '-v'] as $flag) {
+            $r = $this->runCli([$flag]);
+            $this->assertSame(0, $r['exitCode'], $flag . ': ' . $r['stderr']);
+            $this->assertStringStartsWith('candy-codeshot', $r['stdout']);
+            $this->assertSame('', $r['stderr']);
+        }
+    }
+
+    public function testDirectoryInputRefusedWithExitTwo(): void
+    {
+        // Measured pre-fix: @file_get_contents('/etc') returned '' and the
+        // false/null guard passed, rendering an empty frame silently.
+        $r = $this->runCli(['--unsafe-paths', '/etc']);
+        $this->assertSame(2, $r['exitCode']);
+        $this->assertStringContainsString('is a directory', $r['stderr']);
+    }
+
+    public function testPipedStdinStaysSilentAndPngToPipeStillStreams(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not loaded');
+        }
+
+        // Both tty-only branches (stdin notice, PNG-to-terminal refusal) must
+        // stay silent on pipes: this pins the pipe polarity of the fix.
+        $r = $this->runCli(['--format', 'png'], "x\n");
+        $this->assertSame(0, $r['exitCode'], $r['stderr']);
+        $this->assertSame('', $r['stderr']);
+        $this->assertStringStartsWith(chr(137) . 'PNG', $r['stdout']);
+    }
+
+    public function testEscapeBytesCannotReachTerminalThroughFlagValues(): void
+    {
+        // An unknown flag embeds the raw argv value into the stderr message;
+        // the sanitising Lang::t choke must strip the CSI bytes.
+        $r = $this->runCli(["--\x1b[31mx"]);
+        $this->assertSame(2, $r['exitCode']);
+        $this->assertStringNotContainsString("\x1b", $r['stderr']);
     }
 
     private function makeTempDir(): string

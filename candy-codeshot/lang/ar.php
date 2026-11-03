@@ -48,11 +48,12 @@ candy-codeshot - يعرض الشفرة أو مخرجات الطرفية كلقط
   --font <path>           مسار ملف خط TTF/OTF/WOFF/WOFF2 لتضمينه في SVG (SVG فقط)
   --unsafe-paths          السماح بمسارات الإدخال/--font/--output خارج مجلد العمل
   --highlight <start:end[:color]>
-                          تظليل الأسطر start:end بلون اختياري (اللون الافتراضي: #fffbe6؛ SVG فقط)
+                          تظليل الأسطر start:end بلون اختياري (اللون الافتراضي: لون التظليل في السمة؛ SVG فقط)
   --format <svg|png>      صيغة الإخراج (الافتراضي: svg؛ png تتطلب ext-gd)
   -t, --type <lang>       فرض لغة تظليل الصيغة (الافتراضي: اسم الملف، shebang، المحتوى)
   -o, --output <path>     كتابة الإخراج إلى ملف بدلًا من stdout
   -h, --help              عرض رسالة المساعدة هذه
+  -v, --version           عرض الإصدار والخروج
 
 ملاحظات:
   يجب أن تبقى مسارات الإدخال والإخراج داخل مجلد العمل الحالي ما لم تُعطَ
@@ -61,8 +62,8 @@ candy-codeshot - يعرض الشفرة أو مخرجات الطرفية كلقط
 
 رموز الخروج:
   0  نجاح
-  1  autoload المفقود من composer (مشكلة تثبيت)
-  2  خطأ في الاستخدام أو الإدخال (خيار غير صالح، مسار غير قابل للقراءة، تظليل مرفوض، ...)
+  1  خطأ إدخال/إخراج (تعذر قراءة الإدخال، تعذر كتابة الإخراج، autoload مفقود)
+  2  خطأ استخدام أو إدخال (علامة غير معروفة، مسار مرفوض، تظليل مرفوض، ...)
 
 أمثلة:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ candy-codeshot - يعرض الشفرة أو مخرجات الطرفية كلقط
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: مسار الإدخال "{path}" دليل - مرر ملفًا أو ادخل عبر stdin',
+    'cli.png_to_tty'          => 'candy-codeshot: رفض كتابة بايتات PNG أولية إلى الطرفية (استخدم --output <file.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: القراءة من stdin - مرر ملفًا أو ادخل البيانات (Ctrl-D للإنهاء)',
 ];

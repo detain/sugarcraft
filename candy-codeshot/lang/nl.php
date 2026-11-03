@@ -48,11 +48,12 @@ Opties:
   --font <pad>            Pad naar een TTF/OTF/WOFF/WOFF2-lettertypebestand om in de SVG te bedden (alleen SVG)
   --unsafe-paths          Invoer-/--font-/--output-paden buiten de CWD toestaan
   --highlight <begin:einde[:kleur]>
-                          Markeer regels begin:einde met optionele kleur (standaardkleur: #fffbe6; alleen SVG)
+                          Markeer regels begin:einde met optionele kleur (standaardkleur: de markeerkleur van het thema; alleen SVG)
   --format <svg|png>      Uitvoerformaat (standaard: svg; png vereist ext-gd)
   -t, --type <taal>       Taal voor syntaxismarkering afdwingen (standaard: bestandsnaam, shebang, inhoud)
   -o, --output <pad>      Uitvoer naar bestand schrijven in plaats van stdout
   -h, --help              Dit help-bericht tonen
+  -v, --version           Versie tonen en afsluiten
 
 Opmerkingen:
   Invoer- en uitvoerpaden moeten binnen de huidige werkmap blijven, tenzij
@@ -61,8 +62,8 @@ Opmerkingen:
 
 Exitcodes:
   0  succes
-  1  ontbrekende composer-autoload (installatieprobleem)
-  2  gebruiks- of invoerfout (ongeldige vlag, onleesbaar pad, geweigerde markering, ...)
+  1  I/O-fout (onleesbare invoer, niet-schrijfbare uitvoer, ontbrekende autoload)
+  2  gebruiksfout of invoerfout (onbekende vlag, geweigerd pad, geweigerde markering, ...)
 
 Voorbeelden:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Voorbeelden:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: invoerpad "{path}" is een map - geef een bestand op of pipe via stdin',
+    'cli.png_to_tty'          => 'candy-codeshot: weigert ruwe PNG-bytes naar een terminal te schrijven (gebruik --output <bestand.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: leest van stdin - geef een bestand op of pipe de invoer (Ctrl-D om te beëindigen)',
 ];

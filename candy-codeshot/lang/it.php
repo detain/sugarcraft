@@ -48,11 +48,12 @@ Opzioni:
   --font <percorso>       Percorso di un file di font TTF/OTF/WOFF/WOFF2 da incorporare nel SVG (solo SVG)
   --unsafe-paths          Consenti percorsi di input/--font/--output fuori dalla CWD
   --highlight <inizio:fine[:colore]>
-                          Evidenzia le righe inizio:fine con colore opzionale (colore predefinito: #fffbe6; solo SVG)
+                          Evidenzia le righe inizio:fine con colore opzionale (colore predefinito: il colore di evidenziazione del tema; solo SVG)
   --format <svg|png>      Formato di output (predefinito: svg; png richiede ext-gd)
   -t, --type <lingua>     Forza la lingua per l'evidenziazione sintattica (predefinito: nome file, shebang, contenuto)
   -o, --output <percorso> Scrivi l'output in un file invece che su stdout
   -h, --help              Mostra questo messaggio di aiuto
+  -v, --version           Stampa la versione ed esci
 
 Note:
   I percorsi di input e output devono restare nella directory di lavoro corrente,
@@ -61,8 +62,8 @@ Note:
 
 Codici di uscita:
   0  successo
-  1  autoload composer mancante (problema di installazione)
-  2  errore d'uso o di input (flag non valido, percorso illeggibile, evidenziazione rifiutata, ...)
+  1  errore di I/O (input illeggibile, output non scrivibile, autoload mancante)
+  2  errore di uso o input (flag sconosciuto, percorso rifiutato, evidenziazione rifiutata, ...)
 
 Esempi:
   cat script.php | candy-codeshot --theme dracula
@@ -70,4 +71,7 @@ Esempi:
   candy-codeshot script.php --window-style none --highlight 3:7
   candy-codeshot notes.md --format png -o notes.png
 USAGE,
+    'cli.is_directory'        => 'candy-codeshot: il percorso di input "{path}" è una directory - passa un file o invia via stdin',
+    'cli.png_to_tty'          => 'candy-codeshot: rifiuto di scrivere byte PNG grezzi su un terminale (usa --output <file.png>)',
+    'cli.stdin_tty'           => 'candy-codeshot: lettura da stdin - passa un file o invia l\'input (Ctrl-D per terminare)',
 ];
