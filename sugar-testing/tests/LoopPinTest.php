@@ -132,7 +132,7 @@ final class LoopPinTest extends TestCase
     /**
      * The real target of the allowlist, not just a stand-in: ext-uv is the loop
      * autodetection actually picks when the extension is present, and the one
-     * whose stale-clock behaviour is measured in the {@see LoopPin} docblock.
+     * whose stale-clock behavior is measured in the {@see LoopPin} docblock.
      */
     public function testExtUvLoopIsReportedAsAtRisk(): void
     {
@@ -153,7 +153,7 @@ final class LoopPinTest extends TestCase
     }
 
     /**
-     * The behavioural guarantee, not just the type: a timer armed after a long
+     * The behavioral guarantee, not just the type: a timer armed after a long
      * stretch of synchronous idle must still wait its full delay.
      *
      * This is the regression test for the stale-clock trap described on

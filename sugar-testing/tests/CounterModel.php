@@ -12,7 +12,7 @@ use SugarCraft\Core\View;
 /**
  * A trivial counter model for self-testing ProgramSimulator.
  *
- * Demonstrates the TEA contract: init(), update(), view().
+ * Demonstrates the Model–Update–View contract: init(), update(), view().
  */
 final class CounterModel implements Model
 {

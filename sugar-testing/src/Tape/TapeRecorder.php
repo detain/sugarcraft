@@ -268,7 +268,7 @@ final class TapeRecorder
     {
         $escaped = addcslashes($rune, '"\\');
 
-        $neutralised = preg_replace_callback('/[\x00-\x1f\x7f]/', static function (array $m): string {
+        $neutralized = preg_replace_callback('/[\x00-\x1f\x7f]/', static function (array $m): string {
             return match ($m[0]) {
                 "\n" => '\\n',
                 "\r" => '\\r',
@@ -277,7 +277,7 @@ final class TapeRecorder
             };
         }, $escaped);
 
-        return $neutralised ?? $escaped;
+        return $neutralized ?? $escaped;
     }
 
     /**

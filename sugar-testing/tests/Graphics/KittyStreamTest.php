@@ -123,10 +123,10 @@ final class KittyStreamTest extends TestCase
         self::assertNull($image->pixelHeight());
     }
 
-    public function testToGdImageMaterialisesPayload(): void
+    public function testToGdImageMaterializesPayload(): void
     {
         if (!function_exists('imagecreatefromstring')) {
-            self::markTestSkipped('ext-gd is required to materialise a Kitty image');
+            self::markTestSkipped('ext-gd is required to materialize a Kitty image');
         }
 
         $image = KittyStream::decode(Fixture::bytes('kitty_red.kitty'))->image()->toGdImage();
@@ -492,7 +492,7 @@ final class KittyStreamTest extends TestCase
         $png12 = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '12', 'i' => '3']))->image();
         $png100 = KittyStream::decode($this->apcTransmit(['a' => 'T', 'f' => '100', 'i' => '3']))->image();
 
-        self::assertSame($png12->rawPayload(), $png100->rawPayload(), 'both spellings must be behaviourally identical');
+        self::assertSame($png12->rawPayload(), $png100->rawPayload(), 'both spellings must be behaviorally identical');
         self::assertTrue($png12->pngPassthrough());
         self::assertTrue($png100->pngPassthrough());
     }

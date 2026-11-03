@@ -110,7 +110,7 @@ final class GoldenFileTest extends TestCase
     public function testResolveAllowsInternalDotDotThatStaysInsideBase(): void
     {
         // '..' that does not escape the fixtures base is permitted and the
-        // raw (unnormalized) path is returned for byte-stable behaviour.
+        // raw (unnormalized) path is returned for byte-stable behavior.
         $resolved = GoldenFile::resolve('/home/test', 'sub/../counter.golden');
 
         $this->assertSame('/home/test/fixtures/sub/../counter.golden', $resolved);
@@ -143,7 +143,7 @@ final class GoldenFileTest extends TestCase
     {
         // Multiple '..' segments are returned as-is since they don't escape.
         // The normalization IS done internally to check for escape, but the
-        // raw path is returned for byte-stable behaviour.
+        // raw path is returned for byte-stable behavior.
         $resolved = GoldenFile::resolve('/home/test', 'a/b/c/../../d.golden');
 
         $this->assertSame('/home/test/fixtures/a/b/c/../../d.golden', $resolved);

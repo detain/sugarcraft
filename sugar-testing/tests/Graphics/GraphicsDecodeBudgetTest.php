@@ -18,7 +18,7 @@ use SugarCraft\Testing\Graphics\SixelStream;
  * and a corrupt inflate used to surface as a bare PHP warning.)
  *
  * The 64 MiB inflate-bomb leg is deliberately NOT pinned end-to-end —
- * materialising one costs a ~65 MB string on every run; the per-slice cap
+ * materializing one costs a ~65 MB string on every run; the per-slice cap
  * it guards is the same accrual check exercised by the truncation leg's
  * streaming loop.
  */
@@ -76,7 +76,7 @@ final class GraphicsDecodeBudgetTest extends TestCase
         $this->expectException(MalformedGraphicsException::class);
         $this->expectExceptionMessage('decode budget');
 
-        DecodeLimits::assertMaterialisablePng($bomb, 'graphics.payload_not_image');
+        DecodeLimits::assertMaterializablePng($bomb, 'graphics.payload_not_image');
     }
 
     public function testNonImageBytesRefuseWithTheCallersOwnKey(): void
@@ -84,12 +84,12 @@ final class GraphicsDecodeBudgetTest extends TestCase
         $this->expectException(MalformedGraphicsException::class);
         $this->expectExceptionMessage('does not decode');
 
-        DecodeLimits::assertMaterialisablePng('definitely not a png', 'graphics.kitty.payload_not_image');
+        DecodeLimits::assertMaterializablePng('definitely not a png', 'graphics.kitty.payload_not_image');
     }
 
-    public function testSmallRealPngPassesTheMaterialiseGate(): void
+    public function testSmallRealPngPassesTheMaterializeGate(): void
     {
-        DecodeLimits::assertMaterialisablePng($this->tinyPng(), 'graphics.payload_not_image');
+        DecodeLimits::assertMaterializablePng($this->tinyPng(), 'graphics.payload_not_image');
 
         $this->expectNotToPerformAssertions();
     }

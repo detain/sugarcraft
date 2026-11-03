@@ -95,7 +95,7 @@ final class SixelStreamTest extends TestCase
     public function testToGdImageProducesMatchingCanvas(): void
     {
         if (!function_exists('imagecreatefromstring')) {
-            self::markTestSkipped('ext-gd is required to materialise a Sixel image');
+            self::markTestSkipped('ext-gd is required to materialize a Sixel image');
         }
 
         $image = SixelStream::decode(Fixture::bytes('sixel_red.six'))->toGdImage();

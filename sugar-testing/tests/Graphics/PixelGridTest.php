@@ -91,10 +91,10 @@ final class PixelGridTest extends TestCase
         self::assertNull($withGap->uniformColor());
     }
 
-    public function testToGdImageMaterialisesEveryCell(): void
+    public function testToGdImageMaterializesEveryCell(): void
     {
         if (!function_exists('imagecreatetruecolor')) {
-            self::markTestSkipped('ext-gd is required to materialise a PixelGrid');
+            self::markTestSkipped('ext-gd is required to materialize a PixelGrid');
         }
 
         $grid = PixelGrid::fromRgbGrid([[[255, 0, 0], [0, 0, 255]]]);
@@ -109,7 +109,7 @@ final class PixelGridTest extends TestCase
     public function testEmptyGridToGdImageStillYieldsAUsableCanvas(): void
     {
         if (!function_exists('imagecreatetruecolor')) {
-            self::markTestSkipped('ext-gd is required to materialise a PixelGrid');
+            self::markTestSkipped('ext-gd is required to materialize a PixelGrid');
         }
 
         $image = PixelGrid::transparent(0, 0)->toGdImage();

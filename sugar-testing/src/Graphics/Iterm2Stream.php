@@ -165,7 +165,7 @@ final class Iterm2Stream
 
         // Header-only budget check before GD allocates (shared with Kitty):
         // a declared 100000x100000 PNG fatals imagecreatefromstring.
-        DecodeLimits::assertMaterialisablePng($this->png(), 'graphics.iterm2.payload_not_image');
+        DecodeLimits::assertMaterializablePng($this->png(), 'graphics.iterm2.payload_not_image');
 
         $image = imagecreatefromstring($this->png());
         if (!$image instanceof \GdImage) {

@@ -40,13 +40,13 @@ final class DecodeLimits
     public const MAX_DECOMPRESSED_BYTES = 67_108_864;
 
     /**
-     * Maximum pixels (width × height) a materialisable image may declare.
+     * Maximum pixels (width × height) a materializable image may declare.
      * 4096×4096 bounds GD allocation well below any runner's memory limit.
      */
     public const MAX_IMAGE_PIXELS = 16_777_216;
 
     /**
-     * Header-only budget check to run BEFORE GD materialises an image.
+     * Header-only budget check to run BEFORE GD materializes an image.
      *
      * imagecreatefromstring() on a PNG declaring, say, 100000x100000 pixels
      * dies with a memory fatal rather than returning false — parsing the
@@ -55,9 +55,9 @@ final class DecodeLimits
      * @param string $png        the raw PNG payload
      * @param string $notImageKey Lang key raised when the bytes are no image at all
      *
-     * @throws MalformedGraphicsException when unmaterialisable or over budget
+     * @throws MalformedGraphicsException when unmaterializable or over budget
      */
-    public static function assertMaterialisablePng(string $png, string $notImageKey): void
+    public static function assertMaterializablePng(string $png, string $notImageKey): void
     {
         $info = @\getimagesizefromstring($png);
         if ($info === false) {

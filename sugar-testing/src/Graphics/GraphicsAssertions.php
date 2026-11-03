@@ -119,7 +119,7 @@ final class GraphicsAssertions extends Assert
             throw new RuntimeException(Lang::t('graphics.gd.unavailable'));
         }
 
-        DecodeLimits::assertMaterialisablePng($png, 'graphics.payload_not_image');
+        DecodeLimits::assertMaterializablePng($png, 'graphics.payload_not_image');
 
         $image = imagecreatefromstring($png);
         if (!$image instanceof \GdImage) {

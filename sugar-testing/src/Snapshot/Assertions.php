@@ -372,7 +372,7 @@ final class Assertions
     }
 
     /**
-     * Normalise one cell to a trusted shape, or throw with a teaching message.
+     * Normalize one cell to a trusted shape, or throw with a teaching message.
      *
      * @return array{rune?: string, width?: int}|null
      */

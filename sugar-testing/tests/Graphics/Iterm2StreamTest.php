@@ -78,10 +78,10 @@ final class Iterm2StreamTest extends TestCase
         self::assertSame(8, $iterm2->cellsWidth());
     }
 
-    public function testToGdImageMaterialisesPayload(): void
+    public function testToGdImageMaterializesPayload(): void
     {
         if (!function_exists('imagecreatefromstring')) {
-            self::markTestSkipped('ext-gd is required to materialise an iTerm2 image');
+            self::markTestSkipped('ext-gd is required to materialize an iTerm2 image');
         }
 
         $image = Iterm2Stream::decode(Fixture::bytes('iterm2_red.iterm2'))->toGdImage();

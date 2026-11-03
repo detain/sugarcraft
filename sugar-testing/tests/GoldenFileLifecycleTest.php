@@ -228,7 +228,7 @@ final class GoldenFileLifecycleTest extends TestCase
 
     /**
      * The create path is guarded by a read-back check that can fail — a
-     * behavioural pin, not a counter pin: PHPUnit's instance-scoped
+     * behavioral pin, not a counter pin: PHPUnit's instance-scoped
      * numberOfAssertionsPerformed() never sees assertions made through a
      * helper's static Assert:: facade, so the counter is the wrong sensor.
      * What matters is the lifecycle: create lands the bytes, the golden then
