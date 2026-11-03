@@ -94,6 +94,12 @@ final class GitDaemon
     /** Snapshot of git.allow_anonymous_read taken at construction (C-13). */
     private bool $anonymousRead = false;
 
+    /** Upper bound for the pre-auth request line, in bytes. */
+    public const MAX_REQUEST_BYTES = 65536;
+
+    /** Absolute pre-auth lifetime: bytes alone never extend this (C-08). */
+    public const PREAUTH_DEADLINE_SECONDS = 10;
+
     /** Stats collector override (null = shared instance). */
     private ?Stats $stats = null;
 
@@ -182,6 +188,10 @@ final class GitDaemon
     {
         $this->pidFile = $pidFile;
         $this->running = true;
+        // A prior shutdown() latched the flag on this instance; the loop
+        // would exit at once and a restarted daemon would silently refuse
+        // to serve (M-14 — serveAsync already resets it, serve() did not).
+        $this->shutdownRequested = false;
 
         // Register signal handlers
         $this->registerSignalHandlers();
@@ -314,6 +324,15 @@ final class GitDaemon
     {
         while ($this->running && !$this->shutdownRequested) {
             $read = [$this->serverSocket];
+            // THE loop that accepts must also READ its clients: the old
+            // version selected on the listener only, so client bytes sat
+            // in the kernel buffer forever — checkConnectionTimeouts()
+            // then found every buffer empty and never issued the first
+            // read (C-01: accept-only, no fetch protocol). Idle sweeps
+            // still run each second via the select timeout.
+            foreach ($this->clients as $client) {
+                $read[] = $client['socket'];
+            }
             $write = null;
             $except = null;
 
@@ -325,6 +344,16 @@ final class GitDaemon
 
             if (\in_array($this->serverSocket, $read, true)) {
                 $this->acceptConnection();
+            }
+
+            foreach ($this->clients as $idx => $client) {
+                if (\in_array($client['socket'], $read, true)) {
+                    // The client may close itself mid-dispatch (every error
+                    // path); only feed sockets still registered.
+                    if (isset($this->clients[$idx])) {
+                        $this->handleClientData($idx);
+                    }
+                }
             }
 
             // Check timeouts on existing connections
@@ -347,6 +376,17 @@ final class GitDaemon
 
         $this->stats()->recordConnection();
 
+        // Capacity refuses the NEWCOMER (git-daemon's own behavior); the
+        // old code killed the OLDEST established connection instead, so
+        // any number of probing sockets could serially evict every real
+        // transfer in flight (C-08: oldest-kick DoS).
+        if (\count($this->clients) >= $this->config->gitMaxConnections) {
+            \socket_clear_error($client);
+            \socket_close($client);
+
+            return;
+        }
+
         $this->clients[] = [
             'socket' => $client,
             'connected_at' => \time(),
@@ -354,13 +394,6 @@ final class GitDaemon
             'buffer' => '',
             'handled' => false,
         ];
-
-        // Enforce max connections
-        if (\count($this->clients) > $this->config->gitMaxConnections) {
-            $oldest = $this->clients[0];
-            \socket_close($oldest['socket']);
-            \array_shift($this->clients);
-        }
     }
 
     // -------------------------------------------------------------------------
@@ -389,13 +422,17 @@ final class GitDaemon
             'handled' => false,
         ];
 
+        // Capacity refuses the NEWCOMER, never an established client
+        // (same C-08 policy as the blocking transport).
+        if (\count($this->clients) >= $this->config->gitMaxConnections) {
+            \fclose($client);
+
+            return;
+        }
+
         // The callback captures the stream (not the array index) because
         // closeClient() splices the clients list and reindexes it.
         $this->loop->addReadStream($client, fn () => $this->onAsyncClientReadable($client));
-
-        if (\count($this->clients) > $this->config->gitMaxConnections) {
-            $this->closeClient(0);
-        }
     }
 
     /**
@@ -430,6 +467,14 @@ final class GitDaemon
         unset($client);
 
         if (!$this->clients[$idx]['handled']) {
+            // Same pre-auth caps as the blocking transport (C-08).
+            if (\strlen($this->clients[$idx]['buffer']) >= self::MAX_REQUEST_BYTES
+                || \time() - $this->clients[$idx]['connected_at'] > self::PREAUTH_DEADLINE_SECONDS
+            ) {
+                $this->closeClient($idx);
+
+                return;
+            }
             $this->dispatchClientRequest($idx);
         }
     }
@@ -555,6 +600,25 @@ final class GitDaemon
     {
         $client = &$this->clients[$idx];
 
+        // Pre-auth guardrails: an unhandled client gets a bounded request
+        // line AND a bounded lifetime. Without these, anonymous sockets
+        // could append unbounded bytes (memory) or trickle bytes slowly
+        // while the idle clock reset on every read (C-08).
+        if (!$client['handled']) {
+            if (\strlen($client['buffer']) >= self::MAX_REQUEST_BYTES) {
+                unset($client);
+                $this->closeClient($idx);
+
+                return;
+            }
+            if (\time() - $client['connected_at'] > self::PREAUTH_DEADLINE_SECONDS) {
+                unset($client);
+                $this->closeClient($idx);
+
+                return;
+            }
+        }
+
         // Read from socket
         $data = @\socket_read($client['socket'], 65536);
         if ($data === false || $data === '') {
@@ -570,6 +634,48 @@ final class GitDaemon
     }
 
     /**
+     * Pull the daemon request line off the leading bytes: either a
+     * pkt-line-framed payload ("NNNNcmd /path\0host=…\0", length counts
+     * the 4 prefix chars, payload is NUL-terminated segments) or the bare
+     * "cmd /path\n" line. Returns the payload with NULs normalized to
+     * spaces so the command/path regex sees one clean line, or null while
+     * the request is still incomplete.
+     */
+    public static function extractRequestLine(string $buffer): ?string
+    {
+        if (\strlen($buffer) >= 4 && \preg_match('/^[0-9a-fA-F]{4}/', $buffer)) {
+            $length = \hexdec(\substr($buffer, 0, 4));
+            if ($length >= 4 && $length <= self::MAX_REQUEST_BYTES) {
+                if (\strlen($buffer) < $length) {
+                    return null; // still arriving
+                }
+                $payload = \substr($buffer, 4, $length - 4);
+                $first = \explode("\0", $payload)[0];
+                if ($first !== '') {
+                    return $first;
+                }
+            }
+        }
+
+        $nl = \strpos($buffer, "\n");
+        if ($nl === false) {
+            return null;
+        }
+        $line = \rtrim(\substr($buffer, 0, $nl), "\r");
+        // A NUL inside a supposedly bare line is a wire desync (pkt
+        // framing with a swallowed or malformed length prefix). The bare
+        // branch is a fixture convenience for exactly one well-formed
+        // shape; anything NUL-tainted dispatches through the pkt branch
+        // (or not at all) instead of silently consuming a client's
+        // remaining stream.
+        if (\str_contains($line, "\0")) {
+            return null;
+        }
+
+        return $line;
+    }
+
+    /**
      * Dispatch a buffered client request once the request line is
      * complete. Shared by the sync (socket_select) and async (event
      * loop) transports — this is the single copy of the protocol
@@ -579,9 +685,16 @@ final class GitDaemon
     {
         $client = &$this->clients[$idx];
 
-        // Check if we have a complete request
-        // Git daemon protocol: first line is "git-upload-pack /repo\n" or "git-receive-pack /repo\n"
-        if (\preg_match('/^(git-upload-pack|git-receive-pack)\s+(\/[^\s\n]+)\s*\n/', $client['buffer'], $matches)) {
+        // Check if we have a complete request. Git daemon protocol: the
+        // first line is "git-upload-pack /repo\0host=...\0" PKT-LINE framed
+        // (a 4-hex length prefix and NUL-separated args) — real `git clone
+        // git://…` NEVER emits the bare-line form the old regex required,
+        // so no genuine client ever matched this dispatch (M-08). Accept
+        // the pkt-framed wire and tolerate the bare line for fixtures.
+        $requestLine = self::extractRequestLine($client['buffer']);
+        if ($requestLine !== null
+            && \preg_match('/^(git-upload-pack|git-receive-pack)\s+(\/\S*)/', $requestLine, $matches)
+        ) {
             $gitCmd = $matches[1];
             $repoPath = $matches[2];
             $repoName = \ltrim(\pathinfo($repoPath, \PATHINFO_BASENAME) ?: \basename($repoPath), '/');
@@ -734,24 +847,49 @@ final class GitDaemon
     /**
      * Build and send refs advertisement.
      */
+    /** Upper bound on refs advertised to one anonymous daemon client. */
+    public const MAX_ADVERTISED_REFS = 4096;
+
     private function sendRefAdvertisement($socket, Repo $repo): void
     {
         $branches = $repo->branches();
         $head = $branches !== [] ? $branches[0] : 'main';
         $headHash = $repo->refs("refs/heads/{$head}")["refs/heads/{$head}"] ?? '';
 
-        // First ref (no capabilities for git-daemon protocol)
-        $this->writePacket($socket, "{$headHash} refs/heads/{$head}");
+        // git upload-pack parses the capability list with a whitespace
+        // split — every space-separated token after the first ref becomes
+        // a candidate capability. A pipe-delimited list (the old spelling)
+        // registered exactly ONE capability ("report-status|report-status-v2")
+        // and poisoned the rest as nonsense caps. One spaced line, real
+        // caps only, on the advertised first ref; the daemon serves the
+        // read path, so no-oversize-advert (the client's job to respect)
+        // and the upload-side caps are what actually apply.
+        $caps = ' report-status side-band-64k ofs-delta shallow agent=git/candy-git-server';
 
-        // Subsequent refs
+        $first = true;
+        $served = 0;
         foreach ($repo->refs() as $ref => $hash) {
-            if ($ref !== 'refs/heads/' . $head) {
-                $this->writePacket($socket, "{$hash} {$ref}");
+            if ($served >= self::MAX_ADVERTISED_REFS) {
+                break; // bounded advertisement (C-09 pre-auth amplification)
             }
+            $line = "{$hash} {$ref}";
+            if ($first) {
+                $line .= $caps;
+                $first = false;
+            }
+            $this->writePacket($socket, $line);
+            $served++;
+        }
+        if ($first) {
+            // No refs at all: advertise the symbolic head line with caps
+            // so the client still parses a well-formed (empty) advert.
+            $this->writePacket($socket, "{$headHash} refs/heads/{$head}{$caps}");
         }
 
-        // Flush
-        $this->writePacket($socket, '');
+        // Flush. \x30\x30\x30\x30 is the ASCII text "0000" — writing it
+        // appended a 4-byte garbage line after every advertisement, which
+        // clients fold into their negotiation stream (C-09).
+        $this->writeRaw($socket, PktLine::FLUSH);
     }
 
     /**
@@ -1099,9 +1237,62 @@ final class GitDaemon
     private function writeRaw($socket, string $bytes): void
     {
         if ($socket instanceof \Socket) {
-            @\socket_write($socket, $bytes);
-        } else {
-            @\fwrite($socket, $bytes);
+            // Non-blocking by construction (accept sets it): one
+            // socket_write hands the kernel AT MOST one send window and
+            // the rest of the packet silently vanishes on close — real
+            // clones died on truncated advertisements (M-09). Drain with
+            // POLLOUT and a wall-clock stall bound.
+            $stream = @\socket_export_stream($socket);
+            if ($stream === false) {
+                @\socket_write($socket, $bytes);
+
+                return;
+            }
+            \stream_set_blocking($stream, false);
+            self::drainWrite($stream, $bytes);
+
+            return;
+        }
+
+        \stream_set_blocking($socket, false);
+        self::drainWrite($socket, $bytes);
+    }
+
+    /**
+     * Write ALL bytes to a non-blocking stream, waiting for buffer space
+     * (100ms ticks, bounded) — the same discipline HttpListener::writeAll
+     * applies on the HTTP side.
+     *
+     * @param resource $stream
+     */
+    private static function drainWrite($stream, string $bytes): void
+    {
+        $deadline = \hrtime(true) + 10_000_000_000; // 10s absolute
+        $offset = 0;
+        $length = \strlen($bytes);
+        while ($offset < $length) {
+            $chunk = @\fwrite($stream, \substr($bytes, $offset, 65536));
+            if ($chunk === false) {
+                return; // broken pipe: the reader is gone
+            }
+            $offset += $chunk;
+            if ($offset >= $length) {
+                return;
+            }
+            while (\hrtime(true) < $deadline) {
+                $wf = [$stream];
+                $rf = $ef = null;
+                $ready = @\stream_select($rf, $wf, $ef, 0, 100_000);
+                if ($ready === false || $ready === 0) {
+                    continue;
+                }
+                if ($wf !== []) {
+                    break;
+                }
+            }
+            if (\hrtime(true) >= $deadline) {
+                return; // stalled reader; drop the rest
+            }
         }
     }
 
