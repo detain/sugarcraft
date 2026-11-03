@@ -122,7 +122,7 @@ composer require sugarcraft/sugar-dashboard
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `Plot` | Line/scatter chart with braille plotting | `new(dataPoints, type)`, `withDataPoints()`, `withType()`, `withColor()`, `withGrid()` | |
+| `Plot` | Line/scatter chart with braille plotting | `new(data, width, height)`, `withData()`, `withMode()`, `withColor()`, `withHorizontalScale()`, `withShowAxes()` | |
 | `Chart` | Bar/line chart with axes, labels, grid | `new(dataPoints, type)`, `withDataPoints()`, `withType()`, `withColor()`, `withGrid()`, `withShowValues()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/chart.gif) |
 | `AreaChart` | Area chart for time series data | `new(series)`, `withShowGrid()`, `withShowLegend()`, `withMaxValue()`, `withStacked()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/area-chart.gif) |
 | `Area` | Stacked area chart with gradient fills | `new(dataPoints)`, `sample(int)`, `withDataPoints()`, `withStacked()`, `withShowLegend()` | |

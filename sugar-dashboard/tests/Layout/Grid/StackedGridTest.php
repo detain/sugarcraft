@@ -275,14 +275,34 @@ final class StackedGridTest extends TestCase
     {
         // Finding M-33: with fitScreen=false every column used to receive the
         // FULL grid width, so the joined frame overflowed by colCount x width.
+        // Review m4: the previous arm sized the grid at 30 columns — but
+        // Breakpoint::narrow() collapses anything under 90 into a SINGLE
+        // column before the clamp arm is ever reached, so it stayed green
+        // under the unclamped bug too (self-disclosed as non-discriminating).
+        // 120 keeps the grid on the multi-column path, where clamped columns
+        // measure share x colCount = width while unclamped ones measure
+        // width x colCount after joinHorizontal (which pads and joins, it
+        // does NOT crop).
         $grid = new StackedGrid(new Options(fitScreen: false));
         $grid->addItem($this->strItem(str_repeat('A', 90)), new ItemOptions(column: 0));
         $grid->addItem($this->strItem(str_repeat('B', 90)), new ItemOptions(column: 1));
-        $grid->setSize(30, 5);
+        $grid->setSize(120, 3);
 
-        foreach (explode("\n", $grid->render()) as $line) {
-            $this->assertLessThanOrEqual(30, \SugarCraft\Core\Util\Width::string($line));
+        $lines = explode("\n", $grid->render());
+        foreach ($lines as $line) {
+            $this->assertSame(
+                120,
+                \SugarCraft\Core\Util\Width::string($line),
+                'fitScreen=false must clamp every column to its even share',
+            );
         }
+
+        // Geometry, not just budget: clamped, column 0 keeps its first 60
+        // cells and column 1 lands in cells 61..120. Unclamped, the 'A'
+        // column runs to 90 + padding and the frame carries 180+ cells —
+        // the exact breach the ≤120 width arms above also catch.
+        $this->assertSame(60, substr_count($lines[0], 'A'));
+        $this->assertSame(60, substr_count($lines[0], 'B'));
     }
 
 }
