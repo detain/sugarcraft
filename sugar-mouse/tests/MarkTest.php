@@ -325,4 +325,66 @@ final class MarkTest extends TestCase
         }
         self::assertSame(!$valid, $threw, 'isValidId() must be the exact predicate wrap() enforces');
     }
+
+    // ─── untrusted sweep tool + hex-safe refusal messages ───────────────────
+
+    /**
+     * Mark::untrusted() is the mechanical half of the consumer sweep duty:
+     * it removes exactly the U+E000/U+E001 sentinel bytes — turning a
+     * charset-valid forged tag into inert text — and leaves everything else,
+     * including other private-use codepoints (U+E002 … U+F8FF icon glyphs,
+     * image-overlay markers) and ANSI, byte-for-byte untouched.
+     */
+    public function testUntrustedSweepsOnlyTheSentinelCodepoints(): void
+    {
+        $forged = Sentinel::OPEN . 'steal' . Sentinel::CLOSE . 'PAYLOAD' . Sentinel::OPEN . '/steal' . Sentinel::CLOSE;
+
+        // Only the sentinel framing bytes go; the id text remains but is inert
+        // text with no sentinels around it (surgical strip, sugar-core law).
+        self::assertSame('stealPAYLOAD/steal', Mark::untrusted($forged));
+
+        $mixed = "café \x1b[31mred\x1b[0m icon:\u{e002} nerd:\u{f0156} end:\u{f8ff}";
+        self::assertSame($mixed, Mark::untrusted($mixed), 'legitimate PUA and ANSI must survive');
+    }
+
+    /**
+     * Without the sweep, a forged charset-valid tag inside a label registers
+     * a live zone (documented parse-side reality — see the ManagerTest
+     * click-steal e2e); swept first, the label is just text: the real zone
+     * parses alone.
+     */
+    public function testUntrustedMakesForgedTagInertBeforeWrapping(): void
+    {
+        $unswept = (new Mark())->wrap('real', 'A' . Sentinel::OPEN . 'ghost' . Sentinel::CLOSE . 'B' . Sentinel::OPEN . '/ghost' . Sentinel::CLOSE);
+        // Close-order registration: ghost closes before real does.
+        self::assertSame(['ghost', 'real'], array_keys((new Scan())->parse($unswept)));
+
+        $swept = (new Mark())->wrap('real', Mark::untrusted('A' . Sentinel::OPEN . 'ghost' . Sentinel::CLOSE . 'B' . Sentinel::OPEN . '/ghost' . Sentinel::CLOSE));
+        $zones = (new Scan())->parse($swept);
+        self::assertSame(['real'], array_keys($zones));
+        self::assertSame('AghostB/ghost', Scan::strip($swept), 'swept residue is inert plain text');
+    }
+
+    public function testEscapeForMessageQuotesAndNeverLeaksRawBytes(): void
+    {
+        $repr = Mark::escapeForMessage("a\x1b[31m\u{e000}b\n'q'\\z");
+
+        self::assertSame("'a\\x1B[31m\\xEE\\x80\\x80b\\n\\'q\\'\\\\z'", $repr);
+        self::assertSame(1, preg_match('/\A[\x20-\x7E]+\z/', $repr), 'repr must be printable ASCII only');
+
+        // var_export-compatible shape for the ordinary case (pins keep reading
+        // hostile ids exactly as before).
+        self::assertSame("'dup'", Mark::escapeForMessage('dup'));
+    }
+
+    public function testRefusalMessageHexEscapesHostileIdInsteadOfEmittingItRaw(): void
+    {
+        try {
+            Mark::zone("bad\u{e000}id\n", 'x');
+            self::fail('invalid id must throw');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('bad\\xEE\\x80\\x80id\\n', $e->getMessage());
+            self::assertStringNotContainsString(Sentinel::OPEN, $e->getMessage(), 'refusal must not re-emit the sentinel it refuses');
+        }
+    }
 }

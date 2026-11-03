@@ -216,7 +216,7 @@ final class Scan
                     // Mark::wrap()'s reject-on-invalid contract.
                     if ((isset($open[$id]) || isset($closed[$id])) === true) {
                         throw new \InvalidArgumentException(
-                            Lang::t('scan.duplicate_id', ['id' => var_export($id, true)])
+                            Lang::t('scan.duplicate_id', ['id' => Mark::escapeForMessage($id)])
                         );
                     }
                     $open[$id] = [

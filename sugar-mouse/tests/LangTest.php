@@ -45,7 +45,7 @@ final class LangTest extends TestCase
     {
         $msg = Lang::t('mark.id_too_long', ['max' => 256, 'len' => 300]);
 
-        self::assertSame('Mark id exceeds 256 bytes (got 300).', $msg);
+        self::assertSame('sugar-mouse: Mark id exceeds 256 bytes (got 300).', $msg);
     }
 
     /**
@@ -91,7 +91,7 @@ final class LangTest extends TestCase
             Mark::zone('a b', 'x');
             self::fail('invalid id must throw');
         } catch (\InvalidArgumentException $e) {
-            self::assertStringStartsWith('Mark id must match /', $e->getMessage());
+            self::assertStringStartsWith('sugar-mouse: Mark id must match /', $e->getMessage());
             self::assertStringContainsString("got 'a b'", $e->getMessage());
             self::assertStringNotContainsString('{', $e->getMessage());
         }

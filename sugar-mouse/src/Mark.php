@@ -4,21 +4,31 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mouse;
 
+use SugarCraft\Core\Util\Sanitize;
+
 /**
- * Wrap $content with invisible zone markers so {@see Scanner} can later
+ * Wrap $content with sentinel zone markers so {@see Scanner} can later
  * extract bounding boxes without any external Manager wiring.
  *
- * Marker format — three consecutive private-use codepoints that are
- * invisible in the terminal and safe alongside ANSI SGR sequences:
+ * Marker format — a sentinel tag pair around a short id:
  *
  *   U+E000 <id> U+E001 <content> U+E000 / <id> U+E001
  *
- * The sentinel triple U+E000 + id + U+E001 is the zone opening;
+ * The U+E000 + id + U+E001 triple is the zone opening;
  * U+E000 / + id + U+E001 is the zone close.
+ *
+ * The sentinels are C0-adjacent control-like PUA codepoints: they are ZERO
+ * WIDTH to the scanner and normally render as nothing, but they are NOT
+ * guaranteed invisible on every host — terminals fall back to rendering
+ * unused PUA codepoints as boxes or Dotted Circle, and screen readers
+ * announce them as garbage. Treat a frame that leaks markers as cosmetic
+ * noise, never as hidden text. {@see Scan::strip()} removes them.
  *
  * Marking can be globally disabled (e.g. for non-interactive output such
  * as width-only measurement passes).  When {@see $enabled} is false,
- * {@see wrap()} returns $content byte-for-byte with no sentinels.
+ * {@see wrap()} returns $content byte-for-byte with no sentinels — but it
+ * still validates id AND content, so a measurement pass and a marked render
+ * agree on what input is acceptable.
  *
  * Mirrors bubblezone's Mark function.
  */
@@ -94,16 +104,22 @@ final class Mark
      * Wrap $content with start / end sentinels for $id.
      *
      * When this instance was constructed with {@see $enabled} = false,
-     * returns $content unchanged (no sentinels emitted).
+     * returns $content unchanged (no sentinels emitted) — after validating.
      *
-     * The sentinels use private-use codepoints (U+E000 / U+E001), which
-     * cannot appear in ANSI escape sequences or in charset-validated ids;
-     * foreign private-use content (pasted glyphs) is neutralised by the
-     * lone-sentinel rule in {@see Scan} and the consumer's sanitizer sweep
-     * ({@see Sentinel} / docs/TRUST-BOUNDARY.md).
+     * Trust boundary.  The sentinels use private-use codepoints (U+E000 /
+     * U+E001).  Ids are charset-validated so an id can never carry them, but
+     * CONTENT legitimately may: nesting a marked child inside a marked parent
+     * is a supported pattern.  That same freedom means content that carries
+     * foreign sentinels (pasted glyphs, upstream renders, reflected model
+     * output) will forge zones at parse time — sweeping untrusted text is the
+     * consumer's duty, and {@see self::untrusted()} is the tool: pass any
+     * untrusted string through it before wrapping it (or before composing it
+     * into a marked frame). Per the fleet trust-boundary story
+     * (docs/TRUST-BOUNDARY.md in the sugarcraft monorepo — not a link
+     * relative to this split repo).
      *
      * @throws \InvalidArgumentException When $id contains any byte outside
-     *         {@see self::ID_PATTERN} — e.g. a raw sentinel byte, a control
+     *         {@see self::ID_PATTERN} — e.g. a sentinel byte, a control
      *         byte, or whitespace — which would otherwise let a caller-supplied
      *         id inject spurious zone markers into the scanned stream; or when
      *         $id / $content exceed {@see self::MAX_ID_BYTES} /
@@ -118,7 +134,7 @@ final class Mark
         if (preg_match(self::ID_PATTERN, $id) !== 1) {
             throw new \InvalidArgumentException(Lang::t('mark.id_invalid', [
                 'pattern' => self::ID_PATTERN,
-                'id'      => var_export($id, true),
+                'id'      => self::escapeForMessage($id),
             ]));
         }
 
@@ -166,6 +182,53 @@ final class Mark
     public static function isValidId(string $id): bool
     {
         return strlen($id) <= self::MAX_ID_BYTES && preg_match(self::ID_PATTERN, $id) === 1;
+    }
+
+    /**
+     * Sweep zone sentinels out of an UNTRUSTED string before it is composed
+     * into a marked frame.
+     *
+     * This is the mechanical half of the consumer sweep duty documented on
+     * {@see wrap()}: paste, model output, or any upstream render can carry
+     * U+E000 / U+E001 bytes (or full forged tags with charset-valid ids), and
+     * a bare {@see Scan::parse()} will register them as live zones. Passing
+     * each untrusted leaf through here removes exactly the two sentinel
+     * codepoints and changes nothing else — ids, ANSI, ordinary private-use
+     * glyphs outside U+E000/U+E001, and legitimate nested {@see wrap()}
+     * output from a trusted component all survive byte-for-byte where they
+     * should. (Delegates to sugar-core's surgical
+     * {@see \SugarCraft\Core\Util\Sanitize::stripZoneSentinels()}.)
+     */
+    public static function untrusted(string $content): string
+    {
+        return Sanitize::stripZoneSentinels($content);
+    }
+
+    /**
+     * Quoted single-line repr of $value for exception messages: printable
+     * ASCII passes through (with quote/backslash escapes and \n \r \t), every
+     * other byte becomes \xHH. var_export()/print_r() re-emit control and
+     * UTF-8 bytes RAW into the message — a hostile id would smuggle terminal
+     * traffic into whoever logs or prints the refusal. This never does.
+     */
+    public static function escapeForMessage(string $value): string
+    {
+        $out = "'";
+        $len = strlen($value);
+        for ($i = 0; $i < $len; $i++) {
+            $c = $value[$i];
+            $b = ord($c);
+            $out .= match (true) {
+                $c === "'"  => "\\'",
+                $c === "\\" => '\\\\',
+                $c === "\n" => '\n',
+                $c === "\r" => '\r',
+                $c === "\t" => '\t',
+                $b >= 0x20 && $b <= 0x7e => $c,
+                default    => sprintf('\\x%02X', $b),
+            };
+        }
+        return $out . "'";
     }
 
     /**

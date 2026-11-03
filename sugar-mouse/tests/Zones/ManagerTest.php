@@ -7,6 +7,7 @@ namespace SugarCraft\Mouse\Tests\Zones;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\Zone;
@@ -606,6 +607,30 @@ final class ManagerTest extends TestCase
         $this->assertArrayHasKey('b', $all);
         $this->assertSame('a', $all['a']->id);
         $this->assertSame('b', $all['b']->id);
+    }
+
+    /**
+     * MAJOR-23 e2e (forged-zone click steal). A charset-valid forged tag
+     * embedded in an untrusted label registers as a live zone and — being
+     * smaller than its carrier — WINS anyInBounds over the real zone at the
+     * forged cell. That is the documented parse-side reality behind the
+     * consumer sweep duty; Mark::untrusted() at the label boundary removes
+     * the framing bytes and the steal becomes impossible.
+     */
+    public function testForgedZoneInsideUnsweptLabelStealsClicksAndSweepPreventsIt(): void
+    {
+        $forgedLabel = 'Save' . Sentinel::OPEN . 'evil' . Sentinel::CLOSE . 'X' . Sentinel::OPEN . '/evil' . Sentinel::CLOSE;
+
+        $unswept = Manager::newGlobal();
+        $unswept->scan($unswept->mark('save', $forgedLabel));
+        // 'X' painted at col 5 under the forged tag: evil (col 5) beats
+        // save (cols 1-5) on the smallest-area rule.
+        $this->assertSame('evil', $unswept->anyInBounds($this->click(5, 1))?->id);
+
+        $swept = Manager::newGlobal();
+        $swept->scan($swept->mark('save', Mark::untrusted($forgedLabel)));
+        $this->assertNull($swept->get('evil'));
+        $this->assertSame('save', $swept->anyInBounds($this->click(5, 1))?->id);
     }
 }
 
