@@ -33,13 +33,75 @@ final class KittyRendererTest extends TestCase
         $source = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
         $out    = $this->renderer->render($source, 8);
 
-        // Begins with APC G (Kitty graphics begin) + width/height params,
-        // and the begin frame opens the transaction with m=1 (ANSI audit:
-        // the old DCS `ESC P q` header was DECSIXEL and never activated
-        // Kitty graphics).
-        $this->assertStringStartsWith("\x1b_Gc=8,r=4,f=100,m=1;\x1b\\", $out);
+        // Begins with APC G (Kitty graphics begin) + the transmit action and
+        // width/height params, and the begin frame opens the transaction with
+        // m=1 (ANSI audit: the old DCS `ESC P q` header was DECSIXEL and never
+        // activated Kitty graphics).
+        $this->assertStringStartsWith("\x1b_Ga=T,c=8,r=4,f=100,m=1;\x1b\\", $out);
         $this->assertStringContainsString('c=8', $out);    // cell columns
         $this->assertStringContainsString('r=4', $out);    // cell rows
+    }
+
+    /**
+     * The plain route (what {@see \SugarCraft\Image\Mosaic::kitty()} and
+     * auto() hand out) must carry the SAME transmit action as the options
+     * route. It used to emit `c=,r=,f=,m=1` with no `a` at all, which the
+     * published Kitty spec resolves to the transmit-without-display action:
+     * the payload stored and nothing ever composited.
+     */
+    public function testPlainTransmitCarriesTheSameActionAsTheOptionsRoute(): void
+    {
+        $source = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
+
+        $plain  = $this->renderer->render($source, 8);
+        $viaOpts = $this->renderer->renderWithOptions(
+            $source,
+            8,
+            null,
+            \SugarCraft\Image\KittyOptions::transmit(),
+        );
+
+        $beginOf = static function (string $frame): string {
+            $end = strpos($frame, "\x1b\\");
+
+            return $end === false ? $frame : substr($frame, 0, $end + 2);
+        };
+
+        $plainBegin = $beginOf($plain);
+        $optsBegin  = $beginOf($viaOpts);
+
+        $this->assertStringStartsWith("\x1b_Ga=T,", $plainBegin, 'plain route must state the action');
+        $this->assertStringStartsWith("\x1b_Ga=T,", $optsBegin);
+
+        // Same action key, same value, in the same position — the two routes
+        // differ only in the extras the options path adds (i=, q=).
+        $actionOf = static function (string $begin): string {
+            preg_match('/\x1b_G([^;]*)/', $begin, $m);
+            $pairs = [];
+            foreach (explode(',', $m[1] ?? '') as $pair) {
+                [$k, $v] = array_pad(explode('=', $pair, 2), 2, null);
+                $pairs[$k] = $v;
+            }
+
+            return ($pairs['a'] ?? '<absent>') === 'T' ? 'T' : '<absent>';
+        };
+
+        $this->assertSame('T', $actionOf($plainBegin));
+        $this->assertSame($actionOf($optsBegin), $actionOf($plainBegin));
+    }
+
+    /**
+     * The generator route (paced pumping) shares one byte source with
+     * render(), so the action key must appear in the first frame it yields.
+     */
+    public function testRenderRowsFirstFrameCarriesTheTransmitAction(): void
+    {
+        $source = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
+        $rows   = $this->renderer->renderRows($source, 8);
+        $rows->rewind();
+
+        $this->assertStringStartsWith("\x1b_Ga=T,c=8,r=4,f=100,m=1;\x1b\\", $rows->current());
+        $this->assertSame(implode('', iterator_to_array($this->renderer->renderRows($source, 8), false)), $this->renderer->render($source, 8));
     }
 
     public function testRendersKittyEndSequence(): void
@@ -64,7 +126,9 @@ final class KittyRendererTest extends TestCase
             $this->assertIsInt($sep, "frame has no data separator: {$body}");
             $attrs = substr($body, 0, $sep);
             $data = substr($body, $sep + 1);
-            $this->assertMatchesRegularExpression('/^[a-z]=[0-9a-z]+(,[a-z]=[0-9a-z]+)*$/', $attrs);
+            // Value alphabet is case-inclusive: the action's spec values are
+            // uppercase (T) while the rest are lowercase.
+            $this->assertMatchesRegularExpression('/^[a-z]=[A-Za-z0-9]+(,[a-z]=[A-Za-z0-9]+)*$/', $attrs);
             $this->assertMatchesRegularExpression('/^[A-Za-z0-9+\/=]*$/', $data);
         }
     }

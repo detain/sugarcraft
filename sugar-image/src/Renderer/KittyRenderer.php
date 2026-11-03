@@ -71,6 +71,15 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         $total = $pngBytes === '' ? 0 : (int) ceil(strlen($pngBytes) / $chunkBytes);
 
         yield Ansi::kittyGraphicsBegin([
+            // Transmission is always a=T — the same invariant
+            // renderWithOptions() states at its own begin frame. An absent
+            // `a` is not a no-op: the published Kitty spec defaults it to the
+            // transmit-without-display action, so the chunks landed and
+            // NOTHING appeared on a spec-conformant terminal. This plain route
+            // is what Mosaic::kitty()/auto() hands out, and until now it was
+            // the only transmission path in the lib with no `a` byte pin —
+            // every a=T pin exercised the options path.
+            'a' => 'T',
             'c' => $width,
             'r' => $effectiveHeight,
             // f=100 declares the payload as PNG. An absent `f` means raw
@@ -292,6 +301,10 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
         $total  = count($chunks);
 
         $out = Ansi::kittyGraphicsBegin([
+            // Same a=T invariant as every other transmit in this renderer:
+            // raw RGBA under a defaulted action stores the image without
+            // ever compositing it.
+            'a' => 'T',
             'c' => $width,
             'r' => $effectiveHeight > 0 ? $effectiveHeight : 1,
             'f' => 32,

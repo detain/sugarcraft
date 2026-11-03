@@ -37,7 +37,7 @@ final class KittyUncompressedTest extends TestCase
         $rgba = $this->frame(8, 4);
         $out  = $this->renderer->renderUncompressed($this->pngSource(), 8, 4, $rgba);
 
-        self::assertStringStartsWith("\x1b_Gc=8,r=4,f=32,s=8,v=4,m=1;", $out);
+        self::assertStringStartsWith("\x1b_Ga=T,c=8,r=4,f=32,s=8,v=4,m=1;", $out);
     }
 
     public function testTheWholePayloadRidesOnePaddingFreeBase64ChunkThatClosesTheTransaction(): void
@@ -47,7 +47,7 @@ final class KittyUncompressedTest extends TestCase
 
         // 128 raw bytes ≤ the 2967 budget: one m=0 chunk, nothing after.
         self::assertSame(
-            "\x1b_Gc=8,r=4,f=32,s=8,v=4,m=1;" . "\x1b\\"
+            "\x1b_Ga=T,c=8,r=4,f=32,s=8,v=4,m=1;" . "\x1b\\"
             . "\x1b_Gm=0;" . base64_encode($rgba) . "\x1b\\",
             $out,
         );
@@ -107,10 +107,11 @@ final class KittyUncompressedTest extends TestCase
     {
         $source = $this->pngSource();
 
-        // f=100, no s/v, PNG bytes passthrough — the historical shape.
+        // a=T, f=100, no s/v, PNG bytes passthrough — the historical shape,
+        // plus the action key this path always should have carried.
         $out = $this->renderer->render($source, 8, 4);
 
-        self::assertStringStartsWith("\x1b_Gc=8,r=4,f=100,m=1;", $out);
+        self::assertStringStartsWith("\x1b_Ga=T,c=8,r=4,f=100,m=1;", $out);
         self::assertStringNotContainsString('f=32', $out);
     }
 
