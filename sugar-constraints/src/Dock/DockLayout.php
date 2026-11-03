@@ -130,6 +130,11 @@ final class DockLayout
      * Dock a pane onto a side. Null index appends; index is an insertion
      * position in `0..count`. Duplicate pane ids across BOTH sides are refused,
      * and so is the center pane's own id — a pane has exactly one home.
+     *
+     * Cost note: each call scans every already-docked slot for the duplicate
+     * check, so building a stack one slot at a time is quadratic in total
+     * (n=1500 measured ~2 s). Bulk manifests via `fromArray()` validate in a
+     * single linear pass — use it for machine-generated stacks.
      */
     public function withSlotAdded(Side $side, string $paneId, ?int $index = null): self
     {
