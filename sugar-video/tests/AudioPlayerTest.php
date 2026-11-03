@@ -810,4 +810,39 @@ final class AudioPlayerTest extends TestCase
         /** @var list<string>|null */
         return $ref->invoke($player);
     }
+
+    /**
+     * @testdox m3: start() on an already-live companion does not double-spawn
+     */
+    public function testStartOnALiveCompanionIsANoOp(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $this->markTestSkipped('POSIX child-handle identity — the sleep stub form.');
+        }
+        $player = new FakeAudioPlayer('/tmp/video.mp4');
+        $player->setFakeCommand(['/bin/sh', '-c', 'sleep 2']);
+        $player->start();
+        $handle = (new \ReflectionProperty(AudioPlayer::class, 'processHandle'));
+        $handle->setAccessible(true);
+        $first = $handle->getValue($player);
+
+        $player->start(); // resume path: must not spawn over the first child
+        $this->assertSame($first, $handle->getValue($player), 'the live child must survive a second start()');
+        $this->assertTrue($player->isPlaying());
+        $player->stop();
+    }
+
+    /**
+     * @testdox M9: an option-shaped source never reaches the audio child
+     */
+    public function testOptionShapedSourceNeverSpawnsAudio(): void
+    {
+        $player = new FakeAudioPlayer('-option.mp4');
+        $player->setFakeCommand(['/bin/sh', '-c', 'sleep 2']);
+        $player->start();
+        $this->assertFalse($player->isPlaying(), 'a leading-dash source must be refused before spawn');
+        $handle = (new \ReflectionProperty(AudioPlayer::class, 'processHandle'));
+        $handle->setAccessible(true);
+        $this->assertNull($handle->getValue($player));
+    }
 }

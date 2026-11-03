@@ -188,6 +188,14 @@ final class Player implements Model
      */
     public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, ?Mode $mode = null, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], float $frameBudgetMs = 0.0, ?\Closure $autoModeChooser = null): self
     {
+        // m11: every pacing site divides by fps (Cmd::tick(1.0/fps)); refuse a
+        // non-positive override at the boundary before a Model can exist. The
+        // guard runs FIRST so a bad fps is reported as itself, not after an
+        // unrelated probe failure on the same path.
+        if ($fpsOverride !== null && $fpsOverride <= 0.0) {
+            throw new \InvalidArgumentException('fps must be greater than zero');
+        }
+
         // Null mode = auto-detect, resolved once here at the boundary so every
         // downstream consumer (decoder geometry, renderer, mode cycling) trusts
         // a concrete Mode. The chooser is the hermetic test seam; production
@@ -308,6 +316,12 @@ final class Player implements Model
         array $headers = [],
         float $frameBudgetMs = 0.0,
     ): self {
+        // m11: same boundary law as open() — a hand-built Player with fps <= 0
+        // would throw DivisionByZeroError from its first scheduled tick.
+        if ($fps <= 0.0) {
+            throw new \InvalidArgumentException('fps must be greater than zero');
+        }
+
         // The header map is validated HERE, at this public boundary (finding #52
         // review m6): every other entry point — Reel::open/openUrl, the ffmpeg
         // decoder's open() — parses before trusting, and the deferred
@@ -1562,6 +1576,20 @@ final class Player implements Model
         $this->stopped = true;
         $this->audioPlayer?->stop();
         $this->decoder->close();
+    }
+
+    /**
+     * Whether {@see stop()} has torn this player down (M15).
+     *
+     * stop() stays void-and-mutating on the shared instance — flipping it to a
+     * fluent return would break every host that already drives it as a
+     * teardown statement, so the non-breaking half of the API ask is this
+     * reader. mutate() copies the latch down the tree, so any Model derived
+     * after teardown still answers true.
+     */
+    public function isStopped(): bool
+    {
+        return $this->stopped;
     }
 
     /**

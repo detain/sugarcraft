@@ -1283,4 +1283,25 @@ PHP;
         $decoder->close();
         $this->assertFileDoesNotExist($stderr, 'the diagnostic capture must not outlive the decoder');
     }
+
+    /**
+     * @testdox m8: the PNG-buffer trip clears the buffer so the stall is not permanent
+     */
+    public function testThePngBufferTripDropsTheBufferedBytes(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__) . '/src/Decode/FfmpegDecoder.php');
+        $trip = strpos($source, 'strlen($this->pngBuffer) + strlen($chunk) > self::MAX_PNG_BUFFER');
+        $this->assertIsInt($trip, 'the trip site must exist');
+        $window = substr($source, $trip, 900);
+        $this->assertStringContainsString(
+            "\$this->pngBuffer = '';",
+            $window,
+            'm8: bailing without clearing re-trips forever and pins the megabytes',
+        );
+        $clear = strpos($window, "\$this->pngBuffer = '';");
+        $bail = strpos($window, 'return null;', (int) $clear);
+        $this->assertIsInt($clear);
+        $this->assertIsInt($bail, 'the trip must bail after clearing');
+        $this->assertLessThan($bail, $clear, 'the clear must happen before the bail');
+    }
 }

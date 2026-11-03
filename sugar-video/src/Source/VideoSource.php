@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Source;
 
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
+use SugarCraft\Video\Support\FfmpegCommandBuilder;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Video\Lang;
 
@@ -126,6 +127,15 @@ final class VideoSource
     {
         $ffprobe = Probe::ffprobe();
         if ($ffprobe === null) {
+            return new self($path, 0, 0, 0.0, 0.0, false);
+        }
+
+        // M9: playback speaks exactly two source shapes — local files and
+        // http(s) URLs. Anything option-shaped ('-flag') would be parsed as
+        // an ffprobe OPTION, and exotic protocols (rtsp/tcp/udp/concat/pipe:)
+        // would be DIALED OUTBOUND by the probe before the player-side
+        // refusal ever runs; neither reaches the child here.
+        if (!FfmpegCommandBuilder::isNetworkSource($path) && (str_starts_with($path, '-') || !is_file($path))) {
             return new self($path, 0, 0, 0.0, 0.0, false);
         }
 

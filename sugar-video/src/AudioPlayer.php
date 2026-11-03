@@ -114,6 +114,20 @@ class AudioPlayer
         // re-spawning on resume.
         $this->started = true;
 
+        // m3: resume/retoggle paths call start() again on a still-live
+        // companion — a second spawn would play over the first and orphan a
+        // child until the next stop(). Already playing means already playing.
+        if ($this->isPlaying()) {
+            return;
+        }
+
+        // M9: an option-shaped source ('-something') would be parsed as an
+        // ffplay/mpv OPTION (mpv's --script= is arbitrary Lua = code
+        // execution). This route only speaks local files and http(s) URLs.
+        if (str_starts_with($this->videoPath, '-')) {
+            return;
+        }
+
         $cmd = $this->buildCommand();
         if ($cmd === null) {
             // Neither audio binary is available — silent degradation.

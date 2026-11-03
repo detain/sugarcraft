@@ -607,4 +607,50 @@ final class VideoSourceTest extends TestCase
         $this->assertStringContainsString('example.test', $redacted);
         $this->assertSame('plain/path.mp4', \SugarCraft\Video\AudioPlayer::redactCredentials('plain/path.mp4'));
     }
+
+    /**
+     * @testdox M9: option-shaped paths never reach the ffprobe child
+     */
+    public function testAnOptionShapedPathIsRefusedBeforeTheProbeSpawn(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $this->markTestSkipped('POSIX shell stub — the #!/bin-sh form this test needs.');
+        }
+        $dir = sys_get_temp_dir() . '/vs-m9-' . uniqid('', true);
+        mkdir($dir);
+        $log = $dir . '/calls.log';
+        $stub = $dir . '/ffprobe';
+        file_put_contents($stub, "#!/bin/sh\necho \"$@\" >> " . escapeshellarg($log) . "\nexit 0\n");
+        chmod($stub, 0755);
+        $real = $dir . '/real.mp4';
+        file_put_contents($real, 'x');
+
+        $previous = (string) getenv('PATH');
+        putenv('PATH=' . $dir);
+        \SugarCraft\Video\Source\Probe::clearBinaryCacheForTesting();
+
+        try {
+            // Control: a real local file DOES spawn the probe (empty stdout,
+            // exit 0 → the zeroed default, the historical answer).
+            $source = VideoSource::probe($real);
+            $this->assertSame(0, $source->width);
+            $this->assertFileExists($log, 'the control probe must have run');
+
+            // The guard: an option-shaped path is refused BEFORE any spawn —
+            // the log must not gain a second line.
+            $before = (string) file_get_contents($log);
+            $refused = VideoSource::probe($dir . '/../-show_version');
+            $this->assertSame(0, $refused->width);
+            $refused2 = VideoSource::probe('-i');
+            $this->assertSame(0.0, $refused2->duration);
+            $this->assertSame($before, (string) file_get_contents($log), 'no spawn may follow the option-shaped paths');
+        } finally {
+            putenv('PATH=' . $previous);
+            \SugarCraft\Video\Source\Probe::clearBinaryCacheForTesting();
+            @unlink($stub);
+            @unlink($real);
+            @unlink($log);
+            @rmdir($dir);
+        }
+    }
 }

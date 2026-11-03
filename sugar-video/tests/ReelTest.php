@@ -345,4 +345,34 @@ final class ReelTest extends TestCase
         $this->assertSame('minimal', $minimal->ramp());
         $this->assertSame('dense', $dense->ramp());
     }
+
+    /**
+     * @testdox M10: the allowlist is asserted at every build site, not just the setters
+     */
+    public function testTheAllowlistGatesEveryRemoteBuildPath(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Reel.php');
+        // openUrl() + withAllowedHosts() + toPlayer() + play():
+        $this->assertGreaterThanOrEqual(
+            4,
+            substr_count($src, 'self::assertHostAllowed('),
+            'M10: a build path that skipped the gate would let a mutated Reel dial any host',
+        );
+    }
+
+    /**
+     * @testdox m11: withFps refuses a non-positive override
+     */
+    public function testWithFpsRefusesNonPositiveValues(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('fps must be greater than zero');
+        Reel::open('/tmp/x.mp4')->withFps(0.0);
+    }
+
+    public function testWithFpsNullStillMeansAutoDetect(): void
+    {
+        $reel = Reel::open('/tmp/x.mp4')->withFps(30.0)->withFps(null);
+        $this->assertNull($reel->fps());
+    }
 }

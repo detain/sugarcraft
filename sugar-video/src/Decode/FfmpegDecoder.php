@@ -588,6 +588,12 @@ final class FfmpegDecoder implements Decoder
                 return null;
             }
             if (strlen($this->pngBuffer) + strlen($chunk) > self::MAX_PNG_BUFFER) {
+                // m8: drop the buffered bytes as we bail. Without the clear,
+                // every later next() re-trips on the same over-budget buffer —
+                // a permanent stall that also pins the megabytes forever. After
+                // the reset the framing is unrecoverable anyway, but the
+                // close()/EOF paths proceed and the memory actually drops.
+                $this->pngBuffer = '';
                 error_log("FfmpegDecoder: PNG buffer exceeded limit, aborting");
                 return null;
             }

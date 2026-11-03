@@ -10,6 +10,7 @@ use SugarCraft\Video\Render\AutoMode;
 use SugarCraft\Video\Render\Mode;
 use SugarCraft\Video\Render\RendererFactory;
 use SugarCraft\Video\Source\HttpHeaders;
+use SugarCraft\Video\Support\FfmpegCommandBuilder;
 use SugarCraft\Video\Subtitle\WebVtt;
 
 /**
@@ -345,7 +346,13 @@ final class Reel
      */
     public function withFps(?float $fps): self
     {
-        return $this->with(fps: $fps);
+        // m11: a zero/negative override would divide by it for the tick
+        // interval — refuse at the boundary instead of minting a broken Model.
+        if ($fps !== null && $fps <= 0.0) {
+            throw new \InvalidArgumentException('fps must be greater than zero');
+        }
+
+        return $this->with(fps: $fps, fpsSet: true);
     }
 
     /**
@@ -494,6 +501,14 @@ final class Reel
         // to the real pixel box; one that did not keeps the historical 10×20.
         [$cellPxW, $cellPxH] = $this->resolveCellPx();
 
+        // M10: the allowlist is only real if it gates every path that can
+        // reach a remote decoder — openUrl()/withAllowedHosts() validate at
+        // set time; this re-checks at BUILD time, where a mutated or
+        // hand-assembled state would otherwise slip a URL past the policy.
+        if ($this->allowedHosts !== null && FfmpegCommandBuilder::isNetworkSource($this->path)) {
+            self::assertHostAllowed($this->path, $this->allowedHosts);
+        }
+
         return Player::open(
             $this->path,
             $this->cols,
@@ -524,6 +539,13 @@ final class Reel
         $loop = ($path === '') ? true : $this->loop;
         if ($path === '') {
             $path = Synthetic::generate();
+        }
+
+        // M10: same build-time gate as toPlayer() — the allowlist binds the
+        // synthetic path too (it never matches a network shape, so a local
+        // demo plays untouched; a URL swap into a locked Reel does not).
+        if ($this->allowedHosts !== null && FfmpegCommandBuilder::isNetworkSource($path)) {
+            self::assertHostAllowed($path, $this->allowedHosts);
         }
 
         // Resolve auto-mode to the best available mode at runtime.
@@ -563,6 +585,11 @@ final class Reel
         );
 
         (new Program($player, $options))->run();
+
+        // n5: run() returns on every exit path (q, Esc, SIGINT teardown); the
+        // Player owns the ffmpeg and audio children, so tearing it down here
+        // is what keeps `Reel::play()` free of orphaned subprocesses.
+        $player->stop();
     }
 
     /**
@@ -599,6 +626,9 @@ final class Reel
         ?int $cellPxW = null,
         ?int $cellPxH = null,
         ?bool $cellPxSet = null,
+        // m1: null is a LEGAL value for fps (auto-detect), so presence cannot
+        // ride the value itself — this flag marks "the caller handed fps".
+        bool $fpsSet = false,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -608,7 +638,7 @@ final class Reel
             $resolvedMode,
             $cols ?? $this->cols,
             $rows ?? $this->rows,
-            $fps ?? $this->fps,
+            $fpsSet ? $fps : $this->fps,
             $loop ?? $this->loop,
             $ramp ?? $this->ramp,
             $subtitlePath ?? $this->subtitlePath,

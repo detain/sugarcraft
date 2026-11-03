@@ -2515,4 +2515,34 @@ final class SpyAudioPlayer extends AudioPlayer
         $src = (string) file_get_contents(dirname(__DIR__) . '/src/Player.php');
         $this->assertSame(1, substr_count($src, 'catch (FfmpegDecodeFailure'), 'exactly one choke point');
     }
+
+    /**
+     * @testdox M15: isStopped() reads the teardown latch and mutate() carries it
+     */
+    public function testStoppedIsObservableAndCarriedByDerivedInstances(): void
+    {
+        $player = Player::fromDecoder(decoder: new FakeDecoder([]), cellsW: 4, cellsH: 2, fps: 10.0);
+        $this->assertFalse($player->isStopped());
+
+        $player->stop();
+        $this->assertTrue($player->isStopped());
+        $this->assertTrue($player->pause()->isStopped(), 'derived instances own the same closed children');
+    }
+
+    /**
+     * @testdox m11: a non-positive fps is refused at every public boundary
+     */
+    public function testNonPositiveFpsIsRefusedAtTheBoundary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('fps must be greater than zero');
+        Player::open('/nonexistent.mp4', 80, 24, fpsOverride: 0.0);
+    }
+
+    public function testNonPositiveFpsIsRefusedByFromDecoder(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('fps must be greater than zero');
+        Player::fromDecoder(decoder: new FakeDecoder([]), cellsW: 4, cellsH: 2, fps: -1.0);
+    }
 }
