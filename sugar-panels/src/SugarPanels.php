@@ -882,10 +882,14 @@ final class SugarPanels
             }
             return \substr($s, $i, $j - $i);
         }
-        if ($next === ']') {
+        // String oscillates: OSC (ESC ]) plus the DCS / SOS / PM / APC family,
+        // which run to a String Terminator rather than a final byte. Treating
+        // them as two-byte escapes painted the payload as text and then ate the
+        // real content behind it, so the whole string is consumed as one run.
+        if ($next === ']' || $next === 'P' || $next === 'X' || $next === '^' || $next === '_') {
             $j = $i + 2;
             while ($j < $len) {
-                if ($s[$j] === "\x07") { $j++; break; }
+                if ($s[$j] === "\x07" && $next === ']') { $j++; break; }
                 if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') { $j += 2; break; }
                 $j++;
             }

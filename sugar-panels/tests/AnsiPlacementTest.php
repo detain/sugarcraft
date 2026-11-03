@@ -187,6 +187,27 @@ final class AnsiPlacementTest extends TestCase
         $this->assertSame('EFGH', rtrim(self::strip($rows[1])));
     }
 
+    /**
+     * A DCS/SOS/PM/APC string is one escape run (m7).
+     *
+     * Parsing those as two-byte escapes turned the payload into painted text and
+     * lost the real content that followed the terminator.
+     */
+    public function testStringTerminatedEscapesAreConsumedWhole(): void
+    {
+        foreach (['P', 'X', '^', '_'] as $intro) {
+            $panels = \SugarCraft\Panels\SugarPanels::new();
+            $frame = self::body($panels->render(
+                \SugarCraft\Panels\Node::leaf("\x1b{$intro}1q42;43\x1b\\Z")->withBorder(false),
+                6,
+                1,
+            ));
+            $visible = \trim(\SugarCraft\Core\Util\Ansi::strip($frame));
+            self::assertSame('Z', $visible, "introducer {$intro} lost or invented content");
+            self::assertStringNotContainsString('q42', $visible);
+        }
+    }
+
     public function testOscSequenceIsZeroWidth(): void
     {
         // An OSC sequence (set window title) consumes no columns.

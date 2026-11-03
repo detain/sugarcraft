@@ -322,7 +322,7 @@ final class Node
         // re-walks the children for the max).
         if ($this->kind === self::HORIZONTAL) {
             $childWidths = \array_sum(\array_map(fn(Node $c) => $c->measureWidth($childNoFrames), $this->children));
-            $gaps = (\count($this->children) - 1) * $this->spacing;
+            $gaps = \max(0, \count($this->children) - 1) * $this->spacing;
 
             return self::capped($childWidths + $gaps + ($frame ? 2 : 0), $this->maxWidth) + $marginW;
         }
@@ -367,7 +367,7 @@ final class Node
 
         if ($this->kind === self::VERTICAL) {
             $childHeights = \array_sum(\array_map(fn(Node $c) => $c->measureHeight($childNoFrames), $this->children));
-            $gaps = (\count($this->children) - 1) * $this->spacing;
+            $gaps = \max(0, \count($this->children) - 1) * $this->spacing;
 
             return self::capped($childHeights + $gaps + ($frame ? 2 : 0), $this->maxHeight) + $marginH;
         }

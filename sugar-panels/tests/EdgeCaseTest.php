@@ -348,6 +348,15 @@ final class EdgeCaseTest extends TestCase
         $this->assertSame($full, self::body($this->panels->render($layout, 10, 1)), 'the frame after a zero-area render is a full frame');
     }
 
+    /** A childless group with spacing must not claim negative space. */
+    public function testAnEmptyGroupNeverClaimsANegativeFootprint(): void
+    {
+        self::assertSame(0, Node::horizontal()->withBorder(false)->withSpacing(3)->totalWidth());
+        self::assertSame(0, Node::vertical()->withBorder(false)->withSpacing(3)->totalHeight());
+        self::assertGreaterThanOrEqual(0, Node::horizontal()->withSpacing(3)->totalWidth());
+        self::assertGreaterThanOrEqual(0, Node::vertical()->withSpacing(3)->totalHeight());
+    }
+
     public function testAViewportBeyondTheCellBudgetIsRefused(): void
     {
         // 4096 per side is legal, but 4000x3000 is 12 million cells: the grid
