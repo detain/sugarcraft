@@ -22,7 +22,7 @@ final class ClustersTest extends TestCase
     private const CAFE = "caf\u{65}\u{301}";
 
     /** Man + ZWJ + Woman + ZWJ + Girl: five codepoints, one cluster. */
-    private const FAMILY = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
+    private const EMOJI_FAMILY = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}";
 
     public function testPlainAsciiEveryOffsetIsABoundary(): void
     {
@@ -46,12 +46,12 @@ final class ClustersTest extends TestCase
 
     public function testZWJFamilyCountsAsOneCluster(): void
     {
-        $total = \mb_strlen(self::FAMILY, 'UTF-8');
+        $total = \mb_strlen(self::EMOJI_FAMILY, 'UTF-8');
         self::assertGreaterThan(1, $total, 'the sequence is several codepoints deep');
-        self::assertSame(0, Clusters::boundaryAtOrBefore(self::FAMILY, 1));
-        self::assertSame(0, Clusters::boundaryBefore(self::FAMILY, $total));
-        self::assertSame($total, Clusters::boundaryAfter(self::FAMILY, 1));
-        self::assertSame($total, Clusters::boundaryAfter(self::FAMILY, $total));
+        self::assertSame(0, Clusters::boundaryAtOrBefore(self::EMOJI_FAMILY, 1));
+        self::assertSame(0, Clusters::boundaryBefore(self::EMOJI_FAMILY, $total));
+        self::assertSame($total, Clusters::boundaryAfter(self::EMOJI_FAMILY, 1));
+        self::assertSame($total, Clusters::boundaryAfter(self::EMOJI_FAMILY, $total));
     }
 
     public function testClampsAtBothEnds(): void
