@@ -26,18 +26,21 @@ final class SafeText
      *
      * {@see Ansi::strip()} removes every escape sequence in 7-bit and 8-bit
      * form — CSI / OSC / DCS / SOS / PM / APC payloads, string-terminator
-     * controls, and lone C1 bytes; the second pass drops the remaining C0
-     * control bytes (0x00-0x1f) and DEL (0x7f). Multi-byte UTF-8 survives
-     * untouched (its C1-range continuation bytes sit inside fully
-     * well-formed sequences), and clean
+     * controls, and lone C1 bytes; then the horizontal/vertical whitespace
+     * controls (HT/LF/VT/FF/CR, 0x09-0x0d) each become ONE space — they are
+     * word boundaries, and deleting them outright fuses words into a bogus
+     * compound ("line one\nline two" must not read "lineonelinetwo") — and
+     * the remaining C0 control bytes (0x00-0x08, 0x0e-0x1f) and DEL (0x7f)
+     * are dropped. Multi-byte UTF-8 survives untouched (its C1-range
+     * continuation bytes sit inside fully well-formed sequences), and clean
      * printable text is returned identical.
      */
     public static function line(string $s): string
     {
-        $stripped = preg_replace('/[\x00-\x1f\x7f]/', '', Ansi::strip($s));
+        $whitespaced = preg_replace('/[\x09-\x0d]+/', ' ', Ansi::strip($s));
 
-        if ($stripped === null) {
-            // Unreachable for this pattern by construction — a single-pass
+        if ($whitespaced === null) {
+            // Unreachable for these patterns by construction — a single-pass
             // character-class substitution has nothing to backtrack over, so
             // neither pcre.backtrack_limit nor pcre.recursion_limit can be
             // exhausted by any input. Guarded because the alternatives to
@@ -48,6 +51,12 @@ final class SafeText
             // cause. Fail loud at the boundary instead. (The literal that the
             // old expression used is deliberately not spelled out here:
             // SafeTextTest pins its absence from this method's source.)
+            throw new \RuntimeException('SafeText::line(): whitespace fold failed: ' . preg_last_error_msg());
+        }
+
+        $stripped = preg_replace('/[\x00-\x08\x0e-\x1f\x7f]/', '', $whitespaced);
+
+        if ($stripped === null) {
             throw new \RuntimeException('SafeText::line(): C0/DEL strip failed: ' . preg_last_error_msg());
         }
 
@@ -69,9 +78,9 @@ final class SafeText
      * and loses its ESC byte to the C0 strip; because no ESC can survive in
      * an even chunk, a kept SGR can never re-form a longer escape with
      * surrounding text, and the only ESC bytes in the result head a complete
-     * SGR. Newlines go: styled strings here are single-line cells, and a
-     * row count that changes is exactly the frame-desync this class exists
-     * to prevent.
+     * SGR. Newlines go (folded to a word-boundary space by {@see line()}):
+     * styled strings here are single-line cells, and a row count that
+     * changes is exactly the frame-desync this class exists to prevent.
      */
     public static function styledLine(string $s): string
     {

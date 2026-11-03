@@ -84,10 +84,10 @@ final class BannerTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $out);
         $this->assertStringNotContainsString("\x07", $out);
         $this->assertSame(
-            "+-------+\n"
-            . "|  abc  |\n"
-            . "|  suv  |\n"
-            . "+-------+",
+            "+--------+\n"
+            . "|  ab c  |\n"
+            . "|  su v  |\n"
+            . "+--------+",
             $out,
         );
     }

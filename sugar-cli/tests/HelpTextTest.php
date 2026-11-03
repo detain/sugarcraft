@@ -449,13 +449,14 @@ final class HelpTextTest extends TestCase
     }
 
     /**
-     * Polarity guard: render()'s single-line flattening contract is UNCHANGED
-     * by the page variant — a newline in the description still collapses.
+     * Polarity guard: render()'s single-line flattening contract holds —
+     * a newline in the description collapses to a word-boundary space
+     * (never a fused 'ab', never a second row).
      */
     public function testRenderStillFlattensNewlinesInDescription(): void
     {
         $out = HelpText::render('myapp', [], description: "a\nb", theme: Theme::plain());
 
-        $this->assertSame("USAGE\n  myapp\n\nab", $out);
+        $this->assertSame("USAGE\n  myapp\n\na b", $out);
     }
 }

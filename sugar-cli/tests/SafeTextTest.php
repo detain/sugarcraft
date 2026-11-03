@@ -25,12 +25,13 @@ final class SafeTextTest extends TestCase
 
     public function testC0ControlBytesAreStripped(): void
     {
-        // All C0 control bytes 0x00-0x1f should be stripped
+        // C0 bytes 0x09-0x0d (HT/LF/VT/FF/CR) fold to one space each (word
+        // boundaries); every other control byte 0x00-0x1f is deleted outright.
         $input = "a\x00b\x01c\x02d\x03e\x04f\x05g\x06h\x07i"
                . "\x08j\x09k\x0al\x0bm\x0cn\x0do\x0ep\x0fq"
                . "\x10r\x11s\x12t\x13u\x14v\x15w\x16x\x17y"
                . "\x18z\x19\x1a\x1b\x1c\x1d\x1e\x1f!";
-        $this->assertSame('abcdefghijklmnopqrstuvwxyz!', SafeText::line($input));
+        $this->assertSame('abcdefghij k l m n opqrstuvwxyz!', SafeText::line($input));
     }
 
     public function testDelByteIsStripped(): void
@@ -94,22 +95,30 @@ final class SafeTextTest extends TestCase
         $this->assertSame('test', SafeText::line("t\x07e\x1bs\x07t")); // ESC + BEL
     }
 
-    public function testTabIsStripped(): void
+    public function testTabFoldsToASpace(): void
     {
-        // Tab (0x09) is part of C0 and is stripped entirely
-        $this->assertSame('a b', SafeText::line("a\t b")); // tab stripped, spaces kept
+        // HT (0x09) is a word boundary: it folds to one space, and the
+        // adjacent literal space survives beside it.
+        $this->assertSame('a  b', SafeText::line("a\t b"));
     }
 
-    public function testNewlineIsStripped(): void
+    public function testNewlineFoldsToASpace(): void
     {
-        // LF (0x0a) is in C0 range and is stripped entirely (no space substitution)
-        $this->assertSame('helloworld', SafeText::line("hello\x0aworld"));
+        // LF (0x0a) must not fuse the words around it (ux-a11y m1).
+        $this->assertSame('hello world', SafeText::line("hello\x0aworld"));
     }
 
-    public function testCarriageReturnIsStripped(): void
+    public function testCarriageReturnFoldsToASpace(): void
     {
-        // CR (0x0d) is in C0 range and is stripped entirely (no space substitution)
-        $this->assertSame('helloworld', SafeText::line("hello\x0dworld"));
+        // CR (0x0d) folds like its whitespace siblings.
+        $this->assertSame('hello world', SafeText::line("hello\x0dworld"));
+    }
+
+    /** A run of whitespace controls collapses to ONE space, not a gap-field. */
+    public function testWhitespaceControlRunsCollapseToSingleSpace(): void
+    {
+        $this->assertSame('a b', SafeText::line("a\x09\x0a\x0b\x0c\x0db"));
+        $this->assertSame('line one line two', SafeText::line("line one\nline two"));
     }
 
     public function testOnlyAnsiSequencesReturnsEmpty(): void
@@ -277,10 +286,10 @@ final class SafeTextTest extends TestCase
 
     public function testStyledLineStripsNewlinesAndControls(): void
     {
-        // line() deletes control bytes (it does not substitute spaces yet);
-        // styledLine inherits that row-safety for embedded newlines.
-        $this->assertSame('eviltitle', SafeText::styledLine("evil\ntitle"));
-        $this->assertSame("a\x1b[1mb", SafeText::styledLine("a\x1b[1m\x07\tb"));
+        // styledLine inherits line()'s row-safety for embedded newlines —
+        // folded to a space (word boundary), never a row break.
+        $this->assertSame('evil title', SafeText::styledLine("evil\ntitle"));
+        $this->assertSame("a\x1b[1m b", SafeText::styledLine("a\x1b[1m\x07\tb"));
     }
 
     public function testStyledLineEmptyReturnsEmpty(): void
