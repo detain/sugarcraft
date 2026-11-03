@@ -170,6 +170,100 @@ final class StreamInputDriverTest extends TestCase
     }
 
     /**
+     * n4: the constructor is the boundary — a non-resource is a usage error
+     * refused loudly, never a read() that limps along on garbage.
+     */
+    public function testRejectsNonResourceStream(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('StreamInputDriver needs a readable stream resource, got string.');
+
+        new StreamInputDriver('not a resource');
+    }
+
+    /**
+     * M1/M3: the decoder seam + EOF/idle distinction. A burst of mixed event
+     * sizes drains strictly in order (the cursor never reindexes already-issued
+     * events), then the closed peer turns the null into a provable EOF.
+     */
+    public function testDecoderSeamEofAndOrderedDrain(): void
+    {
+        [$r, $w] = $this->createPipe();
+
+        fwrite($w, "AB\x1b[A");
+        fclose($w);
+
+        $driver = new StreamInputDriver($r);
+
+        $a = $driver->read();
+        $this->assertInstanceOf(KeyEvent::class, $a);
+        $this->assertSame('A', $a->key);
+
+        $b = $driver->read();
+        $this->assertInstanceOf(KeyEvent::class, $b);
+        $this->assertSame('B', $b->key);
+
+        $arrow = $driver->read();
+        $this->assertInstanceOf(KeyEvent::class, $arrow);
+        $this->assertSame('ArrowUp', $arrow->key);
+
+        // Buffered events handed out, stream at EOF: read() answers null and
+        // isEof() is now the truth the null alone could not carry.
+        $this->assertNull($driver->read());
+        $this->assertTrue($driver->isEof());
+        $this->assertFalse($driver->hasPending());
+
+        // M1 seam: hosts reach the decoder for reset()/counters/flush.
+        $decoder = $driver->escapeDecoder();
+        $this->assertSame($decoder, $driver->escapeDecoder());
+        $decoder->reset();
+    }
+
+    /**
+     * M3: a live stream with a half-arrived sequence is idle-with-pending,
+     * never EOF — the law the class docblock teaches.
+     */
+    public function testPartialSequenceIsPendingNotEof(): void
+    {
+        [$r, $w] = $this->createPipe();
+
+        fwrite($w, "\x1b["); // head of a CSI sequence, final byte missing
+
+        $driver = new StreamInputDriver($r);
+        $this->assertNull($driver->read());
+        $this->assertTrue($driver->hasPending());
+        $this->assertFalse($driver->isEof());
+
+        // Completing the sequence makes the held remainder decode live.
+        fwrite($w, "C");
+        $right = $driver->read();
+        $this->assertInstanceOf(KeyEvent::class, $right);
+        $this->assertSame('ArrowRight', $right->key);
+
+        fclose($w);
+    }
+
+    /**
+     * M1: options given to the driver actually reach its decoder — a host that
+     * disables mouse protocol must see the SGR frame refused at the gate
+     * (counted drop), not a MouseEvent on the wire.
+     */
+    public function testOptionsThreadThroughToDecoder(): void
+    {
+        [$r, $w] = $this->createPipe();
+
+        $options = new \SugarCraft\Input\EscapeDecoderOptions(enableMouse: false);
+        $driver = new StreamInputDriver($r, $options);
+
+        fwrite($w, "\x1b[<0;10;10M");
+        fclose($w);
+
+        $first = $driver->read();
+        $this->assertNull($first, 'mouse frames must not decode while enableMouse is off');
+        $this->assertGreaterThanOrEqual(1, $driver->escapeDecoder()->droppedUnknownCount());
+    }
+
+    /**
      * Create a non-blocking pipe pair for testing.
      *
      * @return array{0: resource, 1: resource}

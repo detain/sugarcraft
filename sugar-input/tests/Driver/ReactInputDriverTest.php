@@ -10,6 +10,7 @@ use SugarCraft\Input\Driver\ReactInputDriver;
 use SugarCraft\Input\Event;
 use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Input\EscapeDecoder;
+use SugarCraft\Input\EscapeDecoderOptions;
 
 /**
  * Tests for ReactInputDriver — in particular the DoS chunk bound that slices
@@ -533,5 +534,29 @@ final class ReactInputDriverTest extends TestCase
         $driver->resume(); // completes the flush
         $this->assertCount(3, $received);
         $this->assertSame('c', $received[2]->key);
+    }
+
+    /**
+     * M1: the React driver exposes the same decoder seam as the stream driver,
+     * and options given at construction reach the decoder it owns.
+     */
+    public function testDecoderSeamAndOptionsReachTheOwnedDecoder(): void
+    {
+        $upstream = new ThroughStream();
+        $options = new EscapeDecoderOptions(enableFocus: false);
+        $driver = new ReactInputDriver($upstream, $options);
+
+        $this->assertSame($driver->escapeDecoder(), $driver->escapeDecoder());
+
+        $events = [];
+        $driver->on('data', function (Event $event) use (&$events): void {
+            $events[] = $event;
+        });
+
+        // CSI I (focus gained) is refused while enableFocus is off: no event,
+        // counted among the unknown drops the seam exposes.
+        $upstream->write("\x1b[I");
+        $this->assertSame([], $events);
+        $this->assertGreaterThanOrEqual(1, $driver->escapeDecoder()->droppedUnknownCount());
     }
 }

@@ -7,12 +7,8 @@ namespace SugarCraft\Input\Driver;
 use Evenement\EventEmitterTrait;
 use React\Stream\ReadableStreamInterface;
 use SugarCraft\Input\EscapeDecoder;
+use SugarCraft\Input\EscapeDecoderOptions;
 use SugarCraft\Input\Event;
-use SugarCraft\Input\Event\KeyEvent;
-use SugarCraft\Input\Event\MouseEvent;
-use SugarCraft\Input\Event\FocusEvent;
-use SugarCraft\Input\Event\PasteEvent;
-use SugarCraft\Input\Event\ResizeEvent;
 
 /**
  * ReactPHP-compatible input driver that wraps a ReadableStreamInterface.
@@ -59,17 +55,30 @@ final class ReactInputDriver implements ReadableStreamInterface
     /** Buffered events pending emission */
     private array $eventBuffer = [];
 
+    /** Cursor into {@see $eventBuffer} — see flushBuffer() for why not array_shift */
+    private int $bufferOffset = 0;
+
     /** Whether the stream is paused */
     private bool $paused = false;
 
     public function __construct(
         private readonly ReadableStreamInterface $stream,
+        ?EscapeDecoderOptions $options = null,
     ) {
-        $this->decoder = new EscapeDecoder();
+        $this->decoder = new EscapeDecoder($options);
         $stream->on('data', fn(string $chunk) => $this->handleChunk($chunk));
         $stream->on('end', fn() => $this->handleEnd());
         $stream->on('error', fn(\Throwable $e) => $this->handleError($e));
         $stream->on('close', fn() => $this->close());
+    }
+
+    /**
+     * The decoder instance behind this driver — the seam for reset() after a
+     * forged unterminated paste and for the drop/drain counters.
+     */
+    public function escapeDecoder(): EscapeDecoder
+    {
+        return $this->decoder;
     }
 
     /**
@@ -236,12 +245,21 @@ final class ReactInputDriver implements ReadableStreamInterface
      * Emit buffered events in arrival order, stopping the moment the stream
      * is closed or a listener re-pauses mid-flush (the rest stays buffered for
      * the next resume()/handleEnd()).
+     *
+     * Consumption advances a cursor instead of array_shift-ing so a listener
+     * that re-pauses mid-drain can never have already-delivered events
+     * reindexed and re-emitted (M17).
      */
     private function flushBuffer(): void
     {
-        while (!$this->closed && !$this->paused && $this->eventBuffer !== []) {
-            $event = array_shift($this->eventBuffer);
+        while (!$this->closed && !$this->paused && $this->bufferOffset < count($this->eventBuffer)) {
+            $event = $this->eventBuffer[$this->bufferOffset++];
             $this->emit('data', [$event]);
+        }
+
+        if ($this->bufferOffset >= count($this->eventBuffer)) {
+            $this->eventBuffer = [];
+            $this->bufferOffset = 0;
         }
     }
 
