@@ -27,13 +27,26 @@ and deliberately stays downstream in candy-code.
   to bound memory on huge files. Test fixtures trip it with a tiny budget.
 - **Empty hunk sides anchor at 0** (`@@ -1,1 +0,0 @@`, git's shape) —
   inherited from the source, NOT GNU's mid-file zero-length convention.
+  SUPERSEDED 2026-11-03: the docs-fix era made headers GNU-faithful — a
+  zero-length mid-file side now anchors at the line the hunk sits AFTER
+  (`@@ -1,0 +2 @@`, oracle-verified vs `/usr/bin/diff -U0`, pinned by
+  `tests/GnuHunkHeaderParityTest.php`), GNU never drops a `,0`, and single-line
+  ranges elide their count (so even the old example string would print
+  `@@ -1 +0,0 @@` today). The quoted 0-anchor/always-`,1` shape must never be
+  restored: it is the pre-GNU-faithfulness ported rule, inverted from current
+  behaviour.
 - **Newline termination is invisible** to the line diff (git `splitLines`
   semantics): `"a\n"` vs `"a"` is empty; the final-newline facts are exposed
   separately as `beforeHasFinalNewline`/`afterHasFinalNewline` for writers
   that want markers.
-- **UnifiedScan counters reset on file headers**; `--- `/`+++ ` read as
-  content INSIDE an open hunk (deleted `-- comment` lines), which is safe
-  because git always emits `diff --git `/`index ` ahead of a real header.
+- **UnifiedScan honours declared counts.** Each `@@` header's `,b`/`,d` are
+  budgets (elided means 1); a hunk closes when both are spent and any row
+  that would consume an exhausted side — or carries an out-of-vocabulary
+  marker — ends the walk fail-closed as `OutsideHunk` rather than being
+  numbered. Counters still reset on file headers (`diff `/`index `/
+  out-of-hunk `--- `/`+++ `); `--- `/`+++ ` read as content INSIDE an open
+  hunk (deleted `-- comment` lines) — the marker column protects every real
+  header, in any diff flavour, from being mistaken for content.
 
 ## House Notes
 

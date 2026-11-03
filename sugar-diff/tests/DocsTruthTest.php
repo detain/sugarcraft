@@ -1,0 +1,121 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Diff\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Diff\Diff;
+
+/**
+ * Documentation is a pinned surface. These arms guard the literals the
+ * docs-fix-era review found false: the invented elision-less hunk header,
+ * the founding claim that every SugarCraft patch surface shares this one
+ * implementation, phantom {@see} targets, and the README quickstart's
+ * rendered output. They re-derive from the shipped files (and the engine
+ * itself) so a future edit that reintroduces any of those shapes goes red
+ * here, not in a human review.
+ */
+final class DocsTruthTest extends TestCase
+{
+    private const ROOT = __DIR__ . '/..';
+
+    /** The shape the library NEVER emits: GNU and git both drop a `,1` count. */
+    private const FALSE_ELISION_LITERAL = '@@ -1,1 +1,1 @@';
+
+    /** The overclaim the docs-fix era deleted (the gutter keeps its own copy). */
+    private const FALSE_SHARED_CLAIM = 'shares one faithful implementation';
+
+    private static function readme(): string
+    {
+        return (string) file_get_contents(self::ROOT . '/README.md');
+    }
+
+    private static function siteBody(): string
+    {
+        return (string) file_get_contents(self::ROOT . '/../docs/_data/sugar-diff.body.html');
+    }
+
+    public function test_the_docs_never_print_the_elision_less_hunk_header(): void
+    {
+        foreach ([self::readme(), self::siteBody()] as $index => $document) {
+            self::assertStringNotContainsString(
+                self::FALSE_ELISION_LITERAL,
+                $document,
+                "document {$index} teaches a header shape the writer never emits",
+            );
+        }
+    }
+
+    public function test_the_readme_quickstart_output_is_what_the_engine_renders(): void
+    {
+        $expected = "--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-Hello World\n+Hello PHP\n";
+
+        self::assertSame($expected, Diff::compute("Hello World\n", "Hello PHP\n")->unified('file.txt'));
+
+        foreach ([self::readme(), self::siteBody()] as $document) {
+            self::assertStringContainsString("// @@ -1 +1 @@\n// -Hello World\n// +Hello PHP", $document);
+        }
+    }
+
+    public function test_the_docs_do_not_claim_one_shared_surface_implementation(): void
+    {
+        self::assertStringNotContainsString(self::FALSE_SHARED_CLAIM, self::readme());
+        // …and both docs disclose the gap (the gutter's own copy / the
+        // delegation seam) instead of papering over it.
+        foreach ([self::readme(), self::siteBody()] as $document) {
+            self::assertTrue(
+                stripos($document, 'seam') !== false || stripos($document, 'own copy') !== false,
+                'the DiffGutter delegation gap must stay disclosed in every doc surface',
+            );
+        }
+    }
+
+    public function test_the_source_carries_no_phantom_method_sees_targets(): void
+    {
+        // Diff exposes readonly PROPERTIES (lines/hunks), never methods of
+        // those names — an unresolvable {@see} is a docs time-bomb.
+        $phantoms = ['{@see lines()}', '{@see hunks()}', '{@see unified()}', '{@see Diff::lines()}'];
+
+        foreach (self::sourceFiles() as $file => $text) {
+            foreach ($phantoms as $phantom) {
+                self::assertStringNotContainsString($phantom, $text, $file);
+            }
+        }
+    }
+
+    /** @return array<string,string> every shipped source file, keyed by path */
+    private static function sourceFiles(): array
+    {
+        $files = [];
+        $walk = static function (string $dir) use (&$walk, &$files): void {
+            foreach (scandir($dir) ?: [] as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                $path = $dir . '/' . $entry;
+                if (is_dir($path)) {
+                    $walk($path);
+                } elseif (str_ends_with($path, '.php')) {
+                    $files[$path] = (string) file_get_contents($path);
+                }
+            }
+        };
+        $walk(self::ROOT . '/src');
+
+        self::assertGreaterThan(5, count($files), 'the source walk must see the shipped files');
+
+        return $files;
+    }
+
+    public function test_the_caliber_supersession_marker_survives(): void
+    {
+        // The reversed zero-anchor rule is corrected by APPENDING a dated
+        // supersession (the file's own never-delete law) — the marker is what
+        // tells readers the quoted shape is the inverted one.
+        $learnings = (string) file_get_contents(self::ROOT . '/CALIBER_LEARNINGS.md');
+
+        self::assertStringContainsString('SUPERSEDED', $learnings);
+        self::assertStringContainsString('must never be', $learnings);
+    }
+}

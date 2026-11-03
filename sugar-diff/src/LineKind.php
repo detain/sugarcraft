@@ -10,6 +10,10 @@ namespace SugarCraft\Diff;
  * The backing values are the source implementation's op tags so a reader
  * holding legacy `['eq'|'del'|'ins']` tuples maps onto them without a table.
  *
+ * No `final` modifier is needed (or, on this runtime, even parseable): enum
+ * declarations are inherently unextendable since PHP 8.1, so this vocabulary
+ * cannot grow a divergent subclass.
+ *
  * Mirrors the op vocabulary of candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php.
  */
 enum LineKind: string

@@ -10,7 +10,7 @@ namespace SugarCraft\Diff;
  * that side has no line there (a `del` row has no new line, an `ins` row no
  * old line).
  *
- * Rows are what {@see Diff::lines()} hands back for line-mode walking; hunks
+ * Rows are what {@see Diff::$lines} holds for line-mode walking; hunks
  * are the same rows grouped with context by {@see Hunk}.
  *
  * Mirrors the `list<array{0:'eq'|'del'|'ins',1:string}>` ops plus the

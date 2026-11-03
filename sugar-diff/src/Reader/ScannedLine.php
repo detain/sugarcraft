@@ -7,14 +7,21 @@ namespace SugarCraft\Diff\Reader;
 /**
  * One scanned row of an existing unified diff: the old-file and new-file line
  * numbers it lands on — either null when that side has no line there (`+`
- * rows have no old line, `-` rows no new line, headers neither) — plus whether
- * the row was read as a file header.
+ * rows have no old line, `-` rows no new line, headers neither) — whether
+ * the row was read as a file header, and what KIND of row the walk decided
+ * it was.
  *
  * The view half (fixed-width gutter prefixes, colour) deliberately stays
  * downstream; this is only the region model.
  *
+ * The `$kind` default exists for hand-built fixtures; the scanner always
+ * passes the derived kind, so a row scanned from real text never reports
+ * the default it does not mean.
+ *
  * Mirrors the `[$old, $new, $isFileHeader]` tuples computed by
- * candy-code/src/Tui/DiffGutter.php `number()`.
+ * candy-code/src/Tui/DiffGutter.php `number()` — the gutter keeps its own
+ * copy today and adds no kind; delegation to this scan is owed (the row kind
+ * is the lib-side half of that seam).
  */
 final class ScannedLine
 {
@@ -22,5 +29,6 @@ final class ScannedLine
         public readonly ?int $old,
         public readonly ?int $new,
         public readonly bool $fileHeader,
+        public readonly ScanRowKind $kind = ScanRowKind::OutsideHunk,
     ) {}
 }

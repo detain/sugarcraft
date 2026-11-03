@@ -19,9 +19,10 @@ use SugarCraft\Diff\Line;
  * identical row with itself: the same immutable Line instance on both sides.
  *
  * Pure data by construction: no widths, no truncation, no colour. The row
- * pairing rule produced here is the canonical one the candy-code TUI split
- * renderer and the candy-code-web DiffView split mode both consume, so the
- * two surfaces show the same pairing for the same patch.
+ * pairing rule produced here is what the candy-code TUI split-diff renderer
+ * consumes; the candy-code-web DiffView pairs rows in its own separate
+ * TypeScript code, so the two surfaces agree by convention, not by one
+ * shared implementation.
  */
 final class SideBySideRow
 {

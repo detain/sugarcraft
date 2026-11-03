@@ -17,15 +17,19 @@ use SugarCraft\Diff\Writer\UnifiedFormat;
  * are separated by no more than `2 * contextLines + 1` op positions). The
  * cell budget of the LCS table is capped ({@see DiffOptions::$maxLcsCells})
  * so a pathological scattered edit degrades to a valid — if non-minimal —
- * delete-all/insert-all block instead of hanging.
+ * delete-all/insert-all block instead of hanging; {@see self::$degraded}
+ * reports when that fired. The blast radius is honest: with the default
+ * budget an ordinary few-hundred-line file whose edits sit far apart can
+ * still degrade, and the caller — not the engine — decides whether to
+ * re-run with a bigger {@see DiffOptions::withMaxLcsCells()}.
  *
- * Immutable value object: computed once, read many times. {@see lines()} walks
- * the raw line-mode op sequence; {@see hunks()} is the same rows grouped with
- * context; {@see unified()} renders the whole patch.
+ * Immutable value object: computed once, read many times. {@see self::$lines}
+ * is the raw line-mode op sequence; {@see self::$hunks} the same rows grouped
+ * with context; {@see self::unified()} renders the whole patch.
  *
  * Mirrors candy-code/src/Tools/Concerns/BuildsUnifiedDiff.php — the trait
- * this library was extracted from (upstream-scout candidate S4), with the
- * hardcoded constants widened into {@see DiffOptions}.
+ * this library was extracted from, with the hardcoded constants widened
+ * into {@see DiffOptions}.
  */
 final class Diff
 {
@@ -42,13 +46,19 @@ final class Diff
         public readonly int $afterCount,
         public readonly bool $beforeHasFinalNewline,
         public readonly bool $afterHasFinalNewline,
+        public readonly bool $degraded,
     ) {}
 
     /**
      * Diff two sides. A `string` input is counted the way `git diff` counts
      * lines — a trailing newline terminates the last line rather than adding
      * an empty one; a `list<string>` input is read as pre-split lines, each
-     * assumed newline-terminated.
+     * one exactly one line: an element carrying an interior `"\n"` (what
+     * `file($path)` returns without FILE_IGNORE_NEW_LINES) is refused
+     * fail-fast, because emitting it would produce a marker-less row that
+     * breaks the patch for every reader. List sides are therefore always read
+     * as terminated, and {@see DiffOptions::withNoNewlineMarker()} can only
+     * annotate an unterminated end on STRING sides.
      *
      * @param string|list<string> $before
      * @param string|list<string> $after
@@ -57,10 +67,10 @@ final class Diff
     {
         $options ??= DiffOptions::new();
 
-        [$beforeLines, $beforeNewline] = self::parseSide($before);
-        [$afterLines, $afterNewline] = self::parseSide($after);
+        [$beforeLines, $beforeNewline] = self::parseSide($before, 'before');
+        [$afterLines, $afterNewline] = self::parseSide($after, 'after');
 
-        $ops = self::diffLines($beforeLines, $afterLines, $options);
+        [$ops, $degraded] = self::diffLines($beforeLines, $afterLines, $options);
         [$lines, $hunks] = self::assemble($ops, $options);
 
         return new self(
@@ -71,6 +81,7 @@ final class Diff
             afterCount: count($afterLines),
             beforeHasFinalNewline: $beforeNewline,
             afterHasFinalNewline: $afterNewline,
+            degraded: $degraded,
         );
     }
 
@@ -118,13 +129,16 @@ final class Diff
 
     /**
      * Parse one side into lines plus whether its last line was
-     * newline-terminated. Fail-fast on anything that is not a string list:
-     * a half-accepted array would corrupt the LCS input silently.
+     * newline-terminated. Fail-fast on anything that is not a clean string
+     * list: a half-accepted array would corrupt the LCS input silently, and
+     * an element carrying an interior newline would emit a row that breaks
+     * the patch format for every reader downstream.
      *
      * @param string|list<string> $side
+     * @param string $name which side this is, for the refusal message
      * @return array{0:list<string>,1:bool}
      */
-    private static function parseSide(string|array $side): array
+    private static function parseSide(string|array $side, string $name): array
     {
         if (is_string($side)) {
             if ($side === '') {
@@ -142,12 +156,24 @@ final class Diff
         }
 
         if (!array_is_list($side)) {
-            throw new InvalidArgumentException('diff sides must be a string or a list of strings');
+            throw new InvalidArgumentException("diff sides must be a string or a list of strings ({$name} side)");
         }
 
-        foreach ($side as $line) {
+        foreach ($side as $index => $line) {
             if (!is_string($line)) {
-                throw new InvalidArgumentException('diff sides must contain only strings');
+                throw new InvalidArgumentException(
+                    "diff sides must contain only strings; element {$index} of the {$name} side is not a string",
+                );
+            }
+
+            if (str_contains($line, "\n")) {
+                // file()/explode() residue without FILE_IGNORE_NEW_LINES:
+                // one element must mean one line. Accepting it would emit a
+                // marker-less multi-line row the scan walk cannot re-count.
+                throw new InvalidArgumentException(
+                    "diff sides must contain only strings without an embedded newline;"
+                    . " element {$index} of the {$name} side carries one",
+                );
             }
         }
 
@@ -157,12 +183,14 @@ final class Diff
     /**
      * Line-level diff: common-prefix/common-suffix trimming (cheap, and exact
      * for the localized edits this engine exists for) followed by an LCS
-     * number-and-annotate pass. Returns the ops as fully numbered
-     * {@see Line} rows plus the hunk grouping derived from them.
+     * number-and-annotate pass. Returns the ops as kind/text tuples —
+     * numbering and hunk grouping happen in {@see self::assemble()} — plus
+     * whether the middle was too large for the LCS table and took the
+     * delete-all/insert-all fallback.
      *
      * @param list<string> $old
      * @param list<string> $new
-     * @return list<array{0:LineKind,1:string}>
+     * @return array{0:list<array{0:LineKind,1:string}>,1:bool}
      */
     private static function diffLines(array $old, array $new, DiffOptions $options): array
     {
@@ -191,10 +219,18 @@ final class Diff
             $ops[] = [LineKind::Equal, $old[$i]];
         }
 
-        if (count($oldMid) * count($newMid) > $options->maxLcsCells) {
+        // Only a MIDDLE with rows on both sides is quadratic work; with one
+        // side empty the table is linear, there is nothing to fall back to,
+        // and a zero budget must not label untouched input "degraded".
+        $degraded = $oldMid !== []
+            && $newMid !== []
+            && (count($oldMid) + 1) * (count($newMid) + 1) > $options->maxLcsCells;
+        if ($degraded) {
             // Pathological case (a scattered replace across a huge file):
             // skip the O(n*m) table and emit a correct, if non-minimal,
-            // delete-all/insert-all block for the middle.
+            // delete-all/insert-all block for the middle. The bound is the
+            // table lcsOps actually allocates — (n+1)*(m+1) cells, the padding
+            // row and column included — not n*m.
             foreach ($oldMid as $line) {
                 $ops[] = [LineKind::Delete, $line];
             }
@@ -211,7 +247,7 @@ final class Diff
             $ops[] = [LineKind::Equal, $old[$oldCount - $suffix + $i]];
         }
 
-        return $ops;
+        return [$ops, $degraded];
     }
 
     /**
@@ -314,7 +350,16 @@ final class Diff
         }
 
         if ($options->ignoreCase) {
-            $folded = mb_strtolower($folded, 'UTF-8');
+            // Same failure class as the whitespace leg: mb_strtolower maps
+            // every byte it cannot decode to '?', so two lines differing only
+            // in WHICH invalid byte they carry (b"\xFF" vs b"\xFE") would fold
+            // to one fingerprint and a real change would vanish. Fold with
+            // Unicode casing only when the subject is valid UTF-8; otherwise
+            // fall back to the byte-wise ASCII fold, which leaves every
+            // undecodable byte intact and distinct.
+            $folded = mb_check_encoding($folded, 'UTF-8')
+                ? mb_strtolower($folded, 'UTF-8')
+                : strtolower($folded);
         }
 
         return $folded;

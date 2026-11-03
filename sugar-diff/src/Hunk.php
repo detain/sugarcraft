@@ -8,12 +8,17 @@ namespace SugarCraft\Diff;
  * One `@@ -oldStart,oldLen +newStart,newLen @@` hunk: the display anchor pair
  * plus the context/change rows it covers.
  *
- * Header printing follows GNU `diff` exactly (audit 2026-10-07, oracle-verified
- * against /usr/bin/diff -U0 and pinned by tests/GnuHunkHeaderParityTest.php):
+ * Header printing follows GNU `diff` exactly (oracle-verified against
+ * /usr/bin/diff -U0 and pinned by tests/GnuHunkHeaderParityTest.php):
  *  - a single-line range drops its count: `-2`, not `-2,1` (`range()` below);
  *  - a zero-length side is anchored at the line the hunk sits AFTER (0 before
  *    the first line) by the producer in {@see Diff::assemble()} and keeps
  *    its `,0` — GNU never drops a zero count.
+ *  - git's optional function heading after the closing `@@` has no analogue
+ *    here: this engine diffs content and has no enclosing-function notion, so
+ *    {@see header()} ends at `@@` (a reader must likewise ignore everything
+ *    after the closing `@@`, which {@see \SugarCraft\Diff\Reader\UnifiedScan}
+ *    does).
  *
  * This replaced the ported candy-code shape (zero sides anchored at 0, counts
  * always printed) from `BuildsUnifiedDiff::buildHunks()`; the group-window walk
@@ -30,7 +35,7 @@ final class Hunk
         public readonly array $lines,
     ) {}
 
-    /** The `@@ -a,b +c,d @@` header line, without its trailing newline. */
+    /** The `@@ -a[,b] +c[,d] @@` header line, without its trailing newline. */
     public function header(): string
     {
         return '@@ -' . self::range($this->oldStart, $this->oldLines)
@@ -52,7 +57,7 @@ final class Hunk
         return $this->lines;
     }
 
-    /** How many old-side rows this hunk carries (context + removals). */
+    /** How many `-` rows this hunk carries (deletions only — context excluded). */
     public function removedCount(): int
     {
         return array_reduce(
@@ -62,7 +67,7 @@ final class Hunk
         );
     }
 
-    /** How many new-side rows this hunk carries (context + additions). */
+    /** How many `+` rows this hunk carries (additions only — context excluded). */
     public function addedCount(): int
     {
         return array_reduce(

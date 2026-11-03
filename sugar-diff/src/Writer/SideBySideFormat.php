@@ -7,6 +7,7 @@ namespace SugarCraft\Diff\Writer;
 use SugarCraft\Diff\Diff;
 use SugarCraft\Diff\Line;
 use SugarCraft\Diff\LineKind;
+use SugarCraft\Diff\Reader\ScanRowKind;
 use SugarCraft\Diff\Reader\UnifiedScan;
 
 /**
@@ -26,17 +27,21 @@ use SugarCraft\Diff\Reader\UnifiedScan;
  * Both entry points agree by construction: `fromUnified($diff->unified(...))`
  * returns the same rows as `rows($diff)`, including when the writer annotates
  * unterminated end-of-file rows — the `\ No newline` row is skipped inside
- * the run rather than treated as a boundary, mirroring {@see UnifiedScan}
- * (which gives it no line of either file). Rows the scanner cannot count
- * (file headers, `@@` headers, before-the-first-hunk prose, and the hunks
- * past {@see UnifiedScan::MAX_LINE_NUMBER_DIGITS}) are boundaries or omissions
- * respectively — the same fail-closed posture: a wrong pairing would print a
- * confidently wrong column, declining is safe.
+ * the run rather than treated as a boundary. Which side a scanned row
+ * belongs to is taken from the scanner's row {@see \SugarCraft\Diff\Reader\ScanRowKind},
+ * never re-inferred from counter nullability, so scanner and pairing share one
+ * rule set: rows the scanner cannot attribute to a hunk (file headers, `@@`
+ * headers, prose, corruption, and the hunks past
+ * {@see \SugarCraft\Diff\Reader\UnifiedScan::MAX_LINE_NUMBER_DIGITS}) are
+ * boundaries or omissions — the same fail-closed posture. A wrong pairing
+ * would print a confidently wrong column; declining is safe.
  *
  * Pure data: the caller owns widths, truncation and colour (see
- * {@see SideBySideRow}). This is the canonical pairing the candy-code TUI
- * split renderer and the candy-code-web split DiffView are built to consume,
- * so both surfaces align the same patch the same way (GAP-UI-05).
+ * {@see SideBySideRow}). The candy-code TUI split-diff renderer consumes this
+ * pairing directly; the candy-code-web split DiffView pairs rows in its own
+ * separate TypeScript code, so the two surfaces ALIGN BY CONVENTION, not by
+ * a shared implementation — changing this rule should come with a look at
+ * that viewer.
  */
 final class SideBySideFormat
 {
@@ -61,60 +66,52 @@ final class SideBySideFormat
     }
 
     /**
-     * Side-by-side rows for an already-rendered unified patch, numbered
-     * through {@see UnifiedScan::lines()} — so a viewer that only ever holds
-     * patch text (git output, a stored diff) gets the same layout as one that
-     * holds a computed {@see Diff}.
+     * Side-by-side rows for an already-rendered unified patch — raw text or
+     * its rows — numbered through {@see UnifiedScan::lines()} and classified
+     * by its row kind, so a viewer that only ever holds patch text (git
+     * output, a stored diff) gets the same layout as one that holds a
+     * computed {@see Diff}. The scan and the raw rows stay row-for-row
+     * (both split via {@see UnifiedScan::rowsOf()} for strings) — that zip
+     * is the invariant this method relies on; never re-split the text by
+     * other means here.
      *
-     * Which side each row belongs to is read from the scan's counters, not
-     * re-derived: a row that advanced only the old counter is a removal, only
-     * the new one an addition, both context. The row's marker column is then
-     * dropped for the text, under exactly the scanner's own rule (an empty
-     * row is context whose trailing space was stripped in transit).
+     * The marker column is dropped for the text, under exactly the
+     * scanner's own rule (an empty row is context whose trailing space was
+     * stripped in transit, so there is nothing to drop).
      *
+     * @param string|list<string> $patch
      * @return list<SideBySideRow>
      */
-    public static function fromUnified(string $patch): array
+    public static function fromUnified(string|array $patch): array
     {
-        if ($patch === '') {
-            return [];
-        }
-
-        // Count rows the way the writer's parser does — a trailing newline
-        // terminates, it does not add an empty final row — so the zip below
-        // is row-for-row with what UnifiedScan::lines() returns.
-        $rawRows = explode("\n", $patch);
-        if (end($rawRows) === '') {
-            array_pop($rawRows);
-        }
+        $rawRows = is_string($patch) ? UnifiedScan::rowsOf($patch) : $patch;
 
         $rows = [];
         $run = [];
         foreach (UnifiedScan::lines($rawRows) as $index => $scan) {
-            if ($scan->old === null && $scan->new === null) {
-                // Unnumbered row. Only the EOF annotation is invisible to the
-                // walk — it annotates the row above it, so it must not cut a
-                // pairing run in half. Every other kind is a boundary.
-                if (!str_starts_with($rawRows[$index], '\\')) {
-                    self::appendPairRun($rows, $run);
-                    $run = [];
-                }
+            if ($scan->kind === ScanRowKind::NoNewlineAnnotation) {
+                // Invisible to the walk: it annotates the row above it and
+                // must not cut a pairing run in half.
                 continue;
             }
 
-            $kind = $scan->new === null
-                ? LineKind::Delete
-                : ($scan->old === null ? LineKind::Insert : LineKind::Equal);
+            if (!$scan->kind->isContentRow()) {
+                // Every other non-content kind is a boundary.
+                self::appendPairRun($rows, $run);
+                $run = [];
+                continue;
+            }
+
+            $kind = match ($scan->kind) {
+                ScanRowKind::Insert => LineKind::Insert,
+                ScanRowKind::Delete => LineKind::Delete,
+                default => LineKind::Equal,
+            };
 
             $text = $rawRows[$index];
-            $marker = $text === '' ? ' ' : $text[0];
-            $body = $marker === '+' || $marker === '-' || $marker === ' '
-                ? substr($text, 1)
-                : $text;
-
             $run[] = new Line(
                 kind: $kind,
-                text: $body,
+                text: $text === '' ? '' : substr($text, 1),
                 oldNumber: $scan->old,
                 newNumber: $scan->new,
             );

@@ -6,36 +6,64 @@ namespace SugarCraft\Diff\Reader;
 
 /**
  * Walks an already-rendered unified diff and tells a viewer which line of
- * which file each row points at — the region/hunk MODEL the candy-code
- * gutter consumes, lifted out so any renderer (or patch tool) can number rows
- * without owning the counting rules.
+ * which file each row points at — the region/hunk model any renderer (or
+ * patch tool) can use to number rows without owning the counting rules.
+ * The candy-code gutter mirrors these rules today but keeps its own copy
+ * ({@see ScannedLine}); delegating that copy here is the remaining seam.
  *
  * Counters come from each `@@ -a,b +c,d @@` header and advance the way
  * `diff -u` counts: context advances both sides, `-` advances old, `+`
- * advances new. Rows before the first hunk header — and any file header,
- * which is how a second file starts inside a multi-file diff — reset the
- * walk, otherwise the leading `-`/`+` of a header would count as an edit and
- * desynchronise everything below it.
+ * advances new. The DECLARED counts are honoured, not just the starts: a
+ * hunk closes when its `b`/`d` budgets run out, and a row that would
+ * consume an exhausted side ends the hunk and is reported outside it
+ * (fail-closed — guessing where the text resynchronised would renumber
+ * every row below the corruption with confident wrong numbers, the exact
+ * failure the gutter's docblock warns about). This is what keeps a
+ * trailing `-- ` signature, an `Only in A:` note, or a second file's
+ * header from being counted as context of the hunk that ended above them.
+ *
+ * A row before the first hunk header — and any file header, which is how a
+ * second file starts inside a multi-file diff — resets the walk, otherwise
+ * the leading `-`/`+` of a header would count as an edit and desynchronise
+ * everything below it. File headers recognised: `diff ` (any flavour — git's
+ * `diff --git ` and plain GNU's `diff -u `), `index `, and out-of-hunk
+ * `--- `/`+++ `.
  *
  * `--- `/`+++ ` are ambiguous — they are also exactly what a deleted
  * `-- users table` (SQL/Lua/Haskell line comment) or an added `++ i` row
  * reads as once the marker column is prepended. Inside an open hunk the
- * content reading wins; that is safe because git emits `diff --git `/
- * `index ` ahead of every real `--- `, and those close the hunk
- * unconditionally.
+ * content reading wins; that is safe because every real header starts a
+ * fresh file, which GNU/git place after the previous hunk's declared rows.
+ *
+ * Within an open hunk every row must carry a marker: `' '`, `''` (a context
+ * row whose single trailing space was stripped in transit, common enough
+ * that treating it as anything else desynchronises the hunk), `'-'`, `'+'`,
+ * or `'\'`. Any other leading character is corruption — the hunk ends and
+ * the row is reported outside it, rather than being silently numbered as
+ * context.
  *
  * A hunk claiming to start past {@see MAX_LINE_NUMBER_DIGITS} is recognised
- * but left unnumbered: `(int)` would clamp such a literal to PHP_INT_MAX, the
- * first `++` would promote the counter to float, and any later formatting of
- * the number would die downstream. Declining beats printing a wrong number,
- * and stopping the walk beats bleeding the previous hunk's counters through.
+ * but left unnumbered: `(int)` would clamp such a literal to PHP_INT_MAX,
+ * the first `++` would promote the counter to float, and any later
+ * formatting of the number would die downstream. Declining beats printing a
+ * wrong number, and stopping the walk beats bleeding the previous hunk's
+ * counters through. The cap gates the two START fields only; the declared
+ * COUNTS are safe without it because they are decremented toward zero and
+ * never incremented, so even a clamped PHP_INT_MAX budget can only mean
+ * "open until the next header" — it cannot print a number.
  *
  * Mirrors candy-code/src/Tui/DiffGutter.php `number()` / `isFileHeader()` /
- * `numberable()`.
+ * `numberable()` (which predate the count tracking above — see the
+ * delegation seam note on {@see ScannedLine}).
  */
 final class UnifiedScan
 {
-    /** Largest `@@` start line this will number; bigger hunks are left unnumbered. */
+    /**
+     * Largest `@@` start line this will number; bigger hunks are left
+     * unnumbered. A digit CAP on the value with leading zeros stripped
+     * (`strlen(ltrim($raw, '0'))`) — not a threshold: `000000001` is the
+     * number 1 and is numbered normally.
+     */
     public const MAX_LINE_NUMBER_DIGITS = 9;
 
     private function __construct()
@@ -55,58 +83,106 @@ final class UnifiedScan
         $inHunk = false;
         $old = 0;
         $new = 0;
+        $oldLeft = 0;
+        $newLeft = 0;
         $out = [];
 
         foreach ($rows as $line) {
-            if (preg_match('/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/', $line, $m) === 1) {
+            if (preg_match('/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/', $line, $m) === 1) {
                 // Matched with an unbounded \d+ on purpose: the header has to
                 // be RECOGNISED even when its numbers are absurd, or the rows
                 // after it get counted as context. Only the numbering opts
                 // out. See MAX_LINE_NUMBER_DIGITS.
-                $inHunk = self::numberable($m[1]) && self::numberable($m[2]);
-                $old = $inHunk ? (int) $m[1] : 0;
-                $new = $inHunk ? (int) $m[2] : 0;
-                $out[] = new ScannedLine(null, null, false);
+                $numberable = self::numberable($m[1]) && self::numberable($m[3]);
+                $inHunk = $numberable;
+                $old = $numberable ? (int) $m[1] : 0;
+                $new = $numberable ? (int) $m[3] : 0;
+                // An elided count is the number 1: GNU omits `,1` from
+                // headers, so `@@ -1 +1 @@` declares one line per side.
+                // (`preg_match` leaves a skipped interior group as '', which
+                // `?? '1'` would NOT catch — hence the explicit empty test.)
+                $oldLeft = $numberable ? self::declaredCount($m[2] ?? '') : 0;
+                $newLeft = $numberable ? self::declaredCount($m[4] ?? '') : 0;
+                $out[] = new ScannedLine(null, null, false, ScanRowKind::HunkHeader);
                 continue;
             }
 
             if (self::isFileHeader($line, $inHunk)) {
                 $inHunk = false;
-                $out[] = new ScannedLine(null, null, true);
-                continue;
-            }
-
-            if (!$inHunk) {
-                $out[] = new ScannedLine(null, null, false);
+                $out[] = new ScannedLine(null, null, true, ScanRowKind::FileHeader);
                 continue;
             }
 
             // "\ No newline at end of file" annotates the line above it and
-            // occupies no line of either file.
+            // occupies no line of either file — checked BEFORE the
+            // outside-hunk bail, because GNU's final marker lands exactly
+            // where the last declared row spent the budget: just after the
+            // hunk. A content row can never begin with `\` (the marker
+            // column is `' '`, `-` or `+`), so this shape stays unclaimed.
             if (str_starts_with($line, '\\')) {
-                $out[] = new ScannedLine(null, null, false);
+                $out[] = new ScannedLine(null, null, false, ScanRowKind::NoNewlineAnnotation);
+                continue;
+            }
+
+            if (!$inHunk) {
+                $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
                 continue;
             }
 
             $marker = $line === '' ? ' ' : $line[0];
+
             if ($marker === '+') {
-                $out[] = new ScannedLine(null, $new, false);
+                if ($newLeft <= 0) {
+                    $inHunk = false; // the hunk's declared new side is spent
+                    $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                    continue;
+                }
+
+                $out[] = new ScannedLine(null, $new, false, ScanRowKind::Insert);
                 $new++;
+                $newLeft--;
+                $inHunk = !self::hunkSpent($oldLeft, $newLeft);
                 continue;
             }
 
             if ($marker === '-') {
-                $out[] = new ScannedLine($old, null, false);
+                if ($oldLeft <= 0) {
+                    $inHunk = false; // the hunk's declared old side is spent
+                    $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                    continue;
+                }
+
+                $out[] = new ScannedLine($old, null, false, ScanRowKind::Delete);
                 $old++;
+                $oldLeft--;
+                $inHunk = !self::hunkSpent($oldLeft, $newLeft);
                 continue;
             }
 
-            // ' ' is context; an empty row is a context line whose single
-            // trailing space was stripped in transit, common enough that
-            // treating it as anything else desynchronises the hunk.
-            $out[] = new ScannedLine($old, $new, false);
+            if ($marker !== ' ') {
+                // Any other leading character cannot be a unified row.
+                // Ending the hunk here keeps every later real header
+                // working and refuses to number the corruption.
+                $inHunk = false;
+                $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                continue;
+            }
+
+            // ' ' is context (an empty row reads as stripped context — see
+            // the class docblock); it advances both sides at once, so BOTH
+            // budgets must still have room.
+            if ($oldLeft <= 0 || $newLeft <= 0) {
+                $inHunk = false;
+                $out[] = new ScannedLine(null, null, false, ScanRowKind::OutsideHunk);
+                continue;
+            }
+
+            $out[] = new ScannedLine($old, $new, false, ScanRowKind::Context);
             $old++;
             $new++;
+            $oldLeft--;
+            $newLeft--;
+            $inHunk = !self::hunkSpent($oldLeft, $newLeft);
         }
 
         return $out;
@@ -130,11 +206,12 @@ final class UnifiedScan
     /**
      * Count lines the way the writer's parser does — a trailing newline
      * terminates, it does not add an empty final row — so a raw diff string
-     * scans row-for-row with what was written.
+     * scans row-for-row with what was written. Public so renderers pairing
+     * rows against {@see self::lines()} output split text exactly once.
      *
      * @return list<string>
      */
-    private static function rowsOf(string $text): array
+    public static function rowsOf(string $text): array
     {
         if ($text === '') {
             return [];
@@ -148,16 +225,29 @@ final class UnifiedScan
         return $rows;
     }
 
+    /** Both declared budgets consumed: the hunk is complete. */
+    private static function hunkSpent(int $oldLeft, int $newLeft): bool
+    {
+        return $oldLeft <= 0 && $newLeft <= 0;
+    }
+
+    /** A header's `,N` count field: absent (elided) means 1. */
+    private static function declaredCount(string $raw): int
+    {
+        return $raw === '' ? 1 : (int) $raw;
+    }
+
     /**
      * Whether this row starts a new file rather than carrying diff content.
      *
-     * `diff --git `/`index ` are unambiguous — nothing else emits them.
+     * `diff `/`index ` are unambiguous — a content row can never start with
+     * them, because every in-hunk row carries a marker column first.
      * `--- `/`+++ ` are not: inside an open hunk they are content
      * ({@see UnifiedScan} class docblock); outside one they are headers.
      */
     private static function isFileHeader(string $line, bool $inHunk): bool
     {
-        if (str_starts_with($line, 'diff --git ') || str_starts_with($line, 'index ')) {
+        if (str_starts_with($line, 'diff ') || str_starts_with($line, 'index ')) {
             return true;
         }
 

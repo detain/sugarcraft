@@ -12,9 +12,9 @@ namespace SugarCraft\Diff;
  * comparison, no `\ No newline at end of file` markers, and real path labels
  * (never `/dev/null`) on both header rows.
  *
- * One deliberate divergence from the ported engine (audit 2026-10-07): hunk
- * headers are GNU-faithful — zero-length sides anchor at the preceding line
- * and single-line ranges drop their `,1` count — so the output is
+ * One deliberate divergence from the ported engine: hunk headers are
+ * GNU-faithful — zero-length sides anchor at the preceding line and
+ * single-line ranges drop their `,1` count — so the output is
  * `patch`-tool-compatible. Hunk BODIES and grouping remain byte-for-byte.
  *
  * Mirrors the hardcoded behaviour of
@@ -32,7 +32,11 @@ final class DiffOptions
      * common-prefix/suffix trimming only shrinks the middle region for a
      * *localized* change — past this many cells the engine falls back to a
      * non-minimal but still-valid delete-all/insert-all block instead of
-     * hanging.
+     * hanging (the computed {@see Diff::$degraded} flag reports when). The
+     * budget counts the table's real footprint — (n+1)*(m+1) cells, padding
+     * row and column included. This default is part of the memory contract
+     * of every consumer that diffs interactively; widening it is a
+     * breaking change for them, narrowing it trades minimality for time.
      */
     public const DEFAULT_MAX_LCS_CELLS = 250_000;
 
@@ -70,7 +74,14 @@ final class DiffOptions
         return $this->mutate(['maxLcsCells' => max(0, $cells)]);
     }
 
-    /** Treat lines equal when their whitespace-stripped forms match (emitted text keeps original bytes). */
+    /**
+     * Treat lines equal when their whitespace-stripped forms match (emitted
+     * text keeps original bytes). "Whitespace" is every `\s` byte — CR
+     * included — so this is deliberately stronger than git's
+     * `--strip-trailing-cr`: a CRLF file compares equal to its LF form line
+     * by line, and interior runs of tabs/spaces vanish from the comparison
+     * (not from the output).
+     */
     public function withIgnoreWhitespace(bool $ignore = true): self
     {
         return $this->mutate(['ignoreWhitespace' => $ignore]);
@@ -82,7 +93,13 @@ final class DiffOptions
         return $this->mutate(['ignoreCase' => $ignore]);
     }
 
-    /** Annotate rows that sit at an unterminated end-of-file with `\ No newline at end of file`. */
+    /**
+     * Annotate rows that sit at an unterminated end-of-file with
+     * `\ No newline at end of file`. Only meaningful for STRING sides of
+     * {@see Diff::compute()} — a `list<string>` side is always read as
+     * terminated (elements may not carry newlines at all), so no row on it
+     * can ever sit at an unterminated end and this marker stays inert.
+     */
     public function withNoNewlineMarker(bool $on = true): self
     {
         return $this->mutate(['noNewlineMarker' => $on]);
