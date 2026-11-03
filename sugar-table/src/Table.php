@@ -1761,22 +1761,23 @@ final class Table
 
     private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, bool $isSelected, array $computedWidths, array $visibleColumnIndices): Buffer
     {
-        // Determine row-level style
+        // Determine row-level style: the row's own style with the zebra
+        // stripe COMPOSED underneath it (audit M5: zebra used to clobber the
+        // row style wholesale, and Row::withZebra() was never consulted).
         $rowStyle = '';
         if ($rowData->style !== '') {
             $rowStyle = $rowData->style;
         }
-        if ($this->zebraEnabled) {
-            $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
-            if ($zebra !== '') {
-                $rowStyle = $zebra;
-            }
-        }
-        if ($isSelected) {
-            $rowStyle = '7';
-        } // reverse
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $rowIndex));
 
-        $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
+        // Selection is the TOP tier (audit M3: it used to replace rowStyle
+        // before the cell chain ran, so the winning cell style threw the
+        // reverse video away — the highlight was the first style applied,
+        // not the last). The row band (edges/gaps) carries row+zebra+reverse;
+        // each cell composes reverse onto ITS winning style below.
+        $bandStyle = $isSelected ? self::mergeStyle($rowStyle, '7') : $rowStyle;
+
+        $style = $bandStyle !== '' ? $this->parseAnsiToStyle($bandStyle) : null;
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
         [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
 
@@ -1793,7 +1794,12 @@ final class Table
                 $val = $this->missingIndicator;
             }
 
-            // Determine cell-level style precedence: base < column < row < cell < selection
+            // Cell-level style precedence: base < column < row < cell
+            // < styleFunc, with selection reverse-video composed over the
+            // winner at the end of this chain (audit M3 — the old comment
+            // promised the same order but the code applied selection as a
+            // row-style overwrite BEFORE the cell chain, making it the
+            // LOWEST effective tier).
             $cellStyle = $this->baseStyle;
             if ($column->style !== '') {
                 $cellStyle = $column->style;
@@ -1823,6 +1829,11 @@ final class Table
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
                 $cellStyle = $this->normalizeStyleResult($rawResult, $cellStyle);
+            }
+
+            // Selection rides on top of the winning cell style (audit M3).
+            if ($isSelected) {
+                $cellStyle = self::mergeStyle($cellStyle, '7');
             }
 
             $style = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
@@ -1863,15 +1874,10 @@ final class Table
         if ($rowData->style !== '') {
             $rowStyle = $rowData->style;
         }
-        if ($this->zebraEnabled) {
-            $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
-            if ($zebra !== '') {
-                $rowStyle = $zebra;
-            }
-        }
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($rowData, $rowIndex));
         if ($isSelected) {
-            $rowStyle = '7';
-        } // reverse
+            $rowStyle = self::mergeStyle($rowStyle, '7');
+        } // reverse composes on top (audit M3)
 
         $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
@@ -1948,22 +1954,18 @@ final class Table
      */
     private function fillDataRowLines(Buffer $buffer, int $startRow, Row $row, int $rowIndex, int $_contentWidth, bool $isSelected, array $computedWidths, int $rowHeight, array $visibleColumnIndices): Buffer
     {
-        // Determine row-level style
+        // Determine row-level style: compose row + zebra stripe, with the
+        // selection reverse video on top of the band (audit M3/M5 — both
+        // used to REPLACE the row style instead of composing).
         $rowStyle = '';
         if ($row->style !== '') {
             $rowStyle = $row->style;
         }
-        if ($this->zebraEnabled) {
-            $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
-            if ($zebra !== '') {
-                $rowStyle = $zebra;
-            }
-        }
-        if ($isSelected) {
-            $rowStyle = '7';
-        } // reverse
+        $rowStyle = self::mergeStyle($rowStyle, $this->zebraStyleForRow($row, $rowIndex));
 
-        $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
+        $bandStyle = $isSelected ? self::mergeStyle($rowStyle, '7') : $rowStyle;
+
+        $style = $bandStyle !== '' ? $this->parseAnsiToStyle($bandStyle) : null;
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
 
         // Collect cell lines for each column (only visible columns)
@@ -1980,7 +1982,8 @@ final class Table
                 $val = $this->missingIndicator;
             }
 
-            // Determine cell-level style precedence: base < column < row < cell < selection
+            // Cell-level style precedence: base < column < row < cell
+            // < styleFunc, selection composed over the winner (audit M3).
             $cellStyle = $this->baseStyle;
             if ($column->style !== '') {
                 $cellStyle = $column->style;
@@ -2009,6 +2012,11 @@ final class Table
             if ($this->styleFunc !== null) {
                 $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
                 $cellStyle = $this->normalizeStyleResult($rawResult, $cellStyle);
+            }
+
+            // Selection rides on top of the winning cell style (audit M3).
+            if ($isSelected) {
+                $cellStyle = self::mergeStyle($cellStyle, '7');
             }
 
             $parsedStyle = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
@@ -2187,8 +2195,10 @@ final class Table
     }
 
     /**
-     * Normalize a styleFunc result to an ANSI SGR string.
-     * Returns Style object if already Style, or converts string to Style.
+     * Normalize a styleFunc result to an ANSI SGR string: a CellBuffer Style
+     * is converted via styleToAnsi(), a string passes through verbatim, and
+     * anything else (including a SugarCraft\Style\Style object, which has no
+     * conversion path here) falls back to the inherited style.
      */
     private function normalizeStyleResult(mixed $result, string $fallback): string
     {
@@ -2199,6 +2209,39 @@ final class Table
             return $result;
         }
         return $fallback;
+    }
+
+    /**
+     * Compose two SGR strings so both apply, the later code winning at the
+     * terminal (SGR codes accumulate left-to-right). Empty sides collapse.
+     */
+    private static function mergeStyle(string $under, string $over): string
+    {
+        if ($under === '') {
+            return $over;
+        }
+        if ($over === '') {
+            return $under;
+        }
+
+        return $under . ';' . $over;
+    }
+
+    /**
+     * Resolve the zebra stripe for one row (audit M5: {@see Row::withZebra()}
+     * used to be stored and never read — rows that opted in with an explicit
+     * stripe index now win over positional parity).
+     */
+    private function zebraStyleForRow(Row $rowData, int $rowIndex): string
+    {
+        if (!$this->zebraEnabled) {
+            return '';
+        }
+        if ($rowData->zebra) {
+            return $rowData->zebraStyleIndex === 1 ? $this->zebraStyleOdd : $this->zebraStyleEven;
+        }
+
+        return ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
     }
 
     /**
