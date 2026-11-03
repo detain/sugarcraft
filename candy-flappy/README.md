@@ -27,11 +27,28 @@ composer install
 
 ## Keys
 
-| Key                | Action  |
-|--------------------|---------|
-| `Space` / `↑` / `w`| Flap    |
-| `r`                | Restart |
-| `q` / `Esc`        | Quit    |
+| Key                  | Action                                                |
+|----------------------|-------------------------------------------------------|
+| `Space` / `↑` / `w`  | Flap                                                  |
+| `r`                  | Restart (after a crash; fresh board mid-flight too)   |
+| `q` / `Esc` / `Ctrl+C` | Quit                                              |
+
+## Terminal requirements
+
+The framed world is a fixed 62 x 21 cells (`Game::MIN_COLS` x `Game::MIN_ROWS`).
+
+- **Smaller viewport** — a plain "needs a 62x21 terminal" notice replaces the
+  board and the world freezes (no ticks burn on an unplayable frame). Resize
+  back and the game resumes in place; `r` never snaps the layout away.
+- **`TERM=dumb` / no TTY** (`ColorProfile::NoTty`) — candy-flappy refuses to
+  play with a plain message instead of spraying escape codes into a terminal
+  that cannot render them.
+- **ASCII-only terminal** (`ColorProfile::Ascii`, e.g. `NO_COLOR` on a plain
+  tty) — same layout in plain glyphs: `+--+` borders, `#` pipes, no emoji,
+  no colour.
+- **Colour tiers** — 16/256-bit/TrueColor palettes degrade through
+  sugar-style; the status hint collapses to a short form before any line
+  could wrap past the window width.
 
 ## Architecture
 

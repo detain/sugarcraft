@@ -8,8 +8,12 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Flappy\PipeGenerator;
 
 /**
@@ -18,7 +22,13 @@ use SugarCraft\Flappy\PipeGenerator;
  * at a fixed cadence. Pipes spawn on the right edge at intervals
  * controlled by `pipeSpacing` and slide left one column per tick.
  *
- * Keys: space / w / ↑ — flap.  q / esc — quit.  r — restart.
+ * Keys: space / w / ↑ — flap.  q / esc / Ctrl+C — quit.  r — restart.
+ *
+ * Terminal posture (M6-M8, lib-reviews-1102): the frame needs a 62x21
+ * viewport; a smaller one gets a plain notice screen and the world freezes
+ * (no ticks). On a no-TTY / TERM=dumb profile (ColorProfile::NoTty) the app
+ * refuses to play instead of emitting escape codes nobody can render; the
+ * ASCII tier draws plain glyphs.
  *
  * The PRNG is injected as a `Closure(int): int` so tests pin a
  * specific pipe layout without touching the runtime.
@@ -32,6 +42,15 @@ final class Game implements Model
     public const HEIGHT      = 18;
     public const BIRD_COL    = 8;
     public const PIPE_EVERY  = 18;         // cells between successive pipes
+
+    /**
+     * Smallest terminal the framed world plus its status line fits without
+     * wrapping (M26): the rounded border costs 2 columns, and the board plus
+     * one chrome row costs 3 — a narrower viewport gets the notice screen
+     * instead of a corrupted wrap.
+     */
+    public const MIN_COLS = self::WIDTH + 2;   // 62
+    public const MIN_ROWS = self::HEIGHT + 3;  // 21
 
     /**
      * Wall-clock tick period. Derived from {@see Bird::TICKS_PER_SEC} so the
@@ -91,6 +110,11 @@ final class Game implements Model
         public readonly bool $newRecord = false,
         ?\Closure $rand = null,
         ?string $configDir = null,
+        /** Live viewport (M6): seeded at MIN, replaced by WindowSizeMsg. */
+        public readonly int $frameCols = self::MIN_COLS,
+        public readonly int $frameRows = self::MIN_ROWS,
+        /** Null until the Program reports the detected profile (M7/M8). */
+        public readonly ?ColorProfile $colorProfile = null,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
         $this->configDir = $configDir;
@@ -201,6 +225,50 @@ final class Game implements Model
         return max($this->highScores);
     }
 
+    /** True when the live viewport cannot hold the 62x21 frame (M6). */
+    public function tooSmall(): bool
+    {
+        return $this->frameCols < self::MIN_COLS || $this->frameRows < self::MIN_ROWS;
+    }
+
+    /** A new viewport from a WindowSizeMsg — the model never re-frames itself. */
+    private function withFrameSize(int $cols, int $rows): self
+    {
+        return new self(
+            bird: $this->bird,
+            pipes: $this->pipes,
+            score: $this->score,
+            crashed: $this->crashed,
+            tickIndex: $this->tickIndex,
+            highScores: $this->highScores,
+            newRecord: $this->newRecord,
+            rand: $this->rand,
+            configDir: $this->configDir,
+            frameCols: $cols,
+            frameRows: $rows,
+            colorProfile: $this->colorProfile,
+        );
+    }
+
+    /** The Program's detected colour capability (M7/M8). */
+    private function withColorProfile(ColorProfile $profile): self
+    {
+        return new self(
+            bird: $this->bird,
+            pipes: $this->pipes,
+            score: $this->score,
+            crashed: $this->crashed,
+            tickIndex: $this->tickIndex,
+            highScores: $this->highScores,
+            newRecord: $this->newRecord,
+            rand: $this->rand,
+            configDir: $this->configDir,
+            frameCols: $this->frameCols,
+            frameRows: $this->frameRows,
+            colorProfile: $profile,
+        );
+    }
+
     /**
      * Return a NEW Game with $score merged into the high-scores list
      * IF it qualifies as a new record. Does NOT write to disk.
@@ -229,6 +297,9 @@ final class Game implements Model
             newRecord: true,
             rand: $this->rand,
             configDir: $this->configDir,
+            frameCols: $this->frameCols,
+            frameRows: $this->frameRows,
+            colorProfile: $this->colorProfile,
         );
     }
 
@@ -257,6 +328,21 @@ final class Game implements Model
 
     public function update(Msg $msg): array
     {
+        // M6: the viewport is data, not a re-render side effect. Program
+        // sends WindowSizeMsg at startup and on every SIGWINCH.
+        if ($msg instanceof WindowSizeMsg) {
+            if ($msg->cols === $this->frameCols && $msg->rows === $this->frameRows) {
+                return [$this, null];
+            }
+            return [$this->withFrameSize($msg->cols, $msg->rows), null];
+        }
+        // M7/M8: the detected colour capability arrives once at startup.
+        if ($msg instanceof ColorProfileMsg) {
+            if ($msg->profile === $this->colorProfile) {
+                return [$this, null];
+            }
+            return [$this->withColorProfile($msg->profile), null];
+        }
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Escape
                 || ($msg->type === KeyType::Char && $msg->rune === 'q')
@@ -265,7 +351,19 @@ final class Game implements Model
             }
             if ($msg->type === KeyType::Char && $msg->rune === 'r' && $msg->ctrl === false) {
                 // Emit no timer: the stable-id subscription carries over.
-                return [self::start($this->rand, $this->configDir), null];
+                // m30: restart is a fresh board IN THE SAME viewport — the
+                // old trip through start() silently reset the frame to the
+                // default 62x21, so a resized terminal would snap back.
+                return [new self(
+                    bird: Bird::spawn(self::BIRD_COL, self::HEIGHT / 2.0),
+                    pipes: [],
+                    highScores: self::readScores($this->highScoreFilePath),
+                    rand: $this->rand,
+                    configDir: $this->configDir,
+                    frameCols: $this->frameCols,
+                    frameRows: $this->frameRows,
+                    colorProfile: $this->colorProfile,
+                ), null];
             }
             if ($this->crashed === true) {
                 return [$this, null];
@@ -369,6 +467,9 @@ final class Game implements Model
             highScores: $this->highScores,
             rand: $this->rand,
             configDir: $this->configDir,
+            frameCols: $this->frameCols,
+            frameRows: $this->frameRows,
+            colorProfile: $this->colorProfile,
         );
     }
 
@@ -383,6 +484,9 @@ final class Game implements Model
             highScores: $this->highScores,
             rand: $this->rand,
             configDir: $this->configDir,
+            frameCols: $this->frameCols,
+            frameRows: $this->frameRows,
+            colorProfile: $this->colorProfile,
         );
     }
 
@@ -396,15 +500,20 @@ final class Game implements Model
         return $g;
     }
 
-    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    public function subscriptions(): ?Subscriptions
     {
         // The single source of the game cadence (C1/M11). A stable id means
         // Program's per-cycle reconcile keeps exactly one chain alive across
         // restarts, and an empty set on the crashed board cancels it (m31).
-        if ($this->crashed === true) {
-            return new \SugarCraft\Core\Subscriptions();
+        // The world also stands down when it cannot be seen or drawn (M6/M7):
+        // a too-small viewport gets a notice screen, a NoTty profile gets the
+        // refusal — neither should burn ticks — and the next WindowSizeMsg or
+        // profile change re-reconciles the cadence back to life.
+        if ($this->crashed === true || $this->tooSmall() === true
+            || $this->colorProfile === ColorProfile::NoTty) {
+            return new Subscriptions();
         }
-        return (new \SugarCraft\Core\Subscriptions())->withTick(
+        return (new Subscriptions())->withTick(
             self::TICK_SUBSCRIPTION,
             self::TICK_SECONDS,
             static fn(): Msg => new TickMsg(),
