@@ -26,14 +26,46 @@ final class ApplicationFindTest extends TestCase
         $this->assertSame('style', $command->getName());
     }
 
-    public function testFind_typoWithSymfonyMatchReturnsCommand(): void
+    /**
+     * CC3 lockstep flip: Symfony's inherited unique-prefix resolution used to
+     * EXECUTE `choos` as choose — silently running a prompt the user never
+     * named. Exact-only resolution refuses with a did-you-mean instead.
+     */
+    public function testFind_truncatedNameIsRefusedWithSuggestion(): void
     {
         $app = new Application();
 
-        // 'choos' is close to 'choose' (Levenshtein distance 1) so Symfony's
-        // built-in fuzzy matching finds it without throwing.
-        $command = $app->find('choos');
-        $this->assertSame('choose', $command->getName());
+        $this->expectException(CommandNotFoundException::class);
+        $this->expectExceptionMessage('Did you mean "choose"?');
+
+        $app->find('choos');
+    }
+
+    public function testFind_ambiguousPrefixListsEveryCandidate(): void
+    {
+        $app = new Application();
+
+        // The CC3 misdirect case: old code answered `co` with the single
+        // structurally-nearest 3-letter command ("Did you mean log?").
+        // Now every plausible candidate is listed, prefix matches first.
+        $this->expectException(CommandNotFoundException::class);
+        $this->expectExceptionMessage('one of: "completion", "confirm", "log"');
+
+        $app->find('co');
+    }
+
+    public function testFind_prefixTypoDoesNotResolveToAnyCommand(): void
+    {
+        $app = new Application();
+        foreach (['choos', 'confir', 'styl', 'tabl', 'inpu'] as $typo) {
+            try {
+                $app->find($typo);
+                self::fail("$typo must not resolve (CC3)");
+            } catch (CommandNotFoundException) {
+                // expected: refusal, never execution
+            }
+        }
+        $this->addToAssertionCount(5);
     }
 
     public function testFind_unknownCommandThrowsCommandNotFoundException(): void

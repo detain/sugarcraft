@@ -379,34 +379,36 @@ final class Application extends SymfonyApplication
         return $scanner->scan($namespace, $this);
     }
 
+    /**
+     * Resolve a command by EXACT name only. Symfony's inherited find()
+     * additionally accepts unique prefixes, which made typo'd invocations
+     * silently EXECUTE a different command — `choos Pizza Burger` ran choose,
+     * `confir` ran confirm (review 2026-11-02 CC3). On an exit-code-gating
+     * CLI that is a safety defect, not a convenience. Unknown names now fail
+     * closed with a did-you-mean that lists every plausible candidate
+     * (prefix matches first), so the suggestion also stops misdirecting.
+     */
     public function find(string $name): Command
     {
-        try {
+        if ($this->has($name)) {
             return parent::find($name);
-        } catch (CommandNotFoundException $e) {
-            $commandNames = array_keys($this->all());
-            $suggester = new TypoSuggester($commandNames);
-            $suggestion = $suggester->suggest($name);
-
-            if ($suggestion !== null) {
-                // The message already names the single suggestion. Passing
-                // every registered command as "alternatives" violated the
-                // CommandNotFoundException contract (string[]) and would
-                // have made Symfony render its own Did-you-mean list on
-                // top of ours — keep alternatives empty. Do NOT chain the
-                // parent exception either: Symfony 7.4's renderer prints
-                // every previous exception, which stacked a second
-                // "Did you mean" block on top of this one (measured).
-                throw new CommandNotFoundException(
-                    sprintf(
-                        'Command "%s" not found. Did you mean %s?',
-                        $name,
-                        $suggestion
-                    )
-                );
-            }
-
-            throw $e;
         }
+
+        $suggester  = new TypoSuggester(array_keys($this->all()));
+        $candidates = $suggester->suggestAll($name);
+
+        if ($candidates !== []) {
+            // Do NOT chain the parent exception or pass alternatives: both
+            // stack Symfony's own "Did you mean" renderer on top of ours
+            // (measured, previous lane). Our message already lists them.
+            $quoted = array_map(static fn (string $n): string => '"' . $n . '"', $candidates);
+            throw new CommandNotFoundException(sprintf(
+                'Command "%s" not found. Did you mean %s?',
+                $name,
+                count($quoted) === 1 ? $quoted[0] : 'one of: ' . implode(', ', $quoted),
+            ));
+        }
+
+        throw new CommandNotFoundException(sprintf('Command "%s" not found.', $name));
     }
 }

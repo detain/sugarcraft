@@ -67,7 +67,11 @@ final class BinExitCodeTest extends TestCase
         [$status, $stdout, $stderr] = self::runBin(['nosuchcommand']);
 
         self::assertSame(1, $status, 'unknown command must exit 1 (before the bin fix the process always exited 0)');
-        self::assertStringContainsString('is not defined', $stdout . $stderr);
+        // CC3 era: our own exact-only refusal wording replaced Symfony's
+        // "is not defined" (which carried its prefix-resolution foot-gun).
+        self::assertStringContainsString('not found', $stdout . $stderr);
+        // The safety half of CC3: a typo must never EXECUTE a real command.
+        self::assertStringNotContainsString('Pick one option', $stdout . $stderr);
     }
 
     public function testVersionFlagExitsZeroAndNamesTheApp(): void
