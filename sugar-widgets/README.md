@@ -22,6 +22,10 @@ sugar-widgets — TUI components for PHP 8.3+: 9 first-party components (Table, 
 composer require sugarcraft/sugar-widgets
 ```
 
+Requires PHP ≥ 8.3. No non-bundled extensions are needed (mbstring is
+core). When you depend on this package standalone, its `sugarcraft/*`
+siblings resolve from Packagist.
+
 > The most-used setters have short-form aliases, per class:
 > `TextInput` — `placeholder` / `prompt` / `charLimit` / `width` /
 > `validator` / `styles`; `TextArea` — `placeholder` / `charLimit` /
@@ -45,21 +49,21 @@ Spinner.
 | Component | What it does | Notable msgs |
 |---|---|---|
 | `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
-| `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key | — |
+| `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the public constructor stays for BC); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()` | — |
 | `Key\Binding` | One key + label + help row; `Binding::new(...)`, `Binding::withDisabled(...)` factories | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |
 | `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`) | — |
-| `Progress\AnimatedProgress` | Spring-physics-animated progress bar (SugarSpring-driven) | `SpringTickMsg` |
-| `Timer\Timer` | Countdown timer; `interval()`, `timeout()`, `withInterval(float)` | `Timer\TickMsg`, `TimeoutMsg` |
-| `Stopwatch\Stopwatch` | Elapsed-time counter; `interval()`, `withInterval(float)` | `Stopwatch\TickMsg` |
+| `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); honours `REDUCE_MOTION=1` by jumping straight to the target percent | `SpringTickMsg` |
+| `Timer\Timer` | Countdown timer — `Timer::new($duration, $interval = 1.0)` (duration is required); `remaining`, `interval`, `timeout()`, `withInterval(float)`. Quirk: `view()` renders only the formatted time — running / timed-out state is invisible in the bytes, query `isRunning()` / `timedOut()`. In-flight ticks from stopped generations are refused via the tick `epoch` | `Timer\TickMsg`, `TimeoutMsg` |
+| `Stopwatch\Stopwatch` | Count-up timer; `elapsed`, `interval()`, `withInterval(float)`. `elapsed` is a **tick-count accumulator** (ticks × interval), not wall-clock — it advances only while `update()` consumes ticks. Same render-bytes quirk as `Timer` | `Stopwatch\TickMsg` |
 | `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` _(deprecated alias — re-exported from `SugarCraft\Forms\TextInput`)_ | — |
 | `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) _(deprecated alias — re-exported from `SugarCraft\Forms\TextArea`)_ | `TextArea\TextAreaEditedMsg` |
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | — |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
-| `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList`)_ | — |
-| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. | — |
+| `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values (raw strings are not accepted) _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
+| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values (`new Tree\Node($label, $children)` / `Node::leaf($label)`); chrome glyphs and prefixes are immutable via `withStyle(...)` (labels and knobs are sanitised single-line at ingress). | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
-| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow | — |
+| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then clicks find nothing. `focus()` renders the active tab underlined so keyboard focus is visible, not just audible | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
 | `Scrollbar\Scrollbar` | Scrollbar indicator for scrollable viewports _(deprecated alias — re-exported from `SugarCraft\Forms\Scrollbar`)_ | — |
 | `Input\TextEdit` | Inline single-line editor value object with an underline caret (no hardware cursor), grapheme-cluster caret, cell-budget windowing, digits-only mode — btop `Draw::TextEdit` | — |
@@ -69,8 +73,9 @@ Spinner.
 
 `TextInput` vim mode (Insert/Normal/Visual/VisualLine keybindings) is
 powered by `sugar-forms`'s shared `VimKeyHandler` — the same handler
-backing `sugar-forms` and `sugar-readline`. Adding a new binding to the
-`VimAction` enum benefits all three libs at once. The per-lib opt-in flag
+backing `sugar-forms`, `sugar-readline`, and this package's `TextInput`
+re-export. Adding a new binding to the `VimAction` enum benefits all
+three at once. The per-lib opt-in flag
 `withVimMode(true)` is preserved; consumers control whether vim mode is
 enabled.
 
@@ -93,6 +98,10 @@ double-counted.
 
 ## Quickstart — TextInput with autocomplete
 
+> `TextInput` (and `Spinner`) are deprecated `sugar-forms` re-exports.
+> New code should `composer require sugarcraft/sugar-forms` and import
+> `SugarCraft\Forms\…`; the `SugarCraft\Widgets\…` spellings below keep
+> working until the aliases are removed in the next major.
 ```php
 use SugarCraft\Widgets\TextInput\TextInput;
 use SugarCraft\Core\{Cmd, Model, Msg, Program};
@@ -169,7 +178,8 @@ $ti = TextInput::new()
     ->withSuffix(' <');                                     // fixed suffix
 
 echo $ti->view();
-// $ Enter command… <
+// $ > Enter command… <   (the built-in '> ' prompt precedes the dim placeholder;
+//   once focused the placeholder is replaced by the reverse-video block cursor)
 ```
 
 ## TextInput — ValidateOn and restrict
@@ -240,6 +250,11 @@ foreach ($state->criteria as [$colIndex, $dir]) {
 | `SortDirection::Desc` | `'desc'` | Sort in descending order |
 
 `SortDirection::toggle()` returns the opposite direction.
+`SortDirection::marker()` returns the header glyph (`↑` / `↓`).
+
+When a sort is active the header cell gains that marker (`Name ↑`), so
+the visible state matches `sortState()` — and when the selection cursor
+is on a row, `focused` state rides `focus()`/`blur()`.
 
 ### SortState DTO
 
@@ -261,7 +276,9 @@ Immutable list of sort criteria — each entry is a `(column index, direction)` 
 | `clearSort()` | Remove all sort criteria, restoring insertion order |
 | `sortState(): SortState` | Return the current sort criteria (readonly accessor) |
 
-Sorting throws `\InvalidArgumentException` with message `table.sort_unknown_column` when the column name is not found. The exception message is localizable.
+Sorting throws `\InvalidArgumentException` when a column name is not
+found; the message comes from the `table.sort_unknown_column` locale key
+(English: `sort column not found: <name>`). See Localization below.
 
 ## Table — filtering
 
@@ -341,6 +358,37 @@ $paginator = $t->paginator();    // Paginator instance
 
 Pagination works with sort and filter: changing the sort order, filter query, or page size automatically re-clamps the cursor to the first row of the current page so the cursor never points to a row outside the current page boundary.
 
+## Table — per-cell styles (`styleFunc`)
+
+`Table::styleFunc(?Closure $fn)` installs a per-cell composer,
+`fn(int $row, int $col): Style` (row `-1` is the header). Each returned
+style is merged *under* the row's own style via `Style::inherit()` — the
+selection inversion (and the header underline) therefore always survives
+the cell paint. Before this fix, the per-cell `[0m` terminators
+clobbered the row wrapper from the first cell on, so a focused table
+rendered byte-identical to an unfocused one.
+
+```php
+use SugarCraft\Widgets\Table\Table;
+use SugarCraft\Style\Style;
+use SugarCraft\Core\Util\Color;
+
+$table = Table::new(['Name', 'Status'], $rows)
+    ->styleFunc(static function (int $row, int $col) use ($rows): Style {
+        if ($col === 1 && $row >= 0 && $rows[$row][1] === 'FAIL') {
+            return Style::new()->foreground(Color::hex('#ff5555'));
+        }
+        return Style::new();
+    });
+
+[$focused, ] = $table->focus();   // red FAIL cells now ride UNDER the reverse cursor
+```
+
+`getStyleFunc(): ?Closure` reads the seam back for host-side
+re-composition. Partial `Table\Styles` objects no longer delete the
+cursor either — unset slots fall back to the same defaults the
+no-styles path renders (header underline, selected reverse).
+
 ## btop helpers — TextEdit, OptionRow, position-coloured Progress
 
 Three pieces added for [candy-top](https://github.com/detain/sugarcraft/tree/master/candy-top) (the btop-inspired system monitor) that are
@@ -383,10 +431,19 @@ echo $pid->text();                 // "123" — non-digit input is rejected whol
 
 ### `Menu\OptionRow` — btop options-menu geometry
 
-`OptionRow::render(...)` returns the two-line row from btop
-`Menu::optionsMenu`: line 1 the bold name centred in `$nameCol` (default
-`OptionRow::NAME_COL` = 29), line 2 `"  " + value centred in $valueCol
-(VALUE_COL = 25) + "  "`, with `←` / `→` on the selected row (while not editing) when
+`OptionRow::renderRow(...)` is the primary API: the single-line btop
+option row `← label … value ↵ →` sized to exactly the field width the
+caller provides — label and value share the budget, and values are
+clipped with `Width::truncateAnsi()` so caller ANSI survives.
+
+> `OptionRow::render(...)` — the older two-line form (bold name centred
+> in `$nameCol`, value line centred in `$valueCol`) — is **deprecated**:
+> its second line was built `valueCol + 4` cells wide regardless of
+> `$nameCol`, overrunning the next column whenever `nameCol < 29`; it now
+> clips to `$nameCol` (byte-identical at the default 29/25 pair) and
+> stays supported for candy-top, but prefer `renderRow()`.
+
+With `←` / `→` on the selected row (while not editing) when
 `$hasArrows` and `↵` (or `E` with `tty: true`) when `$editable`. Passing a
 `TextEdit` with `editing: true` renders its underline-caret view in
 `valueCol - 1` cells.
@@ -441,15 +498,30 @@ This gives btop's *colouring*, not its fill count (Progress fills
 `round(percent * width)` cells). For an exact btop meter use sugar-dashboard
 `Meter::withGradient($stops, positionWise: true)`.
 
+## Localization
+
+Exception messages and label copy resolve through
+`SugarCraft\Widgets\Lang` (the `sugar-core` i18n lookup: exact locale →
+base language → `en` → raw key). `lang/en.php` is the source of truth,
+mirrored into 15 further locales (ar, cs, de, es, fr, it, ja, ko, nl,
+pl, pt-br, pt, ru, tr, zh-cn); placeholder tokens such as `{column}`
+survive in every locale, and `tests/LangTest.php` fails closed when the
+per-locale key sets diverge, when a locale drops a placeholder, or when
+`src/` requests a key the catalogue does not ship.
+
 ## Snapshot tests
 
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record fixtures after intentional output changes:
+Re-recording is create-only — an existing fixture is never silently
+overwritten — so after an intentional output change delete the affected
+fixtures first:
 
 ```sh
-UPDATE_GOLDENS=1 vendor/bin/phpunit
+rm tests/fixtures/<name>.golden
+UPDATE_GOLDENS=1 vendor/bin/phpunit --filter <owningTest>
+git diff tests/fixtures/   # the rewrite must be the disclosed delta
 ```
 
 ## Test
