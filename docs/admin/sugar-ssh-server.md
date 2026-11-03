@@ -171,7 +171,7 @@ orthogonal — compose them based on what your deployment needs:
 | `PasswordAuth` | Caller-supplied `callable(string $user, string $pw): bool` | `SSH_PASSWORD` |
 | `CertificateAuth` | Caller-supplied `callable(string $pemCert, Session $s): bool` | `SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE` |
 | `KeyboardInteractive` | Challenge-response prompts written to STDOUT, responses read from STDIN (RFC 4256) | — |
-| `AuthMethods` | Writes `SSH_AUTH_METHODS <list>` banner to STDOUT; stores list in Context under `auth.methods` for downstream inspection | — |
+| `AuthMethods` | Stores the declared method list in Context under `auth.methods` for downstream inspection. The `SSH_AUTH_METHODS <list>` line on STDOUT is opt-in (`announce: true`), off by default | — |
 
 **`Auth` trust boundary — the fingerprint allowlist is NOT
 cryptographic proof.** Per the class docblock in
@@ -221,7 +221,26 @@ before that is yours to minimize. The fleet trust model for this class
 of config/credential-as-code surface is documented in
 [docs/TRUST-BOUNDARY.md](../TRUST-BOUNDARY.md).
 
-**`AuthMethods` operational note:** This middleware writes one line to STDOUT (`SSH_AUTH_METHODS publickey password keyboard-interactive`) before passing control down the chain. This is the RFC 4252 banner that tells the SSH client which methods are available. It runs once per session, early in the middleware chain, before any credential-checking middleware.
+**`AuthMethods` operational note:** The middleware's real work is one
+Context value: `auth.methods`, readable downstream with
+`AuthMethods::fromContext($ctx)`. The `SSH_AUTH_METHODS publickey
+password keyboard-interactive` line on STDOUT is opt-in (`announce:
+true`) and off by default.
+
+It is *not* the RFC 4252 banner and cannot be: that exchange happens
+inside `sshd`, which finished authenticating before your forced command
+was exec'd (see [What the process does](#what-the-process-does)).
+Printing the line under `ForceCommand` puts text in the user's terminal
+-- on an interactive session, in the middle of whatever their shell is
+about to do, on every connection. `ssh -v` will not show it as a method
+list either; it arrives as session output. If you want a message like
+that in front of users, configure sshd's own `Banner=` or the MOTD,
+which the client renders before authentication and no program has to
+maintain. `announce: true` exists for the narrow honest case: a
+banner-style stack on `HostSshdTransport` whose *own* protocol is
+`SSH_AUTH_METHODS ...`, with a client written to parse it. Say so in
+your deployment notes if you turn it on; the Context record does not
+need it.
 
 **`KeyboardInteractive` operational note:** This middleware performs blocking STDIN reads during the authentication phase. The prompts and responses are exchange-based (RFC 4256) — the middleware writes all prompts to STDOUT, then reads exactly N lines from STDIN before passing control to the next middleware. It is not suitable for use with `BubbleTea` (which also consumes STDIN/STDOUT) and should only be used with `Spawn` under `InProcessTransport`.
 

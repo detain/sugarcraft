@@ -272,7 +272,7 @@ ssh wishuser@your-host
 | `Auth`               | both            | Username allowlist, key-fingerprint allowlist, or the paired `userKeys` map (name => that name's keys). **The two flat lists are a cross product, not a pairing:** with `users` `['alice','bob']` and `keyFingerprints` `[alice-key, bob-key]`, bob presenting alice's key is admitted *as alice*. Use `userKeys` when the question is whose key this is (`[Auth::ANY_KEY]` = any key, that name only). An empty list arms nothing — `new Auth()` admits every session. |
 | `PasswordAuth`       | both            | Validates user+password against a caller-supplied callback (`SSH_PASSWORD` env var).                 |
 | `CertificateAuth`    | both            | Validates X.509 peer certificate (`SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars).                   |
-| `AuthMethods`        | both            | Declares accepted auth methods; writes `SSH_AUTH_METHODS` banner to STDOUT; stores list in Context. |
+| `AuthMethods`        | both            | Declares accepted auth methods and stores the list in Context (`auth.methods`, readable with `AuthMethods::fromContext()`). The `SSH_AUTH_METHODS` line on STDOUT is **opt-in** (`announce: true`) and off by default -- under `ForceCommand` stdout is the client's data channel, so that line is text in the user's terminal, not a protocol field. |
 | `KeyboardInteractive`| both            | Challenge-response — writes prompts to STDOUT, reads responses from STDIN (RFC 4256).                |
 | `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialise on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; see `docs/admin/sugar-ssh-server.md`. |
 | `Keepalive`          | InProcess only  | Writes an idle `\0` byte to the PTY master at a configurable interval (reaches the wire only where the tty echoes); under HostSshd it is a no-op — rely on sshd `ClientAliveInterval`. |
@@ -341,8 +341,12 @@ Consequences worth knowing before you deploy:
   "fail-open, allowing") reach the prober. Inject a real operator
   sink there; the messages themselves carry no paths and no
   posture detail by design.
-- `AuthMethods` prints its banner to stdout on purpose — that one
-  *is* meant for the client.
+- `AuthMethods` records its declared methods in the Context and
+  prints nothing. The optional `SSH_AUTH_METHODS` line (`announce:
+  true`) is the one message here that *is* meant for the client —
+  though a real client never parses it: `sshd` completed the auth
+  exchange before this process started, so the honest surface for
+  that message is sshd's own `Banner=`/MOTD, not your forced command.
 
 For the fail-open/fail-closed posture of every gate, see
 [Authentication: pairing a key to a name](#authentication-pairing-a-key-to-a-name)

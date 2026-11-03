@@ -36,7 +36,7 @@ final class AuthMethodsTest extends TestCase
     public function testWritesBannerWithAllMethods(): void
     {
         [$out, $read] = $this->stdout();
-        $am = new AuthMethods(['publickey', 'password', 'keyboard-interactive'], $out);
+        $am = new AuthMethods(['publickey', 'password', 'keyboard-interactive'], $out, announce: true);
         $reached = false;
         $am->handle(Context::background(), $this->session(), function (Context $c, Session $s) use (&$reached): void {
             $reached = true;
@@ -51,7 +51,7 @@ final class AuthMethodsTest extends TestCase
 
     public function testStoresMethodsInContext(): void
     {
-        [$out] = $this->stdout();
+        [$out, $read] = $this->stdout();
         $receivedCtx = null;
         $am = new AuthMethods(['publickey', 'password'], $out);
         $am->handle(Context::background(), $this->session(), function (Context $c, Session $s) use (&$receivedCtx): void {
@@ -60,6 +60,21 @@ final class AuthMethodsTest extends TestCase
         $this->assertNotNull($receivedCtx);
         $methods = AuthMethods::fromContext($receivedCtx);
         $this->assertSame(['publickey', 'password'], $methods);
+        // Declaring the list is not the same as announcing it (audit MAJOR 7):
+        // the record lands in Context and the client's channel stays clean.
+        $this->assertSame('', $read());
+    }
+
+    public function testTheBannerIsOffUntilTheStackAsksForIt(): void
+    {
+        [$out, $read] = $this->stdout();
+        $am = new AuthMethods(['publickey', 'password'], $out);
+        $reached = false;
+        $am->handle(Context::background(), $this->session(), function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertTrue($reached);
+        $this->assertSame('', $read());
     }
 
     public function testFromContextReturnsEmptyWhenKeyMissing(): void
@@ -90,7 +105,7 @@ final class AuthMethodsTest extends TestCase
     public function testBannerFormatIsSpaceSeparated(): void
     {
         [$out, $read] = $this->stdout();
-        $am = new AuthMethods(['a', 'b', 'c'], $out);
+        $am = new AuthMethods(['a', 'b', 'c'], $out, announce: true);
         $am->handle(Context::background(), $this->session(), function (): void {});
         $banner = trim($read());
         $this->assertSame('SSH_AUTH_METHODS a b c', $banner);
@@ -104,7 +119,10 @@ final class AuthMethodsTest extends TestCase
 
     public function testConstructorWithNullStdoutOpensPhpStdout(): void
     {
-        // null stdout should open php://stdout without throwing
+        // A null stream resolves to php://stdout without throwing. It stays
+        // unwritten under the default, which is also why the suite prints
+        // nothing here (audit MAJOR 7: this test used to leak a banner line
+        // into every full-suite run).
         $am = new AuthMethods(['publickey'], null);
         $reached = false;
         $am->handle(Context::background(), $this->session(), function () use (&$reached): void {

@@ -29,6 +29,51 @@ final class DocSurfaceTruthTest extends TestCase
 
     private const SITE_JSON = '/docs/_data/sugar-ssh-server.json';
 
+    public function testTheBannerTruthTravelsWithTheOptInFlag(): void
+    {
+        $src = (string) \preg_replace(
+            '/\s+/',
+            ' ',
+            (string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware/Auth/AuthMethods.php')
+        );
+        // The code: silence is the default, and the reason is on the class.
+        self::assertStringContainsString('bool $announce = false', $src);
+        self::assertStringContainsString('opt-in, and off by default (audit MAJOR 7)', $src);
+
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+        $readme = (string) \preg_replace('/\s+/', ' ', $readme);
+        self::assertStringContainsString('**opt-in** (`announce: true`) and off by default', $readme);
+        self::assertStringNotContainsString('writes `SSH_AUTH_METHODS` banner to STDOUT; stores list in Context', $readme);
+
+        $admin = $this->adminGuide();
+        if ($admin === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
+        }
+        $admin = (string) \preg_replace('/\s+/', ' ', $admin);
+        self::assertStringContainsString('It is *not* the RFC 4252 banner and cannot be', $admin);
+        self::assertStringContainsString('is opt-in (`announce: true`)', $admin);
+        self::assertStringNotContainsString('This is the RFC 4252 banner', $admin);
+
+        $dev = $this->devGuide();
+        if ($dev === null) {
+            $this->markTestSkipped('no dev guide in a standalone checkout');
+        }
+        $dev = (string) \preg_replace('/\s+/', ' ', $dev);
+        self::assertStringContainsString('opt-in (`announce: true`) because that text lands in the user', $dev);
+
+        $body = $this->siteBody();
+        if ($body === null) {
+            $this->markTestSkipped('no site body in a standalone checkout');
+        }
+        $body = (string) \preg_replace('/\s+/', ' ', $body);
+        self::assertStringContainsString('bool $announce = false', $body);
+        self::assertStringContainsString('is <strong>opt-in</strong> and off by default', $body);
+        self::assertStringNotContainsString('not an RFC 4252 banner and not an auth gate; an ordinary', $body);
+    }
+
     private function siteBody(): ?string
     {
         $path = \dirname(__DIR__, 2) . self::SITE_BODY;

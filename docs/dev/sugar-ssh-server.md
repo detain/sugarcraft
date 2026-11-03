@@ -407,7 +407,7 @@ The `Middleware\Auth\*` classes provide pluggable SSH authentication:
 |-------|--------------|-----------------------|
 | `PasswordAuth` | Validates `(user, password)` against a callback; reads `SSH_PASSWORD` env var | Inject any `callable(string, string): bool` |
 | `CertificateAuth` | Validates X.509 PEM cert from `SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` / `CERTIFICATE` env vars | Inject any `callable(string, Session): bool`; `$required` flag controls behaviour when no cert is present |
-| `AuthMethods` | Writes `SSH_AUTH_METHODS <list>` banner to STDOUT and stores the method list in Context under `auth.methods` | `AuthMethods::fromContext($ctx)` lets downstream middleware inspect which method succeeded |
+| `AuthMethods` | Stores the method list in Context under `auth.methods`; the `SSH_AUTH_METHODS <list>` STDOUT line is opt-in (`announce: true`) because that text lands in the user's terminal, not in a protocol field | `AuthMethods::fromContext($ctx)` reports what the operator declared -- never what authenticated |
 | `KeyboardInteractive` | Sends challenge prompts to STDOUT, reads newline-delimited responses from STDIN (RFC 4256 format) | Inject `callable(list<string>): bool|null` to validate responses |
 
 **AuthMethods usage pattern:**
