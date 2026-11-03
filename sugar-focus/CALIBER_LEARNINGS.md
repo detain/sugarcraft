@@ -12,19 +12,23 @@ Patterns and anti-patterns specific to this lib. Treat as project-specific rules
   after register/unregister/focus/next/previous.
 - **`unregister()` index math is the subtle bit.** Removing a region *before*
   the focused slot decrements the focused index; removing the focused region
-  keeps the slot (clamped to the new end); removing one *after* leaves the index
-  alone. Cover all three plus the empty-out case.
+  lands on the nearest **enabled** survivor at or after the vacated slot
+  (wrapping), and keeps the clamped slot only when every survivor is disabled
+  (a legitimate parked state); removing one *after* leaves the index alone.
+  Cover all three plus the empty-out and all-disabled-park cases.
 - **Immutable like the rest of the stack.** Mutators return a new instance; the
-  no-op cases (`register` existing, `focus` unknown/already-focused, `next`/
-  `previous` with < 2 regions) return `$this` so callers can cheaply detect
-  "nothing changed" by identity.
+  no-op cases (`register` existing, `focus` unknown/disabled/already-focused,
+  `next`/`previous` with < 2 enabled regions, `reorder` on an empty ring)
+  return `$this` so callers can cheaply detect "nothing changed" by identity.
 - **Every member-changing path must keep `$disabled` a subset of `$ids`.**
   `unregister()` and `reorder()` drop the flags of ids they remove; `register()`
   and `reorder()` add new ids enabled. A phantom flag desyncs the counts from
   `enabledIds()`/`disabledIds()` and leaks into `jsonSerialize()`. Asserts are
   off (`zend.assertions=-1`) on this runtime, so the test helper
   `assertCacheConsistent()` checks it via reflection — call it after any new
-  mutator.
+  mutator. Related cost note: `register()` is O(n) per call (membership scan
+  plus list copies); build rings in bulk with `of(...)` / `reorder(...)`
+  instead of looping `register()`.
 - **Traversal from a disabled focus beats the sole-enabled no-op.** `step()`
   handles "focus parked on a disabled region" before "only one region enabled",
   otherwise the user is stranded on a dimmed panel. Keep `next()`/`previous()`
