@@ -96,6 +96,13 @@ final class RadioPills implements Field
         return $this->mutate(options: array_values($options), cursor: $index === false ? 0 : $index);
     }
 
+    // ------------------------------------------------------------------
+    // Short-form aliases (Input family shape; README :99 contract).
+    // ------------------------------------------------------------------
+
+    public function title(string $t): self { return $this->withTitle($t); }
+    public function desc(string $d): self  { return $this->withDescription($d); }
+
     /** Alias of {@see withOptions()}, family shape (Select::options()). */
     public function options(string ...$options): self { return $this->withOptions(...$options); }
 

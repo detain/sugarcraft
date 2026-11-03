@@ -153,6 +153,9 @@ final class NumberField implements Field
     public function placeholder(string $p): self  { return $this->withPlaceholder($p); }
     public function prompt(string $p): self       { return $this->withPrompt($p); }
     public function width(int $w): self           { return $this->withWidth($w); }
+    public function min(int|float $m): self       { return $this->withMin($m); }
+    public function max(int|float $m): self       { return $this->withMax($m); }
+    public function step(int|float $s): self      { return $this->withStep($s); }
 
     // ------------------------------------------------------------------
     // Field contract

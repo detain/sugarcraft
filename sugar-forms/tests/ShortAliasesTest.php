@@ -10,6 +10,8 @@ use SugarCraft\Forms\Field\FilePicker;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Field\MultiSelect;
 use SugarCraft\Forms\Field\Note;
+use SugarCraft\Forms\Field\NumberField;
+use SugarCraft\Forms\Field\RadioPills;
 use SugarCraft\Forms\Field\Select;
 use SugarCraft\Forms\Field\Text;
 use SugarCraft\Forms\Form;
@@ -100,6 +102,36 @@ final class ShortAliasesTest extends TestCase
     {
         $long  = Note::new('k')->withTitle('T')->withDescription('D')->withHeight(3)->withNext(true)->withNextLabel('Go')->view();
         $short = Note::new('k')->title('T')->desc('D')->height(3)->next(true)->nextLabel('Go')->view();
+        $this->assertSame($long, $short);
+    }
+
+    public function testNumberFieldAliases(): void
+    {
+        // NumberField's lattice knobs were the gap in the README :99 "every
+        // field" alias contract: min/max/step now ride the with* long forms.
+        $long  = NumberField::new('k')
+            ->withTitle('T')->withDescription('D')->withPlaceholder('P')
+            ->withMin(5)->withMax(50)->withStep(5)->view();
+        $short = NumberField::new('k')
+            ->title('T')->desc('D')->placeholder('P')
+            ->min(5)->max(50)->step(5)->view();
+        $this->assertSame($long, $short);
+
+        // Lattice effect is real, not just render noise: the seeded value
+        // re-coerces onto [min,max]'s step grid under either spelling.
+        $viaShort = NumberField::new('k', 0, 100, 1, 17)->step(10)->min(0)->max(100);
+        $viaLong  = NumberField::new('k', 0, 100, 1, 17)->withStep(10)->withMin(0)->withMax(100);
+        $this->assertSame($viaLong->value(), $viaShort->value());
+    }
+
+    public function testRadioPillsAliases(): void
+    {
+        $long  = RadioPills::new('k')
+            ->withTitle('T')->withDescription('D')
+            ->withOptions('a', 'b', 'c')->view();
+        $short = RadioPills::new('k')
+            ->title('T')->desc('D')
+            ->options('a', 'b', 'c')->view();
         $this->assertSame($long, $short);
     }
 
