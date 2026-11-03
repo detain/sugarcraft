@@ -114,7 +114,10 @@ final class Node
      */
     public static function noBorder(Node $child): self
     {
-        return new self(self::NOBORDER, '', [$child]);
+        // Built with the frame flag off on purpose: the wrapper never paints a
+        // border itself, and leaving it at the true default made the measures
+        // charge two columns for a frame that cannot exist.
+        return new self(self::NOBORDER, '', [$child], border: false);
     }
 
     // -------------------------------------------------------------------------
@@ -266,12 +269,35 @@ final class Node
      */
     public function totalWidth(): int
     {
+        return $this->measureWidth(false);
+    }
+
+    public function totalHeight(): int
+    {
+        return $this->measureHeight(false);
+    }
+
+    /**
+     * Horizontal footprint, computed the way the renderer will spend it.
+     *
+     * $noFrames reproduces the noBorder() wrapper's suppression: inside a
+     * frameless subtree no node paints a frame or a divider, so none may charge
+     * for one. The wrapper's own flag is already off (see noBorder()), but its
+     * CHILDREN still carry theirs, and a subtree that asks for two columns it
+     * will never paint starves its horizontal siblings just as badly as the
+     * opposite error.
+     *
+     * @see totalWidth()
+     */
+    private function measureWidth(bool $noFrames): int
+    {
         // The renderer insets each node's region by its own margin before laying
         // it out (SugarPanels::renderNode), so a node's real horizontal footprint —
         // the space a fixed sibling must reserve in flex layout — is its content
         // width PLUS its left+right margin. Omitting it makes margined children
         // under-claim, so the flex solver overlaps or clips them.
         $marginW = $this->margin[3] + $this->margin[1]; // left + right
+        $frame   = $this->border === true && $noFrames === false;
 
         if ($this->kind === self::LEAF) {
             // A leaf's natural size IS its content: the widest visible line, with
@@ -282,9 +308,12 @@ final class Node
             // pattern blank.
             $inner = \max($this->minWidth, $this->naturalContentWidth());
             if ($this->padding > 0) $inner += $this->padding * 2;
-            if ($this->border === true) $inner += 2;
-            return $inner + $marginW;
+            if ($frame) $inner += 2;
+
+            return self::capped($inner, $this->maxWidth) + $marginW;
         }
+
+        $childNoFrames = $noFrames || $this->kind === self::NOBORDER;
 
         // For HORIZONTAL, children sit side-by-side so width is their SUM plus
         // one spacing gap between neighbours; the border is shared once. The
@@ -292,10 +321,10 @@ final class Node
         // so summing there was a wasted full subtree traversal (it already
         // re-walks the children for the max).
         if ($this->kind === self::HORIZONTAL) {
-            $childWidths = \array_sum(\array_map(fn(Node $c) => $c->totalWidth(), $this->children));
+            $childWidths = \array_sum(\array_map(fn(Node $c) => $c->measureWidth($childNoFrames), $this->children));
             $gaps = (\count($this->children) - 1) * $this->spacing;
-            $extra = $this->border === true ? 2 : 0;
-            return $childWidths + $gaps + $extra + $marginW;
+
+            return self::capped($childWidths + $gaps + ($frame ? 2 : 0), $this->maxWidth) + $marginW;
         }
 
         // VERTICAL (and the single-child NOBORDER wrapper): children stack, so
@@ -307,18 +336,21 @@ final class Node
         // `max(...$oneChild)` would pass a bare int, and PHP only accepts a
         // single value when it is an array — so a one-child stack (which is what
         // noBorder() builds) crashed the basis instead of claiming its width.
-        $childWidths = \array_map(fn(Node $c) => $c->totalWidth(), $this->children);
+        $childWidths = \array_map(fn(Node $c) => $c->measureWidth($childNoFrames), $this->children);
         $maxChild = $childWidths === [] ? 0 : \max($childWidths);
-        $extra = $this->border === true ? 2 : 0;
-        return $maxChild + $extra + $marginW;
+
+        return self::capped($maxChild + ($frame ? 2 : 0), $this->maxWidth) + $marginW;
     }
 
-    /** Total height including border, padding and the node's own top+bottom margin. */
-    public function totalHeight(): int
+    /**
+     * Vertical footprint. @see measureWidth() for the shared law.
+     */
+    private function measureHeight(bool $noFrames): int
     {
         // See totalWidth(): the renderer insets by margin, so a node's real
         // vertical footprint includes its own top+bottom margin.
         $marginH = $this->margin[0] + $this->margin[2]; // top + bottom
+        $frame   = $this->border === true && $noFrames === false;
 
         if ($this->kind === self::LEAF) {
             // See totalWidth(): a leaf's natural height is the number of lines its
@@ -326,23 +358,34 @@ final class Node
             // region it was given cannot hold), with min* as a floor.
             $inner = \max($this->minHeight, $this->naturalContentLines());
             if ($this->padding > 0) $inner += $this->padding * 2;
-            if ($this->border === true) $inner += 2;
-            return $inner + $marginH;
+            if ($frame) $inner += 2;
+
+            return self::capped($inner, $this->maxHeight) + $marginH;
         }
 
+        $childNoFrames = $noFrames || $this->kind === self::NOBORDER;
+
         if ($this->kind === self::VERTICAL) {
-            $childHeights = \array_sum(\array_map(fn(Node $c) => $c->totalHeight(), $this->children));
+            $childHeights = \array_sum(\array_map(fn(Node $c) => $c->measureHeight($childNoFrames), $this->children));
             $gaps = (\count($this->children) - 1) * $this->spacing;
-            $extra = $this->border === true ? 2 : 0;
-            return $childHeights + $gaps + $extra + $marginH;
+
+            return self::capped($childHeights + $gaps + ($frame ? 2 : 0), $this->maxHeight) + $marginH;
         }
 
         // HORIZONTAL: use max child height (collected as an array for the same
         // one-child reason as totalWidth()).
-        $childHeights = \array_map(fn(Node $c) => $c->totalHeight(), $this->children);
+        $childHeights = \array_map(fn(Node $c) => $c->measureHeight($childNoFrames), $this->children);
         $maxChild = $childHeights === [] ? 0 : \max($childHeights);
-        $extra = $this->border === true ? 2 : 0;
-        return $maxChild + $extra + $marginH;
+
+        return self::capped($maxChild + ($frame ? 2 : 0), $this->maxHeight) + $marginH;
+    }
+
+    /**
+     * Apply a max* cap to a footprint. A cap of 0 means 'no maximum'.
+     */
+    private static function capped(int $footprint, int $cap): int
+    {
+        return ($cap > 0 && $cap < $footprint) ? $cap : $footprint;
     }
 
     // -------------------------------------------------------------------------

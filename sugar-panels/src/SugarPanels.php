@@ -273,7 +273,7 @@ final class SugarPanels
      * @param int                             $h     Available height
      * @param array<int, array<int, string>>  $cells Mutable cell grid (modified in place)
      */
-    private function renderNode(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    private function renderNode(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames = false): void
     {
         if ($w <= 0 || $h <= 0) return;
 
@@ -287,13 +287,13 @@ final class SugarPanels
 
         switch ($node->kind) {
             case Node::LEAF:
-                $this->renderLeaf($node, $x, $y, $w, $h, $cells);
+                $this->renderLeaf($node, $x, $y, $w, $h, $cells, $noFrames);
                 break;
             case Node::HORIZONTAL:
-                $this->renderHorizontal($node, $x, $y, $w, $h, $cells);
+                $this->renderHorizontal($node, $x, $y, $w, $h, $cells, $noFrames);
                 break;
             case Node::VERTICAL:
-                $this->renderVertical($node, $x, $y, $w, $h, $cells);
+                $this->renderVertical($node, $x, $y, $w, $h, $cells, $noFrames);
                 break;
             case Node::NOBORDER:
                 $this->renderNoBorder($node, $x, $y, $w, $h, $cells);
@@ -301,9 +301,52 @@ final class SugarPanels
         }
     }
 
-    private function renderLeaf(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    /**
+     * Does this node paint a frame of its own into the region it is given?
+     *
+     * Used by the parent layouts to decide whether a spacing-0 divider would
+     * overwrite an existing edge. A noBorder() wrapper answers 'no' because the
+     * frame inside it is suppressed by definition.
+     */
+    private function paintsFrame(Node $node): bool
     {
-        $b = $node->border === true ? 1 : 0;
+        return $node->border === true && $node->kind !== Node::NOBORDER;
+    }
+
+    /**
+     * Apply a node's own max* to the region it was handed.
+     *
+     * maxWidth/maxHeight cap the node's TOTAL footprint — frame and padding
+     * included — which is the same frame of reference the parent layouts use when
+     * they reserve space for a child. The leaf used to clamp its CONTENT box
+     * instead, so one setter meant two things: a capped leaf still painted a
+     * full-size frame around narrower text, and a vertical stack ignored the
+     * width cap entirely.
+     *
+     * @return array{0: int, 1: int} The capped [width, height].
+     */
+    private function capRegion(Node $node, int $w, int $h): array
+    {
+        if ($node->maxWidth > 0 && $node->maxWidth < $w) {
+            $w = $node->maxWidth;
+        }
+        if ($node->maxHeight > 0 && $node->maxHeight < $h) {
+            $h = $node->maxHeight;
+        }
+
+        return [$w, $h];
+    }
+
+    private function renderLeaf(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames = false): void
+    {
+        // max* caps the node's WHOLE footprint — frame and padding included.
+        // That is the same frame of reference the parents use (they hand a leaf
+        // a region already capped by max*), and it replaces the older content-box
+        // clamp below, which let a capped leaf still paint a full-size frame
+        // around narrower text: one setter, two meanings.
+        [$w, $h] = $this->capRegion($node, $w, $h);
+
+        $b = ($node->border === true && $noFrames === false) ? 1 : 0;
         $p = $node->padding;
 
         $cx = $x + $b;          // content left
@@ -315,7 +358,8 @@ final class SugarPanels
         // box whose region is exactly its border (h=2 or w=2) still has a valid
         // frame to show — returning early here used to blank the whole box.
         // drawBorder itself no-ops below 2x2, so this stays safe at 1-wide/tall.
-        if ($node->border === true) {
+        // A frameless subtree (inside a noBorder() wrapper) draws none at all.
+        if ($b === 1) {
             $this->drawBorder($node, $x, $y, $w, $h, $cells);
         }
 
@@ -334,25 +378,6 @@ final class SugarPanels
 
         if ($pcw <= 0 || $pch <= 0) return;
 
-        // Apply maxWidth constraint: soft-clamp the content width to maxWidth
-        // and recompute horizontal padding to stay centered.
-        if ($node->maxWidth > 0 && $node->maxWidth < $pcw) {
-            $clampedW = $node->maxWidth;
-            $clampedPadH = ($p * 2 >= $clampedW) ? \max(0, \intdiv($clampedW - 1, 2)) : $p;
-            $pcx = $cx + $clampedPadH;
-            $pcw = $clampedW - $clampedPadH * 2;
-        }
-        // Apply maxHeight constraint: soft-clamp the content height to maxHeight
-        // and recompute vertical padding to stay centered.
-        if ($node->maxHeight > 0 && $node->maxHeight < $pch) {
-            $clampedH = $node->maxHeight;
-            $clampedPadV = ($p * 2 >= $clampedH) ? \max(0, \intdiv($clampedH - 1, 2)) : $p;
-            $pcy = $cy + $clampedPadV;
-            $pch = $clampedH - $clampedPadV * 2;
-        }
-
-        if ($pcw <= 0 || $pch <= 0) return;
-
         $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells, $node->style, $node->alignH, $node->alignV);
     }
 
@@ -361,10 +386,11 @@ final class SugarPanels
      *
      * Separators between children are drawn whenever spacing === 0 — with or
      * without flex children. In a flex layout the separator lands on the
-     * dynamically resolved child boundary, where it can overwrite the last
-     * column of a borderless child (bordered panels absorb it into their
-     * frame). Use spacing >= 1 to reserve a visual gap, or bordered panels
-     * for explicit separation.
+     * dynamically resolved child boundary, where it overwrites the LAST COLUMN
+     * of the previous child: a borderless child loses its final cell there, and
+     * a bordered one is skipped entirely because its own right edge already is
+     * the divider (painting over it used to shave the corner glyphs off the
+     * neighbouring frame). Use spacing >= 1 to reserve a visual gap.
      *
      * @param Node                           $node  Node to render
      * @param int                            $x     Left offset
@@ -373,23 +399,29 @@ final class SugarPanels
      * @param int                            $h     Available height
      * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
      */
-    private function renderHorizontal(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    private function renderHorizontal(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames = false): void
     {
         $children = $node->children;
         $n = \count($children);
-        if ($n === 0) return;
 
-        $b  = $node->border ? 1 : 0;
+        [$w, $h] = $this->capRegion($node, $w, $h);
+
+        $b  = ($node->border === true && $noFrames === false) ? 1 : 0;
         $sp = $node->spacing;
 
         $availableW = $w - $b * 2;
         $availableH = $h - $b * 2;
 
-        // Draw outer border first: before the collapse guard, so a
-        // panel whose children area shrinks to zero still shows its frame.
-        if ($node->border) {
+        // Draw outer border first: before the collapse guards, so a panel whose
+        // children area shrinks to zero — and a panel with NO children — still
+        // shows its frame. An empty bordered container used to return before the
+        // border was reached, so the documented 'still shows its frame' promise
+        // only held for children that collapse, never for an empty list.
+        if ($b === 1) {
             $this->drawBorder($node, $x, $y, $w, $h, $cells);
         }
+
+        if ($n === 0) return;
 
         if ($availableW <= 0 || $availableH <= 0) return;
 
@@ -424,11 +456,22 @@ final class SugarPanels
                 $ow = \min($ow, $child->maxWidth);
             }
 
-            $this->renderNode($child, $ox, $y + $b, $ow, $availableH, $cells);
+            $this->renderNode($child, $ox, $y + $b, $ow, $availableH, $cells, $noFrames);
 
-            // Draw vertical separator between children (inside the outer border)
-            if ($i < $n - 1 && $sp === 0) {
-                $this->drawVLine($node->borderStyle, $x + $offsets[$i + 1] - 1, $y + $b, $availableH, $cells);
+            // Vertical separator between children, in the previous child's last
+            // column when there is no gap to put it in. Skipped for a frameless
+            // subtree, and for a neighbour whose own right edge already stands on
+            // the divider column: painting over it shaved the ╮/╯ corners off the
+            // frame the neighbour had just drawn, and a bordered panel's edge IS
+            // the divider the layout wanted.
+            if ($i < $n - 1 && $sp === 0 && $noFrames === false) {
+                $divider = $x + $offsets[$i + 1] - 1;
+                $ownEdge = $this->paintsFrame($child)
+                    && $ow >= 2 && $availableH >= 2
+                    && $ox + $ow - 1 === $divider;
+                if ($ownEdge === false) {
+                    $this->drawVLine($node->borderStyle, $divider, $y + $b, $availableH, $cells);
+                }
             }
         }
     }
@@ -436,12 +479,9 @@ final class SugarPanels
     /**
      * Render a vertical (top-to-bottom) panel layout.
      *
-     * Separators between children are drawn whenever spacing === 0 — with or
-     * without flex children. In a flex layout the separator lands on the
-     * dynamically resolved child boundary, where it can overwrite the last
-     * row of a borderless child (bordered panels absorb it into their
-     * frame). Use spacing >= 1 to reserve a visual gap, or bordered panels
-     * for explicit separation.
+     * @see renderHorizontal() for the separator law: at spacing 0 the divider
+     * overwrites the previous child's LAST ROW, and a neighbour that paints its
+     * own bottom edge there is left alone so its frame survives intact.
      *
      * @param Node                           $node  Node to render
      * @param int                            $x     Left offset
@@ -450,23 +490,27 @@ final class SugarPanels
      * @param int                            $h     Available height
      * @param array<int, array<int, string>> $cells Mutable cell grid (modified in place)
      */
-    private function renderVertical(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
+    private function renderVertical(Node $node, int $x, int $y, int $w, int $h, array &$cells, bool $noFrames = false): void
     {
         $children = $node->children;
         $n = \count($children);
-        if ($n === 0) return;
 
-        $b  = $node->border ? 1 : 0;
+        [$w, $h] = $this->capRegion($node, $w, $h);
+
+        $b  = ($node->border === true && $noFrames === false) ? 1 : 0;
         $sp = $node->spacing;
 
         $availableW = $w - $b * 2;
         $availableH = $h - $b * 2;
 
-        // Draw outer border first: before the collapse guard, so a
-        // panel whose children area shrinks to zero still shows its frame.
-        if ($node->border) {
+        // Draw outer border first: before the collapse guards, so a panel whose
+        // children area shrinks to zero — and a panel with NO children — still
+        // shows its frame (see renderHorizontal()).
+        if ($b === 1) {
             $this->drawBorder($node, $x, $y, $w, $h, $cells);
         }
+
+        if ($n === 0) return;
 
         if ($availableW <= 0 || $availableH <= 0) return;
 
@@ -497,19 +541,44 @@ final class SugarPanels
             if ($child->maxHeight > 0) {
                 $oh = \min($oh, $child->maxHeight);
             }
+            // A stacked child is capped on its COLUMNS too. Only the horizontal
+            // layout used to honour maxWidth, so the same setter silently meant
+            // 'row height' in a vertical stack and 'box width' anywhere else.
+            $ow = $availableW;
+            if ($child->maxWidth > 0) {
+                $ow = \min($ow, $child->maxWidth);
+            }
 
-            $this->renderNode($child, $x + $b, $oy, $availableW, $oh, $cells);
+            $this->renderNode($child, $x + $b, $oy, $ow, $oh, $cells, $noFrames);
 
-            if ($i < $n - 1 && $sp === 0) {
-                $this->drawHLine($node->borderStyle, $x + $b, $y + $offsets[$i + 1] - 1, $availableW, $cells);
+            // Horizontal separator between stacked children, in the previous
+            // child's last row — see renderHorizontal() for why a neighbour that
+            // paints its own bottom edge on that row is left alone.
+            if ($i < $n - 1 && $sp === 0 && $noFrames === false) {
+                $divider = $y + $offsets[$i + 1] - 1;
+                $ownEdge = $this->paintsFrame($child)
+                    && $oh >= 2 && $ow >= 2
+                    && $oy + $oh - 1 === $divider;
+                if ($ownEdge === false) {
+                    $this->drawHLine($node->borderStyle, $x + $b, $divider, $ow, $cells);
+                }
             }
         }
     }
 
+    /**
+     * Render the noBorder() wrapper: its subtree is laid out flat.
+     *
+     * The wrapper used to hand the region straight to its child unchanged, so
+     * wrapping a bordered panel in noBorder() produced a byte-identical frame —
+     * the documented "children rendered flat without vertical separators"
+     * promise did nothing. The child is now rendered with $noFrames, which
+     * suppresses every frame and every spacing-0 divider in the subtree.
+     */
     private function renderNoBorder(Node $node, int $x, int $y, int $w, int $h, array &$cells): void
     {
         if ($node->children === []) return;
-        $this->renderNode($node->children[0], $x, $y, $w, $h, $cells);
+        $this->renderNode($node->children[0], $x, $y, $w, $h, $cells, true);
     }
 
     // -------------------------------------------------------------------------
@@ -995,34 +1064,63 @@ final class SugarPanels
         // Uses setChar per grapheme (visualCells/strWidth) to handle wide glyphs.
         if ($title !== '' && $w >= 4) {
             $maxTitleLen = $w - 2; // interior width (cols between corners)
-            ['cells' => $segments] = $this->visualCells($title);
-            $col = 0;
+            ['cells' => $segments, 'trailing' => $trailing] = $this->visualCells($title);
+            $col       = 0;
+            $lastCell  = -1;
+            $styleOpen = false;
             foreach ($segments as $seg) {
                 $gw = $this->strWidth($seg);
                 if ($col + $gw > $maxTitleLen) break;
-                $this->setChar($x + 1 + $col, $y, $seg, $cells);
+                // A title cell is a payload like any other cell: a single grapheme
+                // cluster can carry thousands of combining marks, and the border
+                // row is not exempt from the per-cell byte budget the content path
+                // applies. Clipping keeps one hostile title from inflating the row.
+                $this->setChar($x + 1 + $col, $y, $this->clipCodepoints($seg, self::MAX_CARRY + 64), $cells);
+                $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
+                $lastCell  = $x + 1 + $col;
                 // Blank continuation cells for wide graphemes
                 for ($k = 1; $k < $gw; $k++) {
                     $this->setChar($x + 1 + $col + $k, $y, '', $cells);
                 }
                 $col += $gw;
             }
+            // A truncated title loses its own closing run (it sits in $trailing,
+            // past the break), and a title that never closes its SGR would
+            // recolour the rest of the border row and every cell after it. The
+            // content path closes its spans the same way.
+            if ($lastCell >= 0) {
+                $openAfterTrailing = $trailing !== '' ? $this->sgrLeavesStyleOpen($trailing, $styleOpen) : $styleOpen;
+                if ($openAfterTrailing === true) {
+                    $cells[$y][$lastCell] .= "\x1b[0m";
+                }
+            }
         }
     }
 
+    /**
+     * Paint the vertical divider a spacing-0 horizontal layout puts between
+     * two children.
+     *
+     * The divider is drawn INTO the last column of the previous child, which is
+     * the cell the renderer used to park an auto-reset when that child's line
+     * left a style open. Overwriting it silently un-does the safety net, so the
+     * divider itself carries the closing sequence: whatever the neighbour was
+     * doing, the boundary ends the span.
+     */
     private function drawVLine(?Border $border, int $x, int $y, int $h, array &$cells): void
     {
         $b = $border ?? Border::rounded();
         for ($j = 0; $j < $h; $j++) {
-            $this->setChar($x, $y + $j, $b->left, $cells);
+            $this->setChar($x, $y + $j, "\x1b[0m" . $b->left, $cells);
         }
     }
 
+    /** @see drawVLine() — the horizontal divider closes the neighbour's span too. */
     private function drawHLine(?Border $border, int $x, int $y, int $w, array &$cells): void
     {
         $b = $border ?? Border::rounded();
         for ($i = 0; $i < $w; $i++) {
-            $this->setChar($x + $i, $y, $b->top, $cells);
+            $this->setChar($x + $i, $y, "\x1b[0m" . $b->top, $cells);
         }
     }
 

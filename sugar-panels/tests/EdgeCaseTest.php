@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Panels\Tests;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Panels\{Node, SugarPanels};
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\{Align, Border, Style, VAlign};
@@ -625,7 +626,9 @@ final class EdgeCaseTest extends TestCase
         )->withBorder(false)->withSpacing(0);
         $result = self::body($this->panels->render($layout, 12, 3));
         // Vertical separator (rounded fallback) runs the full height at col 5.
-        $rows = \explode("\n", $result);
+        // The cell is read with the styling runs stripped: a separator now opens
+        // with ESC [ 0 m so it cannot inherit the neighbour's span (M9).
+        $rows = \explode("\n", Ansi::strip($result));
         $this->assertCount(3, $rows);
         foreach ($rows as $r) {
             $this->assertSame('│', \mb_substr($r, 5, 1));
@@ -643,8 +646,10 @@ final class EdgeCaseTest extends TestCase
         $result = self::body($this->panels->render($layout, 12, 8));
         $rows = \explode("\n", $result);
         $this->assertCount(8, $rows);
-        // Horizontal separator (rounded fallback) after TOP's 2+2 block.
-        $this->assertSame('────────────', $rows[3]);
+        // Horizontal separator (rounded fallback) after TOP's 2+2 block. Read
+        // through the stripper: each divider cell carries a leading reset (M9).
+        $stripped = \explode("\n", Ansi::strip($result));
+        $this->assertSame('────────────', $stripped[3]);
         $this->assertStringStartsWith('TOP', $rows[0]);
         $this->assertStringStartsWith('BOT', $rows[4]);
     }
@@ -781,11 +786,21 @@ final class EdgeCaseTest extends TestCase
 
     public function testHasFlexEmptyChildrenReturnsFalse(): void
     {
-        $n = Node::horizontal();
-        // hasFlex iterates over empty array and returns false; childless
-        // container draws no frame.
-        $result = self::body($this->panels->render($n, 10, 3));
-        $this->assertSame("          \n          \n          ", $result);
+        // hasFlex() iterates over an empty array and returns false. A childless
+        // container is NOT blank though: it owns a frame, and the empty case used
+        // to bail out before the border was drawn — the 'still shows its frame'
+        // promise only held for children that collapse, never for an empty list.
+        $framed = self::body($this->panels->render(Node::horizontal(), 10, 3));
+        $rows = \explode("\n", $framed);
+        $this->assertCount(3, $rows);
+        $this->assertSame('╭────────╮', Ansi::strip($rows[0]));
+        $this->assertSame('│        │', Ansi::strip($rows[1]));
+        $this->assertSame('╰────────╯', Ansi::strip($rows[2]));
+
+        // The same container with the frame switched off paints no frame at all.
+        $flat = self::body($this->panels->render(Node::horizontal()->withBorder(false), 10, 3));
+        $this->assertStringNotContainsString('╭', Ansi::strip($flat));
+        $this->assertStringNotContainsString('│', Ansi::strip($flat));
     }
 
     // -------------------------------------------------------------------------

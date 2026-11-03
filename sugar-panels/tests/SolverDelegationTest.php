@@ -6,6 +6,7 @@ namespace SugarCraft\Panels\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Panels\Node;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Panels\SugarPanels;
 use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\Direction;
@@ -155,7 +156,9 @@ final class SolverDelegationTest extends TestCase
         )->withBorder(false)->withSpacing(0);
 
         $out = self::body(SugarPanels::new()->render($layout, 5, 1));
-        $this->assertSame('AA│CC', \rtrim($out));
+        // Stripped: the spacing-0 divider now opens with ESC [ 0 m to close the
+        // previous child's span, which is styling, not geometry.
+        $this->assertSame('AA│CC', \rtrim(Ansi::strip($out)));
     }
 
     // -------------------------------------------------------------------------
