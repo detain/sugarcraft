@@ -52,47 +52,94 @@ final class Table
     /** Style for header row (ANSI string). */
     private string $headerStyle = '';
 
-    /** Separator character between cells. */
+    /** Separator string between cells. */
     private string $separator = ' │ ';
 
-    private int $totalWidth = 0;
+    /**
+     * The visible $rows view is derived state; these two fields make it
+     * LAZY so N appends do not cost N sorts (m5). Reads go through
+     * ensureView().
+     */
+    private bool $viewDirty = false;
+
+    public static function new(): self
+    {
+        return new self();
+    }
 
     public function addColumn(Column $col): self
     {
         $clone = clone $this;
         $clone->columns[] = $col;
-        $clone->totalWidth = $clone->computeTotalWidth();
         return $clone;
     }
 
-    /** Add a row (values are matched to columns by index). */
+    /**
+     * Add a row (values are matched to columns by index).
+     *
+     * Values must be strings or scalars convertible to one (null, bool,
+     * int, float, or an object with __toString); anything else throws,
+     * naming the column index — a silent 'Array' string used to poison
+     * cells and trip failOnWarning through strval()'s notice path.
+     *
+     * Appending does NOT reset the cursor (the view rebuild did): a
+     * streaming feed keeps its selection. Sort and filter changes still
+     * reset it.
+     *
+     * @param array<array-key, string|int|float|bool|null|object> $values
+     */
     public function addRow(array $values): self
     {
+        $values = \array_values($values);
+        foreach ($values as $i => $value) {
+            if (\is_array($value)) {
+                throw new \InvalidArgumentException(
+                    "Row value for column {$i} must be a string or scalar; array given."
+                );
+            }
+            if (\is_object($value) && !\method_exists($value, '__toString')) {
+                $type = \get_class($value);
+                throw new \InvalidArgumentException(
+                    "Row value for column {$i} must be a string or scalar; {$type} without __toString given."
+                );
+            }
+        }
+
         $clone = clone $this;
-        $clone->allRows[] = \array_values(\array_map('strval', $values));
-        $clone->rebuildView();
+        $clone->allRows[] = \array_map(\strval(...), $values);
+        $clone->viewDirty = true;
         return $clone;
     }
 
     /**
      * Sort rows by column index.
      *
-     * NOTE: Triggers rebuildView() which resets cursorRow to 0.
+     * The index must address a real column: silently sorting NOTHING for
+     * an out-of-range index used to leave callers believing a sort had
+     * happened. Resets cursorRow to 0.
      */
     public function sortBy(int $colIndex, bool $ascending = true): self
     {
+        if ($colIndex < 0 || $colIndex >= \count($this->columns)) {
+            $n = \count($this->columns);
+            throw new \InvalidArgumentException(
+                "Sort column index {$colIndex} is out of range for a table with {$n} column(s)."
+            );
+        }
         $clone = clone $this;
         $clone->sortColIndex = $colIndex;
         $clone->sortAscending = $ascending;
         $clone->syncSortedColumns();
-        $clone->rebuildView();
+        $clone->viewDirty = true;
+        $clone->cursorRow  = 0;
         return $clone;
     }
 
     /**
      * Toggle sort direction on column, or start ascending if different column.
      *
-     * NOTE: Triggers rebuildView() which resets cursorRow to 0.
+     * Delegates to sortBy(), so the range guard and the cursorRow reset
+     * apply here too.
      */
     public function sortByNext(int $colIndex): self
     {
@@ -107,13 +154,15 @@ final class Table
     /**
      * Filter rows by text (case-insensitive substring match).
      *
-     * NOTE: Triggers rebuildView() which resets cursorRow to 0.
+     * Resets cursorRow to 0: the visible row set changes identity, so the
+     * old index would silently address a different record.
      */
     public function filter(string $text): self
     {
         $clone = clone $this;
         $clone->filterText = $text;
-        $clone->rebuildView();
+        $clone->viewDirty  = true;
+        $clone->cursorRow  = 0;
         return $clone;
     }
 
@@ -145,10 +194,17 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Set the cell separator. The string is rendered raw between every
+     * pair of cells, so it is sanitized at ingress exactly like data
+     * cells: control sequences cannot ride the separator into the
+     * terminal (ruler jointing then measures the sanitized display
+     * width).
+     */
     public function withSeparator(string $s): self
     {
         $clone = clone $this;
-        $clone->separator = $s;
+        $clone->separator = \SugarCraft\Core\Util\Sanitize::untrusted($s);
         return $clone;
     }
 
@@ -158,6 +214,7 @@ final class Table
 
     public function rowCount(): int
     {
+        $this->ensureView();
         return \count($this->rows);
     }
 
@@ -168,6 +225,7 @@ final class Table
 
     public function currentRow(): ?array
     {
+        $this->ensureView();
         $idx = $this->cursorRow;
         if ($idx < 0 || $idx >= \count($this->rows)) {
             return null;
@@ -206,6 +264,8 @@ final class Table
         if ($this->columns === []) {
             return [];
         }
+
+        $this->ensureView();
 
         $lines = [];
 
@@ -286,16 +346,17 @@ final class Table
 
     /**
      * Rebuild the visible $rows view from $allRows by applying the current
-     * sort and filter state. Called whenever rows, sort, or filter change so
-     * that filter('') (clearFilter) restores the full set instead of operating
-     * on already-shrunk data.
+     * sort and filter state. Always derives from the canonical $allRows
+     (never from already-shrunk data), so filter('') restores the full set.
      *
-     * NOTE: This method unconditionally resets cursorRow to 0. If you need
-     * to preserve cursor position across rebuilds, you must track and restore
-     * it manually after calling sortBy() or filter().
+     * The rebuild is LAZY (m5): writers mark $viewDirty and readers settle
+     * it through ensureView(), so N addRow() calls cost one sort instead
+     * of N. The cursor is NOT touched here — sort/filter writers reset it
+     * deliberately; an append does not.
      */
     private function rebuildView(): void
     {
+        $this->viewDirty = false;
         $rows = $this->allRows;
 
         if ($this->sortColIndex >= 0 && $this->sortColIndex < \count($this->columns)) {
@@ -320,7 +381,19 @@ final class Table
         }
 
         $this->rows = $this->applyFilter($rows);
-        $this->cursorRow = 0;
+    }
+
+    /**
+     * Settle the derived view if any writer marked it stale. Mutates only
+     * internal derived state on an already-published instance, mirroring
+     * the established clone-then-populate pattern; observable results are
+     * unchanged.
+     */
+    private function ensureView(): void
+    {
+        if ($this->viewDirty) {
+            $this->rebuildView();
+        }
     }
 
     /**
@@ -373,11 +446,18 @@ final class Table
         };
     }
 
+    /**
+     * Total display width of a rendered line, in CELLS: column widths
+     * plus the separator's display width at every joint. Byte counting
+     * the separator (strlen) over-reported any non-ASCII joint — ' │ '
+     * is 5 bytes but 3 cells — and zero columns used to yield a negative
+     * total from the (n - 1) joint term.
+     */
     public function computeTotalWidth(): int
     {
         $colWidths = \array_sum(\array_map(fn(Column $c) => $c->width, $this->columns));
-        $sepWidth  = \strlen($this->separator) * (\count($this->columns) - 1);
-        return $colWidths + $sepWidth;
+        $joints    = \max(0, \count($this->columns) - 1);
+        return $colWidths + Width::string($this->separator) * $joints;
     }
 
     private function applyStyle(string $s, string $style): string

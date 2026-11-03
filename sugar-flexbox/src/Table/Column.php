@@ -13,11 +13,17 @@ namespace SugarCraft\Flexbox\Table;
  * and optional sort.
  *
  * Instances are immutable: every `with*` and the sort-state mutators return a
- * NEW Column (house style — see sugar-style/src/Style.php); `make()` is the
- * only entry point.
+ * NEW Column (house style — see sugar-style/src/Style.php); `new()` is the
+ * entry point (`make()` is its BC alias).
  */
 final class Column
 {
+    /** The alignment vocabulary padHeader()/padded() actually implement. */
+    private const ALIGNMENTS = ['left', 'right', 'center'];
+
+    /** Sanitized column title, rendered into the header line. */
+    public readonly string $title;
+
     /** @var callable(string $value, int $rowIndex): string|null */
     private $formatter;
 
@@ -26,12 +32,24 @@ final class Column
     private int $sortPriority = 0;
 
     private function __construct(
-        public readonly string $title,
+        string $title,
         public readonly int $width,
         public readonly string $align = 'left',
         public readonly string $ansiStyle = '',
         ?callable $formatter = null,
     ) {
+        // Width is a cell budget consumed by str_repeat/Width padding: a
+        // negative value produced negative-count repeats (ValueError at
+        // render, far from the cause). 0 = a hidden column, legal.
+        if ($width < 0) {
+            throw new \InvalidArgumentException(
+                "Column width must be >= 0 cells; got {$width}."
+            );
+        }
+        // Titles are rendered raw into the header line: sanitize at ingress,
+        // same trust boundary the data cells already honour. Header colours
+        // arrive through Table::withHeaderStyle(), never through the title.
+        $this->title = \SugarCraft\Core\Util\Sanitize::untrusted($title);
         $this->formatter = $formatter;
     }
 
@@ -55,13 +73,34 @@ final class Column
         return $col;
     }
 
-    public static function make(string $title, int $width): self
+    public static function new(string $title, int $width): self
     {
         return new self($title, $width);
     }
 
+    /**
+     * BC alias of {@see self::new()} — kept for callers written against
+     * the original API.
+     */
+    public static function make(string $title, int $width): self
+    {
+        return self::new($title, $width);
+    }
+
+    /**
+     * @param string $align one of 'left', 'right', 'center' — the padding
+     *                      vocabulary the renderer implements. Other
+     *                      spellings used to fall through to 'left'
+     *                      silently; they now throw.
+     */
     public function withAlign(string $align): self
     {
+        if (!\in_array($align, self::ALIGNMENTS, true)) {
+            $vocab = \implode("', '", self::ALIGNMENTS);
+            throw new \InvalidArgumentException(
+                "Column align must be one of '{$vocab}'; got '{$align}'."
+            );
+        }
         return self::fromState($this->title, $this->width, $align, $this->ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
     }
 
@@ -103,10 +142,21 @@ final class Column
         return $clone;
     }
 
+    /**
+     * Mark this column as sorted. The direction is NORMALIZED to the
+     * header-arrow contract: > 0 renders as +1 (ascending), < 0 as -1
+     * (descending), 0 clears the marker.
+     *
+     * NOTE: Table implements single-column sorting driven by
+     * Table::sortBy(); $priority is stored and readable through
+     * sortPriority() but is NOT consumed by the current sort — it is a
+     * carrier for a future multi-column ordering, never a tiebreaker
+     * today.
+     */
     public function sorted(int $direction = 1, int $priority = 0): self
     {
         $clone = clone $this;
-        $clone->sortDir = $direction;
+        $clone->sortDir = $direction > 0 ? 1 : ($direction < 0 ? -1 : 0);
         $clone->sortPriority = $priority;
         return $clone;
     }

@@ -17,8 +17,8 @@ final class TableTest extends TestCase
     public function testComputeTotalWidthWithNoColumns(): void
     {
         $t = new Table();
-        // When no columns, separator calculation gives negative result
-        $this->assertLessThanOrEqual(0, $t->computeTotalWidth());
+        // Zero columns: the (n - 1) joint term used to make this NEGATIVE.
+        $this->assertSame(0, $t->computeTotalWidth());
     }
 
     public function testComputeTotalWidthWithColumns(): void
@@ -26,8 +26,9 @@ final class TableTest extends TestCase
         $t = (new Table())
             ->addColumn(Column::make('Name', 10))
             ->addColumn(Column::make('City', 8));
-        // 10 + 8 + separator (5 bytes for ' │ ' * 1) = 23
-        $this->assertSame(23, $t->computeTotalWidth());
+        // 10 + 8 + separator (3 CELLS for ' │ ' * 1) = 21. The old byte
+        // count said 23 — ' │ ' is 5 bytes but occupies 3 display cells.
+        $this->assertSame(21, $t->computeTotalWidth());
     }
 
     public function testComputeTotalWidthWithSeparator(): void
@@ -361,5 +362,107 @@ final class TableTest extends TestCase
         $prop = $reflection->getProperty('cursorRow');
         $prop->setAccessible(true);
         return $prop->getValue($t);
+    }
+
+    // ---- Table family hardening (lib-fixes-1103) --------------------------
+
+    public function testComputeTotalWidthCountsCellsNotBytesForWideSeparators(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('A', 2))
+            ->withSeparator('│')
+            ->addColumn(Column::new('B', 2));
+        // 2 + 2 + one joint of 1 cell. Bytes would report 2+2+3 = 7.
+        $this->assertSame(5, $t->computeTotalWidth());
+    }
+
+    public function testAppendKeepsCursorWhileSortAndFilterResetIt(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('Name', 4))
+            ->addRow(['ann'])
+            ->addRow(['bo'])
+            ->setCursor(1);
+
+        $t2 = $t->addRow(['cy']);
+        $this->assertSame(3, $t2->rowCount());
+        $this->assertSame(['bo'], $t2->currentRow(), 'a streaming append must not move the selection');
+    }
+
+    public function testSortByOutOfRangeIndexIsRefused(): void
+    {
+        $t = Table::new()->addColumn(Column::new('A', 4));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('out of range for a table with 1 column(s)');
+        $t->sortBy(1);
+    }
+
+    public function testSortByNextOutOfRangeIndexIsRefused(): void
+    {
+        $t = Table::new()->addColumn(Column::new('A', 4));
+        $this->expectException(\InvalidArgumentException::class);
+        $t->sortByNext(5);
+    }
+
+    public function testAddRowRefusesArrayValueNamingTheColumnIndex(): void
+    {
+        $t = Table::new()->addColumn(Column::new('A', 4));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('column 0 must be a string or scalar; array given');
+        $t->addRow([['nested']]);
+    }
+
+    public function testAddRowRefusesObjectWithoutStringCasting(): void
+    {
+        $t = Table::new()->addColumn(Column::new('A', 4));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('stdClass without __toString given');
+        $t->addRow([new \stdClass()]);
+    }
+
+    public function testAddRowAcceptsScalarsAndStringables(): void
+    {
+        $stringable = new class {
+            public function __toString(): string { return 'typed'; }
+        };
+        $t = Table::new()
+            ->addColumn(Column::new('A', 6))
+            ->addRow([$stringable])
+            ->addRow([42])
+            ->addRow([true]);
+        $this->assertSame(3, $t->rowCount());
+        $this->assertSame(['typed'], $t->currentRow());
+    }
+
+    public function testHeaderTitlesCannotCarryTerminalControlSequences(): void
+    {
+        $t = Table::new()->addColumn(Column::new("Esc\x1b[31mX", 12));
+        $rendered = \implode("\n", $t->buildLines());
+        $this->assertStringNotContainsString("\x1b", $rendered);
+        $this->assertStringContainsString('Esc', $rendered, 'the printable text survives; only control bytes are stripped');
+    }
+
+    public function testSeparatorIsSanitizedAtIngress(): void
+    {
+        $t = Table::new()
+            ->addColumn(Column::new('A', 3))
+            ->withSeparator("\x1b[2J|")
+            ->addColumn(Column::new('B', 3));
+        $this->assertStringNotContainsString("\x1b", $t->render());
+    }
+
+    public function testLazyViewKeepsDerivedStateCorrectAcrossMixedWriters(): void
+    {
+        // N appends settle once on read: filter + sort + appends in any
+        // interleaving must agree with the canonical-rows derivation.
+        $t = Table::new()
+            ->addColumn(Column::new('N', 4))
+            ->addRow(['10'])
+            ->addRow(['2'])
+            ->filter('1')
+            ->addRow(['100'])
+            ->sortBy(0, false);
+        $this->assertSame(2, $t->rowCount());
+        $this->assertSame(['100'], $t->currentRow());
     }
 }

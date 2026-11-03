@@ -234,4 +234,58 @@ final class ColumnTest extends TestCase
         // Cursor wraps outside the column style, so its opener lands first.
         $this->assertStringContainsString("\x1b[7m\x1b[31mab   \x1b[0m\x1b[0m", $t->render());
     }
+
+    // ---- Column family hardening (lib-fixes-1103) -------------------------
+
+    public function testNegativeWidthIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('width must be >= 0 cells; got -5');
+        Column::new('X', -5);
+    }
+
+    public function testZeroWidthColumnRendersEmptyCells(): void
+    {
+        $col = Column::new('T', 0);
+        $this->assertSame('', $col->padded('abc', 0));
+    }
+
+    public function testWithAlignRefusesSpellingsOutsideTheVocabulary(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Column align must be one of 'left', 'right', 'center'; got 'middle'");
+        Column::new('X', 4)->withAlign('middle');
+    }
+
+    public function testWithAlignAcceptsTheFullVocabulary(): void
+    {
+        foreach (['left', 'right', 'center'] as $vocab) {
+            $this->assertSame($vocab, Column::new('X', 4)->withAlign($vocab)->align);
+        }
+    }
+
+    public function testSortedNormalizesDirection(): void
+    {
+        $this->assertSame(1, Column::new('X', 4)->sorted(5)->sortDir());
+        $this->assertSame(-1, Column::new('X', 4)->sorted(-5)->sortDir());
+        $this->assertSame(0, Column::new('X', 4)->sorted(0)->sortDir());
+    }
+
+    public function testSortedCarriesPriorityWithoutConsumingIt(): void
+    {
+        // The accessor round-trips the carrier, but Table's sort target is
+        // decided solely by sortBy(); the priority never reorders columns.
+        $col = Column::new('X', 4)->sorted(1, 7);
+        $this->assertSame(7, $col->sortPriority());
+        $this->assertSame(1, $col->sortDir());
+    }
+
+    public function testNewAndMakeAgree(): void
+    {
+        $a = Column::new('T', 3);
+        $b = Column::make('T', 3);
+        $this->assertSame($a->title, $b->title);
+        $this->assertSame($a->width, $b->width);
+        $this->assertSame('left', $b->align);
+    }
 }
