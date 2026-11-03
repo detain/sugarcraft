@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\Tui\ScreenReaderMode;
+use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Lang;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -118,7 +120,7 @@ final class AgentsPane
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Code\Tui\Pane::Agents->icon() . ' ' . Lang::t('tui.pane.title.agents') . ' '))
+            ->border(Border::rounded()->withTitle(' ' . ScreenReaderMode::paneIcon(Pane::Agents) . ' ' . Lang::t('tui.pane.title.agents') . ' '))
             ->padding(0, 1)
             ->width($width);
 

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui\Components;
 
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Tui\ScreenReaderMode;
+use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 use SugarCraft\Code\App\App;
@@ -131,7 +133,7 @@ final class ChatPane
         }
 
         $st = Style::new()
-            ->border(Border::normal()->withTitle(' ' . \SugarCraft\Code\Tui\Pane::Chat->icon() . ' ' . Lang::t('tui.pane.title.chat') . ' '))
+            ->border(Border::normal()->withTitle(' ' . ScreenReaderMode::paneIcon(Pane::Chat) . ' ' . Lang::t('tui.pane.title.chat') . ' '))
             ->padding(0, 1)
             ->width($width);
 

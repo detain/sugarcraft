@@ -365,7 +365,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.screenReader.label'))
                 ->withHelp(Lang::t('settings.screenReader.help'))
                 ->withReaderSymbol(ScreenReaderMode::class . '::enabled')
-                ->withReadBy('`AgentLiveRegistry::staticSpinner()` → `frameAt()` pins the agent spinner to its first frame (C-TUI-6.i); `ScreenReaderMode::border()` / `glyph()` / `menuRow()` / `cue()` reach the renderer and menus in C-TUI-6.j'),
+                ->withReadBy('ON, the frame sheds what a reader cannot narrate: box frames, rules and the diff gutter draw as blank paper, pane titles and the dock lose their identity pictures, list cursors read as a plain `>`, selected menu rows carry a text `>` and an `n/of` position instead of reverse video alone, and the agent spinner pins to its first frame. OFF, every byte is exactly what the plain renderer paints.'),
             // C-SES-8.g (plan_comparison.md §3): the JSONL mirror switch. USER
             // tier on purpose — no withProjectSettable(): `transcript_path`
             // rides into hook STDIN and hooks are project-definable, so a

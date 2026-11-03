@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\Tui\ScreenReaderMode;
+use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Lang;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -54,7 +56,7 @@ final class FilesPane
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Code\Tui\Pane::Files->icon() . ' ' . Lang::t('tui.pane.title.files') . ' '))
+            ->border(Border::rounded()->withTitle(' ' . ScreenReaderMode::paneIcon(Pane::Files) . ' ' . Lang::t('tui.pane.title.files') . ' '))
             ->padding(0, 1)
             ->width($width);
 

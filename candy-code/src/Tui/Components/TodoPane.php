@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Code\App\App;
 use SugarCraft\Code\Host\TurnRunner;
 use SugarCraft\Code\Lang;
@@ -50,11 +51,11 @@ final class TodoPane
         $labelWidth = max(1, $width - self::CHROME_COLS);
         $todos = self::todos($a);
 
-        $title = ' ' . Pane::Todo->icon() . ' ' . Lang::t('tui.pane.title.todo') . ' ';
+        $title = ' ' . ScreenReaderMode::paneIcon(Pane::Todo) . ' ' . Lang::t('tui.pane.title.todo') . ' ';
         if ($todos->isEmpty()) {
             $body = Style::new()->foreground($theme->shellMuted)->render(RowElide::text(Lang::t(self::EMPTY_TEXT), $labelWidth));
         } else {
-            $title = ' ' . Pane::Todo->icon() . ' ' . Lang::t('tui.pane.title.todo') . ' ' . $todos->countOf(TodoStatus::Completed) . '/' . $todos->count() . ' ';
+            $title = ' ' . ScreenReaderMode::paneIcon(Pane::Todo) . ' ' . Lang::t('tui.pane.title.todo') . ' ' . $todos->countOf(TodoStatus::Completed) . '/' . $todos->count() . ' ';
             $items = $todos->items();
 
             // Keep the item being worked on in view on a list longer than

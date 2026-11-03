@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui\Menu;
 
 use SugarCraft\Code\App\App;
+use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Code\Commands\CommandRegistry;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Lang;
@@ -354,7 +355,7 @@ final class ShellMenu
                 'pane:' . $pane->value,
                 $pane->label(),
                 $a !== null && (!$pane->dockable() || $a->isDocked($pane)),
-                $pane->icon(),
+                ScreenReaderMode::paneIcon($pane),
                 zone: MenuBar::PANE_TAB_ZONE_PREFIX . $pane->value,
             );
         }

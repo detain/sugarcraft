@@ -346,7 +346,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `maxCheckpoints` | `EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()` | **no** |
 | `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()`; `command:` ids split to `commandFor()` at the top of `App::handleKey()` (C-EXT-5) — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` (TUI-4a) | **no** |
 | `vimMode` | `Chat::update()` key dispatch (arm re-sync + operator resolution, TUI-3A) → `ComposerVim` over the sugar-forms `TextArea` Vim layer (w5f) | **no** |
-| `screenReader` | `AgentLiveRegistry::staticSpinner()` → `frameAt()` pins the agent spinner to its first frame (C-TUI-6.i); `ScreenReaderMode::border()` / `glyph()` / `menuRow()` / `cue()` reach the renderer and menus in C-TUI-6.j | **no** |
+| `screenReader` | ON, the frame sheds what a reader cannot narrate: box frames, rules and the diff gutter draw as blank paper, pane titles and the dock lose their identity pictures, list cursors read as a plain `>`, selected menu rows carry a text `>` and an `n/of` position instead of reverse video alone, and the agent spinner pins to its first frame. OFF, every byte is exactly what the plain renderer paints. | **no** |
 | `transcriptJsonl` | `Bootstrap::sessionStore()` → `EnhancedSessionStore::withJsonlMirror()` (the store mirror) and the `JsonlTranscriptWriter::enabled()` flag read by `ScriptHook::stdinPayload()` (`transcript_path`) | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 | `formatCommands` | `Bootstrap::hooks()` → `FormatRunner::withCommands()` | **no** |

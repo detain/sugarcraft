@@ -1401,7 +1401,7 @@ final class Renderer
                 $selected = $entry !== null && $listScroll + $i === $review->selectedIndex();
                 $left = $entry === null
                     ? str_repeat(' ', $listWidth)
-                    : (($selected ? '▸ ' : '  ') . $entry);
+                    : ($selected ? ScreenReaderMode::cursor() . ' ' : '  ') . $entry;
                 $leftStyle = $selected
                     ? Style::new()->foreground($theme->shellPrimary)->bold()
                     : Style::new()->foreground($theme->shellMuted);
@@ -2999,7 +2999,7 @@ final class Renderer
         }
 
         $st = Style::new()->foreground($theme->shellPrimary)->bold();
-        $label = Width::truncate(' ' . $pane->icon() . ' ' . Lang::t($side === Side::Left ? 'tui.dock.label_left' : 'tui.dock.label_right', ['pane' => $pane->label()]) . ' ', max(0, $inner - 2));
+        $label = Width::truncate(' ' . ScreenReaderMode::paneIcon($pane) . ' ' . Lang::t($side === Side::Left ? 'tui.dock.label_left' : 'tui.dock.label_right', ['pane' => $pane->label()]) . ' ', max(0, $inner - 2));
         $top = "\u{250F}\u{2501}" . $label . str_repeat("\u{2501}", max(0, $inner - 1 - Width::string($label))) . "\u{2513}";
         $bottom = "\u{2517}" . str_repeat("\u{2501}", $inner) . "\u{251B}";
         $last = $bandTop + $paneRows - 1;

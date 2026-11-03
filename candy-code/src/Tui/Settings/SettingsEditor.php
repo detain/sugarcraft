@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui\Settings;
 
 use SugarCraft\Core\KeyType;
+use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Config\Settings\ResolvedSetting;
@@ -1019,7 +1020,7 @@ final class SettingsEditor
         };
 
         $label = Style::new()->foreground($selected ? $theme->shellPrimary : $theme->shellForeground)->bold($selected);
-        $line = ($selected ? $label->render('▸ ') : '  ')
+        $line = ($selected ? $label->render(ScreenReaderMode::cursor() . ' ') : '  ')
             . $label->render(self::pad($definition->label, $labelW)) . ' '
             . Style::new()->foreground(match (true) {
                 $refused => $theme->shellError,
@@ -1047,7 +1048,7 @@ final class SettingsEditor
         $statusW = 12;
         $label = Style::new()->foreground($selected ? $theme->shellPrimary : $theme->shellForeground)->bold($selected);
 
-        return ($selected ? $label->render('▸ ') : '  ')
+        return ($selected ? $label->render(ScreenReaderMode::cursor() . ' ') : '  ')
             . $label->render(self::pad($file->role, $roleW)) . ' '
             . Style::new()->foreground($file->status === 'read' ? $theme->shellSuccess : $theme->shellMuted)
                 ->render(self::pad(SettingsDetailPanel::fileStatus($file->status), $statusW)) . ' '

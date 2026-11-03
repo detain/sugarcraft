@@ -32,8 +32,10 @@ use SugarCraft\Style\Border;
  * the byte-identical input when the mode is off — the same string, or
  * the same border, unchanged — so step C-TUI-6.j can route every call
  * site through here unconditionally and the off-mode capture pins stay
- * byte-exact. This step ships the helpers plus the spinner pin only;
- * the renderer and menu wiring is 6.j's.
+ * byte-exact. The doors are wired: the renderer sheds frames, rules and
+ * the diff gutter through border()/glyph(), pane titles and the dock
+ * answer through paneIcon(), list cursors through cursor(), selected
+ * menus through menuRow(), and the attention cue through cue().
  */
 final class ScreenReaderMode
 {
@@ -102,8 +104,8 @@ final class ScreenReaderMode
      * One menu row as text: a `>` marker on the selected row (the mode
      * must never carry selection on reverse video alone), the label, and
      * a textual position as `n/of` in plain digits and one slash — a
-     * locale-neutral form that needs no translation of its own, while
-     * 6.j's richer phrasing keys live under `tui.sr.*`. When the mode is
+     * locale-neutral form that is the whole contract: no translation
+     * keys sit behind it. When the mode is
      * off the row is the bare label: the caller's own reverse-video path
      * is untouched there, so 6.j's off-mode pins stay byte-identical.
      */
@@ -119,8 +121,8 @@ final class ScreenReaderMode
     /**
      * The attention cue for a state change worth narrating — a BEL
      * character as a {@see Cmd::raw()} closure, which makes it a
-     * command: 6.j returns it from `update()` arms and the Program
-     * writes it on its own turn. `view()` must NEVER emit it; rendering
+     * command: the Chat update() arms return it and the Program
+     * writes it on their own turn. `view()` must NEVER emit it; rendering
      * is pure, and a BEL hidden in a painted frame would fire on every
      * repaint diff. Null when the mode is off, so an unwired call site
      * is a no-op, not a stray byte.
@@ -132,6 +134,27 @@ final class ScreenReaderMode
         }
 
         return Cmd::raw("\x07");
+    }
+
+    /**
+     * The pane’s identity picture, or the empty string in screen-reader
+     * mode: the icon names the pane no better than the text label beside
+     * it already does, so a reader is handed the label alone. Off-mode
+     * callers get the byte-identical icon.
+     */
+    public static function paneIcon(Pane $pane): string
+    {
+        return self::enabled() ? '' : $pane->icon();
+    }
+
+    /**
+     * The one-cell list cursor: a plain `>` where a reader narrates
+     * words, the house small triangle otherwise. Both are width 1, so
+     * the marker column does not shift when the mode flips.
+     */
+    public static function cursor(): string
+    {
+        return self::enabled() ? '>' : '▸';
     }
 
     /**

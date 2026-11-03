@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\RawMsg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\Settings\ApplyMode;
@@ -14,6 +15,7 @@ use SugarCraft\Code\Config\Settings\SettingCategory;
 use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Config\Settings\UiSettings;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
+use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Tui\ScreenReaderMode;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Border\TitleAnchor;
@@ -253,6 +255,30 @@ final class ScreenReaderModeTest extends TestCase
 
         self::assertSame('> One 1/1', ScreenReaderMode::menuRow(1, 1, 'One', true), 'first of one reads as selected');
         self::assertSame('  One 1/1', ScreenReaderMode::menuRow(1, 1, 'One', false), 'and first of one still holds the column');
+    }
+
+    /**
+     * The two source-side doors the 2026-11 review minted: a pane's
+     * identity picture and the one-cell list cursor. ON, the picture
+     * sheds to nothing (the text label beside it already names the pane)
+     * and the cursor becomes a plain '>' a reader speaks; OFF, both are
+     * the exact bytes the plain renderer always painted. Both marker
+     * forms are width 1, so the cursor column never shifts on a flip.
+     */
+    public function testPanePicturesShedAndTheCursorSpeaksAsTextWhenOn(): void
+    {
+        foreach (Pane::cases() as $pane) {
+            self::assertSame($pane->icon(), ScreenReaderMode::paneIcon($pane), $pane->value . ' hands its picture back untouched while off');
+        }
+        self::assertSame("\u{25B8}", ScreenReaderMode::cursor(), 'off paints the house triangle');
+
+        $this->writeConfig(['screenReader' => true]);
+
+        foreach (Pane::cases() as $pane) {
+            self::assertSame('', ScreenReaderMode::paneIcon($pane), $pane->value . ' sheds its picture to the empty string');
+        }
+        self::assertSame('>', ScreenReaderMode::cursor());
+        self::assertSame(1, Width::string(ScreenReaderMode::cursor()), 'the swap keeps the marker one cell wide');
     }
 
     /** Copied byte-for-byte from UiSettingsTest (the sandbox-teardown house shape). */

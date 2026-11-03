@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\Tui\ScreenReaderMode;
+use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Lang;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -126,7 +128,7 @@ final class ToolsPane
         $body = implode("\n", $lines);
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' ' . \SugarCraft\Code\Tui\Pane::Tools->icon() . ' ' . Lang::t('tui.pane.title.tools') . ' '))
+            ->border(Border::rounded()->withTitle(' ' . ScreenReaderMode::paneIcon(Pane::Tools) . ' ' . Lang::t('tui.pane.title.tools') . ' '))
             ->padding(0, 1)
             ->width($width);
 

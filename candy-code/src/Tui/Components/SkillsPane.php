@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui\Components;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\Tui\ScreenReaderMode;
+use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Lang;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -56,14 +58,14 @@ final class SkillsPane
                 $lines[] = self::badgePrefix($skill, $theme) . Style::new()
                     ->foreground($isCursor ? $theme->shellPrimary : $theme->shellMuted)
                     ->render(RowElide::text(
-                        ($isCursor ? '▸ ' : '  ') . $skill->name . ' — ' . $skill->description,
+                        ($isCursor ? ScreenReaderMode::cursor() . ' ' : '  ') . $skill->name . ' — ' . $skill->description,
                         $labelWidth,
                     ));
             }
             $body = implode("\n", $lines);
-            $title = ' ' . \SugarCraft\Code\Tui\Pane::Skills->icon() . ' ' . Lang::t('tui.skills.select_title') . ' ';
+            $title = ' ' . ScreenReaderMode::paneIcon(Pane::Skills) . ' ' . Lang::t('tui.skills.select_title') . ' ';
         } else {
-            $title = ' ' . \SugarCraft\Code\Tui\Pane::Skills->icon() . ' ' . Lang::t('tui.pane.title.skills') . ' ';
+            $title = ' ' . ScreenReaderMode::paneIcon(Pane::Skills) . ' ' . Lang::t('tui.pane.title.skills') . ' ';
             $enabled = $a->enabledSkills;
 
             if ($enabled !== []) {
