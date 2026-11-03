@@ -128,4 +128,20 @@ final class ScrollbarTest extends TestCase
         // Original should still use default thumb, new one uses 'X'.
         $this->assertNotEquals($outA, $outB, 'Modified instance should produce different output');
     }
+
+    public function testViewRejectsArrayStateMissingViewportKey(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("'viewport'");
+        Scrollbar::vertical()->view(['total' => 10, 'position' => 0], 3);
+    }
+
+    public function testArrayStateAndValueObjectRenderIdentically(): void
+    {
+        $sb = Scrollbar::vertical()->withTrackChar('#')->withThumbChar('+');
+        $fromArray = $sb->view(['total' => 10, 'position' => 4, 'viewport' => 3], 5);
+        $fromObject = $sb->view(new ScrollbarState(10, 4, 3), 5);
+        $this->assertSame($fromObject, $fromArray);
+        $this->assertNotSame('', $fromArray);
+    }
 }

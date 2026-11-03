@@ -277,4 +277,58 @@ final class StickyViewportTest extends TestCase
             $this->assertSame(20, \SugarCraft\Core\Util\Width::string($line), 'sticky+scrollbar rows must be exactly the requested width');
         }
     }
+
+    public function testShortDocumentNeverDuplicatesBetweenHeaderAndFooter(): void
+    {
+        // With sticky regions on a one-line document, the old footer clamp
+        // ignored the document length and repeated the same line as header
+        // AND footer — the screen reader read it twice.
+        $v = Viewport::withContent('only line', 20, 6)
+            ->withStickyHeader(1)
+            ->withStickyFooter(1);
+        $view = $v->view();
+        $lines = explode("\n", $view);
+        $this->assertCount(6, $lines);
+        $this->assertSame(1, substr_count($view, 'only line'));
+    }
+
+    public function testStickyTruncatesOverlongLinesToViewportWidth(): void
+    {
+        // Content wider than the viewport escaped the sticky frame (the
+        // base view() clamps only when no scrollbar is shown and the
+        // offset is zero); every painted row must be exactly `width` cells.
+        $wide = str_repeat('0123456789', 10);
+        $v = Viewport::withContent($wide, 10, 3)->withStickyHeader(1);
+        $lines = explode("\n", $v->view());
+        foreach ($lines as $i => $line) {
+            $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line), "row $i");
+        }
+        $this->assertStringStartsWith('0123456789', $lines[0]);
+    }
+
+    public function testWideScrollbarRuneReservesItsCells(): void
+    {
+        // The scrollbar column was carved as exactly 1 cell while an
+        // East-Asian thumb rune occupies 2, so every row ran 1 cell over
+        // the viewport width.
+        $content = implode("\n", array_map(
+            static fn (int $n): string => 'line ' . $n,
+            range(1, 20),
+        ));
+        $v = Viewport::withContent($content, 10, 5)
+            ->withStickyHeader(1)
+            ->withScrollbar()
+            ->withScrollbarRunes("\u{6771}", '│');
+        $view = $v->view();
+        $this->assertStringContainsString("\u{6771}", $view);
+        foreach (explode("\n", $view) as $i => $line) {
+            $this->assertSame(10, \SugarCraft\Core\Util\Width::string($line), "row $i");
+        }
+    }
+
+    public function testWithSizeRejectsNegativeDimensions(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Viewport::withContent('x', 20, 5)->withSize(40, -1);
+    }
 }

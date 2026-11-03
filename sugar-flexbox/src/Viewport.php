@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox;
 
 use SugarCraft\Core\Msg;
-use SugarCraft\Widgets\Scrollbar\Scrollbar as BitsScrollbar;
 use SugarCraft\Widgets\Viewport\Viewport as BitsViewport;
 
 /**
- * Sticker-level viewport wrapping the canonical {@see BitsViewport}.
+ * Immutable viewport wrapper over the canonical {@see BitsViewport}.
  *
- * Composes sugar-widgets Viewport rather than reimplementing it. Adds
- * sticky header/footer positioning and scroll-sync (step 10.12).
+ * Composes the sugar-widgets Viewport rather than reimplementing it.
+ * Adds sticky header/footer positioning and a decorative sync-partner
+ * reference ({@see self::syncWith()} stores it; it propagates nothing).
  *
  * @see \SugarCraft\Widgets\Viewport\Viewport
  */
@@ -85,11 +85,14 @@ final readonly class Viewport
     }
 
     /**
-     * Establish a bidirectional scroll-sync relationship with `$other`.
+     * Record `$other` as this viewport's sync partner.
      *
-     * The caller is responsible for applying the same scroll offset to
-     * both viewports when rendering (e.g. a diff viewer with two
-     * side-by-side panels sharing one yOffset value).
+     * ONE-WAY and DECORATIVE: the reference is stored so
+     * {@see self::isSynced()} can report it — no offset ever flows in
+     * either direction on its own (and `$other` is unchanged). Callers
+     * that want synced panels must apply the same yOffset to both
+     * viewports themselves (e.g. a side-by-side diff viewer sharing one
+     * offset value).
      */
     public function syncWith(Viewport $other): self
     {
@@ -152,7 +155,12 @@ final readonly class Viewport
         $yOffset = $this->inner->yOffset;
 
         $headerCount = min($this->stickyHeader, max(0, $height - $this->stickyFooter));
-        $footerCount = min($this->stickyFooter, max(0, $height - $this->stickyHeader));
+        // A footer row must not re-pin a row the header already shows: when
+        // the document is shorter than the sticky regions, cap the footer to
+        // the rows below the header and let blank padding fill the rest.
+        // Duplicating one line (header+footer on a 1-line doc) made screen
+        // readers announce it twice and looked like a stuck frame.
+        $footerCount = min($this->stickyFooter, max(0, $height - $this->stickyHeader), max(0, $total - $headerCount));
 
         $scrollableHeight = max(0, $height - $headerCount - $footerCount);
 
@@ -180,7 +188,7 @@ final readonly class Viewport
         // to the FULL width first made every sticky row one cell too wide
         // (docs-fix-1023).
         $width = $this->inner->width;
-        $contentWidth = $this->inner->showScrollbar ? max(0, $width - 1) : $width;
+        $contentWidth = $this->inner->showScrollbar ? max(0, $width - $this->scrollbarColumnCells()) : $width;
         $pad = fn(string $l): string => $this->padRight($l, $contentWidth);
 
         $headerLines = array_map($pad, $headerLines);
@@ -202,10 +210,17 @@ final readonly class Viewport
     }
 
     /**
-     * Right-pad a line to `$width` cells, stripping ANSI sequences for length.
+     * Clamp a line to `$width` CELLS and right-pad it out.
+     *
+     * Truncation happens before padding: sticky lines came from the raw
+     * document, and an unclamped 20-cell line escaped a width-10 viewport
+     * (the base view() clamps only when neither sticky regions nor the
+     * scrollbar take the wheel), wrapping the terminal and desynchronising
+     * every later frame.
      */
     private function padRight(string $line, int $width): string
     {
+        $line = \SugarCraft\Core\Util\Width::truncateAnsi($line, $width);
         $visual = \SugarCraft\Core\Util\Width::string($line);
         if ($visual >= $width) {
             return $line;
@@ -230,8 +245,14 @@ final readonly class Viewport
         return array_slice($lines, 0, $count);
     }
 
+    /** @return int cells a scrollbar column needs: the widest configured rune, at least 1 */
+    private function scrollbarColumnCells(): int
+    {
+        return max(1, \SugarCraft\Core\Util\Width::string($this->inner->scrollbarChar), \SugarCraft\Core\Util\Width::string($this->inner->scrollbarTrack));
+    }
+
     /**
-     * Append a single-column scrollbar to each line in the window.
+     * Append a scrollbar column to each line in the window.
      *
      * @param list<string> $window
      */
@@ -240,7 +261,11 @@ final readonly class Viewport
         $rendered = count($window);
         $scrollbarChar = $this->inner->scrollbarChar;
         $scrollbarTrack = $this->inner->scrollbarTrack;
-        $bodyWidth = max(0, $this->inner->width - 1);
+        // One reserved column assumed a 1-cell rune; a wide thumb or
+        // track (a single CJK rune is 2 cells) pushed every row a cell past
+        // the viewport. Reserve the WIDEST configured rune and normalize
+        // rows to the full width.
+        $bodyWidth = max(0, $this->inner->width - $this->scrollbarColumnCells());
 
         // Correct thumb proportions relative to window size (not document size).
         // The thumb is a fraction of the window that represents the viewport.
@@ -264,7 +289,7 @@ final readonly class Viewport
             $sb = ($i >= $thumbStart && $i < $thumbStart + $thumbHeight)
                 ? $scrollbarChar
                 : $scrollbarTrack;
-            $out[] = $padded . $sb;
+            $out[] = $this->padRight($padded . $sb, $this->inner->width);
         }
         return implode("\n", $out);
     }
@@ -276,6 +301,10 @@ final readonly class Viewport
         return new self($this->inner->setContent($content), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);
     }
 
+    /**
+     * Resize. Unlike {@see FlexBox::render()}'s clamp-tolerant geometry, the
+     * forms delegate THROWS InvalidArgumentException on a negative dimension.
+     */
     public function withSize(int $width, int $height): self
     {
         return new self($this->inner->withSize($width, $height), $this->stickyHeader, $this->stickyFooter, $this->syncedViewport);

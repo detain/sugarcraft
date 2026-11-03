@@ -8,9 +8,9 @@ use SugarCraft\Widgets\Scrollbar\Scrollbar as BitsScrollbar;
 use SugarCraft\Widgets\Scrollbar\ScrollbarState;
 
 /**
- * Sticker-level scrollbar wrapping the canonical {@see BitsScrollbar}.
+ * Immutable scrollbar wrapper over the canonical {@see BitsScrollbar}.
  *
- * Composes sugar-widgets Scrollbar rather than reimplementing it.
+ * Composes the sugar-widgets Scrollbar rather than reimplementing it.
  *
  * @see \SugarCraft\Widgets\Scrollbar\Scrollbar
  */
@@ -66,10 +66,21 @@ final readonly class Scrollbar
      * Render the scrollbar into `$height` rows.
      *
      * @param ScrollbarState|array{total:int,position:int,viewport:int} $state
+     *
+     * @throws \InvalidArgumentException when an array state is missing one
+     *     of the required keys (fail fast here, not as a PHP warning plus a
+     *     confusing constructor TypeError deep inside the delegate).
      */
     public function view(ScrollbarState|array $state, int $height): string
     {
         if (is_array($state)) {
+            foreach (['total', 'position', 'viewport'] as $key) {
+                if (!array_key_exists($key, $state)) {
+                    throw new \InvalidArgumentException(
+                        "Scrollbar state array requires a '{$key}' key.",
+                    );
+                }
+            }
             $state = new ScrollbarState($state['total'], $state['position'], $state['viewport']);
         }
         return $this->inner->view($state, $height);
