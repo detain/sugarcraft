@@ -33,13 +33,15 @@ composer require sugarcraft/sugar-markdown
 ## Quickstart
 
 The example below embeds a fenced code block inside its Markdown sample,
-so the snippet itself is fenced with tildes — four backticks would
-truncate the heredoc on GitHub too:
+so the snippet itself is fenced with tildes: the outer fence conventionally
+differs from the inner ```` ``` ```` it contains (four backticks would also
+contain three by CommonMark, but the tilde spelling makes the nesting
+legible in the raw source).
 
-~`render()` ends without a trailing newline on purpose — that byte
-sequence is exactly what `stream()` yields for a one-chunk document —
-so an `echo` adds its own `"\n"` above. `write()` and `Writer` follow
-the same law.
+> Note: `render()` ends without a trailing newline on purpose — that byte
+> sequence is exactly what `stream()` yields for a one-chunk document —
+> so an `echo` adds its own `"\n"`. `write()` and `Writer` follow the
+> same law.
 
 ~~~php
 use SugarCraft\Markdown\Renderer;
