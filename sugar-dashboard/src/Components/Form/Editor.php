@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Components\Form;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dashboard\Foundation\ColorMode;
 
@@ -92,10 +93,20 @@ final class Editor implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Parse content into lines.
      *
+     * Every byte stream the editor can hold - file reads included - passes
+     * through this single choke. Opened files are untrusted input: a lone
+     * ESC sequence inside a .txt would otherwise ride the view() output and
+     * reprogram the terminal that is only trying to display it (finding
+     * M-8). Sanitize::untrusted() removes escape sequences and the control
+     * bytes around them while preserving TAB/LF/CR, so multi-line editing,
+     * width math and indentation are untouched.
+     *
      * @return list<string>
      */
     private function parseContent(string $content): array
     {
+        $content = Sanitize::untrusted($content);
+
         if ($content === '') {
             return [''];
         }

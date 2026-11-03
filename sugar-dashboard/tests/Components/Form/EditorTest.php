@@ -30,6 +30,47 @@ final class EditorTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // Untrusted-content ingress (finding M-8)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testOpenedFileBytesCannotInjectEscapeSequences(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'editor-hostile-');
+        self::assertIsString($path);
+        file_put_contents(
+            $path,
+            "ALPHA\x1b[9999mBETA\x07GAMMA\nline-two\tend",
+        );
+
+        try {
+            $editor = Editor::forFile($path);
+
+            // Escape + BEL bytes are gone; the payload text survived whole.
+            $this->assertStringNotContainsString("\x1b", $editor->getContent());
+            $this->assertStringNotContainsString("\x07", $editor->getContent());
+            $this->assertStringContainsString('ALPHABETA', $editor->getContent());
+            $this->assertStringContainsString('GAMMA', $editor->getContent());
+
+            // Line and tab structure is preserved: untrusted keeps LF and TAB.
+            $this->assertSame(2, $editor->getLineCount());
+            $this->assertSame("line-two\tend", $editor->getLine(1));
+
+            $rendered = $editor->setSize(40, 8)->render();
+            $this->assertStringContainsString('ALPHABETAGAMMA', $rendered);
+            $this->assertStringNotContainsString('[9999m', $rendered);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testDirectContentGetsTheSameSanitizingPolicy(): void
+    {
+        $editor = Editor::new("a\x1b[31mb");
+
+        $this->assertSame('ab', $editor->getContent());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // Creation
     // ═══════════════════════════════════════════════════════════════
 
