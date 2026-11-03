@@ -820,17 +820,22 @@ final class Model
             return [''];
         }
 
-        // Defense-in-depth (sugar-cellbuffer #1362): Cell::new() does NOT strip
-        // control bytes — its contract is "caller sanitizes". Ansi::strip()
-        // alone removes only ESC-initiated sequences, so bare C0 (NUL/BEL/BS/
-        // VT/FF/SO-US) and DEL from the untrusted item value would flow through
-        // renderItem() into BOTH view() sinks: the first-frame `return
-        // $fullOutput` and the diff-delta cells built by bufferFromOutput().
-        // Sanitize::untrusted() is the single choke point that neutralizes C0/
-        // DEL (and C1) here at the source so both paths inherit clean content.
+        // The item value is untrusted display data. Ansi::strip() alone removes
+        // only ESC-initiated sequences, so bare C0 (NUL/BEL/BS/VT/FF/SO-US) and
+        // DEL from the value would flow through renderItem() into BOTH view()
+        // sinks. Sanitize::untrustedForMarkedFrames() is the single choke point:
+        // it neutralizes C0/DEL/C1 AND sweeps the U+E000/U+E001 mouse-zone
+        // sentinels, so a forged value can never open or steal a candy-mouse
+        // zone on the consuming terminal. (Sanitize::untrusted() passes the
+        // whole BMP private-use arena through BY CONTRACT — that is correct
+        // for image-marker frames but wrong for a frame sink that composes
+        // zone markers downstream; the marked-frames variant is the fleet cure.)
         // The legitimate SGR ESC is injected LATER by applyStyle(), after this
         // point, and therefore survives — item-value ANSI is stripped by design.
-        $rawLines = $this->hardWrap(Sanitize::untrusted((string) $item->value), $contentWidth);
+        $rawLines = $this->hardWrap(
+            Sanitize::untrustedForMarkedFrames((string) $item->value),
+            $contentWidth,
+        );
         if ($this->wrap > 0 && \count($rawLines) > $this->wrap) {
             $rawLines = \array_slice($rawLines, 0, $this->wrap);
         }

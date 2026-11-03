@@ -390,4 +390,43 @@ final class IntegrationTest extends TestCase
         $this->assertStringNotContainsString("\x00", $delta, 'NUL leaked (delta)');
         $this->assertStringNotContainsString("\x7f", $delta, 'DEL leaked (delta)');
     }
+
+    /**
+     * Security (zone-marker forgery, fleet marked-frames cure): the candy-mouse
+     * zone sentinels U+E000/U+E001 delimit clickable regions in composed frames.
+     * Sanitize::untrusted() passes the whole BMP private-use arena through BY
+     * CONTRACT, so a forged sentinel pair inside an item value used to survive
+     * to the wire — letting list data open a mouse zone it does not own, or
+     * splice one out of the real zone layout. renderItem() now runs
+     * Sanitize::untrustedForMarkedFrames(), which additionally sweeps exactly
+     * the two sentinel code points. The printable payload around them stays
+     * (the value renders), but it can no longer FORM a zone on either view()
+     * sink — first frame or delta frame.
+     */
+    public function testForgedZoneSentinelsCannotSurviveEitherFrameSink(): void
+    {
+        $sentinelOpen = "\u{e000}";
+        $sentinelClose = "\u{e001}";
+
+        $m = Model::new()
+            ->setViewport(40, 5)
+            ->addItem(new StringItem("before{$sentinelOpen}zone:evil{$sentinelClose}after"))
+            ->addItem(new StringItem("second item"))
+            ->setCurrentStyle("\x1b[7m");
+
+        $first = $m->view();
+        $this->assertStringNotContainsString($sentinelOpen, $first, 'open sentinel leaked (full frame)');
+        $this->assertStringNotContainsString($sentinelClose, $first, 'close sentinel leaked (full frame)');
+        $this->assertStringContainsString('beforezone:evilafter', $first, 'printable payload must survive');
+
+        // Delta sink: move the cursor so the forged row is RE-EMITTED in the
+        // second frame's change set — the sentinels must still be absent, and
+        // the delta must actually carry the row (anti-vacuity: an empty string
+        // here would mean the pin never exercised the changed-row path).
+        $moved = $m->setCursor(1);
+        $second = $moved->view();
+        $this->assertNotSame('', $second, 'cursor move must re-emit the restyled row through the delta sink');
+        $this->assertStringNotContainsString($sentinelOpen, $second, 'sentinel on delta sink');
+        $this->assertStringNotContainsString($sentinelClose, $second, 'sentinel on delta sink');
+    }
 }
