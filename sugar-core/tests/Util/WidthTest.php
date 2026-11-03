@@ -551,7 +551,7 @@ final class WidthTest extends TestCase
         // combining sequences start with a printable ASCII base — the fast
         // path MUST stop before the mark, never charge the base twice.
         self::assertSame(1, Width::string("e\xcc\x81"));
-        self::assertSame(2, Width::string("a\xcc\x81日"));
+        self::assertSame(3, Width::string("a\xcc\x81日"));
         self::assertSame(0, Width::string(''));
     }
 
