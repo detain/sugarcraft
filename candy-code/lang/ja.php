@@ -311,6 +311,10 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          --archivedでアーカイブ済み、--allで両方追加;
                          --limit未指定時は20行。
   session show <target>  1セッションの詳細とトランスクリプトを表示。
+  session import <path> [--format auto|…] [--name <title>] [--force]
+                         転写ファイルを新セッションとして取り込む: candy-code
+                         エクスポート、または claude-code・codex・opencode の履歴
+                         (--format で指定、auto は自動判別)。
   session rename <target> <title…>
                          セッションのリネーム; target以降の語が
                          タイトルになる。
@@ -327,6 +331,10 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          起動はしない。ファイル不在、プロジェクトツリー
                          外への解決、または存在するがプロジェクトルートが
                          未信頼の場合はその旨を報告。
+  mcp auth login <server> [token-url] [authorize-url] [registration-url]
+                         宣言済み MCP サーバーを OAuth で認証する: 認可 URL
+                         を開く (または表示する)、loopback リダイレクトを
+                         捕捉してトークンを保存する。
   mcp trust              このプロジェクトの.mcp.jsonを現状のまま承認:
                          ルートを"trustedProjectMcp"に追加し、各サーバーの
                          command、args、envを記録。以降の変更は再承認まで

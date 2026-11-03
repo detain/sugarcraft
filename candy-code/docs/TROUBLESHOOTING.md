@@ -43,6 +43,12 @@ missing), and an invalid `--output-format` **value** (the requested rendering is
 one nothing implements, so the failure renders as text). A *valid*
 `--output-format json` beside any other usage error still emits the document.
 
+A stopped TUI is a separate family: its loop exits `128+N` for the signal that
+caught it — `130` for SIGINT (Ctrl+C), `143` for SIGTERM, `129` for SIGHUP —
+after the full teardown the binary's shutdown guard runs. A cooperative quit
+(`/exit`, `q`) still exits `0`. One-shot mode and the subcommands have no
+signal rows: they answer with the three codes above.
+
 ---
 
 ## Upgrading from sugar-crush <!-- @rename-keep -->

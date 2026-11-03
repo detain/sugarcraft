@@ -311,6 +311,10 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          보관된 항목 추가, --all은 둘 다 추가; 기본 20행,
                          --limit으로 변경 가능.
   session show <target>  세션 하나의 세부 정보와 대화 기록 출력.
+  session import <path> [--format auto|…] [--name <title>] [--force]
+                         전사 파일을 새 세션으로 가져옵니다: candy-code
+                         내보내기 또는 claude-code, codex, opencode 기록
+                         (--format 지정, auto 자동 감지).
   session rename <target> <title…>
                          세션 이름 변경; target 이후의 단어가
                          제목이 됨.
@@ -327,6 +331,10 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          하지 않음. 파일 부재, 프로젝트 트리 밖 경로,
                          또는 프로젝트 루트가 신뢰되지 않은 경우
                          대신 보고.
+  mcp auth login <server> [token-url] [authorize-url] [registration-url]
+                         선언된 MCP 서버를 OAuth로 로그인합니다: 인증 URL을
+                         열거나(또는 출력하고) 루프백 리디렉션을 잡아
+                         토큰을 저장합니다.
   mcp trust              현재 상태의 프로젝트 .mcp.json 승인: 루트를
                          "trustedProjectMcp"에 추가하고 각 서버의
                          command, args, env를 기록하여, 이후 변경 시

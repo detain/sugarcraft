@@ -311,6 +311,10 @@ Sitzung aus; acp führt Runden für einen Editor aus, bis der Editor sich trennt
                          archivierte hinzu, --all fügt beide hinzu; 20 Zeilen, außer
                          --limit bestimmt anders.
   session show <target>  Druckt Details und Transkript einer Sitzung.
+  session import <path> [--format auto|…] [--name <title>] [--force]
+                         Transkriptdatei als neue Session importieren: ein
+                         candy-code-Export oder der Verlauf von claude-code,
+                         codex oder opencode (--format benennt, auto erkennt).
   session rename <target> <title…>
                          Benennt eine Sitzung um; die Wörter nach dem Ziel sind
                          der Titel.
@@ -327,6 +331,10 @@ Sitzung aus; acp führt Runden für einen Editor aus, bis der Editor sich trennt
                          einen davon zu starten. Meldet stattdessen, wenn die Datei
                          fehlt, außerhalb des Projektbaums auflöst oder
                          vorhanden ist, aber das Projektverzeichnis nicht vertrauenswürdig ist.
+  mcp auth login <server> [token-url] [authorize-url] [registration-url]
+                         Einen erklärten MCP-Server per OAuth anmelden:
+                         Autorisierungs-URL öffnen (oder ausgeben), die
+                         Loopback-Weiterleitung abfangen, Tokens speichern.
   mcp trust              Genehmigt die .mcp.json dieses Projekts so wie sie ist: fügt
                          das Stammverzeichnis zu "trustedProjectMcp" hinzu und protokolliert
                          Befehl, args und env jedes Servers, damit eine spätere Änderung

@@ -311,6 +311,10 @@ CandyCode — 終端機 AI 程式碼助理。
                          已歸檔列，--all 兩者皆加入；預設 20 列，
                          除非 --limit 另行指定。
   session show <target>  列印一個工作階段的詳細資訊與逐字稿。
+  session import <path> [--format auto|…] [--name <title>] [--force]
+                         將轉錄檔案匯入為新工作階段：candy-code 匯出，或
+                         claude-code、codex、opencode 的歷史
+                         （--format 指定，auto 自動辨識）。
   session rename <target> <title…>
                          重新命名工作階段；目標之後的文字即為
                          標題。
@@ -327,6 +331,10 @@ CandyCode — 終端機 AI 程式碼助理。
                          啟動任何一個。若檔案不存在、解析到
                          專案目錄樹之外，或存在但專案根目錄
                          未受信任，則回報該情況。
+  mcp auth login <server> [token-url] [authorize-url] [registration-url]
+                         為已宣告的 MCP 伺服器執行 OAuth 登入：開啟（或
+                         列印）授權 URL，捕捉迴環重新導向並儲存權杖，
+                         供日後啟動使用。
   mcp trust              核准此專案目前的 .mcp.json：將根目錄加入
                          "trustedProjectMcp"，並記錄每個伺服器的
                          command、args 與 env，日後任何變更

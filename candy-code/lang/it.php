@@ -311,6 +311,10 @@ esecuzione; acp esegue turni per un editor, finché l'editor non si disconnette)
                          quelli archiviati, --all aggiunge entrambi; 20 righe a meno che
                          --limit dice il contrario.
   session show <target>  Stampa i dettagli e la trascrizione di una sessione.
+  session import <path> [--format auto|…] [--name <title>] [--force]
+                         Importa un file di trascrizione come nuova sessione:
+                         un export candy-code o la cronologia di claude-code,
+                         codex o opencode (--format nomina, auto individua).
   session rename <target> <title…>
                          Rinomina una sessione; le parole dopo la destinazione sono
                          il titolo.
@@ -327,6 +331,10 @@ esecuzione; acp esegue turni per un editor, finché l'editor non si disconnette)
                          avviandone alcuno. Segnala invece quando il file
                          è assente, risolve al di fuori dell'albero del progetto, oppure è
                          presente ma la radice del progetto non è attendibile.
+  mcp auth login <server> [token-url] [authorize-url] [registration-url]
+                         Autorizza con OAuth un server MCP dichiarato: apre
+                         (o stampa) l'URL di autorizzazione, intercetta il
+                         redirect loopback e salva i token per gli usi futuri.
   mcp trust              Approva il .mcp.json di questo progetto così com'è: aggiungi
                          la radice in "trustedProjectMcp" e registra ogni
                          comando, args e env del server, quindi una modifica successiva a

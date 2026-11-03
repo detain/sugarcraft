@@ -311,6 +311,10 @@ detenerse — y attach, que es la excepción a ambos: ejecuta la TUI en una sesi
                          las archivadas, --all añade ambas; 20 filas salvo que
                          --limit indique otra cosa.
   session show <target>  Imprime los detalles y la transcripción de una sesión.
+  session import <path> [--format auto|…] [--name <title>] [--force]
+                         Importa un archivo de transcripción como sesión
+                         nueva: una exportación de candy-code o el historial
+                         de claude-code, codex u opencode (--format auto deduce).
   session rename <target> <title…>
                          Renombra una sesión; las palabras tras el destino son
                          el título.
@@ -327,6 +331,10 @@ detenerse — y attach, que es la excepción a ambos: ejecuta la TUI en una sesi
                          iniciar ninguno. Informa en su lugar cuando el archivo
                          no existe, se resuelve fuera del árbol del proyecto, o está
                          presente pero la raíz del proyecto no es de confianza.
+  mcp auth login <server> [token-url] [authorize-url] [registration-url]
+                         Autentica un servidor MCP declarado con OAuth:
+                         abre (o imprime) su URL de autorización, captura la
+                         redirección loopback y guarda los tokens para luego.
   mcp trust              Aprueba el .mcp.json de este proyecto tal como está: añade
                          la raíz a "trustedProjectMcp" y registra el comando, los
                          argumentos y el entorno de cada servidor, de modo que un cambio

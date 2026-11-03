@@ -343,6 +343,10 @@ session; acp runs turns for an editor, until the editor disconnects):
                          archived ones, --all adds both; 20 rows unless
                          --limit says otherwise.
   session show <target>  Print one session's details and transcript.
+  session import <path> [--format auto|…] [--name <title>] [--force]
+                         Import a transcript file as a new session: a
+                         candy-code export, or the history of claude-code,
+                         codex or opencode (--format names it, auto sniffs).
   session rename <target> <title…>
                          Rename a session; the words after the target are
                          the title.
@@ -359,6 +363,10 @@ session; acp runs turns for an editor, until the editor disconnects):
                          starting any of them. Reports instead when the file
                          is absent, resolves outside the project tree, or is
                          present but the project root is not trusted.
+  mcp auth login <server> [token-url] [authorize-url] [registration-url]
+                         Sign one declared MCP server in with OAuth: open
+                         (or print) its authorize URL, catch the loopback
+                         redirect, and store the tokens for later launches.
   mcp trust              Approve this project's .mcp.json as it is now: add
                          the root to "trustedProjectMcp" and record each
                          server's command, args and env, so a later change to
@@ -842,7 +850,7 @@ Environment variables:
    docs/ENVIRONMENT.md tabulates every variable this build reads, with its
    full contract.
 
-Exit codes (one-shot mode and every subcommand):
+Exit codes (one-shot mode, every subcommand, and the TUI):
   0                      The prompt ran and produced an answer, or the
                          subcommand answered
   1                      Ran and failed: the backend threw (unreachable host,

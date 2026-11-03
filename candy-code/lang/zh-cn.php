@@ -311,6 +311,10 @@ CandyCode — 终端 AI 编程助手。
                          已归档行，--all 添加两者；默认 20 行，除非
                          --limit 另行指定。
   session show <target>  打印一个会话的详细信息和转录。
+  session import <path> [--format auto|…] [--name <title>] [--force]
+                         将转录文件导入为新会话：candy-code 导出，或
+                         claude-code、codex、opencode 的历史
+                         （--format 指定，auto 自动识别）。
   session rename <target> <title…>
                          重命名会话；目标之后的文字即为
                          标题。
@@ -327,6 +331,10 @@ CandyCode — 终端 AI 编程助手。
                          启动其中任何一个。若文件缺失、解析到项目树
                          之外，或存在但项目根未受信任，则报告
                          相应情况。
+  mcp auth login <server> [token-url] [authorize-url] [registration-url]
+                         为已声明的 MCP 服务器执行 OAuth 登录：打开（或
+                         打印）授权 URL，捕获环回重定向并保存令牌，
+                         供以后启动使用。
   mcp trust              按当前状态批准此项目的 .mcp.json：将
                          根目录加入 "trustedProjectMcp" 并记录每个
                          服务器的 command、args 和 env，此后任何变更

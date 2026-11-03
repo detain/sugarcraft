@@ -4118,8 +4118,10 @@ final class DocFigureProseDriftTest extends TestCase
         // line of three shells — eight leaf rows. P-A3 grew session to five
         // rows (list, show, rename, delete, and one pin|unpin|archive|unarchive
         // line) — eleven. C-MCP-5.b grew mcp to four (`mcp serve`) — twelve.
-        self::assertSame(12, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the twelve leaf rows the code dispatches (session and mcp hold their own second words)');
-        foreach (['doctor', 'models', 'session list', 'session delete', 'mcp list', 'mcp serve', 'lsp install', 'lsp list', 'serve', 'completion bash|zsh|fish'] as $row) {
+        // M9 grew session to six (`session import`) and mcp to five
+        // (`mcp auth login`) — fourteen.
+        self::assertSame(14, preg_match_all('/^  (doctor|models|session|mcp|completion)\b/m', $block), 'the block no longer carries the fourteen leaf rows the code dispatches (session and mcp hold their own second words)');
+        foreach (['doctor', 'models', 'session list', 'session import', 'session delete', 'mcp list', 'mcp auth', 'mcp serve', 'lsp install', 'lsp list', 'serve', 'completion bash|zsh|fish'] as $row) {
             self::assertStringContainsString('  ' . $row, $block, "the help block lost the `{$row}` row the page's list quotes");
         }
         self::assertStringContainsString('none of them opens the TUI or needs a provider, an API key or a terminal; each answers and exits except serve and mcp serve, which run until stopped', self::markdownProse($block), 'the help heading lost the promise the page repeats ("none of those six needs a provider, an API key or a terminal; five answer and exit")');
