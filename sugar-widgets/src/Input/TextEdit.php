@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Widgets\Input;
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -46,6 +47,7 @@ final class TextEdit
      */
     public static function new(string $text = '', ?int $caret = null, bool $numeric = false): self
     {
+        $text = self::sanitizeIngress($text);
         $len = \count(self::clusters($text));
         $t = new self($text, self::clamp($caret ?? $len, $len), false);
         return $numeric ? $t->withNumeric() : $t;
@@ -141,6 +143,7 @@ final class TextEdit
      */
     public function insert(string $chars): self
     {
+        $chars = self::sanitizeIngress($chars);
         if ($chars === '') {
             return $this;
         }
@@ -155,6 +158,18 @@ final class TextEdit
             text: $text,
             caret: self::clamp(\count(self::clusters($head)), \count(self::clusters($text))),
         );
+    }
+
+    /**
+     * A single-line editor buffer must never carry control bytes, ESC
+     * sequences, or forged mouse-zone sentinels into view(): the payload
+     * lands inside host frames whose zone scanner reads U+E000/U+E001 as
+     * markers (M20/M21). controlChars first folds CR/LF/TAB to spaces so
+     * pasted multi-line text stays one line.
+     */
+    private static function sanitizeIngress(string $s): string
+    {
+        return Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($s));
     }
 
     /** Delete the cluster BEFORE the caret. Mirrors btop command("backspace"). */

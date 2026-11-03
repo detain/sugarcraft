@@ -24,7 +24,7 @@ use SugarCraft\Core\Util\Width;
  * the filled and empty cells with the same foreground SGR (downsampled
  * via the supplied {@see ColorProfile}); set it to `null` for plain text.
  *
- * For spring-physics interpolated fills (SugarSpring-driven), see
+ * For spring-physics interpolated fills (sugar-spring powered), see
  * {@see AnimatedProgress} — shipped alongside this component.
  */
 final class Progress
@@ -71,10 +71,10 @@ final class Progress
         if ($width < 0) {
             throw new \InvalidArgumentException(Lang::t('progress.width_nonneg'));
         }
-        $this->percent = max(0.0, min(1.0, $percent));
+        $this->percent = self::clampPercent($percent);
         $this->width = $width;
-        $this->fullChar = Sanitize::controlChars($fullChar);
-        $this->emptyChar = Sanitize::controlChars($emptyChar);
+        $this->fullChar = self::sanitizeRune($fullChar);
+        $this->emptyChar = self::sanitizeRune($emptyChar);
         $this->showPercent = $showPercent;
         $this->fillColor = $fillColor;
         $this->emptyColor = $emptyColor;
@@ -89,15 +89,39 @@ final class Progress
         $this->colorFunc = $colorFunc;
     }
 
-    /** Construct a fresh instance with default state. */
-    public static function new(): self
+    /**
+     * Construct a fresh instance, optionally pre-filled to `$percent`
+     * (0..1). The site once advertised `Progress::new(0.42)` before this
+     * factory took any argument (C2) — it now does, matching the docs.
+     */
+    public static function new(float $percent = 0.0): self
     {
-        return new self();
+        return new self($percent);
+    }
+
+    /**
+     * Fold a ratio into 0..1. NaN is treated as 0.0, not 1.0: the raw
+     * max/min ladder would leave NaN untouched by min() and render the
+     * full bar for a corrupted measurement (m1).
+     */
+    private static function clampPercent(float $v): float
+    {
+        return is_nan($v) ? 0.0 : max(0.0, min(1.0, $v));
+    }
+
+    /**
+     * Bar runes ride inside host frames that may carry mouse zones, so
+     * forged U+E000/U+E001 sentinels and 8-bit C1 introducers must not
+     * survive the ingress (fleet marked-frames policy, C3/M20).
+     */
+    private static function sanitizeRune(string $rune): string
+    {
+        return Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($rune));
     }
 
     public function withPercent(float $p): self
     {
-        return $this->mutate(percent: max(0.0, min(1.0, $p)));
+        return $this->mutate(percent: self::clampPercent($p));
     }
 
     /** Increase percent by delta. Mirrors Bubbles' `IncrPercent`. */
@@ -112,12 +136,13 @@ final class Progress
         return $this->withPercent($this->percent - $delta);
     }
 
+    /** Bar width in cells; 0 collapses the bar to its label (N3). */
     public function withWidth(int $w): self        { return $this->mutate(width: $w); }
     public function withRunes(string $full, string $empty): self
     {
         return $this->mutate(
-            fullChar: Sanitize::controlChars($full),
-            emptyChar: Sanitize::controlChars($empty),
+            fullChar: self::sanitizeRune($full),
+            emptyChar: self::sanitizeRune($empty),
         );
     }
     public function withShowPercent(bool $show): self { return $this->mutate(showPercent: $show); }

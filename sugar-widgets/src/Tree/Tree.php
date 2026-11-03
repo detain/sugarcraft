@@ -108,11 +108,48 @@ final class Tree implements Model
         $this->width = $width;
         $this->height = $height;
         $this->focused = $focused;
-        $this->cursorPrefix = $cursorPrefix;
-        $this->unselectedPrefix = $unselectedPrefix;
-        $this->expandedGlyph = $expandedGlyph;
-        $this->collapsedGlyph = $collapsedGlyph;
-        $this->leafGlyph = $leafGlyph;
+        $this->cursorPrefix = self::sanitizeKnob($cursorPrefix);
+        $this->unselectedPrefix = self::sanitizeKnob($unselectedPrefix);
+        $this->expandedGlyph = self::sanitizeKnob($expandedGlyph);
+        $this->collapsedGlyph = self::sanitizeKnob($collapsedGlyph);
+        $this->leafGlyph = self::sanitizeKnob($leafGlyph);
+    }
+
+    /**
+     * Prefixes/glyphs are single-line chrome drawn on every row; control
+     * bytes and forged zone sentinels must not survive the ingress
+     * (C3/M20 fleet policy).
+     */
+    private static function sanitizeKnob(string $knob): string
+    {
+        return Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($knob));
+    }
+
+    /**
+     * Immutable override of the row chrome (M15). These five knobs were
+     * public readonly with no wither, so callers had to rebuild through
+     * the constructor; pass null to keep the current value.
+     */
+    public function withStyle(
+        ?string $cursorPrefix = null,
+        ?string $unselectedPrefix = null,
+        ?string $expandedGlyph = null,
+        ?string $collapsedGlyph = null,
+        ?string $leafGlyph = null,
+    ): self {
+        return new self(
+            $this->roots,
+            $this->cursor,
+            $this->offset,
+            $this->width,
+            $this->height,
+            $this->focused,
+            $cursorPrefix ?? $this->cursorPrefix,
+            $unselectedPrefix ?? $this->unselectedPrefix,
+            $expandedGlyph ?? $this->expandedGlyph,
+            $collapsedGlyph ?? $this->collapsedGlyph,
+            $leafGlyph ?? $this->leafGlyph,
+        );
     }
 
     /** Construct a tree from variadic root nodes. */
@@ -178,7 +215,7 @@ final class Tree implements Model
                 ? $this->leafGlyph
                 : ($row['expanded'] ? $this->expandedGlyph : $this->collapsedGlyph);
             $indent = str_repeat('  ', $row['depth']);
-            $label = Sanitize::controlChars($row['label']);
+            $label = Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($row['label']));
             $line = $cursor . $indent . $glyph . $label;
             if ($this->width > 0) {
                 $line = Width::truncate($line, $this->width);

@@ -182,6 +182,11 @@ final class AnimatedProgress implements Model
         return Cmd::tick($interval, static fn(): Msg => new SpringTickMsg());
     }
 
+    /**
+     * Immutable rebuild. The spring cache survives (m2) exactly when the
+     * three tuning fields are untouched — withSpringOptions()/withFps()
+     * pass values, which drops the cache so the next getSpring() re-tunes.
+     */
     private function copy(
         ?Progress $progress = null,
         ?float $current = null,
@@ -192,7 +197,7 @@ final class AnimatedProgress implements Model
         ?float $fps = null,
         ?bool $animating = null,
     ): self {
-        return new self(
+        $next = new self(
             progress:         $progress         ?? $this->progress,
             current:          $current          ?? $this->current,
             velocity:         $velocity         ?? $this->velocity,
@@ -202,6 +207,10 @@ final class AnimatedProgress implements Model
             fps:              $fps              ?? $this->fps,
             animating:        $animating        ?? $this->animating,
         );
+        if ($angularFrequency === null && $dampingRatio === null && $fps === null) {
+            $next->spring = $this->spring;
+        }
+        return $next;
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

@@ -63,6 +63,9 @@ final class OptionRow
     /**
      * Render the name line and value line joined by "\n".
      *
+     * @deprecated The two-line legacy layout. Prefer {@see renderRow()},
+     *             the one-line btop row whose column maths is exact.
+     *
      * @param string|TextEdit $value plain value, or the live editor; while
      *                               $editing a TextEdit renders its
      *                               underline-caret view in valueCol - 1 cells.
@@ -118,7 +121,18 @@ final class OptionRow
             }
         }
 
-        return $line1 . "\n" . self::paint(array_merge($prefix, $middle, $suffix), $valueStyle);
+        $line2 = self::paint(array_merge($prefix, $middle, $suffix), $valueStyle);
+        // M17: the value line is built to the VALUE column's budget
+        // (valueCol + 4) and historically ignored $nameCol entirely, so a
+        // caller passing nameCol < valueCol + 4 got a row that overran
+        // into the next column. Clip it; short rows stay unpadded, which
+        // is btop's own behaviour (its rows never right-fill). At the
+        // default 29/25 the core is exactly 29 cells and this is a no-op.
+        $w2 = Width::string($line2);
+        if ($w2 > $nameCol) {
+            $line2 = Width::truncateAnsi($line2, $nameCol);
+        }
+        return $line1 . "\n" . $line2;
     }
 
     /** Widest value the one-line row shows before clipping (btop's value column). */
