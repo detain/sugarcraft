@@ -332,16 +332,62 @@ final class EscapeDecoderTest extends TestCase
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
     }
 
-    public function testExplicitNoModifierNumberTildeStaysDropped(): void
+    public function testExplicitNoModifierNumberTildeDecodesUnmodified(): void
     {
-        // A ";1" modifier field means no-modifier — the arrow family leaves
-        // that shape undecoded too (a terminal that omits modifiers omits the
-        // field), so fabricating an event here would be inventing traffic.
+        // A ";1" modifier field is an explicit NO-modifier (the same de-base
+        // law as the arrow family). Flipped 2026-11-03 (m6): the shape is
+        // unmistakable and refusing it stranded real traffic (terminfo
+        // ships e.g. kDN=\E[3;1~ on some entries); it now decodes as the
+        // bare key, agreeing with the parameter-less "3~". ";0" stays
+        // refused — see testZeroModifierNumberTildeRefusedBeforeBitFabrication.
         $events = $this->decoder->decode("\x1b[3;1~z");
-        $this->assertCount(1, $events);
-        $this->assertSame('z', $events[0]->key);
-        $this->assertSame(1, $this->decoder->droppedUnknownCount());
+        $this->assertCount(2, $events);
+        $this->assertSame('Delete', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->equals(KeyModifier::none()));
+        $this->assertSame('z', $events[1]->key);
+        $this->assertSame(0, $this->decoder->droppedUnknownCount());
         $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testRxvtTildeSevenEightDecodeAsHomeAndEnd(): void
+    {
+        // m5 (2026-10 review): rxvt/aterm ship khomet=\E[7~ and kdelet=\E[8~.
+        // xterm reserves 7~/8~ for the ISO-IR escape sequences but never SENDS
+        // them as keys; a terminal that does send them means Home/End. They
+        // were counted drops before — real traffic stranded (and the README's
+        // Home/End claim was false on those terminals). Now decoded.
+        $home = $this->decoder->decode("\x1b[7~");
+        $this->assertCount(1, $home);
+        $this->assertSame('Home', $home[0]->key);
+        $this->assertSame("\x1b[7~", $home[0]->raw);
+        $end = $this->decoder->decode("\x1b[8~");
+        $this->assertCount(1, $end);
+        $this->assertSame('End', $end[0]->key);
+        $this->assertSame(0, $this->decoder->droppedUnknownCount());
+        // The modified rxvt form decodes too: 7 with Ctrl is Ctrl+Home.
+        $ctrlHome = $this->decoder->decode("\x1b[7;5~");
+        $this->assertCount(1, $ctrlHome);
+        $this->assertSame('Home', $ctrlHome[0]->key);
+        $this->assertTrue($ctrlHome[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testExplicitNoModifierArrowFormsDecodeUnmodified(): void
+    {
+        // m6 (2026-10 review): "CSI 1;1A" and the parameter-less "CSI 1A"
+        // spell the de-based modifier value 1 = no-modifier. Refusing them
+        // stranded keypresses from terminals that always emit the modifier
+        // field; they now agree with bare "CSI A".
+        foreach (["\x1b[1;1A", "\x1b[1A"] as $wire) {
+            $events = $this->decoder->decode($wire);
+            $this->assertCount(1, $events, $wire);
+            $this->assertSame('ArrowUp', $events[0]->key, $wire);
+            $this->assertTrue($events[0]->modifiers->equals(KeyModifier::none()), $wire);
+        }
+        $this->assertSame(0, $this->decoder->droppedUnknownCount());
+        // And 1;0A stays refused: de-basing 0 would fabricate every bit.
+        $events = $this->decoder->decode("\x1b[1;0A");
+        $this->assertCount(0, $events);
+        $this->assertSame(1, $this->decoder->droppedUnknownCount());
     }
 
     public function testZeroModifierNumberTildeRefusedBeforeBitFabrication(): void

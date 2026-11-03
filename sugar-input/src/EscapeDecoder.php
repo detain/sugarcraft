@@ -68,6 +68,84 @@ final class EscapeDecoder
      */
     private const MAX_STRING_ABANDON = 65536;
 
+    /**
+     * SS3 (ESC O <final>) application-cursor/keypad table. Stateless by law:
+     * the ESC O <letter> frames are unambiguous regardless of DECKPAM/DECARM.
+     *
+     * @see ansicode.txt:742-753 (VT100 keypad application-mode table) and
+     *      xterm ctlseqs — SS3 `ESC O p..y` etc.
+     */
+    private const SS3_KEY_MAP = [
+        'P' => 'F1',
+        'Q' => 'F2',
+        'R' => 'F3',
+        'S' => 'F4',
+        // App-cursor-mode arrows (some terminals use SS3 for arrows)
+        'A' => 'ArrowUp',
+        'B' => 'ArrowDown',
+        'C' => 'ArrowRight',
+        'D' => 'ArrowLeft',
+        'H' => 'Home',
+        'F' => 'End',
+        // Application keypad mode: ESC O M is keypad Enter.
+        'M' => 'Enter',
+        // Application-keypad mode (DECKPAM, `ESC =`) sends the whole numeric
+        // keypad as SS3 letters: Op..Oy are digits 0..9, Ol the decimal
+        // separator (labelled "COMMA on keypad" on the VT100, the modern
+        // kp_decimal), Om minus.
+        'p' => 'KP0',
+        'q' => 'KP1',
+        'r' => 'KP2',
+        's' => 'KP3',
+        't' => 'KP4',
+        'u' => 'KP5',
+        'v' => 'KP6',
+        'w' => 'KP7',
+        'x' => 'KP8',
+        'y' => 'KP9',
+        'l' => 'KPDecimal',
+        'm' => 'KPSubtract',
+    ];
+
+    /** Bare arrows: final byte of a parameter-less CSI (e.g. ESC [ A). */
+    private const ARROW_FINALS = ['A' => 'ArrowUp', 'B' => 'ArrowDown', 'C' => 'ArrowRight', 'D' => 'ArrowLeft'];
+
+    /** Finals recognized in the xterm modified-key form `CSI 1 ; <mod> <final>`. */
+    private const MODIFIED_KEY_MAP = [
+        'A' => 'ArrowUp',
+        'B' => 'ArrowDown',
+        'C' => 'ArrowRight',
+        'D' => 'ArrowLeft',
+        'H' => 'Home',
+        'F' => 'End',
+        'P' => 'F1',
+        'Q' => 'F2',
+        'S' => 'F4',
+    ];
+
+    /** Legacy numbered special keys in the tilde family (`CSI <n> ~`). */
+    private const TILDE_SPECIAL_KEYS = [
+        1 => 'Home', 2 => 'Insert', 3 => 'Delete', 4 => 'End',
+        5 => 'PageUp', 6 => 'PageDown',
+        // rxvt/aterm extended the family: 7~/8~ are Home/End.
+        7 => 'Home', 8 => 'End',
+    ];
+
+    /**
+     * Legacy numbered function keys in the tilde family (xterm
+     * `kf1..kf24` numbering: 11..38 with the VT gaps). This numbering belongs
+     * to the tilde space ONLY — CSI-u functional codes are the spec table
+     * KITTY_FUNCTIONAL_KEYS below, not these numbers.
+     */
+    private const TILDE_FUNCTION_KEYS = [
+        11 => 'F1', 12 => 'F2', 13 => 'F3', 14 => 'F4',
+        15 => 'F5', 17 => 'F6', 18 => 'F7', 19 => 'F8',
+        20 => 'F9', 21 => 'F10', 23 => 'F11', 24 => 'F12',
+        25 => 'F13', 26 => 'F14', 28 => 'F15', 29 => 'F16',
+        31 => 'F17', 32 => 'F18', 33 => 'F19', 34 => 'F20',
+        35 => 'F21', 36 => 'F22', 37 => 'F23', 38 => 'F24',
+    ];
+
     /** Remaining bytes after last decode() that couldn't form a complete sequence */
     private string $remainder = '';
 
@@ -444,45 +522,7 @@ final class EscapeDecoder
         }
 
         $final = $afterO[0];
-        $ss3Map = [
-            'P' => 'F1',
-            'Q' => 'F2',
-            'R' => 'F3',
-            'S' => 'F4',
-            // App-cursor-mode arrows (some terminals use SS3 for arrows)
-            'A' => 'ArrowUp',
-            'B' => 'ArrowDown',
-            'C' => 'ArrowRight',
-            'D' => 'ArrowLeft',
-            'H' => 'Home',
-            'F' => 'End',
-            // Application keypad mode: ESC O M is keypad Enter.
-            // @see xterm ctlseqs — "ESC O ... (SS3)".
-            'M' => 'Enter',
-            // Application-keypad mode (DECKPAM, `ESC =`) sends the whole numeric
-            // keypad as SS3 letters. ansicode.txt:742-753 pins the table: Op..Oy
-            // are digits 0..9, Ol the decimal separator (labelled "COMMA on keypad"
-            // on the VT100, the modern kp_decimal), Om minus. A stateless decoder
-            // cannot track DECKPAM itself (sugar-input models no DEC modes), but the
-            // ESC O <letter> frames are unambiguous, so decoding them is always
-            // correct regardless of whether the host toggled the mode. Frames beyond
-            // this table (e.g. ESC O n / ESC O o) are not VT100 keypad codes and stay
-            // dropped as unknown SS3.
-            // @see ansicode.txt:742-753 (tmux tools/ansicode.txt, VT100 keypad
-            //      application-mode table) and xterm ctlseqs — SS3 `ESC O p..y` etc.
-            'p' => 'KP0',
-            'q' => 'KP1',
-            'r' => 'KP2',
-            's' => 'KP3',
-            't' => 'KP4',
-            'u' => 'KP5',
-            'v' => 'KP6',
-            'w' => 'KP7',
-            'x' => 'KP8',
-            'y' => 'KP9',
-            'l' => 'KPDecimal',
-            'm' => 'KPSubtract',
-        ];
+        $ss3Map = self::SS3_KEY_MAP;
 
         if (!isset($ss3Map[$final])) {
             // Unknown final byte — skip it
@@ -912,21 +952,14 @@ final class EscapeDecoder
             $modRaw = $m[2] === '' ? 1 : (int) $m[2];
             $finalKey = $m[3];
 
-            // xterm modified keys always have num=1 and a modifier parameter
-            if ($num === 1 && $m[2] !== '' && $modRaw > 1) {
+            // xterm modified keys carry num=1 and a modifier parameter; ";1"
+            // (and the parameter-less "1<final>") are an explicit NO-modifier —
+            // accepted, not refused (m6): the shape is unmistakable and decoding
+            // it agrees with the unmodified CSI final anyway.
+            if ($num === 1 && $modRaw >= 1) {
                 $modifiers = KeyModifier::fromXtermParam($modRaw);
 
-                $keyMap = [
-                    'A' => 'ArrowUp',
-                    'B' => 'ArrowDown',
-                    'C' => 'ArrowRight',
-                    'D' => 'ArrowLeft',
-                    'H' => 'Home',
-                    'F' => 'End',
-                    'P' => 'F1',
-                    'Q' => 'F2',
-                    'S' => 'F4',
-                ];
+                $keyMap = self::MODIFIED_KEY_MAP;
 
                 if (isset($keyMap[$finalKey])) {
                     return [
@@ -938,7 +971,7 @@ final class EscapeDecoder
         }
 
         // Arrow keys: CSI A/B/C/D (a plain arrow has no params, so $seq is one byte)
-        $arrowMap = ['A' => 'ArrowUp', 'B' => 'ArrowDown', 'C' => 'ArrowRight', 'D' => 'ArrowLeft'];
+        $arrowMap = self::ARROW_FINALS;
         if (isset($arrowMap[$seq])) {
             return [
                 'events' => [new KeyEvent($arrowMap[$seq], KeyModifier::none(), "\x1b[" . $seq)],
@@ -994,8 +1027,7 @@ final class EscapeDecoder
         // unmistakable at this point in the dispatch: the modifyOtherKeys wrap
         // (`27;mods;keysym ~`) has THREE params and is decoded above, and a
         // number absent from both tables (a stray `200~`/`201~` paste marker
-        // with a modifier riding along, unmapped `7~`/`8~`) still falls through
-        // to the counted drop.
+        // with a modifier riding along) still falls through to the counted drop.
         // @see ECMA-48 — CSI parameter bytes 0x30-0x3F, one final byte 0x40-0x7E.
         // @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html —
         //      modified function keys under `modifyFunctionKeys` ("CSI number ;
@@ -1005,22 +1037,19 @@ final class EscapeDecoder
 
             // The modifier field is 1 + the bitmask (same wire law as the
             // `1;mod<final>` arrow branch above). ";1" is an explicit
-            // no-modifier the arrow family leaves undecoded too, and ";0" would
-            // de-base to -1 and fabricate every bit (see the modifyOtherKeys
-            // guard) — both are refused, fail-fast, as counted drops.
+            // no-modifier and decodes bare; ";0" would de-base to -1 and
+            // fabricate every bit (see the modifyOtherKeys guard) — refused,
+            // fail-fast, as a counted drop.
             $modifiers = KeyModifier::none();
             if (isset($m[2]) && $m[2] !== '') {
                 $modRaw = (int) $m[2];
-                if ($modRaw <= 1) {
+                if ($modRaw < 1) {
                     return $this->dropUnknown($rest);
                 }
                 $modifiers = KeyModifier::fromXtermParam($modRaw);
             }
 
-            $specialKeys = [
-                1 => 'Home', 2 => 'Insert', 3 => 'Delete', 4 => 'End',
-                5 => 'PageUp', 6 => 'PageDown',
-            ];
+            $specialKeys = self::TILDE_SPECIAL_KEYS;
 
             if (isset($specialKeys[$num])) {
                 return [
@@ -1030,14 +1059,7 @@ final class EscapeDecoder
             }
 
             // F1-F4 via 11~-14~ (some terminals); F5+ via 15~ onward
-            $fKeys = [
-                11 => 'F1', 12 => 'F2', 13 => 'F3', 14 => 'F4',
-                15 => 'F5', 17 => 'F6', 18 => 'F7', 19 => 'F8',
-                20 => 'F9', 21 => 'F10', 23 => 'F11', 24 => 'F12',
-                25 => 'F13', 26 => 'F14', 28 => 'F15', 29 => 'F16',
-                31 => 'F17', 32 => 'F18', 33 => 'F19', 34 => 'F20',
-                35 => 'F21', 36 => 'F22', 37 => 'F23', 38 => 'F24',
-            ];
+            $fKeys = self::TILDE_FUNCTION_KEYS;
 
             if (isset($fKeys[$num])) {
                 return [
