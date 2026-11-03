@@ -114,7 +114,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 <tr><td>Terminal</td><td>mode()</td><td>Get terminal mode state (includes autoWrap)</td></tr>
 <tr><td>Terminal</td><td>windowTitle()</td><td>Get window title from OSC</td></tr>
 <tr><td>Terminal</td><td>withScrollbackSize(n)</td><td>New terminal with scrollback buffer size N</td></tr>
-<tr><td>Screen</td><td>cell(col, row)</td><td>Get cell at position</td></tr>
+<tr><td>Screen</td><td>cell(row, col)</td><td>Get cell at position (out-of-bounds in either coordinate returns the empty cell)</td></tr>
 <tr><td>Screen</td><td>scrollback()</td><td>Get scrollback buffer (ring buffer of scrolled-off rows)</td></tr>
 <tr><td>Cell</td><td>grapheme, sgr, combining, foreground(), background()</td><td>Cell content, style, and combining marks</td></tr>
 <tr><td>Cell</td><td>withCombining(string)</td><td>New cell with additional combining marks appended</td></tr>

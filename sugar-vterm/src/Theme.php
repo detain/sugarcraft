@@ -72,7 +72,7 @@ final class Theme
      * with value 8 + 10·(i − 232). Keyed by absolute index so it unions
      * cleanly beneath any sixteen-entry manual base.
      *
-     * Process-lifetime memo (E736 6.3): the region is a pure constant yet was
+     * Process-lifetime memo: the region is a pure constant yet was
      * rebuilt six times per request — once by defaultPalette() and once by
      * each factory's spread. PHP arrays are copy-on-write values, so handing
      * every caller the cached array cannot corrupt it.
@@ -110,7 +110,7 @@ final class Theme
         if (isset($this->palette[$index])) {
             return $this->palette[$index];
         }
-        // The lib's own palettes carry the full 0..255 table (E742); this
+        // The lib's own palettes carry the full 0..255 table; this
         // fallback serves custom palettes that omit slots — a caller-supplied
         // base-only sixteen, say — by computing the standard xterm mapping
         // for the index via self::rgb().

@@ -45,7 +45,7 @@ composer require sugarcraft/sugar-vterm
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 
 // Feed raw ANSI bytes from a terminal program.
 $vt->feed("\x1b[1;1H\x1b[31mmhello\x1b[0m");
@@ -92,12 +92,14 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 
 ## Two Terminal classes
 
-sugar-vterm ships **two** Terminal entry-points for distinct use cases:
+sugar-vterm ships **two** Terminal entry-points for distinct use cases —
+both share the short class name `Terminal`, so import one per file or alias
+the other (`use SugarCraft\Vterm\Terminal\Terminal as FullTerminal;`):
 
 | Class | Use case | Methods |
 |-------|----------|---------|
-| `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()` and `focusEvents()` (both drain-on-read), `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
-| `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self` (mutates in place, returns `$this`), `snapshot(?time): Snapshot` (deep-copies the grid), `revision(): int`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string`, `isWrapPending(): bool`. `enableAltScreen()`/`disableAltScreen()` exist for interface parity but ALWAYS throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
+| `SugarCraft\Vterm\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `new(cols, rows, ?scrollbackSize)`, `feed(bytes, ?respond)`, `feedAsync(bytes): PromiseInterface<string>`, `feedStream(ReadableStreamInterface, ?respond, ?cancellation): PromiseInterface<string>`, `replies()`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()` (null until the first title), `palette()`, `clipboardEvents()` and `focusEvents()` (both drain-on-read), `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
+| `SugarCraft\Vterm\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self` (mutates in place, returns `$this`), `snapshot(?time): Snapshot` (deep-copies the grid), `revision(): int`, `cursor(): Cursor`, `grid(): Buffer`, `windowTitle(): string` (empty until the first title), `isWrapPending(): bool`. `enableAltScreen()`/`disableAltScreen()` exist for interface parity but ALWAYS throw `\LogicException` — alt-screen machinery lives only on the full `Terminal\Terminal`. |
 
 ```php
 use SugarCraft\Vterm\Terminal;       // root — renderer path
@@ -147,7 +149,7 @@ $grid = $grid->resize(100, 40);        // NEW grid; content within bounds kept,
 // Cursor — row + col + shape + visibility
 $cursor = new Cursor(row: 0, col: 0, shape: 0, visible: true);
 $cursor = $cursor->at(5, 10);        // move to row 5, col 10
-$cursor = $cursor->withShape(2);      // shape 2 = pipe
+$cursor = $cursor->withShape(2);      // shape 2 = steady block
 $cursor = $cursor->hidden();           // hide cursor
 $cursor = $cursor->shown();          // show cursor
 ```
@@ -158,7 +160,7 @@ Each handler translates parser actions into handler state mutations:
 
 - `CursorHandler` — CUP, HVP, CUU/CUD/CUF/CUB, CR, LF/VT/FF, BS, RI, HOME, DECSC/USC
 - `SgrHandler` — SGR sequences (colour + attributes)
-- `EraseHandler` — ED, EL, ECH, DECSCA
+- `EraseHandler` — ED, EL, ECH
 - `ScrollHandler` — SU, SD, DECSTBM
 - `ModeHandler` — DECSET/DECRST/DECMODESET/DECMODERST (includes DECAWM mode 7)
 - `TabHandler` — TBC, HTS
@@ -334,15 +336,19 @@ DEC 2026 sections below.
 | `3` | Italic. |
 | `4` (or `4:1`) | Single underline. |
 | `4:2` / `4:3` / `4:4` / `4:5` | Double / Curly / Dotted / Dashed underline. |
+| `5` / `6` | Blink (slow and rapid fold onto one bit). |
 | `7` | Inverse (swap fg/bg). |
+| `8` | Hidden (conceal). |
 | `9` | Strikethrough. |
-| `21` / `22` | Reset bold + faint. |
-| `23` / `24` / `27` / `29` | Reset italic / underline / inverse / strikethrough. |
+| `21` | Accepted and ignored — the SGR handler has no arm for it. |
+| `22` | Reset bold + faint. |
+| `23` / `24` / `25` / `27` / `28` / `29` | Reset italic / underline / blink / inverse / hidden / strikethrough. |
 | `30..37` / `90..97` | Set 8 + 8 bright ANSI foreground. |
 | `38;5;<n>` / `38;2;<r>;<g>;<b>` | 256-color / truecolor foreground. |
 | `40..47` / `100..107` | Set 8 + 8 bright ANSI background. |
 | `48;5;<n>` / `48;2;<r>;<g>;<b>` | 256-color / truecolor background. |
 | `39` / `49` | Reset fg / bg to default. |
+| `58;5`/`58;2` / `59` | Underline-colour specifiers consumed and discarded (no per-style colour state). |
 
 Attribute bitfield exposed as `Cell::ATTR_*` constants:
 `ATTR_BOLD`, `ATTR_ITALIC`, `ATTR_UNDERLINE`, `ATTR_INVERSE`,
@@ -360,7 +366,7 @@ black.
 use SugarCraft\Vterm\Color\Color;  // color value object
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 $vt->feed("\x1b[48;5;196m\x1b[?12h");  // red background + BCE on
 $vt->feed("\x1b[2J");                   // erase screen — cells carry red bg
 
@@ -379,7 +385,7 @@ After feeding bytes, snapshot the screen and compare:
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 $vt->feed("before\r\n");
 $before = $vt->screen();
 
@@ -401,7 +407,7 @@ rightmost column. The `Mode` object exposes this as:
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 
 // Query the current state.
 $mode = $vt->mode();
@@ -462,9 +468,9 @@ in a ring-buffer `Scrollback`. Access it via:
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 4);
+$vt = Terminal::new(cols: 80, rows: 4);
 foreach (range(1, 6) as $n) {
-    $vt->feed("line $n\r\n");  // rows 5 and 6 push two rows off the top
+    $vt->feed("line $n\r\n");  // each LF at the bottom row scrolls one off: lines 1-3 land in the ring
 }
 
 $screen = $vt->screen();
@@ -494,7 +500,7 @@ Available `Scrollback` accessors:
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$scrollback = Terminal::create(cols: 80, rows: 24)->screen()->scrollback();
+$scrollback = Terminal::new(cols: 80, rows: 24)->screen()->scrollback();
 
 $scrollback->count();     // int — rows currently stored
 $scrollback->maxSize();   // int — configured capacity
@@ -515,7 +521,7 @@ DECSTBM. The `Mode` object exposes this as:
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 
 $mode = $vt->mode();
 var_dump($mode->originMode);  // bool
@@ -526,8 +532,9 @@ $origin = $mode->withOriginMode(true);
 When origin mode is **on**, the cursor is constrained to the scroll region
 and cursor-addressing commands (`CSI row;col H`, `CSI row;col f`) treat
 `(1,1)` as the top-left of the DECSTBM region. When **off** (the default),
-`(1,1)` is the absolute top-left of the screen. DECSTBM must be reset
-when leaving origin mode — both happen together via `CSI ?6 l`.
+`(1,1)` is the absolute top-left of the screen. Leaving origin mode
+(`CSI ?6 l`) flips only the mode: the DECSTBM region stays armed and is
+re-adopted when origin mode is re-enabled.
 
 ## Cursor shape (DECSCUSR)
 
@@ -541,7 +548,7 @@ value as an integer:
 use SugarCraft\Vterm\CursorShape;
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 
 $mode = $vt->mode();
 var_dump($mode->cursorShape);  // int (0–6)
@@ -582,7 +589,7 @@ The `Mode` object tracks the reporting flag:
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 $vt->feed("\x1b[?1004h");  // start reporting focus in/out
 
 $mode = $vt->mode();
@@ -614,7 +621,7 @@ pass an `onFocusEvent` callback to the constructor.
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 $vt->feed("\x1b[31me\xcc\x81");  // 'e' + combining acute accent → 'é'
 $cell = $vt->screen()->cell(0, 0);
 echo $cell->grapheme, "\n";   // 'e'
@@ -642,7 +649,7 @@ update behavior.
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
 
-$vt = Terminal::create(cols: 80, rows: 24);
+$vt = Terminal::new(cols: 80, rows: 24);
 
 $mode = $vt->mode();
 var_dump($mode->syncUpdate);  // bool — false until DEC 2026 is set
@@ -712,11 +719,11 @@ Attribute constants on `Theme` match `Cell::ATTR_*` for SGR bitfield constructio
 
 | Method | Returns |
 |--------|---------|
-| `Theme::color($index)` | `int` — packed 24-bit RGB for palette slot 0..255. Falls back through `Theme::rgb()` for grayscale (232..255) when a slot is absent. |
+| `$theme->color($index)` (instance) | `int` — packed 24-bit RGB for palette slot 0..255. Falls back through `Theme::rgb()` for grayscale (232..255) when a slot is absent. |
 | `Theme::rgb($index)` | `array{int,int,int}` — `[R,G,B]` resolution for any 256-color index, including the 6x6x6 color cube (16..231) and the 24-step grayscale ramp (232..255). |
 | `Theme::fgIndex($slot)` | `int` — Map an ANSI 0..15 slot to its 256-color index (currently a no-op identity, kept for spec parity). |
 | `Theme::bgIndex($slot)` | `int` — Same for background slot. |
-| `Theme::defaultPalette()` | `array<int,int>` — Bootstrap palette (xterm defaults) used by `Themes::ansi()`. |
+| `Theme::defaultPalette()` | `array<int,int>` — Bootstrap palette (xterm defaults); the `Theme` constructor falls back to it when no palette is passed (`Themes::ansi()` does not exist). |
 | `Theme::ANSI_OFFSET` / `Theme::CUBE_OFFSET` / `Theme::GRAYSCALE_OFFSET` | int constants 0 / 16 / 232 — palette region boundaries. |
 
 ## Subsystems
@@ -725,18 +732,55 @@ Each subdirectory of `src/` owns a small piece of VT state:
 
 | Namespace | Purpose | Public surface |
 |-----------|---------|----------------|
-| `Buffer\Buffer` | Cell grid storage (`rows × cols` array of `Cell`). | `cell($row, $col)`, `put($row, $col, $cell)`, `each(): Generator`, `copy(): array`, `resize($cols, $rows): self`. |
+| `Buffer\Buffer` | Cell grid storage (`rows × cols` array of `Cell`). | `cell($row, $col)` (either coordinate out of bounds → `Cell::empty()`), `put($row, $col, $cell)` (out-of-grid writes silently ignored), `insertRows($count, $from, ?$top, ?$bottom)`, `deleteRows($count, $from, ?$top, ?$bottom)`, `dirtyRegion()`, `each(): Generator`, `copy(): array`, `resize($cols, $rows): self` (refuses dims < 1, repairs wide pairs at the cut, marks the whole viewport dirty). |
 | `Screen\Screen` | Immutable snapshot of Buffer + Scrollback; cell-level diff API. | `fromBuffer($buf, ?$scrollback)`, `lines()` (Generator: full-width rows, combining marks re-appended), `linesWithHistory()` (Generator: scrolled-off rows oldest-first, then visible), `cell($row, $col)` (out-of-bounds in EITHER coordinate returns `Cell::empty()`), `scrollback()`, `diff($other)`. |
 | `Screen\Scrollback` | Ring buffer (default 1000 rows) for rows scrolled off the top. | `count()`, `maxSize()`, `at($n)`, `all()`. |
 | `Cell\Cell` | Cell-grid cell — grapheme + Sgr + Hyperlink + combining marks. Used by the full Terminal facade. | `empty()`, `continuation($prev)`, `withCombining($s)`, `sgr()`, `foreground()`, `background()`, `equals()`. |
 | `Cursor\Cursor` | Position + visibility + shape + saved-state. | `withRow($r)`, `withCol($c)`, `withVisible($v)`, `withShape($s)`, `save()`, `restore()`, `equals()`. |
 | `Sgr\Sgr` | Pen state (fg, bg, attrs bitfield, underline style). | `empty()`, `withBold/Italic/Underline/Strikethrough/Blink/Reverse/Dim/Hidden($v)`, `withUnderlineStyle($style)`, `withForeground(?$color)`, `withBackground(?$color)`, `equals()`. |
-| `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | `fromInt()`, `value`. |
+| `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | Backed int enum (`None`=0 … `Dashed`=5); `->value` is the CSI code (no `fromInt()`). |
 | `Mode\Mode` | DEC private modes. | `withAltScreen/AltScreenVariant/CursorVisible/MouseEncoding/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `isMouseReporting()`, `equals()`. |
 | `Hyperlink\Hyperlink` | OSC 8 URI + id state. | `fromRaw($id, $uri)`, `equals()`. |
 | `Msg\FocusInMsg` / `FocusOutMsg` | Focus event records — land in the emulator's bounded focus ring (DEC mode `1004`) and drain via `Terminal::focusEvents()`. | Plain DTOs. |
 | `Color\Color` | Color value object — palette index or truecolor RGB. | `default()`, `indexed16($i)`, `indexed256($i)`, `truecolor($r,$g,$b)`, `fromInt($kind,$v)`, `red()`, `green()`, `blue()`, `equals()`. |
 | `CursorShape` (root enum) | `BlinkingBlock` (0/1) / `SteadyBlock` (2) / `BlinkingUnderline` (3) / `SteadyUnderline` (4) / `BlinkingBar` (5) / `SteadyBar` (6). | `fromInt()`, `toInt()`. |
+
+## Trust boundary and hostile input
+
+Both facades exist to parse bytes emitted by UNTRUSTED programs, so every
+unbounded channel is capped and nothing leaves the grid unsanitised:
+
+- **Parser string buffer** — `Terminal::MAX_STRING_BUFFER` (64 KiB, shared by
+  both facade parsers). OSC/DCS payloads past the cap are truncated, so no
+  per-stream allocation grows with attacker-chosen length.
+- **Replies** — the emulator's query-reply queue is a 1024-entry drop-oldest
+  ring; under a DA/DSR flood an awaited reply can be evicted, so drain
+  `replies()` (or pass the `?respond` callback) promptly.
+- **Clipboard / focus events** — OSC 52 and DEC 1004 are *self-armed* by the
+  remote program (no capability negotiation), so both logs are 1024-entry
+  drop-oldest rings. `clipboardEvents()` and `focusEvents()` drain-on-read.
+- **DEC 2026 sync queue** — at most 16 384 pending cell writes; past that the
+  queue partially replays to the grid. Atomicity is surrendered only under
+  adversarial pressure, never silently dropped.
+- **Scrollback** — bounded ring (default 1000 rows); `withScrollbackSize()`
+  drops oldest rows when shrinking. The renderer path keeps no scrollback.
+- **Stored strings are attacker text** — window titles, OSC 8 hyperlinks and
+  OSC 52 payloads are kept VERBATIM; consumers must sanitise before display
+  or onward propagation (`Sanitize::untrusted()` upstream).
+- **Discarded without parsing** — DCS, SOS, PM and APC payloads; malformed
+  UTF-8 bytes (the upstream tokenizer emits no print event for them, so the
+  grid only ever holds decoded graphemes).
+- **BEL** — counted via `bells()` on the emulator path only; the renderer
+  discards BEL upstream in the adapter before any sink exists.
+- **One-way doors** — mouse, focus and bracketed-paste sequences are DECODED
+  only. `Mode\MouseEncoding` describes the decoder slot; the library ships
+  no encoders, so programs emitting those sequences build their own bytes.
+- **No I/O** — `src/` never writes streams, spawns processes, or touches the
+  filesystem; `feedStream()` merely accepts one.
+- **Renderer silences** — the CSI finals the parser adapter does not route
+  (E F G d X c n t p q, SP q, and OSC 4/10/11/52) are discarded on the
+  renderer path; the CSI/OSC coverage tables above are the per-sequence
+  ledger for which engine implements what.
 
 ## Development
 
@@ -752,10 +796,13 @@ vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php  # lint + auto-fi
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record fixtures after intentional output changes:
+To re-record a fixture after an intentional output change, delete it and
+re-run the test — `assertGoldenAnsi()` writes the file when it is missing
+(there is no env-var override):
 
 ```sh
-UPDATE_GOLDENS=1 vendor/bin/phpunit
+rm tests/fixtures/<name>.golden
+vendor/bin/phpunit --filter <TestName>
 ```
 
 Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (PSR-12 + `declare_strict_types` + `strict_param` + short array syntax). Append `--dry-run --diff` to preview without writing.

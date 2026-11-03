@@ -396,7 +396,7 @@ final class CsiHandlerImpl implements CsiHandler
             // The parser's contract is `list<int>` (sugar-ansi-parser `Parser::$params`,
             // -1 default slots included), so the former per-iteration
             // intval-normalisation ran on provably-integer input — dead
-            // allocation (E736 6.1).
+            // allocation.
             [$this->fg, $this->bg, $this->attrs, $i] = $this->applySgrParam(
                 $p,
                 $params,
@@ -874,7 +874,7 @@ final class CsiHandlerImpl implements CsiHandler
             return;
         }
         // The walk (region clamp + blank fill) lives in Buffer::insertRows()
-        // since E736/vt-6.4; only the phantom-drop and column-home movement
+        // since the row-splice rework; only the phantom-drop and column-home movement
         // rules stay here.
         $this->grid->insertRows($count, $row, $this->scrollTop, $this->scrollBottom);
         $this->wrapPending = false;
@@ -1033,7 +1033,7 @@ final class CsiHandlerImpl implements CsiHandler
      * Region scroll up (SU family). The per-row walk now lives in
      * {@see Buffer::deleteRows()} with $from pinned to the region top — a
      * single bulk pass replaces the old N x scrollUpOne() loop, final grid
-     * content identical (E736/vt-6.4). The empty-movement guard stays HERE:
+     * content identical. The empty-movement guard stays HERE:
      * unlike the IL/DL one-row floor inside the Buffer walk, SU/SD treat
      * $count <= 0 as a no-op.
      */

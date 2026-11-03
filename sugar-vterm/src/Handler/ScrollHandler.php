@@ -77,7 +77,7 @@ final class ScrollHandler
      * upstream uses the pen's background only via its blankCell(); the
      * caller passes SGR when BCE matters, kept simple here).
      *
-     * The walk itself lives in {@see Buffer::insertRows()} (E736/vt-6.4);
+     * The walk itself lives in {@see Buffer::insertRows()};
      * this method is its region-parameterised entry point.
      *
      * @see ECMA-48 §8.4.15 (IL)
@@ -94,7 +94,7 @@ final class ScrollHandler
      *
      * Same region-guarding rules as {@see insertLines()}.
      *
-     * The walk itself lives in {@see Buffer::deleteRows()} (E736/vt-6.4).
+     * The walk itself lives in {@see Buffer::deleteRows()}.
      *
      * @see ECMA-48 §8.4.10 (DL)
      * @see https://vt100.net/docs/vt510-rm/DL.html

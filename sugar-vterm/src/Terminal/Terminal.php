@@ -87,7 +87,7 @@ final class Terminal
     /**
      * Drive bytes through the parser.
      *
-     * Backwards-compatible query→reply channel (audit §B): when
+     * Backwards-compatible query→reply channel: when
      * `$respond` is given, the full queue of terminal→host answers —
      * DA1/DA2, DECRPM, CPR, XTWINOPS … — produced by this feed (plus any
      * earlier ones still queued) is handed to it in request order as the
@@ -186,7 +186,7 @@ final class Terminal
      * re-enter the parser. This closes the reviewer-agreed gap where the only
      * way to stop a pump was to end the promise's *consumer*, leaving the data
      * listener attached until the stream itself ended or errored (n3, wave-6
-     * handoff §6.1). The race is single-shot: whichever of `end`/`error`/
+     * The race is single-shot: whichever of `end`/`error`/
      * `close`/cancel arrives first owns the one settlement (the same
      * settle-once latch the failure paths use), and cancellation is idempotent
      * — a `cancel()` that arrives after the pump already settled is a no-op.
@@ -451,7 +451,7 @@ final class Terminal
         }
         // Resize both screens: the saved alt-state buffer must follow the
         // active one, or leaving DEC 1049 later would restore a stale-size
-        // grid into a resized terminal (real terminals resize both; E725).
+        // grid into a resized terminal (real terminals resize both).
         $this->handler->resizeBuffers($cols, $rows);
     }
 
@@ -462,7 +462,7 @@ final class Terminal
      * committed state only. ScreenHandler::__clone() deep-copies the mutable
      * Buffer/Scrollback (and the saved alt-state buffer) so the clone can
      * never write through into this terminal's grid.
-     * The alt-screen saved slots ride that deep copy (E725).
+     * The alt-screen saved slots ride that deep copy.
      */
     public function __clone(): void
     {
