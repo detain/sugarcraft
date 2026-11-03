@@ -1328,17 +1328,39 @@ final class Table
                 }
             }
             $remaining = $tableWidth - $reservedWidth - $fixedWidth;
-            $flexWidth = $remaining > 0 ? (int) \floor($remaining / $flexCount) : 0;
+
+            // Weighted flex split (audit MAJOR 15): a Flex column's
+            // flexibleWidth is a WEIGHT, not decoration. Every flexible slot
+            // holds at least one share — unweighted Flex, Dynamic, and Content
+            // columns each count as a single share, so when nothing carries a
+            // weight the split below is byte-identical to the old equal split.
+            $shares = [];
+            $totalShares = 0;
+            foreach ($this->columns as $i => $col) {
+                if ($widths[$i] !== null) {
+                    continue;
+                }
+                $shares[$i] = $col->columnWidth === ColumnWidth::Flex
+                    ? \max(1, $col->flexibleWidth)
+                    : 1;
+                $totalShares += $shares[$i];
+            }
+            $flexWidth = $remaining > 0 && $totalShares > 0
+                ? (int) \floor($remaining / $totalShares)
+                : 0;
 
             // Apply Dynamic/Content/Flex as content-based or share-based width
             foreach ($this->columns as $i => $col) {
                 if ($widths[$i] === null) {
                     $contentLen = $this->contentWidthForColumn($col);
                     if ($col->columnWidth === ColumnWidth::Flex) {
-                        // Flex: take the share verbatim, ignoring content (it is
-                        // truncated to fit) — the basis for an exact total width.
-                        // May shrink to 0 when the width is too tight to spare any.
-                        $widths[$i] = \max(0, $flexWidth);
+                        // Flex: take its weighted share verbatim, ignoring
+                        // content (it is truncated to fit) — the basis for an
+                        // exact total width. May shrink to 0 when the width is
+                        // too tight to spare any.
+                        $widths[$i] = $remaining > 0
+                            ? \max(0, (int) \floor($remaining * $shares[$i] / $totalShares))
+                            : 0;
                     } elseif ($col->columnWidth === ColumnWidth::Dynamic) {
                         // Dynamic: use content length or flex width, whichever is larger
                         $widths[$i] = \max($contentLen, $flexWidth);
