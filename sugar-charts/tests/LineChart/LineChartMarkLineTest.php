@@ -144,14 +144,22 @@ final class LineChartMarkLineTest extends TestCase
             $this->assertStringContainsString('MarkLine instances, string given', $e->getMessage());
         }
 
-        // The VO accepts any style string, so the render pass is the fail-fast point
-        // for glyphs it cannot draw.
-        $bogus = MarkLine::at(5.0, '', 'wavy');
+        // Style is validated at construction, not buried in the render pass:
+        // a MarkLine that cannot be rasterised must never exist, and the
+        // message names the accepted spellings so callers fix it blind.
         try {
-            self::base()->withMarkLines([$bogus])->view();
-            $this->fail('unknown MarkLine style must throw at render time');
+            MarkLine::at(5.0, '', 'wavy');
+            $this->fail('unknown MarkLine style must throw at construction');
         } catch (\InvalidArgumentException $e) {
-            $this->assertSame('Invalid MarkLine style: wavy', $e->getMessage());
+            $this->assertSame(
+                'Invalid MarkLine style: wavy (expected one of: solid, dashed, dotted)',
+                $e->getMessage(),
+            );
         }
+
+        // A non-finite value is rejected at the same ingress — it would
+        // otherwise defeat the divide-by-zero range guards downstream.
+        $this->expectException(\InvalidArgumentException::class);
+        MarkLine::at(NAN);
     }
 }

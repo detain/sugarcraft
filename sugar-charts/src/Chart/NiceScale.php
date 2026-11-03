@@ -34,7 +34,7 @@ final class NiceScale
      * 45 → 100 (floor). Non-positive maxima, and any result below the floor,
      * return {@see FLOOR}.
      *
-     * FINITE DOMAIN (audit F2 fix): the digit walk runs on a formatted
+     * Finite domain: the digit walk runs on a formatted
      * decimal string and the scale is recombined as a FLOAT product, so the
      * guarantee "result >= max" holds for every accepted input. The former
      * `(string)(int)$max` saturated at PHP_INT_MAX — ceiling(1e20) answered

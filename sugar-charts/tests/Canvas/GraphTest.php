@@ -256,7 +256,7 @@ final class GraphTest extends TestCase
     }
 
     /**
-     * Review follow-up (round 90): with `$max` within one tolerance of
+     * With `$max` within one tolerance of
      * DBL_MAX the inclusion tolerance itself overflows to INF, which
      * re-armed the runaway the bound doors were meant to retire — a
      * valid finite call died on the LogicException belt. The tolerance
@@ -278,7 +278,7 @@ final class GraphTest extends TestCase
     }
 
     /**
-     * Review follow-up (round 90) — mirror image: with `$min` near
+     * Mirror image: with `$min` near
      * -DBL_MAX the grid point at-or-below the minimum lives outside the
      * double domain (`floor($min / $step) * $step === -INF`) and the
      * loop would never end. The door throws a descriptive

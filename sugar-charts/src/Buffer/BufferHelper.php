@@ -24,7 +24,7 @@ final class BufferHelper
      * ({@see Width::of()}) so East-Asian, emoji (including plane-1), and
      * combining marks follow the same canon as every other SugarCraft
      * renderer — the old private table omitted plane-1 emoji despite its
-     * docblock claiming otherwise (audit F6).
+     * docblock claiming otherwise.
      */
     public static function graphemeWidth(string $cluster): int
     {

@@ -21,8 +21,7 @@ use SugarCraft\Style\Style;
 final class Graph
 {
     /**
-     * Upper bound silently clamped onto `niceNumbers()`'s `$targetTicks`
-     * (audit F1 fix), mirroring the existing lower clamp to 2. A tick
+     * Upper bound silently clamped onto `niceNumbers()`'s `$targetTicks`, mirroring the existing lower clamp to 2. A tick
      * ladder is only ever rendered onto a terminal-sized axis; asking for
      * more than this many is a caller bug, and clamping keeps the
      * allocation bounded instead of throwing at a cosmetic argument.
@@ -164,7 +163,7 @@ final class Graph
 
     /**
      * Place the characters of `$s` starting at (`$x`, `$y`), advancing
-     * by each grapheme's DISPLAY width (audit F6: one column per grapheme
+     * by each grapheme's DISPLAY width (one column per grapheme
      * shifted everything after a CJK/emoji rune off its terminal column).
      * Multi-byte safe. Delegates to {@see Canvas::setString()}, the single
      * cluster-splitting walker.
@@ -591,17 +590,16 @@ final class Graph
      * Returns evenly-spaced round numbers that divide the given range
      * into readable intervals. Mirrors ntcharts' `niceNumbers` helper.
      *
-     * Zero-range edge case (E736/3.6 round 86): when `$min === $max`
+     * Zero-range edge case: when `$min === $max`
      * (after a swap of inverted bounds) the raw `$min` is returned
      * unrounded as a single tick — there is no interval to make nice.
      *
-     * FINITE DOMAIN (audit F1/F22 fix): endpoints are rejected unless
+     * Finite domain: endpoints are rejected unless
      * finite, an overflowing difference (`1e308 - -1e308 === INF`) and a
      * zero-valued step throw instead of feeding an unbounded tick loop,
      * and `$targetTicks` is silently clamped to
      * {@see MAX_TARGET_TICKS} at the top the same way it was already
-     * clamped to 2 at the bottom. Round 90 review closed the two mirror
-     * overflow doors at the DBL_MAX boundary: a first tick that would
+     * clamped to 2 at the bottom. A first tick that would
      * round below the domain throws, and an inclusion tolerance that
      * overflows past DBL_MAX falls back to the bare `$max`. With those
      * doors the ladder picks the first of 1/2/5/10 at or above the
@@ -674,7 +672,7 @@ final class Graph
         if ($niceMin > $min) {
             $niceMin -= $niceStep;
         }
-        // Review follow-up (round 90): mirror image of the upper-bound
+        // Mirror image of the upper-bound
         // overflow fixed below. With `$min` near -DBL_MAX the grid point
         // at-or-below the minimum lives OUTSIDE the double domain and
         // `$niceMin` arrives here as -INF — the first rung of a loop
@@ -697,7 +695,7 @@ final class Graph
         // which is what let the loop run away once the endpoint bounds
         // above were added.
         //
-        // Review follow-up (round 90): when `$max` sits within one
+        // When `$max` sits within one
         // tolerance of DBL_MAX (e.g. `niceNumbers(1.7e308, PHP_FLOAT_MAX)`)
         // the addition itself overflows to INF, re-arming the very
         // runaway the bound check was meant to retire — every overflowing

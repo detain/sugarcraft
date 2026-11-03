@@ -9,6 +9,7 @@ use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Support\Finite;
+use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Support\Range;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -160,7 +161,7 @@ final class LineChart extends Chart
      * `withMin($min)->withMax($max)`. Mirrors ntcharts' `SetYRange`.
      *
      * @throws \InvalidArgumentException on NaN/INF endpoints or min > max
-     *         (audit F3, enforced at the constructor door); `null` ends stay
+     *         (enforced at the constructor door); `null` ends stay
      *         legal and mean "auto".
      */
     public function withYRange(?float $min, ?float $max): self
@@ -175,7 +176,7 @@ final class LineChart extends Chart
      * plot width. Mirrors ntcharts' `SetXRange`.
      *
      * @throws \InvalidArgumentException on NaN/INF endpoints or min > max
-     *         (audit F3, enforced at the constructor door); `null` ends stay
+     *         (enforced at the constructor door); `null` ends stay
      *         legal and mean "auto".
      */
     public function withXRange(?float $min, ?float $max): self
@@ -238,6 +239,7 @@ final class LineChart extends Chart
     public function withDataset(string $name, array $values): self
     {
         Finite::assertAll($values);
+        $name = UntrustedText::guard($name);
         $sets = $this->datasets;
         $sets[$name] = array_values($values);
 
@@ -258,7 +260,7 @@ final class LineChart extends Chart
     public function withDatasetPoint(string $name, string $rune): self
     {
         $points = $this->datasetPoints;
-        $points[$name] = $rune;
+        $points[UntrustedText::guard($name)] = UntrustedText::guard($rune);
         return $this->lineChartCopy(datasetPoints: $points);
     }
 
@@ -355,7 +357,7 @@ final class LineChart extends Chart
      */
     public function withXLabels(array $labels): self
     {
-        return $this->lineChartCopy(xLabels: array_values($labels));
+        return $this->lineChartCopy(xLabels: array_map(static fn(string $l): string => UntrustedText::guard($l), array_values($labels)));
     }
 
     /**
@@ -365,7 +367,7 @@ final class LineChart extends Chart
      */
     public function withYLabels(array $labels): self
     {
-        return $this->lineChartCopy(yLabels: array_values($labels));
+        return $this->lineChartCopy(yLabels: array_map(static fn(string $l): string => UntrustedText::guard($l), array_values($labels)));
     }
 
     // Short-form aliases.
@@ -420,19 +422,19 @@ final class LineChart extends Chart
     /** Customize legend styling. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->lineChartCopy(legendIndicatorChar: $indicatorChar);
+        return $this->lineChartCopy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar));
     }
 
     /** Set the X-axis label (rendered at bottom). */
     public function withXLabel(string $label): self
     {
-        return $this->lineChartCopy(xLabel: $label);
+        return $this->lineChartCopy(xLabel: UntrustedText::guard($label));
     }
 
     /** Set the Y-axis label (rendered at left). */
     public function withYLabel(string $label): self
     {
-        return $this->lineChartCopy(yLabel: $label);
+        return $this->lineChartCopy(yLabel: UntrustedText::guard($label));
     }
 
     /**
@@ -466,7 +468,7 @@ final class LineChart extends Chart
      */
     public function withTitle(string $title, Position $position = Position::Top): self
     {
-        return $this->lineChartCopy(title: $title, titlePosition: $position);
+        return $this->lineChartCopy(title: UntrustedText::guard($title), titlePosition: $position);
     }
 
     /**
@@ -754,7 +756,7 @@ final class LineChart extends Chart
     }
 
     /**
-     * Braille-mode series pass (audit F11). Rasterizes every series into a
+     * Braille-mode series pass. Rasterizes every series into a
      * dot-matrix grid (2×4 dots per terminal cell) and paints each touched
      * cell exactly once, carrying the series' legend color as the cell
      * style — so dataset colors actually reach the strokes and the render
@@ -978,7 +980,7 @@ final class LineChart extends Chart
             $labelWidth = Width::string($mark->label);
             if ($mark->label !== '' && $plotW > $labelWidth + 2) {
                 $start = $gutterLeft + $plotW - $labelWidth;
-                // Width-aware placement (audit F6): one walker for every
+                // Width-aware placement: one walker for every
                 // string the canvas receives, wide runes included.
                 $canvas->setString($start, $row, $mark->label);
             }

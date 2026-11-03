@@ -8,6 +8,7 @@ use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Range;
+use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -286,13 +287,13 @@ final class BarChart
     /** Customize legend indicator character. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->copy(legendIndicatorChar: $indicatorChar);
+        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar));
     }
 
     /** Set the chart title. */
     public function withTitle(string $title, Position $position = Position::Top): self
     {
-        return $this->copy(title: $title, titlePosition: $position);
+        return $this->copy(title: UntrustedText::guard($title), titlePosition: $position);
     }
 
     /** Set the title position separately. */
@@ -304,13 +305,13 @@ final class BarChart
     /** Set the X-axis label (rendered at bottom). */
     public function withXLabel(string $label): self
     {
-        return $this->copy(xLabel: $label);
+        return $this->copy(xLabel: UntrustedText::guard($label));
     }
 
     /** Set the Y-axis label (prepended to each line). */
     public function withYLabel(string $label): self
     {
-        return $this->copy(yLabel: $label);
+        return $this->copy(yLabel: UntrustedText::guard($label));
     }
 
     /**
@@ -320,7 +321,7 @@ final class BarChart
      */
     public function withLegendItems(array $items): self
     {
-        return $this->copy(legendItems: $items);
+        return $this->copy(legendItems: UntrustedText::guardItems($items));
     }
 
     // ─── Short-form Aliases ─────────────────────────────────────────────

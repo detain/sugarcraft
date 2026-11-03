@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Chart;
 
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Style\Theme;
@@ -269,19 +270,19 @@ abstract class Chart
     /** Customize legend styling. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->copy(legendIndicatorChar: $indicatorChar);
+        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar));
     }
 
     /** Set the X-axis label (rendered at bottom). */
     public function withXLabel(string $label): self
     {
-        return $this->copy(xLabel: $label);
+        return $this->copy(xLabel: UntrustedText::guard($label));
     }
 
     /** Set the Y-axis label (rendered at left). */
     public function withYLabel(string $label): self
     {
-        return $this->copy(yLabel: $label);
+        return $this->copy(yLabel: UntrustedText::guard($label));
     }
 
     /**
@@ -321,7 +322,7 @@ abstract class Chart
      */
     public function withTitle(string $title, Position $position = Position::Top): self
     {
-        return $this->copy(title: $title, titlePosition: $position);
+        return $this->copy(title: UntrustedText::guard($title), titlePosition: $position);
     }
 
     /**
@@ -360,7 +361,7 @@ abstract class Chart
     // ─── Short-form Aliases ──────────────────────────────────────────────
 
     /** @param list<array{label: string, color: string}> $items */
-    public function legendItems(array $items): self { return $this->copy(legendItems: $items); }
+    public function legendItems(array $items): self { return $this->copy(legendItems: UntrustedText::guardItems($items)); }
     public function legend(bool $on = true): self   { return $this->withLegend($on); }
     public function legendPos(Position $pos): self  { return $this->withLegendPosition($pos); }
     public function legendStyle(?string $char): self { return $this->withLegendStyle($char); }

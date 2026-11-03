@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Heatmap;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\Range;
+use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
@@ -33,6 +34,12 @@ use SugarCraft\Style\Style;
 final class Heatmap
 {
     /**
+     * Monochrome density ramp, lightest to densest. Seven evenly spaced
+     * steps keep the buckets visually distinguishable at cell size.
+     */
+    private const RAMP_GLYPHS = [' ', '·', ':', '░', '▒', '▓', '█'];
+
+    /**
      * @param list<list<int|float>> $grid
      * @param list<Color>           $palette  multi-stop colour palette;
      *                                        empty falls back to the
@@ -52,6 +59,7 @@ final class Heatmap
         public readonly bool $showLegend = false,
         public readonly ?Style $cellStyle = null,
         public readonly bool $autoValueRange = true,
+        public readonly bool $monoRamp = false,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('heatmap.dim_nonneg'));
@@ -140,7 +148,12 @@ final class Heatmap
         }
         return $next;
     }
-    public function withRune(string $r): self { return $this->copy(rune: $r); }
+    /**
+     * Fill rune for coloured mode. Control bytes (escape sequences,
+     * newlines) are stripped: the rune is repainted on every cell, so an
+     * unfiltered one would inject raw SGR into every row of the frame.
+     */
+    public function withRune(string $r): self { return $this->copy(rune: UntrustedText::guard($r)); }
     public function withColors(Color $cold, Color $hot): self
     {
         return $this->copy(coldColor: $cold, hotColor: $hot);
@@ -207,11 +220,50 @@ final class Heatmap
     }
 
     /**
+     * Monochrome density mode: each cell shows a glyph from a seven-step
+     * ramp (space · : ░ ▒ ▓ █) sized to the value's position in the range
+     * instead of a colour-filled block. The reading survives terminals
+     * without colour and colour-blind viewers; the cold-end block of the
+     * coloured mode, which is nearly indistinguishable from a dark
+     * background, has no equivalent here. Default off — the coloured
+     * gradient stays the out-of-box behaviour.
+     */
+    public function withMonoRamp(bool $on = true): self
+    {
+        return $this->copy(monoRamp: $on);
+    }
+
+    /**
+     * Export the raw grid as CSV (rows joined with "\n", values with
+     * `$sep`). Data, not pixels — pairs with {@see withMonoRamp()} when
+     * the reader cannot see the gradient at all.
+     */
+    public function toCsv(string $sep = ','): string
+    {
+        $lines = [];
+        foreach ($this->grid as $row) {
+            $cells = [];
+            foreach ($row as $v) {
+                $cells[] = self::formatLabel((float) $v);
+            }
+            $lines[] = implode($sep, $cells);
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
      * Read the auto-range flag. The bare `autoValueRange()` name is taken
      * by the setter alias ({@see withAutoValueRange()}), so this accessor
      * keeps the `get` prefix as a documented exception to the house law.
      */
     public function getAutoValueRange(): bool { return $this->autoValueRange; }
+
+    /**
+     * Read the mono-ramp flag. The bare `monoRamp()` name is taken by the
+     * setter alias ({@see withMonoRamp()}), so this accessor keeps the
+     * `get` prefix as a documented exception to the house law.
+     */
+    public function getMonoRamp(): bool { return $this->monoRamp; }
 
     // Short-form aliases.
     public function size(int $w, int $h): self    { return $this->withSize($w, $h); }
@@ -223,6 +275,7 @@ final class Heatmap
     public function palette(array $stops): self   { return $this->withPalette($stops); }
     public function legend(bool $on = true): self { return $this->withLegend($on); }
     public function cellStyle(?Style $style): self { return $this->withCellStyle($style); }
+    public function monoRamp(bool $on = true): self { return $this->withMonoRamp($on); }
     /** Short-form alias for {@see withColorProfile()}. */
     public function colorProfile(ColorProfile $p): self { return $this->withColorProfile($p); }
     /** Short-form alias for {@see withAutoValueRange()}. */
@@ -267,11 +320,15 @@ final class Heatmap
 
         $canvas = new Canvas($this->width, $this->height);
         $rowCount = count($this->grid);
-        // E736/2.1 round 86: Style objects are immutable value objects and
-        // the (r,g,b) triple fully determines the per-cell style for this
-        // render (profile/cellStyle are loop-invariant), so repeated cell
-        // colours reuse one allocation instead of ~width×height of them.
+        // Style objects are immutable value objects and the colour fully
+        // determines the per-cell style for this render (profile and
+        // cellStyle are loop-invariant), so repeated cell colours reuse
+        // one allocation instead of ~width×height of them. The palette
+        // index is part of the identity: two colours can share an RGB
+        // triple yet emit different SGR when the profile maps indexed
+        // colours by index.
         $styleCache = [];
+        $ramp = self::RAMP_GLYPHS;
         for ($y = 0; $y < $this->height; $y++) {
             if ($y >= $rowCount) {
                 break;
@@ -283,16 +340,26 @@ final class Heatmap
                     break;
                 }
                 $v = (float) $row[$x];
+                $t = $max == $min ? 0.0 : max(0.0, min(1.0, ($v - $min) / ($max - $min)));
+                if ($this->monoRamp) {
+                    // Monochrome density mode: the glyph carries the value,
+                    // so the frame survives terminals without colour (and
+                    // colour-blind viewers) — no per-cell style at all
+                    // beyond the optional caller overlay.
+                    $glyph = $ramp[min((int) floor($t * count($ramp)), count($ramp) - 1)];
+                    $canvas->setCell($x, $y, $glyph, $this->cellStyle);
+                    continue;
+                }
                 $color = $this->sample((float) $min, (float) $max, $v);
-                $rgb = ($color->r << 16) | ($color->g << 8) | $color->b;
-                if (!isset($styleCache[$rgb])) {
+                $key = (($color->ansiIndex ?? -1) << 24) | ($color->r << 16) | ($color->g << 8) | $color->b;
+                if (!isset($styleCache[$key])) {
                     $cell = Style::new()->foreground($color)->colorProfile($this->profile);
                     if ($this->cellStyle !== null) {
                         $cell = $cell->inherit($this->cellStyle);
                     }
-                    $styleCache[$rgb] = $cell;
+                    $styleCache[$key] = $cell;
                 }
-                $canvas->setCell($x, $y, $this->rune, $styleCache[$rgb]);
+                $canvas->setCell($x, $y, $this->rune, $styleCache[$key]);
             }
         }
         $body = $canvas->view();
@@ -350,8 +417,13 @@ final class Heatmap
 
         $stripWidth = max(0, $this->width - $minLen - $maxLen - 2);
         $strip = '';
+        $rampCount = count(self::RAMP_GLYPHS);
         for ($i = 0; $i < $stripWidth; $i++) {
             $t = $stripWidth <= 1 ? 0.0 : $i / ($stripWidth - 1);
+            if ($this->monoRamp) {
+                $strip .= self::RAMP_GLYPHS[min((int) floor($t * $rampCount), $rampCount - 1)];
+                continue;
+            }
             $color = $this->sample(0.0, 1.0, $t);
             $strip .= Style::new()
                 ->foreground($color)
@@ -383,6 +455,7 @@ final class Heatmap
         ?bool $showLegend = null,
         ?Style $cellStyle = null, bool $cellStyleSet = false,
         ?bool $autoValueRange = null,
+        ?bool $monoRamp = null,
     ): self {
         return new self(
             grid:           $grid       ?? $this->grid,
@@ -398,6 +471,7 @@ final class Heatmap
             showLegend:     $showLegend ?? $this->showLegend,
             cellStyle:      $cellStyleSet ? $cellStyle : $this->cellStyle,
             autoValueRange: $autoValueRange ?? $this->autoValueRange,
+            monoRamp:       $monoRamp       ?? $this->monoRamp,
         );
     }
 }

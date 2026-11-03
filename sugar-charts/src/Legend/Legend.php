@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Legend;
 
 use SugarCraft\Charts\Chart\Position;
+use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
@@ -42,7 +43,7 @@ final class Legend
      */
     public static function new(array $items = []): self
     {
-        return new self($items, Position::Right, '█', true);
+        return new self(UntrustedText::guardItems($items), Position::Right, '█', true);
     }
 
     /**
@@ -50,7 +51,7 @@ final class Legend
      */
     public function withItems(array $items): self
     {
-        return new self($items, $this->position, $this->indicatorChar, $this->showBorder);
+        return new self(UntrustedText::guardItems($items), $this->position, $this->indicatorChar, $this->showBorder);
     }
 
     public function withPosition(Position $position): self
@@ -60,7 +61,7 @@ final class Legend
 
     public function withIndicatorChar(string $char): self
     {
-        return new self($this->items, $this->position, $char, $this->showBorder);
+        return new self($this->items, $this->position, UntrustedText::guard($char), $this->showBorder);
     }
 
     public function withShowBorder(bool $show): self
@@ -106,8 +107,11 @@ final class Legend
         $line = implode('  ', $parts);
         if ($this->showBorder) {
             // borders sized by DISPLAY width — the line carries
-            // SGR escapes whose bytes mb_strlen would count.
-            $w = Width::string($line);
+            // SGR escapes whose bytes mb_strlen would count. The
+            // corners occupy one cell at each end, so the dash run
+            // spans the line width minus two and the whole frame is
+            // column-aligned with its content row.
+            $w = max(0, Width::string($line) - 2);
             return '┌' . str_repeat('─', $w) . '┐' . "\n" . $line . "\n" . '└' . str_repeat('─', $w) . '┘';
         }
         return $line;
@@ -129,15 +133,7 @@ final class Legend
     private function renderLeft(): string
     {
         if ($this->showBorder) {
-            $lines = [];
-            foreach ($this->items as $item) {
-                $lines[] = '│' . $this->coloredIndicator($item['color']) . ' ' . $item['label'] . '│';
-            }
-            $width = max(array_map(fn($l) => Width::string($l), $lines));
-            $border = '├' . str_repeat('─', $width) . '┤';
-            array_unshift($lines, $border);
-            $lines[] = $border;
-            return implode("\n", $lines);
+            return $this->renderSideBox(false);
         }
         $lines = [];
         foreach ($this->items as $item) {
@@ -149,15 +145,7 @@ final class Legend
     private function renderRight(): string
     {
         if ($this->showBorder) {
-            $lines = [];
-            foreach ($this->items as $item) {
-                $lines[] = '│ ' . $this->coloredIndicator($item['color']) . ' ' . $item['label'] . ' │';
-            }
-            $width = max(array_map(fn($l) => Width::string($l), $lines));
-            $border = '├' . str_repeat('─', $width) . '┤';
-            array_unshift($lines, $border);
-            $lines[] = $border;
-            return implode("\n", $lines);
+            return $this->renderSideBox(true);
         }
         $lines = [];
         foreach ($this->items as $item) {
@@ -167,9 +155,42 @@ final class Legend
     }
 
     /**
-     * Named-colour → SGR prefix table (E736/2.3 round 86): compile-time
-     * class constant instead of a method-local static — the values are
-     * fixed ANSI CSI sequences, identical to Ansi::fg16(n)/Ansi::sgr(39).
+     * Bordered box for the Left/Right positions: every content row is
+     * padded to the widest one so the closing border lands in a single
+     * column, and the box opens with ┌┐ / closes with └┘ corners (the
+     * earlier ├┤ tee spelling drew two "middle" joints with no frame
+     * above or below them, and the shorter rows' borders came home
+     * ragged).
+     */
+    private function renderSideBox(bool $padInside): string
+    {
+        $lines = [];
+        foreach ($this->items as $item) {
+            $content = $this->coloredIndicator($item['color']) . ' ' . $item['label'];
+            // The Right gutter pads each row with one space on both sides
+            // of the content; Left draws flush.
+            $lines[] = $padInside ? ' ' . $content . ' ' : $content;
+        }
+        $width = max(array_map(fn(string $l): int => Width::string($l), $lines));
+        // The dash run spans exactly the padded interior between the two
+        // side bars, so corners land over the row ends and the whole box
+        // is rectangular (an earlier +2 overhang sat two cells outside
+        // every content row).
+        $border = fn(string $cornerA, string $cornerB): string =>
+            $cornerA . str_repeat('─', $width) . $cornerB;
+        $framed = [];
+        $framed[] = $border('┌', '┐');
+        foreach ($lines as $line) {
+            $framed[] = '│' . Width::padRight($line, $width) . '│';
+        }
+        $framed[] = $border('└', '┘');
+        return implode("\n", $framed);
+    }
+
+    /**
+     * Named-color → SGR prefix table. A compile-time class constant (not a
+     * method-local static) because the values are fixed ANSI CSI sequences,
+     * identical to Ansi::fg16(n)/Ansi::sgr(39).
      */
     private const COLOR_MAP = [
         'red'     => Ansi::CSI . '31m',
@@ -183,10 +204,41 @@ final class Legend
     ];
 
     /**
+     * Whether this render pass must emit no colour at all.
+     *
+     * The legend's raw-CSI and hex paths bypass {@see Style}, so they need
+     * their own honouring of the de-facto standard: CLICOLOR_FORCE /
+     * FORCE_COLOR (any non-empty, non-"0" value) win outright, otherwise
+     * NO_COLOR set to ANY non-empty value — including "0" — disabless
+     * (no-color.org; `getenv()` returns FALSE, not '', when unset, so
+     * comparing against '' alone would read "unset" as "disable"), and
+     * CLICOLOR=0 disables by BSD convention.
+     */
+    private static function colorSuppressed(): bool
+    {
+        foreach (['CLICOLOR_FORCE', 'FORCE_COLOR'] as $forceVar) {
+            $force = getenv($forceVar);
+            if ($force !== false && $force !== '' && $force !== '0') {
+                return false;
+            }
+        }
+        $noColor = getenv('NO_COLOR');
+        if ($noColor !== false && $noColor !== '') {
+            return true;
+        }
+
+        return getenv('CLICOLOR') === '0';
+    }
+
+    /**
      * Wrap a block character with ANSI color codes.
      */
     private function coloredIndicator(string $color): string
     {
+        if (self::colorSuppressed()) {
+            return $this->indicatorChar;
+        }
+
         if (isset(self::COLOR_MAP[$color])) {
             $code = self::COLOR_MAP[$color];
             return $code . $this->indicatorChar . Ansi::sgr(39);

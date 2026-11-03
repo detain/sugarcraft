@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Canvas;
 
 use SugarCraft\Charts\Lang;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
@@ -38,7 +39,10 @@ final class Canvas
      * the rune is measured with the shared sugar-core display
      * width. A wide (CJK / emoji) rune claims two columns — the next one
      * receives a width-0 continuation cell — and a zero-width cluster
-     * claims none; ordinary single-cell runes behave exactly as before.
+     * merges into the base rune it decorates (the cell at $x, or the
+     * anchor one column back when $x is a continuation half); with no
+     * base to decorate it is dropped. Ordinary single-cell runes behave
+     * exactly as before.
      *
      * @return void
      */
@@ -49,15 +53,61 @@ final class Canvas
         }
         $w = $rune === '' ? 1 : Width::of($rune);
         if ($w === 0) {
+            // Zero-width cluster: merge into the cell it decorates — the
+            // cell at $x when it already holds a base rune, otherwise the
+            // anchor one column back (when $x sits on a wide rune's
+            // continuation half). With no base to decorate there is
+            // nowhere to attach the mark, so it is dropped.
+            $anchorX = $x;
+            $anchor = $this->cells[$y][$x] ?? null;
+            if (($anchor === null || $anchor->width === 0) && $x > 0) {
+                $prev = $this->cells[$y][$x - 1] ?? null;
+                if ($prev !== null && $prev->width !== 0) {
+                    $anchorX = $x - 1;
+                    $anchor = $prev;
+                }
+            }
+            if ($anchor === null || $anchor->width === 0) {
+                return;
+            }
+            $this->cells[$y][$anchorX] = new Cell($anchor->rune . $rune, $anchor->style, $anchor->width);
             return;
         }
-        if ($w === 1) {
-            $this->cells[$y][$x] = new Cell($rune, $style, 1);
+        $this->placeCell($x, $y, $rune, $style, $w >= 2 ? 2 : 1);
+    }
+
+    /**
+     * Write a base cell and keep the wide/continuation bookkeeping
+     * consistent: a wide rune claims its right half, and any write that
+     * steals a half (or replaces a wide rune with a narrow one) retires
+     * the now-stale partner instead of leaving a ghost continuation cell
+     * behind.
+     *
+     * @return void
+     */
+    private function placeCell(int $x, int $y, string $rune, ?Style $style, int $w): void
+    {
+        $existing = $this->cells[$y][$x] ?? null;
+        if ($existing !== null && $existing->width === 0 && $x > 0) {
+            // Overwriting the right half of a wide rune: its base can no
+            // longer be displayed in full, so the anchor goes with it.
+            $anchor = $this->cells[$y][$x - 1] ?? null;
+            if ($anchor !== null && $anchor->width >= 2) {
+                unset($this->cells[$y][$x - 1]);
+            }
+        }
+        $this->cells[$y][$x] = new Cell($rune, $style, $w);
+        if ($w >= 2) {
+            if ($x + 1 < $this->width) {
+                $this->cells[$y][$x + 1] = new Cell('', null, 0);
+            }
             return;
         }
-        $this->cells[$y][$x] = new Cell($rune, $style, 2);
-        if ($x + 1 < $this->width) {
-            $this->cells[$y][$x + 1] = new Cell('', null, 0);
+        if ($existing !== null && $existing->width >= 2 && $x + 1 < $this->width) {
+            $next = $this->cells[$y][$x + 1] ?? null;
+            if ($next !== null && $next->width === 0) {
+                unset($this->cells[$y][$x + 1]);
+            }
         }
     }
 
@@ -206,7 +256,7 @@ final class Canvas
         $y1 = min($this->height - 1, $y1);
         for ($y = $y0; $y <= $y1; $y++) {
             for ($x = $x0; $x <= $x1; $x++) {
-                $this->cells[$y][$x] = new Cell($rune, $style);
+                $this->placeCell($x, $y, $rune, $style, $rune === '' ? 1 : (Width::of($rune) >= 2 ? 2 : 1));
             }
         }
     }
@@ -319,32 +369,110 @@ final class Canvas
         }
     }
 
-    /** Render the canvas as a string. Empty cells render as spaces. */
+    /**
+     * Render the canvas as a string. Empty cells render as spaces; each
+     * row is right-trimmed, and rows join with "\n". Adjacent cells that
+     * share a style emit its escape sequence once for the whole run, and
+     * exactly one reset closes each styled run — the frame carries no
+     * per-cell reset spam.
+     */
     public function view(): string
+    {
+        return $this->renderFrame(trimRows: true);
+    }
+
+    /**
+     * Render the canvas with every row padded to its full width — trailing
+     * cells (including a styled cell whose rune is a space) survive.
+     * Overlay hosts that blit the frame onto an existing screen need the
+     * full rectangle; {@see view()} trims it away.
+     */
+    public function viewPadded(): string
+    {
+        return $this->renderFrame(trimRows: false);
+    }
+
+    private function renderFrame(bool $trimRows): string
     {
         $rows = [];
         for ($y = 0; $y < $this->height; $y++) {
             $row = '';
+            $active = ''; // SGR prefix currently open on the terminal ('' = default)
             for ($x = 0; $x < $this->width; $x++) {
                 $cell = $this->cells[$y][$x] ?? null;
-                if ($cell === null) {
-                    $row .= ' ';
+                if ($cell !== null && $cell->width === 0) {
+                    // Right half of a wide cell: the anchor already emitted it.
                     continue;
                 }
-                if ($cell->width === 0) {
-                    // Right half of a wide cell: the left cell already emitted it.
+                $rune = $cell === null || $cell->rune === '' ? ' ' : $cell->rune;
+                $open = $cell === null || $cell->style === null
+                    ? ''
+                    : self::styleOpen($cell->style, $rune);
+                if ($open === null) {
+                    // Exotic style (padding/border chars around the rune):
+                    // flush the open run and emit the cell verbatim, exactly
+                    // as the per-cell renderer did.
+                    if ($active !== '') {
+                        $row .= Ansi::reset();
+                        $active = '';
+                    }
+                    $wrapped = $cell->style->render($rune);
+                    $row .= $wrapped;
+                    if (preg_match('/\x1b\[[0-9;]*m\z/', $wrapped) !== 1) {
+                        $row .= Ansi::reset();
+                    } else {
+                        $active = '';
+                    }
                     continue;
                 }
-                $rune = $cell->rune === '' ? ' ' : $cell->rune;
-                $row .= $cell->style !== null
-                    ? $cell->style->render($rune)
-                    : $rune;
-                if ($cell->width >= 2) {
+                if ($open !== $active) {
+                    if ($active !== '') {
+                        $row .= Ansi::reset();
+                    }
+                    if ($open !== '') {
+                        $row .= $open;
+                    }
+                    $active = $open;
+                }
+                $row .= $rune;
+                if ($cell !== null && $cell->width >= 2) {
                     $x++; // the wide rune spans this column and the next
                 }
             }
-            $rows[] = rtrim($row);
+            if ($active !== '') {
+                $row .= Ansi::reset();
+            }
+            $rows[] = $trimRows ? rtrim($row) : $row;
         }
         return implode("\n", $rows);
+    }
+
+    /**
+     * The SGR prefix {@see Style::render()} puts around `$rune`, or ''
+     * when the style renders the rune bare. Returns null when the
+     * rendered shape is not a plain `<sgr><rune><reset>` sandwich (the
+     * caller then emits the full render inline). Memoized per process:
+     * hot frames repeat the same style/rune pair thousands of times.
+     *
+     * @var array<string, string|null>
+     */
+    private static array $styleOpenMemo = [];
+
+    private static function styleOpen(Style $style, string $rune): ?string
+    {
+        $key = spl_object_id($style) . '|' . $rune;
+        if (array_key_exists($key, self::$styleOpenMemo)) {
+            return self::$styleOpenMemo[$key];
+        }
+        $wrapped = $style->render($rune);
+        $runePos = strrpos($wrapped, $rune);
+        if ($runePos === false) {
+            return self::$styleOpenMemo[$key] = null;
+        }
+        $tail = substr($wrapped, $runePos + strlen($rune));
+        if ($tail !== '' && $tail !== Ansi::reset()) {
+            return self::$styleOpenMemo[$key] = null;
+        }
+        return self::$styleOpenMemo[$key] = substr($wrapped, 0, $runePos);
     }
 }

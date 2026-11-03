@@ -116,6 +116,10 @@ final class LegendTest extends TestCase
      * (The separator's dash count equals the walled content row's
      * display width — the same structural geometry the ASCII path always
      * had, now escape-blind.)
+     *
+     * lib-reviews-1103: the side box is now column-rectangular — the two
+     * side bars sit at the row ends, so the dash run spans the content
+     * row width minus those bars.
      */
     public function testBorderWidthIgnoresAnsiEscapes(): void
     {
@@ -124,7 +128,7 @@ final class LegendTest extends TestCase
             ->view();
         $rows = explode("\n", $out);
         $borderRun = substr_count($rows[0], "\u{2500}");
-        self::assertSame(\SugarCraft\Core\Util\Width::string($rows[1]), $borderRun);
+        self::assertSame(\SugarCraft\Core\Util\Width::string($rows[1]) - 2, $borderRun);
     }
 
     /**

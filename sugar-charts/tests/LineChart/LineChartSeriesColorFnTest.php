@@ -45,9 +45,13 @@ final class LineChartSeriesColorFnTest extends TestCase
             ->withFill()
             ->view();
 
-        $this->assertStringContainsString(self::BLUE . "/\x1b[0m", $out);
-        $this->assertStringContainsString(self::RED . "*\x1b[0m", $out);
-        $this->assertStringContainsString(self::BLUE . "*\x1b[0m", $out);
+        // SGR runs coalesce across adjacent equal-style cells, so a blue
+        // marker may share its opener with the neighboring connector
+        // glyphs; pin the semantic: within one row, a colour opener reaches
+        // a '*' before the row ends (opener, then at most the '/' fill
+        // glyphs and spaces, then the marker).
+        $this->assertMatchesRegularExpression('/' . preg_quote(self::BLUE, '/') . "[^\n\x1b]{0,6}\\*/", $out);
+        $this->assertMatchesRegularExpression('/' . preg_quote(self::RED, '/') . "[^\n\x1b]{0,6}\\*/", $out);
     }
 
     public function testBrailleModeSgrRunsDifferWithinOneSeries(): void
