@@ -26,9 +26,18 @@ use SugarCraft\Input\Event;
  *       }
  *   }
  *
- * NOTE: Applications must still install a SIGWINCH handler if they need
- * to RESPOND to resizes, not just detect them. This driver only detects
- * that a resize occurred by checking a flag set in the signal handler.
+ * ONE-DISPOSITION LAW: arm() IS the SIGWINCH handler — a process can hold
+ * only one, and this driver's handler fans the signal out to every armed
+ * instance. Applications must NOT install a second pcntl_signal(SIGWINCH,
+ * ...): whichever installs LAST silently blinds the other. Responding to a
+ * resize needs no handler of your own — read() returns the ResizeEvent
+ * carrying the fresh dimensions. (If your program already owns SIGWINCH for
+ * other reasons, do not arm this driver.)
+ *
+ * arm() returns false — and read() then stays null forever — when ext-pcntl
+ * is absent: the degraded mode is observable, never a silent half-start.
+ * disarm() reverses the registration for one driver, and when the LAST armed
+ * driver disarms, the SIGWINCH disposition returns to SIG_DFL.
  *
  * Construction is side-effect free. Arm() flips the process-global signal
  * disposition (pcntl_async_signals + a SIGWINCH handler) and shells out to
@@ -49,8 +58,8 @@ final class SignalResizeDriver implements InputDriver
      * else is a malformed name — or an injection attempt riding a future
      * caller — and never reaches a shell.
      *
-     * This gate, plus escapeshellarg() on the validated name, is
-     * defense-in-depth for the shell_exec() in getTput(). The gate parses;
+     * This guard, plus escapeshellarg() on the validated name, is
+     * defense-in-depth for the shell_exec() in getTput(). The guard parses;
      * the quoting stays even though a passing name needs none, so a later
      * regex relaxation cannot silently un-defend the shell-out.
      */
@@ -66,6 +75,16 @@ final class SignalResizeDriver implements InputDriver
      * @var \WeakMap<self>|null
      */
     private static ?\WeakMap $sigwinchListeners = null;
+
+    /**
+     * The SIGWINCH disposition as it stood BEFORE the first arm() in this
+     * process, captured lazily so disarm() can hand it back (m3). 'captured'
+     * is the sentinel — the stored handler may legitimately be 0 (SIG_DFL)
+     * or a Closure owned by other code.
+     *
+     * @var array{captured: bool, handler: \Closure|string|int}
+     */
+    private static array $sigwinchPrevious = ['captured' => false, 'handler' => 0];
 
     /** Flag set by the SIGWINCH handler for THIS instance only */
     private bool $sigwinchReceived = false;
@@ -102,11 +121,15 @@ final class SignalResizeDriver implements InputDriver
      * any of that — callers who only build (or test-build) a driver leave the
      * process disposition untouched. Calling arm() twice is harmless: the
      * WeakMap set is idempotent and the handler re-install is the same closure.
+     *
+     * @return bool false when ext-pcntl is absent — the driver cannot detect
+     *               resizes in that environment and read() will always return
+     *               null (M8: no silent half-start).
      */
-    public function arm(): void
+    public function arm(): bool
     {
         if (!function_exists('pcntl_signal')) {
-            return;
+            return false;
         }
 
         // The process can hold only ONE SIGWINCH disposition, so registration
@@ -120,6 +143,47 @@ final class SignalResizeDriver implements InputDriver
 
         // Capture initial dimensions
         $this->updateDimensions();
+
+        return true;
+    }
+
+    /**
+     * Undo arm() for this instance (m3: arming used to be a one-way door).
+     *
+     * Removes this driver from the fan-out registry. When it was the LAST
+     * armed driver, the process-wide SIGWINCH disposition is restored —
+     * to whatever handler predates the first ever arm() in this process,
+     * or SIG_DFL if none existed — so a host that armed this driver for a
+     * phase can hand the signal back intact instead of leaking the
+     * replacement. pcntl_async_signals() mode is deliberately NOT restored:
+     * flipping a process-wide dispatch mode off could strand signal code
+     * other libraries armed after this driver, and the disposition (not the
+     * mode) is what this driver ever claimed to own.
+     *
+     * @return bool false when ext-pcntl is absent — exactly as in arm(),
+     *               nothing was ever installed to undo.
+     */
+    public function disarm(): bool
+    {
+        if (!function_exists('pcntl_signal')) {
+            return false;
+        }
+
+        $this->sigwinchReceived = false;
+
+        if (self::$sigwinchListeners === null) {
+            return true;
+        }
+
+        unset(self::$sigwinchListeners[$this]);
+
+        if (count(self::$sigwinchListeners) === 0) {
+            $previous = self::$sigwinchPrevious;
+            self::$sigwinchPrevious = ['captured' => false, 'handler' => 0];
+            pcntl_signal(SIGWINCH, $previous['captured'] ? $previous['handler'] : SIG_DFL);
+        }
+
+        return true;
     }
 
     /**
@@ -129,6 +193,13 @@ final class SignalResizeDriver implements InputDriver
      */
     private static function installSigwinchHandler(): void
     {
+        if (!self::$sigwinchPrevious['captured'] && function_exists('pcntl_signal_get_handler')) {
+            self::$sigwinchPrevious = [
+                'captured' => true,
+                'handler' => pcntl_signal_get_handler(SIGWINCH),
+            ];
+        }
+
         pcntl_async_signals(true);
         pcntl_signal(SIGWINCH, static function (int $sig): void {
             // WeakMap single-variable foreach yields VALUES — iterate keys.
@@ -139,20 +210,26 @@ final class SignalResizeDriver implements InputDriver
     }
 
     /**
-     * Record a SIGWINCH for THIS instance only, refreshing its dimensions.
+     * Record a SIGWINCH for THIS instance only.
+     *
+     * Deliberately a bare flag write: this runs from the async-signal
+     * handler, and the two tput forks used to ride it (m2). A resize-drag
+     * storm nesting shell_exec mid-dispatch is both slow and hostile to
+     * non-reentrant state; the refresh now happens lazily in read(), where
+     * N coalesced signals cost exactly one probe pair.
      */
     private function markSigwinch(): void
     {
         $this->sigwinchReceived = true;
-        // Update stored dimensions on signal receipt
-        $this->updateDimensions();
     }
 
     /**
      * Read the next resize event, or null if no resize has been detected.
      *
      * This method is non-blocking — it returns null immediately if no
-     * SIGWINCH has been received since the last call.
+     * SIGWINCH has been received since the last call. When a resize is
+     * delivered, dimensions are re-probed here (not in the signal handler)
+     * before the event is constructed (m2).
      *
      * @return Event|ResizeEvent|null
      */
@@ -167,6 +244,7 @@ final class SignalResizeDriver implements InputDriver
         }
 
         $this->sigwinchReceived = false;
+        $this->updateDimensions();
 
         return new ResizeEvent($this->cols, $this->rows);
     }
@@ -204,7 +282,7 @@ final class SignalResizeDriver implements InputDriver
     }
 
     /**
-     * Gate then build the exact tput command line for one capability.
+     * Refuse malformed names, then build the exact tput command line.
      *
      * Fail-fast: an unparseable capability throws before any shell-out.
      * The validated name is still escapeshellarg()'d (AGENTS.md: pass ALL
@@ -213,13 +291,24 @@ final class SignalResizeDriver implements InputDriver
     private static function tputCommand(string $capability): string
     {
         if (\preg_match(self::CAPABILITY_PATTERN, $capability) !== 1) {
+            // The message quotes the offender (control bytes folded to '.')
+            // and states the rule in prose — no hand-copied regex literal,
+            // which would drift from CAPABILITY_PATTERN the moment either
+            // side moved (n21).
+            $quoted = preg_replace('/[^\x20-\x7e]/', '.', $capability) ?? '';
+
             throw new \InvalidArgumentException(
-                "SignalResizeDriver capability name rejected: " .
-                var_export($capability, true) .
-                " does not match terminfo shape ^[a-z][a-z0-9]{0,4}$"
+                'SignalResizeDriver refused capability "' . $quoted . '": '
+                . 'a terminfo capability is a lowercase letter followed by '
+                . 'up to four lowercase letters or digits.'
             );
         }
 
+        // 2>/dev/null: tput grumbles on stderr when terminfo cannot be
+        // resolved (no tty, unknown TERM); getTput() reads the empty stdout
+        // as "keep last known dimensions". POSIX-sh idiom — on cmd.exe the
+        // redirect is inert and the error text lands on stdout, where the
+        // numeric cast yields 0: the same safe answer by a different road (n24).
         return 'tput ' . \escapeshellarg($capability) . ' 2>/dev/null';
     }
 }

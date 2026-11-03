@@ -8,9 +8,10 @@ namespace SugarCraft\Input;
  * Configuration options for EscapeDecoder protocol filtering.
  *
  * Allows applications to disable unused protocol parsing to reduce overhead.
- * By default all protocols are enabled. The options are immutable — the
- * decoder reads them at construction; a different mix means a new instance
- * (named arguments make that a one-liner).
+ * All four protocol families are enabled by default; trailing-escape
+ * deferral is a behaviour, not a protocol, and it defaults OFF. The options
+ * are immutable — the decoder reads them at construction; a different mix
+ * means a new instance (named arguments make that a one-liner).
  *
  * @example
  * ```php

@@ -172,8 +172,103 @@ final class SignalResizeDriverTest extends TestCase
         $this->assertNull($driverA->read());
         $this->assertNull($driverB->read());
 
-        // Each instance refreshed its OWN dimensions when the fan-out fired.
+        // Each instance refreshed its OWN dimensions lazily, in its own
+        // read() — the handler only sets the flag (m2). Values land the
+        // same either way; the count below now proves the deferral.
         $this->assertSame(4, $callsA);
         $this->assertSame(4, $callsB);
+    }
+
+    /**
+     * m2: the signal handler must be a bare flag write — no tput forks in
+     * async-signal context. The probe pair runs when read() delivers the
+     * event, and a coalesced storm still costs exactly one pair.
+     */
+    public function testDimensionsRefreshInReadNotInSignalContext(): void
+    {
+        if (!function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('SIGWINCH timing pin needs pcntl and posix');
+        }
+
+        $calls = 0;
+        $driver = new SignalResizeDriver(static function (string $command) use (&$calls): string {
+            $calls++;
+            return "80\n";
+        });
+
+        $this->assertTrue($driver->arm(), 'arm() must report the installation (M8)');
+        $this->assertSame(2, $calls, 'arm() probes cols + lines once');
+
+        $this->assertTrue(posix_kill(posix_getpid(), SIGWINCH));
+        pcntl_signal_dispatch();
+        $this->assertSame(2, $calls, 'the handler must not fork tput from signal context (m2)');
+
+        $event = $driver->read();
+        $this->assertInstanceOf(ResizeEvent::class, $event);
+        $this->assertSame(4, $calls, 'read() refreshes once per delivered event (m2)');
+
+        $this->assertNull($driver->read());
+        $this->assertSame(4, $calls, 'an idle read() must not probe again');
+
+        $driver->disarm();
+    }
+
+    /**
+     * m3: disarm() hands the SIGWINCH disposition back to whoever held it
+     * before the driver's first arm() — the process-global mutation is no
+     * longer one-way. State is reset via reflection so this test is order-
+     * independent of other suites' drivers in the same process.
+     */
+    public function testDisarmHandsTheSignalDispositionBack(): void
+    {
+        if (!function_exists('pcntl_signal') || !function_exists('pcntl_signal_get_handler')) {
+            $this->markTestSkipped('disposition-restore pin needs pcntl');
+        }
+
+        self::resetSigwinchStatics();
+
+        $marker = static function (int $signal): void {
+        };
+        pcntl_signal(SIGWINCH, $marker);
+        $this->assertSame($marker, pcntl_signal_get_handler(SIGWINCH));
+
+        $driver = new SignalResizeDriver(static fn (string $command): string => "80\n");
+        $this->assertTrue($driver->arm());
+        $this->assertNotSame(
+            $marker,
+            pcntl_signal_get_handler(SIGWINCH),
+            'arm() takes the one disposition (documented, not silent)'
+        );
+
+        $this->assertTrue($driver->disarm());
+        $this->assertSame(
+            $marker,
+            pcntl_signal_get_handler(SIGWINCH),
+            'disarming the last driver restores the pre-arm handler (m3)'
+        );
+
+        // Re-arming after a full hand-back works and re-owns the signal.
+        $this->assertTrue($driver->arm());
+        $this->assertNotSame($marker, pcntl_signal_get_handler(SIGWINCH));
+
+        // Disarming a driver that never registered is a harmless no-op.
+        $neverArmed = new SignalResizeDriver(static fn (string $command): string => "80\n");
+        $this->assertTrue($neverArmed->disarm());
+
+        // Hand the process back clean for any later test.
+        $driver->disarm();
+        pcntl_signal(SIGWINCH, SIG_DFL);
+        self::resetSigwinchStatics();
+    }
+
+    private static function resetSigwinchStatics(): void
+    {
+        $class = new \ReflectionClass(SignalResizeDriver::class);
+
+        $listeners = $class->getProperty('sigwinchListeners');
+        $listeners->setValue(null, null);
+
+        $previous = $class->getProperty('sigwinchPrevious');
+        $previous->setValue(null, ['captured' => false, 'handler' => 0]);
     }
 }

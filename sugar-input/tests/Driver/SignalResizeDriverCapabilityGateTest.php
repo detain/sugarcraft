@@ -8,11 +8,11 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Input\Driver\SignalResizeDriver;
 
 /**
- * Gate pins for SignalResizeDriver's tput capability (shell-injection guard).
+ * Guard pins for SignalResizeDriver's tput capability (shell-injection guard).
  *
  * Both polarities: well-formed terminfo names reach the shell ONLY as a
  * quoted, exact command shape; injection-shaped names are refused at the
- * gate with a typed failure and cost zero shell-outs. The command string
+ * guard with a typed refusal and cost zero shell-outs. The command string
  * is captured through the driver's internal executor seam — no real
  * subprocess ever runs here.
  *
@@ -54,7 +54,7 @@ final class SignalResizeDriverCapabilityGateTest extends TestCase
     }
 
     /**
-     * Invoke the private static gate+builder directly.
+     * Invoke the private static guard+builder directly.
      */
     private function build(string $capability): string
     {
@@ -81,7 +81,7 @@ final class SignalResizeDriverCapabilityGateTest extends TestCase
         $this->assertSame(80, $linesValue);
     }
 
-    public function testNumericParseBehaviourSurvivesTheGate(): void
+    public function testNumericParseBehaviourSurvivesTheGuard(): void
     {
         $driver = $this->makeDriver($recorder, "132\n");
         $value = (new \ReflectionMethod($driver, 'getTput'))->invoke($driver, 'cols');
@@ -125,7 +125,7 @@ final class SignalResizeDriverCapabilityGateTest extends TestCase
             $getTput->invoke($driver, $capability);
             $this->fail('expected InvalidArgumentException for ' . var_export($capability, true));
         } catch (\InvalidArgumentException $exception) {
-            $this->assertStringContainsString('rejected', $exception->getMessage());
+            $this->assertStringContainsString('refused', $exception->getMessage());
         }
 
         $this->assertSame([], $this->commands($recorder), 'a refused capability must never reach the shell');
@@ -142,13 +142,13 @@ final class SignalResizeDriverCapabilityGateTest extends TestCase
             $this->build($capability);
             $this->fail('expected InvalidArgumentException for ' . var_export($capability, true));
         } catch (\InvalidArgumentException $exception) {
-            $this->assertStringContainsString('rejected', $exception->getMessage());
-            $this->assertStringContainsString('terminfo shape', $exception->getMessage());
+            $this->assertStringContainsString('refused', $exception->getMessage());
+            $this->assertStringContainsString('terminfo capability', $exception->getMessage());
         }
     }
 
     /**
-     * Gate boundary: letter-initial, 1-5 lowercase alnum, exactly.
+     * Guard boundary: letter-initial, 1-5 lowercase alnum, exactly.
      */
     public function testAllowlistBoundaryAcceptsWellFormedTerminfoNames(): void
     {
