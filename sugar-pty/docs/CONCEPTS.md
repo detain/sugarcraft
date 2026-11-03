@@ -314,7 +314,7 @@ environment variable before picking a backend. On the POSIX families
 this defaults to `posix-ffi`; on Windows the auto path resolves
 `conpty`. Setting it to `sidecar` or `pecl` causes an immediate
 `UnsupportedPlatformException` noting the backend is not
-implemented in v1. Unrecognised values throw `\InvalidArgumentException` listing
+implemented in this release. Unrecognised values throw `\InvalidArgumentException` listing
 the five valid options (`posix-ffi`, `conpty`, `sidecar`, `pecl`,
 `auto`).
 

@@ -591,8 +591,8 @@ environment variable to select which PTY backend to use:
 | _(unset)_ / `auto` | Platform-appropriate default — `posix-ffi` on the POSIX families, `conpty` on Windows |
 | `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS) |
 | `conpty` | `Windows\ConPtySystem` — FFI into the kernel32 pseudo-console APIs (Windows 10 1809+ / PHP 8.4+). On a non-Windows host it throws `UnsupportedPlatformException` naming the probe's reason; the FFI load itself is deferred to `open()`. |
-| `sidecar` | Not implemented in v1 — throws `UnsupportedPlatformException` |
-| `pecl` | Not implemented in v1 — throws `UnsupportedPlatformException` |
+| `sidecar` | Not implemented in this release — throws `UnsupportedPlatformException` |
+| `pecl` | Not implemented in this release — throws `UnsupportedPlatformException` |
 
 Unrecognised values throw `\InvalidArgumentException` naming the
 valid options.

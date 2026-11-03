@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * resize-forwarding — Wire SignalForwarder to deliver host-side
- * SIGWINCH into the child PTY's TIOCSWINSZ via the v1 contract API.
+ * SIGWINCH into the child PTY's TIOCSWINSZ via the contract API.
  *
  * Demo:
  *  1. Open a PTY at 80×24 via {@see \SugarCraft\Pty\PtySystemFactory}.

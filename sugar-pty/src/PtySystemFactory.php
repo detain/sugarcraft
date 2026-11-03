@@ -32,7 +32,7 @@ use SugarCraft\Pty\Windows\Kernel32ConPty;
  * `posix-ffi` (default on POSIX), `conpty` (forces the Windows ConPTY
  * backend; on a non-Windows host it throws
  * {@see UnsupportedPlatformException} naming the probe's reason),
- * `sidecar` / `pecl` (declared but not implemented in v1 — selecting
+ * `sidecar` / `pecl` (declared but not implemented in this release — selecting
  * either throws {@see UnsupportedPlatformException}), `auto` (same as
  * unset / default behaviour).
  *

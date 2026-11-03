@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-pty",
-    "description": "PHP port of charmbracelet/x/xpty \u2014 pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+    "description": "PHP pseudo-terminal layer (open / spawn / resize) inspired by creack/pty and charmbracelet/x/xpty for SugarCraft. Linux + macOS via FFI to libc, Windows via ConPTY.",
     "type": "library",
     "license": "MIT",
     "keywords": [

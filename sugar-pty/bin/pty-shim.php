@@ -9,7 +9,7 @@ declare(strict_types=1);
  * so signals (SIGINT on Ctrl+C, SIGWINCH on resize, SIGHUP on master
  * close) reach it via the kernel's tty layer.
  *
- * Invoked by Pty::spawn(..., controllingTerminal: true) as
+ * Invoked by Spawn::wrapInShim() for controllingTerminal:true spawns as
  *
  *   php pty-shim.php [--autoload=<path>] <cmd> [args...]
  *
