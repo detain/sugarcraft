@@ -31,6 +31,7 @@ final class PlayerAutoModeTest extends TestCase
 
     protected function tearDown(): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(null);
         foreach ($this->files as $file) {
             @unlink($file);
         }
@@ -58,6 +59,7 @@ final class PlayerAutoModeTest extends TestCase
 
     public function testTheChooserSeamResolvesKittyAtTheBoundary(): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([\SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true, \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true, \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true]));
         $player = $this->withoutPathBinaries(
             fn (): Player => Player::open(
                 $this->gif(),
@@ -76,6 +78,7 @@ final class PlayerAutoModeTest extends TestCase
 
     public function testTheChooserSeamResolvesSixelAtTheBoundary(): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([\SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true, \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true, \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true]));
         $player = $this->withoutPathBinaries(
             fn (): Player => Player::open(
                 $this->gif(),

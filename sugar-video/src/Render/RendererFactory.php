@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Render;
 
 use SugarCraft\Image\Mosaic;
+use SugarCraft\Video\Lang;
 use SugarCraft\Image\TermDb;
 use SugarCraft\Image\TermInfo;
 use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Probe;
 use SugarCraft\ColorProfile\Probe\Capability;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
 
 /**
  * Static factory for FrameRenderer instances.
@@ -28,6 +30,69 @@ use SugarCraft\ColorProfile\Probe\Capability;
 final class RendererFactory
 {
     /**
+     * Per-process memo of the live capability probe (M28).
+     *
+     * WHY a memo: Mosaic::diagnose() is a SYNCHRONOUS terminal negotiation.
+     * The capability door below runs on every renderer acquisition — which
+     * includes every `m` keypress — and the pre-memo code re-probed each
+     * time, paying a round-trip's latency inside a keystroke to re-derive an
+     * answer that cannot change under a running program: a terminal's
+     * capabilities are fixed for the session. One probe per process is both
+     * the honest and the cheap shape.
+     */
+    private static ?ProbeReport $reportMemo = null;
+
+    /**
+     * The terminal's capability report — probed once, memoized thereafter.
+     */
+    public static function diagnose(): ProbeReport
+    {
+        return self::$reportMemo ??= Mosaic::diagnose();
+    }
+
+    /**
+     * Test seam: seed the capability memo (null = clear it).
+     *
+     * Lets pins script the door without poisoning the process environment —
+     * same rationale as the autoModeFrom() pure seam above.
+     */
+    public static function setDiagnoseForTesting(?ProbeReport $report): void
+    {
+        self::$reportMemo = $report;
+    }
+
+    /**
+     * Whether this terminal can actually RECEIVE the mode's output (M1).
+     *
+     * The text rungs (Ascii/Ansi256/TrueColor/HalfBlock/QuarterBlock) are
+     * always transport-safe: they emit only SGR and glyphs, which degrade
+     * visibly but harmlessly on any seat. The GRAPHICS rungs are not: their
+     * APC/DCS/OSC-1337 payloads are invisible to a terminal that never
+     * claimed the protocol, and the un-erased image data accumulates as
+     * garbage in the scrollback (tmux) or worse. Before this door, any
+     * explicit graphics selection — Reel::withMode(), Player::open(mode:),
+     * the example's argv — handed raw escape bytes straight to such a seat.
+     *
+     * The door is ONE: every renderer construction path routes through
+     * new(), which refuses an unsupported mode loudly (typed refusal naming
+     * the best supported mode) instead of silently emitting into it.
+     *
+     * Kitty rides Capability::KittyKeyboard because sugar-colorprofile
+     * exposes no standalone KittyGraphics bit (cross-lib seam recorded in
+     * the findings ledger); the auto ladder gates on the same signal, so
+     * ladder and door can never disagree.
+     */
+    public static function supports(Mode $mode): bool
+    {
+        return match ($mode) {
+            Mode::Sixel => self::diagnose()->has(Capability::Sixel),
+            Mode::Kitty => self::diagnose()->has(Capability::KittyKeyboard),
+            Mode::Iterm2 => self::diagnose()->has(Capability::ITerm2),
+            default => true,
+        };
+    }
+
+    /**
      * Return the best Mode enum case for the current terminal.
      *
      * Precedence:
@@ -44,7 +109,7 @@ final class RendererFactory
      */
     public static function autoMode(): Mode
     {
-        $report = Mosaic::diagnose();
+        $report = self::diagnose();
 
         return self::autoModeFrom(
             sixel: $report->has(Capability::Sixel),
@@ -127,9 +192,18 @@ final class RendererFactory
      * @param int    $cellPxW Pixel width of a terminal cell (graphics modes only — used to
      *                        recover the cell footprint and size the sixel canvas)
      * @param int    $cellPxH Pixel height of a terminal cell
+     *
+     * @throws \RuntimeException when the mode is unsupported here (M1 door)
      */
     public static function new(Mode $mode, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20): FrameRenderer
     {
+        if (!self::supports($mode)) {
+            throw new \RuntimeException(Lang::t('render.mode_unsupported', [
+                'mode' => $mode->label(),
+                'best' => self::autoMode()->label(),
+            ]));
+        }
+
         return match ($mode) {
             Mode::Ascii     => new AsciiRenderer($ramp),
             Mode::Ansi256   => new AsciiRenderer($ramp),

@@ -1116,41 +1116,74 @@ final class PlayerTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * Regression for F2 (tail). The mode cycle must ONLY include modes the
-     * terminal actually supports. On master the cycle hardcoded all 7 modes,
-     * so `m` would land on Sixel even when the terminal can't render it
-     * (garbage output). This test verifies that the cycle is non-empty,
-     * visits distinct modes, and never crashes.
-     *
-     * NOTE: Since Mosaic::diagnose() is a real external probe that cannot be
-     * mocked without a library, we verify observable behavior: cycling works
-     * without error and visits at least 2 distinct modes.
+     * Capability-door cycle pins (M1). The pre-M1 version of this test only
+     * asserted that visited modes are Modes — vacuous against the defect it
+     * names. Now it drives the scripted capability memo both ways: a
+     * text-only seat must NEVER be cycled into a graphics rung, and a fully
+     * capable seat must visit all three rungs within a wrap.
      */
     public function testModeCycleOnlyVisitsSupportedModes(): void
     {
-        // Use GeometryFakeDecoder which regenerates frames based on mode.
-        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 0, 80, 24, '/fake');
-
         $m = new KeyMsg(KeyType::Char, 'm');
-        $visited = [];
-        // Visit 14 times — enough to wrap around at least once if cycle is short.
-        for ($i = 0; $i < 14; $i++) {
-            [$player] = $player->update($m);
-            $visited[] = $this->getPlayerProperty($player, 'mode');
-        }
 
-        // Every visited mode must be a valid Mode.
-        foreach ($visited as $mode) {
-            $this->assertInstanceOf(Mode::class, $mode);
-        }
-
-        // The cycle must visit at least 2 distinct modes.
-        $unique = array_unique(array_map(fn (Mode $m) => $m->name, $visited));
-        $this->assertGreaterThanOrEqual(
-            2,
-            count($unique),
-            'mode cycle must visit at least 2 distinct modes'
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(
+            new \SugarCraft\ColorProfile\Probe\ProbeReport([]),
         );
+        try {
+            $player = Player::fromDecoder(
+                decoder: new GeometryFakeDecoder(4),
+                cellsW: 30,
+                cellsH: 12,
+                fps: 10.0,
+                mode: Mode::Ascii,
+            );
+            $names = [];
+            for ($i = 0; $i < 16; $i++) {
+                [$player] = $player->update($m);
+                $names[] = $player->mode->name;
+            }
+            foreach (['Sixel', 'Kitty', 'Iterm2'] as $forbidden) {
+                $this->assertNotContains(
+                    $forbidden,
+                    $names,
+                    "a seat without the {$forbidden} capability must never be cycled into it",
+                );
+            }
+            $this->assertGreaterThanOrEqual(2, count(array_unique($names)));
+        } finally {
+            \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(null);
+        }
+
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(
+            new \SugarCraft\ColorProfile\Probe\ProbeReport([
+                \SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true,
+                \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true,
+                \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true,
+            ]),
+        );
+        try {
+            $player = Player::fromDecoder(
+                decoder: new GeometryFakeDecoder(4),
+                cellsW: 30,
+                cellsH: 12,
+                fps: 10.0,
+                mode: Mode::Ascii,
+            );
+            $names = [];
+            for ($i = 0; $i < 24; $i++) {
+                [$player] = $player->update($m);
+                $names[] = $player->mode->name;
+            }
+            foreach (['Sixel', 'Kitty', 'Iterm2'] as $expected) {
+                $this->assertContains(
+                    $expected,
+                    $names,
+                    "a capable seat must cycle through {$expected}",
+                );
+            }
+        } finally {
+            \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(null);
+        }
     }
 
     // -------------------------------------------------------------------------

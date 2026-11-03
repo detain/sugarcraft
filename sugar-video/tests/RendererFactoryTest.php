@@ -78,6 +78,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsGraphicsRendererForSixelMode(): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([\SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true, \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true, \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true]));
         $renderer = RendererFactory::new(Mode::Sixel);
 
         $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
@@ -89,6 +90,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsGraphicsRendererForKittyMode(): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([\SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true, \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true, \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true]));
         $renderer = RendererFactory::new(Mode::Kitty);
 
         $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
@@ -100,6 +102,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateReturnsGraphicsRendererForIterm2Mode(): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([\SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true, \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true, \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true]));
         $renderer = RendererFactory::new(Mode::Iterm2);
 
         $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
@@ -116,6 +119,7 @@ final class RendererFactoryTest extends TestCase
      */
     public function testCreateWithExplicitCellPxReturnsGraphicsRenderer(Mode $mode): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([\SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true, \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true, \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true]));
         $renderer = RendererFactory::new($mode, 'standard', 12, 24);
 
         $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
@@ -356,5 +360,10 @@ final class RendererFactoryTest extends TestCase
                 $this->assertLessThan(128, ord($ramp[$i]), "non-ASCII byte in luma ramp at offset {$i}");
             }
         }
+    }
+
+    protected function tearDown(): void
+    {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(null);
     }
 }

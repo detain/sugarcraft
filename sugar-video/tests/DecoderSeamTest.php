@@ -30,6 +30,11 @@ use SugarCraft\Video\Tests\Concerns\CapturesErrorLog;
  */
 final class DecoderSeamTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(null);
+    }
+
     use CapturesErrorLog;
 
     /**
@@ -256,6 +261,7 @@ final class DecoderSeamTest extends TestCase
      */
     public function testToPlayerThreadsMeasuredCellPx(): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([\SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true, \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true, \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true]));
         // A local .gif decodes through GifDecoder (pure PHP + GD); ffprobe is
         // only queried for metadata and degrades gracefully, so gate on GD alone.
         if (!extension_loaded('gd')) {
@@ -287,6 +293,7 @@ final class DecoderSeamTest extends TestCase
      */
     public function testToPlayerFallsBackToLegacyCellPx(): void
     {
+        \SugarCraft\Video\Render\RendererFactory::setDiagnoseForTesting(new \SugarCraft\ColorProfile\Probe\ProbeReport([\SugarCraft\ColorProfile\Probe\Capability::Sixel->value => true, \SugarCraft\ColorProfile\Probe\Capability::KittyKeyboard->value => true, \SugarCraft\ColorProfile\Probe\Capability::ITerm2->value => true]));
         if (!extension_loaded('gd')) {
             $this->markTestSkipped('ext-gd required to build a test GIF');
         }

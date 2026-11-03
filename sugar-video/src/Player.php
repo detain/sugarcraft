@@ -15,9 +15,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Image\Mosaic;
 use SugarCraft\ColorProfile\Probe;
-use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\Video\Decode\Decoder;
 use SugarCraft\Video\Decode\DecoderFactory;
 use SugarCraft\Video\Decode\FfmpegDecodeFailure;
@@ -842,24 +840,16 @@ final class Player implements Model
         }
 
         // m : cycle rendering mode through ONLY the modes the terminal supports.
-        // Build the cycle dynamically based on Mosaic::diagnose() capabilities.
+        // The candidate list comes from the SAME single capability door every
+        // renderer construction consults (RendererFactory::supports(), backed
+        // by one memoized probe — M28), so cycle and door cannot disagree.
         if ($msg->type === KeyType::Char && $msg->rune === 'm') {
             // Always present: text modes.
             $textModes = [Mode::Ascii, Mode::Ansi256, Mode::TrueColor, Mode::HalfBlock, Mode::QuarterBlock];
-            // Graphics modes only if the terminal reports the capability.
-            $report = Mosaic::diagnose();
-            $graphicsModes = [];
-            if ($report->has(Capability::Sixel)) {
-                $graphicsModes[] = Mode::Sixel;
-            }
-            if ($report->has(Capability::KittyKeyboard)) {
-                // Note: Kitty image mode is gated on Capability::KittyKeyboard because
-                // sugar-colorprofile exposes no standalone KittyGraphics capability.
-                $graphicsModes[] = Mode::Kitty;
-            }
-            if ($report->has(Capability::ITerm2)) {
-                $graphicsModes[] = Mode::Iterm2;
-            }
+            $graphicsModes = array_values(array_filter(
+                [Mode::Sixel, Mode::Kitty, Mode::Iterm2],
+                static fn (Mode $candidate): bool => RendererFactory::supports($candidate),
+            ));
             $allModes = array_merge($textModes, $graphicsModes);
 
             // Guard: if current mode is somehow not in the cycle, start from first.
