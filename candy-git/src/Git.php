@@ -148,10 +148,28 @@ final class Git implements GitDriver
         $this->runPatch($path, $hunk, ['apply', '--cached', '--reverse', '-']);
     }
 
-    /** @return list<string> */
-    public function diff(string $path): array
+    /**
+     * Unified diff lines for one file.
+     *
+     * `--no-ext-diff` is deliberate: `diff.external` is ANOTHER repo config
+     * key naming an executable (and difftool classes reach the same door via
+     * config) — the same clone-time code-execution surface as core.fsmonitor.
+     * The viewer only ever wants git's own unified text, so externals are
+     * switched off per invocation instead of inherited from the repo.
+     *
+     * `$cached` shows the STAGED side (`git diff --cached`): a file whose
+     * worktree copy matches the index has an empty plain diff, and the
+     * staged change would otherwise be invisible.
+     *
+     * @return list<string>
+     */
+    public function diff(string $path, bool $cached = false): array
     {
-        return $this->run(['diff', '--no-color', '--', $path]);
+        $args = ['diff', '--no-color', '--no-ext-diff'];
+        if ($cached) {
+            $args[] = '--cached';
+        }
+        return $this->run([...$args, '--', $path]);
     }
 
     public function discard(string $path): void
@@ -183,7 +201,9 @@ final class Git implements GitDriver
     public function merge(string $branch): void
     {
         $this->guardRef($branch);
-        $this->run(['merge', '--', $branch]);
+        // --no-edit: a merge that needs a commit message must never open
+        // $EDITOR inside the TUI (the editor would inherit our terminal).
+        $this->run(['merge', '--no-edit', '--', $branch]);
     }
 
     public function rebaseContinue(): void
@@ -328,12 +348,23 @@ final class Git implements GitDriver
      * filename fails (audit candy-git #3). Paths containing `"` or `\`
      * stay quoted regardless — see {@see self::unquotePath()}.
      *
+     * `-c core.fsmonitor=false` is a TRUST-BOUNDARY override, ordered on the
+     * command line so it wins over any repository config: `core.fsmonitor`
+     * names an EXECUTABLE that lives in the cloned repo's `.git/config`, and
+     * git invokes it on the very first `status`. Cloning an untrusted repo
+     * and opening it here would otherwise be instant arbitrary code execution
+     * before the user ever sees a pane. Our `-c` overlays run after config
+     * files, so no fsmonitor value the repo controls can take effect.
+     *
      * @param list<string> $args
      * @return list<string>
      */
     private function argv(array $args): array
     {
-        return array_merge(['git', '-c', 'core.quotepath=off', '-C', $this->cwd], $args);
+        return array_merge(
+            ['git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', '-C', $this->cwd],
+            $args,
+        );
     }
 
     /**
@@ -405,7 +436,7 @@ final class Git implements GitDriver
         $r = Process::run($this->argv($args), null, $this->timeout);
         $this->assertNotTimedOut($r);
         if ($r['exit'] !== 0) {
-            throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($r['stderr'])]));
+            throw new \RuntimeException(Lang::t('git.error', ['stderr' => self::errorDetail($r)]));
         }
         return explode("\n", rtrim($r['stdout'], "\n"));
     }
@@ -416,8 +447,21 @@ final class Git implements GitDriver
         $r = Process::run($this->argv($args), $hunk, $this->timeout);
         $this->assertNotTimedOut($r);
         if ($r['exit'] !== 0) {
-            throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($r['stderr'])]));
+            throw new \RuntimeException(Lang::t('git.error', ['stderr' => self::errorDetail($r)]));
         }
+    }
+
+    /**
+     * Human detail for a failed git invocation. git puts the explanatory
+     * output of a conflicted merge (and other "stopped, not crashed"
+     * failures) on STDOUT while stderr stays empty — showing only stderr
+     * rendered the error lane as the bare `git: ` prefix with nothing after
+     * it, so the detail falls back to stdout.
+     */
+    private static function errorDetail(array $r): string
+    {
+        $stderr = trim($r['stderr']);
+        return $stderr !== '' ? $stderr : trim($r['stdout']);
     }
 
     /**

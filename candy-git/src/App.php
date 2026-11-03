@@ -752,7 +752,13 @@ final class App implements Model
             return $this;
         }
         try {
-            $lines = $this->git->diff($row['path']);
+            // A row whose worktree half is clean but whose index half is not
+            // has all its change STAGED — a plain worktree diff would render
+            // empty, so show the staged side for those rows.
+            $cached = ($row['index_status'] ?? ' ') !== ' '
+                && ($row['index_status'] ?? ' ') !== '?'
+                && ($row['work_status'] ?? ' ') === ' ';
+            $lines = $this->git->diff($row['path'], $cached);
             $diffViewer = DiffViewer::fromRawDiff($row['path'], $lines);
             return $this->withDiffViewer($diffViewer);
         } catch (\RuntimeException $e) {

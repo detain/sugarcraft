@@ -23,21 +23,58 @@ namespace SugarCraft\Git;
  * Mirrors jesseduffield/lazygit pkg/utils exec command-runner — capture + bounded execution of git. */
 final class Process
 {
+    /** How long a SIGTERMed child gets to exit before we escalate to SIGKILL. */
+    public const TERMINATE_GRACE_SECONDS = 2.0;
+
+    /**
+     * Environment handed to every child: the parent's environment plus
+     * git-specific overrides. Each override closes a real way a repo- or
+     * user-controlled setting could block or hijack a synchronous git call
+     * made from inside the TUI:
+     *
+     * - GIT_TERMINAL_PROMPT=0  — never prompt for credentials on our tty
+     *   (a prompt would wedge the UI until the timeout kills the call).
+     * - GIT_PAGER=cat          — never pipe output into an interactive pager.
+     * - GIT_EDITOR / GIT_SEQUENCE_EDITOR=true — merge --continue, stash apply
+     *   conflicts and rebase --continue must not claim the terminal; `true`
+     *   accepts whatever message git prepared.
+     * - LC_ALL / LANG=C        — the porcelain parsers in {@see Git} expect
+     *   git's canonical English byte shapes; on a localized machine they are
+     *   not negotiable.
+     */
+    public static function childEnv(): array
+    {
+        return array_merge(getenv() ?: [], [
+            'GIT_TERMINAL_PROMPT' => '0',
+            'GIT_PAGER' => 'cat',
+            'GIT_EDITOR' => 'true',
+            'GIT_SEQUENCE_EDITOR' => 'true',
+            'LC_ALL' => 'C',
+            'LANG' => 'C',
+        ]);
+    }
+
     /**
      * @param list<string> $argv    Command + args passed straight to proc_open (no shell).
      * @param string|null  $stdin   Pumped incrementally into the child's non-blocking stdin, closed when fully
-     *                              written (or on EPIPE). Null opens no stdin pipe.
+     *                              written (or on EPIPE). Null attaches /dev/null: the child sees an
+     *                              immediate EOF and can never read (or block on) our terminal.
      * @param float        $timeout Seconds before the child is killed; <= 0 disables the timeout.
      *
      * @return array{stdout: string, stderr: string, exit: int, timedOut: bool}
      */
     public static function run(array $argv, ?string $stdin = null, float $timeout = 30.0): array
     {
-        $spec = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        // With no stdin payload the child still must NOT inherit our stdin:
+        // the TUI leaves the terminal in raw mode, so an inherited fd 0 lets a
+        // child (git's credential or editor machinery, say) read — and steal
+        // — the user's keystrokes. /dev/null gives it an immediate EOF
+        // (house shape: candy-code BackgroundSupervisor uses the same spec).
+        $spec = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         if ($stdin !== null) {
             $spec[0] = ['pipe', 'r'];
         }
-        $proc = proc_open($argv, $spec, $pipes);
+        $proc = proc_open($argv, $spec, $pipes, null, self::childEnv());
         if (!is_resource($proc)) {
             throw new \RuntimeException(Lang::t('git.spawn_failed'));
         }
@@ -62,17 +99,19 @@ final class Process
             $open[$i] = $pipes[$i];
         }
 
-        $stdout   = '';
-        $stderr   = '';
-        $timedOut = false;
-        $deadline = $timeout > 0 ? microtime(true) + $timeout : null;
+        $stdout      = '';
+        $stderr      = '';
+        $timedOut    = false;
+        $abandoned   = false; // loop stopped while the child may still be live (timeout or EINTR)
+        $deadline    = $timeout > 0 ? microtime(true) + $timeout : null;
 
         while ($open !== [] || $stdinHandle !== null) {
             $wait = null;
             if ($deadline !== null) {
                 $wait = $deadline - microtime(true);
                 if ($wait <= 0) {
-                    $timedOut = true;
+                    $timedOut  = true;
+                    $abandoned = true;
                     break;
                 }
             }
@@ -88,12 +127,17 @@ final class Process
                 $ready = @stream_select($read, $write, $except, $sec, $usec);
             }
 
-            // false = interrupted by a signal; stop draining and reap the child.
+            // false = interrupted by a signal; stop draining and tear the child
+            // down through the same bounded ladder a timeout gets — an ordinary
+            // SIGWINCH (terminal resize) must never strand a live git child on
+            // a proc_close that would block until the child exits by itself.
             if ($ready === false) {
+                $abandoned = true;
                 break;
             }
             if ($ready === 0) {
-                $timedOut = true;
+                $timedOut  = true;
+                $abandoned = true;
                 break;
             }
 
@@ -129,8 +173,8 @@ final class Process
             }
         }
 
-        if ($timedOut) {
-            proc_terminate($proc, 9);
+        if ($abandoned) {
+            self::terminateBounded($proc);
         }
 
         if ($stdinHandle !== null) {
@@ -151,5 +195,37 @@ final class Process
             'exit'     => $exit,
             'timedOut' => $timedOut,
         ];
+    }
+
+    /**
+     * Bounded SIGTERM -> grace -> SIGKILL ladder for a child we stopped waiting
+     * on. SIGTERM first gives git (and any hook it spawned) a chance to clean
+     * up lock files it took; only a child that ignores it — deliberately or
+     * because it is wedged in uninterruptible I/O — is SIGKILLed after the
+     * grace window. Polls instead of one-shotting proc_get_status: the exit
+     * ordering around pipe-EOF makes any single liveness read racy (measured
+     * in this fleet: a one-shot can still say "running" seconds after death),
+     * and the loop is bounded by the grace deadline either way.
+     *
+     * @param resource $proc
+     */
+    private static function terminateBounded($proc): void
+    {
+        $status = proc_get_status($proc);
+        if (!$status['running']) {
+            return; // already dead — proc_close will reap without blocking
+        }
+
+        proc_terminate($proc, 15);
+
+        $grace = microtime(true) + self::TERMINATE_GRACE_SECONDS;
+        while (microtime(true) < $grace) {
+            usleep(10_000);
+            if (!proc_get_status($proc)['running']) {
+                return;
+            }
+        }
+
+        proc_terminate($proc, 9);
     }
 }

@@ -143,6 +143,30 @@ $msg = Lang::t('git.error', ['stderr' => $stderr]);
 > `stage.tape` drives the real `./bin/candy-git` against the CI checkout, so its
 > rows are environment-dependent; the hero demo above (`play.tape`) is hermetic.
 
+## Trust boundary
+
+Opening a repository executes its configuration unless told otherwise, and git
+has several config keys that name **executables**. CandyGit runs every git
+call through a fixed argument prelude that closes the clone-time surfaces:
+
+- `-c core.fsmonitor=false` — `core.fsmonitor` (in the cloned repo's
+  `.git/config`) names a program git invokes on the very first `status`; a
+  hostile clone would otherwise achieve instant code execution before you see
+  a pane. `diff.external` is the same class of hazard and is disabled with
+  `--no-ext-diff` on every diff.
+- Child environment is pinned: `GIT_TERMINAL_PROMPT=0`, `GIT_PAGER=cat`,
+  `GIT_EDITOR`/`GIT_SEQUENCE_EDITOR=true` (no credential, pager, or editor
+  can hijack the TUI's terminal), and `LC_ALL=C`/`LANG=C` because the
+  porcelain parsers depend on git's canonical English byte shapes.
+- The child's stdin is `/dev/null` unless we deliberately pipe a patch into
+  `git apply`, so no git subprocess can read (or block on) your keystrokes.
+
+Deliberately **out of scope**: git's own commit machinery — `pre-commit`,
+`commit-msg`, `post-checkout`, and the like — still runs when you ask
+CandyGit to commit, because you are invoking git on that repository and
+expecting its normal behavior. Treat repository hooks as executing code:
+clone, and open, only what you trust.
+
 ## Shared foundations
 
 candy-git uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar-fuzzy) for Smith-Waterman scored matching infrastructure, laying the groundwork for future fuzzy stash search.

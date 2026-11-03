@@ -25,6 +25,8 @@ final class FixtureGit implements GitDriver
     public bool $unstageAllCalled = false;
     /** @var list<string> */
     public array $diffs = [];
+    /** @var list<array{0:string,1:bool}> path + cached flag per diff() request */
+    public array $diffRequests = [];
     public array $discards = [];
     public bool $amendCalled = false;
     /** @var array<string, string> path => hunk patch */
@@ -83,7 +85,7 @@ final class FixtureGit implements GitDriver
     public function checkout(string $branch): void { $this->maybeThrow('checkout'); $this->checkouts[] = $branch; }
     public function commit(string $message): void  { $this->maybeThrow('commit'); $this->commits[] = $message; }
     public function stageAll(): void             { $this->maybeThrow('stageAll'); $this->stageAllCalled = true; }
-    public function diff(string $path): array    { $this->maybeThrow('diff'); return $this->diffs; }
+    public function diff(string $path, bool $cached = false): array { $this->maybeThrow('diff'); $this->diffRequests[] = [$path, $cached]; return $this->diffs; }
     public function discard(string $path): void   { $this->maybeThrow('discard'); $this->discards[] = $path; }
     public function amend(): void                 { $this->maybeThrow('amend'); $this->amendCalled = true; }
     public function stagePatch(string $path, string $hunk): void { $this->maybeThrow('stagePatch'); $this->stagePatches[$path] = $hunk; }

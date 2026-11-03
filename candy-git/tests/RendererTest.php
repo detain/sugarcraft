@@ -86,7 +86,7 @@ final class RendererTest extends TestCase
             public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
-            public function diff(string $path): array { return []; }
+            public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
             public function amend(): void {}
             public function stagePatch(string $path, string $hunk): void {}
@@ -144,7 +144,7 @@ final class RendererTest extends TestCase
             public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
-            public function diff(string $path): array { return []; }
+            public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
             public function amend(): void {}
             public function stagePatch(string $path, string $hunk): void {}
@@ -391,7 +391,7 @@ final class RendererTest extends TestCase
             public function commit(string $_message): void {}
             public function stageAll(): void {}
             public function unstageAll(): void {}
-            public function diff(string $path): array { return []; }
+            public function diff(string $path, bool $cached = false): array { return []; }
             public function discard(string $path): void {}
             public function amend(): void {}
             public function stagePatch(string $path, string $hunk): void {}

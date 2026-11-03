@@ -1,0 +1,342 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Git\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Git\Git;
+use SugarCraft\Git\Process;
+use SugarCraft\Git\Tests\Concerns\RecursiveDirCleanup;
+
+/**
+ * Trust-boundary and process-hygiene pins for the git shell-out layer.
+ *
+ * Each pin here corresponds to a class of failure the plain unit suite cannot
+ * see, because it is a property of the ARGV we hand proc_open, of the ENV we
+ * hand the child, or of how we tear a wedged child down:
+ *
+ * - core.fsmonitor / diff.external in the cloned repo's .git/config are
+ *   repo-controlled EXECUTABLES — cloning an untrusted repo and opening it
+ *   must not run anything before the user sees a pane (the headline CRIT).
+ * - an inherited raw-mode tty on the child's stdin steals keystrokes.
+ * - a child that wedges must die on a BOUNDED TERM->grace->KILL ladder, never
+ *   strand the UI thread inside proc_close.
+ * - a failed git call must surface git's own explanation even when git put it
+ *   on stdout (merge conflicts), not an empty error lane.
+ */
+final class GitHardeningTest extends TestCase
+{
+    use RecursiveDirCleanup;
+
+    /** @var list<string> temp paths (files or dirs) removed in tearDown */
+    private array $trash = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->trash as $path) {
+            if (is_dir($path)) {
+                $this->removeDir($path);
+            } elseif (is_file($path)) {
+                @unlink($path);
+            }
+        }
+        $this->trash = [];
+    }
+
+    // ---------------------------------------------------------------- argv
+
+    public function testArgvOverlaysFsmonitorDisableBeforeRepoArgs(): void
+    {
+        $argv = self::callArgv('/repo/dir', ['status', '--porcelain=v1']);
+
+        // Exact full shape, not just presence: the -c overrides must sit on
+        // the command line ahead of the subcommand (git applies -c in order,
+        // last-wins, and any later repo config could not override them), and
+        // nothing may ever drop them.
+        self::assertSame([
+            'git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false',
+            '-C', '/repo/dir', 'status', '--porcelain=v1',
+        ], $argv);
+    }
+
+    /** @param list<string> $args */
+    private static function callArgv(string $cwd, array $args): array
+    {
+        $method = new \ReflectionMethod(Git::class, 'argv');
+        $method->setAccessible(true);
+
+        return $method->invoke(new Git($cwd), $args);
+    }
+
+    // ------------------------------------------------------------ child env
+
+    public function testChildEnvPinsNonInteractiveGit(): void
+    {
+        putenv('CANDY_GIT_HARDENING_CARRIED=yes');
+        try {
+            $env = Process::childEnv();
+
+            // Parent environment rides through (PATH etc.)...
+            self::assertSame('yes', $env['CANDY_GIT_HARDENING_CARRIED'] ?? null);
+            self::assertArrayHasKey('PATH', $env);
+
+            // ...and every interactive surface git could reach is closed.
+            self::assertSame('0', $env['GIT_TERMINAL_PROMPT']);
+            self::assertSame('cat', $env['GIT_PAGER']);
+            self::assertSame('true', $env['GIT_EDITOR']);
+            self::assertSame('true', $env['GIT_SEQUENCE_EDITOR']);
+            self::assertSame('C', $env['LC_ALL']);
+            self::assertSame('C', $env['LANG']);
+        } finally {
+            putenv('CANDY_GIT_HARDENING_CARRIED');
+        }
+    }
+
+    public function testChildActuallySeesThePinnedEnv(): void
+    {
+        // The map is worthless if proc_open never receives it: read the values
+        // back from INSIDE the child.
+        $r = Process::run([
+            'php', '-r',
+            'echo getenv("GIT_TERMINAL_PROMPT"),"|",getenv("GIT_PAGER"),"|",getenv("GIT_EDITOR"),"|",getenv("GIT_SEQUENCE_EDITOR");',
+        ]);
+
+        self::assertSame(0, $r['exit'], $r['stderr']);
+        self::assertSame('0|cat|true|true', $r['stdout']);
+    }
+
+    // ------------------------------------------------------------- stdin
+
+    public function testChildWithoutStdinPayloadSeesImmediateEof(): void
+    {
+        // Behavior pin: fgets(STDIN) === false means the child got EOF at
+        // once — it can never read (or block on) the TUI's raw-mode terminal.
+        $r = Process::run(['php', '-r', 'var_dump(fgets(STDIN) === false);']);
+
+        self::assertSame(0, $r['exit'], $r['stderr']);
+        self::assertStringContainsString('bool(true)', $r['stdout']);
+    }
+
+    public function testStdinPayloadStillReachesTheChild(): void
+    {
+        $r = Process::run(
+            ['php', '-r', 'echo "got:" . stream_get_contents(STDIN);'],
+            'patch-payload',
+        );
+
+        self::assertSame(0, $r['exit'], $r['stderr']);
+        self::assertSame('got:patch-payload', $r['stdout']);
+    }
+
+    public function testProcessSourceAttachesDevNullExactlyOnce(): void
+    {
+        // Structural leg: the EOF behavior above is indistinguishable from
+        // "no fd 0 key at all" (which inherits the tty and blocks instead of
+        // EOF-ing on some reads). Pin the explicit /dev/null spec entry.
+        $src = (string) file_get_contents((new \ReflectionClass(Process::class))->getFileName());
+
+        self::assertSame(1, substr_count($src, "['file', '/dev/null', 'r']"));
+        self::assertStringContainsString('self::childEnv()', $src);
+    }
+
+    // ------------------------------------------------- TERM->grace->KILL ladder
+
+    public function testTeardownSendsSigtermBeforeSigkill(): void
+    {
+        $src = (string) file_get_contents((new \ReflectionClass(Process::class))->getFileName());
+
+        $term = strpos($src, 'proc_terminate($proc, 15)');
+        $kill = strpos($src, 'proc_terminate($proc, 9)');
+
+        self::assertNotFalse($term, 'ladder must start with SIGTERM');
+        self::assertNotFalse($kill, 'ladder must escalate to SIGKILL');
+        self::assertLessThan((int) $kill, (int) $term, 'TERM must precede KILL');
+    }
+
+    public function testDefaultDispositionChildDiesOnSigtermWithinGrace(): void
+    {
+        // A child that has not trapped SIGTERM dies on the first rung; the
+        // wall-clock budget must therefore stop near the timeout, NOT spend
+        // the full 2s grace before returning.
+        $start = microtime(true);
+        $r     = Process::run(['php', '-r', 'while (true) { usleep(10000); }'], null, 0.4);
+        $wall  = microtime(true) - $start;
+
+        self::assertTrue($r['timedOut']);
+        self::assertLessThan(1.5, $wall, "TERM rung should reap this child; wall was {$wall}s");
+    }
+
+    public function testTermIgnoringChildEscalatesToSigkillAfterBoundedGrace(): void
+    {
+        // Only meaningful when PHP can trap signals in the child.
+        $probe = Process::run(['php', '-r', 'exit(function_exists("pcntl_signal") ? 0 : 1);']);
+        if ($probe['exit'] !== 0) {
+            $this->markTestSkipped('child PHP lacks pcntl for the TERM-ignoring fixture');
+        }
+
+        $start = microtime(true);
+        $r     = Process::run([
+            'php', '-r',
+            'pcntl_signal(SIGTERM, function () {}); while (true) { usleep(10000); }',
+        ], null, 0.4);
+        $wall = microtime(true) - $start;
+
+        self::assertTrue($r['timedOut']);
+        // Grace honored (child could not die before ~timeout+grace) and the
+        // KILL rung bounded the wait (no unbounded proc_close hang).
+        self::assertGreaterThan(
+            0.4 + Process::TERMINATE_GRACE_SECONDS - 0.1,
+            $wall,
+            'ladder killed before the grace window elapsed',
+        );
+        self::assertLessThan(8.0, $wall, "wedged child escaped the ladder; wall was {$wall}s");
+    }
+
+    // ------------------------------------------- fsmonitor integration (real git)
+
+    public function testRepoControlledFsmonitorNeverExecutesOnStatus(): void
+    {
+        $this->requireGit();
+
+        $repo     = $this->makeRepo();
+        $sentinel = $this->cwd() . '/fsmonitor_fired.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $hook     = $this->writeExecutable($repo, 'evil-fsmonitor.sh',
+            "#!/bin/sh\ntouch " . escapeshellarg($sentinel) . "\nexit 1\n");
+
+        exec('git -C ' . escapeshellarg($repo) . ' config core.fsmonitor ' . escapeshellarg($hook));
+        file_put_contents($repo . '/file.txt', "line 1\nline 2\nchanged\n");
+
+        // Control: the vulnerability is real on this git build — a plain
+        // `git status` in the repo DOES fire the configured hook. If it
+        // doesn't (different git semantics), the negative proof below would
+        // pass vacuously, so skip instead.
+        exec('git -C ' . escapeshellarg($repo) . ' status --porcelain 2>/dev/null');
+        if (!file_exists($sentinel)) {
+            $this->markTestSkipped('this git build does not fire core.fsmonitor on status');
+        }
+        @unlink($sentinel);
+
+        // The fix: Git::status() runs through argv() with -c core.fsmonitor=false.
+        $git = new Git($repo);
+        $rows = $git->status();
+
+        self::assertFalse(file_exists($sentinel), 'repo-controlled core.fsmonitor executed through Git::status()');
+        self::assertNotEmpty($rows, 'status must still work with the hook disabled');
+    }
+
+    // ------------------------------------------- diff.external integration (real git)
+
+    public function testRepoControlledExternalDiffNeverExecutes(): void
+    {
+        $this->requireGit();
+
+        $repo     = $this->makeRepo();
+        $sentinel = $this->cwd() . '/extdiff_fired.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $hook     = $this->writeExecutable($repo, 'evil-extdiff.sh',
+            "#!/bin/sh\ntouch " . escapeshellarg($sentinel) . "\nexec diff \"\$@\"\n");
+
+        exec('git -C ' . escapeshellarg($repo) . ' config diff.external ' . escapeshellarg($hook));
+        file_put_contents($repo . '/file.txt', "line 1\nline 2 modified\nline 3\n");
+
+        exec('git -C ' . escapeshellarg($repo) . ' diff -- file.txt 2>/dev/null');
+        if (!file_exists($sentinel)) {
+            $this->markTestSkipped('this git build does not fire diff.external');
+        }
+        @unlink($sentinel);
+
+        $lines = (new Git($repo))->diff('file.txt');
+
+        self::assertFalse(file_exists($sentinel), 'repo-controlled diff.external executed through Git::diff()');
+        self::assertNotEmpty($lines, 'the internal diff must still be produced');
+        self::assertStringStartsWith('diff --git', $lines[0]);
+    }
+
+    // ------------------------------------------- A6: honest failure detail (real git)
+
+    public function testMergeConflictFailureCarriesGitsOwnExplanation(): void
+    {
+        $this->requireGit();
+
+        $repo = $this->makeRepo();
+        $base = trim((string) shell_exec('git -C ' . escapeshellarg($repo) . ' rev-parse --abbrev-ref HEAD'));
+
+        // Diverged same-line commits: merge is guaranteed to conflict.
+        exec('git -C ' . escapeshellarg($repo) . ' checkout -b conflicting 2>/dev/null');
+        file_put_contents($repo . '/file.txt', "line 1\nother branch line\nline 3\n");
+        exec('git -C ' . escapeshellarg($repo) . " commit -aqm other 2>/dev/null");
+        exec('git -C ' . escapeshellarg($repo) . ' checkout ' . escapeshellarg($base) . ' 2>/dev/null');
+        file_put_contents($repo . '/file.txt', "line 1\nmaster branch line\nline 3\n");
+        exec('git -C ' . escapeshellarg($repo) . " commit -aqm ours 2>/dev/null");
+
+        try {
+            (new Git($repo))->merge('conflicting');
+            self::fail('expected RuntimeException on a conflicting merge');
+        } catch (\RuntimeException $e) {
+            // git puts the CONFLICT lines on STDOUT while stderr stays empty
+            // for a content conflict — the old `trim(stderr)` lane rendered an
+            // empty message and the user saw a silent no-op.
+            self::assertStringContainsString('CONFLICT', $e->getMessage());
+        }
+    }
+
+    public function testMergeRunsNonInteractively(): void
+    {
+        $src = (string) file_get_contents((new \ReflectionClass(Git::class))->getFileName());
+
+        // --no-edit: a merge that needs a message must not wait on an editor
+        // (childEnv pins GIT_EDITOR, but the flag is the belt to that brace).
+        self::assertStringContainsString("'merge', '--no-edit'", $src);
+    }
+
+    public function testErrorDetailFallsBackToStdoutWhenStderrEmpty(): void
+    {
+        $method = new \ReflectionMethod(Git::class, 'errorDetail');
+        $method->setAccessible(true);
+
+        self::assertSame('stderr says no', $method->invoke(null, ['stderr' => " stderr says no \n", 'stdout' => 'ignored']));
+        self::assertSame('CONFLICT (content): Merge conflict in f', $method->invoke(null, ['stderr' => '', 'stdout' => "CONFLICT (content): Merge conflict in f\n"]));
+        self::assertSame('', $method->invoke(null, ['stderr' => '', 'stdout' => '']));
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    private function requireGit(): void
+    {
+        if (!exec('git --version 2>/dev/null')) {
+            $this->markTestSkipped('git not available');
+        }
+    }
+
+    private function cwd(): string
+    {
+        return sys_get_temp_dir();
+    }
+
+    private function makeRepo(): string
+    {
+        $dir = sys_get_temp_dir() . '/githarden_' . uniqid();
+        $this->trash[] = $dir;
+
+        mkdir($dir);
+        exec('git init ' . escapeshellarg($dir) . ' 2>/dev/null');
+        exec('git -C ' . escapeshellarg($dir) . " config user.email 'test@test.com' 2>/dev/null");
+        exec('git -C ' . escapeshellarg($dir) . " config user.name 'Test' 2>/dev/null");
+        file_put_contents($dir . '/file.txt', "line 1\nline 2\nline 3\n");
+        exec('git -C ' . escapeshellarg($dir) . ' add file.txt 2>/dev/null');
+        exec('git -C ' . escapeshellarg($dir) . " commit -m initial 2>/dev/null");
+
+        return $dir;
+    }
+
+    private function writeExecutable(string $dir, string $name, string $body): string
+    {
+        $path = $dir . '/' . $name;
+        file_put_contents($path, $body);
+        chmod($path, 0755);
+
+        return $path;
+    }
+}

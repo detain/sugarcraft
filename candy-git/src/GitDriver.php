@@ -53,9 +53,11 @@ interface GitDriver
     public function stageAll(): void;
 
     /**
+     * @param bool $cached show the staged side (git diff --cached) for files
+     *                     whose worktree copy already matches the index
      * @return list<string> unified diff lines for a file (no color)
      */
-    public function diff(string $path): array;
+    public function diff(string $path, bool $cached = false): array;
 
     /** Discard working-tree changes for a file (git restore --worktree <path>). */
     public function discard(string $path): void;
