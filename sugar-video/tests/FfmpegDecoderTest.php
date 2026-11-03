@@ -1304,4 +1304,80 @@ PHP;
         $this->assertIsInt($bail, 'the trip must bail after clearing');
         $this->assertLessThan($bail, $clear, 'the clear must happen before the bail');
     }
+
+    /**
+     * @testdox M8: the child environment drops proxy/secret variables and keeps PATH
+     */
+    public function testTheScrubbedEnvironmentDropsProxyAndSecretVariables(): void
+    {
+        $hostile = [
+            'HTTP_PROXY' => 'http://evil.test',
+            'http_proxy' => 'http://evil.test',
+            'ALL_PROXY' => 'socks5://evil.test',
+            'AWS_SESSION_TOKEN' => 'nope',
+            'S3_SECRET' => 'nope',
+            'DB_PASSWORD' => 'nope',
+            'SSH_private_KEY' => 'nope',
+        ];
+        $saved = [];
+        foreach ($hostile as $name => $value) {
+            $saved[$name] = getenv($name);
+            putenv($name . '=' . $value);
+        }
+
+        try {
+            $env = \SugarCraft\Video\Support\FfmpegCommandBuilder::scrubbedEnv();
+            $this->assertArrayHasKey('PATH', $env, 'PATH must survive — an explicit env REPLACES the parent one');
+            foreach (array_keys($hostile) as $name) {
+                $this->assertArrayNotHasKey($name, $env, $name . ' must never reach a media child');
+            }
+        } finally {
+            foreach ($saved as $name => $value) {
+                putenv($value === false ? $name : $name . '=' . $value);
+            }
+        }
+    }
+
+    /**
+     * @testdox M8: a spawned ffmpeg child literally cannot see the parent's proxy
+     */
+    public function testASpawnedFfmpegChildNeverSeesTheParentProxy(): void
+    {
+        $dir = sys_get_temp_dir() . '/m8-scrub-' . uniqid('', true);
+        mkdir($dir);
+        $dump = $dir . '/env-dump.txt';
+        file_put_contents(
+            $dir . '/ffmpeg',
+            "#!/bin/sh\n/usr/bin/env > " . escapeshellarg($dump) . "\nexit 0\n",
+        );
+        chmod($dir . '/ffmpeg', 0755);
+        $subject = $dir . '/clip.mp4';
+        file_put_contents($subject, 'x');
+
+        $savedPath = getenv('PATH');
+        $savedProxy = getenv('HTTP_PROXY');
+        putenv('PATH=' . $dir);
+        putenv('HTTP_PROXY=http://evil-proxy.test');
+        Probe::clearBinaryCacheForTesting();
+
+        try {
+            $decoder = new FfmpegDecoder();
+            $decoder->open($subject, 8, 6, 10.0, Mode::HalfBlock);
+            $decoder->close();
+
+            $this->assertFileExists($dump, 'the stub must have run as the media child');
+            $childEnv = (string) file_get_contents($dump);
+            $this->assertStringNotContainsString('evil-proxy', $childEnv, 'the proxy env must not ride the child');
+            $this->assertStringNotContainsString('HTTP_PROXY=', $childEnv);
+            $this->assertStringContainsString('PATH=', $childEnv);
+        } finally {
+            putenv($savedPath === false ? 'PATH' : 'PATH=' . $savedPath);
+            putenv($savedProxy === false ? 'HTTP_PROXY' : 'HTTP_PROXY=' . $savedProxy);
+            Probe::clearBinaryCacheForTesting();
+            @unlink($dump);
+            @unlink($dir . '/ffmpeg');
+            @unlink($subject);
+            @rmdir($dir);
+        }
+    }
 }

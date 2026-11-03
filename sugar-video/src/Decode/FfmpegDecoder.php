@@ -301,7 +301,9 @@ final class FfmpegDecoder implements Decoder
             ['file', $this->stderrPath ?? $devNull, 'w'],  // stderr → diagnostic sink
         ];
 
-        $this->process = proc_open($cmd, $descriptorSpec, $pipes);
+        // M8: an explicit scrubbed env — proxy/secret variables must never
+        // steer or leak through a media child.
+        $this->process = proc_open($cmd, $descriptorSpec, $pipes, null, FfmpegCommandBuilder::scrubbedEnv());
         if (!is_resource($this->process)) {
             throw new \RuntimeException('Failed to start ffmpeg process');
         }

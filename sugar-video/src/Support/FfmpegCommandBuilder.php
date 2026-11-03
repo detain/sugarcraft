@@ -41,6 +41,43 @@ use SugarCraft\Video\Source\HttpHeaders;
 final class FfmpegCommandBuilder
 {
     /**
+     * Environment for every media child: the parent env MINUS anything a
+     * spawned ffmpeg/ffplay/mpv/ffprobe must not honor.
+     *
+     * WHY a scrub (M8): ffmpeg reads `http_proxy`/`https_proxy`/`all_proxy`
+     * from its environment, so a parent shell configured to route through a
+     * proxy would silently send a "restricted host allowlist" playback through
+     * that third party — the allowlist would police the URL while the bytes
+     * ride someone else's hop. Secret/token/credential variables are swept for
+     * the same reasoning: a media child has no business reading them, and it
+     * echoes its environment into logs far more readily than our own process.
+     *
+     * Passing a full copy (minus the swept names) as proc_open()'s explicit
+     * `$env` keeps everything else — PATH, HOME, locale — exactly as
+     * inherited: an explicit env REPLACES the parent environment for the
+     * child, so anything omitted would vanish from ffmpeg's view.
+     *
+     * @return array<string,string>
+     */
+    public static function scrubbedEnv(): array
+    {
+        $inherited = getenv();
+        $env = is_array($inherited) ? $inherited : [];
+
+        foreach (array_keys($env) as $name) {
+            if (preg_match('/(?:PROXY|SECRET|TOKEN|KEY|CREDENTIAL|PASSWORD)/i', (string) $name) === 1) {
+                unset($env[(string) $name]);
+            }
+        }
+
+        if (!isset($env['PATH']) || $env['PATH'] === '') {
+            $env['PATH'] = '/usr/local/bin:/usr/bin:/bin';
+        }
+
+        return $env;
+    }
+
+    /**
      * Whether the source is an http(s) URL (vs a local file path).
      *
      * One predicate for every ffmpeg-family call site: the reconnect options and

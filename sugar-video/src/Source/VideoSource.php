@@ -157,7 +157,8 @@ final class VideoSource
             2 => ['file', $devNull, 'w'],  // stderr — discard
         ];
 
-        $process = proc_open($cmd, $descriptorSpec, $pipes);
+        // M8: ffprobe gets the same scrubbed env as every other media child.
+        $process = proc_open($cmd, $descriptorSpec, $pipes, null, FfmpegCommandBuilder::scrubbedEnv());
         if (!is_resource($process)) {
             return new self($path, 0, 0, 0.0, 0.0, false);
         }

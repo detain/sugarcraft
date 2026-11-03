@@ -147,7 +147,8 @@ class AudioPlayer
         ];
 
         $pipes = [];
-        $this->processHandle = @proc_open($cmd, $descriptorSpec, $pipes);
+        // M8: scrubbed env (no proxy/secret steering or leaking through the child).
+        $this->processHandle = @proc_open($cmd, $descriptorSpec, $pipes, null, FfmpegCommandBuilder::scrubbedEnv());
 
         // Guard against proc_open failure (returns false when it cannot spawn).
         if ($this->processHandle === false) {
