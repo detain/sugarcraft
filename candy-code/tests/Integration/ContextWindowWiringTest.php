@@ -29,7 +29,7 @@ use SugarCraft\Code\Role;
 use SugarCraft\Code\Runtime;
 
 /**
- * crush_code.md Phase 5 item 4: every context threshold used to be a
+ * Phase 5 item 4: every context threshold used to be a
  * percentage of a hardcoded 100,000, written three times in code and quoted
  * four more times in prose, while all seven providers reported a real
  * `contextWindow()` that nothing read. These tests drive the wiring end to

@@ -17,7 +17,7 @@ use SugarCraft\Code\Providers\SglangProvider;
 use SugarCraft\Code\Tools\Tool;
 
 /**
- * Regression coverage for §12 D4 of crush_feat.md: `SglangProvider`'s entire
+ * Regression coverage for §12 D4 of : `SglangProvider`'s entire
  * outgoing request surface used to be `model`/`messages`/`temperature`/
  * `max_tokens`/`tools` (+ `stream`). None of SGLang's sampling knobs were
  * reachable, and `CompleteRequest::$jsonSchema` was silently dropped on every

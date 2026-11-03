@@ -21,7 +21,7 @@ use SugarCraft\Code\Tui\Renderer;
 use SugarCraft\Code\Tui\SplitDirection;
 
 /**
- * The split-pane compositor, wired (crush_code.md Phase 8 item 4).
+ * The split-pane compositor, wired (Phase 8 item 4).
  *
  * Three things are under test and they fail for three different reasons:
  *

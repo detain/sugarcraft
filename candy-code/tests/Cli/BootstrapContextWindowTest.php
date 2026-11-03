@@ -18,7 +18,7 @@ use SugarCraft\Code\Role;
 /**
  * The tier values of the path that runs by DEFAULT, pinned as real numbers.
  *
- * crush_code.md Phase 5 item 4 made every context tier a percentage of the
+ * Phase 5 item 4 made every context tier a percentage of the
  * backend's reported window, and its prose said the offline path "acts exactly
  * as it did before" because a backend with no model behind it falls back to
  * {@see ContextWindow::FALLBACK_TOKENS}. That was true of

@@ -11,7 +11,7 @@ use SugarCraft\Code\Tools\ToolCall as EngineToolCall;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
 
 /**
- * Reconciliation of the two ToolCall/ToolResult type pairs crush_feat.md
+ * Reconciliation of the two ToolCall/ToolResult type pairs 
  * §1 D flags ("different field names ... itself a maintenance hazard") via
  * the lossless adapters §1 E1 asks for.
  *
@@ -75,7 +75,7 @@ final class ToolTypeAdapterTest extends TestCase
     /**
      * The whole point of the reconciliation: $diff (W1.F1, engine-side only)
      * and the image fields (W1.G2, Chat-side only) must both cross, in both
-     * directions -- otherwise crush_feat.md §1 E3's diff can never reach
+     * directions -- otherwise §1 E3's diff can never reach
      * Renderer, which only ever sees the Chat-side ToolResult.
      */
     public function testToEngineResultCarriesTheDiffAndImageFields(): void
@@ -198,7 +198,7 @@ final class ToolTypeAdapterTest extends TestCase
     }
 
     /**
-     * crush_feat.md §3 E2: the call's one-liner rides on the RESULT so a
+     * §3 E2: the call's one-liner rides on the RESULT so a
      * finished (and therefore collapsed) row can still say what ran.
      */
     public function testWithDescriptionAttachesTheCallsOneLinerWithoutTouchingAnythingElse(): void

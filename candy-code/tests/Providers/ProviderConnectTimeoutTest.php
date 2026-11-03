@@ -24,7 +24,7 @@ use SugarCraft\Code\Providers\SglangProvider;
 use SugarCraft\Code\Providers\TransientFailure;
 
 /**
- * Pins crush_code.md Phase 0 item 4 in BOTH directions.
+ * Pins Phase 0 item 4 in BOTH directions.
  *
  * Positive: every provider that owns an HTTP client bounds the connect phase,
  * so an unreachable host fails fast instead of hanging the one-shot `-p`/`run`
@@ -575,7 +575,7 @@ final class ProviderConnectTimeoutTest extends TestCase
 
         $why = $name . " sets a total request 'timeout'. LLM completions legitimately run for "
             . 'tens of minutes; only a connect bound belongs on a provider client '
-            . '(crush_code.md Phase 0 item 4).';
+            . '(Phase 0 item 4).';
 
         foreach (self::TOTAL_TIMEOUT_SPELLINGS as $pattern) {
             $this->assertDoesNotMatchRegularExpression($pattern, $source, $why);
@@ -736,7 +736,7 @@ final class ProviderConnectTimeoutTest extends TestCase
     {
         $client = self::guzzleClientOf(SglangProvider::openAiCompatible('https://sglang.invalid/v1'));
 
-        // 10-30s per crush_code.md item 4: long enough that a slow but working
+        // 10-30s per item 4: long enough that a slow but working
         // DNS + TLS handshake never trips it, short enough that a dead host
         // does not sit on the kernel's ~2 minute SYN-retry ceiling.
         $this->assertGreaterThanOrEqual(10.0, $client->getConfig('connect_timeout'));

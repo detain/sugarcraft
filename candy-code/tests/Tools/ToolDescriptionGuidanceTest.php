@@ -17,7 +17,7 @@ use SugarCraft\Code\Tools\ToolResult;
  * The five most-used tools' `description()` is the model's ONLY first-contact
  * documentation for a tool it has not called yet in this session, so each of
  * them now carries the handful of facts a caller otherwise pays a wasted turn
- * to learn (crush_code.md Phase 5 item 2 / section 12 finding 2).
+ * to learn (Phase 5 item 2 / section 12 finding 2).
  *
  * Every test here asserts a PROPERTY — a stated fact, or a number read off the
  * instance that owns it — never a paragraph of prose. The wording will be
@@ -456,7 +456,7 @@ final class ToolDescriptionGuidanceTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * The regex dialect is the clause crush_code.md section 12 got wrong (it
+     * The regex dialect is the clause section 12 got wrong (it
      * says ERE). {@see Grep::execute()} passes neither `-E` nor `-P`, so it is
      * BASIC regular expression syntax, and the difference decides whether
      * `a|b` is alternation or three literal characters.

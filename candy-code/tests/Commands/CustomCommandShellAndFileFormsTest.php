@@ -29,7 +29,7 @@ use SugarCraft\Code\ToolCall;
 
 /**
  * The two template forms that LEAVE THE STRING: `` !`cmd` `` runs a shell and
- * `@path` reads a file (crush_code.md Phase 2 item 4, second half).
+ * `@path` reads a file (Phase 2 item 4, second half).
  *
  * DRIVEN THROUGH `submit()` wherever a claim is about what the model receives,
  * for {@see CustomCommandDispatchTest}'s reason: both halves of this feature

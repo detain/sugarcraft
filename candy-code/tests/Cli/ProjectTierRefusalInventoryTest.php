@@ -52,7 +52,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * {@see Bootstrap::agentPresets()} and its siblings merge into one collector.
      *
      * The fourth is {@see ForeignAgentPresetRegistry}, which arrived when
-     * crush_code.md Phase 1 item 3 gave its seam a reader in
+     * Phase 1 item 3 gave its seam a reader in
      * {@see Bootstrap::foreignAgentPresets()}. It had been listed as a named GAP
      * on the collector for the round its gates existed without a consumer, which
      * is the transition this file exists to keep visible in both directions.
@@ -115,7 +115,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
     /**
      * The FOURTH holder of a repository-chosen directory, WIRED — this test is
      * the "or stay three after this one is wired" half of what its predecessor
-     * pinned, now discharged. crush_code.md Phase 2 item 4 gave
+     * pinned, now discharged. Phase 2 item 4 gave
      * {@see CommandLoader} a production caller
      * ({@see Bootstrap::chat()} builds one and hands it to {@see \SugarCraft\Code\Chat}),
      * so `.candy-code/commands` moved from the gap column to the feeder column
@@ -880,11 +880,11 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * TEN and NINETEEN — stated here so "nine feeders" cannot quietly stand in
      * for "and eight paths nobody drains".
      *
-     * It was FIVE AND FIVE until crush_code.md Phase 1 item 3 wired
+     * It was FIVE AND FIVE until Phase 1 item 3 wired
      * {@see Bootstrap::foreignAgentPresets()}: `.claude/agents` and
      * `.opencode/agents` moved from the gap column to the feeder column, which is
      * a named gap being closed rather than a count drifting. It became SEVEN AND
-     * THREE there, and EIGHT AND TWO when crush_code.md Phase 2 item 4 wired
+     * THREE there, and EIGHT AND TWO when Phase 2 item 4 wired
      * {@see CommandLoader} into {@see Bootstrap::chat()} and drained its
      * `refusedDirectories()` — the same shape of move, recorded the same way.
      * Phase 6 items 1+2 added THREE gaps and no feeder, making it EIGHT AND FIVE,
@@ -1150,7 +1150,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      * given while they were.
      *
      * {@see \SugarCraft\Code\Agents\ForeignAgentPresetRegistry} left
-     * {@see dormantHolders()} when crush_code.md Phase 1 item 3 wired it into
+     * {@see dormantHolders()} when Phase 1 item 3 wired it into
      * {@see Bootstrap::foreignAgentPresets()}. Moving it out of that provider
      * without moving it into this one would have DELETED the gate requirement at
      * the exact moment the class acquired a production caller — the inverse of the
@@ -1167,7 +1167,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
                 \SugarCraft\Code\Tests\Agents\ForeignAgentPresetDirContainmentTest::class,
                 ['below', 'within'],
             ],
-            // Left dormantHolders() when crush_code.md Phase 2 item 4 wired it
+            // Left dormantHolders() when Phase 2 item 4 wired it
             // into Bootstrap::chat(). Same tuple, deliberately: the gate
             // requirement is keyed to holding a repository-chosen directory, not
             // to being dormant, so acquiring a caller must not drop a single

@@ -9,7 +9,7 @@ use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Code\Tui\TerminalBackground;
 
 /**
- * crush_code.md Phase 8 item 5: nothing in candy-code probed the terminal's
+ * Phase 8 item 5: nothing in candy-code probed the terminal's
  * background, so a user on a light terminal had to know to run `/theme light`.
  * These pin the detection rules and, more importantly, the precedence: the
  * terminal's own OSC 11 answer always beats the environment's guess.
@@ -123,7 +123,7 @@ final class TerminalBackgroundTest extends TestCase
     /**
      * ...but an explicit `CANDY_CODE_BACKGROUND` outranks even that. The
      * ordering only became observable once `observe()` was wired into the live
-     * shell (crush_code.md Phase 8 item 6): with the query now sent on every
+     * shell (Phase 8 item 6): with the query now sent on every
      * launch, ranking the measurement above the override would leave the
      * documented escape hatch with nothing to escape on any terminal that
      * answers OSC 11 — which is most of them.

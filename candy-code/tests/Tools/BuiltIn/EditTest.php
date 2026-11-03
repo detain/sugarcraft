@@ -28,7 +28,7 @@ final class EditTest extends TestCase
     // =========================================================================
     // Diff generation - the failure mode being fixed: old code returned only
     // "File updated: $path" with zero before/after visibility. The diff now
-    // rides ToolResult::diff() as a standalone field (crush_feat.md §1 E3)
+    // rides ToolResult::diff() as a standalone field (§1 E3)
     // rather than being concatenated into the free-text content summary.
     // =========================================================================
 

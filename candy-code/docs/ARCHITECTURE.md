@@ -1210,6 +1210,21 @@ written against; the zone names are the live `*_ZONE_PREFIX` constants):
    • media form / settings editor — full-band modals with their own tab order
 ```
 
+Narrower terminals: the map above is the WIDE shape. The docked side-pane
+column only exists while the chat column keeps its own floor after the dock —
+`App::AUTO_DOCK_MIN_CHAT_COLS` (80 columns for any pane, and
+`AUTO_DOCK_CONTEXT_MIN_COLS` raises it to 120 for the Context pane alone) —
+below that the panes do not sit beside the transcript, they replace it one at
+a time: every one of them stays reachable through the same tab cycle and the
+**View ▸ Panes** menu, and the `pane:` / `divider:` / `stackdiv:` zones simply
+are not painted. The agent/shell split obeys the same law from the other
+side: under `SPLIT_MIN_TOTAL_COLS` (80) the split is not rendered and the
+view is whichever single band has focus. Nothing about the keyboard contract
+changes with width, which is what makes a narrow or screen-reader terminal a
+layout question rather than a lost feature: `screenReader` mode sheds icons
+and spells the row cursor as text (see `ScreenReaderMode`), and the collapse
+rules above mean the same keys select the same panes at 60 columns as at 160.
+
 Keyboard focus order and meaning:
 
 - **Tab** (`shell.pane-next`) cycles the highlighted **docked pane**; a pane's

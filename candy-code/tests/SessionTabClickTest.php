@@ -20,7 +20,7 @@ use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 
 /**
- * crush_feat.md section 8 E2 — click-to-switch session tab.
+ * section 8 E2 — click-to-switch session tab.
  *
  * Renderer-side assertions are structural snapshots of the zone registry the
  * root scan produces (the sentinels themselves never survive into the frame,

@@ -246,7 +246,7 @@ final class TokenTrackerTest extends TestCase
     }
 
     // =====================================================================
-    // The unsplit bucket (crush_code.md Phase 5 item 7)
+    // The unsplit bucket (Phase 5 item 7)
     // =====================================================================
 
     /**

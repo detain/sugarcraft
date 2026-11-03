@@ -340,7 +340,7 @@ final class BuiltInToolTest extends TestCase
     }
 
     /**
-     * crush_feat.md §3 E2: every built-in tool marks a human-readable
+     * §3 E2: every built-in tool marks a human-readable
      * `description` required, so a compliant backend always emits the label
      * {@see \SugarCraft\Code\Message::describeToolCall()} prefers - no extra
      * LLM call needed. Fails against the old schemas, which had no such field.

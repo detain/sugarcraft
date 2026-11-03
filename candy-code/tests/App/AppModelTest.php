@@ -48,7 +48,7 @@ use SugarCraft\Code\Tui\TerminalBackground;
 
 /**
  * App as the pane shell's root Model, hosting a Chat
- * (crush_feat.md §5 E7, merge branch — W3.M1).
+ * (§5 E7, merge branch — W3.M1).
  *
  * @see App::init()
  * @see App::update()
@@ -183,7 +183,7 @@ final class AppModelTest extends TestCase
 
     /**
      * init() no longer just forwards the hosted chat's Cmd: it batches the OSC
-     * 11 background query in front of it (crush_code.md Phase 8 item 6), which
+     * 11 background query in front of it (Phase 8 item 6), which
      * is what makes `TerminalBackground::observe()` reachable at all. The query
      * is unconditional — a shell with no hosted chat still asks.
      *
@@ -691,7 +691,7 @@ final class AppModelTest extends TestCase
 
     // =====================================================================
     // update(): shell keys first, every other key straight to Chat
-    // (crush_feat.md section 5 E7, merge branch -- W3.M2)
+    // (section 5 E7, merge branch -- W3.M2)
     // =====================================================================
 
     public function testShellClaimedKeyNeverReachesTheHostedChat(): void
@@ -787,7 +787,7 @@ final class AppModelTest extends TestCase
     }
 
     // =====================================================================
-    // Consuming the shell Cmd objects (crush_feat.md section 5 E7 /
+    // Consuming the shell Cmd objects (section 5 E7 /
     // section 7 -- F.CMDCONSUME). Before this, App::handleKey() dropped
     // dispatchKey()'s element 1 on the floor, so Ctrl+S, menu Enter and the
     // skill picker all produced a command object nothing ever ran.

@@ -10,7 +10,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 
 /**
- * crush_code.md Phase 0 item 12 — `listSessions()`'s ORDER BY must be served
+ * Phase 0 item 12 — `listSessions()`'s ORDER BY must be served
  * by an index (on old databases too), the per-frame query must stop
  * re-running, and `pruneSessions()` must be reachable with a retention that
  * cannot eat something a user meant to keep: not a named session, not the

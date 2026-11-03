@@ -10,7 +10,7 @@ use SugarCraft\Image\Mosaic;
 
 /**
  * Covers ToolResult's image/attachment field + probe-once Mosaic::auto()
- * capture point (crush_feat.md section 9, E1/E2).
+ * capture point (section 9, E1/E2).
  *
  * @see ToolResult
  */

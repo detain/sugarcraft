@@ -43,7 +43,7 @@ final class EchoProviderTest extends TestCase
         $this->assertFalse($this->provider->supportsVision());
         $this->assertFalse($this->provider->supportsJsonSchema());
         // 0 is the UNKNOWN sentinel, not a degenerate value: this provider has
-        // no model behind it, and crush_code.md Phase 5 item 4 made
+        // no model behind it, and Phase 5 item 4 made
         // contextWindow() the denominator of every context tier in Chat. The
         // 1,000,000 that used to sit here was a stand-in for "unlimited" from
         // when nothing read the method; measured, it put the live offline

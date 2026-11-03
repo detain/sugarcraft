@@ -18,7 +18,7 @@ use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 
 /**
- * crush_feat.md section 8 E5 — click a tool call to expand/collapse it.
+ * section 8 E5 — click a tool call to expand/collapse it.
  *
  * Renderer-side assertions are structural snapshots of the zone registry the
  * root scan produces (the sentinels themselves never survive into the frame,

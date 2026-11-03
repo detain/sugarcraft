@@ -76,7 +76,7 @@ final class CommandRegistryTest extends TestCase
 
         // These two have no "/name" branch in Chat::submit(), so advertising
         // them in the "/" popup would offer a command that does nothing.
-        // `model` used to be a third: crush_code.md Phase 4 item 1 gave it a
+        // `model` used to be a third: Phase 4 item 1 gave it a
         // real branch, so it is now listed, and
         // SlashDispatchTest::testEverySlashVisibleRegistryRowHasALiveDispatchHandler()
         // is what holds this list and the dispatch together from now on -
@@ -95,7 +95,7 @@ final class CommandRegistryTest extends TestCase
      * {@see CommandRegistry::filterMatchResults()} return are one list, not two
      * that agree by inspection: `filter()` is `array_map` over the other one.
      * Asserted because the popup pairs row N of the first with row N of the
-     * second when it highlights (crush_code.md Phase 4 item 5), and a pairing
+     * second when it highlights (Phase 4 item 5), and a pairing
      * by index is only safe while the lengths and the order are the same.
      */
     public function testMatchResultsLineUpWithTheSpecsRowForRow(): void

@@ -16,7 +16,7 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * crush_code.md Phase 0 item 10 (§5): a misconfigured provider on the one-shot
+ * Phase 0 item 10 (§5): a misconfigured provider on the one-shot
  * `-p`/`run` path used to silently degrade to the offline `EchoProvider` and
  * still exit 0, so a CI caller got a plausible canned sentence with no way to
  * tell the model was never called.
@@ -184,7 +184,7 @@ final class NonInteractiveProviderFailureTest extends TestCase
     {
         return [
             // MISCONFIGURED, shape 1: a real provider type whose required
-            // credential is absent. This is the exact invocation crush_code.md
+            // credential is absent. This is the exact invocation 
             // §5 reproduced live (`CANDY_CODE_PROVIDER=openai OPENAI_API_KEY=`)
             // and watched return a canned Echo reply at exit 0.
             'known type, missing credential' => ['openai'],

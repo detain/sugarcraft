@@ -10,7 +10,7 @@ use SugarCraft\Code\Context\MemoryBlock;
 use SugarCraft\Code\Memory\MemoryStore;
 
 /**
- * Truth for the crush_code.md Phase 5 item 9 memory block.
+ * Truth for the Phase 5 item 9 memory block.
  *
  * The two claims most worth pinning behaviourally are the ones a presence check
  * would wave through: that the block is SCOPE-selected (so a user-scope note

@@ -20,7 +20,7 @@ use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Code\Tui\Components\AgentDashboardPane;
 
 /**
- * Reachability tests for crush_code.md Phase 1 item 1: "Construct a real
+ * Reachability tests for Phase 1 item 1: "Construct a real
  * AgentManager inside Bootstrap::chat()".
  *
  * The failure mode this whole audit keeps finding is a subsystem that is built,
@@ -544,7 +544,7 @@ final class AgentManagerWiringTest extends TestCase
     }
 
     /**
-     * crush_code.md issue #49: a sub-agent used to be told the PROCESS working
+     * issue #49: a sub-agent used to be told the PROCESS working
      * directory, because `Agent::systemPrompt()`'s last-resort
      * `EnvironmentBlock::capture(getcwd())` was the only path any caller took.
      * Bootstrap holds the session's root, so it now hands every registered

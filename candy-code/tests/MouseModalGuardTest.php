@@ -278,7 +278,7 @@ final class MouseModalGuardTest extends TestCase
     /**
      * The guard must not be wider than the capture it mirrors: the palette's
      * own rows are the one thing a click may still reach while it is up, which
-     * is the whole of crush_feat.md §8 E6.
+     * is the whole of §8 E6.
      */
     public function testThePaletteKeepsItsOwnRowsClickableWhileItSwallowsTheRest(): void
     {

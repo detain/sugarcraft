@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 final class ClaudeCodeMcpClientTest extends TestCase
 {
     /**
-     * The rename itself (crush_code.md Phase 2 item 1), asserted rather than
+     * The rename itself (Phase 2 item 1), asserted rather than
      * grepped.
      *
      * The plan called the two `McpClient` classes duplicates. They were not:

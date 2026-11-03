@@ -239,7 +239,7 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * Regression for crush_feat.md §12 D3's final sentence: "surface the
+     * Regression for §12 D3's final sentence: "surface the
      * result rendered dimmed/collapsed in the TUI". Prior to this fix,
      * `Message` had no reasoning field at all, so `Renderer` had nothing to
      * render even though the provider layer's `ReasoningExtractor` computed
@@ -760,7 +760,7 @@ final class RendererTest extends TestCase
         $out = Renderer::render($this->chat(buf: '/re'));
 
         // ANSI-stripped, because the typed "re" now carries its own SGR run
-        // inside the row (crush_code.md Phase 4 item 5), so "▸ /redo" is no
+        // inside the row (Phase 4 item 5), so "▸ /redo" is no
         // longer contiguous in the raw bytes. The marker and the row are still
         // what is being asserted - see
         // testSlashMenuHighlightsTheMatchedRunOfTheTypedPrefix() for the SGR.
@@ -1246,7 +1246,7 @@ final class RendererTest extends TestCase
      * The COUNT is a chars/4 proxy, not a tokenizer figure, so it is prefixed
      * rather than presented as a measurement.
      *
-     * The limit beside it is no longer in the same boat: since crush_code.md
+     * The limit beside it is no longer in the same boat: since 
      * Phase 5 item 4 it IS the model's advertised context window whenever the
      * backend can report one, so the reason for the `~` narrowed to the
      * left-hand number and the mismatch between the two units. It has not gone
@@ -1327,7 +1327,7 @@ final class RendererTest extends TestCase
     }
 
     // =========================================================================
-    // crush_feat.md §1 E3 (rendering half): Edit/Write diffs in the transcript
+    // §1 E3 (rendering half): Edit/Write diffs in the transcript
     // =========================================================================
 
     /** A Chat with a pinned viewport so width/height clipping is deterministic. */
@@ -1403,7 +1403,7 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * crush_code.md Phase 8 item 1: the diff box used to say what changed but
+     * Phase 8 item 1: the diff box used to say what changed but
      * never where. Each row now carries an old-file/new-file line-number
      * gutter, and the numbers have to be the file's, not the diff block's.
      */
@@ -1648,7 +1648,7 @@ final class RendererTest extends TestCase
     }
 
     // =========================================================================
-    // crush_feat.md §4 E3/E6/E7: palette highlighting, grouping, MRU order
+    // §4 E3/E6/E7: palette highlighting, grouping, MRU order
     // =========================================================================
 
     /**
@@ -1785,7 +1785,7 @@ final class RendererTest extends TestCase
     }
 
     // =========================================================================
-    // crush_feat.md §1 E2 (rendering half): the permission-prompt modal
+    // §1 E2 (rendering half): the permission-prompt modal
     // =========================================================================
 
     /**
@@ -2168,7 +2168,7 @@ final class RendererTest extends TestCase
     }
 
     // =========================================================================
-    // crush_feat.md §1 E7: denied / interrupted tool-call visual states
+    // §1 E7: denied / interrupted tool-call visual states
     // =========================================================================
 
     /** One tool-result turn, so a whole frame can be rendered around it. */
@@ -2285,7 +2285,7 @@ final class RendererTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Live session picker overlay (crush_feat.md section 5 E8)
+    // Live session picker overlay (section 5 E8)
     // ---------------------------------------------------------------
 
     private function pickerChat(int $cols = 100): Chat
@@ -2366,7 +2366,7 @@ final class RendererTest extends TestCase
     }
 
     /**
-     * The user-reported regression behind crush_feat.md §3 E2: expanding a
+     * The user-reported regression behind §3 E2: expanding a
      * finished tool call showed its OUTPUT but the row never said which
      * command produced it. Against the old renderer this fails - the finished
      * row was `🔧 tool: bash ✓ ok` and the `ls -la` only ever appeared on the
@@ -2493,7 +2493,7 @@ final class RendererTest extends TestCase
     }
 
     // =========================================================================
-    // Image-bearing tool results: caption + collapse (crush_feat.md §9 E3 read
+    // Image-bearing tool results: caption + collapse (§9 E3 read
     // through §1 E5). User-reported: `/doctor` "shows just a big green box for
     // output, nothing else, not collapsable or expandable" - the swatch was
     // painted unconditionally, at up to a full viewport of rows, so it evicted

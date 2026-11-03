@@ -92,7 +92,7 @@ final class ThemeTest extends TestCase
     }
 
     // =========================================================================
-    // crush_code.md Phase 8 item 5: the `adaptive` preset
+    // Phase 8 item 5: the `adaptive` preset
     // =========================================================================
 
     /**

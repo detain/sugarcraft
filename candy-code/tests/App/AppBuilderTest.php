@@ -26,7 +26,7 @@ final class AppBuilderTest extends TestCase
 
         // build() runs SkillManager::loadAll(), which walks the user's
         // foreign-skill trees (~/.claude/skills, ~/.config/opencode/skills)
-        // since crush_code.md Phase 2 item 6. Point HOME at an empty sandbox
+        // since Phase 2 item 6. Point HOME at an empty sandbox
         // so a built App's skill roster is this test's fixtures and nothing
         // the developer running the suite happens to have installed.
         $this->sandboxHome = sys_get_temp_dir() . '/candy_code_appbuilder_home_' . uniqid('', true);
@@ -532,7 +532,7 @@ final class AppBuilderTest extends TestCase
     }
 
     // =========================================================================
-    // Skill wiring Tests (crush_feat.md section 7 E1)
+    // Skill wiring Tests (section 7 E1)
     // =========================================================================
 
     /**

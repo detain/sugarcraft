@@ -35,7 +35,7 @@ use SugarCraft\Code\Tools\BuiltIn\WebSearch;
 
 /**
  * {@see Runtime}'s same-turn tool batch, executed concurrently
- * (crush_code.md Phase 0 item 14).
+ * (Phase 0 item 14).
  *
  * The witness for "these really overlapped" is a RENDEZVOUS, not a stopwatch:
  * each call drops a marker file and then watches the shared directory for its

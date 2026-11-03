@@ -196,7 +196,7 @@ final class PathJailTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Bound contract (crush_code.md P8.14) - one call, fail-closed
+    // Bound contract (P8.14) - one call, fail-closed
     // -------------------------------------------------------------------------
 
     public function testImplementsTheSharedBoundJailContract(): void

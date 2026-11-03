@@ -73,7 +73,7 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * "deprecation" without the quote marker, earned by the 2026-10-24
      * get* accessor era (see the deprecation-appears test for the why).
      */
-    private const ACCESSOR_SECTION_HEADING = '## Accessor deprecation (2026-10-24)';
+    private const ACCESSOR_SECTION_HEADING = '## Accessor deprecation';
 
     private string $tmpDir = '';
 

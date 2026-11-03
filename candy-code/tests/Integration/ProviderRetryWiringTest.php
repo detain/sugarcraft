@@ -32,7 +32,7 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
- * Behavioural pins for the crush_code.md Phase 5 item 8 retry.
+ * Behavioural pins for the Phase 5 item 8 retry.
  *
  * The tests that matter here are the ones that would still pass if the retry
  * were wired wrongly in a plausible way, and therefore have to be written to
@@ -86,7 +86,7 @@ final class ProviderRetryWiringTest extends TestCase
     /**
      * THE regression test for the plan's proposed location.
      *
-     * crush_code.md Phase 5 item 8 says to put the retry inside
+     * Phase 5 item 8 says to put the retry inside
      * `EngineBackend::runCompleteInChild()`, which wraps
      * {@see EngineBackend::complete()} — the whole bounded agentic loop, tool
      * dispatch included. A retry there replays every tool call the failed

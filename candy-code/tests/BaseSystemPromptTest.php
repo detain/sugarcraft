@@ -32,7 +32,7 @@ use SugarCraft\Code\Tools\Tool;
  * The base system prompt was one sentence — `'You are CandyCode, an AI coding
  * assistant.'` — and everything appended after it is DATA (the `<env>` block,
  * `<project-instructions>` fences, skill bodies, the skill listing), not
- * guidance. crush_code.md Phase 5 item 1 calls replacing it the
+ * guidance. Phase 5 item 1 calls replacing it the
  * highest-leverage single change in that phase.
  *
  * These tests assert the prompt's STRUCTURE and the TRUTHFULNESS of its

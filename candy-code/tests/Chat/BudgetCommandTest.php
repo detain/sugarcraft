@@ -16,7 +16,7 @@ use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenTracker;
 
 /**
- * crush_code.md Phase 5 item 7's user-facing half: `/budget`, and the spend cap
+ * Phase 5 item 7's user-facing half: `/budget`, and the spend cap
  * it sets.
  *
  * Everything is driven as a submitted draft through `Chat::update()`, and the

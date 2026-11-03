@@ -9,7 +9,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Tui\DiffGutter;
 
 /**
- * crush_code.md Phase 8 item 1: the diff viewer had no line-number column, so a
+ * Phase 8 item 1: the diff viewer had no line-number column, so a
  * reviewer could see what changed but not where. These pin the numbering rules
  * (`diff -u`'s own counting) and the fixed-width invariant the renderer's
  * column clipping depends on.

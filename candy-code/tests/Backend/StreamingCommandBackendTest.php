@@ -137,7 +137,7 @@ final class StreamingCommandBackendTest extends TestCase
     }
 
     // =========================================================================
-    // The deadline (crush_code.md Phase 2 item 8)
+    // The deadline (Phase 2 item 8)
     //
     // This class shipped with `int $timeout = 120`, armed ONCE as
     // `$deadline = time() + $this->timeout`, so a completion that ran past two

@@ -25,7 +25,7 @@ use SugarCraft\Code\Tools\ToolResult;
  * fact that they REACH it.
  *
  * {@see Runtime} has carried `$parallelToolCalls`/`$parallelToolDeadlineSeconds`
- * since crush_code.md Phase 0 item 14, but the one production construction site
+ * since Phase 0 item 14, but the one production construction site
  * — {@see EngineBackend::complete()} — passed neither, so both were reachable
  * only from tests: a user hitting a bad interaction could not turn concurrency
  * off without editing source. Every assertion below is therefore paired: the

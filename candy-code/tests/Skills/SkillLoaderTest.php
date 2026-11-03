@@ -880,7 +880,7 @@ SKILL
 
     // -------------------------------------------------------------------------
     // loadManifestsFromDirectory() / loadAllManifests() -- lazy progressive
-    // loading (crush_feat.md section 7.E3)
+    // loading (section 7.E3)
     // -------------------------------------------------------------------------
 
     public function testLoadManifestsFromDirectoryNonExistent(): void

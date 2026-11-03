@@ -18,7 +18,7 @@ use SugarCraft\Image\Renderer\SixelRenderer;
 use SugarCraft\Image\TmuxPassthroughDecorator;
 
 /**
- * crush_feat.md §9 E5 — tmux passthrough for image-bearing tool results.
+ * §9 E5 — tmux passthrough for image-bearing tool results.
  *
  * E5's claim is that nothing needs implementing: sugar-image already wraps
  * the chosen renderer in {@see TmuxPassthroughDecorator} whenever `$TMUX` is

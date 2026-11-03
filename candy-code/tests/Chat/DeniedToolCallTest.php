@@ -11,7 +11,7 @@ use SugarCraft\Code\Role;
 use SugarCraft\Code\ToolResult;
 
 /**
- * crush_feat.md §1 E7's classification half: which results are refusals,
+ * §1 E7's classification half: which results are refusals,
  * which are restart-orphans, and how a checkpoint row taken mid-tool-call is
  * healed on the way back in.
  *

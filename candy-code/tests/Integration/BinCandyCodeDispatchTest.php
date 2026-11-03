@@ -15,7 +15,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * crush_code.md Phase 0 item 3: every unrecognized or incomplete CLI flag
+ * Phase 0 item 3: every unrecognized or incomplete CLI flag
  * used to fall through `bin/candy-code`'s dispatch into `Program::run()`,
  * which attaches to the TTY, enters the alt-screen and blocks — so
  * `candy-code --version`, a bare `candy-code run`, a bare `candy-code -p` and
@@ -42,7 +42,7 @@ final class BinCandyCodeDispatchTest extends TestCase
 {
     use HomeSandboxTrait;
 
-    /** Usage error, per crush_code.md; distinct from NonInteractive's 1 = ran and failed. */
+    /** Usage error, per ; distinct from NonInteractive's 1 = ran and failed. */
     private const EXIT_USAGE = 2;
 
     /**
@@ -126,7 +126,7 @@ final class BinCandyCodeDispatchTest extends TestCase
     public static function unknownFlagInvocations(): array
     {
         return [
-            // `--version` used to live here: crush_code.md Phase 0 item 3 made
+            // `--version` used to live here: Phase 0 item 3 made
             // it fail cleanly as an unknown flag, and Phase 4 item 3 made it a
             // real flag. A near-miss typo of it stands in, so the guard that
             // used to catch `--version` itself is still covered.
@@ -422,7 +422,7 @@ final class BinCandyCodeDispatchTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // crush_code.md Phase 4 item 3: --version dispatches like --help.
+    // Phase 4 item 3: --version dispatches like --help.
     // -------------------------------------------------------------------------
 
     /**
@@ -540,7 +540,7 @@ final class BinCandyCodeDispatchTest extends TestCase
     }
 
     /**
-     * crush_code.md Phase 4 item 6, the `--output-format` half. Measured
+     * Phase 4 item 6, the `--output-format` half. Measured
      * before the fix: `--output-format xml` reached every consumer, each of
      * which tests `=== FORMAT_JSON` and renders text otherwise, so this
      * invocation printed a plain-text answer and exited 0 — a `| jq` caller
@@ -841,7 +841,7 @@ final class BinCandyCodeDispatchTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // crush_code.md Phase 0 item 10: a one-shot run never answers from the
+    // Phase 0 item 10: a one-shot run never answers from the
     // offline echo provider on behalf of a provider that was asked for.
     // -------------------------------------------------------------------------
 
@@ -851,7 +851,7 @@ final class BinCandyCodeDispatchTest extends TestCase
     public static function unusableProviderInvocations(): array
     {
         return [
-            // The exact reproduction in crush_code.md §5: this used to print a
+            // The exact reproduction in §5: this used to print a
             // warning to stderr and a canned Echo sentence to stdout at exit 0.
             'known type, missing credential' => ['openai', "requires 'apiKey'"],
             'unknown provider name'          => ['definitely-not-a-real-provider', 'Unknown provider type'],
@@ -1138,13 +1138,13 @@ final class BinCandyCodeDispatchTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // crush_code.md Phase 4 item 6: the real subcommands.
+    // Phase 4 item 6: the real subcommands.
     //
     // EVERY CASE HERE IS EXEC'D through runBin(), deliberately and against the
     // temptation to call Subcommands::dispatch() directly: ROUTING is the thing
     // most likely to break. A handler that works perfectly while ArgvParser
     // fails to recognise its verb is precisely the failure mode `--version` had
-    // (crush_code.md Phase 0 item 3) — the token fell through every dispatch
+    // (Phase 0 item 3) — the token fell through every dispatch
     // guard into Program::run() and hung. A unit test on the handler cannot see
     // that; a child process that hangs on the deadline can.
     //
@@ -1295,7 +1295,7 @@ final class BinCandyCodeDispatchTest extends TestCase
      * NOT the model-invoked {@see \SugarCraft\Code\Tools\BuiltIn\Doctor} tool,
      * which exists, is registered in Bootstrap::tools(), and answers the
      * completely different question "what image protocol does this terminal
-     * speak" with a PNG swatch attached. crush_code.md Phase 4 item 6 asks for
+     * speak" with a PNG swatch attached. Phase 4 item 6 asks for
      * them to stay distinct; this pins that they are.
      */
     public function testDoctorReportsTheInstallAndIsNotTheModelInvokedDoctorTool(): void

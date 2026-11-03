@@ -293,7 +293,7 @@ final class RuntimeTest extends TestCase
     }
 
     // =========================================================================
-    // $onEvent tool-lifecycle plumbing (crush_feat.md §1 E1)
+    // $onEvent tool-lifecycle plumbing (§1 E1)
     // =========================================================================
 
     public function testRunEmitsToolStartedThenToolFinishedForEachToolCall(): void
@@ -8757,7 +8757,7 @@ DOC;
     }
 
     // =========================================================================
-    // Blocking permission requests (crush_feat.md 1 E2) - HookResult::ask()
+    // Blocking permission requests (1 E2) - HookResult::ask()
     // =========================================================================
 
     /**

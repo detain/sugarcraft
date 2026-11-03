@@ -25,7 +25,7 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
- * crush_code.md Phase 1 item 2: {@see PermissionGate} had exactly one consumer
+ * Phase 1 item 2: {@see PermissionGate} had exactly one consumer
  * (the sub-agent path) while the main loop got only the built-in hooks. These
  * exercise the {@see EngineBackend::withPermissionGate()} seam end-to-end
  * through the real {@see \SugarCraft\Code\Runtime}, so a "the gate is wired"

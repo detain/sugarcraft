@@ -182,7 +182,7 @@ final class TaskListHooksTest extends TestCase
      * cosmetic blank: {@see \SugarCraft\Code\Hooks\ScriptHook::execute()}
      * hands the field straight to `proc_open()` as the cwd, and a directory
      * that does not exist stops the hook from running at all — which used to
-     * mean a DENYING hook silently allowed the call (crush_code.md Phase 0
+     * mean a DENYING hook silently allowed the call (Phase 0
      * item 6).
      */
     public function testTaskScopedHookContextsCarryAUsableProjectRoot(): void

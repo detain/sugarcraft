@@ -10,7 +10,7 @@ use SugarCraft\Code\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
- * W1.A5 (crush_feat.md §12 D6): the default `message.tool_calls[]` strategy.
+ * W1.A5 (§12 D6): the default `message.tool_calls[]` strategy.
  */
 final class OpenAiArrayToolCallParserTest extends TestCase
 {

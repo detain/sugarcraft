@@ -25,7 +25,7 @@ use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 
 /**
- * crush_feat.md §8 (mouse integration) for the one surface its E-list never
+ * §8 (mouse integration) for the one surface its E-list never
  * reached: the menu bar. The user report is literal — "clicking the menu up
  * top with a mouse doesnt work". F10 opened it and the arrows walked it, but
  * the titles carried no click zone at all.

@@ -21,7 +21,7 @@ use SugarCraft\Image\Mosaic;
 use SugarCraft\Mouse\Zone;
 
 /**
- * crush_feat.md §8 (mouse integration) read with §5 E7 — the hosted chat's
+ * §8 (mouse integration) read with §5 E7 — the hosted chat's
  * click zones have to be re-based onto the terminal by the chat pane's origin.
  *
  * Regression cover for a live bug the pane-shell migration introduced:

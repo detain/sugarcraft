@@ -360,7 +360,7 @@ final class CustomProviderTest extends TestCase
     }
 
     /**
-     * The catch site classifies the LIVE exception (crush_code.md Phase 5 item 8).
+     * The catch site classifies the LIVE exception (Phase 5 item 8).
      *
      * This provider reports failure as a response rather than by throwing, so
      * the exception is gone by the time anything above it can look — the verdict

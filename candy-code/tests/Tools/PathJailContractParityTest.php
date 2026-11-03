@@ -11,7 +11,7 @@ use SugarCraft\Code\Tools\PathJail;
 use SugarCraft\Code\Tools\PathJailInterface;
 
 /**
- * The guardrail for crush_code.md P8.14.
+ * The guardrail for P8.14.
  *
  * candy-code keeps two path-containment types on purpose — the stateless
  * algorithm {@see PathJail} (root per call, used by the workspace-jailed

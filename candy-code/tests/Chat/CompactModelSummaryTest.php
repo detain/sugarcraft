@@ -23,7 +23,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 
 /**
- * crush_code.md Phase 5 item 6, driven through the real `Chat::update()`.
+ * Phase 5 item 6, driven through the real `Chat::update()`.
  *
  * Two properties are load-bearing and both are asserted behaviourally rather
  * than described:
@@ -1340,7 +1340,7 @@ final class CompactModelSummaryTest extends TestCase
     }
 
     // =====================================================================
-    // The recursive merge (crush_code.md Phase 8): a re-compaction carries
+    // The recursive merge (Phase 8): a re-compaction carries
     // the earlier summary instead of silently losing what it preserved.
     //
     // The distinction the whole section defends: one compaction proves only

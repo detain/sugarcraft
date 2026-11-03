@@ -13,7 +13,7 @@ use SugarCraft\Code\Tools\BuiltIn\Glob;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 
 /**
- * crush_feat.md section 7 E4: `SkillRegistry::getForPaths()` was correct and
+ * section 7 E4: `SkillRegistry::getForPaths()` was correct and
  * tested but had no production caller, so touching a file a skill scopes
  * itself to surfaced nothing. Every assertion here fails against the old
  * Read/Edit/Glob, which had no way to reach the registry at all.

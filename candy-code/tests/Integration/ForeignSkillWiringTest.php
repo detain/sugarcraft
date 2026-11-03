@@ -14,7 +14,7 @@ use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * crush_code.md Phase 2 item 6, measured FROM THE ENTRY POINT.
+ * Phase 2 item 6, measured FROM THE ENTRY POINT.
  *
  * {@see ForeignSkillDiscovery} had a full unit suite, a {@see SkillSource} tag and
  * two containment gates while nothing in `src/` or `bin/` called it. The call now

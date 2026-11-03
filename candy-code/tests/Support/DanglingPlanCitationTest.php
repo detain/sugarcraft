@@ -44,7 +44,7 @@ final class DanglingPlanCitationTest extends TestCase
      * review scoped M1 to shipped source, and widening later is a claim
      * change, not a bug fix.
      */
-    private const CENSUS_ROOTS = ['src', 'bin'];
+    private const CENSUS_ROOTS = ['src', 'bin', 'tests'];
 
     /**
      * Floor for the walked population: the census would go vacuously green

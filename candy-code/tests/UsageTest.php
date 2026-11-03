@@ -9,7 +9,7 @@ use SugarCraft\Code\Usage;
 
 /**
  * {@see Usage} — the value object that carries a provider's own token count and
- * cost across the seams that used to drop them (crush_code.md Phase 5 item 7).
+ * cost across the seams that used to drop them (Phase 5 item 7).
  *
  * The whole class exists to keep two claims apart: "the provider said this call
  * was free" and "no provider said anything". Every test here is about one of the

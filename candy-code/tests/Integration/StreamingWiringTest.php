@@ -33,7 +33,7 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
- * crush_code.md Phase 0 item 13: streaming was fake end to end while still
+ * Phase 0 item 13: streaming was fake end to end while still
  * paying its full SSE-parsing cost.
  *
  * Two independent breaks, both covered here.

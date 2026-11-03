@@ -59,7 +59,7 @@ use SugarCraft\Code\Tui\Settings\SettingsSources;
 use SugarCraft\Mouse\Zone;
 
 /**
- * The anti-drift half of the in-app keybinding reference (crush_code.md
+ * The anti-drift half of the in-app keybinding reference (
  * Phase 8 item 2).
  *
  * A hand-written cheat sheet is worth less than nothing the moment it

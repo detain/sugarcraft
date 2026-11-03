@@ -107,7 +107,7 @@ final class EnvironmentBlockTest extends TestCase
     }
 
     /**
-     * The crush_code.md Phase 5 item 10a OS-version line.
+     * The Phase 5 item 10a OS-version line.
      *
      * Pinned to the expression that produces it rather than to a literal string,
      * because the literal would be a fact about THIS machine's kernel and this
@@ -136,7 +136,7 @@ final class EnvironmentBlockTest extends TestCase
     }
 
     /**
-     * crush_code.md Phase 5 item 10a also asks for an "additional working
+     * Phase 5 item 10a also asks for an "additional working
      * directories" line. It is deliberately NOT emitted, and this pins that as a
      * decision rather than an omission.
      *
@@ -390,7 +390,7 @@ final class EnvironmentBlockTest extends TestCase
         $this->assertSame('model', $block->modelName());
     }
 
-    // ─── `--root` propagation (crush_code.md Phase 0 item 6) ────────
+    // ─── `--root` propagation (Phase 0 item 6) ────────
     //
     // Every case below deliberately points the configured root at a temp
     // directory that is NOT the process cwd. A test where the two coincide

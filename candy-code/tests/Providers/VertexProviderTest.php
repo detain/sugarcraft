@@ -724,7 +724,7 @@ final class VertexProviderTest extends TestCase
     /**
      * A rawPredict failure arrives as a 200 carrying an error OBJECT, so the
      * decoded `type` is the only place its transience is visible — no HTTP
-     * status, no exception (crush_code.md Phase 5 item 8).
+     * status, no exception (Phase 5 item 8).
      *
      * `TransientFailure::anthropicErrorIsTransient()` is unit-tested on its own;
      * what this pins is that `parseAnthropicResponse()` calls it. With the

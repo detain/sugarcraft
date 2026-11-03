@@ -10,7 +10,7 @@ use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Code\Context\ContextCompactor;
 
 /**
- * crush_code.md Phase 5 item 6's compactor half: the seam that lets stage 2 use
+ * Phase 5 item 6's compactor half: the seam that lets stage 2 use
  * a model-written summary instead of the truncate-and-placeholder heuristic.
  *
  * What the heuristic did, measured before this change: it truncated the user's

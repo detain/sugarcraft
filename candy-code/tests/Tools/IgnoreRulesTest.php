@@ -10,7 +10,7 @@ use SugarCraft\Code\Tools\IgnoreRules;
 /**
  * @see IgnoreRules
  *
- * The defect these cover (crush_code.md Phase 8 item 7): `Glob` and `Grep`
+ * The defect these cover (Phase 8 item 7): `Glob` and `Grep`
  * walked into `vendor/`, `node_modules/`, build output and anything else the
  * project had told git to ignore — burning the turn's context on generated
  * files, and surfacing secrets out of ignored local config.

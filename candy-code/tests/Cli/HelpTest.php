@@ -576,7 +576,7 @@ final class HelpTest extends TestCase
         $screen = Help::screen();
 
         $this->assertStringContainsString('Usage:', $screen);
-        // `run` is a positional-prompt alias for -p "<prompt>" (spec: crush_feat.md
+        // `run` is a positional-prompt alias for -p "<prompt>" (spec: 
         // section 2 E5 lines 273/288) -- not a `.crush` script interpreter, so pin
         // the exact wording rather than a bare 'run' substring match.
         $this->assertStringContainsString('candy-code run "<prompt>"        Alias for -p "<prompt>" (one-shot mode)', $screen);
@@ -675,7 +675,7 @@ final class HelpTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // --version (crush_code.md Phase 4 item 3)
+    // --version (Phase 4 item 3)
     // -------------------------------------------------------------------------
 
     public function testVersionNamesTheBinaryAndEndsWithASingleNewline(): void

@@ -17,7 +17,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Session\SessionStore;
 
 /**
- * The draft's cursor (crush_code.md Phase 3 item 1).
+ * The draft's cursor (Phase 3 item 1).
  *
  * `Chat::$inputBuf` used to be an append-only string with no cursor at all:
  * there was no `KeyType::Left` or `KeyType::Right` arm anywhere in `Chat`, so

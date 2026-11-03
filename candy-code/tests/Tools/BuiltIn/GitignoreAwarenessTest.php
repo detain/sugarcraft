@@ -9,7 +9,7 @@ use SugarCraft\Code\Tools\BuiltIn\Glob;
 use SugarCraft\Code\Tools\BuiltIn\Grep;
 
 /**
- * crush_code.md Phase 8 item 7 — `.gitignore`-awareness for `Glob`/`Grep`.
+ * Phase 8 item 7 — `.gitignore`-awareness for `Glob`/`Grep`.
  *
  * The defect: both tools walked into `vendor/`, `node_modules/`, `.git/`,
  * build output and everything else the project had told git to ignore. Two

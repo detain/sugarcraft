@@ -317,7 +317,7 @@ final class AgentManagerTest extends TestCase
 
     // -------------------------------------------------------------------------
     // Live telemetry: subAgentsOf() / elapsedSeconds() / tokensUsed() / costUsd()
-    // crush_feat.md §5 E6 -- the render site previously hardcoded 0, 0, 0.0
+    // §5 E6 -- the render site previously hardcoded 0, 0, 0.0
     // because no per-agent telemetry accessor existed at all.
     // -------------------------------------------------------------------------
 
@@ -922,7 +922,7 @@ final class AgentManagerTest extends TestCase
     }
 
     /**
-     * crush_code.md Phase 1 item 2's third part. An ASK used to be an
+     * Phase 1 item 2's third part. An ASK used to be an
      * unconditional hard failure, which made PermissionMode::Auto's whole
      * 3-strike escalation unreachable for sub-agents: escalating from Deny to
      * Ask produced the same dead sub-agent, only with a worse message.

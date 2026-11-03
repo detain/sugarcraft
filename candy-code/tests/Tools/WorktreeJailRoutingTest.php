@@ -229,7 +229,7 @@ final class WorktreeJailRoutingTest extends TestCase
     // its argument, and then re-open the UNRESOLVED string. Two different
     // paths, so a symlink component swapped in between was read from somewhere
     // the jail never approved. Both now resolve once and use the canonical
-    // result (crush_code.md P8.14/15).
+    // result (P8.14/15).
     // =========================================================================
 
     public function testReadOpensTheResolvedPathWhenTheTargetIsASymlink(): void

@@ -72,7 +72,7 @@ final class EngineBackendTest extends TestCase
     }
 
     /**
-     * Regression for crush_feat.md §12 D3's final wiring gap: `complete()`
+     * Regression for §12 D3's final wiring gap: `complete()`
      * used to build the root {@see Message} from `$lastAssistant->content()`
      * only, silently dropping `$lastAssistant->reasoning()` even though
      * {@see \SugarCraft\Code\Runtime} already populates it correctly on
@@ -546,7 +546,7 @@ final class EngineBackendTest extends TestCase
     }
 
     /**
-     * crush_feat.md §1 E1: before the $onEvent seam every tool call the bounded
+     * §1 E1: before the $onEvent seam every tool call the bounded
      * agentic loop made was swallowed inside complete() — only $lastAssistant's
      * text escaped — so a caller had no way to observe them. This test fails
      * against that older code because there was no third argument to pass.

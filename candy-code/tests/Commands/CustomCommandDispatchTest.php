@@ -17,7 +17,7 @@ use SugarCraft\Code\Role;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * File-based `*.md` commands END TO END (crush_code.md Phase 2 item 4): a file
+ * File-based `*.md` commands END TO END (Phase 2 item 4): a file
  * on disk, a real {@see CommandLoader} handed to a real {@see Chat}, and a draft
  * submitted with `update(new KeyMsg(KeyType::Enter))`.
  *

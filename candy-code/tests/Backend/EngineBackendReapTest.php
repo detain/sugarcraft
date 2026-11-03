@@ -11,7 +11,7 @@ use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
- * crush_code.md Phase 0 item 5: `completeAsync()`'s cancel teardown used to
+ * Phase 0 item 5: `completeAsync()`'s cancel teardown used to
  * call `pcntl_waitpid($pid, $status)` with no flags, immediately after a
  * `posix_kill()` that is `function_exists()`-guarded because ext-posix is not
  * guaranteed. In a build that has ext-pcntl but not ext-posix the child never

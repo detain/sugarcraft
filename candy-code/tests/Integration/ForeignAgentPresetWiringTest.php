@@ -15,7 +15,7 @@ use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * crush_code.md Phase 1 item 3, measured FROM THE ENTRY POINT.
+ * Phase 1 item 3, measured FROM THE ENTRY POINT.
  *
  * {@see ForeignAgentPresetRegistry} shipped a two-dialect frontmatter mapper, a
  * {@see SkillSource} tag, a lossy-mapping warning channel, two containment gates

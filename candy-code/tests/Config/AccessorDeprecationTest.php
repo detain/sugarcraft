@@ -295,7 +295,7 @@ final class AccessorDeprecationTest extends TestCase
             }
         }
         self::assertNotNull($section, 'README lost its Accessor deprecation section');
-        self::assertSame(1, preg_match('/^Accessor deprecation \(2026-10-24\)/m', $section), 'the section heading lost its date stamp');
+        self::assertSame(1, preg_match('/^Accessor deprecation$/m', $section), 'the Accessor deprecation heading changed shape (since the 2026-11 copy law the date lives in the section prose, not the heading)');
 
         preg_match_all('/^\| [^|]* \| `[^`]+` \| `(get[A-Za-z]+)\(\)` \| `([a-z][A-Za-z]+)\(\)` \|$/m', $section, $rows, PREG_SET_ORDER);
         self::assertCount(count(self::eraPairs()), $rows, 'README table row count drifted from the era roster');

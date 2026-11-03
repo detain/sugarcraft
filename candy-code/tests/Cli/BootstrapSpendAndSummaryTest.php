@@ -15,7 +15,7 @@ use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\UiEditability;
 
 /**
- * The launch-time resolvers: the two crush_code.md Phase 5 items 6 and 7 added
+ * The launch-time resolvers: the two Phase 5 items 6 and 7 added
  * — {@see Bootstrap::maxCostUsd()} (the spend cap) and
  * {@see Bootstrap::summaryBackend()} (the tool-less backend `/compact` asks for
  * its exchange summaries) — plus {@see Bootstrap::keybindingsSetting()}, the

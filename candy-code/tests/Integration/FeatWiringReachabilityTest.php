@@ -36,7 +36,7 @@ use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 
 /**
- * Reachability tests for crush_feat.md's Executive Summary table of
+ * Reachability tests for the plan's Executive Summary table of
  * subsystems that were "fully built, fully tested, never wired into the live
  * app". Each test here proves a subsystem is reachable FROM the real
  * `bin/candy-code` construction chain — `Bootstrap::app()` /
@@ -856,7 +856,7 @@ final class FeatWiringReachabilityTest extends TestCase
     // Row: sugar-mouse (Mark/Scan/Get + Zones)
     // "grep -rln \"Mouse\" src/ returns zero files in candy-code. Mouse mode
     //  isn't even turned on (ProgramOptions::$mouseMode defaults Off and is
-    //  never overridden)." — crush_feat.md §8 D/E1.
+    //  never overridden)." — §8 D/E1.
     //
     // The coordinate invariant (pane-local zone boxes rebased against
     // Renderer::zoneOrigin()) is already guarded by tests/Tui/ShellMouseZoneTest
@@ -992,7 +992,7 @@ final class FeatWiringReachabilityTest extends TestCase
     // Row: InstructionFileLoader::loadRoot()/loadForced() + the environment block
     // "Never called — root CLAUDE.md/AGENTS.md never auto-load into the system
     //  prompt. Only nested on-touch loading (loadForPath()) is actually
-    //  wired." (crush_feat.md §6 D, gap items 1, 2 and 4.)
+    //  wired." (§6 D, gap items 1, 2 and 4.)
     // =========================================================================
 
     /**
@@ -1099,7 +1099,7 @@ final class FeatWiringReachabilityTest extends TestCase
     //  non-null [...] So `/workflow run|pause|resume|status|list` on a real
     //  `bin/candy-code` invocation ALWAYS prints 'Workflow engine not
     //  configured,' regardless of any `.candy-code/workflows/*.yaml` a user
-    //  might author." — crush_code.md §10 Finding 3 / Phase 2 item 3.
+    //  might author." — §10 Finding 3 / Phase 2 item 3.
     // =========================================================================
 
     /**

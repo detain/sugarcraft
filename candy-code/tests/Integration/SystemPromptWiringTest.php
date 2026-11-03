@@ -27,7 +27,7 @@ use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * W1.B3c (crush_feat.md section 6 recommendation #5): integration-level proof
+ * W1.B3c (section 6 recommendation #5): integration-level proof
  * that BOTH halves of the section-6 gap actually reach the model.
  *
  * `tests/RuntimeTest.php` (W1.B3a) covers the same two features by reflecting
@@ -549,7 +549,7 @@ final class SystemPromptWiringTest extends TestCase
     }
 
     /**
-     * W3.S8 (crush_feat.md section 7 E1/E2): a populated skill registry is
+     * W3.S8 (section 7 E1/E2): a populated skill registry is
      * only half the wiring — the model needs the Level-1 listing in its
      * system prompt, or the `Skill` tool is one it has no reason to call.
      * Asserted on the request a provider is actually handed, for the same

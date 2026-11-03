@@ -510,7 +510,7 @@ final class AppSkillDispatchTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // dispatchSkill() environment orientation (crush_code.md Phase 5 item 3 /
+    // dispatchSkill() environment orientation (Phase 5 item 3 /
     // section 12 finding 4).
     //
     // The path built its CompleteRequest by hand with `systemPrompt:

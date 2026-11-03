@@ -295,7 +295,7 @@ final class ScriptHookTest extends TestCase
      * `cwd` does not exist, and ScriptHook used to translate that failure into
      * `HookResult::allow()`. A `--root /typo` therefore turned every DENYING
      * hook into an allow — the one direction a gate must never fail in
-     * (crush_code.md Phase 0 item 6).
+     * (Phase 0 item 6).
      */
     public function testADenyingHookStaysDenyingWhenTheProjectRootDoesNotExist(): void
     {
@@ -370,7 +370,7 @@ final class ScriptHookTest extends TestCase
     // Exit-code contract: ask (3) and modify (4)
     //
     // 0/1/2 are HookDispatcher's already-documented allow/deny/block codes and
-    // are covered above; these pin the two crush_code.md Phase 1 item 2 added
+    // are covered above; these pin the two Phase 1 item 2 added
     // so a YAML-configured hook can reach ASK/MODIFY at all.
     // =========================================================================
 

@@ -2,7 +2,7 @@
 
 # CandyCode
 
-> Formerly published as `sugarcraft/sugar-crush` (renamed 2026-10). <!-- @rename-keep -->
+> Formerly published as `sugarcraft/sugar-crush` (renamed 2026-10). <!-- @rename-keep --> One product, three registers: `CandyCode` (title-case — frames and headers), `candy-code` (slug — package, binary, `~/.candy-code/`), and `SugarCraft\Code\` (the PHP namespace).
 > Namespace changed: `SugarCraft\Crush\` → `SugarCraft\Code\`. <!-- @rename-keep -->
 
 <!-- BADGES:BEGIN -->
@@ -99,6 +99,7 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/PLUGINS.md`](docs/PLUGINS.md) | Claude-format plugin bundles: what a bundle may ship, which surfaces it feeds, why its hooks and `.mcp.json` are declined, `candy-code bundles list|install|marketplace|update|search|recommend` |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
 | [`docs/MEDIA.md`](docs/MEDIA.md) | Image and video generation: endpoint dialects, the capability probe, the `Ctrl+D` form and `/play`, presets, the PNG infotext round-trip, the RPC surface |
+| [`docs/SCHEDULES.md`](docs/SCHEDULES.md) | Scheduled prompts: `schedules.json` rows, the cadence, the `root` project binding, and the `Schedule` tool |
 | [`docs/CI.md`](docs/CI.md) | The GitHub Action around `-p`, the JSON envelope, and the fork-PR/prompt-injection doctrine — for when you run the agent in CI |
 | [`docs/MCP.md`](docs/MCP.md) | MCP servers: `.mcp.json`, the trust gate, auth, the in-process git server |
 | [`docs/SERVER.md`](docs/SERVER.md) | `candy-code serve`, remote access (`--allowed-host`, `--allowed-ips`), picking a new session's directory (`--allow-dir-browse`), the `candy-code.v1` protocol, the web UI, `candy-code attach`, editors through `candy-code acp` |
@@ -148,7 +149,7 @@ against the sidecar, then installs `candy-code` (mode 0755) into
 curl -fsSL https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/tools/install.sh | sh -s --
 ```
 
-The script takes flags only — no environment variables — plus
+The trailing `--` closes the outer shell's options and opens the installer's: script flags go after it (the script itself is a plain file at that URL — reading it before piping it is a reasonable habit). It takes flags only — no environment variables — plus
 `--base-url URL` to read `releases.json` from a mirror of the release list
 instead of the GitHub API. Homebrew: a formula is rendered per release by
 `candy-code/tools/gen-homebrew-formula.php` and ships as that release's
@@ -270,7 +271,7 @@ export CANDY_CODE_MODEL=gpt-4o          # optional; provider default otherwise
 | You run your own model server | `sglang` | The server’s URL — no key |
 | You are on a corporate cloud account | `azure`, `bedrock`, `vertex` | Endpoint, region or ambient credentials per family — see [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) |
 
-`CANDY_CODE_PROVIDER` accepts `openai`, `azure`, `anthropic`, `claude-code`, `codex`, `sglang`, `bedrock`, `vertex`, `gemini`, `openrouter`, or `custom` — eleven type keys, and the guards derive that list from `ProviderFactory` rather than restating it. Credentials and endpoint overrides arrive from the environment family tabulated in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md); `bedrock` itself reads `AWS_REGION` and `AWS_DEFAULT_REGION` for the signing region, while its credentials stay on the vendored AWS SDK's ambient chain — SDK-layer variables the SDK consults, not names this binary reads. When a real provider is active, the binary wires its built-in tools and the safety hooks automatically — thirty-eight of them ship on every launch (among them Bash, Read, Edit, Write, Glob, Grep, WebFetch, WebSearch, `doctor`, Skill, Lsp — code navigation through a language server — Memory, RepoMap, Todo, Compress, Recall, Workflow, Team, GenerateImage and Canvas), plus `Task` whenever the launch carries an agent manager, and the board, Advisor and MCP-call tools when their backends and settings are live; this list is illustrative, the [Capabilities](#capabilities) roster names every one beside its class file. These are **runtime tool names**, and `doctor` is lower-case: `allowedTools`, `disabledTools` and every `permissionRules` pattern match them with case-sensitive `fnmatch()`, so a rule written `Doctor` matches no tool at all. The two vendor-CLI routes are a different shape from the other nine: each turn runs inside the vendor's own child, and the [Providers](#providers) section tells that isolation story whole.
+`CANDY_CODE_PROVIDER` accepts `openai`, `azure`, `anthropic`, `claude-code`, `codex`, `sglang`, `bedrock`, `vertex`, `gemini`, `openrouter`, or `custom` — eleven type keys, and the guards derive that list from `ProviderFactory` rather than restating it. Credentials and endpoint overrides arrive from the environment family tabulated in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md); `bedrock` itself reads `AWS_REGION` and `AWS_DEFAULT_REGION` for the signing region, while its credentials stay on the vendored AWS SDK's ambient chain — SDK-layer variables the SDK consults, not names this binary reads. When a real provider is active, the binary wires its built-in tools and the safety hooks automatically — thirty-eight of them ship on every launch (among them Bash, Read, Edit, Write, Glob, Grep, WebFetch, WebSearch, `doctor`, Skill, Lsp — code navigation through a language server — Memory, RepoMap, Todo, Compress, Recall, Workflow, Team, GenerateImage and Canvas), plus `Task` whenever the launch carries an agent manager, and the board, Advisor and MCP-call tools when their backends and settings are live; this list is illustrative, the [Capabilities](#capabilities) roster names every one beside its class file. These are **runtime tool names**, and `doctor` is lower-case: `allowedTools`, `disabledTools` and every `permissionRules` pattern match them with case-sensitive `fnmatch()`, so a rule written `Doctor` matches no tool at all. The word names two surfaces with one spelling: `candy-code doctor` is the CLI subcommand the install section above runs, and the `doctor` in this list is the tool the model calls from inside a session — the subcommand reports on the build to you, the tool reports it to the model. The two vendor-CLI routes are a different shape from the other nine: each turn runs inside the vendor's own child, and the [Providers](#providers) section tells that isolation story whole.
 
 **Generating images and video.** Point the app at a Stable Diffusion server — `sd.baseUrl` in your settings, or `CANDY_CODE_SD_BASE_URL` — then ask the agent for a picture, or type `/generate a cat astronaut --steps 30` yourself; without a configured server every door refuses **before dialing**. Finished files land under `~/.candy-code/media/` (private: `0700`/`0600`), and `auto` render mode asks the terminal what it supports — `/rendermode` switches it mid-session. The dialect model, the display tiers, presets, the video ledger and the RPC surface all live in [`docs/MEDIA.md`](docs/MEDIA.md).
 
@@ -2846,7 +2847,7 @@ final class MyProvider implements ProviderInterface
 }
 ```
 
-## Accessor deprecation (2026-10-24)
+## Accessor deprecation
 
 Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"),
 ruling 3b), the 2026-10-24 remediation pass renamed 55 public `get*()` accessors

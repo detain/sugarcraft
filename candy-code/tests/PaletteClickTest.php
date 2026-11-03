@@ -21,7 +21,7 @@ use SugarCraft\Mouse\Sentinel;
 use SugarCraft\Mouse\Zone;
 
 /**
- * crush_feat.md section 8 E6 — click-to-select in the command palette /
+ * section 8 E6 — click-to-select in the command palette /
  * picker.
  *
  * Renderer-side assertions are structural snapshots of the zone registry the

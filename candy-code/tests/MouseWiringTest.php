@@ -13,7 +13,7 @@ use SugarCraft\Mouse\Mark;
 use PHPUnit\Framework\TestCase;
 
 /**
- * crush_feat.md section 8 E1 — mouse mode is enabled at all, both documented
+ * section 8 E1 — mouse mode is enabled at all, both documented
  * escape hatches actually disable what they claim, and the root frame is
  * zone-scanned exactly once.
  *

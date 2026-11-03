@@ -19,7 +19,7 @@ use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * `Chat::submit()`'s slash-command dispatch (crush_code.md Phase 4 items 1, 2
+ * `Chat::submit()`'s slash-command dispatch (Phase 4 items 1, 2
  * and 7): which draft reaches which handler, and — the part no test used to
  * cover — whether every command the "/" popup ADVERTISES reaches one at all.
  *

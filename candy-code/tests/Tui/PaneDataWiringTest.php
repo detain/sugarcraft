@@ -22,7 +22,7 @@ use SugarCraft\Code\Tui\Renderer;
 
 /**
  * W3.M4 — the shell's sidebars read the live session instead of placeholder
- * text (crush_feat.md §1 E6 for {@see ToolsPane}, §5 E7 for the pane layer
+ * text (§1 E6 for {@see ToolsPane}, §5 E7 for the pane layer
  * as a whole, §10.5 for {@see SkillsPane}'s provenance badges).
  *
  * @see FilesPane
@@ -50,7 +50,7 @@ final class PaneDataWiringTest extends TestCase
     }
 
     // =====================================================================
-    // ToolsPane — crush_feat.md §1 E6
+    // ToolsPane — §1 E6
     // =====================================================================
 
     /**
@@ -416,7 +416,7 @@ final class PaneDataWiringTest extends TestCase
     }
 
     // =====================================================================
-    // SkillsPane — crush_feat.md §10.5
+    // SkillsPane — §10.5
     // =====================================================================
 
     /**

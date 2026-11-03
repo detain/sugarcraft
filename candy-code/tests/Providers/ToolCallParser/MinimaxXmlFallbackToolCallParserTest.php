@@ -13,7 +13,7 @@ use SugarCraft\Code\Providers\ToolCallParser\ToolSchemaAware;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
- * W1.A5 (crush_feat.md §12 D6): the last-resort raw-XML strategy for a server
+ * W1.A5 (§12 D6): the last-resort raw-XML strategy for a server
  * launched without `--tool-call-parser minimax-m2`. Every XML case below is a
  * tool call that the OpenAI array parser drops on the floor entirely.
  */

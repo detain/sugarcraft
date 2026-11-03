@@ -15,7 +15,7 @@ use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
- * Regression coverage for §12 D2 of crush_feat.md: `SglangProvider::parseChunk()`
+ * Regression coverage for §12 D2 of : `SglangProvider::parseChunk()`
  * used to hardcode `toolCalls: null` on every chunk, so `completeStream()`
  * could never deliver a tool call - only `complete()` (non-streaming) could.
  * These tests assert the delta.tool_calls[] fragment accumulation added to

@@ -25,7 +25,7 @@ use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 use SugarCraft\Code\ToolCall;
 
 /**
- * crush_code.md Phase 1 item 2's construction half: the launch's
+ * Phase 1 item 2's construction half: the launch's
  * {@see PermissionGate} is built here, from the same kebab-case
  * {@see PermissionMode} vocabulary agent presets already use, and threaded
  * into {@see EngineBackend::withPermissionGate()} and into the hook chain

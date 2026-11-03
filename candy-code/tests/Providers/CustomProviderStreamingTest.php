@@ -15,7 +15,7 @@ use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
- * Regression coverage for §12 D2 of crush_feat.md: `CustomProvider::parseChunk()`
+ * Regression coverage for §12 D2 of : `CustomProvider::parseChunk()`
  * had the identical bug as `SglangProvider::parseChunk()` (byte-for-byte, per
  * the spec) - it hardcoded `toolCalls: null` on every chunk, so
  * `completeStream()` could never deliver a tool call. These tests assert the

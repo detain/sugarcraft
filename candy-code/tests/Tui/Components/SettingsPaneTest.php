@@ -111,7 +111,7 @@ final class SettingsPaneTest extends TestCase
      * The `--root` case: a rooted App must report ITS root, not the process
      * directory. This pane read `getcwd()` unconditionally until App carried
      * a root to read back, so it agreed with the (then wrong) environment
-     * block rather than with the tools (crush_code.md Phase 0 item 6).
+     * block rather than with the tools (Phase 0 item 6).
      */
     public function testRootReportsTheAppsConfiguredRootWhenItDivergesFromTheProcessDirectory(): void
     {

@@ -191,7 +191,7 @@ final class ChatTest extends TestCase
     }
 
     /**
-     * `$inputBuf` is DERIVED from the draft's editor (crush_code.md Phase 3
+     * `$inputBuf` is DERIVED from the draft's editor (Phase 3
      * item 1 replaced the hand-rolled string with `sugar-forms`' TextArea), so
      * the two can never be allowed to disagree about what is in the box. Every
      * write route is exercised here: the widget's own editing, the "replace
@@ -242,7 +242,7 @@ final class ChatTest extends TestCase
     }
 
     /**
-     * W1.G2/E2 fix (reviewer-reported): crush_feat.md section 9's E2
+     * W1.G2/E2 fix (reviewer-reported): section 9's E2
      * literally specifies `new Chat(..., mosaic: $mosaic)` exposing the
      * probe-once sugar-image capability instance through Chat's
      * constructor, rather than leaving it a standalone static cache only
@@ -386,7 +386,7 @@ final class ChatTest extends TestCase
     }
 
     /**
-     * crush_feat.md §1 E5: tool output starts collapsed and Ctrl+O is the
+     * §1 E5: tool output starts collapsed and Ctrl+O is the
      * only way to open it, so the keystroke must NOT fall through to the
      * generic Char arm and type a literal "o" into the input buffer.
      */
@@ -857,7 +857,7 @@ final class ChatTest extends TestCase
         // History: user msg + assistant msg + tool result msg
         $this->assertCount(3, $next->history);
         $this->assertStringContainsString('total 0', $next->history[2]->content);
-        // crush_feat.md §3 E2: the placeholder's describeToolCall() one-liner
+        // §3 E2: the placeholder's describeToolCall() one-liner
         // rides onto the finished result so a collapsed row still says WHAT
         // ran, not just which tool ran.
         $this->assertSame('bash(cmd: "ls -la")', $next->history[2]->toolResults[0]->description);
@@ -1338,7 +1338,7 @@ final class ChatTest extends TestCase
         [$narrowed] = $chat->update(new KeyMsg(KeyType::Char, 'b'));
         $names = array_map(static fn($spec) => $spec->name, $narrowed->slashMenuMatches());
         // Every slash-visible row whose name contains a `b`, fuzzy-ranked. `budget`
-        // joined the registry in crush_code.md Phase 5 item 7; the list is spelled
+        // joined the registry in Phase 5 item 7; the list is spelled
         // out rather than derived on purpose, because the thing under test is that
         // the popup NARROWS as characters arrive, and a derived expectation would
         // pass against a popup that never filtered at all.
@@ -1634,7 +1634,7 @@ final class ChatTest extends TestCase
         }
         [$inThemes] = $current->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertSame('themes', $inThemes->palette()->mode);
-        // `adaptive` (crush_code.md Phase 8 item 5) joined the roster; it is
+        // `adaptive` (Phase 8 item 5) joined the roster; it is
         // last because it is the newest, not because order carries meaning.
         $this->assertSame(
             ['dark', 'light', 'dracula', 'tokyoNight', 'ansi', 'adaptive'],
@@ -2365,7 +2365,7 @@ final class ChatTest extends TestCase
      * The other half of the idle gate: a session far past its window but a
      * user who is right here does NOT get the idle prompt.
      *
-     * What it gets instead changed in crush_code.md Phase 5 item 5, and this
+     * What it gets instead changed in Phase 5 item 5, and this
      * test was rewritten rather than relaxed. It used to assert the turn was
      * dispatched, which was only ever true because nothing enforced the
      * window: 325,286 estimated tokens (26 messages of ~50,000 chars at
@@ -2933,7 +2933,7 @@ final class ChatTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Backend tool-lifecycle events (crush_feat.md §1 E1, W2.S1c)
+    // Backend tool-lifecycle events (§1 E1, W2.S1c)
     // ---------------------------------------------------------------
 
     public function testBackendToolEventsSurviveAsAQueuedMsgInsteadOfBeingDropped(): void
@@ -3025,7 +3025,7 @@ final class ChatTest extends TestCase
     }
 
     /**
-     * The user-reported gap behind crush_feat.md §3 E2: on the live
+     * The user-reported gap behind §3 E2: on the live
      * (EngineBackend) path the only carrier of a call's arguments is the
      * running placeholder, and replacing it used to throw them away - so the
      * finished row could name the TOOL but never the command. ToolFinished
@@ -3188,7 +3188,7 @@ final class ChatTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Live tool-event pump (crush_feat.md §1 E1, F.PROGRESS)
+    // Live tool-event pump (§1 E1, F.PROGRESS)
     // ---------------------------------------------------------------
 
     public function testToolEventsReachTheTranscriptWhileTheTurnIsStillRunning(): void
@@ -3450,7 +3450,7 @@ final class ChatTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Hook gating on the Chat-native tool path (crush_feat.md §1 E1, W2.S1d)
+    // Hook gating on the Chat-native tool path (§1 E1, W2.S1d)
     // ---------------------------------------------------------------
 
     /**
@@ -3514,7 +3514,7 @@ final class ChatTest extends TestCase
     /**
      * The Chat-native (registerTool) pipeline used to invoke its callback
      * with zero gating while the engine pipeline ran the very same call
-     * through HookManager - crush_feat.md §1 D's "two independent,
+     * through HookManager - §1 D's "two independent,
      * non-unified tool-calling pipelines". Fails against the old Chat: no
      * PreToolUse hook ever fired for a registerTool() call.
      */
@@ -4058,7 +4058,7 @@ final class ChatTest extends TestCase
     }
 
     // =========================================================================
-    // crush_feat.md §4 E3/E6/E7: match indices, category grouping, MRU bias
+    // §4 E3/E6/E7: match indices, category grouping, MRU bias
     // =========================================================================
 
     /** Open palette, then type $query into it. */
@@ -4204,7 +4204,7 @@ final class ChatTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Auto-generated session titles (crush_feat.md section 3 E1)
+    // Auto-generated session titles (section 3 E1)
     // ---------------------------------------------------------------
 
     /** A store with one session already created, ready to be auto-titled. */
@@ -4766,7 +4766,7 @@ final class ChatTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Blocking permission requests (crush_feat.md 1 E2, W2.S3b)
+    // Blocking permission requests (1 E2, W2.S3b)
     // ---------------------------------------------------------------
 
     /** A PreToolUse hook that always defers to the user, counting its runs. */
@@ -5089,7 +5089,7 @@ final class ChatTest extends TestCase
         $this->assertSame('running', $rejected->history[0]->content);
         $this->assertSame('_Permission denied: bash was not run._', $rejected->history[1]->content);
 
-        // crush_feat.md §1 E7: the refusal must also exist as a RESULT under
+        // §1 E7: the refusal must also exist as a RESULT under
         // the refused call's own id. history[0] carries the tool_use block, so
         // without this the next request goes out with a tool_use that has no
         // matching tool_result - and the renderer has nothing to strike through.
@@ -5319,7 +5319,7 @@ final class ChatTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // /bg + /fork background sessions (crush_feat.md section 5 E3)
+    // /bg + /fork background sessions (section 5 E3)
     // ---------------------------------------------------------------
 
     /** Type $line at the prompt one key at a time, then send it. */
@@ -5494,7 +5494,7 @@ final class ChatTest extends TestCase
      * `/bg` must run the daemon as a REAL roster agent, not as the synthesised
      * stand-in `Host\Commands\BackgroundCommand::defaultAgent()` returns.
      *
-     * This pins a live behaviour change that crush_code.md Phase 1 item 1 made
+     * This pins a live behaviour change that Phase 1 item 1 made
      * as a side effect. `BackgroundSupervisor::spawnSession()` interpolates
      * `$agent->provider` and `$agent->model` straight into the daemon's
      * command line, and the stand-in carries the literal strings
@@ -5652,7 +5652,7 @@ final class ChatTest extends TestCase
     }
 
     // =====================================================================
-    // subscriptions() poll pump — crush_feat.md section 5 E4
+    // subscriptions() poll pump — section 5 E4
     // =====================================================================
 
     /** Build a background session without going near a real fork/socket. */
@@ -5777,7 +5777,7 @@ final class ChatTest extends TestCase
     }
 
     // ---------------------------------------------------------------
-    // Live session picker (crush_feat.md section 5 E8)
+    // Live session picker (section 5 E8)
     // ---------------------------------------------------------------
 
     /** A store carrying two named sessions, ready to be picked between. */

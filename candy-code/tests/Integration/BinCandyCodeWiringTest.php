@@ -486,7 +486,7 @@ final class BinCandyCodeWiringTest extends TestCase
      * The inverse of what this test used to assert. It previously pinned the
      * R20.fix GAP -- `Bootstrap::chat()` never constructs/passes an
      * `agentManager:` -- documenting it where a reader would see it rather
-     * than only in a docblock. crush_code.md Phase 1 item 1 closed the gap, so
+     * than only in a docblock. Phase 1 item 1 closed the gap, so
      * the pin flips: a launch must now carry a real manager, because
      * everything downstream of it (`/agents`, Ctrl+A, the transcript's agent
      * strip, `AgentDashboardPane`'s agent rows, `PermissionGate`) is reachable
@@ -662,7 +662,7 @@ final class BinCandyCodeWiringTest extends TestCase
     }
 
     // =========================================================================
-    // Skills subsystem wiring (crush_feat.md section 7 E1)
+    // Skills subsystem wiring (section 7 E1)
     // =========================================================================
 
     /**
@@ -787,7 +787,7 @@ final class BinCandyCodeWiringTest extends TestCase
     }
 
     // =========================================================================
-    // `--root` propagation (crush_code.md Phase 0 item 6)
+    // `--root` propagation (Phase 0 item 6)
     //
     // Every test below points --root at $this->tempDir . '/repo', which is
     // NEVER the process cwd (PHPUnit runs from the package directory). That
@@ -876,7 +876,7 @@ final class BinCandyCodeWiringTest extends TestCase
     }
 
     /**
-     * Chat's OWN tool pipeline (crush_feat.md §1 D's second dispatcher) builds
+     * Chat's OWN tool pipeline (§1 D's second dispatcher) builds
      * its own `HookContext`, with no App or Runtime in reach — which is why it
      * needed its own copy of the root rather than reading the engine's.
      */
@@ -1157,7 +1157,7 @@ final class BinCandyCodeWiringTest extends TestCase
                 $source,
                 $name . ' resolves a project root with a bare getcwd(). Read the configured root '
                     . '(App::$root / Chat::$projectRoot / EngineBackend::withRoot()) and fall back to '
-                    . 'getcwd() only when it is null, or `--root` stops here (crush_code.md Phase 0 item 6).',
+                    . 'getcwd() only when it is null, or `--root` stops here (Phase 0 item 6).',
             );
         }
     }

@@ -777,7 +777,7 @@ final class WorktreeManagerTest extends TestCase
     // -------------------------------------------------------------------------
     // Base-path override: CANDY_CODE_WORKTREES_DIR, with the pre-rename
     // SUGAR_CRUSH_WORKTREES_DIR honoured for one release // @rename-keep
-    // (crush_code.md Phase 4 item 4).
+    // (Phase 4 item 4).
     // -------------------------------------------------------------------------
 
     public function testCanonicalOverrideReplacesTheConfiguredBasePath(): void

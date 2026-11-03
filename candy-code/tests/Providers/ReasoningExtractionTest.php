@@ -22,7 +22,7 @@ use SugarCraft\Code\Providers\OpenAIProvider;
 use SugarCraft\Code\Providers\SglangProvider;
 
 /**
- * Regression coverage for crush_feat.md §12 D3: `SglangProvider`,
+ * Regression coverage for §12 D3: `SglangProvider`,
  * `CustomProvider` and `OpenAIProvider` each used to hardcode
  * `reasoning: null` in `parseResponse()`/`parseChunk()`, discarding
  * `reasoning_content` unconditionally and leaving any inline `<think>`

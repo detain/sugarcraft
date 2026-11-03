@@ -24,7 +24,7 @@ use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\ToolCall;
 
 /**
- * MCP tools are REACHABLE BY THE MODEL — crush_code.md Phase 2 item 2.
+ * MCP tools are REACHABLE BY THE MODEL — Phase 2 item 2.
  *
  * "An adapter exists in `Bootstrap::tools()`" is not the claim. `McpClient` could
  * already start servers, list their tools and call them; what no run could do was

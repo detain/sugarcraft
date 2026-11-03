@@ -35,7 +35,7 @@ use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Usage;
 
 /**
- * crush_code.md Phase 5 item 7's first half: the token count and cost every
+ * Phase 5 item 7's first half: the token count and cost every
  * provider already returned, travelling the two seams that used to discard them.
  *
  * The seams, measured before this change: `Runtime::runBatch()` built its
@@ -50,7 +50,7 @@ use SugarCraft\Code\Usage;
  * provider double. Nothing calls a private method or asserts on a docblock: the
  * question in each case is what a caller can observe on the returned Message.
  *
- * DOMAIN OF THE SENTENCE ABOVE: the ten crush_code.md Phase 5 tests. The P4.S2
+ * DOMAIN OF THE SENTENCE ABOVE: the ten Phase 5 tests. The P4.S2
  * section appended below answers a different question - the provider's own
  * parse of its usage object - so it drives the providers through their PUBLIC
  * parse seams plus their complete()/completeStream() entry points, and asserts

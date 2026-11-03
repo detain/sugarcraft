@@ -21,7 +21,7 @@ use SugarCraft\Code\ToolResult;
 use SugarCraft\Mouse\Zone;
 
 /**
- * crush_feat.md section 8 E8 — drag-vs-click disambiguation, so a text
+ * section 8 E8 — drag-vs-click disambiguation, so a text
  * selection swept across a clickable row copies text instead of firing the
  * control underneath it.
  *

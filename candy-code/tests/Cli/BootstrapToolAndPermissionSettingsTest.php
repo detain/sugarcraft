@@ -13,7 +13,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tools\Tool;
 
 /**
- * crush_code.md Phase 6 items 3 and 4: `allowedTools`/`disabledTools` filtering
+ * Phase 6 items 3 and 4: `allowedTools`/`disabledTools` filtering
  * {@see Bootstrap::tools()}, and `permissionMode`/`permissionRules` reachable
  * from the user's hand-authored `~/.candy-code/settings.json`.
  *

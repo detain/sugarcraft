@@ -385,7 +385,7 @@ final class SubAgentTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // elapsedSeconds() -- crush_feat.md §5 E6
+    // elapsedSeconds() -- §5 E6
     // -------------------------------------------------------------------------
 
     public function testElapsedSecondsIsZeroBeforeExecutionStarts(): void

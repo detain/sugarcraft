@@ -631,7 +631,7 @@ final class BootstrapTest extends TestCase
     public function testChatCarriesABackgroundSupervisorSoSlashBgIsUsable(): void
     {
         // Without this, /bg answers "Background sessions not configured" on
-        // every real run and crush_feat.md §5 E3 is unreachable from the
+        // every real run and §5 E3 is unreachable from the
         // binary (the daemon it dispatches to is never even spawned).
         $chat = Bootstrap::chat($this->isolatedHome());
 
@@ -646,7 +646,7 @@ final class BootstrapTest extends TestCase
         // The instance check above proves the field is set; this proves the
         // command a user actually types gets past the null guard in
         // Chat::handleBackgroundCommand() and hands back the spawn Cmd
-        // (crush_feat.md §5 E3). Against a Bootstrap that does not pass a
+        // (§5 E3). Against a Bootstrap that does not pass a
         // supervisor this fails on both assertions at once.
         [$next, $cmd] = $this->submitLine(Bootstrap::chat($this->isolatedHome()), '/bg run the tests');
 

@@ -23,7 +23,7 @@ use SugarCraft\Code\Usage;
 use SugarCraft\Code\Util\TokenTracker;
 
 /**
- * crush_code.md Phase 5 item 6, on the tier that actually fires in real use.
+ * Phase 5 item 6, on the tier that actually fires in real use.
  *
  * `/compact` typed by hand already asked the model for its summaries
  * ({@see CompactModelSummaryTest}); the automatic 85% tier did not, and compacted

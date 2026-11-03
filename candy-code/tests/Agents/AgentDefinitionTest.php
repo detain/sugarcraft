@@ -204,7 +204,7 @@ final class AgentDefinitionTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Preset prompt quality (crush_code.md Phase 5 item 10 / section 12
+    // Preset prompt quality (Phase 5 item 10 / section 12
     // finding 3). These assert PROPERTIES, not wording: the prose will be
     // edited again, and a test pinning an exact paragraph would be rewritten
     // with it instead of catching anything.

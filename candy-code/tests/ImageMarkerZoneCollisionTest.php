@@ -14,7 +14,7 @@ use SugarCraft\Mouse\Sentinel;
 
 /**
  * Regression guard for the defect that appeared where the two Wave 2 tracks
- * met — tool-result image rendering (crush_feat.md §9 E3) and the mouse/zone
+ * met — tool-result image rendering (§9 E3) and the mouse/zone
  * chain (§8) — and for the defense-in-depth that outlived it.
  *
  * When `ImageOverlay::MARKER_BASE` was U+E000, the first image in a frame

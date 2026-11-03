@@ -10,7 +10,7 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 
 /**
- * crush_code.md Phase 0 item 12 — `pruneSessions()` was written, unit-tested
+ * Phase 0 item 12 — `pruneSessions()` was written, unit-tested
  * and never called, so `~/.candy-code/session.db` grew for the life of the
  * install. These assert it is reachable from the one production path that
  * builds the real store, that it is OPT-IN (an unset variable must never

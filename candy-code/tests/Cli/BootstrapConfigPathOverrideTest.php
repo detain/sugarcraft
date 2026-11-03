@@ -13,7 +13,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\ToolCall;
 
 /**
- * The Bootstrap half of `--config <path>` (crush_code.md Phase 4 item 6):
+ * The Bootstrap half of `--config <path>` (Phase 4 item 6):
  * {@see Bootstrap::useConfigPath()} redirects every reader of the per-user
  * `config.json` at a file the caller named, and `bin/candy-code` sets it once
  * after {@see \SugarCraft\Code\Cli\ArgvParser::configError()} has proved the

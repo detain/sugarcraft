@@ -14,7 +14,7 @@ use SugarCraft\Code\Tools\BuiltIn\Glob;
 use SugarCraft\Code\Tools\BuiltIn\Read;
 
 /**
- * crush_feat.md section 7 E4: `paths:` auto-scoping has to reach the live
+ * section 7 E4: `paths:` auto-scoping has to reach the live
  * tool-touch path, not sit as static frontmatter. Against the old code
  * `Bootstrap::tools()` built Read/Edit/Glob with no route to the registry at
  * all, so a project skill scoped to `**\/*.php` never announced itself when

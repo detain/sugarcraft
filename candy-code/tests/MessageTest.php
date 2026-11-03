@@ -126,7 +126,7 @@ final class MessageTest extends TestCase
     }
 
     /**
-     * crush_feat.md §3 E2: the model-authored `description` argument is the
+     * §3 E2: the model-authored `description` argument is the
      * label, not the mechanical argument dump. Fails against the old code,
      * which rendered `bash(command: "ls -la", description: "...")`.
      */

@@ -942,7 +942,7 @@ final class KeyboardHandlerTest extends TestCase
     }
 
     // =========================================================================
-    // KeyboardHandler::handleKeyMsg() -- the KeyMsg bridge (crush_feat.md
+    // KeyboardHandler::handleKeyMsg() -- the KeyMsg bridge (
     // section 5 E7, merge branch). Claimed keys are the shell's; unclaimed
     // keys return null so App::update() can fall through to Chat.
     // =========================================================================

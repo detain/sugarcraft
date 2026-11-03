@@ -19,7 +19,7 @@ use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\ScriptHook;
 
 /**
- * crush_code.md Phase 2 item 5: `~/.candy-code/hooks.yaml` and
+ * Phase 2 item 5: `~/.candy-code/hooks.yaml` and
  * `{root}/.candy-code/hooks.yaml` are read by {@see Bootstrap::hooks()},
  * which is what makes {@see ScriptHook}'s exit-3 (ask) and exit-4 (modify)
  * reachable from configuration instead of only from hand-written PHP.

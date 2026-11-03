@@ -39,7 +39,7 @@ use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Tui\SessionPicker;
 
 /**
- * The in-app keybinding reference (crush_code.md Phase 8 item 2): how it is
+ * The in-app keybinding reference (Phase 8 item 2): how it is
  * opened, how it is dismissed, and the two render invariants a frame in this
  * app may never break — no line wider than the terminal, no frame taller than
  * it, because sugar-core's renderer repaints with an absolute cursorTo() and
@@ -107,7 +107,7 @@ final class KeyHelpTest extends TestCase
 
     /**
      * `/help` was a SECOND SPELLING of `/keys` — same arm, same reference —
-     * until crush_code.md Phase 4 item 2 gave it the meaning it has in every
+     * until Phase 4 item 2 gave it the meaning it has in every
      * other CLI: the command list. This is the pin on the split, and it is
      * asserted in both directions, because "no longer an alias" is satisfiable
      * by `/help` doing nothing at all.
@@ -1002,7 +1002,7 @@ final class KeyHelpTest extends TestCase
      * the very screen such a user is trying to get past.
      *
      * The cursor half of that measurement has since expired: the draft moved
-     * into `sugar-forms`' TextArea (crush_code.md Phase 3 item 1), so a
+     * into `sugar-forms`' TextArea (Phase 3 item 1), so a
      * NON-empty draft now has a second route — Home, then `?` — driven by
      * `ChatInputCursorTest::testHomeThenAQuestionMarkComposesALeadingQuestionMark()`.
      * On a genuinely empty line there is still no character for the cursor to
@@ -2162,7 +2162,7 @@ final class KeyHelpTest extends TestCase
 
     /**
      * The keys the draft grew when it moved into `sugar-forms`' TextArea
-     * (crush_code.md Phase 3 item 1) are swallowed by a live prompt too.
+     * (Phase 3 item 1) are swallowed by a live prompt too.
      *
      * The arm rule below was measured when `Chat` had no cursor at all: every
      * key that could reach the draft was a `Char`, a `Space` or a `Backspace`.
@@ -2969,7 +2969,7 @@ final class KeyHelpTest extends TestCase
      * state cannot leak into the next render.
      *
      * Nine, and NONE of them has a spend cap set or a reported spend, so the
-     * status bar's spend segment (crush_code.md Phase 5 item 7) never renders in
+     * status bar's spend segment (Phase 5 item 7) never renders in
      * this corpus. That band is covered next door instead, by
      * `Renderer\StatusBarSpendTest::testACappedSessionsBarFitsTheTerminalIdleAndInFlight()`,
      * which sweeps the capped and billed states, idle and in flight, against the

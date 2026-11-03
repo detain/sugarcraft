@@ -30,7 +30,7 @@ use SugarCraft\Code\Tests\Prompt\PromptFixture;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 
 /**
- * The route crush_code.md Phase 5 item 9 had to build: MemoryStore -> App ->
+ * The route Phase 5 item 9 had to build: MemoryStore -> App ->
  * Runtime::buildSystemPrompt() -> the model.
  *
  * Before this item the store was constructed by `Bootstrap::memoryStore()` and

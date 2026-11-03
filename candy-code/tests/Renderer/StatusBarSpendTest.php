@@ -14,7 +14,7 @@ use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Usage;
 
 /**
- * The status bar's spend segment (crush_code.md Phase 5 item 7), and the one
+ * The status bar's spend segment (Phase 5 item 7), and the one
  * invariant it must not break: **the bar is the frame's last line and must not
  * wrap.** A wrapped bar makes the frame one physical row taller, which is the
  * absolute-`cursorTo()` row collision `Renderer::render()`'s tail clip exists to

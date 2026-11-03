@@ -11,7 +11,7 @@ use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 
 /**
- * crush_code.md Phase 0 item 11 — checkpoints must stop rewriting the whole
+ * Phase 0 item 11 — checkpoints must stop rewriting the whole
  * conversation on every turn.
  *
  * These assert on the bytes that reach SQLite, not on code shape: the finding

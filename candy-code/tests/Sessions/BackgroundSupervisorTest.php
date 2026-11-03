@@ -139,7 +139,7 @@ final class BackgroundSupervisorTest extends TestCase
     }
 
     // =========================================================================
-    // Daemon spawn plumbing (crush_feat.md section 5 E3)
+    // Daemon spawn plumbing (section 5 E3)
     // =========================================================================
 
     public function testParseHandshakeExtractsTheAuthenticatedCredentialTriple(): void

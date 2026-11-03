@@ -18,7 +18,7 @@ use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Role;
 
 /**
- * crush_feat.md section 8 E4 — scrollwheel in the chat transcript.
+ * section 8 E4 — scrollwheel in the chat transcript.
  *
  * Chat-side assertions drive `update()` and assert on the returned
  * `[Model, ?Cmd]`; Renderer-side assertions are snapshots of the frame the
@@ -146,7 +146,7 @@ final class ChatScrollTest extends TestCase
 
     public function testWheelStillScrollsWhileClicksAreDisabled(): void
     {
-        // The whole point of CANDY_CODE_DISABLE_MOUSE_CLICKS (crush_feat.md
+        // The whole point of CANDY_CODE_DISABLE_MOUSE_CLICKS (
         // section 8 B) is "keep wheel scroll, drop clicks" - routing the
         // wheel through the click hit-test would take scrolling down with it.
         putenv('CANDY_CODE_DISABLE_MOUSE_CLICKS=1');

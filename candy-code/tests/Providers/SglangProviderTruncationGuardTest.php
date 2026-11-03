@@ -13,7 +13,7 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\SglangProvider;
 
 /**
- * W1.A4 (crush_feat.md §12 D5): the MiniMax-M2.x `</parameter>` tool-call
+ * W1.A4 (§12 D5): the MiniMax-M2.x `</parameter>` tool-call
  * truncation bug is server-side and unfixable from here, but it is detectable.
  *
  * Every assertion on a logged warning below fails against the old code, which

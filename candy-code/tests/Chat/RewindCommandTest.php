@@ -353,7 +353,7 @@ final class RewindCommandTest extends TestCase
     }
 
     /**
-     * crush_feat.md §1 E7, end to end: a checkpoint taken while a tool call
+     * §1 E7, end to end: a checkpoint taken while a tool call
      * was still running (the auto-save in {@see Chat::update()} fires per
      * prompt, so this is the ordinary case for a crash mid-call) used to
      * restore its `Message::toolRunning()` placeholder as a plain bubble -

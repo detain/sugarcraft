@@ -166,7 +166,7 @@ final class ArgvParserTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Unknown flags — recorded, never applied (crush_code.md Phase 0 item 3;
+    // Unknown flags — recorded, never applied (Phase 0 item 3;
     // bin/candy-code turns a non-empty $unknownFlags into exit 2)
     // -------------------------------------------------------------------------
 
@@ -214,7 +214,7 @@ final class ArgvParserTest extends TestCase
     /**
      * `--version` used to be this vector's first entry — it was the original
      * reproduction for the unknown-flag guard. It is a real flag now
-     * (crush_code.md Phase 4 item 3), so an equally-unknown long flag stands in
+     * (Phase 4 item 3), so an equally-unknown long flag stands in
      * for it and the ordering assertion is unchanged.
      */
     public function testEveryUnknownFlagIsRecordedInOrder(): void
@@ -336,7 +336,7 @@ final class ArgvParserTest extends TestCase
      * discarded the subcommand, leaving promptRequested false — so
      * `candy-code --output-format json run` fell through bin/candy-code's
      * dispatch into the blocking full-screen TUI. Same hang class as the
-     * `--version` fall-through (crush_code.md Phase 0 item 3), reopened by
+     * `--version` fall-through (Phase 0 item 3), reopened by
      * argument order alone.
      *
      * @param list<string> $argv
@@ -602,7 +602,7 @@ final class ArgvParserTest extends TestCase
     /**
      * The root is not merely a convenience: it reaches every HookContext's
      * projectRoot and, from there, the proc_open() cwd of every ScriptHook.
-     * A typo has to be reported, not absorbed (crush_code.md Phase 0 item 6).
+     * A typo has to be reported, not absorbed (Phase 0 item 6).
      */
     public function testRootErrorReportsARootThatIsNotADirectory(): void
     {
@@ -654,7 +654,7 @@ final class ArgvParserTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // --version / -v (crush_code.md Phase 4 item 3)
+    // --version / -v (Phase 4 item 3)
     // -------------------------------------------------------------------------
 
     public function testVersionDefaultsToFalse(): void
@@ -789,7 +789,7 @@ final class ArgvParserTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // --output-format validation (crush_code.md Phase 4 item 6)
+    // --output-format validation (Phase 4 item 6)
     // -------------------------------------------------------------------------
 
     /**
@@ -980,7 +980,7 @@ final class ArgvParserTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // --config (crush_code.md Phase 4 item 6)
+    // --config (Phase 4 item 6)
     // -------------------------------------------------------------------------
 
     public function testConfigPathIsNullWhenTheFlagIsAbsent(): void
@@ -1164,7 +1164,7 @@ final class ArgvParserTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // crush_code.md Phase 4 item 6: the real subcommands, at the PARSE layer.
+    // Phase 4 item 6: the real subcommands, at the PARSE layer.
     // The end-to-end routing is exercised against the real binary in
     // Tests\Integration\BinCandyCodeDispatchTest; these pin the reading
     // decisions that class cannot see (which token became the verb, which became

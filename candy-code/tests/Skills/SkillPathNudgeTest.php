@@ -11,7 +11,7 @@ use SugarCraft\Code\Skills\SkillPathNudge;
 use SugarCraft\Code\Skills\SkillRegistry;
 
 /**
- * crush_feat.md section 7 E4: `paths:` frontmatter must become a live
+ * section 7 E4: `paths:` frontmatter must become a live
  * auto-scoping signal on the tool-touch path, not static metadata.
  */
 final class SkillPathNudgeTest extends TestCase

@@ -41,7 +41,7 @@ final class SkillManagerTest extends TestCase
     protected function setUp(): void
     {
         // loadAll() now walks the user's foreign-skill trees as well
-        // (~/.claude/skills, ~/.config/opencode/skills — crush_code.md Phase 2
+        // (~/.claude/skills, ~/.config/opencode/skills — Phase 2
         // item 6), so HOME is redirected at an empty sandbox for the whole
         // class. Without it every assertion here would depend on what the
         // developer running the suite happens to have installed for another
@@ -83,11 +83,11 @@ SKILL;
 
     // =========================================================================
     // loadAll() - registers Stage-1 manifests only, never the eager full
-    // body (crush_feat.md section 7.E3)
+    // body (section 7.E3)
     // =========================================================================
 
     /**
-     * Regression test for the fix in crush_feat.md section 7.E3: before
+     * Regression test for the fix in section 7.E3: before
      * this fix, SkillManager::loadAll() called SkillLoader::loadAll(),
      * which reads every SKILL.md's full body off disk (via
      * Skill::fromFile()) and registers it verbatim -- so the registered
@@ -311,7 +311,7 @@ SKILL;
     }
 
     // =========================================================================
-    // loadAll() - foreign imports (crush_code.md Phase 2 item 6)
+    // loadAll() - foreign imports (Phase 2 item 6)
     //
     // ForeignSkillDiscovery, its SkillSource tagging and its own tests all
     // existed; nothing called it, so a skill under .claude/skills or

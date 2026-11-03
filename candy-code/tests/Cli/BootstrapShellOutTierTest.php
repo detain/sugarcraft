@@ -14,7 +14,7 @@ use SugarCraft\Code\Message;
  * The two shell-out tiers of {@see Bootstrap::backend()}, and the reason there
  * are two of them.
  *
- * crush_code.md Phase 2 item 8 asked for `$CANDY_CODE_BACKEND_CMD` to select
+ * Phase 2 item 8 asked for `$CANDY_CODE_BACKEND_CMD` to select
  * {@see StreamingCommandBackend} instead of {@see CommandBackend}. Taken
  * literally that is destructive, and this file is the measurement that says so:
  * the streaming backend's stdout contract is one token per TERMINATED line, so

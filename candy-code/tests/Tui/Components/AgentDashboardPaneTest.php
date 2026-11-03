@@ -25,7 +25,7 @@ use SugarCraft\Code\Tui\StallDetector;
 use SugarCraft\Code\Tui\Renderer as ShellRenderer;
 
 /**
- * Covers the full-pane agent dashboard (crush_feat.md §5 E5): its stable
+ * Covers the full-pane agent dashboard (§5 E5): its stable
  * slot ordering, status grouping, height budget, the Space peek overlay, the
  * Alt+1..9 jump chords, and the shell wiring that makes it reachable.
  */

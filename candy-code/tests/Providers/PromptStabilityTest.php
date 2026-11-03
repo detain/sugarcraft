@@ -28,7 +28,7 @@ use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
 
 /**
- * §12 D7 of crush_feat.md: RadixAttention prefix-cache friendliness.
+ * §12 D7 of : RadixAttention prefix-cache friendliness.
  *
  * SGLang caches KV state keyed on an EXACT token-prefix match. The cache hit
  * therefore survives only as far as the first byte that differs between two

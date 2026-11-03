@@ -15,7 +15,7 @@ use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * crush_feat.md §9 E3 — image-bearing tool results reach the terminal through
+ * §9 E3 — image-bearing tool results reach the terminal through
  * sugar-image + sugar-core's ImageOverlay compositor.
  *
  * Every assertion here fails against the pre-E3 renderer, which had no
@@ -121,7 +121,7 @@ final class RendererImageTest extends TestCase
         $placement = array_values($view->images)[0];
 
         $this->assertNotSame('', $placement->bytes);
-        $this->assertSame(40, $placement->widthCells, 'crush_feat.md §9 E3 pins the image width at 40 cells');
+        $this->assertSame(40, $placement->widthCells, '§9 E3 pins the image width at 40 cells');
         // 20x10 source, cells ~2:1 → 40 / (20/10) / 2 = 10 rows.
         $this->assertSame(10, $placement->heightCells);
     }

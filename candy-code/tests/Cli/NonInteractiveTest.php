@@ -15,7 +15,7 @@ use SugarCraft\Code\Role;
 
 /**
  * Tests for {@see NonInteractive} — the `-p "<prompt>"` / `run "<prompt>"`
- * one-shot CLI path (crush_feat.md section 2, Recommendations 2-4).
+ * one-shot CLI path (section 2, Recommendations 2-4).
  *
  * Covered cases:
  *   - missing/blank prompt -> exit 2, never calls the backend

@@ -18,7 +18,7 @@ use SugarCraft\Code\Commands\CommandLoader;
  *
  * WHY IT MATTERED FOR A CLASS NOTHING CONSTRUCTED YET — and the wiring has since
  * arrived, which is the point. `CommandLoader` was a deliberate dormant seam with
- * the per-ENTRY check only; crush_code.md Phase 2 item 4 gave it its production
+ * the per-ENTRY check only; Phase 2 item 4 gave it its production
  * caller ({@see \SugarCraft\Code\Cli\Bootstrap::chat()} builds one for
  * {@see \SugarCraft\Code\Chat}), so the anchor added here is a rule the first
  * consumer INHERITED rather than one somebody had to remember to add at wiring
