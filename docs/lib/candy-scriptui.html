@@ -53,7 +53,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-scriptui"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-scriptui" alt="CandyScriptui code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">13 subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write. Drop into a shell script and instantly get a Charm-quality interactive UX.</p>
+    <p class="lede" style="margin-top: 28px;">13 presentation subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write — plus completion. Drop into a shell script and instantly get a Charm-quality interactive UX.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-scriptui</code></pre>
@@ -79,7 +79,7 @@ git branch | candy-scriptui filter</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>style</strong><span>Apply Sprinkles styling to argv (or stdin) and print.</span></div>
+      <div class="feature"><strong>style</strong><span>Apply ANSI styling to argv (or stdin) and print.</span></div>
       <div class="feature"><strong>choose</strong><span>Pick one item from a list; prints the selection to stdout.</span></div>
       <div class="feature"><strong>confirm</strong><span>Yes/no — exit code 0 on yes, 1 on no.</span></div>
       <div class="feature"><strong>filter</strong><span>Fuzzy-filter over stdin lines.</span></div>
@@ -166,7 +166,7 @@ $app-&gt;run();                 // mycmd --format yaml  →  format=yaml</code><
 <table class="api-table">
 <tr><th>Command</th><th>Description</th></tr>
 <tr><td>completion</td><td>Emit shell completion script (bash · zsh · fish)</td></tr>
-<tr><td>style</td><td>Apply Sprinkles styling to text</td></tr>
+<tr><td>style</td><td>Apply ANSI styling to text</td></tr>
 <tr><td>choose</td><td>Pick one item from a list</td></tr>
 <tr><td>confirm</td><td>Yes/no confirmation</td></tr>
 <tr><td>filter</td><td>Fuzzy-filter stdin lines</td></tr>
