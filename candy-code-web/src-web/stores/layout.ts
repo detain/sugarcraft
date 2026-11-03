@@ -2,9 +2,25 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useConnectionStore } from './connection'
 import { useSessionsStore } from './sessions'
-import { readJson, writeJson } from './storage'
+import { eraseKey, onKeyErased, readJson, storageKey, writeJson } from './storage'
 
 const DRAFT_LIMIT = 50
+
+/**
+ * How long one persisted draft may be. A pasted megabyte stays fully
+ * editable in memory, but only its first DRAFT_MAX_PERSISTED_CHARS reach
+ * storage — a single oversized entry would push the other 49 out of the
+ * ~5 MB per-origin quota, and the whole map would stop surviving reloads.
+ */
+export const DRAFT_MAX_PERSISTED_CHARS = 16 * 1024
+
+/**
+ * Trailing-edge debounce for draft persistence. `setDraft` rides every
+ * keystroke; serialising up to 50 drafts per character is O(stored bytes)
+ * per keystroke, and a synchronous `setItem` per character is the kind of
+ * work the browser forgives once and not fifty times a second.
+ */
+const DRAFT_PERSIST_DEBOUNCE_MS = 300
 
 /** Sessions kept open as tabs; the oldest unfocused one goes first past it. */
 export const MAX_TABS = 12
@@ -97,15 +113,140 @@ export const useLayoutStore = defineStore('layout', () => {
     return drafts.value[sessionId] ?? ''
   }
 
+  /**
+   * True once a draft write failed (storage full or blocked): memory and
+   * disk have silently diverged, and the one place a reader learns that is
+   * this flag — the composer's copy still works, it just will not survive
+   * reload. One-shot: recovery of the truth is "stop trusting storage",
+   * which the wrapper cannot observe.
+   */
+  const storageDegraded = ref(false)
+
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * Ids emptied since the last write. The in-memory map deletes on empty,
+   * so without a tombstone the read-modify-write below would treat "gone
+   * from my map" as "never mine" and resurrect the stored copy.
+   */
+  const pendingErases = new Set<string>()
+
+  /**
+   * Write the draft map: read-modify-write over the FRESHEST stored copy, so
+   * a second tab editing another session's draft is carried forward instead
+   * of clobbered by this tab's snapshot (MA-14: the whole-map rewrite used
+   * to re-persist the other tab's stale text and destroy its newer one).
+   * This tab's map is authoritative for the keys it holds — and tombstones
+   * carry the deletions it made since the last write.
+   */
+  function persistDrafts(): void {
+    if (persistTimer !== null) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    const stored = readJson<Record<string, string>>('drafts', {})
+    const merged: Record<string, string> = { ...stored }
+    for (const [id, text] of Object.entries(drafts.value)) {
+      merged[id] = text.length > DRAFT_MAX_PERSISTED_CHARS ? text.slice(0, DRAFT_MAX_PERSISTED_CHARS) : text
+    }
+    for (const id of pendingErases) delete merged[id]
+    pendingErases.clear()
+    // Bound the map: the oldest drafts go first (also against the merged
+    // view — a tab that learned other tabs' keys must not persist past them).
+    const keys = Object.keys(merged)
+    for (const key of keys.slice(0, Math.max(0, keys.length - DRAFT_LIMIT))) delete merged[key]
+    // Memory is deliberately NOT replaced by `merged`: the clamp trims what
+    // is STORABLE, while the editor keeps the viewer's full text to fix,
+    // copy, or send.
+    if (!writeJson('drafts', merged)) storageDegraded.value = true
+  }
+
   function setDraft(sessionId: string, text: string): void {
     const next = { ...drafts.value }
-    if (text === '') delete next[sessionId]
-    else next[sessionId] = text
+    if (text === '') {
+      delete next[sessionId]
+      pendingErases.add(sessionId)
+    } else {
+      next[sessionId] = text
+      pendingErases.delete(sessionId)
+    }
     // Bound the map: the oldest drafts go first.
     const keys = Object.keys(next)
     for (const key of keys.slice(0, Math.max(0, keys.length - DRAFT_LIMIT))) delete next[key]
     drafts.value = next
-    writeJson('drafts', next)
+    // Persist on a trailing edge, not per keystroke; blur/pagehide flush.
+    if (persistTimer !== null) clearTimeout(persistTimer)
+    persistTimer = setTimeout(persistDrafts, DRAFT_PERSIST_DEBOUNCE_MS)
+  }
+
+  /**
+   * Forget everything recorded about a session that is gone: its draft row,
+   * and the layout pointers that named it. Wire this where a session leaves
+   * the index (delete, `session.deleted`, workspace close) — an orphaned
+   * draft of pasted paths and proprietary text outliving the session is the
+   * disclosure the README had not made (fixed alongside it).
+   */
+  function forget(sessionId: string): void {
+    if (drafts.value[sessionId] === undefined && lastSessionId.value !== sessionId && focused.value !== sessionId) return
+    if (drafts.value[sessionId] !== undefined) {
+      setDraft(sessionId, '') // debounced persist carries the deletion
+    }
+    if (lastSessionId.value === sessionId) lastSessionId.value = null
+    if (focused.value === sessionId) focused.value = null
+    closeTab(sessionId)
+  }
+
+  /** Erase every stored draft — what signing out now does (MA-12). */
+  function clearAllDrafts(): void {
+    eraseKey('drafts') // fires this tab's watcher below; disk removal inside
+  }
+
+  // Sign-out (here or in another tab) must empty the IN-MEMORY map too: a
+  // pending debounced flush would otherwise re-persist the drafts that were
+  // just erased, from this tab's snapshot.
+  onKeyErased('drafts', () => {
+    if (persistTimer !== null) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    pendingErases.clear()
+    drafts.value = {}
+  })
+
+  // A draft written in ANOTHER tab replaces this tab's copy of the whole map
+  // (both tabs now RMW, so the arriving map carries this tab's latest keys);
+  // a removal — sign-out elsewhere — empties it, so the next keystroke here
+  // cannot resurrect it from memory (same law promptHistory already obeys).
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    const draftsKey = storageKey('drafts')
+    window.addEventListener('storage', (event: StorageEvent) => {
+      if (event.key !== draftsKey && event.key !== null) return
+      if (event.key === null || event.newValue === null) {
+        if (persistTimer !== null) {
+          clearTimeout(persistTimer)
+          persistTimer = null
+        }
+        pendingErases.clear()
+        drafts.value = {}
+        return
+      }
+      try {
+        const parsed = JSON.parse(event.newValue) as unknown
+        if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          drafts.value = parsed as Record<string, string>
+        }
+      } catch {
+        // unparseable neighbour write: keep this tab's memory, next flush wins
+      }
+    })
+  }
+
+  // The last chance to persist before the page can go away.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => persistDrafts())
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') persistDrafts()
+    })
   }
 
   function toggleSidebar(open?: boolean): void {
@@ -212,6 +353,12 @@ export const useLayoutStore = defineStore('layout', () => {
     approvalsOpen,
     lastSessionId,
     drafts,
+    storageDegraded,
+    draft,
+    setDraft,
+    persistDrafts,
+    forget,
+    clearAllDrafts,
     tabs,
     unseen,
     mode,
@@ -219,8 +366,6 @@ export const useLayoutStore = defineStore('layout', () => {
     tiles,
     columns,
     showing,
-    draft,
-    setDraft,
     toggleSidebar,
     toggleApprovals,
     openTab,

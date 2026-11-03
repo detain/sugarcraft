@@ -17,6 +17,7 @@
  * under a path behind a reverse proxy.
  */
 import { clearPromptHistory } from '../stores/promptHistory'
+import { eraseKey } from '../stores/storage'
 
 export class AuthError extends Error {
   readonly status: number
@@ -147,9 +148,11 @@ export async function canvasLink(sessionId: string, artifactId: string, fetchImp
 
 /**
  * End the session: the server revokes the cookie, and this browser keeps
- * nothing behind — the login secret goes, and so does the prompt history
- * ring (`stores/promptHistory.ts`), the one per-viewer record of what was
- * typed here. Other conveniences (draft, layout, theme) stay.
+ * nothing typed behind — the login secret goes, the prompt history ring
+ * goes (`stores/promptHistory.ts`), and so does the draft map (the other
+ * half of what-the-viewer-typed, MA-12: user text that had outlived both
+ * the session and the sign-out). Layout conveniences that name no user
+ * text (tab order, theme, notifications) stay.
  */
 export async function logout(fetchImpl: Fetch = fetch): Promise<void> {
   try {
@@ -157,6 +160,7 @@ export async function logout(fetchImpl: Fetch = fetch): Promise<void> {
   } finally {
     clearLoginSecret()
     clearPromptHistory()
+    eraseKey('drafts')
   }
 }
 

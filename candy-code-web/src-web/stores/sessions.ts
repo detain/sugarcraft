@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useLayoutStore } from './layout'
 import { computed, ref } from 'vue'
 import type { Events, MethodResult, PermissionMode, SessionSummary } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
@@ -171,6 +172,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     drop(sessionId)
   }
 
+  /**
+   * MA-12: everything this browser recorded about a session that is now
+   * gone. The layout store is reached at call time (not at module top) so
+   * the two stores' import cycle stays runtime-only; instantiating an
+   * unregistered store simply means this tab held nothing to forget.
+   */
+  function forgetSessionRecords(sessionId: string): void {
+    try {
+      useLayoutStore().forget(sessionId)
+    } catch {
+      // no pinia in scope: this tab never opened the layout store, so it
+      // holds no live draft for the id (a stored row cannot exist without
+      // the store having run at some point in this profile).
+    }
+  }
+
   /** WEB-1a: fork on the server; the fresh summary joins the index like a created one. */
   async function fork(sessionId: string): Promise<SessionSummary> {
     const summary = await connection.request('session.fork', { sessionId })
@@ -292,10 +309,15 @@ export const useSessionsStore = defineStore('sessions', () => {
   async function closeRoot(root: string, force = false): Promise<void> {
     await connection.request('workspace.close', force ? { root, force: true } : { root })
     const next = { ...byId.value }
+    const gone: string[] = []
     for (const [id, summary] of Object.entries(next)) {
-      if (summary.root === root) delete next[id]
+      if (summary.root === root) {
+        delete next[id]
+        gone.push(id)
+      }
     }
     byId.value = next
+    for (const id of gone) forgetSessionRecords(id)
     await load()
   }
 
@@ -303,6 +325,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const next = { ...byId.value }
     delete next[sessionId]
     byId.value = next
+    forgetSessionRecords(sessionId)
   }
 
   /**
