@@ -834,6 +834,35 @@ final class RenderCommandTest extends TestCase
         $this->assertFalse($model->isExited());
     }
 
+    public function testBuildPagerModelDocumentModeAddsTheHeader(): void
+    {
+        $method = new \ReflectionMethod(RenderCommand::class, 'buildPagerModel');
+        $method->setAccessible(true);
+
+        $model = $method->invoke(null, "line1\nline2", 40, 6, 'doc.md');
+
+        $header = \explode("\n", $model->view())[0];
+        $this->assertStringContainsString('doc.md', $header);
+        $this->assertStringContainsString('%', $header);
+        $this->assertSame(5, $model->viewport->height, 'the header row is reserved inside the model');
+    }
+
+    public function testPagerArmsTheTtyKeyboardAndMouseWheel(): void
+    {
+        // KM3: piped stdin used to leave the pager a dead keyboard; openTty
+        // re-opens /dev/tty. The wheel needs CellMotion — the Viewport has
+        // handled MouseWheelMsg all along, Program simply never delivered it.
+        $method = new \ReflectionMethod(RenderCommand::class, 'execute');
+        $slice  = \implode("\n", \array_slice(
+            \file($method->getFileName()),
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $this->assertMatchesRegularExpression('/openTty:\s*true/', $slice);
+        $this->assertMatchesRegularExpression('/mouseMode:\s*MouseMode::CellMotion/', $slice);
+    }
+
     public function testPagerFileWatchIsWiredIntoTheExecuteBranch(): void
     {
         // E735 step 10.25 CLI half: execute() must hoist the file argument

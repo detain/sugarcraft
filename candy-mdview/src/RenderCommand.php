@@ -7,6 +7,7 @@ namespace SugarCraft\MdView;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\TtyDetect;
 use SugarCraft\MdView\Lang;
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty;
@@ -164,12 +165,14 @@ final class RenderCommand extends Command
         }
 
         // Pager mode: drop into a Program with a Viewport-backed Model.
-        // A file argument also arms auto-reload: the pager re-reads and
-        // re-renders the SAME file through the SAME renderer — theme, width
-        // and hyperlink choices survive every reload frame. Stdin input has
-        // nothing to watch and never arms the pump.
+        // A file argument also arms auto-reload AND a status header: the
+        // pager re-reads and re-renders the SAME file through the SAME
+        // renderer — theme, width and hyperlink choices survive every
+        // reload frame. Stdin input has nothing to watch and never arms
+        // the pump. openTty re-opens /dev/tty when STDIN was a pipe, so
+        // the keyboard lives even for `git log | candy-mdview -p`.
         $size  = (new Tty())->size();
-        $model = self::buildPagerModel($rendered, $size['cols'], $size['rows']);
+        $model = self::buildPagerModel($rendered, $size['cols'], $size['rows'], $fileArg === '' ? '' : basename($fileArg));
         if ($fileArg !== '') {
             $model = self::armPagerWatch($model, $fileArg, $renderer);
         }
@@ -177,6 +180,8 @@ final class RenderCommand extends Command
             useAltScreen:    true,
             hideCursor:      true,
             catchInterrupts: true,
+            mouseMode:       MouseMode::CellMotion,
+            openTty:         true,
         ));
         $program->run();
         return Command::SUCCESS;
@@ -537,11 +542,15 @@ final class RenderCommand extends Command
     }
 
     /**
-     * Build the MdViewModel for pager mode from rendered content and terminal size.
+     * Build the MdViewModel for pager mode from rendered content and terminal
+     * size. A document name switches on the status header, which reserves its
+     * own row inside withDocument() — the viewport is never pre-shrunk here.
      */
-    private static function buildPagerModel(string $rendered, int $cols, int $rows): MdViewModel
+    private static function buildPagerModel(string $rendered, int $cols, int $rows, string $document = ''): MdViewModel
     {
-        return MdViewModel::fromContent($rendered, $cols, $rows);
+        $model = MdViewModel::fromContent($rendered, $cols, $rows);
+
+        return $document === '' ? $model : $model->withDocument($document);
     }
 
     /**

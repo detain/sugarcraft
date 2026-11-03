@@ -7,18 +7,22 @@ namespace SugarCraft\MdView\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\TickRequest;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\MdView\FileWatcher;
 use SugarCraft\MdView\MdViewModel;
 use SugarCraft\MdView\ReloadTickMsg;
 
 /**
- * E735 step 10.25 — pager file-watch auto-reload. Everything is driven by
- * dispatching {@see ReloadTickMsg} straight into update(): no wall-clock,
- * no real timers, no sleep. Change detection is exercised through the real
- * (mtime, size) tuple on temp files — every edit changes the SIZE, so same-
- * second writes are caught without the second-granularity sleep the old
- * hasChangedSince test pays; one dedicated pin covers the mtime-only edge.
+ * Pager file-watch auto-reload. Everything is driven by dispatching
+ * {@see ReloadTickMsg} straight into update(): no wall-clock, no real
+ * timers, no sleep. Change detection is exercised through the real
+ * (mtime, size) tuple on temp files — every edit changes the SIZE, so
+ * same-second writes are caught without the second-granularity sleep the
+ * old hasChangedSince test pays; one dedicated pin covers the mtime-only
+ * edge. Geometry (WindowSizeMsg) and the document status header ride the
+ * same message-driven discipline.
  *
  * @covers \SugarCraft\MdView\MdViewModel
  * @covers \SugarCraft\MdView\ReloadTickMsg
@@ -217,10 +221,114 @@ final class MdViewModelReloadTest extends TestCase
 
     public function testReloadPollConstantIsIdleBound(): void
     {
-        // E646 posture: a POLL cadence (idle bound), never a request timeout,
-        // and a documented human-scale value.
+        // A POLL cadence (idle bound), never a request timeout, and a
+        // documented human-scale value.
         self::assertGreaterThan(0.05, MdViewModel::RELOAD_POLL_SECONDS);
         self::assertLessThan(5.0, MdViewModel::RELOAD_POLL_SECONDS);
+    }
+
+    public function testWindowSizeMsgRebuildsTheViewportGeometry(): void
+    {
+        $body = "a\nb\n" . str_repeat("x\n", 30);
+        $m = MdViewModel::fromContent($body, 40, 5);
+
+        [$grown, $cmd] = $m->update(new WindowSizeMsg(20, 10));
+
+        self::assertSame(20, $grown->viewport->width, 'terminal resize must reflow the viewport');
+        self::assertSame(10, $grown->viewport->height);
+        self::assertNull($cmd, 'a resize alone arms no command');
+    }
+
+    public function testStartupDuplicateWindowSizeMsgIsAnIdentityNoOp(): void
+    {
+        // Program dispatches the initial size once, and SIGWINCH may repeat
+        // it verbatim: an unchanged (cols, rows) must not churn a new model.
+        $m = MdViewModel::fromContent('body', 20, 10);
+
+        [$same, ] = $m->update(new WindowSizeMsg(20, 10));
+
+        self::assertSame($m, $same);
+    }
+
+    public function testDocumentModeAddsAHeaderRowAndReservesItsLine(): void
+    {
+        $m = MdViewModel::fromContent("body\nlines", 30, 5)->withDocument('README.md');
+
+        self::assertSame(4, $m->viewport->height, 'the header costs the viewport one row');
+
+        $lines = \explode("\n", $m->view());
+        self::assertStringContainsString('README.md', $lines[0]);
+        self::assertStringContainsString('%', $lines[0]);
+        self::assertSame(30, Width::of($lines[0]), 'the header is padded to the full width');
+    }
+
+    public function testDocumentResizeKeepsTheHeaderRowAccounted(): void
+    {
+        $m = MdViewModel::fromContent("body\nlines", 30, 5)->withDocument('README.md');
+
+        [$grown, ] = $m->update(new WindowSizeMsg(24, 8));
+
+        self::assertSame(24, $grown->viewport->width);
+        self::assertSame(7, $grown->viewport->height, 'the reserved header row survives resizes');
+    }
+
+    public function testReloadMarkerAppearsInHeaderAfterReloads(): void
+    {
+        $path = $this->createSourceFile('v1');
+        $m = MdViewModel::fromContent('RENDERED<v1>', 40, 5)
+            ->withDocument('notes.md')
+            ->withWatch($path, $this->markerReRender());
+
+        file_put_contents($path, 'v2 edited');
+        [$reloaded, ] = $m->update(new ReloadTickMsg());
+
+        $header = \explode("\n", $reloaded->view())[0];
+        self::assertStringContainsString('↻1', $header, 'silent swaps must become visible in the header');
+        self::assertStringContainsString('notes.md', $header);
+    }
+
+    public function testAltQDoesNotQuitThePager(): void
+    {
+        $m = $this->armedModel();
+
+        [$after, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'q', alt: true));
+
+        self::assertFalse($after->isExited(), 'Alt+q belongs to the terminal, not the pager');
+        self::assertNull($cmd);
+    }
+
+    public function testCtrlQDoesNotQuitThePager(): void
+    {
+        $m = $this->armedModel();
+
+        [$after, ] = $m->update(new KeyMsg(KeyType::Char, 'q', ctrl: true));
+
+        self::assertFalse($after->isExited());
+    }
+
+    public function testPlainQStillQuitsThePager(): void
+    {
+        // The unmodified rune keeps working — README documents q as the quit key.
+        $m = $this->armedModel();
+
+        [$after, $cmd] = $m->update(new KeyMsg(KeyType::Char, 'q'));
+
+        self::assertTrue($after->isExited());
+        self::assertNotNull($cmd);
+    }
+
+    public function testStateDerivationGoesThroughASingleCopySite(): void
+    {
+        // The 3-way hand-rolled ctor duplication silently zeroed watch state;
+        // every derived instance must now flow through copy() from the one
+        // genesis (fromContent) — the only other `new self(` is copy() itself.
+        $source = \file_get_contents(\dirname(__DIR__) . '/src/MdViewModel.php');
+        self::assertIsString($source);
+        self::assertSame(
+            2,
+            \substr_count($source, 'new self('),
+            'fromContent genesis + copy() body only; add state to the ctor, never a fourth copy',
+        );
     }
 
     public function testFileWatcherTupleApiFeedsTheModelSweep(): void
