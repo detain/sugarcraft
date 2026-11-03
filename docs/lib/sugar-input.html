@@ -96,7 +96,7 @@ while (true) {
     </div>
 
     <h3 style="margin-top: 32px;">EscapeDecoderOptions</h3>
-    <p>Five booleans — <code>enableMouse</code>, <code>enableKitty</code>, <code>enableFocus</code>, <code>enablePaste</code> (all true by default) and <code>deferTrailingEscape</code> (false by default) — decide which protocol families the decoder interprets. A disabled family's frames are counted drops, never mis-decoded keys.</p>
+    <p>Five readonly booleans — <code>enableMouse</code>, <code>enableKitty</code>, <code>enableFocus</code>, <code>enablePaste</code> (all true by default) and <code>deferTrailingEscape</code> (false by default) — decide which protocol families the decoder interprets. A disabled family's frames are counted drops, never mis-decoded keys.</p>
 
     <h3 style="margin-top: 32px;">InputDriver</h3>
     <div class="feature-grid">
@@ -154,7 +154,8 @@ while (true) {
 <tr><td>ReactInputDriver</td><td>isReadable() / pause() / resume() / close()</td><td>ReadableStreamInterface surface; pause buffers, resume flushes</td></tr>
 <tr><td>ReactInputDriver</td><td>pipe(WritableStreamInterface): WritableStreamInterface</td><td>Forwards raw bytes of the wrapped stream</td></tr>
 <tr><td>ReactInputDriver</td><td>escapeDecoder(): EscapeDecoder</td><td>Seam to the owned decoder</td></tr>
-<tr><td>SignalResizeDriver</td><td>arm(): void</td><td>Opt in to SIGWINCH handling (constructor is side-effect free)</td></tr>
+<tr><td>SignalResizeDriver</td><td>arm(): bool</td><td>Install the SIGWINCH handler; false without ext-pcntl (constructor is side-effect free)</td></tr>
+<tr><td>SignalResizeDriver</td><td>disarm(): bool</td><td>Hand the process disposition back (previous handler, or SIG_DFL)</td></tr>
 <tr><td>KeyEvent</td><td>key: string</td><td>Symbolic key name (releases: <code>Release</code> + capitalised name)</td></tr>
 <tr><td>KeyEvent</td><td>modifiers: KeyModifier</td><td>Modifier bitmask</td></tr>
 <tr><td>KeyEvent</td><td>raw: string</td><td>Raw bytes that produced this event</td></tr>
