@@ -53,6 +53,13 @@ use SugarCraft\Style\Style;
 final class GlamourTheme
 {
     /**
+     * Hard ceiling on theme-config bytes any GlamourTheme door will read.
+     * Shared by {@see fromFile()} and RenderCommand's stream-capped read so
+     * the two entrances cannot drift into different size policies.
+     */
+    public const MAX_CONFIG_BYTES = 1_000_000;
+
+    /**
      * @param array<string, array<string, mixed>> $elements  element name => StylePrimitive map
      * @param array<string, array<string, mixed>> $chroma    chroma token => StylePrimitive map
      */
@@ -86,6 +93,13 @@ final class GlamourTheme
     {
         if (is_readable($path) === false) {
             throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $path]));
+        }
+        $size = @filesize($path);
+        if ($size !== false && $size > self::MAX_CONFIG_BYTES) {
+            throw new \InvalidArgumentException(Lang::t('render.theme_config_too_large', [
+                'path'  => $path,
+                'limit' => self::MAX_CONFIG_BYTES,
+            ]));
         }
         $raw = file_get_contents($path);
         if ($raw === false) {
@@ -140,8 +154,8 @@ final class GlamourTheme
         $document = $elements['document'] ?? [];
 
         return new self(
-            blockPrefix:     (string) ($document['block_prefix'] ?? ''),
-            blockSuffix:     (string) ($document['block_suffix'] ?? ''),
+            blockPrefix:     self::stringOrEmpty($document['block_prefix'] ?? ''),
+            blockSuffix:     self::stringOrEmpty($document['block_suffix'] ?? ''),
             documentIndent:  self::nonNegativeInt($document['indent'] ?? 0),
             documentMargin:  self::nonNegativeInt($document['margin'] ?? 0),
             elements:        $elements,
@@ -209,11 +223,22 @@ final class GlamourTheme
             strike:            $this->style('strikethrough'),
             documentMargin:    $this->documentMargin,
             documentIndent:    $this->documentIndent,
-            paragraphPrefix:   (string) ($paragraph['block_prefix'] ?? ''),
-            paragraphSuffix:   (string) ($paragraph['block_suffix'] ?? ''),
+            paragraphPrefix:   self::stringOrEmpty($paragraph['block_prefix'] ?? ''),
+            paragraphSuffix:   self::stringOrEmpty($paragraph['block_suffix'] ?? ''),
             documentBlockPrefix: $this->blockPrefix,
             documentBlockSuffix: $this->blockSuffix,
         );
+    }
+
+    /**
+     * Decorator fields must be strings; a config carrying a nested
+     * array/object where a decorator string belongs is malformed. Coerce to
+     * empty rather than emitting PHP's 'Array to string conversion'
+     * warning into the user's terminal.
+     */
+    private static function stringOrEmpty(mixed $value): string
+    {
+        return is_string($value) ? $value : '';
     }
 
     /** Parsed Style for one element block, null when the block is absent. */

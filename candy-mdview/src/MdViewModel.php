@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\MdView;
 
-use SugarCraft\Widgets\Viewport\Viewport;
+use SugarCraft\Forms\Viewport\Viewport;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;

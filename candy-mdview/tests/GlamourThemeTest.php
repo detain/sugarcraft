@@ -299,4 +299,55 @@ final class GlamourThemeTest extends TestCase
             unlink($config);
         }
     }
+
+
+    /**
+     * The size ceiling must guard EVERY parse door, not just the CLI
+     * stream read: fromFile() slurping an unbounded path was the bypass.
+     */
+    public function testFromFileRefusesConfigsOverTheByteCap(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'mdview-cap-');
+        $this->assertIsString($path);
+        try {
+            $handle = fopen($path, 'wb');
+            $this->assertIsResource($handle);
+            fwrite($handle, '{"document":{');
+            $chunk = str_repeat('x', 4096);
+            $written = 14;
+            while ($written < GlamourTheme::MAX_CONFIG_BYTES + 1) {
+                fwrite($handle, $chunk);
+                $written += 4096;
+            }
+            fclose($handle);
+
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('exceeds 1000000 bytes');
+            GlamourTheme::fromFile($path);
+        } finally {
+            unlink($path);
+        }
+    }
+
+    /**
+     * A config carrying nested values where decorator strings belong is
+     * malformed; it must coerce to empty strings, never emit PHP's
+     * "Array to string conversion" warning at the terminal.
+     */
+    public function testNonStringDocumentDecoratorsCoerceToEmptyStrings(): void
+    {
+        $theme = GlamourTheme::fromDecoded([
+            'document' => [
+                'block_prefix' => ['nested'],
+                'block_suffix' => ['tail' => 'x'],
+                'indent'       => 0,
+                'margin'       => 0,
+            ],
+        ]);
+        $this->assertSame('', $theme->blockPrefix);
+        $this->assertSame('', $theme->blockSuffix);
+
+        $markdownTheme = $theme->toMarkdownTheme();
+        $this->assertInstanceOf(Theme::class, $markdownTheme);
+    }
 }

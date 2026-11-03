@@ -42,4 +42,12 @@ if ($archive !== '') {
     }
 }
 
+if (!class_exists(Application::class)) {
+    // Every autoload candidate missed (composer install never ran here).
+    // Name the problem and its fix instead of letting the class-autoloader
+    // die with an opaque uncaught error and exit status 255.
+    fwrite(STDERR, "candy-mdview: no autoloader found — run composer install or use the phar.\n");
+    exit(1);
+}
+
 (new Application())->run();

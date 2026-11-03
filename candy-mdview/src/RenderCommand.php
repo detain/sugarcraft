@@ -44,7 +44,7 @@ final class RenderCommand extends Command
      * or runaway file (or an attacker-controlled path) from being slurped
      * whole into memory. Mirrors sugar-markdown's MAX_HIGHLIGHT_BYTES.
      */
-    private const MAX_THEME_CONFIG_BYTES = 1_000_000;
+    private const MAX_THEME_CONFIG_BYTES = GlamourTheme::MAX_CONFIG_BYTES;
 
     /**
      * Hard cap on document bytes read from a file argument. The renderer

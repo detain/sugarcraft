@@ -1,7 +1,7 @@
 {
     "name": "sugarcraft/candy-mdview",
-    "description": "Markdown CLI viewer / pager composing SugarMarkdown + Viewport, modeled on charmbracelet/glow. 8 stock themes, word-wrap, OSC 8 hyperlinks.",
-    "type": "library",
+    "description": "Markdown CLI viewer / pager composing SugarMarkdown + Viewport, modeled on charmbracelet/glow. 12 stock themes including an ascii accessibility tier, word-wrap, OSC 8 hyperlinks.",
+    "type": "project",
     "license": "MIT",
     "keywords": [
         "markdown",
@@ -31,9 +31,11 @@
     ],
     "require": {
         "php": "^8.3",
+        "sugarcraft/sugar-colorprofile": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
+        "sugarcraft/sugar-forms": "dev-master",
         "sugarcraft/sugar-markdown": "dev-master",
-        "sugarcraft/sugar-widgets": "dev-master",
+        "sugarcraft/sugar-style": "dev-master",
         "symfony/console": "^6.4 || ^7.0"
     },
     "require-dev": {

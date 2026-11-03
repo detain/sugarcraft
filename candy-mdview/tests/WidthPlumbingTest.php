@@ -83,4 +83,27 @@ final class WidthPlumbingTest extends TestCase
             'candy-mdview must consume SugarCraft\Core\Util\Width, never a local copy'
         );
     }
+
+
+    /**
+     * The canonical sugar-forms Viewport is the only viewport this app may
+     * touch. The deprecated sugar-widgets facade was removed with the
+     * dependency declaration fix and must not creep back into shipped code.
+     */
+    public function testNoShippedCodeImportsTheDeprecatedWidgetsViewport(): void
+    {
+        $root = dirname(__DIR__);
+        $files = array_merge(
+            glob($root . '/src/*.php') ?: [],
+            [$root . '/bin/candy-mdview'],
+        );
+        $this->assertGreaterThan(0, count($files));
+        foreach ($files as $file) {
+            $this->assertStringNotContainsString(
+                'SugarCraft\Widgets',
+                (string) file_get_contents($file),
+                $file . ' must use the canonical SugarCraft\Forms Viewport',
+            );
+        }
+    }
 }
