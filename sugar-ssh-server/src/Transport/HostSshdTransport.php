@@ -28,12 +28,12 @@ final class HostSshdTransport implements Transport
 
     public function run(Context $ctx, Session $session, array $stack): int
     {
-        $this->dispatch($ctx, $session, $stack, 0);
-
-        // No child process exists under the inline transport — the
-        // middleware chain completing without a raise IS success here
-        // (a BubbleTea Program's own status never crosses the sshd PTY
-        // boundary any differently than an interactive shell's would).
-        return 0;
+        // No child of ours exists under the inline transport, but the
+        // chain can still refuse: an Auth gate that says no must not
+        // answer 0 just because nothing was spawned (audit MAJOR 9).
+        // A BubbleTea Program's own status still never crosses the sshd
+        // PTY boundary — that remains the documented difference from a
+        // spawner transport.
+        return $this->dispatch($ctx, $session, $stack, 0);
     }
 }

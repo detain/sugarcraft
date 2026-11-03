@@ -83,6 +83,7 @@ final class CertificateAuth implements Middleware
             ]) . "\n");
 
             if ($this->required) {
+                $session->markRefused();
                 fwrite($this->stderr, Lang::t('certificateauth.required') . "\n");
                 return;
             }
@@ -91,6 +92,7 @@ final class CertificateAuth implements Middleware
         }
 
         if (!($this->validate)($pem, $session)) {
+            $session->markRefused();
             fwrite($this->stderr, Lang::t('certificateauth.rejected') . "\n");
             return;
         }

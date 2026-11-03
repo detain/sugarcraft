@@ -132,7 +132,7 @@ final class Auth implements Middleware
     public function handle(Context $ctx, Session $session, callable $next)
     {
         if ($this->users !== [] && !in_array($session->user, $this->users, true)) {
-            $this->reject('user not allowed: ' . $this->sanitize($session->user));
+            $this->reject($session, 'user not allowed: ' . $this->sanitize($session->user));
             return;
         }
         if ($this->keyFingerprints !== [] || $this->fingerprintValidator !== null || $this->userKeys !== []) {
@@ -140,7 +140,7 @@ final class Auth implements Middleware
             if ($this->keyFingerprints !== []
                 && ($fp === null || !$this->listContains($fp, $this->keyFingerprints))
             ) {
-                $this->reject('key not allowed: ' . $this->sanitize($fp ?? '<missing>'));
+                $this->reject($session, 'key not allowed: ' . $this->sanitize($fp ?? '<missing>'));
                 return;
             }
             if ($this->userKeys !== [] && !$this->keyBelongsTo($fp, $session->user)) {
@@ -148,7 +148,7 @@ final class Auth implements Middleware
                 // absent) but the name that owns this key is not the name
                 // that asked. Without a separate reason an operator
                 // reading the log cannot tell the two failures apart.
-                $this->reject('key not paired with the requested user: ' . $this->sanitize($fp ?? '<missing>')
+                $this->reject($session, 'key not paired with the requested user: ' . $this->sanitize($fp ?? '<missing>')
                     . ' as ' . $this->sanitize($session->user));
                 return;
             }
@@ -158,7 +158,7 @@ final class Auth implements Middleware
             if ($this->fingerprintValidator !== null
                 && !($this->fingerprintValidator)($fp ?? '', $session)
             ) {
-                $this->reject('key validation failed: ' . $this->sanitize($fp ?? '<missing>'));
+                $this->reject($session, 'key validation failed: ' . $this->sanitize($fp ?? '<missing>'));
                 return;
             }
         }
@@ -253,8 +253,12 @@ final class Auth implements Middleware
         return $s;
     }
 
-    private function reject(string $reason): void
+    private function reject(Session $session, string $reason): void
     {
+        // The notice goes to whoever can see it (audit K3: under
+        // ForceCommand that is the peer); the mark goes to the exit code,
+        // which is what a cron entry or CI step reads (audit MAJOR 9).
+        $session->markRefused();
         fwrite($this->stderr, Lang::t('auth.unauthorized', ['reason' => $reason]) . "\n");
     }
 }

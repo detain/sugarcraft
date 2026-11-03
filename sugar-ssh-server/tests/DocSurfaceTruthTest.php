@@ -117,7 +117,7 @@ final class DocSurfaceTruthTest extends TestCase
     {
         $readme = $this->readme();
         if ($readme === null) {
-            return;
+            $this->markTestSkipped('no README in a standalone checkout');
         }
 
         $flat = (string) \preg_replace('/\s+/', ' ', $readme);
@@ -149,7 +149,7 @@ final class DocSurfaceTruthTest extends TestCase
 
         $guide = $this->adminGuide();
         if ($guide === null) {
-            return;
+            $this->markTestSkipped('no admin guide in a standalone checkout');
         }
 
         $flatGuide = (string) \preg_replace('/\s+/', ' ', $guide);
@@ -211,7 +211,7 @@ final class DocSurfaceTruthTest extends TestCase
 
         $guide = $this->adminGuide();
         if ($guide === null) {
-            return;
+            $this->markTestSkipped('no admin guide in a standalone checkout');
         }
 
         $flatGuide = (string) \preg_replace('/\s+/', ' ', $guide);
@@ -242,7 +242,7 @@ final class DocSurfaceTruthTest extends TestCase
 
         $dev = $this->devGuide();
         if ($dev === null) {
-            return;
+            $this->markTestSkipped('no dev guide in a standalone checkout');
         }
 
         $this->assertStringNotContainsString('new InProcessTransport($ptySystem)', $dev);
@@ -251,24 +251,62 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringContainsString('decodeCommandString()', $flatDev);
     }
 
-    private function adminGuide(): ?string
+    public function testTheFailureTableAndTheExitCodeAreWrittenAsTheCodeBehaves(): void
     {
-        $path = \dirname(__DIR__, 3) . '/docs/admin/sugar-ssh-server.md';
-        if (!\is_file($path)) {
-            return null;
+        // Audit MAJOR 19 shipped a table written in the language of HTTP: no
+        // stack wrapper exists on any of these paths, so each 'error logged'
+        // row promised something nothing did. Audit MAJOR 9 answered every
+        // refusal with `0`. Both stories now sit on the two surfaces a reader
+        // actually consults, and this pin is what keeps them there.
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
         }
 
-        return (string) \file_get_contents($path);
+        $flat = (string) \preg_replace('/\s+/', ' ', $guide);
+        $this->assertStringNotContainsString('500 response to SSH client', $flat);
+        $this->assertStringNotContainsString('SSH DISCONNECT', $flat);
+        $this->assertStringContainsString('no HTTP status code', $flat);
+        $this->assertStringContainsString('uncaught PHP fatal', $flat);
+        $this->assertStringContainsString('### Exit status', $guide);
+        $this->assertStringContainsString('Server::EXIT_DENIED', $guide);
+        $this->assertStringContainsString('(`129`)', $flat);
+        $this->assertStringContainsString('A PHP **fatal** is `255`', $flat);
+
+        $readme = (string) \preg_replace('/\s+/', ' ', (string) $this->readme());
+        $this->assertStringContainsString('when a gate refused and nothing ran', $readme);
+        $this->assertStringContainsString('cron entry or CI step', $readme);
+    }
+
+    private function adminGuide(): ?string
+    {
+        return $this->monorepoFile('docs/admin/sugar-ssh-server.md');
     }
 
     private function devGuide(): ?string
     {
-        $path = \dirname(__DIR__, 3) . '/docs/dev/sugar-ssh-server.md';
-        if (!\is_file($path)) {
-            return null;
+        return $this->monorepoFile('docs/dev/sugar-ssh-server.md');
+    }
+
+    /**
+     * Walk up from the lib until the monorepo's `docs/` tree shows up, so a
+     * standalone composer checkout (which has none) skips instead of quietly
+     * asserting nothing. The first draft of these two helpers pointed one
+     * level too high and every guide leg was vacuous - the reason this method
+     * resolves by search rather than by depth.
+     */
+    private function monorepoFile(string $relative): ?string
+    {
+        $dir = \dirname(__DIR__);
+
+        for ($hop = 0; $hop < 4; $hop++) {
+            $dir = \dirname($dir);
+            if (\is_file($dir . '/' . $relative)) {
+                return (string) \file_get_contents($dir . '/' . $relative);
+            }
         }
 
-        return (string) \file_get_contents($path);
+        return null;
     }
 
     private function readme(): ?string

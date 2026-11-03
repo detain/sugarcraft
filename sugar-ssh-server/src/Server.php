@@ -71,6 +71,20 @@ use SugarCraft\SshServer\Transport\InProcessTransport;
  */
 final class Server
 {
+    /**
+     * Status a ForceCommand process returns when the session was
+     * refused rather than served.
+     *
+     * 128 + 1, the shell's own convention for 'this died to a signal',
+     * picked because it cannot collide with anything a served program
+     * exits with (0-127 is the useful range, 128+ is the shell's) and
+     * because `1` would be indistinguishable from a script that simply
+     * failed. Audit MAJOR 9: an refused login used to answer `0`, so
+     * `ssh host backup.sh` looked like a successful backup to the cron
+     * job and the CI step that ran it.
+     */
+    public const EXIT_DENIED = 129;
+
     /** @var list<Middleware> */
     private array $stack = [];
 
@@ -151,11 +165,12 @@ final class Server
      * there is no per-transport integration point and no `->wait()` on
      * the chain path.
      *
-     * **Exit status (MEDIUM-2).** Returns the session's exit status —
-     * the spawned child's exit code under a spawner transport, `0`
-     * when no child was ever spawned. A ForceCommand server script
-     * must hand it to `exit()` so the SSH client sees the real code
-     * (`ssh host cmd; echo $?`):
+     * **Exit status.** Returns the session's exit status: the spawned
+     * child's exit code when a child ran, {@see self::EXIT_DENIED}
+     * (129) when a middleware refused the session or the context died
+     * before one did, and `0` when the chain simply had nothing to run.
+     * A ForceCommand server script must hand it to `exit()` so the SSH
+     * client sees the real code (`ssh host cmd; echo $?`):
      *
      * ```php
      * exit($server->serve());
@@ -171,5 +186,24 @@ final class Server
     {
         $session ??= Session::fromEnvironment();
         return $this->transport->run($ctx ?? Context::background(), $session, $this->stack);
+    }
+
+    /**
+     * The one answer to 'what code does this session leave behind?'.
+     *
+     * Both transports read the stack's result through here, so a refusal
+     * and a completion cannot drift apart by transport the way they did
+     * before audit MAJOR 9. Precedence is deliberate: a child that
+     * actually ran wins, because its number is the most specific truth
+     * available.
+     */
+    public static function resolveStatus(Session $session): int
+    {
+        $status = $session->exitStatus();
+        if ($status !== null) {
+            return $status;
+        }
+
+        return $session->refused() ? self::EXIT_DENIED : 0;
     }
 }

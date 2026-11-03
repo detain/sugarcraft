@@ -116,11 +116,13 @@ final class KeyboardInteractive implements Middleware
             // prompt. An incomplete exchange is a failed authentication,
             // never a passed one (E727, round 82) — reject without ever
             // consulting a validator, which would face a short list.
+            $session->markRefused();
             fwrite($this->stderr, Lang::t('keyboardinteractive.auth_failed') . "\n");
             return;
         }
 
         if ($this->validate !== null && !($this->validate)($responses)) {
+            $session->markRefused();
             fwrite($this->stderr, Lang::t('keyboardinteractive.auth_failed') . "\n");
             return;
         }

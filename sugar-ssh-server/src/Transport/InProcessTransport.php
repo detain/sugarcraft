@@ -75,13 +75,6 @@ final class InProcessTransport implements Transport, ChildSpawner
     private ?int $childPid = null;
 
     /**
-     * Exit status of the most recently pumped child within the current
-     * {@see run()} — null until a child actually settles. Surfaced as the
-     * run() return value (MEDIUM-2) so Server::serve() can hand the real
-     * code to the ForceCommand process.
-     */
-    private ?int $lastChildStatus = null;
-
     /**
      * The active master for the current session. Stored here so the
      * keepalive callback (registered by middleware via
@@ -178,10 +171,6 @@ final class InProcessTransport implements Transport, ChildSpawner
 
     public function run(Context $ctx, Session $session, array $stack): int
     {
-        // Fresh session ⇒ fresh status slot; a stale child code from a
-        // previous run() must never leak into this one's return value.
-        $this->lastChildStatus = null;
-
         foreach ($stack as $mw) {
             if ($mw instanceof TransportAware) {
                 $mw->setTransport($this);
@@ -217,12 +206,12 @@ final class InProcessTransport implements Transport, ChildSpawner
             serverVersion:  $serverVersion,
         );
 
-        $this->dispatch($ctx, $authenticatedSession, $stack, 0);
-
-        // The session's exit status: the pumped child's code when a
-        // Spawn/DefaultChannelHandler path ran, 0 when the chain
-        // completed without ever spawning a child.
-        return $this->lastChildStatus ?? 0;
+        // The session carries the answer: the pumped child's code when a
+        // Spawn / DefaultChannelHandler path ran, EXIT_DENIED when a gate
+        // refused, 0 when the chain never reached a terminal (audit
+        // MAJOR 9 — this used to be `lastChildStatus ?? 0`, which could
+        // only ever report success, and which outlived a transport reuse).
+        return $this->dispatch($ctx, $authenticatedSession, $stack, 0);
     }
 
     /**
@@ -416,9 +405,10 @@ final class InProcessTransport implements Transport, ChildSpawner
             ? $pumpResult
             : ($child !== null ? $child->wait() : 0);
 
-        // MEDIUM-2: keep the settled child's code on the transport so
-        // run() can surface it after the stack walk unwinds.
-        $this->lastChildStatus = $status;
+        // Hand the settled code to the session, which is what the stack
+        // walk reads on its way out. Same object, one hop away from the
+        // exit() in the server script.
+        $session->recordExitStatus($status);
 
         return $status;
     }

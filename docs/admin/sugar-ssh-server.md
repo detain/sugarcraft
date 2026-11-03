@@ -42,6 +42,31 @@ Under **HostSshdTransport** (legacy, opt-in):
 2. Terminal middleware (`BubbleTea`) mounts a SugarCraft `Program` directly on STDIN/STDOUT
 3. No subprocess, no PTY
 
+### Exit status
+
+The entry script's exit code is `Server::serve()`'s return value, so the
+script must propagate it — `exit($server->serve());`. Anything else throws
+the answer away: a script that falls off the end of the file exits `0` no
+matter whom the chain refused. Three outcomes, and they mean different
+things to the cron entry or CI step reading `$?`:
+
+| Code | Meaning |
+|------|---------|
+| the child's own code | the chain reached a spawner and a process ran: `0` means that program succeeded, `3` means it did not |
+| `Server::EXIT_DENIED` (`129`) | nothing was served: a shipped gate (`Auth`, `RateLimit`, `PasswordAuth`, `CertificateAuth`, `KeyboardInteractive`) refused, or the `Context` was already dead when the walk reached a hop |
+| `0` | the walk ran out of middleware without any of the above — an empty or purely observational stack |
+
+`129` is `128 + SIGHUP`, the shell's own convention for "this process did
+not finish normally", and it sits outside the range a program can exit
+with, so a refusal can never be misread as some other program's `1`. A
+PHP **fatal** is `255`, not `129`: an uncaught throw never reaches
+`serve()`'s return, which is the honest reading of the
+[Failure modes](#failure-modes) table. Both transports report refusals
+the same way — the legacy `HostSshdTransport` has no child of its own,
+but it shares the walk and its rules (a `BubbleTea` program's own status
+still cannot cross the sshd PTY boundary, so on that transport a program
+has no code to report).
+
 ### Signals handled
 
 | Signal | Behaviour |
@@ -377,13 +402,19 @@ ssh -o BatchMode=yes hubuser@host echo ok
 
 ## Failure modes
 
-| Failure | Result |
-|---------|--------|
-| Middleware throws before terminal | 500 response to SSH client; error logged |
-| PTY allocation fails | `RuntimeException` from `PtySystem::open()`; connection closed; error logged |
-| Rate-limit exceeded | Connection closed with SSH DISCONNECT; no response body |
-| `sshd` misconfigured (no `ForceCommand`) | PHP supervisor sees no session metadata; `Session::fromEnvironment()` returns default/zero values |
-| Child process hangs | `InProcessTransport` pump loop waits forever — set a deadline via `Context::withDeadline()` earlier in the chain to force-cleanup |
+| Failure | What actually happens |
+|---------|---------------------|
+| Middleware throws | An uncaught PHP fatal: the trace goes to the child's standard error, which under `ForceCommand` is the connecting **client's** channel, and the process exits `255`. Nothing is logged anywhere unless a `finally` inside your own middleware logged it first. |
+| PTY allocation fails | Same shape: the `PtyException` from `PtySystem::open()` escapes `runChild()` uncaught, prints the trace onto the client's stream, exits `255`. |
+| Rate-limit exceeded | The throttle writes its `ratelimit.exceeded` line to the stream it was given and returns without invoking `$next`. No disconnect packet, no close, no body: the child simply never spawns and the process exits `0` (the `0`-means-nothing-ran rule below). |
+| `sshd` misconfigured (no `ForceCommand`) | No session metadata exists, so `Session::fromEnvironment()` fills every slot it can from the supervisor's own environment (`USER`/`LOGNAME`, `TERM` defaulting to `xterm-256color`, zero `COLUMNS`/`LINES`) and the entry script runs as an ordinary command rather than a session. |
+| Child process hangs | The pump loop waits forever, and `Context::withDeadline()` does **not** save you: no deadline is consulted inside the pump (see [Cooperative cancellation](#cooperative-cancellation)). Bound the work yourself — a `timeout(1)` wrapper, or a middleware that signals the child on its own clock. |
+
+There is no HTTP status code, no response body and no close-on-error on any of
+these paths, because there is no protocol stack here to produce one: this
+library hands a shell to a child and mirrors bytes. The stack wrapper that
+would turn a throw into a logged refusal and a tidy exit does not exist, so
+`error logged` in this table would have been a promise nobody keeps.
 
 **Output can be truncated on a non-blocking STDOUT (cross-lib seam).**
 `runChild()` flips the PTY master and STDIN to non-blocking because the pump

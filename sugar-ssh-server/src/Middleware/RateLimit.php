@@ -105,6 +105,9 @@ final class RateLimit implements Middleware
     public function handle(Context $ctx, Session $session, callable $next)
     {
         if (!$this->take($session)) {
+            // Throttled is not served: say so on the session so the
+            // process exits nonzero for the caller that retried too fast.
+            $session->markRefused();
             fwrite($this->stderr, Lang::t('ratelimit.exceeded') . "\n");
             return;
         }

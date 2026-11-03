@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * Test fixture — drives the FULL MEDIUM-2 status chain from a
+ * Test fixture — drives the FULL status chain (audit MAJOR 9) from a
  * separate PHP process: `InProcessTransport::run()` with the Spawn
  * middleware, then exits the script with the int run() returned.
  *
  * Unlike `_fixtures/runchild.php` (which calls runChild directly and
  * proves the pump returns the child code), this fixture pins the
- * transport-slot handoff: Spawn -> runChild -> lastChildStatus ->
+ * session-slot handoff: Spawn -> runChild -> Session::recordExitStatus ->
  * run() return value -> server-script exit code, AND simultaneously
  * proves the typed TransportAware injection fires (Spawn throws
  * "no transport" without it).

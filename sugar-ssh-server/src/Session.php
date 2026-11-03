@@ -120,7 +120,7 @@ final class Session
         ?string $clientVersion,
         ?string $serverVersion,
     ): self {
-        return new self(
+        $copy = new self(
             user:             $this->user,
             clientHost:       $this->clientHost,
             clientPort:       $this->clientPort,
@@ -138,6 +138,12 @@ final class Session
             clientVersion:    $clientVersion,
             serverVersion:    $serverVersion,
         );
+        // A hop that already settled a status keeps it: the number does
+        // not travel back to null just because geometry or metadata
+        // refreshed on the way down the stack.
+        $copy->exitStatus = $this->exitStatus;
+        $copy->refused    = $this->refused;
+        return $copy;
     }
 
     /**
@@ -148,7 +154,7 @@ final class Session
      */
     public function withSize(int $cols, int $rows): self
     {
-        return new self(
+        $copy = new self(
             user:             $this->user,
             clientHost:       $this->clientHost,
             clientPort:       $this->clientPort,
@@ -166,6 +172,71 @@ final class Session
             clientVersion:    $this->clientVersion,
             serverVersion:    $this->serverVersion,
         );
+        // A hop that already settled a status keeps it: the number does
+        // not travel back to null just because geometry or metadata
+        // refreshed on the way down the stack.
+        $copy->exitStatus = $this->exitStatus;
+        $copy->refused    = $this->refused;
+        return $copy;
+    }
+
+    /**
+     * Status the session accumulated while it was being served.
+     *
+     * Deliberately NOT one of the fifteen wire fields above, and
+     * deliberately mutable: the transports hand ONE of these objects down
+     * the middleware stack, and every `with*()` rebuild clones from the
+     * wire fields, so a fluent `withExitStatus()` would be discarded by
+     * the next hop. Audit MAJOR 9 is exactly that failure - a refused
+     * login used to answer `0`, so a denied `ssh host backup.sh`
+     * 'succeeded' for the cron job and the CI step that ran it.
+     */
+    private ?int $exitStatus = null;
+
+    private bool $refused = false;
+
+    /**
+     * The child's exit code once a spawner has run one, else null.
+     */
+    public function exitStatus(): ?int
+    {
+        return $this->exitStatus;
+    }
+
+    /**
+     * Called by a transport as its child settles (see
+     * {@see \SugarCraft\SshServer\Transport\ChildSpawner}).
+     */
+    public function recordExitStatus(int $status): void
+    {
+        $this->exitStatus = $status;
+    }
+
+    /**
+     * True when a middleware stopped this session rather than serving it.
+     *
+     * Set by the gates this library ships - Auth, PasswordAuth,
+     * KeyboardInteractive, CertificateAuth, RateLimit - and available to
+     * your own, so 'the chain ended' and 'the chain refused' stay
+     * distinguishable all the way to the exit code.
+     */
+    public function refused(): bool
+    {
+        return $this->refused;
+    }
+
+    /**
+     * Say that this session was refused, so the process can exit nonzero.
+     *
+     * Asking for the wrong name, presenting a key that pairs with nobody,
+     * exhausting a token bucket and typing a bad answer all mean the same
+     * thing to a caller reading `$?`: this session did not run. Marking
+     * them once at the deny site is the difference between a CI step that
+     * notices and one that logs a green check.
+     */
+    public function markRefused(): void
+    {
+        $this->refused = true;
     }
 
     /**

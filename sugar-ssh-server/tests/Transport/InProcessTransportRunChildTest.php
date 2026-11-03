@@ -246,7 +246,7 @@ final class InProcessTransportRunChildTest extends TestCase
 
     public function testSpawnRunChainExitsWithChildCodeThroughTransportSlot(): void
     {
-        // MEDIUM-2 e2e: Spawn -> runChild -> lastChildStatus -> run()
+        // Audit M9 e2e: Spawn -> runChild -> Session::recordExitStatus -> run()
         // return -> server-script exit. Also proves the typed
         // TransportAware injection fires — Spawn without it throws
         // "no transport" and the fixture would exit 2.

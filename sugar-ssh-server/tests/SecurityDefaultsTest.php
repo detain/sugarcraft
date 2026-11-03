@@ -112,8 +112,10 @@ final class SecurityDefaultsTest extends TestCase
         // Nothing gates on your behalf: an empty stack is not a deny, and a
         // stack without an Auth middleware is not a deny either. Both answer
         // 0, which is how a `ssh host backup.sh` reports success for a server
-        // that authenticated nobody (the exit-status leg of the same audit
-        // family is tracked separately).
+        // that authenticated nobody. What `0` no longer covers is a refusal:
+        // since audit MAJOR 9 a gate that says no marks the session and the
+        // walk answers `Server::EXIT_DENIED` instead -- see
+        // tests/ExitStatusTest.php for that half of the contract.
         $this->assertSame(0, (new Server())->serve(), 'an empty stack reports success -- it is reporting that nothing ran');
 
         $seen = (object) ['ran' => false];

@@ -6,6 +6,7 @@ namespace SugarCraft\SshServer\Transport;
 
 use SugarCraft\SshServer\Context;
 use SugarCraft\SshServer\Middleware;
+use SugarCraft\SshServer\Server;
 use SugarCraft\SshServer\Session;
 
 /**
@@ -26,19 +27,32 @@ use SugarCraft\SshServer\Session;
  * context died while its middleware was running (rejections and cancellations
  * alike surface at the dispatch frame, keeping the sync-caller contract that
  * PromiseDispatchTest pins: transport `run()` throws).
+ *
+ * The walk also ANSWERS: since audit MAJOR 9 it returns the status the
+ * session ended with, read through {@see Server::resolveStatus()} — the
+ * spawned child's code when a spawner ran one, `Server::EXIT_DENIED`
+ * when a middleware refused the session or the context died, and `0`
+ * when the stack simply had nothing to run. A middleware that stops the
+ * chain is either the terminal (a spawner, which records its child's
+ * code) or a refusal (which says so with
+ * {@see Session::markRefused()}); the walk cannot tell those apart on
+ * its own, so it never pretends to.
  */
 trait DispatchesMiddlewareStack
 {
     /**
      * @param list<Middleware> $stack
      */
-    private function dispatch(Context $ctx, Session $session, array $stack, int $idx): void
+    private function dispatch(Context $ctx, Session $session, array $stack, int $idx): int
     {
         if ($idx >= \count($stack)) {
-            return;
+            return Server::resolveStatus($session);
         }
         if ($ctx->done()) {
-            return;
+            // Nothing was served and nobody was asked: that is a refusal
+            // as far as the caller reading `$?` is concerned.
+            $session->markRefused();
+            return Server::EXIT_DENIED;
         }
         $next = function (Context $c, Session $s) use ($stack, $idx): void {
             $this->dispatch($c, $s, $stack, $idx + 1);
@@ -47,5 +61,7 @@ trait DispatchesMiddlewareStack
         if ($result instanceof \React\Promise\PromiseInterface) {
             PromiseAwait::settle($result, ctx: $ctx);
         }
+
+        return Server::resolveStatus($session);
     }
 }

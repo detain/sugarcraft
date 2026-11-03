@@ -27,7 +27,9 @@ namespace SugarCraft\SshServer;
  * front-end. A full PHP SSH server is a separate effort tracked
  * under `plans/x-xpty.md`'s deferred Option A.
  *
- * @see plans/plan-sugar-ssh-server-pty.md for the full design rationale.
+ * Both transports share one middleware walk, so the status rules above
+ * hold identically on either; what differs is only what happens after the
+ * chain reaches its terminal.
  */
 interface Transport
 {
@@ -43,12 +45,13 @@ interface Transport
      *
      * @return int The session's exit status — the child's exit code
      *         under a spawner transport (Spawn / DefaultChannelHandler
-     *         exec/shell), `0` when the chain completed without ever
-     *         spawning a child. MEDIUM-2: the ForceCommand process must
-     *         surface this via `exit()` so `ssh host cmd; echo $?`
-     *         reports the real failure instead of always 0. Failures of
-     *         the machinery itself raise (PtyException etc.) rather than
-     *         encoding a status.
+     *         exec/shell), {@see \SugarCraft\SshServer\Server::EXIT_DENIED}
+     *         when a middleware refused the session or the context died
+     *         first, and `0` when the chain completed with nothing to
+     *         run. The server script is expected to surface it via
+     *         `exit()` so `ssh host cmd; echo $?` reports the real
+     *         result. Failures of the machinery itself raise
+     *         (PtyException etc.) rather than encoding a status.
      */
     public function run(Context $ctx, Session $session, array $stack): int;
 }

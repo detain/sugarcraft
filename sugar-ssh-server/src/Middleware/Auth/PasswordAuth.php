@@ -60,6 +60,7 @@ final class PasswordAuth implements Middleware
         putenv('SSH_PASSWORD');
 
         if (!($this->validate)($session->user, $password)) {
+            $session->markRefused();
             fwrite($this->stderr, Lang::t('passwordauth.permission_denied') . "\n");
             return;
         }

@@ -250,6 +250,14 @@ exit(Server::new()
     ->serve());
 ```
 
+Both examples `exit(...)` on `serve()` deliberately: that return value is
+the session's answer -- the child's own exit code, `Server::EXIT_DENIED`
+(`129`) when a gate refused and nothing ran, or `0` when the walk finished
+with nothing to spawn. A script that calls `serve()` and falls off the end
+of the file reports success to whichever cron entry or CI step asked.
+[`docs/admin/sugar-ssh-server.md`](../docs/admin/sugar-ssh-server.md#exit-status)
+tabulates the three.
+
 ### 4. Connect
 
 ```
@@ -304,7 +312,7 @@ table below.
 | `Auth` | `new Auth()` has no user list and no fingerprint list, so **every session passes**. | Pass `users`, `keyFingerprints`, or the pairing map `userKeys` (see below). |
 | `KeyboardInteractive` | No `$validate` callable means **any answer authenticates**; the exchange is a form, not a check. | Pass a validator. There is no built-in PAM/password backend in this library. |
 | `RateLimit` | `failClosed` is `false`, so an unreadable or locked state file **lets the connection through** with a notice. | Construct with `failClosed: true` to deny when state cannot be read. |
-| `Server` | `serve()` runs exactly the middleware you `use()` -- **no auth is inserted for you** -- and an empty stack returns exit code `0`. | `->use(new Auth(...))->use(new RateLimit(...))`; treat a `0` from a stack that never spawned a child as "nothing ran". |
+| `Server` | `serve()` runs exactly the middleware you `use()` -- **no auth is inserted for you** -- and a stack that runs out of middleware without spawning answers `0`. | `->use(new Auth(...))->use(new RateLimit(...))`, then `exit($server->serve())`: a gate that refuses now answers `Server::EXIT_DENIED` (`129`), a child reports its own code, and `0` means there was nothing to run. |
 
 The docblocks on those four classes say the same thing in longer words, and
 `docs/admin/sugar-ssh-server.md` describes the deployment posture. If you
