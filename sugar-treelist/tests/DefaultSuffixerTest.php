@@ -78,6 +78,22 @@ final class DefaultSuffixerTest extends TestCase
         $this->assertSame('', $result);
     }
 
+    /**
+     * The marker lands verbatim inside every framed row, so escape and control
+     * bytes must be refused at the boundary — the same class of glyph-injection
+     * hole the prefixer fields carried before 2026-11-03.
+     */
+    public function testControlByteMarkerIsRefused(): void
+    {
+        $s = new DefaultSuffixer();
+        $s->currentMarker = "\x1b[1m";
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('currentMarker');
+
+        $s->initSuffixer(new StringItem('item'), 0, 0, 5, 80, 24);
+    }
+
     public function testSuffixerIsStatefulAcrossMultipleInits(): void
     {
         $s = new DefaultSuffixer();

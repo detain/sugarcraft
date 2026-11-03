@@ -7,8 +7,12 @@ namespace SugarCraft\TreeList;
 use SugarCraft\Core\Util\Width;
 
 /**
- * Default suffixer — shows a < marker on the first line of the cursor item,
- * pads the rest to maintain horizontal alignment.
+ * Default suffixer — shows a < marker on the first line of the cursor item.
+ *
+ * The Model right-pads the content cell ONLY for lines where suffix()
+ * returns a non-empty marker; every other line is emitted at its natural
+ * width (there is no whole-viewport right-padding contract). The marker
+ * glyph is validated at init: control bytes are refused, not smuggled.
  */
 final class DefaultSuffixer implements Suffixer
 {
@@ -27,6 +31,15 @@ final class DefaultSuffixer implements Suffixer
         int $width,
         int $height,
     ): int {
+        if (\preg_match('/[\x00-\x1F\x7F]/', $this->currentMarker) === 1
+            || !\mb_check_encoding($this->currentMarker, 'UTF-8')
+            || \preg_match('/[\x{80}-\x{9F}]/u', $this->currentMarker) === 1
+        ) {
+            throw new \InvalidArgumentException(
+                'DefaultSuffixer:$currentMarker must be a printable glyph string without control characters (C0/DEL/C1).'
+            );
+        }
+
         $this->itemIndex   = $currentIndex;
         $this->cursorIndex = $cursorIndex;
         $this->markerWidth = Width::string($this->currentMarker);
@@ -40,7 +53,8 @@ final class DefaultSuffixer implements Suffixer
         if ($this->itemIndex === $this->cursorIndex && $currentLine === 0) {
             return $this->currentMarker;
         }
-        // Empty suffix — line will be right-padded to viewport width by the Model
+        // No suffix for this line — and the Model therefore does NOT right-pad
+        // it. Rows without a non-empty suffix end at their content width.
         return '';
     }
 }

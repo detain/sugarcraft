@@ -62,7 +62,64 @@ final class DefaultPrefixerTest extends TestCase
     {
         $p = new DefaultPrefixer();
         $p->initPrefixer(new StringItem('other'), 1, 0, 5, 80, 24, 5);
-        $this->assertSame('╭ 1   ', $p->prefix(0, 3)); // first line of EVERY item uses firstSep
+        // 2026-11-03 fix wave: the first-line join glyph follows the item's
+        // POSITION (╭ first / ├ middle / ╰ last). The old pin '╭ 1   ' froze
+        // the tree-lie — firstSep on every item made ├/╰ unreachable.
+        $this->assertSame('├ 1   ', $p->prefix(0, 3));
+    }
+
+    /** Corners track the ends of the rendered list; ├ owns the middle. */
+    public function testGutterCornersTrackListEnds(): void
+    {
+        $p = new DefaultPrefixer();
+        $p->initPrefixer(new StringItem('a'), 0, 0, 5, 80, 24, 3);
+        $this->assertStringStartsWith('╭', $p->prefix(0, 1));
+        $p->initPrefixer(new StringItem('b'), 1, 0, 5, 80, 24, 3);
+        $this->assertStringStartsWith('├', $p->prefix(0, 1));
+        $p->initPrefixer(new StringItem('c'), 2, 0, 5, 80, 24, 3);
+        $this->assertStringStartsWith('╰', $p->prefix(0, 1));
+
+        // A one-item list is both ends and renders as the top corner;
+        // a two-item list uses ╭ and ╰ and never ├.
+        $p->initPrefixer(new StringItem('only'), 0, 0, 5, 80, 24, 1);
+        $this->assertStringStartsWith('╭', $p->prefix(0, 1));
+        $p->initPrefixer(new StringItem('last'), 1, 0, 5, 80, 24, 2);
+        $this->assertStringStartsWith('╰', $p->prefix(0, 1));
+
+        // Wrap continuations are position-independent: always │.
+        $p->initPrefixer(new StringItem('c'), 2, 0, 5, 80, 24, 3);
+        $this->assertStringStartsWith('│', $p->prefix(1, 2));
+    }
+
+    public function testLastSepIsCustomisable(): void
+    {
+        $p = new DefaultPrefixer();
+        $p->lastSep = '└';
+        $p->initPrefixer(new StringItem('end'), 2, 0, 5, 80, 24, 3);
+        $this->assertStringStartsWith('└', $p->prefix(0, 1));
+    }
+
+    /**
+     * Gutter glyphs are terminal content: control bytes (the old
+     * firstSep="\x1b]0;owned\x07" shape) are refused at init, empty is legal.
+     */
+    public function testGlyphFieldsRejectControlBytes(): void
+    {
+        foreach (['firstSep', 'separator', 'lastSep', 'separatorWrap', 'currentMarker', 'emptyMarker'] as $field) {
+            $p = new DefaultPrefixer();
+            $p->$field = "x\x1b]0;owned\x07";
+            try {
+                $p->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 3);
+                $this->fail("DefaultPrefixer:\${$field} accepted control bytes");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString($field, $e->getMessage());
+            }
+        }
+
+        $blank = new DefaultPrefixer();
+        $blank->firstSep = '';
+        $blank->initPrefixer(new StringItem('i'), 0, 0, 5, 80, 24, 3);
+        $this->assertStringStartsWith(' ', $blank->prefix(0, 1));
     }
 
     public function testPrefixShapeWrapContinuation(): void
@@ -77,9 +134,9 @@ final class DefaultPrefixerTest extends TestCase
     {
         $p = new DefaultPrefixer();
         $p->initPrefixer(new StringItem('ten'), 10, 0, 5, 80, 24, 12);
-        $this->assertSame('╭ 10   ', $p->prefix(0, 1));
+        $this->assertSame('├ 10   ', $p->prefix(0, 1)); // middle item → ├ (2026-11-03 gutter fix)
         $p->initPrefixer(new StringItem('nine'), 9, 0, 5, 80, 24, 12);
-        $this->assertSame('╭  9   ', $p->prefix(0, 1));
+        $this->assertSame('├  9   ', $p->prefix(0, 1));
     }
 
     public function testPrefixWithRelativeNumbers(): void
@@ -88,9 +145,9 @@ final class DefaultPrefixerTest extends TestCase
         $p->numberRelative = true;
         $p->initPrefixer(new StringItem('rel'), 3, 5, 3, 80, 24, 12);
         // distance |3-5| = 2 in a 2-cell right-aligned field; no marker (not the cursor)
-        $this->assertSame('╭  2   ', $p->prefix(0, 1));
+        $this->assertSame('├  2   ', $p->prefix(0, 1)); // middle item → ├ (2026-11-03 gutter fix)
         $p->initPrefixer(new StringItem('cur'), 5, 5, 3, 80, 24, 12);
-        $this->assertSame('╭  0 > ', $p->prefix(0, 1));
+        $this->assertSame('├  0 > ', $p->prefix(0, 1));
     }
 
     public function testPrefixWithoutNumbersHasNoDigits(): void
