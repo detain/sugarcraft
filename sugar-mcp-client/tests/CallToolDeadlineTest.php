@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
- * callTool()'s OPT-IN deadline. Unbounded stays the default (E646); a
+ * callTool()'s OPT-IN deadline. Unbounded stays the default (the no-blanket-timeout law); a
  * positive `$timeoutSeconds` abandons the wait, tells the server with
  * `notifications/cancelled`, and leaves the connection usable — the late
  * reply is skipped by the strict id match.

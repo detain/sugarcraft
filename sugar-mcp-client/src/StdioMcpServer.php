@@ -862,7 +862,7 @@ final class StdioMcpServer implements McpServer
      * exchanges and want diagnostics warm. This is a CALLER-PUMPED seam on
      * purpose: mounting it on an event loop would put two readers on one pipe,
      * and pipe reads are destructive — whichever reader wins eats bytes the
-     * other was meant to see (the product's E537 ruling; same law here).
+     * other was meant to see (the shared-pipe readership ruling: two readers on one pipe steal each other's bytes).
      */
     public function pumpStderr(): void
     {

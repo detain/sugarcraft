@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Pagination fixture for the tools/list cursor walk (ISS-093(b)).
+// Pagination fixture for the tools/list cursor walk.
 //   (default)        2 pages: 2 tools + nextCursor, then 1 tool, no cursor —
 //                    the whole roster is only visible if the client follows
 //   --repeat-cursor  every page re-issues the SAME nextCursor forever: the

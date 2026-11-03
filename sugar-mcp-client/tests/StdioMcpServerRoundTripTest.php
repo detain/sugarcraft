@@ -126,7 +126,7 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
     public function testSpontaneousIdLessBroadcastsAreSkippedAndNeverAnswerARequest(): void
     {
-        // Review probe P7: the strict-match fix. The rogue fixture pushes a
+        // Measured: the strict-match fix. The rogue fixture pushes a
         // `result` frame with NO id before every genuine answer; only the
         // exact-id response may answer a request. Under the old leniency the
         // broadcast was accepted as initialize's reply and the real answers
@@ -147,7 +147,7 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
     public function testNonJsonStdoutLinesAreSkippedInsteadOfAbortingTheRequest(): void
     {
-        // Audit MCP-4: a boot banner, a log line, a blank keep-alive and a
+        // The sloppy-stdout shape: a boot banner, a log line, a blank keep-alive and a
         // whitespace-only line precede every genuine answer. Each one used to
         // end the in-flight request as a failure, so start() threw "Failed to
         // start MCP server" with the real initialize reply one line away.
@@ -186,7 +186,7 @@ final class StdioMcpServerRoundTripTest extends TestCase
 
     public function testADoubleStartIsRefusedInsteadOfOrphaningTheLiveChild(): void
     {
-        // Review probe P6: a second start() used to overwrite the proc handle,
+        // Measured: a second start() used to overwrite the proc handle,
         // leaving the first child running with no owner. Fail-fast now.
         $server = $this->spawn('twice', 'prompt_server.php');
         $server->start();

@@ -188,7 +188,7 @@ final class ExchangeLockTest extends TestCase
 
             self::assertFileExists($ownedByLive, 'a live owner keeps its lock');
             self::assertFileExists($ownedBySelf, 'the sweeping process never removes its own');
-            self::assertFileExists($legacy, 'a pre-R14 name says nothing about its owner and is left');
+            self::assertFileExists($legacy, 'a legacy tempnam-style name says nothing about its owner and is left');
             self::assertFileExists($otherNamespace, 'a pid from another pid namespace names some other process');
             self::assertFileExists($held, 'a held flock means somebody still uses it');
 

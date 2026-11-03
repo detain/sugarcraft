@@ -189,7 +189,7 @@ final class McpRouterTest extends TestCase
                 self::fail('allow-list entry ' . json_encode($bad[0]) . ' must throw');
             } catch (\RuntimeException $thrown) {
                 self::assertStringContainsString('non-empty string', $thrown->getMessage());
-                // The fail-loud WHY rides the message itself (lane-A2 fold of
+                // The fail-loud WHY rides the message itself (fold of
                 // the candy-code wording): the refusal is a policy, not a
                 // parse error, and the operator reading the log gets the
                 // argument for it.
@@ -268,7 +268,7 @@ final class McpRouterTest extends TestCase
         // not filter as if absent at resolution time.
         $servers = ['x' => self::server('x', ['t'])];
 
-        // Review probe P5: an array spec with NO usable string action is the
+        // Measured: an array spec with NO usable string action is the
         // same silent-widening failure as garbage — it reads as an inert rule.
         // The constructor docblock always promised "Any other shape throws".
         foreach ([42, null, ['action' => 42], new \stdClass(), [], ['action' => null]] as $bad) {

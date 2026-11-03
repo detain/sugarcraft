@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\ArgumentShape;
 
 /**
- * Audit MCP-9: every row is judged by the JSON the shaped arguments encode
+ * The nested-object wire audit: every row is judged by the JSON the shaped arguments encode
  * to, because the wire bytes are the whole point — `[]` versus `{}`.
  */
 final class ArgumentShapeTest extends TestCase

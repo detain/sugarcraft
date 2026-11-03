@@ -9,7 +9,7 @@ use SugarCraft\McpClient\ExchangeLock;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
- * One server, many processes (audit B1 / AG-1): the embedder starts the server
+ * One server, many processes (the fork-corruption audit): the embedder starts the server
  * and then uses the SAME object from pcntl_fork()ed children, exactly as
  * candy-code's forked turns and parallel sub-agents do.
  *

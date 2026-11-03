@@ -1,15 +1,25 @@
-# Sugar MCP
+# Sugar MCP Client
 
 > Formerly published as `sugarcraft/sugar-mcp` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Mcp\` → `SugarCraft\McpClient\`. <!-- @rename-keep -->
 
 MCP (Model Context Protocol) client core for PHP: a JSON-RPC 2.0 envelope
-codec, a newline-delimited stdio transport with a fully bounded lifecycle,
-the initialize/tools protocol layer, and policy-free allow/deny routing.
+codec, a newline-delimited JSON (NDJSON) stdio transport with a fully bounded
+lifecycle, the initialize/tools protocol layer, and policy-free allow/deny
+routing.
+
+Here "client" means the tool-CALLING side: this library is what an AI coding
+agent or editor embeds to spawn and talk to an MCP SERVER process. You run it
+inside your application; the server is the child it launches.
+
+Requires PHP >= 8.3. Speaks protocol revision `2024-11-05` and refuses a
+server that answers the handshake claiming a different revision (a legacy
+server that omits the field is allowed to proceed).
 
 Extracted from the [candy-code](https://github.com/sugarcraft/candy-code)
-MCP stack, where these classes run a ~4.9k-LOC production subsystem. The wire
-algorithms are faithful ports; everything product-specific stayed downstream.
+MCP stack, where these classes carry its entire stdio server lifecycle. The
+wire algorithms are faithful ports; everything product-specific stayed
+downstream.
 
 ## Install
 
@@ -17,7 +27,7 @@ algorithms are faithful ports; everything product-specific stayed downstream.
 composer require sugarcraft/sugar-mcp-client
 ```
 
-## What ships (Phase 1)
+## What ships
 
 | Class | Role |
 |---|---|
@@ -50,6 +60,12 @@ $result = $server->callTool('echo', ['message' => 'hi']);
 $server->stop();                     // also runs automatically on destruct
 ```
 
+`callTool()` answers with the tool's result envelope — normally
+`['content' => [['type' => 'text', 'text' => ...], ...], 'isError' => bool]`
+as the server shaped it (a non-table result is wrapped into a one-item
+`content` list for you) — or, on failure, `['error' => 'why']`. It never
+throws for a call that merely failed; see *Failure shapes*.
+
 ## Trust boundary
 
 **A stdio server entry is arbitrary code execution as the user running this
@@ -81,6 +97,25 @@ production. That remediation is deliberately downstream product policy here —
 this library has no list of which names are secrets, and any list it shipped
 would be wrong for someone's environment.
 
+The planner is a `callable(string $name, array $argv, array $env): array`
+returning `[$argv, $env]`; throwing from it refuses the launch:
+
+```php
+$curated = ['PATH' => '/usr/local/bin:/usr/bin:/bin'];
+$server = new StdioMcpServer(
+    name: 'narrow',
+    command: $binary,
+    args: $argv,
+    spawnPlanner: static fn (string $name, array $argv, array $env): array =>
+        [$argv, $curated],   // full replacement env — nothing ambient rides
+);
+```
+
+`cwd:` pins the spawn directory (see *Spawn directory*), and `lockDir:` pins
+where the `ExchangeLock` file lives — useful when `TMPDIR` moves or a janitor
+sweeps it; the directory must exist, and a lock that cannot be created there
+fails `start()` loudly rather than silently sharing less.
+
 ## Spawn directory
 
 The child's working directory is the embedder's decision, not an accident of
@@ -94,16 +129,20 @@ uses the seam to run its user-tier MCP servers in the home directory and its
 project-tier servers at the project root rather than inheriting whatever
 checkout the launch stood in.
 
-## Timeout discipline (E646)
+## Timeout discipline
 
 - The handshake runs under **one** monotonic (`hrtime`) deadline
   (`DEFAULT_START_TIMEOUT_SECONDS`, 60s, sized for cold `npx` fetches) shared
-  across `initialize`, `notifications/initialized` and `tools/list`.
+  across `initialize`, `notifications/initialized` and `tools/list`. A slow
+  start is not a silence: `start(onWait: $beat)` gets the same liveness beat
+  every poll slice while the handshake runs.
 - Every handshake leg must succeed, or `start()` stops the child and throws a
   `RuntimeException` (with any captured stderr) rather than reporting "up, 0
   tools": an `initialize` or `tools/list` reply carrying `error` names the
   server's error code and message; a leg that gets no reply, or a
-  `notifications/initialized` that cannot be delivered, names that leg.
+  `notifications/initialized` that cannot be delivered, names that leg. A
+  server claiming a different `protocolVersion` than this client speaks
+  refuses the start too; one that omits the field proceeds.
 - `callTool()` carries **no** deadline by default: a tool call is somebody's real work and
   is bounded by child liveness, never by a wall-clock kill of in-flight work.
   Liveness is checked whenever a poll leaves the pipe idle — at most once a
@@ -119,18 +158,100 @@ checkout the launch stood in.
   Without `/proc` (macOS, BSD) a forked caller falls back to signal 0 and to
   pipe EOF.
 - A caller that DOES want a bound opts in per call:
-  `callTool($name, $args, timeoutSeconds: 30.0)` abandons the wait at the
-  deadline (time queued for the exchange lock counts), sends
+  `callTool(name: $name, arguments: $args, timeoutSeconds: 30.0)` abandons the
+  wait at the deadline (time queued for the exchange lock counts), sends
   `notifications/cancelled` naming the request, and returns
-  `{"error": "Tool call timed out after 30s …"}`; the connection stays usable
-  and the late reply is skipped by id. Null, zero, a negative or a non-finite
-  value leaves the call unbounded.
-- `callTool($name, $args, onWait: $beat)` calls `$beat` at least once a second
+  `{"error": "Tool call timed out after 30s and was cancelled; the server may
+  still finish the work"}`; the connection stays usable and the late reply is
+  skipped by id. Null, zero, a negative or a non-finite value leaves the call
+  unbounded.
+- `callTool(..., onWait: $beat)` calls `$beat` at least once a second
   for as long as the call waits, so an embedder whose own watchdog measures
   silence can keep a long unbounded call visibly alive. Throttle it yourself;
   it may fire far more often.
 - Every socket wait is bounded by `stream_select` polls; stderr is absorbed on
   both wait sets so a full 64KiB kernel pipe can never deadlock the child.
+  A `select` that keeps failing (an EINTR storm) is counted on both the read
+  and the write side and ends the wait with a named cause.
+- `request()` and `notify()` take a `$deadline` as an **absolute monotonic
+  instant** — the same `hrtime` basis as `StdioMcpServer::monotonicNow()` —
+  not a duration and not wall clock. Pass `monotonicNow() + 30.0` for "30
+  seconds"; a past instant gives up silently (`null`/`false`), and a
+  wall-clock-magnitude value would never fire, so the magnitude is refused
+  with an `InvalidArgumentException` instead.
+  `callTool(timeoutSeconds:)` remains the relative-duration spelling.
+
+## Failure shapes
+
+What you get when things go wrong, so you can branch on it knowingly:
+
+- `start()` **throws** — the connection either comes up with a tool roster or
+  does not come up. The exception names the leg and the cause:
+  - `Failed to start MCP server: <name> — could not execute <command> (<os
+    cause>)` when the spawn itself fails (a missing `npx` says so, with the
+    OS-level reason);
+  - `… — initialize refused (code): <server message>` / the same for
+    `tools/list`, plus the stderr tail when the server wrote one;
+  - `… — protocol mismatch: this client speaks X, the server answered Y`;
+  - a `tools/list` page that is not shaped like a tool list — a non-array
+    `tools`, or any definition malformed enough that the name cannot be
+    trusted — refuses the boot by name and count instead of connecting to a
+    silently half-empty roster (a legitimately EMPTY `tools: []` stays legal).
+- `callTool()` **answers, never throws**: a failed call comes back as
+  `['error' => ...]` naming its CAUSE — the server's own JSON-RPC code and
+  message when it refused
+  (`Tool call failed — tools/call refused (-32602): ...`), or the reader's
+  reason when no valid answer arrived (`the server is not started`, `the
+  server process exited`, `the request could not be written to the server`,
+  `the server refused an unparseable frame (error code -32700)`, `no reply
+  arrived before the wait ended`, the bounded-timeout text above). Frames a
+  JSON-RPC 2.0 server must not send — both `result` and `error` in one reply,
+  or neither — are reported, never silently taken as success. The captured
+  stderr tail rides along in the message; `stderrTail()` exposes it on its
+  own and survives `stop()`, so a post-mortem still has the evidence.
+- A server-request handler that throws or answers malformed never crashes the
+  caller: the in-flight `callTool()` ends through its error payload, naming
+  the handler class and message — never a mislabelled encoding failure and
+  never an escaped exception; the server's own request stays unanswered on
+  that leg.
+- A server that floods the pipe with frames no exchange can attribute (junk,
+  id-less pushes, endless blank keep-alives) is refused after a bounded
+  number of them instead of holding a deadline-less call forever.
+- `request()` returns `null` and `notify()` returns `false` when the write or
+  the wait failed (not started, deadline passed, lock lost); neither throws
+  for those. Both let `McpMessage::toJson()`'s `InvalidArgumentException`
+  through for an unencodable envelope, with nothing written.
+- Diagnostic strings embed SERVER-authored bytes after a control-character
+  sweep (no ESC/OSC/NUL survives), but they are still UNTRUSTED text: render
+  them through `SugarCraft\Core\Sanitize::untrusted()` before they reach a
+  terminal, never raw.
+
+## Routing policy
+
+`McpRouter` narrows which servers and tools a caller may see, before any
+transport runs. It holds a name-keyed map of already-built servers and takes
+deny patterns as config — either a plain list of glob patterns (all `deny`) or
+a `pattern => action` map; an action other than the exact string `"deny"` is
+ignored, and a malformed spec throws at construction:
+
+```php
+use SugarCraft\McpClient\{McpRouter, StdioMcpServer};
+
+$servers = ['fs' => $fsServer, 'scratch' => $scratchServer];
+$router = new McpRouter($servers, denyPatterns: ['scratch', 'untrusted_*']);
+
+$visible = $router->resolveAllowedServers();            // deny applies first
+$fsTools = $router->resolveAllowedTools('fs', ['read']);// per-server allow-list
+```
+
+The two membership laws are public statics so downstream gates read exactly
+this doctrine: `McpRouter::serverDenied($name, $denyPatterns)` and
+`McpRouter::serverAllowed($name, $allowList)`. Deny runs before allow; an
+empty allow-list means allow-all (distinct from "restrict to nothing"); a
+non-string or empty allow entry throws. Note the deliberate asymmetry: deny
+patterns are `fnmatch`-matched whole (broad, because a missed denial is a
+security hole), while an allow entry only globs when it contains `*`
+(strict, because a mis-globbed allowance is worse than a missed one).
 
 ## Failure reporting
 
@@ -148,7 +269,14 @@ checkout the launch stood in.
   fails (full or read-only temp filesystem); the exchange then fails rather
   than running without its recovery marker, and a failed store leaves the file
   empty, which reads as dirty. The lock's factory is `ExchangeLock::new()`
-  (`create()` remains as a deprecated alias).
+  (`create()` remains as a deprecated alias); its file is opened at mode
+  `0600`, verified before any payload lands, and a filesystem that refuses
+  the mode fails the open loudly.
+- `callTool()`/`callTool(name:, arguments:)`: the concrete parameter names
+  match the `McpServer` interface, so named-argument calls written against
+  the contract bind here. The three trailing opt-ins (`onWait:`,
+  `timeoutSeconds:`, `onServerMessage:`) exist on `StdioMcpServer` only —
+  code typed against the interface cannot pass them.
 
 ## Wire shape
 
@@ -158,9 +286,12 @@ PHP's `[]` encodes as an array, so `McpMessage::toJson()` emits empty `params`
 as `{}`, `initialize` sends `"capabilities":{}`, an argument-less `callTool()`
 sends `"arguments":{}`, and `tools/list` omits `params` entirely (as the
 reference TS client does). The `capabilities:` constructor argument configures
-what that object HOLDS (C-MCP-3) — a configured map rides through the same
-object cast, so `['roots' => ['listChanged' => false]]` arrives as a populated
-JSON object and the default still lands as `{}` byte-for-byte.
+what that object HOLDS — a configured map rides through the same object cast,
+so `['roots' => ['listChanged' => false]]` arrives as a populated JSON object
+and the default still lands as `{}` byte-for-byte. Advertise what you will
+answer: a capability-gating server asks `roots/list` or sends
+`elicitation/create` only of clients that declared the capability, so the
+handler below section cannot fire without it.
 
 Tool arguments are shaped one level further: a model's `{"filter":{}}`
 decodes (assoc) to `['filter' => []]`, so `callTool()` walks the arguments
@@ -194,7 +325,7 @@ notifications write nothing back. Two consequences worth knowing:
   must never call back into the same server instance.
 - the wall clock a request handler spends is **paused out** of a bounded
   call's `timeoutSeconds` budget — waiting on an answer this client owes is
-  not the server being slow (E646). `sampling/createMessage` ships no
+  not the server being slow. `sampling/createMessage` ships no
   answer beyond the default refusal: running a model in the client's name
   is product policy, downstream.
 
@@ -207,7 +338,10 @@ process that started it — one server shared by the whole process tree:
   reply of a SIGKILLed child's call — only ever matches the call that sent
   it; a forked child that re-opens the connection cannot silently take over
   the id space while its owner is still live — `claim()` refuses a foreign
-  claim against a live owner, and the child keeps minting pid-tagged ids;
+  claim against a live owner, and the child keeps minting pid-tagged ids.
+  When a foreign process succeeds a claim because the old owner DIED, its
+  counter resumes far ahead of the dead owner's window, so a stale reply
+  still sitting in the pipe can never alias a new call;
 - every exchange runs under a cross-process `flock` (`ExchangeLock`; each
   process opens its own handle, since an inherited one shares the lock).
   **Concurrent calls on one server therefore serialise**; the lock wait
@@ -227,7 +361,10 @@ process that started it — one server shared by the whole process tree:
   fragment of a half-read reply until the first parseable message;
 - only the starting process stops the server; `stop()`/destruct in a child
   closes that child's handles only. A child checks liveness with
-  `posix_kill($pid, 0)` (it cannot `waitpid` a sibling's child).
+  `posix_kill($pid, 0)` (it cannot `waitpid` a sibling's child). If the OWNER
+  is SIGKILLed while a forked child still holds the connection, nothing here
+  reaps the server child — that cleanup is the embedding process manager's
+  job (candy-code runs it through its own lifecycle supervisor).
 - the lock file's name records its owner
   (`sugar-mcp-client-lock-<pid-namespace>-<pid>-<random>`). An owner that is killed
   before it stops its server leaves the file behind, so every new connection
@@ -251,13 +388,16 @@ stderr is not locked — it is diagnostics only.
 - **Downstream (product policy, not protocol):** contained/detached spawning
   (setsid wrapping, PATH pre-checks, curated environments) — wrap `proc_open`
   policy at the embedder.
-- **Phase 2:** HTTP/SSE transport, server-side implementation, and OAuth
-  (PKCE, loopback, dynamic client registration). `resources/*` and
-  `prompts/*` traffic is already one `StdioMcpServer::request()` away (the
-  product's provider pages ride exactly that), and the server's own
-  request/notification traffic is answered inline — see *Server requests*
-  above. What is deliberately NOT answered for you is `sampling/createMessage`:
-  model policy stays downstream.
+- **Deferred (not planned in this package):** HTTP/SSE transport, server-side
+  implementation, and OAuth (PKCE, loopback, dynamic client registration).
+  `resources/*` and `prompts/*` traffic is already one
+  `StdioMcpServer::request()` away (the product's provider pages ride exactly
+  that), and the server's own request/notification traffic is answered inline
+  — see *Server requests* above. What is deliberately NOT answered for you is
+  `sampling/createMessage`: model policy stays downstream.
+- Deprecated surfaces (`ExchangeLock::create()`) keep working and announce
+  their replacement in the docblock; removal is a package-major change,
+  announced in the release notes well before it lands.
 
 ## Tests
 
@@ -267,11 +407,6 @@ cd sugar-mcp-client && composer install && vendor/bin/phpunit
 
 The suite spawns real short-lived PHP child servers over stdio
 (`tests/Fixtures/`) — bounded, reaped, no network access.
-
-## Assets
-
-`media/icons/sugar-mcp-client.png` is a shared monorepo placeholder (currently
-byte-identical to sugar-diff's icon) pending a dedicated glyph.
 
 ## License
 

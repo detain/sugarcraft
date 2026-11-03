@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\RequestIdSequence;
 
 /**
- * Process-unique JSON-RPC ids (audit B1 / AG-1), pinned through the pid seam
+ * Process-unique JSON-RPC ids (the fork-corruption audit), pinned through the pid seam
  * so no fork is needed: the owner keeps plain counters, every other pid gets
  * `<pid>-<nonce>-<n>`, and a reused pid never recreates an earlier id.
  */

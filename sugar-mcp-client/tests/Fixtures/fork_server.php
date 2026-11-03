@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Fork-safety fixture (audit B1 / AG-1). Single-threaded like a real stdio
+// Fork-safety fixture (the fork-corruption audit). Single-threaded like a real stdio
 // server: requests are answered strictly in arrival order.
 //   slow  — sleeps 1s, answers "result of slow"
 //   fast  — answers "result of fast" at once

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Wire-shape fixture for audit MCP-9: an SDK-strict server whose tool declares
+// Wire-shape fixture for the nested-object wire audit: an SDK-strict server whose tool declares
 // NESTED object positions. It decodes WITHOUT assoc so `{}` and `[]` stay
 // distinct, refuses `filter`/`options.headers` arriving as arrays the way the
 // official SDKs do ("expected object, received array"), and otherwise answers

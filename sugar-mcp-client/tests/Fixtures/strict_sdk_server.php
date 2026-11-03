@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Wire-shape fixture modelled on the official MCP SDK servers (audit MCP-1).
+// Wire-shape fixture modelled on the official MCP SDK servers (the top-level object law).
 // It decodes WITHOUT assoc so a JSON `{}` and a JSON `[]` stay distinct, then
 // refuses array-shaped objects exactly the way the SDKs were measured to:
 //   - initialize with `capabilities` (or params) as an array → -32603

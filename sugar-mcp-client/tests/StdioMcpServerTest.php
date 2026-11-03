@@ -178,7 +178,7 @@ final class StdioMcpServerTest extends TestCase
             'wrong-typed name refuses' => ['probe', [
                 'result' => ['tools' => [['name' => 5], ['name' => 'ok', 'description' => '', 'inputSchema' => []]]],
             ], null],
-            // Review probe P8 (re-graded by review M7): definitions with no
+            // Measured (re-graded by the fix wave): definitions with no
             // usable name must be refused LOUDLY, not silently dropped — a
             // vanished tool is exactly the "looks connected, exposes less"
             // defect the tools/list gate exists to prevent.
@@ -239,26 +239,27 @@ final class StdioMcpServerTest extends TestCase
         self::assertSame($schema, $tools[0]->inputSchema);
     }
 
-    public function testAnEchoCommandEitherThrowsTheMcpMessageOrStartsCleanly(): void
+    public function testAnEchoCommandCannotPassTheHandshakeGate(): void
     {
-        // /bin/echo answers nothing useful: the handshake gate must catch it
-        // (the reply is not a response) and fail with the MCP message.
+        // Pin hardened 2026-11-04 (fix wave, review m10): the old test passed
+        // on EITHER outcome and closed with a literal assertTrue(true) — it
+        // could not go red. /bin/echo prints one non-JSON line and exits, so
+        // the initialize leg has exactly one honest answer: refuse. If the
+        // gate ever regresses to "up with no tools", this test must fail.
         $server = new StdioMcpServer('echo-command', '/bin/echo', ['not-json']);
+
+        $thrown = null;
 
         try {
             $server->start();
-            $started = true;
-        } catch (\RuntimeException $thrown) {
-            self::assertStringContainsString('Failed to start MCP server: echo-command', $thrown->getMessage());
-            $started = false;
+        } catch (\RuntimeException $failure) {
+            $thrown = $failure->getMessage();
         } finally {
             $server->stop();
         }
 
-        if ($started) {
-            self::assertSame([], $server->listTools(), 'a server with no tools/list answer is up with an empty table');
-        }
-
-        self::assertTrue(true);
+        self::assertIsString($thrown, 'a server that answers nothing must fail the handshake, never boot empty');
+        self::assertStringContainsString('Failed to start MCP server: echo-command', $thrown);
+        self::assertFalse($server->isUp());
     }
 }

@@ -9,7 +9,7 @@ use SugarCraft\McpClient\McpMessage;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
- * Audit MCP-1: the stdio client could not talk to the official TypeScript or
+ * The top-level object law: the stdio client could not talk to the official TypeScript or
  * Python SDK servers. PHP's empty `[]` reached the wire as a JSON array where
  * the schema wants an object (`capabilities`, `params`, `arguments`), the SDKs
  * answered `initialize` with an error the client took for success, tools/list
@@ -105,8 +105,8 @@ final class StdioMcpServerSdkWireShapeTest extends TestCase
 
     public function testInitializeCapabilitiesGoOnTheWireAsAnObject(): void
     {
-        // The MCP-1 law restated for the field the handshake leads with,
-        // and C-MCP-3 extends it: whatever the client configures, the map
+        // The object-vs-array law restated for the field the handshake leads with,
+        // and the capabilities option extends it: whatever the client configures, the map
         // rides the (object) cast, never an array.
         $json = McpMessage::request('1', 'initialize', ['capabilities' => new \stdClass()])->toJson();
 
@@ -116,7 +116,7 @@ final class StdioMcpServerSdkWireShapeTest extends TestCase
 
     public function testConfiguredClientCapabilitiesStillSatisfyTheStrictServer(): void
     {
-        // C-MCP-3 round-trip form: strict_sdk_server refuses an array-shaped
+        // The capabilities round-trip form: strict_sdk_server refuses an array-shaped
         // `capabilities` exactly like the official SDKs were measured to, so
         // a clean handshake with a CONFIGURED map proves the object cast
         // survives configuration — not just the empty default this file's
@@ -211,13 +211,13 @@ final class StdioMcpServerSdkWireShapeTest extends TestCase
     }
 
     /**
-     * C-MCP-3: the `capabilities:` constructor argument made the handshake
+     * The capabilities option: the `capabilities:` constructor argument made the handshake
      * object configurable, but the shape law survives. An unconfigured
      * client still sends the empty OBJECT (this fixture refuses array-shaped
      * capabilities, so a successful start is the witness for the default),
      * and a configured map rides through as a JSON object too — the plain
      * PHP cast of `['roots' => ...]` would encode an ARRAY and die at the
-     * same gate MCP-1 audited.
+     * same gate the object-vs-array law audited.
      */
     public function testConfiguredCapabilitiesArriveAsAnObjectAndTheDefaultStaysTheEmptyOne(): void
     {

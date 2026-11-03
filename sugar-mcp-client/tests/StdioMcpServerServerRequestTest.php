@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
- * C-MCP-3: server-initiated traffic on the stdio transport.
+ * The server-request law: server-initiated traffic on the stdio transport.
  *
  * Before this seam the read loop skipped every method-bearing frame "however
  * chatty" — a server pinging mid-call, asking for roots, or eliciting the
@@ -20,7 +20,7 @@ use SugarCraft\McpClient\StdioMcpServer;
  * the empty object, an unknown request earns -32601, integer wire ids echo
  * as integers, configured capabilities ride the initialize handshake, a
  * per-call handler replaces the defaults — and the call deadline is PAUSED
- * while a handler runs (the E646-spirit fix: a thinking human never costs
+ * while a handler runs (the no-blanket-timeout fix: a thinking human never costs
  * the request its budget), proven by a handler that sleeps longer than the
  * whole timeout while the call still succeeds.
  *

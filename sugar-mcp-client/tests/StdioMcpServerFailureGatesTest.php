@@ -389,7 +389,7 @@ final class StdioMcpServerFailureGatesTest extends TestCase
     }
 
     /**
-     * FIX #4: the 64MiB frame-cap refusal threw straight out of callTool() on
+     * The error rails: the 64MiB frame-cap refusal threw straight out of callTool() on
      * a mid-session oversized reply, breaking the McpServer contract promise
      * (a failed call answers as an error payload). Now the refusal is caught
      * in callToolWaiting. Dead-connection ruling, pinned here: the child is
@@ -423,11 +423,11 @@ final class StdioMcpServerFailureGatesTest extends TestCase
     }
 
     /**
-     * FIX #6: a non-conforming server that keeps the pipe busy with frames
+     * The strike law: a non-conforming server that keeps the pipe busy with frames
      * attributable to no request (null/float ids on result/error pushes,
      * batches, garbage) used to leave a deadline-less callTool() skipping
      * them forever. The skip-strike tripwire now refuses the exchange after
-     * the threshold — reported as a payload (FIX #4 rail), naming the server
+     * the threshold — reported as a payload (the error rails), naming the server
      * — instead of hanging or throwing.
      */
     public function testAFloodOfUnattributableFramesRefusesTheOutstandingExchange(): void
@@ -457,7 +457,7 @@ final class StdioMcpServerFailureGatesTest extends TestCase
     }
 
     /**
-     * The under-threshold half of FIX #6: fewer strike frames than the
+     * The under-threshold half of the strike law: fewer strike frames than the
      * threshold, then a genuine reply — the call must SUCCEED, proving the
      * tripwire bounds only hopeless waits and per-read counting lets any
      * answered exchange start from zero strikes.

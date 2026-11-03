@@ -8,12 +8,12 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\McpMessage;
 
 /**
- * Decision D12: the id-preserving {@see McpMessage} variant the ACP adapter
+ * The id-preserving {@see McpMessage} variant the ACP adapter
  * (candy-code) reads and writes with. An integer id stays an integer both
  * ways; MCP's own {@see McpMessage::parse()} and factories are byte-for-byte
  * what they were.
  *
- * Moved from candy-code/tests/MCP/ with the lane-A2 fold — the canonical
+ * Moved from candy-code/tests/MCP/ in the fold — the canonical
  * tests live with the canonical class.
  */
 final class McpMessageIdPreservingTest extends TestCase

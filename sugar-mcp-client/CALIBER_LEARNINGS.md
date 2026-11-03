@@ -62,7 +62,7 @@
   inject it through the `$spawnPlanner` ctor seam — a closure
   `($name, $argv, $env) → [command, env|null]` whose return is handed to
   proc_open verbatim after shape validation, and which may throw to refuse a
-  launch before any child exists (that is where crush's PATH pre-check lives).
+  launch before any child exists (that is where candy-code's PATH pre-check lives).
 - `$clientInfo` is the other ctor seam: the initialize-handshake identity,
   parsed fail-fast at construction (non-empty string `name` + string
   `version`); default advertises sugar-mcp-client, candy-code's adapter sends its
@@ -71,11 +71,11 @@
   extraction (`$preset->mcpServers`) stays downstream.
 - MAX_FRAME_BYTES restates the product family's 64MiB cap as a library-local
   constant (pinned != MAX_STDERR_BYTES to catch a collapse edit).
-- pumpStderr() is a caller-pumped seam, never loop-mounted (E537: pipe reads
+- pumpStderr() is a caller-pumped seam, never loop-mounted (pipe reads
   are destructive — two readers on one pipe steal each other's bytes).
-- HTTP transport, server side, and the OAuth stack are Phase 2.
+- HTTP transport, server side, and the OAuth stack stay downstream, not planned in this package.
 
-## Failure-path rules (crush_libs.md audit, 2026-10-03)
+## Failure-path rules (the 2026-10-03 library-audit pass)
 
 - **Never `(string) json_encode(...)` on the wire.** `false` becomes a blank
   line every server ignores, and a deadline-less `callTool()` then waits for a

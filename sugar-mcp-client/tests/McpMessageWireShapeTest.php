@@ -39,7 +39,7 @@ use SugarCraft\McpClient\McpMessage;
  * — a serialiser that dropped an absent `result` would take the tool list with
  * it. That is pinned here as well.
  *
- * Moved from candy-code/tests with the lane-A2 fold — the canonical tests
+ * Moved from candy-code/tests in the fold — the canonical tests
  * live with the canonical class.
  */
 final class McpMessageWireShapeTest extends TestCase

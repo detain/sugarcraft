@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
- * The cwd argument (C-MCP-1): the child's start directory is the embedder's
+ * The cwd argument: the child's start directory is the embedder's
  * decision, and null keeps the historic inherited spawn byte-identical.
  * Real children only — getcwd() inside the fixture is the ground truth of
  * where proc_open put the process, not a mock's memory of an argument, and
@@ -110,7 +110,7 @@ final class StdioMcpServerCwdTest extends TestCase
     {
         // The product passes BOTH: a containment planner decides the argv and
         // env (candy-code wraps and scrubs through exactly this seam), and
-        // C-MCP-1 decides the directory. A planner that returns a pair must
+        // The cwd option decides the directory. A planner that returns a pair must
         // not silently drop the cwd on the way through.
         $dir = $this->makeDir();
         $planner = static fn (string $name, array $argv, array $env): array => [$argv, null];

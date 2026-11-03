@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
- * Audit MCP-9: a model's `{"filter":{}}` is decoded assoc to
+ * The nested-object wire audit: a model's `{"filter":{}}` is decoded assoc to
  * `['filter' => []]` long before the transport sees it, and used to go back
  * on the wire as `"filter":[]` — refused by SDK servers whose schema declares
  * `filter` an object. callTool() now shapes the arguments against the tool's
@@ -76,7 +76,7 @@ final class StdioMcpServerNestedArgumentsWireTest extends TestCase
     {
         // No schema to consult: a nested [] keeps its decoded shape (the
         // fixture then refuses it, which is the honest outcome), while the
-        // empty top level still leaves as {} (audit MCP-1).
+        // empty top level still leaves as {} (the top-level object law).
         $server = $this->started();
 
         // Pin flipped 2026-11-04 (fix wave, review M1): the SDK server's

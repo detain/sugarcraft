@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
- * The tools/list cursor walk (ISS-093(b)): a server that paginates used to
+ * The tools/list cursor walk: a server that paginates used to
  * have its FIRST page cached as the entire roster — tools silently missing
  * from every later dispatch. start() now follows nextCursor to the end,
  * refuses a lying (repeating) cursor, refuses a roster known to be cut at
@@ -68,7 +68,7 @@ final class StdioMcpServerPaginationTest extends TestCase
         self::assertSame(
             ['alpha', 'beta', 'tool_page_2'],
             $names,
-            'ISS-093(b): the cursor was followed — the second page is in the cache',
+            'the cursor was followed — the second page is in the cache',
         );
     }
 

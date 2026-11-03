@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Test fixture (C-MCP-3): an MCP server that TALKS BACK mid-call.
+// Test fixture for the server-request law: an MCP server that TALKS BACK mid-call.
 //
 // Answers the handshake, then during the "talk" tool call it pushes the
 // server-initiated traffic the client used to skip unanswered forever:

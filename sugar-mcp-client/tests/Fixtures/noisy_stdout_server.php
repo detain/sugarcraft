@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Round-trip fixture for audit MCP-4: a server that is sloppy with stdout. It
+// Round-trip fixture for the sloppy-stdout shape: a server that is sloppy with stdout. It
 // prints a banner at boot and, before EVERY genuine answer, a log line, a blank
 // keep-alive line and a whitespace-only line. The reference SDK clients skip
 // unparseable lines; before the fix the first one ended the request as a

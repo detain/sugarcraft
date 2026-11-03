@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Failure-gates fixture for FIX #4: a server that HANDSHAKES CORRECTLY and
+// Failure-gates fixture for the error rails: a server that HANDSHAKES CORRECTLY and
 // only then misbehaves — on the first tools/call it streams just past the
 // client's 64MiB frame cap with no newline, and after that stays alive and
 // silent while still reading stdin. This pins the mid-session shape the
