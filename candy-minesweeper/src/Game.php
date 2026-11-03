@@ -141,6 +141,17 @@ final class Game implements Model
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
+        // M04: Ctrl/Alt-modified characters are never gameplay commands. The
+        // decoder reports Ctrl+R as Char with rune 'r', so without this gate
+        // the browser's reload chord silently hard-restarts the board,
+        // Ctrl+S/Ctrl+L collide with the save/load keys, and Ctrl+H/I/J/K
+        // steer the cursor. Ctrl+C is the one modified rune with meaning —
+        // it quits — and is handled (alongside Esc and plain q) below.
+        if ($msg->type === KeyType::Char
+            && ($msg->ctrl || $msg->alt)
+            && !($msg->ctrl && $msg->rune === 'c')) {
+            return [$this, null];
+        }
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {

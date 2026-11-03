@@ -111,6 +111,41 @@ final class GameTest extends TestCase
         $this->assertNull($cmd);
     }
 
+    /**
+     * M04: Ctrl/Alt-modified characters must never reach the game commands.
+     * Ctrl+R used to hard-restart (browser reload chord), Ctrl+S/Ctrl+L hit
+     * save/load, Ctrl+H/J/K/L steered the cursor — the decoder reports all
+     * of them as bare Char runes with the modifier flag set.
+     */
+    public function testCtrlAndAltModifiedCharactersAreInert(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));  // places mines, moves
+
+        foreach ([
+            ['r', true, false], ['l', true, false], ['s', true, false],
+            ['h', true, false], ['k', true, false], ['j', false, true],
+            ['l', false, true], ['q', true, false],
+        ] as [$rune, $ctrl, $alt]) {
+            [$next, $cmd] = $g->update(new KeyMsg(KeyType::Char, $rune, alt: $alt, ctrl: $ctrl));
+            $this->assertSame($g, $next, "ctrl/alt+$rune must be a no-op");
+            $this->assertNull($cmd, "ctrl/alt+$rune must not emit a command");
+        }
+
+        // Positive controls: the plain keys still work.
+        [$afterR, ] = $g->update(self::key(KeyType::Char, 'r'));
+        $this->assertTrue(!$afterR->board->minesPlaced, 'plain r still restarts');
+        [$afterQ, $quitCmd] = $g->update(self::key(KeyType::Char, 'q'));
+        $this->assertNotNull($quitCmd, 'plain q still quits');
+    }
+
+    public function testCtrlCStillQuits(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $_max): int => 0);
+        [, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        $this->assertNotNull($cmd, 'Ctrl+C remains the quit chord');
+    }
+
     public function testViewIncludesStatusLine(): void
     {
         $g = Game::start(4, 4, 2, static fn(int $_max): int => 0);
