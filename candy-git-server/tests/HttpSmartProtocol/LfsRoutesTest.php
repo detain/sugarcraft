@@ -14,7 +14,7 @@ use SugarCraft\GitServer\Stats;
 use SugarCraft\GitServer\User;
 
 /**
- * LFS object HTTP routes on the smart-HTTP server — plan item 7.9.
+ * LFS object HTTP routes on the smart-HTTP server.
  *
  * @covers \SugarCraft\GitServer\HttpSmartProtocol\Server
  */
@@ -130,7 +130,7 @@ final class LfsRoutesTest extends TestCase
         $decoded = \json_decode($result['body'], true);
         $this->assertSame('basic', $decoded['transfer']);
         $this->assertSame(
-            "/testrepo.git/info/lfs/objects/{$oid}",
+            "http://localhost:23232/testrepo.git/info/lfs/objects/{$oid}",
             $decoded['objects'][0]['actions']['download']['href'],
             'batch must advertise the URL the object routes actually serve',
         );

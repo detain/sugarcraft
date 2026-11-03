@@ -42,8 +42,9 @@ return [
     'cli.next_step_4'          => '  4. Ejecute: candy-git-server serve --config {path}/config.yaml',
 
     // bin/candy-git-server — user
-    'cli.usage_user_root'      => 'Uso: candy-git-server user add|key|list',
+    'cli.usage_user_root'      => 'Uso: candy-git-server user add|key|list|token',
     'cli.usage_user_add'       => 'Uso: candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] genera una firma de token de proxy HTTP',
     'cli.usage_user_key'       => 'Uso: candy-git-server user key <username> [key-file]',
     'cli.user_created'         => "Usuario '{username}' creado (admin: true)",
     'cli.user_password_stored' => 'Contraseña almacenada como hash.',

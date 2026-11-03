@@ -87,7 +87,7 @@ final class TrustModeHttpProbeTest extends TestCase
     public function testTokenModeSignatureGrantsTheReadAndAForgedHeaderDoesNot(): void
     {
         $server = $this->makeServer('user_trust_mode: "token", auth_secret: "s3cr3t"');
-        $sig = \hash_hmac('sha256', 'alice', 's3cr3t');
+        $sig = Server::mintUserToken('alice', \time() + 60, 's3cr3t');
 
         $granted = $server->handleRequest(
             'GET',

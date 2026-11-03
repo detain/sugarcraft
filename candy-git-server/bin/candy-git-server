@@ -363,9 +363,42 @@ function cmdUser(array $args): int
         'add'    => cmdUserAdd($subargs),
         'key'    => cmdUserKey($subargs),
         'list'   => cmdUserList($subargs),
+        'token'  => cmdUserToken($subargs),
         'help'   => say(Lang::t('cli.usage_user_root')),
         default  => cmdUnknown("user {$subcommand}"),
     };
+}
+
+/**
+ * Mint an HTTP proxy-token signature for the `token` trust mode: the
+ * "<expiry-unix>.<hex-hmac>" string the server's verifyUserToken accepts.
+ * Requires the data path's config.yaml to define a non-empty auth.secret.
+ */
+function cmdUserToken(array $args): int
+{
+    $username = $args[0] ?? '';
+    if ($username === '' || !bin_valid_account_name($username)) {
+        return error(Lang::t('cli.usage_user_token') . "\n");
+    }
+
+    $ttl      = \max(1, (int) ($args[1] ?? '3600'));
+    $dataPath = bin_data_path($args[2] ?? null);
+
+    try {
+        $config = Config::load($dataPath . '/config.yaml');
+    } catch (RuntimeException | InvalidArgumentException $error) {
+        return error("token: no readable config at {$dataPath}/config.yaml — run init or pass a data-path\n");
+    }
+
+    if ($config->authSecret === '') {
+        return error("token: auth.secret is not configured for this data path; set it in config.yaml before minting tokens\n");
+    }
+
+    return say(\SugarCraft\GitServer\HttpSmartProtocol\Server::mintUserToken(
+        $username,
+        \time() + $ttl,
+        $config->authSecret,
+    ) . "\n");
 }
 
 /**

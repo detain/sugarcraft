@@ -10,7 +10,7 @@ use SugarCraft\GitServer\LFS\{LFSHandler, LFSStorageBackendInterface, LocalStora
 use SugarCraft\GitServer\{Repo, User};
 
 /**
- * Async (event-loop) LFS batch processing — plan item 6.2.
+ * Async (event-loop) LFS batch processing.
  *
  * @covers \SugarCraft\GitServer\LFS\LFSHandler
  */
@@ -90,19 +90,19 @@ final class LFSHandlerAsyncTest extends TestCase
         $backend = new LocalStorageBackend($lfsDir);
 
         // Two stored objects + one missing → mixed action/error entries.
-        foreach (['oid-aaaa1111', 'oid-bbbb2222'] as $i => $oid) {
+        foreach ([\str_repeat('a', 64), \str_repeat('c', 64)] as $i => $oid) {
             $stream = \fopen('data://text/plain;base64,' . \base64_encode("Content {$i}"), 'r');
             $backend->write($oid, $stream);
             \fclose($stream);
         }
 
-        $handler = new LFSHandler($repo, User::new('alice'), $lfsDir, $backend, 2);
+        $handler = new LFSHandler($repo, User::new('alice'), $lfsDir, $backend, 2, publicBaseUrl: '');
         $request = [
             'operation' => 'download',
             'objects' => [
-                ['oid' => 'oid-aaaa1111', 'size' => 9],
-                ['oid' => 'missing-oid', 'size' => 100],
-                ['oid' => 'oid-bbbb2222', 'size' => 9],
+                ['oid' => \str_repeat('a', 64), 'size' => 9],
+                ['oid' => \str_repeat('b', 64), 'size' => 100],
+                ['oid' => \str_repeat('c', 64), 'size' => 9],
             ],
         ];
 
@@ -118,7 +118,7 @@ final class LFSHandlerAsyncTest extends TestCase
     public function testAsyncBatchEmptyObjects(): void
     {
         $repo = $this->createRepo();
-        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs');
+        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs', publicBaseUrl: '');
 
         $result = $this->awaitBatch($handler, ['operation' => 'download', 'objects' => []]);
 
@@ -128,11 +128,11 @@ final class LFSHandlerAsyncTest extends TestCase
     public function testAsyncBatchAccessDeniedResolves403(): void
     {
         $repo = $this->createRepo()->withPublic(false)->withPrivate(true);
-        $handler = new LFSHandler($repo, User::new('mallory'), $this->tmpDir . '/lfs');
+        $handler = new LFSHandler($repo, User::new('mallory'), $this->tmpDir . '/lfs', publicBaseUrl: '');
 
         $result = $this->awaitBatch($handler, [
             'operation' => 'download',
-            'objects' => [['oid' => 'abc', 'size' => 1]],
+            'objects' => [['oid' => \str_repeat('d', 64), 'size' => 1]],
         ]);
 
         $this->assertSame(['error' => ['code' => 403, 'message' => 'Access denied']], $result);
@@ -148,7 +148,7 @@ final class LFSHandlerAsyncTest extends TestCase
         $backend = new class implements LFSStorageBackendInterface {
             public function exists(string $oid): bool
             {
-                if ($oid === 'boom-oid') {
+                if ($oid === \str_repeat('e', 64)) {
                     throw new \RuntimeException('backend exploded');
                 }
 
@@ -179,24 +179,24 @@ final class LFSHandlerAsyncTest extends TestCase
             }
         };
 
-        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs', $backend, 4);
+        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs', $backend, 4, publicBaseUrl: '');
         $result = $this->awaitBatch($handler, [
             'operation' => 'download',
             'objects' => [
-                ['oid' => 'boom-oid', 'size' => 1],
-                ['oid' => 'fine-oid', 'size' => 2],
+                ['oid' => \str_repeat('e', 64), 'size' => 1],
+                ['oid' => \str_repeat('f', 64), 'size' => 2],
             ],
         ]);
 
         $this->assertCount(2, $result['objects']);
 
         // Failed object reported in place, not thrown at the batch level.
-        $this->assertSame('boom-oid', $result['objects'][0]['oid']);
+        $this->assertSame(\str_repeat('e', 64), $result['objects'][0]['oid']);
         $this->assertSame(500, $result['objects'][0]['error']['code']);
         $this->assertSame('backend exploded', $result['objects'][0]['error']['message']);
 
         // The other object still processed and reported like sequential would.
-        $this->assertSame('fine-oid', $result['objects'][1]['oid']);
+        $this->assertSame(\str_repeat('f', 64), $result['objects'][1]['oid']);
         $this->assertSame(404, $result['objects'][1]['error']['code']);
     }
 
@@ -251,8 +251,8 @@ final class LFSHandlerAsyncTest extends TestCase
             }
         };
 
-        $oids = ['o1', 'o2', 'o3', 'o4', 'o5', 'o6'];
-        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs', $backend, 2);
+        $oids = [\str_repeat('1', 64), \str_repeat('2', 64), \str_repeat('3', 64), \str_repeat('4', 64), \str_repeat('5', 64), \str_repeat('6', 64)];
+        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs', $backend, 2, publicBaseUrl: '');
         $result = $this->awaitBatch($handler, [
             'operation' => 'download',
             'objects' => \array_map(static fn (string $o): array => ['oid' => $o, 'size' => 1], $oids),

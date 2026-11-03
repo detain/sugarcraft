@@ -88,7 +88,7 @@ final class UserTrustTest extends TestCase
 
     private function sign(string $username, string $secret): string
     {
-        return \hash_hmac('sha256', $username, $secret);
+        return Server::mintUserToken($username, \time() + 60, $secret);
     }
 
     // -------------------------------------------------------------------------
@@ -255,6 +255,33 @@ final class UserTrustTest extends TestCase
 
         $this->assertNotNull($user);
         $this->assertSame('alice', $user->username);
+    }
+
+    public function testExpiredTokenIsRefused(): void
+    {
+        $server = $this->makeServer('user_trust_mode: "token", auth_secret: "s3cr3t"');
+
+        $user = $this->resolveTrustedUser($server, [
+            'X-CandyGitServer-User' => 'alice',
+            'X-CandyGitServer-User-Sig' => Server::mintUserToken('alice', \time() - 10, 's3cr3t'),
+        ], null);
+
+        $this->assertNull($user, 'a signature whose expiry has passed is worthless');
+    }
+
+    public function testOldFormatUsernameOnlySignatureIsRefused(): void
+    {
+        $server = $this->makeServer('user_trust_mode: "token", auth_secret: "s3cr3t"');
+
+        // The retired credential format signed the username alone — an
+        // immortal bearer secret. It must not authenticate any more, even
+        // when computed with the correct secret.
+        $user = $this->resolveTrustedUser($server, [
+            'X-CandyGitServer-User' => 'alice',
+            'X-CandyGitServer-User-Sig' => \hash_hmac('sha256', 'alice', 's3cr3t'),
+        ], null);
+
+        $this->assertNull($user, 'the pre-expiry token shape is structurally rejected');
     }
 
     public function testTokenModeRejectsForgedSignature(): void

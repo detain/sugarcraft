@@ -181,31 +181,49 @@ final class Server
         // - /{repo}.git/info/lfs/objects/batch          (POST, LFS batch API)
         // - /{repo}.git/info/lfs/objects/{oid}          (GET download, PUT upload)
         // - /{repo}.git/info/lfs/objects/{oid}/verify   (POST, post-upload check)
+        //
+        // Everything BEFORE the service segment is the repository path:
+        // hosting layouts namespace repos under an owner segment
+        // (`/alice/widget.git/info/refs`), which the old flat
+        // "second segment is the action" rule answered 404 for. The
+        // dispatch below scans for the first service-shaped segment and
+        // treats the prefix as the repo name; findRepo resolves the
+        // deepest segment (owner prefixes are display, not identity —
+        // matching how the scan registers repos by their directory name).
 
         if (\count($parts) < 2) {
             return $this->errorResponse(404, 'Not found');
         }
 
-        $actionPart = $parts[1] ?? '';
-
-        // Handle info/refs request (advertisement)
-        if ($actionPart === 'info' && isset($parts[2]) && $parts[2] === 'refs') {
-            return $this->handleInfoRefs($headers);
+        $serviceIndex = null;
+        foreach ($parts as $index => $segment) {
+            if ($segment === 'info' || $segment === 'git-upload-pack' || $segment === 'git-receive-pack') {
+                $serviceIndex = $index;
+                break;
+            }
         }
 
-        // Handle Git LFS routes (batch API + object transfer)
-        if ($actionPart === 'info' && isset($parts[2]) && $parts[2] === 'lfs') {
-            return $this->handleLfs($parts, $headers, $body);
+        if ($serviceIndex === null || $serviceIndex === 0) {
+            return $this->errorResponse(404, 'Not found');
         }
 
-        // Handle upload-pack request
-        if ($actionPart === 'git-upload-pack') {
-            return $this->handleUploadPack($headers, $body);
+        $repoName = \implode('/', \array_slice($parts, 0, $serviceIndex));
+        $rest = \array_slice($parts, $serviceIndex);
+
+        if ($rest[0] === 'info' && ($rest[1] ?? '') === 'refs' && \count($rest) === 2) {
+            return $this->handleInfoRefs($repoName, $headers);
         }
 
-        // Handle receive-pack request
-        if ($actionPart === 'git-receive-pack') {
-            return $this->handleReceivePack();
+        if ($rest[0] === 'info' && ($rest[1] ?? '') === 'lfs' && ($rest[2] ?? '') === 'objects' && \count($rest) >= 4) {
+            return $this->handleLfs($rest, $repoName, $headers, $body);
+        }
+
+        if ($rest[0] === 'git-upload-pack' && \count($rest) === 1) {
+            return $this->handleUploadPack($repoName, $headers, $body);
+        }
+
+        if ($rest[0] === 'git-receive-pack' && \count($rest) === 1) {
+            return $this->handleReceivePack($repoName, $headers, $body);
         }
 
         return $this->errorResponse(404, 'Not found');
@@ -216,19 +234,19 @@ final class Server
      *
      * This advertises the available refs to the client.
      */
-    private function handleInfoRefs(array $headers): array
+    private function handleInfoRefs(string $repoName, array $headers): array
     {
+        // info/refs is a fetch-style GET; a POST here is a client bug or a
+        // probe, not a negotiation.
+        if ($this->method !== 'GET') {
+            return $this->errorResponse(405, 'Use GET for info/refs');
+        }
+
         $queryParams = $this->parseQuery($this->query);
         $service = $queryParams['service'] ?? '';
 
         if ($service !== 'git-upload-pack' && $service !== 'git-receive-pack') {
             return $this->errorResponse(400, 'Missing or invalid service parameter');
-        }
-
-        // Extract repo name from path
-        $repoName = $this->extractRepoName();
-        if ($repoName === null) {
-            return $this->errorResponse(404, 'Repository not found');
         }
 
         $repo = $this->findRepo($repoName);
@@ -279,11 +297,12 @@ final class Server
      *
      * The client sends wants and we respond with a packfile.
      */
-    private function handleUploadPack(array $headers, string $body): array
+    private function handleUploadPack(string $repoName, array $headers, string $body): array
     {
-        $repoName = $this->extractRepoName();
-        if ($repoName === null) {
-            return $this->errorResponse(404, 'Repository not found');
+        // The negotiation POST is the transfer; a GET here would spawn a
+        // child against an empty body.
+        if ($this->method !== 'POST') {
+            return $this->errorResponse(405, 'Use POST for git-upload-pack');
         }
 
         $repo = $this->findRepo($repoName);
@@ -325,49 +344,94 @@ final class Server
     }
 
     /**
-     * Handle POST /{repo}/git-receive-pack — an honest 501: only the
-     * smart-HTTP READ path ships today.
-     * Push needs receive-pack negotiation plus ref-update hardening that
-     * belong to their own lane; until then this answers 501 loudly instead
-     * of pretending to work. The receive-pack ADVERTISEMENT (info/refs
-     * ?service=git-receive-pack) is gated and served, so a future phase-2
-     * flips this one handler back on without touching the wire plumbing.
+     * Handle POST /{repo}/git-receive-pack — the push transfer.
+     *
+     * Relays the request body to a real `git receive-pack --stateless-rpc`
+     * child through the same bounded pump the read path uses
+     * (StatelessRpc::negotiate): object-then-ref ordering, refname
+     * validation and packfile indexing are git's own, so a push either
+     * lands with its objects or does not land. Hook declines ride
+     * IN-BAND (report-status ng packets inside a 200 body, exactly what
+     * git clients parse); only a child that dies without producing any
+     * answer is reported as 500. The receive-pack ADVERTISEMENT
+     * (info/refs?service=git-receive-pack) stays gated above.
      */
-    private function handleReceivePack(): array
+    private function handleReceivePack(string $repoName, array $headers, string $body): array
     {
-        return $this->errorResponse(501, 'receive-pack (push) is phase 2; this server speaks the read path only');
+        if ($this->method !== 'POST') {
+            return $this->errorResponse(405, 'Use POST for git-receive-pack');
+        }
+
+        $repo = $this->findRepo($repoName);
+        if ($repo === null) {
+            return $this->errorResponse(404, 'Repository not found');
+        }
+
+        $ac = AccessControl::getInstance();
+        $user = $this->getUserFromHeaders($headers);
+        if (!$ac->canWrite($user, $repo)) {
+            return $this->authDenied($user);
+        }
+
+        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+        $deadline = $this->config->gitMaxTimeout > 0 ? (float) $this->config->gitMaxTimeout : null;
+        $result = StatelessRpc::negotiate('git-receive-pack', $repo->path(), $body, $maxBytes, $deadline);
+
+        if ($result['reason'] === StatelessRpc::REASON_OVERFLOW) {
+            return $this->errorResponse(413, 'Packfile too large');
+        }
+        if ($result['reason'] === StatelessRpc::REASON_TIMEOUT) {
+            return $this->errorResponse(504, 'Negotiation timed out');
+        }
+        if ($result['bytes'] === '') {
+            // The pump already wrote the child's bounded stderr tail to
+            // the operator log; the client gets a bare failure status.
+            return $this->errorResponse(500, 'Receive-pack failed');
+        }
+
+        $this->stats()->recordPackUpload();
+        $this->responseHeaders['Content-Type'] = 'application/x-git-receive-pack-result';
+        $this->body = $result['bytes'];
+
+        return $this->finalizeResponse();
     }
 
     // -------------------------------------------------------------------------
-    // Git LFS routes (plan item 7.9)
+    // Git LFS routes
     // -------------------------------------------------------------------------
 
     /**
      * Dispatch /{repo}/info/lfs/objects/... requests.
      *
-     * @param list<string> $parts Path segments
+     * @param list<string> $parts Service-relative segments (starts at 'info')
      * @return array{status: int, headers: array<string, string>, body: string}
      */
-    private function handleLfs(array $parts, array $headers, string $body): array
+    private function handleLfs(array $parts, string $repoName, array $headers, string $body): array
     {
         if (!$this->config->lfsEnabled) {
             return $this->errorResponse(404, 'Git LFS is disabled');
         }
 
-        $repoName = $this->extractRepoName();
-        $repo = $repoName !== null ? $this->findRepo($repoName) : null;
+        $repo = $this->findRepo($repoName);
         if ($repo === null) {
             return $this->errorResponse(404, 'Repository not found');
         }
 
-        if (($parts[3] ?? '') !== 'objects') {
+        if (($parts[2] ?? '') !== 'objects') {
             return $this->errorResponse(404, 'Not found');
         }
 
         $user = $this->getUserFromHeaders($headers);
-        $handler = new LFSHandler($repo, $user, $this->config->lfsPath(), stats: $this->stats);
+        $handler = new LFSHandler(
+            $repo,
+            $user,
+            $this->config->lfsPath(),
+            stats: $this->stats,
+            maxObjectBytes: (int) ($this->config->maxPackBytes ?? LFSHandler::MAX_OBJECT_BYTES),
+            publicBaseUrl: $this->config->httpPublicUrl,
+        );
 
-        $target = $parts[4] ?? '';
+        $target = $parts[3] ?? '';
         if ($target === 'batch') {
             return $this->handleLfsBatch($repo, $handler, $user, $body);
         }
@@ -377,10 +441,10 @@ final class Server
             return $this->errorResponse(400, 'Invalid LFS object ID');
         }
 
-        if (($parts[5] ?? '') === 'verify') {
+        if (($parts[4] ?? '') === 'verify') {
             return $this->handleLfsVerify($repo, $handler, $user, $target, $body);
         }
-        if (isset($parts[5])) {
+        if (isset($parts[4])) {
             return $this->errorResponse(404, 'Not found');
         }
 
@@ -395,8 +459,10 @@ final class Server
      * POST /{repo}/info/lfs/objects/batch — the LFS batch API.
      *
      * Auth mirrors the object routes: reads for `download` operations,
-     * writes for `upload` operations (the handler itself only checks
-     * read access; the write gate lives here at the HTTP boundary).
+     * writes for `upload` operations. The boundary answers with real HTTP
+     * statuses (401 challenges so git-lfs prompts); the handler applies
+     * the SAME predicates again for direct callers, so no invocation path
+     * skips the gate.
      */
     private function handleLfsBatch(Repo $repo, LFSHandler $handler, ?User $user, string $body): array
     {
@@ -418,6 +484,13 @@ final class Server
             // Challenge (401) before the JSON body is examined any further:
             // git-lfs clients only prompt for credentials on 401.
             return $this->authDenied($user);
+        }
+
+        // Transfers the client insists on that we do not speak are refused
+        // at the boundary too (the handler mirrors this predicate).
+        $transfers = $request['transfers'] ?? null;
+        if (\is_array($transfers) && !\in_array('basic', $transfers, true)) {
+            return $this->errorResponse(400, 'Unsupported transfer type');
         }
 
         $result = $handler->handleBatch($request);
@@ -542,44 +615,39 @@ final class Server
     // -------------------------------------------------------------------------
 
     /**
-     * Extract repo name from the current path.
-     */
-    private function extractRepoName(): ?string
-    {
-        $cleanPath = \ltrim($this->path, '/');
-        $parts = $cleanPath === '' ? [] : \explode('/', $cleanPath);
-
-        if ($parts === []) {
-            return null;
-        }
-
-        // Handle /{name}.git/... format
-        $firstPart = $parts[0];
-        if (\str_ends_with($firstPart, '.git')) {
-            return $firstPart;
-        }
-
-        return $firstPart;
-    }
-
-    /**
      * Find a repo by name.
+     *
+     * Accepts the spellings real clients produce: the registered name,
+     * with or without the `.git` suffix, and — since owner-namespaced
+     * URLs — the deepest path segment of a longer name (the owner prefix
+     * is display, not identity: hosting registers repos by directory
+     * name). First hit wins.
      */
     private function findRepo(string $name): ?Repo
     {
-        $repo = $this->repos[$name] ?? null;
-        if ($repo !== null) {
-            return $repo;
+        $candidates = [$name];
+        if (\str_contains($name, '/')) {
+            $candidates[] = \basename($name);
         }
 
-        // Clients append '.git' to clone URLs (and tolerate it omitted);
-        // hosts register under whichever name they scanned. Resolve the
-        // other spelling before declaring 404.
-        if (\str_ends_with($name, '.git')) {
-            return $this->repos[\substr($name, 0, -4)] ?? null;
+        foreach ($candidates as $candidate) {
+            $repo = $this->repos[$candidate] ?? null;
+            if ($repo !== null) {
+                return $repo;
+            }
+
+            if (\str_ends_with($candidate, '.git')) {
+                $repo = $this->repos[\substr($candidate, 0, -4)] ?? null;
+            } else {
+                $repo = $this->repos[$candidate . '.git'] ?? null;
+            }
+
+            if ($repo !== null) {
+                return $repo;
+            }
         }
 
-        return $this->repos[$name . '.git'] ?? null;
+        return null;
     }
 
     /**
@@ -826,9 +894,29 @@ final class Server
     }
 
     /**
-     * Verify the `X-CandyGitServer-User-Sig` header is a valid hex HMAC-SHA256
-     * of the username keyed by the configured shared secret. Constant-time
-     * comparison via hash_equals(); missing secret or signature fails closed.
+     * Mint the wire value for `X-CandyGitServer-User-Sig`: an unix expiry
+     * and an HMAC-SHA256 over `username NL expiry`, joined by a dot.
+     * Shared by the CLI (`user token`) and the verifier so minted and
+     * checked shapes cannot drift apart.
+     */
+    public static function mintUserToken(string $username, int $expiry, string $secret): string
+    {
+        return $expiry . '.' . \hash_hmac('sha256', $username . "\n" . $expiry, $secret);
+    }
+
+    /**
+     * Verify the `X-CandyGitServer-User-Sig` header against the shared
+     * secret. The signature must carry an unexpired expiry and a matching
+     * HMAC; comparison is constant-time via hash_equals(). Missing secret
+     * or signature fails closed.
+     *
+     * The OLD shape signed the username ALONE: once leaked it was an
+     * immortal bearer credential — a deactivated or deleted user stayed
+     * readable forever through the trusted-proxy token mode. Expired
+     * grants are refused, so leaks have a bounded life, and the old
+     * username-only hex cannot validate under the new grammar (the
+     * expiry field must be digits, and the HMAC covers a different
+     * message), which structurally revokes every pre-hardening token.
      *
      * @param array<string, string> $headers
      */
@@ -841,8 +929,17 @@ final class Server
             return false;
         }
 
-        $expected = \hash_hmac('sha256', $username, $secret);
-        return \hash_equals($expected, $sig);
+        $bits = \explode('.', $sig, 2);
+        if (\count($bits) !== 2 || !\ctype_digit($bits[0])) {
+            return false;
+        }
+
+        $expiry = (int) $bits[0];
+        if ($expiry < \time()) {
+            return false;
+        }
+
+        return \hash_equals(self::mintUserToken($username, $expiry, $secret), $sig);
     }
 
     /**

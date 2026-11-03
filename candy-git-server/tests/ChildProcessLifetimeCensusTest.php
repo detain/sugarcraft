@@ -417,20 +417,24 @@ final class ChildProcessLifetimeCensusTest extends TestCase
 
         $server = new Server($this->config);
         $server->registerRepo(Repo::new('http-recv.git', $repo->path())->withPublic(true));
-        $server->registerUser(User::new('pusher')->withAdmin(true)->withPassword('pushpass'));
+        $server->registerUser(User::new('pusher')->withAdmin(true)->withPasswordHash(\password_hash('pushpass', \PASSWORD_DEFAULT)));
 
         $response = $server->handleRequest(
             'POST',
             '/http-recv.git/git-receive-pack',
             '',
-            ['Authorization' => 'Basic ' . \base64_encode('pusher:pushpass')],
+            [],
             "junk-not-a-negotiation\n"
         );
 
-        self::assertSame(501, $response['status']);
-        self::assertStringContainsString('phase 2', $response['body']);
-        self::assertFileDoesNotExist($marker, 'the phase-2 refusal must not spawn a receive-pack child');
-        $this->assertNoLiveChildren('after the 501 refusal');
+        // Push is wired now: the authorization gate answers an anonymous
+        // POST with a 401 challenge BEFORE the body is examined, so no
+        // receive-pack child is ever spawned for a client that has not
+        // proven write access.
+        self::assertSame(401, $response['status']);
+        self::assertSame('Basic realm="candy-git-server"', $response['headers']['WWW-Authenticate'] ?? null);
+        self::assertFileDoesNotExist($marker, 'the pre-auth challenge must not spawn a receive-pack child');
+        $this->assertNoLiveChildren('after the 401 challenge');
     }
 
     public function testStatelessRpcNegotiateReapsReceivePackChildren(): void

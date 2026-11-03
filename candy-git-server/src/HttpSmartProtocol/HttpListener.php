@@ -293,7 +293,19 @@ final class HttpListener
 
         $peer = self::peerAddress($client);
 
+        // One line per request on the operator log (STDERR, next to
+        // the pump's child-failure lines). Before git 2.51 retired the
+        // daemon, operators could watch `git daemon` connections arrive;
+        // the HTTP listener is the replacement front door, so it carries
+        // the same minimum visibility: who asked, what for, what answer,
+        // how much wire, how long it took.
+        $startedNs = \hrtime(true);
         $result = $this->router->handleRequest($method, $path, $query, $headers, $body, $peer);
+        $elapsedMs = (\hrtime(true) - $startedNs) / 1_000_000;
+        \fwrite(
+            \STDERR,
+            self::accessLogLine($peer, $method, $path, (int) $result['status'], \strlen((string) $result['body']), $elapsedMs) . "\n"
+        );
 
         $reason = self::REASON_PHRASES[$result['status']] ?? 'Unknown';
         $wire = "HTTP/1.1 {$result['status']} {$reason}\r\n";
@@ -361,6 +373,23 @@ final class HttpListener
         $colon = \strrpos($name, ':');
 
         return $colon === false ? $name : \substr($name, 0, $colon);
+    }
+
+    /**
+     * One line per served request, shaped after git daemon's log style:
+     * `access <peer> <METHOD> <path> <status> <bytes> <elapsed>`.
+     */
+    private static function accessLogLine(?string $peer, string $method, string $path, int $status, int $bytes, float $elapsedMs): string
+    {
+        return \sprintf(
+            'access %s %s %s %d %d %.1fms',
+            $peer ?? '-',
+            $method,
+            $path,
+            $status,
+            $bytes,
+            $elapsedMs
+        );
     }
 
     /** @param resource $client */

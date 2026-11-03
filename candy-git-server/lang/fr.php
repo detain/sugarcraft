@@ -42,8 +42,9 @@ return [
     'cli.next_step_4'          => '  4. Exécutez : candy-git-server serve --config {path}/config.yaml',
 
     // bin/candy-git-server — user
-    'cli.usage_user_root'      => 'Usage : candy-git-server user add|key|list',
+    'cli.usage_user_root'      => 'Usage : candy-git-server user add|key|list|token',
     'cli.usage_user_add'       => 'Usage : candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] générer une signature de jeton de proxy HTTP',
     'cli.usage_user_key'       => 'Usage : candy-git-server user key <username> [key-file]',
     'cli.user_created'         => "Utilisateur '{username}' créé (admin : true)",
     'cli.user_password_stored' => 'Mot de passe stocké sous forme de hachage.',

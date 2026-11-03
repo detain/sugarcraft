@@ -74,11 +74,11 @@ final class LFSHandlerTest extends TestCase
         $repo = $this->createRepo();
         $repo = $repo->withPublic(false)->withPrivate(true);
         $user = $this->createUser();
-        $handler = new LFSHandler($repo, $user, $this->tmpDir);
+        $handler = new LFSHandler($repo, $user, $this->tmpDir, publicBaseUrl: '');
 
         $request = [
             'operation' => 'download',
-            'objects' => [['oid' => 'abc123', 'size' => 100]],
+            'objects' => [['oid' => \str_repeat('a', 64), 'size' => 100]],
         ];
 
         $result = $handler->handleBatch($request);
@@ -92,18 +92,18 @@ final class LFSHandlerTest extends TestCase
         $repo = $this->createRepo();
         $user = $this->createUser();
         $backend = new LocalStorageBackend($this->tmpDir . '/lfs');
-        $handler = new LFSHandler($repo, $user, $this->tmpDir . '/lfs', $backend);
+        $handler = new LFSHandler($repo, $user, $this->tmpDir . '/lfs', $backend, publicBaseUrl: '');
 
         // No operation specified - defaults to download
         $request = [
-            'objects' => [['oid' => 'missing-oid', 'size' => 100]],
+            'objects' => [['oid' => \str_repeat('b', 64), 'size' => 100]],
         ];
 
         $result = $handler->handleBatch($request);
 
         $this->assertSame('basic', $result['transfer']);
         $this->assertCount(1, $result['objects']);
-        $this->assertSame('missing-oid', $result['objects'][0]['oid']);
+        $this->assertSame(\str_repeat('b', 64), $result['objects'][0]['oid']);
         $this->assertSame(404, $result['objects'][0]['error']['code']);
     }
 
@@ -112,18 +112,18 @@ final class LFSHandlerTest extends TestCase
         $repo = $this->createRepo();
         $user = $this->createUser();
         $backend = new LocalStorageBackend($this->tmpDir . '/lfs');
-        $handler = new LFSHandler($repo, $user, $this->tmpDir . '/lfs', $backend);
+        $handler = new LFSHandler($repo, $user, $this->tmpDir . '/lfs', $backend, publicBaseUrl: '');
 
         $request = [
             'operation' => 'download',
-            'objects' => [['oid' => 'nonexistent-oid-12345', 'size' => 100]],
+            'objects' => [['oid' => \str_repeat('c', 64), 'size' => 100]],
         ];
 
         $result = $handler->handleBatch($request);
 
         $this->assertSame('basic', $result['transfer']);
         $this->assertCount(1, $result['objects']);
-        $this->assertSame('nonexistent-oid-12345', $result['objects'][0]['oid']);
+        $this->assertSame(\str_repeat('c', 64), $result['objects'][0]['oid']);
         $this->assertSame(404, $result['objects'][0]['error']['code']);
         $this->assertSame('Object not found', $result['objects'][0]['error']['message']);
     }
@@ -136,12 +136,12 @@ final class LFSHandlerTest extends TestCase
         $backend = new LocalStorageBackend($lfsDir);
 
         // Write an LFS object first
-        $oid = 'abcd1234efgh5678';
+        $oid = \hash('sha256', 'served-content');
         $stream = fopen('data://text/plain;base64,' . base64_encode('Hello LFS'), 'r');
         $backend->write($oid, $stream);
         fclose($stream);
 
-        $handler = new LFSHandler($repo, $user, $lfsDir, $backend);
+        $handler = new LFSHandler($repo, $user, $lfsDir, $backend, publicBaseUrl: '');
 
         $request = [
             'operation' => 'download',
@@ -163,27 +163,29 @@ final class LFSHandlerTest extends TestCase
     public function testHandleBatchUploadPreparesUploadEndpoint(): void
     {
         $repo = $this->createRepo();
-        $user = $this->createUser();
+        // Upload is a write operation: the batch gate demands canWrite, so
+        // this fixture user must actually hold write rights (admin).
+        $user = $this->createUser()->withAdmin(true);
         $backend = new LocalStorageBackend($this->tmpDir . '/lfs');
-        $handler = new LFSHandler($repo, $user, $this->tmpDir . '/lfs', $backend);
+        $handler = new LFSHandler($repo, $user, $this->tmpDir . '/lfs', $backend, publicBaseUrl: '');
 
         $request = [
             'operation' => 'upload',
-            'objects' => [['oid' => 'upload-oid-12345', 'size' => 256]],
+            'objects' => [['oid' => \str_repeat('d', 64), 'size' => 256]],
         ];
 
         $result = $handler->handleBatch($request);
 
         $this->assertSame('basic', $result['transfer']);
         $this->assertCount(1, $result['objects']);
-        $this->assertSame('upload-oid-12345', $result['objects'][0]['oid']);
+        $this->assertSame(\str_repeat('d', 64), $result['objects'][0]['oid']);
         $this->assertArrayHasKey('actions', $result['objects'][0]);
         $this->assertArrayHasKey('upload', $result['objects'][0]['actions']);
-        // Plan 7.9: hrefs now point at the routes the smart-HTTP server
-        // actually serves (/{repo}/info/lfs/objects/{oid}), not the old
-        // /repos/… prefix nothing dispatched.
-        $this->assertStringContainsString('/test-repo/info/lfs/objects/upload-oid-12345', $result['objects'][0]['actions']['upload']['href']);
-        $this->assertStringContainsString('/test-repo/info/lfs/objects/upload-oid-12345/verify', $result['objects'][0]['actions']['verify']['href']);
+        // hrefs point at the routes the smart-HTTP server actually serves
+        // (/{repo}/info/lfs/objects/{oid}), not the old /repos/… prefix
+        // nothing dispatched.
+        $this->assertStringContainsString('/test-repo/info/lfs/objects/' . \str_repeat('d', 64), $result['objects'][0]['actions']['upload']['href']);
+        $this->assertStringContainsString('/test-repo/info/lfs/objects/' . \str_repeat('d', 64) . '/verify', $result['objects'][0]['actions']['verify']['href']);
     }
 
     public function testHandleBatchWithMultipleObjects(): void
@@ -194,18 +196,18 @@ final class LFSHandlerTest extends TestCase
         $backend = new LocalStorageBackend($lfsDir);
 
         // Write one object
-        $oid1 = 'first-object-oid12';
+        $oid1 = \str_repeat('1', 64);
         $stream = fopen('data://text/plain;base64,' . base64_encode('Content 1'), 'r');
         $backend->write($oid1, $stream);
         fclose($stream);
 
-        $handler = new LFSHandler($repo, $user, $lfsDir, $backend);
+        $handler = new LFSHandler($repo, $user, $lfsDir, $backend, publicBaseUrl: '');
 
         $request = [
             'operation' => 'download',
             'objects' => [
                 ['oid' => $oid1, 'size' => 9],
-                ['oid' => 'missing-oid-second', 'size' => 100],
+                ['oid' => \str_repeat('e', 64), 'size' => 100],
             ],
         ];
 
@@ -217,7 +219,7 @@ final class LFSHandlerTest extends TestCase
         $this->assertSame($oid1, $result['objects'][0]['oid']);
         $this->assertArrayHasKey('actions', $result['objects'][0]);
         // Second object not found
-        $this->assertSame('missing-oid-second', $result['objects'][1]['oid']);
+        $this->assertSame(\str_repeat('e', 64), $result['objects'][1]['oid']);
         $this->assertSame(404, $result['objects'][1]['error']['code']);
     }
 
@@ -226,7 +228,7 @@ final class LFSHandlerTest extends TestCase
         $repo = $this->createRepo();
         $user = $this->createUser();
         $backend = new LocalStorageBackend($this->tmpDir . '/lfs');
-        $handler = new LFSHandler($repo, $user, $this->tmpDir . '/lfs', $backend);
+        $handler = new LFSHandler($repo, $user, $this->tmpDir . '/lfs', $backend, publicBaseUrl: '');
 
         $request = [
             'operation' => 'download',
@@ -247,7 +249,7 @@ final class LFSHandlerTest extends TestCase
 
         $request = [
             'operation' => 'download',
-            'objects' => [['oid' => 'any-oid', 'size' => 100]],
+            'objects' => [['oid' => \str_repeat('f', 64), 'size' => 100]],
         ];
 
         $result = $handler->handleBatch($request);
@@ -268,7 +270,7 @@ final class LFSHandlerTest extends TestCase
         $originalBackend = new LocalStorageBackend($this->tmpDir . '/original');
         $newBackend = new LocalStorageBackend($this->tmpDir . '/new');
 
-        $handler = new LFSHandler($repo, $user, $this->tmpDir, $originalBackend);
+        $handler = new LFSHandler($repo, $user, $this->tmpDir, $originalBackend, publicBaseUrl: '');
         $newHandler = $handler->withStorageBackend($newBackend);
 
         $this->assertNotSame($handler, $newHandler);
@@ -287,7 +289,7 @@ final class LFSHandlerTest extends TestCase
         $user = $this->createUser();
         $backend = new LocalStorageBackend($this->tmpDir);
 
-        $handler = new LFSHandler($repo, $user, $this->tmpDir, $backend, 4);
+        $handler = new LFSHandler($repo, $user, $this->tmpDir, $backend, 4, publicBaseUrl: '');
         $newHandler = $handler->withConcurrentTransfers(16);
 
         $this->assertNotSame($handler, $newHandler);
@@ -301,7 +303,7 @@ final class LFSHandlerTest extends TestCase
         $user = $this->createUser();
         $backend = new LocalStorageBackend($this->tmpDir);
 
-        $handler = new LFSHandler($repo, $user, $this->tmpDir, $backend, 1);
+        $handler = new LFSHandler($repo, $user, $this->tmpDir, $backend, 1, publicBaseUrl: '');
         $newHandler = $handler->withConcurrentTransfers(0);
 
         $this->assertSame(0, $newHandler->concurrentTransfers());

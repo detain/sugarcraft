@@ -286,8 +286,11 @@ final class ServerTest extends TestCase
             ''
         );
 
-        $this->assertSame(501, $result['status']);
-        $this->assertStringContainsString('phase 2', $result['body']);
+        // Push is wired: an anonymous POST meets the auth challenge before
+        // anything else happens (the old honest 501 stub retired).
+        $this->assertSame(401, $result['status']);
+        $this->assertSame('Basic realm="candy-git-server"', $result['headers']['WWW-Authenticate'] ?? null);
+        $this->assertStringContainsString('Authentication required', $result['body']);
     }
 
     public function testHandleRequestReturns404ForUnknownAction(): void
