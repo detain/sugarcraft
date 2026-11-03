@@ -167,10 +167,17 @@ final class TmuxPassthroughDecorator implements Renderer, PassthroughDecorator
                 continue;
             }
 
-            // Drain any plain bytes before this escape.
+            // Drain any plain bytes before this escape, then park the flush
+            // mark AT the escape byte. Every span is therefore copied exactly
+            // once: a matched arm below overwrites $flush with the end of the
+            // sequence it just emitted, and an unmatched one leaves the flush
+            // here so the next drain (or the final drain) carries the ESC and
+            // its parameters unchanged. Leaving $flush behind re-appended the
+            // stale prefix at every later escape — quadratic blow-up.
             if ($i > $flush) {
                 $out .= substr($ansi, $flush, $i - $flush);
             }
+            $flush = $i;
 
             $remaining = substr($ansi, $i);
 

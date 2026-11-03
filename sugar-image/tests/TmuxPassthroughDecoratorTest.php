@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
 use SugarCraft\Image\Renderer\KittyRenderer;
 use SugarCraft\Image\Renderer\Renderer;
@@ -140,5 +141,89 @@ final class TmuxPassthroughDecoratorTest extends TestCase
         $decorator = new TmuxPassthroughDecorator($inner);
 
         $this->assertSame('tmux(halfblock)', $decorator->name());
+    }
+
+    /**
+     * A single unmatched escape (every SGR/CSI the text tiers emit) must pass
+     * through exactly once. Before the flush-advance fix the bytes preceding
+     * the escape were drained, re-drained at the final drain, and the output
+     * came back as "abc" . "abc\x1b[0m".
+     */
+    public function testWrapCarriesASingleUnmatchedEscapeOnce(): void
+    {
+        $decorator = new TmuxPassthroughDecorator(new HalfBlockRenderer());
+
+        $this->assertSame("abc\x1b[0m", $decorator->wrap("abc\x1b[0m"));
+    }
+
+    /**
+     * The text-tier frame shape: many SGR sequences and no DCS/APC/OSC at all.
+     * Every one of them is unmatched by the envelope arms, so the wrapped bytes
+     * must be byte-for-byte the inner frame — same length, same content.
+     */
+    public function testWrapCarriesAnSgrRunByteForByte(): void
+    {
+        $decorator = new TmuxPassthroughDecorator(new HalfBlockRenderer());
+
+        $frame = "\x1b[31m\x1b[40m#\x1b[0m\x1b[32m\x1b[40m/\x1b[0m\r\n"
+            . "\x1b[1;34mnext\x1b[0m\r\n";
+
+        $wrapped = $decorator->wrap($frame);
+
+        $this->assertSame($frame, $wrapped);
+        $this->assertSame(strlen($frame), strlen($wrapped));
+    }
+
+    /**
+     * A matched sequence between two unmatched runs: the envelope covers only
+     * the OSC, and each plain span is emitted once. This is the shape a real
+     * frame takes when a hyperlink (OSC 8) rides alongside SGR cells.
+     */
+    public function testWrapEmitsEachSpanOnceAroundAMatchedSequence(): void
+    {
+        $decorator = new TmuxPassthroughDecorator(new HalfBlockRenderer());
+
+        $osc = "\x1b]8;;https://example.test\x07";
+        $in  = "before\x1b[1m" . $osc . "after\x1b[0m";
+
+        $expected = "before\x1b[1m"
+            . "\x1bPtmux;" . str_replace("\x1b", "\x1b\x1b", $osc) . "\x1b\\"
+            . "after\x1b[0m";
+
+        $this->assertSame($expected, $decorator->wrap($in));
+    }
+
+    /**
+     * Growth guard: duplication is quadratic in the escape count, so an exact
+     * byte pin on a small fixture could still be satisfied by a partial fix.
+     * A hundred SGR runs must cost exactly what they cost unwrapped.
+     */
+    public function testWrapCostDoesNotGrowWithEscapeCount(): void
+    {
+        $decorator = new TmuxPassthroughDecorator(new HalfBlockRenderer());
+
+        $run   = "\x1b[38;2;10;20;30m\x1b[48;2;40;50;60mX\x1b[0m";
+        $frame = str_repeat($run, 100);
+
+        $this->assertSame(strlen($frame), strlen($decorator->wrap($frame)));
+        $this->assertSame($frame, $decorator->wrap($frame));
+    }
+
+    /**
+     * The defect as the user met it: a whole rendered half-block frame, put
+     * through the passthrough decorator the way {@see \SugarCraft\Image\Mosaic}
+     * wires it inside
+     * tmux, must not inflate. Measured pre-fix: 3,667 bytes became 351,372.
+     */
+    public function testWrapPassesARealTextTierFrameThroughUnchanged(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $frame = (new HalfBlockRenderer())->render($image, 4, 2);
+
+        $decorator = new TmuxPassthroughDecorator(new HalfBlockRenderer());
+        $wrapped   = $decorator->render($image, 4, 2);
+
+        $this->assertStringNotContainsString("\x1bPtmux;", $frame);
+        $this->assertSame($frame, $wrapped);
     }
 }
