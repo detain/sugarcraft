@@ -717,13 +717,13 @@ final class Buffer implements \JsonSerializable
     }
 
     /**
-     * Apply a list of DiffOps to $source buffer and return the resulting
-     * buffer (round-trip inverse of diff).
-     *
-     * This is useful for testing:  current.diff(prev).apply(prev) === current.
+     * Apply a list of DiffOps to this buffer and return the resulting
+     * buffer (round-trip inverse of diff):
+     * $previous->applyDiff($current->diff($previous)) renders as $current.
      *
      * @param list<\SugarCraft\CellBuffer\Diff\DiffOp> $ops
      * @return self
+     * @throws \InvalidArgumentException on a MoveCursorOp with negative coords
      */
     public function applyDiff(array $ops): self
     {
@@ -732,31 +732,33 @@ final class Buffer implements \JsonSerializable
         $cursorCol = 0;
         $cursorRow = 0;
         $pendingStyle = null;
-        $pendingLinkUrl = null;
 
         foreach ($ops as $op) {
             if ($op instanceof Diff\MoveCursorOp) {
+                if ($op->col < 0 || $op->row < 0) {
+                    throw new \InvalidArgumentException(
+                        "MoveCursorOp coordinates must not be negative: ({$op->col}, {$op->row})"
+                    );
+                }
                 $cursorCol = $op->col;
                 $cursorRow = $op->row;
             } elseif ($op instanceof Diff\SetStyleOp) {
                 $pendingStyle = $op->style;
             } elseif ($op instanceof Diff\SetHyperlinkOp) {
-                $pendingLinkUrl = $op->hyperlink?->url();
+                // Terminal-state framing: cells carry their own links, so the
+                // open/close ops need no separate accumulation here.
             } elseif ($op instanceof Diff\SetCellOp) {
                 foreach ($op->cells as $cell) {
                     if ($cursorCol >= $this->width || $cursorRow >= $this->height) {
                         continue;
                     }
                     $width = $cell->width() > 0 ? $cell->width() : 1;
-                    // Build cell with pending style/link merged.
+                    // Build cell with pending style merged. The cell's own
+                    // hyperlink is carried through intact (url AND id) — the
+                    // old reconstruction dropped the id and the comment
+                    // blamed SetHyperlinkOp, which carries the full link.
                     $style = $cell->style() ?? $pendingStyle;
-                    // Note: applyDiff is for round-trip testing only.
-                    // Hyperlinks can't be perfectly reconstructed from ops
-                    // since we only store the url string in SetHyperlinkOp.
-                    // Reconstruct with only the URL to document this lossy behaviour.
-                    $link = $cell->link() !== null
-                        ? new Hyperlink($cell->link()->url())
-                        : null;
+                    $link = $cell->link();
                     $grid[$cursorRow * $this->width + $cursorCol] = new Cell(
                         $cell->rune(),
                         $style,
@@ -854,10 +856,14 @@ final class Buffer implements \JsonSerializable
                 }
 
                 // Open hyperlink when a link appears that is not already open.
+                // The id rides the spec-conformant 'id=<value>' parameter form
+                // (shared spelling with sugar-core's Ansi::hyperlinkOpen); a
+                // bare ';<id>;' token is ignored by conforming terminals and
+                // dropped by the fleet's own sugar-ansi-parser decoder.
                 if ($cell->link() !== null && !Hyperlink::valuesEqual($cell->link(), $prevLink)) {
                     $url = $cell->link()->url();
                     $id = $cell->link()->id();
-                    $idPart = $id !== '' ? (";" . $id) : "";
+                    $idPart = $id !== '' ? (";id=" . $id) : "";
                     $out .= "\x1b]8" . $idPart . ";" . $url . "\x1b\\";
                     $prevLink = $cell->link();
                 }

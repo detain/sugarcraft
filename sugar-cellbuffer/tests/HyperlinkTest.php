@@ -166,4 +166,50 @@ final class HyperlinkTest extends TestCase
         $link = new Hyperlink('https://example.com/a b/c');
         $this->assertSame('https://example.com/a b/c', $link->url());
     }
+
+    public function testTheIdentifierRejectsSemicolons(): void
+    {
+        // The id rides the OSC 8 parameter list as `id=<value>`; a bare ';'
+        // would still split the parameter and shift the URL field.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Hyperlink ID must not contain semicolons');
+
+        Hyperlink::new('https://example.com', 'a;b');
+    }
+
+    public function testUnserializationReforgesTheControlByteGuards(): void
+    {
+        $forged = "a\x1b[31m";
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Hyperlink URL must not contain control characters');
+
+        $this->blankHyperlink()->__unserialize(['url' => $forged, 'id' => '']);
+    }
+
+    public function testUnserializationReforgesTheSemicolonGuard(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Hyperlink ID must not contain semicolons');
+
+        $this->blankHyperlink()->__unserialize(['url' => 'https://ok.dev', 'id' => 'a;b']);
+    }
+
+    public function testUnserializationOfAForgedMissingFieldFailsClosed(): void
+    {
+        // A payload that never carried an id restores it as '' (back-compat
+        // shape), but never as attacker-controlled bytes.
+        $link = $this->blankHyperlink();
+        $link->__unserialize(['url' => 'https://ok.dev']);
+
+        $this->assertSame('https://ok.dev', $link->url());
+        $this->assertSame('', $link->id());
+    }
+
+    private function blankHyperlink(): Hyperlink
+    {
+        // The hook runs on a freshly allocated instance (as unserialize()
+        // does); readonly promoted properties may only be written once.
+        return (new \ReflectionClass(Hyperlink::class))->newInstanceWithoutConstructor();
+    }
 }

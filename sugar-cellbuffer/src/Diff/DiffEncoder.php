@@ -21,9 +21,11 @@ use SugarCraft\CellBuffer\Style;
  *   - ECH  \x1b[N X        (erase N chars)
  *   - REP  \x1b[N b        (repeat preceding char N times — emitted only
  *                          when RepeatGate::worth() says it beats the
- *                          literal bytes; A-02, chafa printer.c:56-92)
+ *                          literal bytes, a byte-arithmetic rule chafa's
+ *                          canvas printer follows too)
  *   - SGR  \x1b[...m      (style transitions)
- *   - OSC 8;id;url\x1b\\  (hyperlink open)
+ *   - OSC 8;id=<id>;url\x1b\\  (hyperlink open, when an id is set)
+ *   - OSC 8;url\x1b\\          (hyperlink open, id-less short form)
  *   - OSC 8;;\x1b\\        (hyperlink close)
  *   - trailing \x1b[0m    (conditional SGR reset closing the stream when the
  *                          frame ended styled — same contract as toAnsi())
@@ -114,9 +116,10 @@ final class DiffEncoder
 
     private function encodeMoveCursor(MoveCursorOp $op): string
     {
-        // 1-based for CUP.
-        $row = $op->row + 1;
-        $col = $op->col + 1;
+        // 1-based for CUP; negatives clamp to the grid edge (fail-soft render
+        // path — applyDiff refuses negative coords fail-loud).
+        $row = max(0, $op->row) + 1;
+        $col = max(0, $op->col) + 1;
 
         if ($col === $this->cursorCol && $row === $this->cursorRow) {
             return ''; // Already there.
@@ -238,7 +241,10 @@ final class DiffEncoder
     private function openHyperlink(Hyperlink $link): string
     {
         $id = $link->id();
-        $idPart = $id !== '' ? (';' . $id) : '';
+        // Spec-conformant 'id=<value>' parameter (sugar-core Ansi::hyperlinkOpen
+        // spelling); the old bare ';<id>;' token was silently ignored by
+        // conforming terminals and dropped by sugar-ansi-parser's decoder.
+        $idPart = $id !== '' ? (';id=' . $id) : '';
 
         return "\x1b]8{$idPart};{$link->url()}\x1b\\";
     }

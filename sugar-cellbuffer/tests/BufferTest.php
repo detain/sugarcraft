@@ -915,10 +915,11 @@ final class BufferTest extends TestCase
         $this->assertSame('X', $buf->cellAt(2, 0)->rune());
     }
 
-    public function testApplyDiffHyperlinkReconstructionIsLossy(): void
+    public function testApplyDiffPreservesTheHyperlinkIdentifierEndToEnd(): void
     {
-        // applyDiff() reconstructs hyperlinks from the url string stored in
-        // SetHyperlinkOp, losing the id field.  Pin the actual (lossy) behaviour.
+        // Round 1103 fix (review M3): cells carry their own Hyperlink, so
+        // applyDiff no longer reconstructs one from the url alone — the id
+        // survives the diff→apply round-trip.
         $link = Hyperlink::new('https://example.com', 'myid');
         $prev = Buffer::new(1, 1);
         $curr = $prev->withCellAt(0, 0, Cell::new('L', null, $link));
@@ -928,10 +929,9 @@ final class BufferTest extends TestCase
 
         $cell = $reconstructed->cellAt(0, 0);
         $this->assertNotNull($cell->link());
-        // URL is preserved
         $this->assertSame('https://example.com', $cell->link()->url());
-        // ID is lost (reconstruction omits it)
-        $this->assertSame('', $cell->link()->id());
+        $this->assertSame('myid', $cell->link()->id());
+        $this->assertTrue($link->equals($cell->link()));
     }
 
     public function testFillWithZeroAreaRegionIsNoOp(): void
@@ -1565,7 +1565,7 @@ final class BufferTest extends TestCase
 
         // Close + re-open carrying the new id: url-only tracking dropped this.
         $this->assertStringContainsString("\x1b]8;;\x1b\\", $bytes);
-        $this->assertStringContainsString("\x1b]8;v2;https://i.dev\x1b\\", $bytes);
+        $this->assertStringContainsString("\x1b]8;id=v2;https://i.dev\x1b\\", $bytes);
         $this->assertStringNotContainsString("v1", $bytes);
     }
 
@@ -1770,6 +1770,16 @@ final class BufferTest extends TestCase
         $this->assertSame('A', $result->cellAt(0, 0)->rune());
         $this->assertSame('B', $result->cellAt(1, 0)->rune());
         $this->assertSame('C', $result->cellAt(2, 0)->rune());
+    }
+
+    public function testApplyDiffRefusesANegativeCursor(): void
+    {
+        // Round 1103 fix (review sec-m3): a negative MoveCursorOp would index
+        // the flat grid below zero — applyDiff refuses it fail-loud.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('MoveCursorOp coordinates must not be negative');
+
+        Buffer::new(3, 2)->applyDiff([new MoveCursorOp(-1, 0)]);
     }
 
     public function testApplyDiffSetCellOpClipsCursorAtRightEdge(): void

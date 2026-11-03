@@ -145,7 +145,7 @@ final class DiffEncoderTest extends TestCase
         $ops = [new SetHyperlinkOp($link)];
         $bytes = $this->encoder->encode($ops);
 
-        $this->assertSame("\x1b]8;myid;https://example.com\x1b\\\x1b]8;;\x1b\\", $bytes);
+        $this->assertSame("\x1b]8;id=myid;https://example.com\x1b\\\x1b]8;;\x1b\\", $bytes);
     }
 
     public function testEncodeSetHyperlinkOpCloseWithNoOpenLinkIsNoOp(): void
@@ -372,5 +372,41 @@ final class DiffEncoderTest extends TestCase
             $frame . $clear,
             'the erase frame must start at default rendition',
         );
+    }
+
+    public function testANegativeCursorClampsToTheGridEdgeOnTheWire(): void
+    {
+        // Render path is fail-soft (state mutation refuses negatives in
+        // Buffer::applyDiff); the encoder clamps instead of emitting
+        // ESC[-1;..H, which no terminal can parse. The clamp lands on the
+        // home position, so step away first to observe the emitted CUP.
+        $bytes = $this->encoder->encode([new MoveCursorOp(4, 2), new MoveCursorOp(-3, -2)]);
+
+        $this->assertSame("\x1b[3;5H\x1b[1;1H", $bytes);
+    }
+
+    public function testTheEmittersSpellTheHyperlinkIdentifierAsASpecParameter(): void
+    {
+        // Reverse-parity: both OSC 8 open emitters must fold the id into the
+        // spec's `id=` attribute parameter (sugar-core's Ansi::hyperlinkOpen
+        // spelling, sugar-ansi-parser's only readable form). A reverted
+        // emitter re-spells $idPart bare (';' . $id) and reddens this pin.
+        foreach (
+            [
+                __DIR__ . '/../src/Buffer.php',
+                __DIR__ . '/../src/Diff/DiffEncoder.php',
+            ] as $file
+        ) {
+            $source = (string) file_get_contents($file);
+            preg_match_all('/\$idPart\s*=.*/', $source, $matches);
+            $this->assertNotEmpty($matches[0], "no \$idPart assignment found in {$file}");
+            foreach ($matches[0] as $assignment) {
+                $this->assertStringContainsString(
+                    'id=',
+                    $assignment,
+                    "an emitter spells the OSC 8 id bare in {$file}: {$assignment}",
+                );
+            }
+        }
     }
 }

@@ -9,7 +9,10 @@ namespace SugarCraft\CellBuffer;
  *
  * Mirrors charmbracelet/lipgloss's Hyperlink field and the OSC 8 spec.
  * URL and ID are validated at construction to prevent ANSI escape
- * injection into the OSC 8 wire format (C0 controls rejected).
+ * injection into the OSC 8 wire format (C0/DEL controls rejected; a
+ * semicolon is rejected in the ID, which would shift the URL field).
+ *
+ * @throws \InvalidArgumentException on any rejected value.
  *
  * @readonly
  */
@@ -24,6 +27,11 @@ final class Hyperlink implements \JsonSerializable
         }
         if (preg_match('/[\x00-\x1f\x7f]/', $id) === 1) {
             throw new \InvalidArgumentException('Hyperlink ID must not contain control characters');
+        }
+        if (str_contains($id, ';')) {
+            // Spelled as the spec's `id=` attribute (M4), a bare ';' in the
+            // id would still split the parameter and shift the URL field.
+            throw new \InvalidArgumentException('Hyperlink ID must not contain semicolons');
         }
     }
 
@@ -72,12 +80,28 @@ final class Hyperlink implements \JsonSerializable
     /**
      * Unserialization hook for caching/IPC use cases.
      *
-     * @param array{url: string, id: string} $data
+     * Fail-closed: the constructor's control-byte and semicolon checks are
+     * a security control on the OSC 8 wire, so they are re-applied here —
+     * a forged payload cannot smuggle escape bytes or a field-shifting
+     * semicolon past them.
+     *
+     * @param array{url?: string, id?: string} $data
      */
     public function __unserialize(array $data): void
     {
-        $this->url = $data['url'];
-        $this->id = $data['id'];
+        $url = (string) ($data['url'] ?? '');
+        $id = (string) ($data['id'] ?? '');
+        if (preg_match('/[\x00-\x1f\x7f]/', $url) === 1) {
+            throw new \InvalidArgumentException('Hyperlink URL must not contain control characters');
+        }
+        if (preg_match('/[\x00-\x1f\x7f]/', $id) === 1) {
+            throw new \InvalidArgumentException('Hyperlink ID must not contain control characters');
+        }
+        if (str_contains($id, ';')) {
+            throw new \InvalidArgumentException('Hyperlink ID must not contain semicolons');
+        }
+        $this->url = $url;
+        $this->id = $id;
     }
 
     /**
