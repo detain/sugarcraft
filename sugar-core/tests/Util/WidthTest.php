@@ -533,6 +533,28 @@ final class WidthTest extends TestCase
      * cluster. This pins the agreement itself, so a future edit that gives
      * either side its own splitter fails here rather than in a pane.
      */
+    /**
+     * M19 (lib-reviews-1102): printable ASCII must short-circuit the
+     * segmenter — and while it does, the answer must NOT change. Every
+     * assertion here is exact against the pre-fast-path cluster walk;
+     * the tab leg is load-bearing: if the fast path ever swallowed the
+     * 0x09 case, the whole 4-cell column would silently collapse to 1.
+     */
+    public function testTheAsciiFastPathPreservesExactWidths(): void
+    {
+        self::assertSame(strlen('hello, world 0123456789 !@#$%^&*()'), Width::string('hello, world 0123456789 !@#$%^&*()'));
+        self::assertSame(4, Width::string("\t"));
+        self::assertSame(5, Width::string("\tx"));
+        self::assertSame(4 + strlen('ab'), Width::string("ab\t"));
+        self::assertSame(2, Width::string('日'));
+        self::assertSame(4, Width::string('a日b'));
+        // combining sequences start with a printable ASCII base — the fast
+        // path MUST stop before the mark, never charge the base twice.
+        self::assertSame(1, Width::string("e\xcc\x81"));
+        self::assertSame(2, Width::string("a\xcc\x81日"));
+        self::assertSame(0, Width::string(''));
+    }
+
     public function testStringScoresAWholeClusterAsOneGlyph(): void
     {
         // Emoji + skin-tone modifier is ONE glyph in ONE 2-cell box; the

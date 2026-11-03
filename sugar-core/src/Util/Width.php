@@ -132,9 +132,34 @@ final class Width
         if ($clean === '') {
             return 0;
         }
+        /** @var string|null $asciiRuns */
+        static $asciiRuns = null;
+        $asciiRuns ??= implode('', array_map('chr', range(0x20, 0x7E)));
         $width = 0;
-        foreach (self::graphemes($clean) as $g) {
-            $width += self::graphemeWidth($g);
+        $len = strlen($clean);
+        $i = 0;
+        while ($i < $len) {
+            // M19 perf fast path: printable ASCII (0x20-0x7E) is always a
+            // one-cell, zero-combining character on its own — UTF-8
+            // continuation bytes and every combining mark are >= 0x80, so a
+            // maximal run of these bytes cannot share a cluster with its
+            // neighbours. Consume the whole run without touching the
+            // segmenter; everything else falls through to the cluster walk.
+            $run = strspn($clean, $asciiRuns, $i);
+            if ($run > 0) {
+                $width += $run;
+                $i += $run;
+                continue;
+            }
+            $cluster = self::nextCluster($clean, $i);
+            if ($cluster === '') {
+                // nextCluster() is contracted to return at least one byte;
+                // this guards the loop against a future regression rather
+                // than a reachable state (same shape as graphemes()).
+                $cluster = $clean[$i];
+            }
+            $width += self::graphemeWidth($cluster);
+            $i += strlen($cluster);
         }
         return $width;
     }
