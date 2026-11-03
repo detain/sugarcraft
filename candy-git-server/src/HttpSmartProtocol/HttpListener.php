@@ -6,6 +6,7 @@ namespace SugarCraft\GitServer\HttpSmartProtocol;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
 
 /**
  * The socket half of smart HTTP: accepts TCP connections, buffers complete
@@ -23,24 +24,42 @@ use React\EventLoop\LoopInterface;
  * neither. The router never blocks on a child longer than the bounded read
  * ladder in Git\StatelessRpc allows, so an accept tick always terminates.
  *
- * Scope: the smart-HTTP READ path only.
+ * Every seat is bounded three ways: a connection cap (the newcomer is
+ * refused while the house is full, mirroring the daemon), an IDLE deadline
+ * (a client that stops talking loses its seat without ever becoming
+ * readable — the periodic sweep is what notices), and an ABSOLUTE deadline
+ * per request (a slow-drip client that keeps talking still dies). Body
+ * sizes are capped by ONE knob: the router's maxRequestBodyBytes() — the
+ * socket and the pack paths can never disagree about what is acceptable.
  */
 final class HttpListener
 {
     /** Bytes of request head (line + headers) tolerated before refusal. */
     private const MAX_HEADER_BYTES = 65536;
 
-    /** Total request body cap — the router caps packs tighter; this is the socket-level guard. */
-    private const MAX_BODY_BYTES = 33554432; // 32 MiB
+    /** Silence tolerated on a half-finished request before the seat dies. */
+    private const IDLE_TIMEOUT_SECONDS = 30.0;
+
+    /** Total time tolerated for one request regardless of dribble. */
+    private const ABSOLUTE_DEADLINE_SECONDS = 180.0;
+
+    /** Concurrent half-finished or in-flight requests accepted. */
+    private const MAX_CLIENTS = 64;
+
+    /** How often the deadline sweep runs. */
+    private const SWEEP_PERIOD_SECONDS = 0.25;
 
     /**
-     * How long a response write may make ZERO progress on a client socket
-     * before the listener gives up on that client. Progress resets the window, so a slow-but-alive reader
-     * is never cut off; a wedged one holds one stalled write for this long.
+     * Framing slack over the decoded cap for chunked bodies: legitimate
+     * git clients send megabyte-sized chunks (negligible framing), so a
+     * raw buffer this far past the cap is hostile many-tiny-chunk padding
+     * and is refused without draining it toward the cap forever.
      */
-    private const WRITE_STALL_SECONDS = 10.0;
+    private const CHUNKED_RAW_SLACK_BYTES = 1048576;
 
-    /** @var array<int, array{stream: resource, buffer: string}> */
+    /**
+     * @var array<int, array{stream: resource, buffer: string, connected_at: float, last_activity: float, scan: array{pos: int, mode: string, want: int, decoded: int, done: bool}}>
+     */
     private array $clients = [];
 
     /** @var resource|null */
@@ -48,11 +67,16 @@ final class HttpListener
 
     private ?LoopInterface $loop = null;
 
+    private ?TimerInterface $sweepTimer = null;
+
     public function __construct(
         private readonly Server $router,
         private readonly string $host = '127.0.0.1',
         private readonly int $port = 0,
         ?LoopInterface $loop = null,
+        private readonly float $idleTimeoutSeconds = self::IDLE_TIMEOUT_SECONDS,
+        private readonly float $absoluteDeadlineSeconds = self::ABSOLUTE_DEADLINE_SECONDS,
+        private readonly int $maxClients = self::MAX_CLIENTS,
     ) {
         $this->loop = $loop;
     }
@@ -85,13 +109,25 @@ final class HttpListener
 
         $this->serverStream = $stream;
         $this->loop->addReadStream($stream, fn () => $this->acceptConnection());
+        // Idle clients never become readable, so readiness callbacks
+        // cannot police the deadlines themselves — a slow tick sweeps.
+        $this->sweepTimer = $this->loop->addPeriodicTimer(
+            self::SWEEP_PERIOD_SECONDS,
+            function (): void {
+                $this->sweepDeadlines();
+            }
+        );
     }
 
-    /** Stop accepting and drop the (single) listen watch; idempotent. */
+    /** Stop accepting, drop the watches, and drop every client; idempotent. */
     public function stop(): void
     {
         if ($this->serverStream === null) {
             return;
+        }
+        if ($this->sweepTimer !== null) {
+            $this->loop?->cancelTimer($this->sweepTimer);
+            $this->sweepTimer = null;
         }
         $this->loop?->removeReadStream($this->serverStream);
         @\fclose($this->serverStream);
@@ -115,6 +151,12 @@ final class HttpListener
         return $name === false ? null : $name;
     }
 
+    /** Seats currently held (accepted, request unfinished). */
+    public function activeConnectionCount(): int
+    {
+        return \count($this->clients);
+    }
+
     // -------------------------------------------------------------------------
     // Connection handling
     // -------------------------------------------------------------------------
@@ -128,10 +170,41 @@ final class HttpListener
         if ($client === false) {
             return;
         }
-        \stream_set_blocking($client, false);
 
-        $this->clients[(int) $client] = ['stream' => $client, 'buffer' => ''];
+        if (\count($this->clients) >= $this->maxClients) {
+            // Refuse the NEWCOMER; established transfers are never cut to
+            // make room (the daemon's capacity policy, same reasoning).
+            @\fclose($client);
+
+            return;
+        }
+
+        \stream_set_blocking($client, false);
+        $now = \microtime(true);
+
+        $this->clients[(int) $client] = [
+            'stream'        => $client,
+            'buffer'        => '',
+            'connected_at'  => $now,
+            'last_activity' => $now,
+            'scan'          => ['pos' => 0, 'mode' => 'size', 'want' => 0, 'decoded' => 0, 'done' => false],
+        ];
         $this->loop?->addReadStream($client, fn () => $this->onClientReadable($client));
+    }
+
+    /** Close every seat whose idle or absolute deadline has expired. */
+    private function sweepDeadlines(): void
+    {
+        $now = \microtime(true);
+        foreach ($this->clients as $client) {
+            if ($now - $client['last_activity'] > $this->idleTimeoutSeconds
+                || $now - $client['connected_at'] > $this->absoluteDeadlineSeconds) {
+                // Silent drop: nothing answerable arrived (or nothing
+                // answerable ever will); there is no request to attach a
+                // status line to on the idle path.
+                $this->closeClient($client['stream']);
+            }
+        }
     }
 
     /** @param resource $client */
@@ -148,6 +221,7 @@ final class HttpListener
             return;
         }
 
+        $this->clients[$id]['last_activity'] = \microtime(true);
         $buffer = &$this->clients[$id]['buffer'];
         $buffer .= $data;
 
@@ -165,7 +239,7 @@ final class HttpListener
 
         $head = \substr($buffer, 0, $headEnd);
         $bodySoFar = \substr($buffer, $headEnd + 4);
-        $needs = $this->expectedBodyBytes($head, $bodySoFar);
+        $needs = $this->expectedBodyBytes($head, $bodySoFar, $this->clients[$id]['scan']);
         if ($needs === self::BODY_TOO_LARGE) {
             unset($buffer);
             $this->writeStatus($client, 413, 'Payload Too Large');
@@ -189,15 +263,29 @@ final class HttpListener
     /**
      * Remaining body bytes for the given head + body seen so far:
      * 0 = complete, >0 = still needed, BODY_TOO_LARGE = over the cap.
+     *
+     * The chunked path advances a PERSISTED scan cursor instead of
+     * re-decoding the whole buffer per read — re-scanning turned a
+     * cap-sized upload into quadratic work for the listener.
+     *
+     * @param array{pos: int, mode: string, want: int, decoded: int, done: bool} $scan
      */
-    private function expectedBodyBytes(string $head, string $body): int
+    private function expectedBodyBytes(string $head, string $body, array &$scan): int
     {
+        $cap = $this->router->maxRequestBodyBytes();
         if ($this->hasHeader($head, 'transfer-encoding', 'chunked')) {
-            $decoded = self::decodeChunked($body);
-            if ($decoded === null) {
-                return \strlen($body) > self::MAX_BODY_BYTES ? self::BODY_TOO_LARGE : 1;
+            if (\strlen($body) > $cap + self::CHUNKED_RAW_SLACK_BYTES) {
+                // Hostile framing padding (tiny chunks): the raw buffer is
+                // past any legitimate overhead before the decoded cap can
+                // ever be reached by honest chunks.
+                return self::BODY_TOO_LARGE;
             }
-            return 0;
+            self::advanceChunkScan($body, $scan);
+            if ($scan['decoded'] > $cap) {
+                return self::BODY_TOO_LARGE;
+            }
+
+            return $scan['done'] ? 0 : 1;
         }
 
         $length = 0;
@@ -206,12 +294,54 @@ final class HttpListener
                 $length = (int) $m[1];
             }
         }
-        if ($length > self::MAX_BODY_BYTES) {
+        if ($length > $cap) {
             return self::BODY_TOO_LARGE;
         }
         $have = \strlen($body);
 
         return $have < $length ? $length - $have : 0;
+    }
+
+    /**
+     * Advance the chunked framing scan from its persisted cursor, $O(new
+     * bytes) per read. Parity with decodeChunked()'s tolerance: a garbage
+     * size line decodes as 0 (terminator), and trailing CRLF after the
+     * last chunk closes the body.
+     *
+     * @param array{pos: int, mode: string, want: int, decoded: int, done: bool} $scan
+     */
+    private static function advanceChunkScan(string $body, array &$scan): void
+    {
+        while (!$scan['done']) {
+            $length = \strlen($body);
+            if ($scan['mode'] === 'size') {
+                $eol = \strpos($body, "\r\n", $scan['pos']);
+                if ($eol === false) {
+                    return; // size line not complete yet
+                }
+                $size = \hexdec(\trim(\substr($body, $scan['pos'], $eol - $scan['pos'])));
+                $scan['pos'] = $eol + 2;
+                if ($size === 0) {
+                    $scan['mode'] = 'term';
+                    continue;
+                }
+                $scan['decoded'] += $size;
+                $scan['mode']    = 'data';
+                $scan['want']    = $size;
+            } elseif ($scan['mode'] === 'data') {
+                if ($length < $scan['pos'] + $scan['want'] + 2) {
+                    return; // chunk (or its CRLF) not fully here yet
+                }
+                $scan['pos'] += $scan['want'] + 2;
+                $scan['mode'] = 'size';
+            } else { // 'term': the CRLF that follows the zero-size line
+                if ($length < $scan['pos'] + 2) {
+                    return;
+                }
+                $scan['pos']  += 2;
+                $scan['done']  = true;
+            }
+        }
     }
 
     private function decodeBody(string $head, string $body): string
@@ -363,6 +493,9 @@ final class HttpListener
         return $offset;
     }
 
+    /** How long a response write may make ZERO progress on a client socket. */
+    private const WRITE_STALL_SECONDS = 10.0;
+
     /** @param resource $client */
     private static function peerAddress($client): ?string
     {
@@ -397,8 +530,8 @@ final class HttpListener
     {
         $body = "{$status} {$reason}\n";
         // Same full-buffer drain as dispatch(): small bodies almost always
-        // fit one kernel window, but "almost" is what the MAJOR-1 e2e proved
-        // unprovable from the inside.
+        // fit one kernel window, but "almost" is what the byte-fidelity
+        // review proved unprovable from the inside.
         self::writeAll($client, "HTTP/1.1 {$status} {$reason}\r\n"
             . "Content-Type: text/plain\r\n"
             . 'Content-Length: ' . \strlen($body) . "\r\n"
@@ -424,6 +557,7 @@ final class HttpListener
         403 => 'Forbidden',
         404 => 'Not Found',
         405 => 'Method Not Allowed',
+        408 => 'Request Timeout',
         411 => 'Length Required',
         413 => 'Payload Too Large',
         422 => 'Unprocessable Entity',

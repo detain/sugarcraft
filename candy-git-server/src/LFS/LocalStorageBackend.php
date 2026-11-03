@@ -81,6 +81,14 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
     }
 
     /**
+     * Publish an object atomically: bytes land in a same-directory temp
+     * file (chmod first, rename carries the mode onto the target), and the
+     * final path appears only when the whole payload is flushed — a reader
+     * can never observe a truncated object, and a failed write leaves no
+     * residue behind. 'xb' refuses even a pre-planted file at the temp
+     * name. Mode 0600: objects are secrets-adjacent payloads, and the
+     * serving process is the same uid that wrote them.
+     *
      * @param resource $stream
      */
     public function write(string $oid, $stream): void
@@ -94,20 +102,36 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
             }
         }
 
-        $handle = @\fopen($path, 'wb');
+        $temp = $dir . '/.' . \basename($path) . '.tmp-' . \bin2hex(\random_bytes(8));
+        $handle = @\fopen($temp, 'xb');
         if ($handle === false) {
             throw new \RuntimeException("Cannot open LFS object for writing: {$path}");
         }
 
-        // Copy stream to file
-        if (\stream_copy_to_stream($stream, $handle) === false) {
+        try {
+            if (@\stream_copy_to_stream($stream, $handle) === false) {
+                throw new \RuntimeException("Failed to write LFS object {$oid}");
+            }
+            \fflush($handle);
+            if (@\chmod($temp, 0600) === false) {
+                throw new \RuntimeException("Cannot set LFS object mode: {$path}");
+            }
+            if (@\rename($temp, $path) === false) {
+                throw new \RuntimeException("Cannot publish LFS object {$oid}");
+            }
+        } catch (\Throwable $e) {
             \fclose($handle);
-            throw new \RuntimeException("Failed to write LFS object {$oid}");
+            @\unlink($temp); // no half-written object, no orphaned temp
+            throw $e;
         }
-
         \fclose($handle);
     }
 
+    /**
+     * Remove an object. No production path calls this today (upload is
+     * content-addressed and objects are immutable); it is the storage-side
+     * API for prune/GC tooling, so it stays honest and idempotent.
+     */
     public function delete(string $oid): void
     {
         $path = $this->objectPath($oid);

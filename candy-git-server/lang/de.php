@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'user.invalid_ssh_key'     => 'Ungültiges SSH-Öffentlicher-Schlüssel-Format',
+    'user.invalid_ssh_key'     => 'Ungültiges Format für öffentlichen SSH-Schlüssel',
     'repo.create_dir_failed'   => 'Repository-Verzeichnis konnte nicht erstellt werden: {path}',
     'repo.git_init_failed'     => 'git init fehlgeschlagen: {output}',
     'repo.visibility_marker_unwritable' => 'Schreiben des Sichtbarkeits-Markers fehlgeschlagen: {file}',
@@ -36,11 +36,11 @@ return [
     'cli.initializing'         => 'CandyGitServer-Datenverzeichnis wird initialisiert: {path}',
     'cli.done'                 => 'Fertig.',
     'cli.next_steps'           => 'Nächste Schritte:',
-    'cli.next_step_1'          => '  1. Bearbeiten Sie {path}/config.yaml',
-    'cli.next_step_2'          => '  2. SSH-Hostschlüssel generieren: ssh-keygen -t ed25519 -f {path}/ssh/soft_serve_host',
-    'cli.next_step_3'          => '  3. Setzen Sie CANDY_GIT_SERVER_INITIAL_ADMIN_KEYS=Ihr-ssh-öffentlicherschlüssel',
-    'cli.next_step_4'          => '  4. Ausführen: candy-git-server serve --config {path}/config.yaml',
+    'cli.next_step_1'          => '  1. Konto anlegen: candy-git-server user add admin {path}',
 
+    'cli.next_step_2'          => '  2. Repository anlegen: candy-git-server repo create <name> {path} (--public veröffentlicht es zum anonymen Lesen)',
+
+    'cli.next_step_3'          => '  3. Über smart HTTP ausliefern: candy-git-server serve --http --repo-root {path}/repositories',
     // bin/candy-git-server — user
     'cli.usage_user_root'      => 'Nutzung: candy-git-server user add|key|list|token',
     'cli.usage_user_add'       => 'Nutzung: candy-git-server user add <username> [data-path] [--password <pw>|-]',
@@ -74,4 +74,14 @@ return [
     // bin/candy-git-server — help / unknown
     'cli.unknown_command'      => "Unbekannter Befehl: {cmd}\n  Führen Sie 'candy-git-server help' für die Hilfe aus.",
     'cli.help'                 => "CandyGitServer — Selbst-hostbarer Git-Server\n\nNutzung:\n  candy-git-server <befehl> [optionen]\n\nBefehle:\n  serve [--config path]    Git-Server starten\n  init [data-path]         Neues Datenverzeichnis initialisieren\n  user add <username>      Benutzer erstellen\n  user key <username> <file>  SSH-Öffentlicher Schlüssel für Benutzer hinzufügen (- für stdin)\n  user list                Benutzer auflisten\n  repo list [data-path]    Repositories auflisten\n  repo create <name> [data-path]  Repository erstellen\n  repo info <name> [data-path]    Repository-Informationen anzeigen\n  help, --help, -h         Diese Hilfe anzeigen\n  version, --version, -v   Version anzeigen\n\nUmgebung:\n  CANDY_GIT_SERVER_DATA_PATH    Datenverzeichnis (Standard: /tmp/candy-git-server)\n\nBeispiele:\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --config ~/candy-git-server-data/config.yaml\n  candy-git-server repo create mein-projekt\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'user.ssh_key_too_short' => 'SSH-Public-Key-Blob zu kurz für {type}: {len} < {min} Base64-Zeichen',
+    'config.parse_failed'   => 'Ungültige YAML-Konfiguration: {error}',
+    'config.invalid_user_trust_mode' => 'Ungültiger http.user_trust_mode "{mode}": erwartet off, proxy oder token',
+    'config.tls_not_supported' => 'http.tls_key_path/tls_cert_path sind gesetzt, aber es ist noch kein HTTPS-Listener eingebunden; das setzt NICHT TLS in Kraft. Entfernen Sie die Einträge, bis TLS unterstützt wird.',
+    'jobs.invalid_schedule' => 'Ungültiger Job-Plan "{schedule}": {reason}',
+    'cli.option_needs_value' => 'Option {option} benötigt einen Wert',
+    'cli.serve_http_needs_repo_root' => 'serve --http benötigt --repo-root VERZEICHNIS (das Verzeichnis, dessen Unterordner ausgeliefert werden)',
+    'cli.serve_repo_root_not_dir' => '--repo-root ist kein Verzeichnis: {path}',
+    'cli.serve_http_port_range' => '--http-port außerhalb des Bereichs: {port}',
+    'cli.serve_http_banner' => 'smart-HTTP-Listener auf {addr} ({repos} Repos, {published} veröffentlicht, {users} Konten; anonymes Lesen={anon}; Push wird ausgeliefert — Hook-Ablehnungen laufen im Band)',
 ];

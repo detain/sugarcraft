@@ -36,11 +36,11 @@ return [
     'cli.initializing'         => 'Initialisation du répertoire de données CandyGitServer : {path}',
     'cli.done'                 => 'Terminé.',
     'cli.next_steps'           => 'Étapes suivantes :',
-    'cli.next_step_1'          => '  1. Modifiez {path}/config.yaml',
-    'cli.next_step_2'          => '  2. Générez une clé d\'hôte SSH : ssh-keygen -t ed25519 -f {path}/ssh/soft_serve_host',
-    'cli.next_step_3'          => '  3. Définissez CANDY_GIT_SERVER_INITIAL_ADMIN_KEYS=votre-clé-publique-ssh',
-    'cli.next_step_4'          => '  4. Exécutez : candy-git-server serve --config {path}/config.yaml',
+    'cli.next_step_1'          => '  1. Créer un compte : candy-git-server user add admin {path}',
 
+    'cli.next_step_2'          => '  2. Créer un dépôt : candy-git-server repo create <nom> {path} (ajouter --public pour l’exposer en lecture anonyme)',
+
+    'cli.next_step_3'          => '  3. Servir via smart HTTP : candy-git-server serve --http --repo-root {path}/repositories',
     // bin/candy-git-server — user
     'cli.usage_user_root'      => 'Usage : candy-git-server user add|key|list|token',
     'cli.usage_user_add'       => 'Usage : candy-git-server user add <username> [data-path] [--password <pw>|-]',
@@ -74,4 +74,14 @@ return [
     // bin/candy-git-server — help / unknown
     'cli.unknown_command'      => "Commande inconnue : {cmd}\n  Exécutez 'candy-git-server help' pour l'aide.",
     'cli.help'                 => "CandyGitServer — Serveur Git auto-hébergeable\n\nUsage :\n  candy-git-server <commande> [options]\n\nCommandes :\n  serve [--config path]    Démarrer le serveur Git\n  init [data-path]         Initialiser un nouveau répertoire de données\n  user add <username>      Créer un utilisateur\n  user key <username> <file>  Ajouter une clé SSH publique pour l'utilisateur (utilisez - pour stdin)\n  user list                Lister les utilisateurs\n  repo list [data-path]    Lister les dépôts\n  repo create <name> [data-path]  Créer un dépôt\n  repo info <name> [data-path]    Afficher les informations d'un dépôt\n  help, --help, -h         Afficher cette aide\n  version, --version, -v   Afficher la version\n\nEnvironnement :\n  CANDY_GIT_SERVER_DATA_PATH    Répertoire de données (défaut : /tmp/candy-git-server)\n\nExemples :\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --config ~/candy-git-server-data/config.yaml\n  candy-git-server repo create mon-projet\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'user.ssh_key_too_short' => 'blob de clé publique SSH trop court pour {type} : {len} < {min} caractères base64',
+    'config.parse_failed'   => 'configuration YAML invalide : {error}',
+    'config.invalid_user_trust_mode' => 'http.user_trust_mode « {mode} » invalide : attendu off, proxy ou token',
+    'config.tls_not_supported' => 'http.tls_key_path/tls_cert_path sont définis mais aucun listener HTTPS n’est câblé ; les définir n’active PAS TLS. Retirez-les tant que TLS n’est pas pris en charge.',
+    'jobs.invalid_schedule' => 'planification de job invalide « {schedule} » : {reason}',
+    'cli.option_needs_value' => 'l’option {option} exige une valeur',
+    'cli.serve_http_needs_repo_root' => 'serve --http exige --repo-root REP (le répertoire dont les sous-répertoires sont servis)',
+    'cli.serve_repo_root_not_dir' => '--repo-root n’est pas un répertoire : {path}',
+    'cli.serve_http_port_range' => '--http-port hors plage : {port}',
+    'cli.serve_http_banner' => 'listener smart-HTTP sur {addr} ({repos} dépôts, {published} publiés, {users} comptes ; lecture anonyme={anon} ; le push est servi — les refus d’accroches passent en bande)',
 ];

@@ -1,0 +1,112 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\GitServer\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\I18n\T;
+use SugarCraft\GitServer\Lang;
+
+/**
+ * The operator-facing copy is only as real as the machinery that picks it:
+ * these pins guard the locale switch, the cross-locale key parity that
+ * twelve-persona reviews kept eroding, and the fact that the serve --http
+ * refusals and the startup banner route through Lang instead of being
+ * hardcoded English.
+ */
+final class LangLocaleSelectionTest extends TestCase
+{
+ private const LOCALES = ['ar', 'cs', 'de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'nl', 'pl', 'pt-br', 'pt', 'ru', 'tr', 'zh-cn'];
+
+ protected function tearDown(): void
+ {
+ T::setLocale('en');
+ }
+
+ public function testEnvironmentVariableSelectsTheCatalogue(): void
+ {
+ $bin = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-git-server');
+ self::assertStringContainsString("getenv('CANDY_GIT_SERVER_LANG')", $bin);
+ self::assertStringContainsString('T::setLocale($locale)', $bin);
+
+ // Behavioural half: a non-English locale actually changes lookups.
+ T::setLocale('de');
+ $german = Lang::t('cli.done');
+ T::setLocale('en');
+ self::assertNotSame($german, Lang::t('cli.done'), 'switching locale must change the catalogue');
+ self::assertStringContainsString('fertig', \strtolower($german));
+ }
+
+ public function testUnknownLocaleFallsThroughToEnglish(): void
+ {
+ T::setLocale('qq-ZZ');
+ // Lookup order is locale → base language → en, so every shipped key
+ // still resolves for a nonsense locale.
+ self::assertSame(Lang::t('cli.done'), (static function (): string {
+ T::setLocale('en');
+
+ return Lang::t('cli.done');
+ })());
+ }
+
+ public function testEveryLocaleCarriesExactlyTheEnglishKeySet(): void
+ {
+ $english = \array_keys(include \dirname(__DIR__) . '/lang/en.php');
+ self::assertNotEmpty($english);
+ foreach (self::LOCALES as $locale) {
+ $keys = \array_keys(include \dirname(__DIR__) . "/lang/{$locale}.php");
+ // Guard-genre: a key that exists only in en.php silently ships
+ // untranslated copy for five runtime messages' worth of history.
+ $sortEnglish = $english;
+ $sortKeys = $keys;
+ \sort($sortEnglish);
+ \sort($sortKeys);
+ self::assertSame(
+ $sortEnglish,
+ $sortKeys,
+ "locale {$locale} diverges from the en key set",
+ );
+ self::assertCount(\count($english), $keys);
+ }
+ }
+
+ public function testServeOperatorCopyRoutesThroughLang(): void
+ {
+ $bin = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-git-server');
+ foreach (['cli.option_needs_value', 'cli.serve_http_needs_repo_root',
+ 'cli.serve_repo_root_not_dir', 'cli.serve_http_port_range',
+ 'cli.serve_http_banner'] as $key) {
+ self::assertStringContainsString(
+ "Lang::t('{$key}'",
+ $bin,
+ "serve --http copy must reach the wire via Lang ({$key})",
+ );
+ }
+ // The retired fiction strings stay retired (they were live until the
+ // push transport shipped; an accidental reintroduction reddens here).
+ foreach (['transports are not implemented', ': {$arg} requires a value', 'INITIAL_ADMIN_KEYS'] as $gone) {
+ self::assertStringNotContainsString($gone, $bin);
+ }
+ }
+
+ public function testInitNextStepsTeachTheWorkingRecipe(): void
+ {
+ $bin = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-git-server');
+ // The three printed steps must all resolve their {path} placeholder
+ // and teach the shipped transport (serve --http), not ssh fiction.
+ self::assertStringContainsString("Lang::t('cli.next_step_3', ['path' => \$dataPath])", $bin);
+ $en = include \dirname(__DIR__) . '/lang/en.php';
+ self::assertStringContainsString('serve --http --repo-root', $en['cli.next_step_3']);
+ self::assertStringContainsString('user add', $en['cli.next_step_1']);
+ self::assertStringContainsString('--public', $en['cli.next_step_2']);
+ self::assertArrayNotHasKey('cli.next_step_4', $en);
+ }
+
+ public function testInitStampCarriesNoPhantomPersistenceKeys(): void
+ {
+ $bin = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-git-server');
+ self::assertStringNotContainsString('driver: "sqlite"', $bin);
+ self::assertStringNotContainsString('candy-git-server.db', $bin);
+ }
+}

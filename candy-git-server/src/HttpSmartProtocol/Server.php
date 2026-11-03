@@ -95,6 +95,21 @@ final class Server
     // Registration
     // -------------------------------------------------------------------------
 
+    /**
+     * Body/pack transfer default when `http.max_pack_bytes` is unset:
+     * 256 MiB. ONE knob governs every layer that buffers a request body —
+     * the socket listener (HttpListener reads it back through
+     * maxRequestBodyBytes()) and each router cap below — so the two can
+     * never disagree about what size is acceptable.
+     */
+    public const DEFAULT_MAX_BODY_BYTES = 268435456;
+
+    /** Effective single-source request-body cap (config or the default). */
+    public function maxRequestBodyBytes(): int
+    {
+        return $this->config->maxPackBytes ?? self::DEFAULT_MAX_BODY_BYTES;
+    }
+
     public function registerRepo(Repo $repo): void
     {
         $this->repos[$repo->name] = $repo;
@@ -323,7 +338,7 @@ final class Server
         // every path including success). git.max_timeout, when positive,
         // overrides the built-in negotiation ceiling (the constant
         // was not configurable).
-        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+        $maxBytes = $this->maxRequestBodyBytes();
         $deadline = $this->config->gitMaxTimeout > 0 ? (float) $this->config->gitMaxTimeout : null;
         $result = StatelessRpc::negotiate('git-upload-pack', $repo->path(), $body, $maxBytes, $deadline);
 
@@ -373,7 +388,7 @@ final class Server
             return $this->authDenied($user);
         }
 
-        $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+        $maxBytes = $this->maxRequestBodyBytes();
         $deadline = $this->config->gitMaxTimeout > 0 ? (float) $this->config->gitMaxTimeout : null;
         $result = StatelessRpc::negotiate('git-receive-pack', $repo->path(), $body, $maxBytes, $deadline);
 
@@ -524,10 +539,23 @@ final class Server
             return $this->errorResponse(404, 'Object not found');
         }
 
+        // The object is content-addressed and lands atomically, so its
+        // stat size is stable: refuse to MATERIALIZE anything past the
+        // transfer cap — readAll() of a hostile/huge object must not be
+        // the thing that discovers the limit. Verified again after the
+        // read (trust-but-verify the stat under a benign race).
+        $cap = $this->maxRequestBodyBytes();
+        if ($backend->size($oid) > $cap) {
+            return $this->errorResponse(413, 'Object too large');
+        }
+
         $this->stats()->recordLfsDownload();
 
         $this->responseHeaders['Content-Type'] = 'application/octet-stream';
         $this->body = $backend->readAll($oid);
+        if (\strlen($this->body) > $cap) {
+            return $this->errorResponse(413, 'Object too large');
+        }
         $this->responseHeaders['Content-Length'] = (string) \strlen($this->body);
 
         return $this->finalizeResponse();
@@ -536,9 +564,10 @@ final class Server
     /**
      * PUT /{repo}/info/lfs/objects/{oid} — upload an object.
      *
-     * Enforces the configured transfer cap (`http.max_pack_bytes`, the
-     * same knob that caps buffered packfiles) and verifies the body's
-     * SHA-256 matches the OID before anything touches storage.
+     * Enforces the single-source transfer cap (http.max_pack_bytes, the
+     * same knob that bounds the socket buffer and buffered packfiles;
+     * {@see self::DEFAULT_MAX_BODY_BYTES} when unset) and verifies the
+     * body's SHA-256 matches the OID before anything touches storage.
      */
     private function handleLfsUpload(Repo $repo, LFSHandler $handler, ?User $user, string $oid, string $body): array
     {
@@ -546,8 +575,8 @@ final class Server
             return $this->authDenied($user);
         }
 
-        $maxBytes = $this->config->maxPackBytes;
-        if ($maxBytes !== null && \strlen($body) > $maxBytes) {
+        $maxBytes = $this->maxRequestBodyBytes();
+        if (\strlen($body) > $maxBytes) {
             return $this->errorResponse(413, 'Object too large');
         }
 
@@ -710,7 +739,7 @@ final class Server
             \fclose($pipes[0]);
 
             // TODO: stream via chunked callback for true streaming; cap buffered size for now
-            $maxBytes = $this->config->maxPackBytes ?? 268435456; // 256 MiB default
+            $maxBytes = $this->maxRequestBodyBytes();
             $packData = $this->readCapped($pipes[1], $maxBytes);
         } finally {
             if ($packData === null) {

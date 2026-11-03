@@ -41,11 +41,11 @@ return [
     'cli.initializing'         => 'Initializing CandyGitServer data directory: {path}',
     'cli.done'                 => 'Done.',
     'cli.next_steps'           => 'Next steps:',
-    'cli.next_step_1'          => '  1. Edit {path}/config.yaml',
-    'cli.next_step_2'          => '  2. Generate SSH host key: ssh-keygen -t ed25519 -f {path}/ssh/soft_serve_host',
-    'cli.next_step_3'          => '  3. Set CANDY_GIT_SERVER_INITIAL_ADMIN_KEYS=your-ssh-public-key',
-    'cli.next_step_4'          => '  4. Run: candy-git-server serve --config {path}/config.yaml',
+    'cli.next_step_1'          => '  1. Create an account: candy-git-server user add admin {path}',
 
+    'cli.next_step_2'          => '  2. Create a repository: candy-git-server repo create <name> {path} (add --public to publish it for anonymous read)',
+
+    'cli.next_step_3'          => '  3. Serve over smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
     // bin/candy-git-server — user
     'cli.usage_user_root'      => 'Usage: candy-git-server user add|key|list|token',
     'cli.usage_user_add'       => 'Usage: candy-git-server user add <username> [data-path] [--password <pw>|-]',
@@ -78,5 +78,10 @@ return [
 
     // bin/candy-git-server — help / unknown
     'cli.unknown_command'      => "Unknown command: {cmd}\n  Run 'candy-git-server help' for usage.",
-    'cli.help'                 => "CandyGitServer — Self-hostable Git Server\n\nUsage:\n  candy-git-server <command> [options]\n\nCommands:\n  serve [--config path]    Start the Git server\n  init [data-path]         Initialize a new data directory\n  user add <username>      Create a user\n  user key <username> <file>  Add SSH public key for user (use - for stdin)\n  user list                List users\n  repo list [data-path]    List repositories\n  repo create <name> [data-path]  Create a repository\n  repo info <name> [data-path]    Show repository info\n  help, --help, -h         Show this help\n  version, --version, -v   Show version\n\nEnvironment:\n  CANDY_GIT_SERVER_DATA_PATH    Data directory (default: /tmp/candy-git-server)\n\nExamples:\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --config ~/candy-git-server-data/config.yaml\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'cli.help'                 => "CandyGitServer — Self-hostable Git Server\n\nUsage:\n  candy-git-server <command> [options]\n\nCommands:\n  serve --http --repo-root DIR [--port N]   Serve repositories over smart HTTP\n  init [data-path]         Initialize a new data directory\n  user add <username>      Create a user\n  user key <username> <file>  Add SSH public key for user (use - for stdin)\n  user list                List users\n  user token <username> [ttl]  Mint an HTTP proxy token signature\n  repo list [data-path]    List repositories\n  repo create <name> [data-path]  Create a repository\n  repo info <name> [data-path]    Show repository info\n  help, --help, -h         Show this help\n  version, --version, -v   Show version\n\nEnvironment:\n  CANDY_GIT_SERVER_DATA_PATH    Data directory (default: /tmp/candy-git-server)\n  CANDY_GIT_SERVER_LANG           Translation catalogue (default: en)\n\nExamples:\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --http --repo-root ~/candy-git-server-data/repositories\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'cli.option_needs_value' => 'Option {option} requires a value',
+    'cli.serve_http_needs_repo_root' => 'serve --http requires --repo-root DIR (the directory whose subdirectories are served)',
+    'cli.serve_repo_root_not_dir' => '--repo-root is not a directory: {path}',
+    'cli.serve_http_port_range' => '--http-port out of range: {port}',
+    'cli.serve_http_banner' => 'smart-HTTP listener on {addr} ({repos} repos, {published} published; {users} accounts; anonymous-read={anon}; push is served too — hook declines ride in-band)',
 ];
