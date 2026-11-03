@@ -33,6 +33,7 @@ final class DoctorChecksTest extends TestCase
         'pdo_sqlite',
         'fts5',
         'ext-curl',
+        'ext-sodium',
         'ext-mbstring',
         'ext-intl',
         'server mode',
@@ -46,9 +47,9 @@ final class DoctorChecksTest extends TestCase
         'mcp config',
     ];
 
-    public function testTheRosterIsTheseSixteenRowsInThisOrder(): void
+    public function testTheRosterIsTheseSeventeenRowsInThisOrder(): void
     {
-        self::assertSame(self::ROSTER, array_keys(self::probes()), 'the doctor roster changed shape — the pages, the `sixteen checks` headline and this list move together');
+        self::assertSame(self::ROSTER, array_keys(self::probes()), 'the doctor roster changed shape — the pages, the check-count headline and this list move together');
     }
 
     /**

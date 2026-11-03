@@ -209,6 +209,7 @@ return [
     'cli.doctor.config_invalid' => '{path}：JSON 無效（{error}）',
     'cli.doctor.config_unreadable' => '{path} 不可讀取',
     'cli.doctor.curl_missing' => '缺少 — HTTP 供應商（openai、anthropic、sglang、custom）將失敗',
+    'cli.doctor.sodium_missing' => '缺少 — self-update 與 tools/install.sh 無法驗證發行簽章',
     'cli.doctor.failed.many' => '{count} 項檢查失敗。',
     'cli.doctor.failed.one' => '{count} 項檢查失敗。',
     'cli.doctor.fts5_missing' => '全文搜尋不可用（{error}）— 工作階段內文搜尋降級為名稱/預覽預篩選',

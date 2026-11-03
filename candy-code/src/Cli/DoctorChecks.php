@@ -243,6 +243,18 @@ final class DoctorChecks
                     : Lang::t('cli.doctor.curl_missing'),
             ],
 
+            'ext-sodium' => static fn (): array => [
+                // `suggest`, like ext-curl above: only the signature paths need
+                // it — `self-update` and `tools/install.sh` refuse to swap or
+                // install an unverifiable phar without it, and everything else
+                // runs. So a missing sodium is a WARN naming what is lost,
+                // never a FAIL on an otherwise healthy install.
+                'status' => \extension_loaded('sodium') ? 'OK' : 'WARN',
+                'detail' => \extension_loaded('sodium')
+                    ? Lang::t('cli.doctor.loaded')
+                    : Lang::t('cli.doctor.sodium_missing'),
+            ],
+
             'ext-mbstring' => static function (): array {
                 // `require`, and EXERCISED, not name-checked (rv-enduser-6):
                 // `Message`, `Renderer` and the palette all count and clip

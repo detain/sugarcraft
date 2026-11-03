@@ -209,6 +209,7 @@ return [
     'cli.doctor.config_invalid' => '{path}：JSON 无效（{error}）',
     'cli.doctor.config_unreadable' => '{path} 不可读',
     'cli.doctor.curl_missing' => '缺失 — HTTP 提供商（openai, anthropic, sglang, custom）将失败',
+    'cli.doctor.sodium_missing' => '缺失 — self-update 与 tools/install.sh 无法验证发行签名',
     'cli.doctor.failed.many' => '{count} 项检查失败。',
     'cli.doctor.failed.one' => '{count} 项检查失败。',
     'cli.doctor.fts5_missing' => '全文搜索不可用（{error}）— 会话正文搜索降级为名称/预览预筛选',

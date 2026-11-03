@@ -209,6 +209,7 @@ return [
     'cli.doctor.config_invalid' => '{path}: ungültiges JSON ({error})',
     'cli.doctor.config_unreadable' => '{path} ist nicht lesbar',
     'cli.doctor.curl_missing' => 'fehlt — die HTTP-Anbieter (openai, anthropic, sglang, custom) werden fehlschlagen',
+    'cli.doctor.sodium_missing' => 'fehlt — self-update und tools/install.sh können Release-Signaturen nicht prüfen',
     'cli.doctor.failed.many' => '{count} Prüfungen fehlgeschlagen.',
     'cli.doctor.failed.one' => '{count} Prüfung fehlgeschlagen.',
     'cli.doctor.fts5_missing' => 'Volltextsuche nicht verfügbar ({error}) — Sitzungstextsuche fällt auf Namens-/Vorschau-Vorfilter zurück',

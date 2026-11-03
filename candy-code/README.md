@@ -16,7 +16,7 @@
 
 ![demo](.vhs/chat.gif)
 
-A terminal AI coding agent for PHP 8.3+, built on the SugarCraft libraries. It is a SugarCraft program (a real `Model`/`Program` render loop — the MVC-style Model–Update–View pattern — with buffer-diffed output and Markdown-rendered replies) wrapped around a full agent engine: **multiple LLM providers**, model-driven **tool calling** gated by **hooks**, prompt-injecting **skills**, **sub-agents**, an **MCP** (Model Context Protocol — the standard for plugging external tool servers into an agent) client — stdio, Streamable HTTP, and an in-process git server it hosts for itself — and **SQLite** session history. The interface is a **TUI** (terminal user interface — a full-screen keyboard-and-mouse app drawn in your terminal window).
+A terminal AI coding agent for PHP 8.3+, built on the SugarCraft libraries. It is a SugarCraft program (a real `Model`/`Program` render loop — the MVC-style Model–Update–View pattern — with buffer-diffed output and Markdown-rendered replies) wrapped around a full agent engine: **multiple LLM providers**, model-driven **tool calling** gated by **hooks**, prompt-injecting **skills**, **sub-agents**, an **MCP** (Model Context Protocol — the standard for plugging external tool servers into an agent) client — stdio (each server a child process speaking the protocol over its standard input and output), Streamable HTTP, and an in-process git server it hosts for itself — and **SQLite** session history. The interface is a **TUI** (terminal user interface — a full-screen keyboard-and-mouse app drawn in your terminal window).
 
 > **Before you start.** You need **PHP 8.3+**, **Composer**, and the extensions
 > listed under [Install](#install). Platform support: **Linux** is the primary,
@@ -113,13 +113,7 @@ Claude Code, OpenCode and OpenClaw.
 
 ## Install
 
-```bash
-composer require sugarcraft/candy-code        # as a dependency; the binary is vendor/bin/candy-code
-# or, from a checkout of this package:
-composer install && ./bin/candy-code
-```
-
-Or run the single-file phar — no Composer, no `vendor/`: download
+Run the single-file phar — no Composer, no `vendor/`: download
 `candy-code.phar` and its `candy-code.phar.sha256` sidecar from the
 `candy-code/v*` releases at <https://github.com/detain/sugarcraft/releases>,
 verify with `sha256sum -c candy-code.phar.sha256`, run with
@@ -132,8 +126,9 @@ Ed25519 signature that `candy-code self-update` verifies against the pinned
 key before any swap. The preferred asset is `candy-code.phar.sha256.sig` — a
 signature over the `candy-code.phar.sha256` sidecar body, so verification
 stays on the stream and the phar never has to fit in memory. The legacy
-`candy-code.phar.minisig` signs the raw phar bytes and is accepted for one
-further release cycle. Despite the file names, both are RAW base64 sodium
+`candy-code.phar.minisig` signs the raw phar bytes instead; it is
+still accepted on releases that carry no sidecar signature — a preference
+order, not a dated sunset. Despite the file names, both are RAW base64 sodium
 (Ed25519) signatures — neither is in minisign format. Phars from `candy-code/v0.1.0`
 and earlier are unsigned and report an uncomparable `dev-master` version
 stamp, so an install from one cannot self-update — download
@@ -157,18 +152,47 @@ The script takes flags only — no environment variables — plus
 `--base-url URL` to read `releases.json` from a mirror of the release list
 instead of the GitHub API. Homebrew: a formula is rendered per release by
 `candy-code/tools/gen-homebrew-formula.php` and ships as that release's
-`candy-code.rb` asset — there is no tap, so install it as a formula file:
-`brew install --formula ./candy-code.rb`.
+`candy-code.rb` asset — there is no tap, so install the formula file itself,
+downloaded from the release page or named by its download URL:
+`brew install --formula ./candy-code.rb`, or
+`brew install --formula "https://github.com/detain/sugarcraft/releases/download/<tag>/candy-code.rb"`.
 
-Requirements: PHP 8.3+, `ext-sqlite3` (it backs the Team task list) and
-`pdo_sqlite` (the session store),
-`ext-curl` for the HTTP providers, and `ext-mbstring` with `ext-intl` (text
-width and locale handling, used directly by the rendering stack). `ext-pcntl` is strongly recommended:
+To require it as a dependency of your own Composer project:
+
+```bash
+composer require sugarcraft/candy-code        # the binary is vendor/bin/candy-code
+```
+
+Read the prerequisite before typing that: the `sugarcraft/*` libraries this
+package builds on ship only dev releases, so the command resolves only in a
+root that accepts them — `"minimum-stability": "dev"` with
+`"prefer-stable": true` in your own `composer.json` (its effect on every
+later require there is the price). A default `stable` root cannot resolve it
+at all; the same-mechanism global-require trap is dissected under
+[Install as a user](#install-as-a-user) below, and for a PATH command without
+a project the phar or `tools/install.sh` above is the honest path. From a
+checkout of this package instead: `composer install && ./bin/candy-code` —
+and inside the `sugarcraft` monorepo, run `php scripts/refresh-deps.php
+--mode=linked` first so the sibling libraries resolve from this tree.
+
+Requirements: PHP 8.3+ is a hard floor — nothing boots below it. No other
+row here is preflight-enforced: a missing piece degrades or fails at its own
+point of use, and `candy-code doctor` checks every row below (plus the
+provider, config, sandbox and session rows), so make it step zero whenever
+anything misbehaves. The extensions: `ext-sqlite3` (it backs the Team task
+list) and `pdo_sqlite` (the session store); `ext-mbstring` with `ext-intl`
+(text width and locale handling, used directly by the rendering stack);
+`ext-sodium` for Ed25519 signature checks — without it `self-update` and
+`tools/install.sh` refuse to swap or install a phar they cannot verify,
+which is the safe direction, not a breakage; and `ext-curl`, recommended
+rather than required — without it Guzzle's `Utils::chooseHandler()` routes
+the HTTP providers to the stream transport (where `allow_url_fopen` allows),
+and the `doctor` row answers `WARN`. `ext-pcntl` is strongly recommended:
 each turn runs in a forked child, and without it turns, parallel tool calls and
 sub-agents run in-process and the screen only updates when they finish.
 `candy-code serve` additionally needs `ext-pcntl`, `ext-posix` and `ext-ffi`,
 and serves the browser UI when `sugarcraft/candy-code-web` is installed
-beside it. `candy-code doctor` checks all of this for you. On **Windows** the
+beside it. On **Windows** the
 chat/TUI is experimental: the interactive tools (Bash `interactive` and
 PtyRun) allocate a ConPTY pseudoconsole, which needs PHP 8.4+, Windows 10
 1809 or newer, `ext-ffi`, and a `bash.exe` on PATH or under the default Git
@@ -222,7 +246,7 @@ assumes.
 ## Quick start
 
 ```bash
-./bin/candy-code            # or vendor/bin/candy-code in a project that requires the package
+./bin/candy-code            # from a checkout of this package; after the Install paths above the command is just `candy-code` on your PATH, or vendor/bin/candy-code inside a project that requires the package
 ```
 
 With no configuration the binary runs the **offline `EchoProvider`** through the full engine, so it launches with zero network and zero keys. Point it at a real model with environment variables:

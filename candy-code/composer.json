@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-code",
-    "description": "Chat-shell TUI for AI coding assistants \u2014 port of charmbracelet/crush. Pluggable Backend interface (ship your own Anthropic / OpenAI / Ollama / shell-out adapter). Markdown rendering of replies via SugarMarkdown, scrollback viewport via SugarWidgets, input area via SugarWidgets TextArea.",
+    "description": "Chat-shell TUI for AI coding assistants \u2014 port of charmbracelet/crush. Pluggable Backend interface (ship your own Anthropic / OpenAI / Ollama / shell-out adapter). Markdown rendering of replies via SugarMarkdown, scrollback viewport via SugarWidgets, input area via SugarForms TextArea.",
     "type": "project",
     "license": "MIT",
     "keywords": [
@@ -76,6 +76,7 @@
     },
     "suggest": {
         "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom).",
+        "ext-sodium": "Required by `candy-code self-update` and tools/install.sh: Ed25519 verification of release signatures; both refuse an unverifiable phar without it.",
         "ext-dom": "Required by WebFetch's HTML-to-Markdown conversion (the default format); without it HTML bodies come back raw with a one-line note.",
         "ext-pcntl": "Required by `candy-code serve`: every turn runs in a forked child, and the blocking fallback would stall every session on the server.",
         "ext-posix": "Required by `candy-code serve` (process identity and signals for the forked turn children).",

@@ -7457,4 +7457,33 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertFalse(strpos($shaper, $clock), "McpPromptCommands mentions {$clock} — the page promises the fetch rides the ordinary MCP deadline, not a new clock");
         }
     }
+    /**
+     * cli-m3 (lib-reviews-1103): the TROUBLESHOOTING "Start here" fence
+     * advertised the doctor roster size in words while `Cli/DoctorChecks.php`
+     * grew rows — the one figure on that page no guard derived. Pin it live:
+     * the word must spell `count(DoctorChecks::probes())` exactly, so adding
+     * or retiring a row forces the sentence along.
+     */
+    public function testTheTroubleshootingCheckCountWordTracksTheDoctorRoster(): void
+    {
+        $trouble = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/TROUBLESHOOTING.md');
+        self::assertSame(
+            1,
+            preg_match('/# (\w+) checks; exits 1 if any FAILs/', $trouble, $m),
+            'the doctor fence no longer carries its check-count word — re-pin this arm with the page'
+        );
+
+        $wordNumbers = [
+            'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
+            'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17, 'eighteen' => 18,
+            'nineteen' => 19, 'twenty' => 20, 'twenty-one' => 21, 'twenty-two' => 22,
+            'twenty-three' => 23, 'twenty-four' => 24, 'twenty-five' => 25,
+        ];
+        self::assertArrayHasKey($m[1], $wordNumbers, "unknown count word '{$m[1]}' on the page — the arm's map needs the new spelling");
+        self::assertSame(
+            count(\SugarCraft\Code\Cli\DoctorChecks::probes(null)),
+            $wordNumbers[$m[1]],
+            'the "N checks" sentence of docs/TROUBLESHOOTING.md drifted from the live DoctorChecks::probes() roster'
+        );
+    }
 }

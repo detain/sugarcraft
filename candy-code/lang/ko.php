@@ -209,6 +209,7 @@ return [
     'cli.doctor.config_invalid' => '{path}: 잘못된 JSON ({error})',
     'cli.doctor.config_unreadable' => '{path} 읽을 수 없음',
     'cli.doctor.curl_missing' => '누락 — HTTP 프로바이더(openai, anthropic, sglang, custom) 실패',
+    'cli.doctor.sodium_missing' => '누락 — self-update와 tools/install.sh가 릴리스 서명을 검증할 수 없음',
     'cli.doctor.failed.many' => '{count}개 검사 실패.',
     'cli.doctor.failed.one' => '{count}개 검사 실패.',
     'cli.doctor.fts5_missing' => '전문 검색 불가 ({error}) — 세션 본문 검색이 이름/미리보기 사전 필터로 축소됨',

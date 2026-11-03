@@ -209,6 +209,7 @@ return [
     'cli.doctor.config_invalid' => '{path} : JSON invalide ({error})',
     'cli.doctor.config_unreadable' => '{path} n\'est pas lisible',
     'cli.doctor.curl_missing' => 'absent — les fournisseurs HTTP (openai, anthropic, sglang, custom) échoueront',
+    'cli.doctor.sodium_missing' => 'absent — self-update et tools/install.sh ne peuvent pas vérifier les signatures de version',
     'cli.doctor.failed.many' => '{count} vérifications échouées.',
     'cli.doctor.failed.one' => '{count} vérification échouée.',
     'cli.doctor.fts5_missing' => 'recherche en texte intégral indisponible ({error}) — la recherche dans le corps des sessions se dégrade en préfiltre nom/apercu',

@@ -209,6 +209,7 @@ return [
     'cli.doctor.config_invalid' => '{path}: 不正なJSON（{error}）',
     'cli.doctor.config_unreadable' => '{path} が読み取り不可',
     'cli.doctor.curl_missing' => '未設定 — HTTPプロバイダー（openai, anthropic, sglang, custom）は失敗します',
+    'cli.doctor.sodium_missing' => '未設定 — self-update と tools/install.sh はリリース署名を検証できません',
     'cli.doctor.failed.many' => '{count} 件のチェックが失敗しました。',
     'cli.doctor.failed.one' => '{count} 件のチェックが失敗しました。',
     'cli.doctor.fts5_missing' => '全文検索不可（{error}）— セッション本文検索は名前/プレビューのプリフィルタに縮退',

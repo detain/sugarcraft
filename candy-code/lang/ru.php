@@ -209,6 +209,7 @@ return [
     'cli.doctor.config_invalid' => '{path}: некорректный JSON ({error})',
     'cli.doctor.config_unreadable' => '{path} не читается',
     'cli.doctor.curl_missing' => 'отсутствует — HTTP-провайдеры (openai, anthropic, sglang, custom) не будут работать',
+    'cli.doctor.sodium_missing' => 'отсутствует — self-update и tools/install.sh не могут проверить подписи релизов',
     'cli.doctor.failed.many' => 'Сбой проверок: {count}.',
     'cli.doctor.failed.one' => 'Сбой проверки: {count}.',
     'cli.doctor.fts5_missing' => 'полнотекстовый поиск недоступен ({error}) — поиск по телу сессии сводится к префильтру по имени/превью',
