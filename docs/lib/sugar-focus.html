@@ -53,7 +53,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-focus"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-focus" alt="SugarFocus code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the app-wide "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any sugar-core model without pulling in dependencies. Original SugarCraft component.</p>
+    <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any sugar-core model without pulling in dependencies. Original SugarCraft component.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-focus</code></pre>
@@ -77,23 +77,29 @@ $ring->isFocused('grid');     // true</code></pre>
 use SugarCraft\Core\Msg\KeyMsg;
 
 // …in update():
-if ($msg instanceof KeyMsg &amp;&amp; $msg->type === KeyType::Tab) {
+if ($msg instanceof KeyMsg &amp;&amp; $msg->type === KeyType::Tab
+    &amp;&amp; !$msg->ctrl &amp;&amp; !$msg->alt) {
     $ring = $msg->shift ? $this->ring->previous() : $this->ring->next();
     return [$this->withRing($ring), null];
 }
 
 // …and in view():
-$style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre>
+$style = $ring->isFocused('sidebar') &amp;&amp; $ring->isEnabled('sidebar')
+    ? $accentBorder : $plainBorder;</code></pre>
+
+    <p>On the wire, <strong>Shift+Tab</strong> arrives as <code>Tab</code> with <code>shift: true</code> — sugar-core's <code>InputReader</code> decodes <code>ESC [ Z</code> (CSI-Z, the literal "Backtab" sequence) into that shape. <strong>Ctrl+Tab</strong> and <strong>Ctrl+Shift+Tab</strong> also arrive as plain <code>Tab</code> on basic terminals, so the <code>!$msg-&gt;ctrl &amp;&amp; !$msg-&gt;alt</code> gate leaves those chords free for other bindings. The <code>isEnabled()</code> conjunct in the paint matters: focus can legally park on a disabled region, so <code>isFocused()</code> alone can accent a dimmed panel.</p>
 
     <h3 style="margin-top: 32px;">Behaviour</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Exactly one focused region</strong><span>A non-empty ring always has exactly one focused region; an empty ring focuses nothing (<code>current()</code> is <code>null</code>, <code>index()</code> is <code>-1</code>).</span></div>
       <div class="feature"><strong>register() appends</strong><span>Adds to the traversal order and focuses the region only when the ring was empty; re-registering an existing id is a no-op.</span></div>
-      <div class="feature"><strong>unregister() preserves focus</strong><span>Keeps focus on the same region where possible; removing the focused region shifts focus to whatever takes its slot (clamped to the end), and emptying the ring clears focus.</span></div>
-      <div class="feature"><strong>Wrap-around traversal</strong><span><code>next()</code> / <code>previous()</code> wrap past the ends and are no-ops with fewer than two regions.</span></div>
-      <div class="feature"><strong>reorder() in one step</strong><span>Replaces the traversal order: ids are deduped (first wins), focus stays on the current region if it survives (otherwise the first region is focused), new ids are added and missing ids dropped.</span></div>
-      <div class="feature"><strong>Disabled regions</strong><span><code>disable()</code> keeps a region registered but makes traversal skip it; <code>enable()</code> puts it back. Disabling the focused region does not move focus — the next <code>next()</code> / <code>previous()</code> carries it to the nearest enabled region. <code>register()</code> always adds an enabled region, and a region dropped while disabled comes back enabled.</span></div>
-      <div class="feature"><strong>Iterable, countable, serialisable</strong><span>Implements <code>IteratorAggregate</code>, <code>Countable</code> and <code>JsonSerializable</code>: <code>foreach</code> walks every registered id, <code>count($ring)</code> counts them, and <code>json_encode($ring)</code> gives <code>{"ids":[…],"index":n,"disabled":[…]}</code> with string ids you can feed back in to restore a session.</span></div>
+      <div class="feature"><strong>unregister() lands enabled</strong><span>Keeps focus on the same region where possible; removing the focused region lands focus on the nearest <em>enabled</em> survivor at or after the vacated slot (wrapping around), falling back to the clamped slot only when every survivor is disabled; emptying the ring clears focus.</span></div>
+      <div class="feature"><strong>Wrap-around traversal</strong><span><code>next()</code> / <code>previous()</code> wrap past the ends and are no-ops with fewer than two <em>enabled</em> regions — with one exception: focus parked on a disabled region beats the no-op and moves to the nearest enabled survivor.</span></div>
+      <div class="feature"><strong>reorder() in one step</strong><span>Replaces the traversal order: ids are deduped (first wins), focus stays on the current region if it survives — otherwise it lands on the first <em>enabled</em> survivor, index 0 only when every survivor is disabled. New ids are added and missing ids dropped; reordering an already-empty ring is a no-op.</span></div>
+      <div class="feature"><strong>Disabled regions</strong><span><code>disable()</code> keeps a region registered but makes traversal skip it; <code>enable()</code> puts it back. Disabling the focused region does not move focus — the next <code>next()</code> / <code>previous()</code> carries it to the nearest enabled region, even a sole enabled survivor. <code>focus()</code> refuses a disabled id (no-op) so it cannot teleport past that wall — snapshots restore focuses the id before re-applying its flag. A region dropped while disabled comes back enabled.</span></div>
+      <div class="feature"><strong>Iterable, countable, serialisable</strong><span>Implements <code>IteratorAggregate</code>, <code>Countable</code> and <code>JsonSerializable</code>: <code>foreach</code> walks every registered id, <code>count($ring)</code> counts them, <code>json_encode($ring)</code> gives <code>{"ids":[…],"focused":…,"index":n,"disabled":[…]}</code>, and <code>FocusRing::restore()</code> rebuilds the ring — clamping stale indices, dropping unknown disabled entries, preferring the <code>focused</code> id over the positional leg, and still loading legacy positional-only snapshots.</span></div>
+      <div class="feature"><strong>Pure queries</strong><span><code>nextOf()</code> / <code>previousOf()</code> answer where traversal would land from an id without moving focus; <code>focusFirst()</code> / <code>focusLast()</code> jump to the first / last enabled region; <code>enabledIndex()</code> is the focused region's ordinal among enabled ids (<code>null</code> while parked or empty).</span></div>
+      <div class="feature"><strong>Modals and focus traps</strong><span>No layer concept: a dialog is just another region and the trap is the disabled set — register it, disable the background, and on close re-enable the background before dropping the dialog and restoring the saved region. The README carries the full recipe and its edges.</span></div>
       <div class="feature"><strong>Immutable</strong><span>Every mutator returns a new <code>FocusRing</code> and leaves the receiver untouched, so it slots into the immutable Model–Update–View pattern. No-op calls return the <em>same</em> instance, so <code>$new === $old</code> cheaply detects "nothing changed".</span></div>
       <div class="feature"><strong>Dependency-free</strong><span>No rendering or key decoding of its own — the owning model wires keys to it and reads <code>isFocused()</code> when drawing. Composes with any sugar-core model.</span></div>
     </div>
@@ -102,7 +108,7 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
     <ul>
       <li><strong>Full-window TUI layouts</strong> — track which panel (sidebar, content grid, filter bar) currently owns keyboard focus.</li>
       <li><strong>Tab / Shift-Tab traversal</strong> — wrap-around movement across an ordered set of regions, decoupled from key decoding.</li>
-      <li><strong>Accent-border styling</strong> — read <code>isFocused()</code> in <code>view()</code> to highlight the active region.</li>
+      <li><strong>Accent-border styling</strong> — read <code>isFocused()</code> together with <code>isEnabled()</code> in <code>view()</code> to highlight the focused region.</li>
       <li><strong>Immutable models</strong> — drop the ring into your Model state; every mutator returns a fresh instance.</li>
     </ul>
 
@@ -111,8 +117,10 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
       <li><a href="https://github.com/sugarcraft/sugar-focus">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-focus/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-focus/tree/master/tests">Test suite</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-focus/tree/master/examples">Runnable example</a></li>
       <li>Original SugarCraft design — no 1:1 Go counterpart.</li>
     </ul>
+    <p><img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-focus/.vhs/focus-ring.gif" alt="sugar-focus demo" onerror="this.parentElement.style.display='none'"></p>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
@@ -122,25 +130,29 @@ $style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre
 <tr><td>FocusRing</td><td>new(): self</td><td>An empty ring with nothing registered or focused</td></tr>
 <tr><td>FocusRing</td><td>of(string ...$ids): self</td><td>A ring of regions (duplicates dropped), focusing the first</td></tr>
 <tr><td>FocusRing</td><td>ofStrict(string ...$ids): self</td><td>Like of(), but throws InvalidArgumentException on a duplicate id</td></tr>
+<tr><td>FocusRing</td><td>restore(array $snapshot): self</td><td>Inverse of jsonSerialize() — clamps stale indices, drops unknown disabled entries, loads legacy positional snapshots</td></tr>
 <tr><td>FocusRing</td><td>register(string $id): self</td><td>Add an enabled region to the end of the traversal order</td></tr>
 <tr><td>FocusRing</td><td>unregister(string $id): self</td><td>Remove a region, preserving focus where possible</td></tr>
 <tr><td>FocusRing</td><td>reorder(string ...$ids): self</td><td>Replace the traversal order, keeping focus on the current id when it survives</td></tr>
-<tr><td>FocusRing</td><td>focus(string $id): self</td><td>Focus a specific registered region</td></tr>
+<tr><td>FocusRing</td><td>focus(string $id): self</td><td>Focus a specific registered, enabled region (no-op for unknown, disabled or already-focused ids)</td></tr>
 <tr><td>FocusRing</td><td>next(): self</td><td>Tab traversal — move to the next enabled region (wrapping)</td></tr>
 <tr><td>FocusRing</td><td>previous(): self</td><td>Shift-Tab traversal — move to the previous enabled region (wrapping)</td></tr>
+<tr><td>FocusRing</td><td>nextOf(string $id): ?string / previousOf(string $id): ?string</td><td>Pure query: the id traversal would land on if focus sat on $id (focus not moved; null for unregistered ids)</td></tr>
+<tr><td>FocusRing</td><td>focusFirst(): self / focusLast(): self</td><td>Jump to the first / last enabled region (no-op when none is enabled)</td></tr>
 <tr><td>FocusRing</td><td>disable(string $id): self / enable(string $id): self</td><td>Exclude a region from / restore it to traversal; no-ops for unknown ids or ids already in that state</td></tr>
-<tr><td>FocusRing</td><td>isEnabled(string $id): bool</td><td>Whether $id is registered and not disabled</td></tr>
+<tr><td>FocusRing</td><td>isEnabled(string $id): bool</td><td>Whether $id is registered and not disabled (false conflates unregistered with disabled — use has() to tell them apart)</td></tr>
 <tr><td>FocusRing</td><td>enabledIds(): list&lt;string&gt; / disabledIds(): list&lt;string&gt;</td><td>Enabled / disabled ids in traversal order</td></tr>
 <tr><td>FocusRing</td><td>enabledCount(): int / disabledCount(): int</td><td>Enabled / disabled region counts</td></tr>
 <tr><td>FocusRing</td><td>current(): ?string</td><td>The focused region id, or null when empty</td></tr>
-<tr><td>FocusRing</td><td>isFocused(string $id): bool</td><td>Whether $id is the focused region</td></tr>
+<tr><td>FocusRing</td><td>isFocused(string $id): bool</td><td>Whether $id is the focused region (paint with &amp;&amp; isEnabled($id))</td></tr>
 <tr><td>FocusRing</td><td>has(string $id): bool</td><td>Whether $id is registered</td></tr>
-<tr><td>FocusRing</td><td>index(): int</td><td>Focused position, or -1 when empty</td></tr>
+<tr><td>FocusRing</td><td>index(): int</td><td>Focused position into all registered ids, or -1 when empty (enabledIndex() for the "k of n" enabled ordinal)</td></tr>
+<tr><td>FocusRing</td><td>enabledIndex(): ?int</td><td>Focused region's 0-based ordinal into enabledIds(), or null when the ring is empty or focus is parked on a disabled region</td></tr>
 <tr><td>FocusRing</td><td>ids(): list&lt;string&gt;</td><td>Registered region ids in traversal order</td></tr>
 <tr><td>FocusRing</td><td>count(): int</td><td>Number of registered regions (Countable, so count($ring) works too)</td></tr>
 <tr><td>FocusRing</td><td>isEmpty(): bool</td><td>Whether the ring has no regions</td></tr>
 <tr><td>FocusRing</td><td>getIterator(): Traversable&lt;int, string&gt;</td><td>foreach support — every registered id (disabled ones included) in traversal order</td></tr>
-<tr><td>FocusRing</td><td>jsonSerialize(): array</td><td>['ids' =&gt; …, 'index' =&gt; …, 'disabled' =&gt; …] snapshot for json_encode()</td></tr>
+<tr><td>FocusRing</td><td>jsonSerialize(): array</td><td>['ids' =&gt; …, 'focused' =&gt; …, 'index' =&gt; …, 'disabled' =&gt; …] snapshot for json_encode(); restore() reads it back</td></tr>
 </table>
   </div>
 </section>
