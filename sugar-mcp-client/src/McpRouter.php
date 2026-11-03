@@ -87,10 +87,20 @@ final class McpRouter
      * The servers that survive deny patterns and the allow-list, keyed by name.
      *
      * @param list<string> $allowList empty list means "all servers allowed"
-     * @return array<string,McpServer>
+     * @return array<array-key,McpServer> keyed by the config name; a name
+     *         that is a decimal integer arrives as an int key (PHP array
+     *         normalisation — compare keys as strings, and note that deny
+     *         rules and allow entries DO reach such a server)
      */
     public function resolveAllowedServers(array $allowList = []): array
     {
+        // Review N1: PHP's array law casts decimal-integer keys to int on
+        // the way IN and no re-spelling keeps them strings on the way OUT,
+        // so a server literally named "0" rides an int key through the map.
+        // The filters below read every key at its STRING spelling (the old
+        // `fn (string $name)` either TypeErrored the view or, behind an
+        // early return, let a rule for "0" silently miss it); the @return
+        // documents the normalisation honestly instead of pretending.
         $allowed = $this->applyDenyPatterns($this->servers);
 
         return $this->applyAllowList($allowed, $allowList);
@@ -108,7 +118,7 @@ final class McpRouter
 
         return array_filter(
             $servers,
-            fn (string $name): bool => !$this->matchesAnyDenyPattern($name),
+            fn (int|string $name): bool => !$this->matchesAnyDenyPattern((string) $name),
             ARRAY_FILTER_USE_KEY,
         );
     }
@@ -126,7 +136,7 @@ final class McpRouter
 
         return array_filter(
             $servers,
-            fn (string $name): bool => self::serverAllowed($name, $allowList),
+            fn (int|string $name): bool => self::serverAllowed((string) $name, $allowList),
             ARRAY_FILTER_USE_KEY,
         );
     }
@@ -147,15 +157,21 @@ final class McpRouter
      * Public static because the same question gets asked without a router in
      * sight: candy-code's McpClient applies the operator's deny map to the
      * servers it starts and to its unrestricted arm, which never builds a
-     * router over the servers it refuses (lane-A2 fold of the candy-code
-     * original — this class is now the single home of both predicates).
+     * router over the servers it refuses (folded from the candy-code
+     * original; this class is now the single home of both predicates).
      *
-     * A pattern that is not a non-empty string never matches. PHP casts
-     * numeric-looking array keys back to int, and an int "pattern" — or the
-     * literal "" a stray config colon leaves behind — is not a rule anyone
-     * authored against a server name; reading it as one would be guessing.
-     * An entry whose action is not the exact string "deny" is likewise not a
-     * deny rule; other actions are ignored, never interpreted.
+     * An empty pattern never matches: the literal "" a stray config colon
+     * leaves behind is not a rule anyone authored against a server name.
+     * Numeric-looking array keys arrive from PHP as ints and are read at
+     * their string spelling — a server literally named "0" is addressable,
+     * and a deny rule spelling that name must reach it; a deny side that
+     * skipped such a key would fail OPEN, the one direction this layer
+     * refuses. Patterns are GLOBS honored by fnmatch with all its semantics:
+     * backslash escapes are live, so a pattern authored as a regular
+     * expression (`\d+`, `.*`) is a foot-gun — the deny side is glob by
+     * contract. An entry whose action is not the exact string "deny" is
+     * likewise not a deny rule; other actions are ignored, never
+     * interpreted.
      *
      * @param array<array-key, mixed> $denyPatterns pattern => action, the raw
      *        config shape (or the constructor-normalised action map).
@@ -163,7 +179,9 @@ final class McpRouter
     public static function serverDenied(string $server, array $denyPatterns): bool
     {
         foreach ($denyPatterns as $pattern => $action) {
-            if ($action === 'deny' && \is_string($pattern) && $pattern !== '' && fnmatch($pattern, $server)) {
+            $spelling = is_int($pattern) ? (string) $pattern : (\is_string($pattern) ? $pattern : '');
+
+            if ($action === 'deny' && $spelling !== '' && fnmatch($spelling, $server)) {
                 return true;
             }
         }
@@ -177,24 +195,33 @@ final class McpRouter
      * `applyAllowList()` filters a whole server map; downstream gate checks
      * answer the same question one entry at a time — candy-code's sub-agent
      * roster narrows MCP bridges out of a preset's grant at resolution
-     * (E696-α, `AgentManager::resolveGrantedTools()`). Both must read the same
+     * (the sub-agent roster narrowing in `AgentManager::resolveGrantedTools()`). Both must read the same
      * law — empty list allows all, `*` entries `fnmatch`, everything else is
      * exact equality on the RAW config server key — or a preset's roster and
      * its router view diverge, which is the two-dialects defect a permission
      * layer refuses to host for tool names. One spelling of the membership
      * rule, one implementation; the filter delegates here rather than
-     * mirroring it. (Lane-A2 fold: this is the candy-code original's wording
-     * and doctrine, now the single home.)
+     * mirroring it. (Folded from the candy-code original's wording and
+     * doctrine; this class is the single home.)
      *
      * RAW BOTH SIDES ON PURPOSE: entries are compared against the config key
      * as authored (`.mcp.json` for candy-code), never against the sanitised
-     * `mcp__<key>__` wire spelling (E42) — a caller holding only a wire name
+     * `mcp__<key>__` wire spelling (the raw-key law) — a caller holding only a wire name
      * must not route it in here.
      *
      * An empty list means allow-all — "no restriction configured" is distinct
      * from "restrict to nothing", and every product caller relies on that
-     * reading. A `*` entry glob-matches via fnmatch(); anything else must
-     * compare exactly.
+     * reading. The two sides of the wall deliberately speak TWO GLOB
+     * DIALECTS, and the difference is the fail-closed direction: the DENY
+     * side (serverDenied) fnmatches EVERY pattern, because a denial is only
+     * dangerous when it UNDER-matches — reading `q?` or `[ab]*` as a
+     * literal there would let a refused server through. The ALLOW side is
+     * strict: only entries containing `*` glob at all, anything else must
+     * compare exactly, because an allow rule is dangerous when it
+     * OVER-matches — a typo like `q?` read literally narrows nothing
+     * silently, while fnmatch-ing it would quietly widen the grant to
+     * `qq`. Both laws are pinned in McpRouterTest: `q?` denies `qq` and
+     * does not allow it.
      *
      * Non-string or empty-string entries throw. A blank rule would fnmatch()
      * nothing useful and an exact "" compares to nothing real: we refuse rather

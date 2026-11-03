@@ -80,8 +80,10 @@ final class McpToolTest extends TestCase
     {
         return [
             'name is a number (the measured kill-chain)' => [['name' => 5], 'name'],
+            'name carries control bytes (N3)' => [['name' => "bad\x00name"], 'name'],
+            'name carries escape sequences (N3)' => [['name' => "esc\x1b[31m"], 'name'],
             'name is a bool' => [['name' => true], 'name'],
-            // Review probe P8: name is REQUIRED, not skip-if-absent. A bare
+            // Measured: name is REQUIRED, not skip-if-absent. A bare
             // `{}` used to mint a phantom tool named '' through the isset()
             // leniency that legitimately serves description/inputSchema.
             'name absent entirely' => [[], 'name'],

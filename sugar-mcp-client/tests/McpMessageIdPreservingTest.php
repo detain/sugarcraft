@@ -74,6 +74,19 @@ final class McpMessageIdPreservingTest extends TestCase
         $deep = str_repeat('[', McpMessage::MAX_DEPTH + 1) . str_repeat(']', McpMessage::MAX_DEPTH + 1);
         self::assertNull(McpMessage::parsePreservingId('{"jsonrpc":"2.0","id":1,"method":"x","params":{"d":' . $deep . '}}'), 'nesting past the bound');
 
+        // Both parsers share the depth bound: the plain one reads the same
+        // hostile stdio stream (pinned 2026-11-04, fix wave, review m15 —
+        // it used to ride json_decode's default 512 while this variant
+        // refused at 64, two policies on one wire).
+        self::assertNull(McpMessage::parse('{"jsonrpc":"2.0","id":1,"method":"x","params":{"d":' . $deep . '}}'), 'the plain parser refuses the same depth');
+
+        // The dialect split is the contract, not an accident: a batch is
+        // refused only by the adapter-facing variant; the plain reader
+        // skips it as a non-object envelope through json_decode's assoc
+        // gate (pin added 2026-11-04 to stop a future unification from
+        // silently widening either surface).
+        self::assertNull(McpMessage::parse('[{"jsonrpc":"2.0","id":1,"method":"x"}]'), 'the plain parser skips a batch as non-object');
+
         $null = McpMessage::parsePreservingId('{"jsonrpc":"2.0","id":null,"result":null}');
         self::assertNotNull($null);
         self::assertNull($null->wireId);

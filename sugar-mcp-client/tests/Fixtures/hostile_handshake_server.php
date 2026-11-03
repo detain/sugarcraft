@@ -18,6 +18,8 @@ declare(strict_types=1);
  *                    every control byte must be swept from diagnostics.
  *  --slow-handshake  sleeps 1.4 s before answering initialize, so a
  *                    start(onWait:) beat must fire at least once inside it.
+ *  --bad-tool-name   advertises a tool whose name carries a raw NUL
+ *                    byte (boot must refuse: gate + malformed count).
  *  --noisy           floods 70 KiB of plain stderr at startup, then behaves:
  *                    the tail (and its truncation flag) must survive stop().
  *
@@ -67,11 +69,22 @@ while (($line = fgets(STDIN)) !== false) {
             break;
 
         case 'tools/list':
-            $write(['jsonrpc' => '2.0', 'id' => $id, 'result' => ['tools' => [[
+            $good = [
                 'name' => 'echo',
                 'description' => 'echo raw',
                 'inputSchema' => ['type' => 'object', 'properties' => new stdClass()],
-            ]]]]);
+            ];
+            if ($mode === '--bad-tool-name') {
+                // A server-authored NUL in the name: the well-typedness gate
+                // refuses it, and the malformed-count rail turns the boot
+                // into a loud failure instead of a silently shrunk roster.
+                $write(['jsonrpc' => '2.0', 'id' => $id, 'result' => ['tools' => [
+                    ['name' => 'bad' . chr(0) . 'name', 'description' => 'poison', 'inputSchema' => ['type' => 'object', 'properties' => new stdClass()]],
+                    $good,
+                ]]]);
+                break;
+            }
+            $write(['jsonrpc' => '2.0', 'id' => $id, 'result' => ['tools' => [$good]]]);
             break;
 
         case 'tools/call':

@@ -8,13 +8,13 @@ namespace SugarCraft\McpClient;
  * Restores the JSON object/array distinction a `tools/call` argument map lost
  * on its way into PHP, guided by the tool's own `inputSchema`.
  *
- * WHY THIS EXISTS (audit MCP-9). A model's tool-call arguments reach PHP via
+ * WHY THIS EXISTS (the nested-object wire audit). A model's tool-call arguments reach PHP via
  * `json_decode($raw, true)` in every provider parser, so `{"filter":{}}` and
  * `{"filter":[]}` both arrive as `['filter' => []]`, and `json_encode()` sends
  * that back out as `"filter":[]`. The official TypeScript/Python SDK servers
  * validate arguments against the schema they advertised and refuse it
  * ("expected object, received array"), so the call fails although the model
- * sent valid JSON. MCP-1 fixed only the top level (`"arguments":{}`); this is
+ * sent valid JSON. The first pass fixed only the top level (`"arguments":{}`); this is
  * the same defect one level down, and at every level below that.
  *
  * WHY THE SCHEMA, and not "decode without assoc end to end": the arguments pass
@@ -48,7 +48,7 @@ namespace SugarCraft\McpClient;
  *    `anyOf: [{"$ref": …}, {"type": "null"}]` for an optional one.
  *
  * NO SCHEMA, NO GUESS: an empty array at a position the schema does not type
- * stays `[]`. That is exactly the pre-MCP-9 behaviour, so an unknown position
+ * stays `[]`. That is exactly the pre-shaping behaviour, so an unknown position
  * can never be made worse by this class; flipping the default would turn every
  * genuine empty list (`"tags":[]`) under a schema-less tool into an object.
  *
@@ -73,6 +73,19 @@ final class ArgumentShape
 
     private int $visits = 0;
 
+    /**
+     * Patterns already attempted in this walk that PCRE rejected (a
+     * compile error or an execution overflow). Review m8/m9: a hostile
+     * pattern like `(a+)+$` measured ~25 ms PER KEY before any frame was
+     * written; every pattern now gets ONE attempt per conform(), after
+     * which its positions read as schema-untyped (NO-GUESS — empty values
+     * keep their decoded shape, a `{}` the pattern would have typed stays
+     * `{}` only when the schema says so elsewhere).
+     *
+     * @var array<string,true>
+     */
+    private array $patternUnusable = [];
+
     /** Keywords that only constrain objects; their presence types an untyped schema. */
     private const OBJECT_KEYWORDS = [
         'properties', 'additionalProperties', 'patternProperties', 'required',
@@ -95,7 +108,7 @@ final class ArgumentShape
      * The tool-call argument map with every empty object position (per the
      * schema) turned into `\stdClass`. The top level itself stays an array —
      * an empty one is returned as `[]`, and each transport keeps its own
-     * `=== [] ? new \stdClass()` for the `arguments` member (audit MCP-1), so
+     * `=== [] ? new \stdClass()` for the `arguments` member (the top-level object law), so
      * a caller typed `array` (e.g. ClaudeCodeMcpClient) can take the result.
      *
      * @param array<array-key,mixed> $arguments  decoded tool-call arguments
@@ -253,8 +266,25 @@ final class ArgumentShape
                 continue;
             }
             foreach ($patterns as $pattern => $sub) {
-                // ECMA-262 patterns; one PCRE cannot compile is simply no match.
-                if (@preg_match('/' . str_replace('/', '\/', (string) $pattern) . '/u', $key) === 1) {
+                // ECMA-262 patterns. One that PCRE cannot compile — or
+                // cannot execute inside the backtrack budget — types
+                // NOTHING, but it is tried ONCE per walk, not once per key
+                // (the measured (a+)+$ stall would otherwise burn a
+                // deadline-less callTool before a single frame). Its keys
+                // simply fall through to NO-GUESS.
+                $spelling = (string) $pattern;
+                if (isset($this->patternUnusable[$spelling])) {
+                    continue;
+                }
+
+                $matched = @preg_match('/' . str_replace('/', '\/', $spelling) . '/u', $key);
+                if ($matched === false) {
+                    $this->patternUnusable[$spelling] = true;
+
+                    continue;
+                }
+
+                if ($matched === 1) {
                     return $sub;
                 }
             }

@@ -82,11 +82,15 @@ final class RequestIdSequenceTest extends TestCase
 
         self::assertSame(200, $ids->ownerPid());
         self::assertTrue($ids->isOwner());
-        self::assertSame(1, $ids->next(), 'the owner counter continues, it is never reset');
+        // Pin flipped 2026-11-04 (fix wave, review N9 / tui n2): the counter
+        // is never RESET, but a foreign succession now resumes FAR ahead —
+        // the dead owner's plain-id window can never alias a stale reply
+        // still sitting in the pipe.
+        self::assertGreaterThanOrEqual(1_000_001, $ids->next(), 'the counter continues ahead of the dead owner window');
     }
 
     /**
-     * FIX #5: the fork-collision shape — parent (owner) alive, child re-claims
+     * The fork guard: the fork-collision shape — parent (owner) alive, child re-claims
      * the same sequence object. The claim must be REFUSED, ownership stay put,
      * and the child keep minting pid-tagged nonce ids so it can never collide
      * with the live owner's plain counters on the shared connection.

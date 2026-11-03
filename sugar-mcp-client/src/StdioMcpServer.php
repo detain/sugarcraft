@@ -122,7 +122,7 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * answerer must therefore never call back into this server instance; it
  * answers from state it already holds. The wall clock a request handler
  * spends is PAUSED out of any bounded call's deadline — waiting for an
- * answer this client owes is not the server being slow (E646 spirit).
+ * answer this client owes is not the server being slow (the no-blanket-timeout law).
  */
 final class StdioMcpServer implements McpServer
 {
@@ -139,7 +139,7 @@ final class StdioMcpServer implements McpServer
     public const DEFAULT_START_TIMEOUT_SECONDS = 60.0;
 
     /**
-     * Page ceiling for the `tools/list` cursor walk (ISS-093(b)), mirroring
+     * Page ceiling for the `tools/list` cursor walk, mirroring
      * candy-code's HttpMcpServer. A wall for pathological servers, not a
      * working budget: 32 pages times a typical page of a hundred tools is
      * three thousand entries, far past any real server. The guard that
@@ -246,8 +246,42 @@ final class StdioMcpServer implements McpServer
      */
     private ?string $lastFailureCause = null;
 
-    /** Identity this client advertises in the initialize handshake. */
+    /**
+     * The identity this client advertises in the initialize handshake. The
+     * version literal is only the FALLBACK: an installed copy announces its
+     * real package version (see {@see defaultClientInfo()}); the literal
+     * stays for the linked monorepo checkout, where this package is itself
+     * the install root and no shipped version has been resolved.
+     */
     private const DEFAULT_CLIENT_INFO = ['name' => 'sugar-mcp-client', 'version' => '0.1.0'];
+
+    /**
+     * The advertised identity with the SHIPPED package version when the
+     * Composer runtime knows it (m16's fix: a frozen literal here keeps
+     * announcing an outdated version silently, release after release, and
+     * the handshake is the one place a server gets to know who is calling).
+     * Only the untouched default is resolved — an explicitly
+     * caller-supplied identity is never rewritten.
+     *
+     * @return array<string,string>
+     */
+    private static function defaultClientInfo(): array
+    {
+        if (class_exists(\Composer\InstalledVersions::class)
+            && \Composer\InstalledVersions::isInstalled('sugarcraft/sugar-mcp-client')) {
+            try {
+                $version = \Composer\InstalledVersions::getPrettyVersion('sugarcraft/sugar-mcp-client');
+            } catch (\OutOfBoundsException) {
+                $version = null;
+            }
+
+            if (is_string($version) && $version !== '') {
+                return ['name' => self::DEFAULT_CLIENT_INFO['name'], 'version' => $version];
+            }
+        }
+
+        return self::DEFAULT_CLIENT_INFO;
+    }
 
     /** @var array<string,mixed> parsed in the constructor, trusted afterwards */
     private readonly array $clientInfo;
@@ -274,7 +308,7 @@ final class StdioMcpServer implements McpServer
 
     /**
      * Connection-wide answerer for the server's own requests and
-     * notifications (C-MCP-3), or null to fall back to the built-in
+     * notifications (the server-request law), or null to fall back to the built-in
      * defaults (answer ping, refuse the rest). Overridden per call by
      * {@see $callServerMessage}; see the class docblock for the contract
      * and the lock-hold discipline.
@@ -328,7 +362,7 @@ final class StdioMcpServer implements McpServer
      *        shape stayed two-tuple — the directory is a spawn fact the
      *        embedder decides up front, not one the wrapper negotiates.
      * @param array<string,mixed> $capabilities client capabilities for the
-     *        initialize handshake (C-MCP-3); the default [] encodes as the
+     *        initialize handshake (the server-request law); the default [] encodes as the
      *        empty JSON OBJECT it always has — a configured map rides
      *        through as an object too, never an array.
      * @param \Closure|null $onServerMessage connection-wide answerer for
@@ -340,6 +374,14 @@ final class StdioMcpServer implements McpServer
      *        exchange in flight (callTool converts it to an error payload);
      *        it must never call back into this server — the answer travels
      *        under the exchange lock the caller already holds.
+     * @param string|null $lockDir directory holding the exchange lock file;
+     *        null (the default) uses the system temp directory. An embedder
+     *        whose TMPDIR moves mid-process, or whose temp dir is swept by
+     *        a janitor while servers run, pins the lock where it can keep
+     *        seeing it. The directory must already exist — minting a lock
+     *        file inside a missing one fails start() loudly rather than
+     *        silently relocating the shared state out of reach of the
+     *        other processes that look for it.
      */
     public function __construct(
         public readonly string $name,
@@ -352,10 +394,15 @@ final class StdioMcpServer implements McpServer
         private readonly ?string $cwd = null,
         array $capabilities = [],
         ?\Closure $onServerMessage = null,
+        private readonly ?string $lockDir = null,
     ) {
         $this->startTimeoutSeconds = $startTimeoutSeconds !== null && $startTimeoutSeconds > 0
             ? $startTimeoutSeconds
             : self::DEFAULT_START_TIMEOUT_SECONDS;
+
+        if ($clientInfo === self::DEFAULT_CLIENT_INFO) {
+            $clientInfo = self::defaultClientInfo();
+        }
 
         $this->assertClientInfoShaped($clientInfo);
         $this->clientInfo = $clientInfo;
@@ -495,8 +542,10 @@ final class StdioMcpServer implements McpServer
         [$spawnCommand, $spawnEnv] = $this->spawnPlan();
 
         // The lock exists before the child does: a server nobody can exchange
-        // with safely is not started at all.
-        $this->lock = ExchangeLock::new($this->name);
+        // with safely is not started at all. `lockDir:` lets an embedder whose
+        // TMPDIR moves or gets swept pin the file somewhere durable; null
+        // keeps the historic system-temp placement.
+        $this->lock = ExchangeLock::new($this->name, $this->lockDir);
 
         // Fork ownership (measured): a forked child may not take over the id
         // space while its parent — the current owner — is still live and
@@ -845,7 +894,7 @@ final class StdioMcpServer implements McpServer
     private const CANCEL_NOTICE_SECONDS = 2.0;
 
     /**
-     * Invoke a tool. No deadline by default (E646): see the class docblock.
+     * Invoke a tool. No deadline by default (the no-blanket-timeout law): see the class docblock.
      *
      * $timeoutSeconds is the opt-in bound: a positive number abandons the
      * wait that many seconds after the call starts (lock wait included —
@@ -1423,7 +1472,7 @@ final class StdioMcpServer implements McpServer
      * notifications, foreign ids AND unparseable lines. Only EOF, the
      * deadline, or a stdout-idle poll on a dead child ends the search.
      *
-     * Skipping garbage is what the reference SDK clients do (audit MCP-4):
+     * Skipping garbage is what the reference SDK clients do (measured against them):
      * real servers print a startup banner or a log line to stdout, or emit a
      * blank keep-alive line (readLine() trims it to ''), and the genuine reply
      * follows on the next line. Treating that line as fatal made start() fail
@@ -1677,7 +1726,7 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * FIX #6: how many skipped unattributable frames one exchange tolerates
+     * The strike ceiling: how many skipped unattributable frames one exchange tolerates
      * before the wait is judged hopeless. Eight bounds a deadline-less
      * callTool() against a server whose every frame is junk-to-us while
      * staying far above the sloppiness the pinned fixtures model — the rogue
@@ -1702,7 +1751,7 @@ final class StdioMcpServer implements McpServer
 
     /**
      * Refuse the outstanding exchange once $count of its skipped frames could
-     * be attributed to no request. The throw rides the FIX #4 rail in
+     * be attributed to no request. The throw rides the error rails in
      * callToolWaiting (error payload, not an escaped exception) for tool
      * calls, and the start() reap rail for handshake legs; the stream itself
      * keeps its framing — only this exchange is abandoned.
@@ -2057,7 +2106,7 @@ final class StdioMcpServer implements McpServer
 
     /**
      * Gate a `tools/list` reply and FOLLOW ITS CURSOR until the roster is
-     * whole (ISS-093(b); the same walk candy-code's HttpMcpServer does — the
+     * whole (the same walk candy-code's HttpMcpServer does — the
      * spec says `tools/list` MAY paginate, and caching the FIRST page as the
      * whole truth leaves tools silently missing from every later dispatch).
      * Each follow-up page goes through the SAME gate as the first, inside the

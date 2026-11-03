@@ -55,6 +55,12 @@ final class McpTool
      * collapse to their defaults (`''`, `[]`) — the `??` reads match the
      * well-typedness gate below, which uses isset() semantics.
      *
+     * This is the raw-cast door: it force-casts every field, so a wrong-typed
+     * wire value arrives as a PHP-cast artifact (the string "5", an "Array"
+     * name). Prefer {@see tryFromArray()} — it refuses the same input
+     * instead — and reserve this method for definitions you have already
+     * validated or build yourself.
+     *
      * @param array<string,mixed> $definition
      */
     public static function fromArray(array $definition, string $serverName): self
@@ -103,9 +109,20 @@ final class McpTool
         // treats an absent field as well-typed (isset() semantics fit
         // description/inputSchema, which fromArray() legitimately defaults),
         // but an absent or empty name would mint a phantom tool the router
-        // cannot address (probe P8: a bare `{}` definition landed as a tool
+        // cannot address (measured: a bare `{}` definition landed as a tool
         // named ''). Require it present, a string, and non-empty.
         if (!isset($definition['name']) || !is_string($definition['name']) || $definition['name'] === '') {
+            return false;
+        }
+
+        // A server-authored name is the LAST place that knows it is
+        // server-authored: control characters (NUL, the CSI/OSC openers, the
+        // C1 block) in a tool name poison every transcript, TUI frame, and
+        // downstream registry that trusts the name to be displayable. The
+        // refusal rides the tools/list malformed-count refusal in
+        // StdioMcpServer, so a server advertising bad names fails the boot
+        // loudly instead of minting a roster of invisible landmines.
+        if (preg_match('/[\x00-\x1F\x7F-\x9F]/u', $definition['name']) === 1) {
             return false;
         }
 

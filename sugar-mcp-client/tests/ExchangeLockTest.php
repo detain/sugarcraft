@@ -134,7 +134,7 @@ final class ExchangeLockTest extends TestCase
     }
 
     // =========================================================================
-    // Audit R14: a killed owner's file is swept by the next create()
+    // The boot-sweep law: a killed owner's file is swept by the next create()
     // =========================================================================
 
     public function testTheFileNameRecordsTheOwnerAndTheFileIsPrivate(): void
@@ -245,5 +245,30 @@ final class ExchangeLockTest extends TestCase
         proc_close($proc);
 
         return $pid;
+    }
+
+    /**
+     * Review M12 (fix wave): the lock file carries server output, so the
+     * mode is SET AND VERIFIED before any payload byte lands — a chmod that
+     * cannot stick refuses the boot loudly. Structural slice: re-spreading
+     * the old `@chmod`-after-write-and-forget order reddens this.
+     */
+    public function testTheLockFileModeIsSetAndVerifiedBeforeThePayloadLands(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/ExchangeLock.php');
+        $start = strpos($src, 'public static function new');
+        self::assertIsInt($start);
+        $end = strpos($src, 'readable by every user on the host', $start);
+        self::assertIsInt($end, 'the loud refusal exists');
+        $slice = substr($src, $start, $end - $start);
+
+        $chmod = strpos($slice, '@chmod');
+        $fwrite = strpos($slice, '@fwrite');
+        self::assertIsInt($chmod, 'the factory sets the mode');
+        self::assertIsInt($fwrite, 'the factory writes the phase payload');
+        self::assertLessThan($fwrite, $chmod, 'the mode lands before the payload, never after');
+        self::assertStringContainsString('modeOf(', $slice, 'the mode is verified, not assumed');
+        self::assertStringContainsString('@unlink', $slice, 'a refused boot removes the half-made file');
+        self::assertStringContainsString('could not be set to mode', $slice, 'the refusal is loud');
     }
 }

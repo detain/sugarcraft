@@ -8,7 +8,8 @@ namespace SugarCraft\McpClient;
  * Cross-process mutual exclusion for one stdio connection, plus the state that
  * must outlive whichever process held it last.
  *
- * WHY (audit AG-1): after pcntl_fork() every child holds a copy of the same
+ * WHY (the fork-corruption audit): after pcntl_fork() every child holds a
+ * copy of the same
  * stdin/stdout pipes. Two children exchanging at once interleave their request
  * lines and race to read one stdout — each takes whatever line arrives first.
  * Unique ids alone turn that silent swap into lost replies (the reader that
@@ -35,7 +36,7 @@ namespace SugarCraft\McpClient;
  *    exchange may run in another process, which would then start reading in
  *    the middle of a line.
  *
- * A KILLED OWNER LEAVES ITS FILE BEHIND (audit R14, residual of AG-1/B1):
+ * A KILLED OWNER LEAVES ITS FILE BEHIND (the boot-sweep law):
  * {@see destroy()} runs only when the server is stopped, so a TUI that is
  * SIGKILLed, OOM-killed or loses its terminal leaves one file per server in
  * the temp dir, forever. The file name therefore records who owns it —
@@ -95,9 +96,11 @@ final class ExchangeLock
         self::sweepStale($dir);
 
         // tempnam() cannot carry the owner in the name, so the file is made
-        // the way tempnam() makes one — exclusive create ('x'), mode 0600,
-        // retried on the (vanishingly rare) random-suffix collision.
+        // the way tempnam() makes one — exclusive create ('x') retried on the
+        // (vanishingly rare) random-suffix collision — with one addition: the
+        // mode is SET BEFORE THE PAYLOAD AND VERIFIED, not assumed.
         $path = null;
+        $modeRefused = null;
         for ($attempt = 0; $attempt < 8 && $path === null; $attempt++) {
             $candidate = rtrim($dir, '/') . '/' . self::FILE_PREFIX . self::pidNamespace() . '-' . $pid . '-' . bin2hex(random_bytes(6));
             $handle = @fopen($candidate, 'x');
@@ -105,7 +108,21 @@ final class ExchangeLock
                 continue;
             }
 
-            @chmod($candidate, 0600);
+            // The file carries the exchange READ BUFFER — server stdout bytes,
+            // i.e. tool results. A discarded @chmod that silently failed
+            // (exotic filesystem, mount options) would leave a world-readable
+            // transcript at the ambient umask, plus a create-to-chmod window.
+            // House law (candy-core AtomicJsonFile): chmod before the payload
+            // publishes, verify it took, and refuse LOUD rather than run
+            // unlocked-or-readable.
+            if (@chmod($candidate, 0600) === false || self::modeOf($candidate) !== 0600) {
+                fclose($handle);
+                @unlink($candidate);
+                $modeRefused = $candidate;
+
+                break;
+            }
+
             $written = @fwrite($handle, self::PHASE_CLEAN) === 1;
             fclose($handle);
             if (!$written) {
@@ -114,6 +131,12 @@ final class ExchangeLock
             }
 
             $path = $candidate;
+        }
+
+        if ($modeRefused !== null) {
+            throw new \RuntimeException(
+                "MCP server {$label}: the exchange lock file at {$modeRefused} could not be set to mode 0600; it would hold server output readable by every user on the host"
+            );
         }
 
         if ($path === null) {
@@ -126,9 +149,12 @@ final class ExchangeLock
     }
 
     /**
-     * Former name of {@see new()}, kept so embedders that still call it (the
-     * candy-code ClaudeCodeMcpClient) keep working until they move over; the
-     * repo's factory rule names the default root `::new()`.
+     * Former name of {@see new()}, kept as a public-API compatibility shim
+     * until any embedder still calling it moves over; the repo's factory rule
+     * names the default root `::new()`. (The originally-named downstream
+     * caller has ALREADY migrated — the sole caller inside this repo is the
+     * alias-resolution test, and this note carries no survivor's name so it
+     * cannot go stale again.)
      *
      * @deprecated use {@see new()}
      */
@@ -137,13 +163,26 @@ final class ExchangeLock
         return self::new($label, $dir);
     }
 
+    /** The permission bits on a path, or null when stat cannot read it. */
+    private static function modeOf(string $path): ?int
+    {
+        clearstatcache(true, $path);
+        $stat = @stat($path);
+
+        return $stat === null ? null : ($stat['mode'] & 0777);
+    }
+
     /**
      * Remove the lock files in $dir whose owner process no longer exists.
      *
      * A file is removed only when ALL of these hold, so a lock somebody can
      * still use is never taken away:
-     *  - its name is this class' current shape. Pre-R14 names (`tempnam()`'s
-     *    `sugar-mcp-client-lock-XXXXXX`) say nothing about their owner and are left;
+     *  - its name is this class' CURRENT shape. Names from before the
+     *    owner-in-name law (`tempnam()`'s `sugar-mcp-client-lock-XXXXXX`
+     *    residue) say nothing about their owner and are left — including
+     *    world-readable transcript residue on a shared /tmp, which is the
+     *    accepted cost of never deleting a file this process cannot prove
+     *    dead (an operator may remove them by hand);
      *  - it was made in THIS pid namespace. A pid read from another namespace
      *    (a container sharing /tmp) names a different process, or none — a
      *    live owner there would look dead from here;

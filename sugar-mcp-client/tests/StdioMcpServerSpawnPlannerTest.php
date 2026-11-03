@@ -57,12 +57,37 @@ final class StdioMcpServerSpawnPlannerTest extends TestCase
         return $server;
     }
 
+    /**
+     * Pin flipped 2026-11-04 (fix wave, review m16): the shipped default
+     * identity now resolves the package version from Composer metadata
+     * instead of a hand-typed literal, so the expectation derives from the
+     * same source (and lands on the fallback in a bare checkout).
+     *
+     * @return array{name:string,version:string}
+     */
+    private static function defaultIdentityExpected(): array
+    {
+        $version = '0.1.0';
+        if (class_exists(\Composer\InstalledVersions::class) && \Composer\InstalledVersions::isInstalled('sugarcraft/sugar-mcp-client')) {
+            try {
+                $pretty = \Composer\InstalledVersions::getPrettyVersion('sugarcraft/sugar-mcp-client');
+            } catch (\OutOfBoundsException) {
+                $pretty = null;
+            }
+            if (is_string($pretty) && $pretty !== '') {
+                $version = $pretty;
+            }
+        }
+
+        return ['name' => 'sugar-mcp-client', 'version' => $version];
+    }
+
     public function testTheDefaultHandshakeSendsTheLibraryIdentity(): void
     {
         $params = $this->mirrorCall($this->spawnWith(null))['initializeParams'];
 
         $this->assertSame(
-            ['name' => 'sugar-mcp-client', 'version' => '0.1.0'],
+            self::defaultIdentityExpected(),
             $params['clientInfo'] ?? null,
             'the un-injected handshake stopped carrying the library default identity',
         );
@@ -108,7 +133,7 @@ final class StdioMcpServerSpawnPlannerTest extends TestCase
         $mirror = $this->mirrorCall($this->spawnWith($planner));
 
         $this->assertSame('planted-by-planner', $mirror['probeEnv'] ?? null);
-        $this->assertSame(['name' => 'sugar-mcp-client', 'version' => '0.1.0'], $mirror['initializeParams']['clientInfo'] ?? null);
+        $this->assertSame(self::defaultIdentityExpected(), $mirror['initializeParams']['clientInfo'] ?? null);
     }
 
     public function testThePlannerCanSupplyAFullEnvironmentArray(): void

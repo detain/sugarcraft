@@ -182,4 +182,25 @@ final class ArgumentShapeTest extends TestCase
     {
         self::assertSame([], ArgumentShape::conform([], ['type' => 'object']));
     }
+
+    /**
+     * Review m8/m9 (fix wave): a server-supplied patternProperties regex is
+     * compiled (and, on hostile patterns, executed) at most ONCE per
+     * conform(); a pattern that errors stops accusing every further key.
+     * Structural slice: removing the memo reddens this.
+     */
+    public function testUnusablePatternsAreMemoizedPerWalk(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/ArgumentShape.php');
+        self::assertStringContainsString('patternUnusable', $src, 'the per-walk memo exists');
+        $start = strpos($src, 'foreach ($patterns as $pattern');
+        self::assertIsInt($start);
+        $slice = substr($src, $start, (int) strpos($src, 'return null;', $start) - $start);
+        self::assertStringContainsString('patternUnusable', $slice, 'the pattern loop consults and records the memo');
+
+        // And the semantics stay NO-GUESS: an un-compilable pattern types
+        // nothing, so empty maps under it keep their decoded shape.
+        $schema = ['type' => 'object', 'patternProperties' => ['[' => ['type' => 'object']]];
+        self::assertSame(['anything' => []], ArgumentShape::conform(['anything' => []], $schema));
+    }
 }

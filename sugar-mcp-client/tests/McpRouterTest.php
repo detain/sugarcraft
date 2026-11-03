@@ -202,8 +202,8 @@ final class McpRouterTest extends TestCase
     }
 
     /**
-     * The deny law, exposed as a public static — carried verbatim from the
-     * candy-code original with the lane-A2 fold. Only the exact action
+     * The deny law, exposed as a public static — folded from the candy-code
+     * original. Only the exact action
      * string "deny" acts; patterns are `fnmatch` against RAW config keys.
      */
     public function testServerDeniedStaticSemantics(): void
@@ -217,19 +217,19 @@ final class McpRouterTest extends TestCase
 
     public function testServerDeniedRefusesShapesThatAreNotPatternStrings(): void
     {
-        // Lane-A2 doctrine: PHP casts digit-looking array keys back to int,
-        // and an empty key is not a rule anyone authored against a server
-        // name. Neither may match — matching a cast "pattern" would deny
-        // servers silently, the silent-boundary-move this class refuses on
-        // the allow side.
-        self::assertFalse(McpRouter::serverDenied('64', [64 => 'deny']), 'an int pattern key is not a pattern');
+        // Pin flipped 2026-11-04 (fix wave, review N1): a config
+        // {"64":"deny"} DECODES to an int key, and refusing to read it made
+        // the deny rule for a numerically-named server silently inert — a
+        // silent WIDENING, exactly the boundary move this class refuses on
+        // the allow side. The numeric key is now read at its string
+        // spelling; an empty pattern still never matches.
+        self::assertTrue(McpRouter::serverDenied('64', [64 => 'deny']), 'a numeric key is its server\'s deny rule');
         self::assertFalse(McpRouter::serverDenied('', ['' => 'deny']), 'an empty pattern is not a rule');
 
-        // The instance filter delegates to the same law rather than mirroring
-        // it: the constructor normalises the map, and the routed view must
-        // still refuse the non-string pattern.
+        // The instance filter delegates to the same law: the routed view
+        // now honours the numeric deny rule (review N1).
         $servers = ['64' => self::server('64', ['t'])];
-        self::assertSame(['t'], self::toolNames($servers, [], [64 => 'deny']));
+        self::assertSame([], self::toolNames($servers, [], [64 => 'deny']));
     }
 
     public function testTheCrushConfigSpellingOfStringDenySpecsBlocks(): void
@@ -282,5 +282,36 @@ final class McpRouterTest extends TestCase
             self::assertNotNull($caught, 'deny spec ' . get_debug_type($bad) . ' must be refused');
             self::assertStringContainsString('deny pattern "x"', $caught->getMessage());
         }
+    }
+
+    /**
+     * Review m12 (fix wave): the deny side fnmatches EVERY pattern, the
+     * allow side globs only `*` entries and otherwise compares exactly.
+     * The asymmetry is deliberate (denial errs broad, admission errs
+     * strict) and is now pinned rather than contradicted by prose.
+     */
+    public function testTheTwoGlobDialectsAreDeliberate(): void
+    {
+        self::assertTrue(McpRouter::serverDenied('qq', ['q?' => 'deny']), 'the deny side fnmatches');
+        self::assertFalse(McpRouter::serverAllowed('qq', ['q?']), 'the allow side matches `q?` literally');
+        self::assertTrue(McpRouter::serverAllowed('qq', ['q*']), 'the allow side globs star entries');
+    }
+
+    /**
+     * Review N1 (fix wave): PHP normalises the numeric-looking key "0" to
+     * an int; the routed view restored the declared string-keyed shape and
+     * deny rules written as {"0":"deny"} actually reach server "0".
+     */
+    public function testNumericServerNamesAreAddressable(): void
+    {
+        $servers = ['0' => self::server('0', ['zero'])];
+
+        // PHP cannot carry a decimal-integer key as a string; the view
+        // honestly returns the int normalisation (now documented in the
+        // @return), and what the fix guarantees is that the NAME stays
+        // reachable — never skipped by a TypeError or a silent miss.
+        self::assertSame([0], array_keys((new McpRouter($servers))->resolveAllowedServers()));
+        self::assertSame(['zero'], self::toolNames($servers, ['0']), 'an allow-list entry "0" admits server 0');
+        self::assertSame([], self::toolNames($servers, [], ['0' => 'deny']), 'a deny rule "0" reaches server 0');
     }
 }

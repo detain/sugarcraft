@@ -7,7 +7,7 @@ namespace SugarCraft\McpClient;
 /**
  * JSON-RPC request ids that stay unique across pcntl_fork().
  *
- * WHY THIS EXISTS (audit B1 / AG-1): an embedder like candy-code starts its
+ * WHY THIS EXISTS (the fork-corruption audit): an embedder like candy-code starts its
  * MCP servers once, in the long-lived parent, and then runs every turn — and
  * every parallel sub-agent — in a forked child. A plain `$nextId++` counter is
  * COPIED into each child, so every child sends the same next id. Two children
@@ -74,7 +74,7 @@ final class RequestIdSequence
      * ordinary. The owner counter is not reset: an id is never reused within
      * one object's lifetime, even across a stop()/start() cycle.
      *
-     * FIX #5 (fork-proven): a claim by a process OTHER than the owner used to
+     * THE FORK GUARD (fork-proven): a claim by a process OTHER than the owner used to
      * succeed unconditionally, so a forked child that re-claimed while the
      * parent still exchanged on the connection installed itself as a second
      * live owner — both then minted the same plain-counter ids and the id
@@ -89,8 +89,17 @@ final class RequestIdSequence
     {
         $pid = $this->currentPid();
 
-        if ($pid !== $this->ownerPid && ($this->ownerAlive)($this->ownerPid)) {
-            return false;
+        if ($pid !== $this->ownerPid) {
+            if (($this->ownerAlive)($this->ownerPid)) {
+                return false;
+            }
+
+            // Succession from a DEAD owner (review N9): the dead process's
+            // last plain ids may still have replies sitting in the shared
+            // pipe (its call was SIGKILLed mid-flight). Resuming the plain
+            // counter FAR ahead makes aliasing a stale reply impossible.
+            // Same-pid claims are one process restarting and never bump.
+            $this->ownerCounter += random_int(1_000_000, 2_000_000);
         }
 
         $this->ownerPid = $pid;

@@ -304,4 +304,84 @@ final class StdioMcpServerFailureDiagnosticsTest extends TestCase
         // on purpose, never by accident).
         self::assertTrue((new ReflectionObject(new StdioMcpServer('shape', PHP_BINARY, [])))->hasProperty('lastFailureCause'));
     }
+
+    /**
+     * Review m21 (fix wave): lockDir pins the exchange lock where the
+     * embedder can see it, instead of chasing a movable TMPDIR.
+     */
+    public function testTheLockDirOptionPinsTheLockFileSystemEntry(): void
+    {
+        $dir = sys_get_temp_dir() . '/mcpldir-' . bin2hex(random_bytes(6));
+        self::assertTrue(mkdir($dir, 0700));
+
+        try {
+            $server = new StdioMcpServer(
+                'ldprobe',
+                PHP_BINARY,
+                [__DIR__ . '/Fixtures/echo_server.php'],
+                startTimeoutSeconds: self::BOUND_SECONDS,
+                lockDir: $dir,
+            );
+            $server->start();
+
+            $prefix = \SugarCraft\McpClient\ExchangeLock::FILE_PREFIX;
+            $seen = array_values(array_filter(scandir($dir), static fn (string $n): bool => str_starts_with($n, $prefix)));
+            self::assertNotEmpty($seen, 'the lock file landed in the pinned directory');
+
+            $server->stop();
+            self::assertSame([], array_values(array_filter(scandir($dir), static fn (string $n): bool => str_starts_with($n, $prefix))), 'stop() removed it');
+        } finally {
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * Review m16 (fix wave): the default initialize identity resolves the
+     * package's real version when Composer metadata knows it, and only
+     * falls back to the constant otherwise.
+     */
+    public function testTheDefaultClientInfoCarriesThePackageVersion(): void
+    {
+        $server = $this->spawn('handshake_mirror.php');
+        $server->start();
+        $reply = $server->callTool('mirror', []);
+
+        $text = $reply['content'][0]['text'] ?? '';
+        self::assertIsString($text);
+        $params = json_decode($text, true)['initializeParams'] ?? null;
+        self::assertIsArray($params, 'the mirror echoed the captured initialize params');
+        $info = $params['clientInfo'] ?? null;
+        self::assertIsArray($info);
+        self::assertSame('sugar-mcp-client', $info['name']);
+
+        $expected = '0.1.0';
+        if (class_exists(\Composer\InstalledVersions::class) && \Composer\InstalledVersions::isInstalled('sugarcraft/sugar-mcp-client')) {
+            $pretty = \Composer\InstalledVersions::getPrettyVersion('sugarcraft/sugar-mcp-client');
+            if (is_string($pretty) && $pretty !== '') {
+                $expected = $pretty;
+            }
+        }
+        self::assertSame($expected, $info['version'], 'the advertised version tracks the package, not a hand-typed literal');
+    }
+
+    /**
+     * Review N3 + M7 (fix wave): a server-authored tool name carrying a
+     * raw NUL is refused by the well-typedness gate, and the malformed
+     * count turns the boot into a loud failure instead of a silently
+     * shrunk roster.
+     */
+    public function testAToolNameCarryingControlBytesRefusesTheBoot(): void
+    {
+        $server = $this->spawn('hostile_handshake_server.php', ['--bad-tool-name']);
+
+        $caught = null;
+        try {
+            $server->start();
+        } catch (\RuntimeException $error) {
+            $caught = $error->getMessage();
+        }
+
+        self::assertIsString($caught, 'the boot must refuse a half-poisoned roster');
+        self::assertStringContainsString('1 malformed tool definition', $caught);
+    }
 }

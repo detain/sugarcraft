@@ -9,7 +9,7 @@ namespace SugarCraft\McpClient;
  * or error response — as one immutable value object.
  *
  * Extracted from the candy-code MCP stack (src/McpMessage.php); the wire
- * algorithm is faithful, the naming follows this library. As of the lane-A2
+ * algorithm is faithful, the naming follows this library. Since the
  * fold this class is the ONE JSON-RPC envelope in the monorepo: candy-code's
  * twin was deleted into it, carrying its id-preserving variant
  * ({@see parsePreservingId()}, {@see withWireId()}, {@see MAX_DEPTH}) — the
@@ -36,11 +36,14 @@ final class McpMessage
     private const JSONRPC_VERSION = '2.0';
 
     /**
-     * How deep {@see parsePreservingId()} lets a message nest: a peer's
-     * deeply nested document is refused unread rather than recursed into.
-     * The plain {@see parse()} uses PHP's default bound instead — the
-     * variant exists precisely for the adapter that faces foreign-authored
-     * ids and must treat the whole envelope as hostile input.
+     * How deep EITHER parser lets a message nest: a peer's deeply nested
+     * document is refused unread rather than recursed into. Both entry
+     * points share the bound on purpose — the plain {@see parse()} reads
+     * the SAME foreign stdio stream as the id-preserving variant, so
+     * "hostile input" describes both paths, not one. (Measured before the
+     * unification: parse() rode json_decode's default 512, and a
+     * 600-deep document parsed there while the variant refused it — two
+     * policies on one stream was the finding.)
      */
     public const MAX_DEPTH = 64;
 
@@ -55,7 +58,7 @@ final class McpMessage
         public readonly bool $resultSet = false,
         /**
          * The id EXACTLY as the peer sent it, or as it must go back out — `7`,
-         * not `"7"` (decision D12, the ACP adapter). Only meaningful when
+         * not `"7"` (the ACP adapter law). Only meaningful when
          * {@see $wireIdSet}; {@see $id} stays the string form every MCP caller
          * matches on.
          */
@@ -73,17 +76,40 @@ final class McpMessage
      * Parse one wire line into an envelope, or null when the payload is not a
      * JSON-RPC 2.0 object we can act on.
      *
-     * Returning null (never throwing) is deliberate: the stdio reader treats an
-     * unparseable line as "this peer is not speaking our protocol" and fails the
-     * exchange, and a malformed line must not become a crash vector inside the
-     * read loop.
+     * Returning null (never throwing) is deliberate, and what the reader does
+     * with it is a LAWD, not a guess: a null from this parser joins the
+     * strike bucket — non-blank unattributable frames are counted and the
+     * exchange is refused once the ceiling passes, blank keep-alive lines
+     * are counted against their own far higher ceiling — while a
+     * well-formed envelope answering OUR id with no result and no error
+     * ends that wait immediately. A malformed line must never become a
+     * crash vector inside the read loop, and it must never silently pass as
+     * a reply either.
+     *
+     * Nesting is refused past {@see MAX_DEPTH} exactly as in
+     * {@see parsePreservingId()}: both parsers read hostile streams.
      */
     public static function parse(string $json): ?self
     {
-        $decoded = json_decode($json, true);
+        $decoded = json_decode($json, true, self::MAX_DEPTH);
         if (!is_array($decoded)) {
             return null;
         }
+
+        return self::fromDecoded($decoded);
+    }
+
+    /**
+     * The shared envelope read behind BOTH parsers: shape rules only, no
+     * decoding — so the id-preserving variant cannot drift from the plain
+     * one by a second decode pass (an old finding: it decoded once to
+     * validate depth, then called back into the string parser and decoded
+     * AGAIN, paying the full cost twice on the hottest answer path).
+     *
+     * @param array<array-key,mixed> $decoded
+     */
+    private static function fromDecoded(array $decoded): ?self
+    {
 
         if (!isset($decoded['jsonrpc']) || $decoded['jsonrpc'] !== self::JSONRPC_VERSION) {
             return null;
@@ -134,7 +160,7 @@ final class McpMessage
     }
 
     /**
-     * THE ID-PRESERVING VARIANT (decision D12): {@see parse()}, except that the
+     * THE ID-PRESERVING VARIANT: {@see parse()}, except that the
      * id is also kept exactly as it arrived — an integer stays an integer —
      * in {@see $wireId}, and {@see toJson()} writes it back that way.
      *
@@ -150,8 +176,9 @@ final class McpMessage
      * a response the agent receives can be matched on {@see $wireId}.
      *
      * Also refuses what {@see parse()} lets through and an RPC server must
-     * not: an id that is neither a string, an integer nor null, and nesting
-     * past {@see MAX_DEPTH}.
+     * not: an id that is neither a string, an integer nor null. (Nesting
+     * past {@see MAX_DEPTH} is refused by BOTH parsers since the depth
+     * policies were unified.)
      */
     public static function parsePreservingId(string $json): ?self
     {
@@ -167,7 +194,7 @@ final class McpMessage
             return null;
         }
 
-        $message = self::parse($json);
+        $message = self::fromDecoded($decoded);
         if ($message === null) {
             return null;
         }
@@ -259,6 +286,14 @@ final class McpMessage
      * arrays made the faithful relay of a scalar `data` impossible.
      *
      * @param mixed $data optional error detail — any JSON value
+     */
+    /**
+     * Build a JSON-RPC error envelope. An explicit wire `"data": null` does
+     * NOT survive a build→encode→parse round-trip: the member is omitted
+     * for a null $data, and a parsed envelope keeps only what the wire
+     * carried. Code 0 is legal and preserved — callers who mean "no data"
+     * and callers who mean "null data" both arrive at the omission; JSON-RPC
+     * treats the two alike.
      */
     public static function error(string $id, int $code, string $message, mixed $data = null): self
     {
