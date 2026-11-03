@@ -7,126 +7,215 @@ namespace SugarCraft\Kv\Cli;
 /**
  * Argument parser for the candy-kv CLI.
  *
- * Mirrors charmbracelet/skate argument parsing.
+ * Mirrors charmbracelet/skate argument parsing, with the option grammar
+ * tightened to the documented contract: EVERY token is accounted for.
+ * Unknown flags, extra positionals, and value-hungry options facing a flag
+ * are usage errors — they throw `InvalidArgumentException` (which
+ * `bin/candy-kv` reports on stderr with exit code 2) instead of being
+ * silently dropped. Silently ignoring `--frobnicate` once let a typo'd
+ * `--ttl300=60` store a "temporary" secret forever, so the parser now
+ * refuses rather than guesses.
+ *
+ * A bare `--` ends option processing: every token after it is data,
+ * flag-shaped or not, so `set backup -- --ttl=60` stores the literal
+ * value `--ttl=60`.
  *
  * @internal This class is for CLI use only and is not part of the public API.
  */
 final class ArgParser
 {
+    /** Largest accepted --ttl payload in seconds (~31.7 years). */
+    private const TTL_MAX_SECONDS = 999999999;
+
     /**
      * Parse arguments for the `set` command.
      *
      * The --ttl option accepts both spellings: the attached form
-     * `--ttl=3600` and the separated form `--ttl 3600` (documented in
-     * README as the space form). A non-numeric value is refused loudly
-     * rather than silently stored as 0.
+     * `--ttl=3600` and the separated form `--ttl 3600`. A non-numeric,
+     * negative, or absurdly large value is refused loudly.
+     * `--binary` / `--text` force the storage encoding; when neither is
+     * given `binary` stays null and the caller auto-detects.
      *
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where set subcommand args begin.
-     * @return array{key: string|null, value: string|null, ttl: int|null}
-     * @throws \InvalidArgumentException when --ttl carries a non-integer value.
+     * @return array{key: string|null, value: string|null, ttl: int|null, binary: bool|null}
+     * @throws \InvalidArgumentException on unknown flags, extra positionals,
+     *         or a malformed --ttl payload.
      */
     public static function set(array $argv, int $offset): array
     {
-        $remaining = \array_slice($argv, $offset);
-        $positional = [];
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
         $ttl = null;
+        $binary = null;
+        $out = [];
 
-        $count = \count($remaining);
-        for ($i = 0; $i < $count; $i++) {
-            $arg = $remaining[$i];
-            if (\str_starts_with($arg, '--ttl=')) {
-                $ttl = self::ttlSeconds(\substr($arg, 6), \substr($arg, 6));
+        $count = count($tokens);
+        for ($p = 0; $p < $count; $p++) {
+            $arg = $tokens[$p];
+            if (str_starts_with($arg, '--ttl=')) {
+                $ttl = self::ttlSeconds(substr($arg, 6));
             } elseif ($arg === '--ttl') {
-                $next = $remaining[$i + 1] ?? null;
+                $next = $tokens[$p + 1] ?? null;
                 if ($next === null) {
                     throw new \InvalidArgumentException('Option --ttl requires a value.');
                 }
-                $i++;
-                $ttl = self::ttlSeconds($next, $next);
-            } elseif (\str_starts_with($arg, '--')) {
-                // Ignore unknown flags for set (--no-atomic is not applicable).
+                $p++;
+                $ttl = self::ttlSeconds($next);
+            } elseif ($arg === '--binary') {
+                $binary = true;
+            } elseif ($arg === '--text') {
+                $binary = false;
+            } elseif (self::isOptionLike($arg)) {
+                throw self::unknownOption($arg, 'set');
             } else {
-                $positional[] = $arg;
+                $out[] = $arg;
             }
         }
+        $out = array_merge($out, $tail);
+
+        self::refuseSurplus($out, 2, 'set');
 
         return [
-            'key' => $positional[0] ?? null,
-            'value' => $positional[1] ?? null,
+            'key' => $out[0] ?? null,
+            'value' => $out[1] ?? null,
             'ttl' => $ttl,
+            'binary' => $binary,
         ];
     }
 
     /**
-     * Validate a TTL option payload as a non-negative integer of seconds.
+     * Parse arguments for the `get` command.
      *
-     * @throws \InvalidArgumentException naming the offending value.
+     * `get` is byte-exact by contract — the opt-IN flag is `--sanitize`,
+     * which routes the value through the same control/escape scrub `list`
+     * applies. Default raw preserves the documented "get is the exact
+     * read" promise (PEM keys and other multi-line text survive it).
+     *
+     * @param list<string> $argv  Full argv array.
+     * @param int         $offset Offset where get subcommand args begin.
+     * @return array{key: string|null, sanitize: bool}
+     * @throws \InvalidArgumentException on unknown flags or extra positionals.
      */
-    private static function ttlSeconds(string $raw, string $shown): int
+    public static function get(array $argv, int $offset): array
     {
-        if (\preg_match('/^[0-9]+$/', $raw) !== 1) {
-            throw new \InvalidArgumentException(
-                \sprintf('Option --ttl expects a non-negative integer of seconds, got "%s".', $shown)
-            );
-        }
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
+        $out = [];
+        $sanitize = false;
 
-        return (int) $raw;
+        foreach ($tokens as $arg) {
+            if ($arg === '--sanitize') {
+                $sanitize = true;
+            } elseif (self::isOptionLike($arg)) {
+                throw self::unknownOption($arg, 'get');
+            } else {
+                $out[] = $arg;
+            }
+        }
+        $out = array_merge($out, $tail);
+
+        self::refuseSurplus($out, 1, 'get');
+
+        return ['key' => $out[0] ?? null, 'sanitize' => $sanitize];
+    }
+
+    /**
+     * Parse arguments for the `delete` command.
+     *
+     * `--dry-run` reports how many entries the pattern WOULD remove and
+     * writes nothing.
+     *
+     * @param list<string> $argv  Full argv array.
+     * @param int         $offset Offset where delete subcommand args begin.
+     * @return array{key: string|null, dryRun: bool}
+     * @throws \InvalidArgumentException on unknown flags or extra positionals.
+     */
+    public static function delete(array $argv, int $offset): array
+    {
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
+        $out = [];
+        $dryRun = false;
+
+        foreach ($tokens as $arg) {
+            if ($arg === '--dry-run') {
+                $dryRun = true;
+            } elseif (self::isOptionLike($arg)) {
+                throw self::unknownOption($arg, 'delete');
+            } else {
+                $out[] = $arg;
+            }
+        }
+        $out = array_merge($out, $tail);
+
+        self::refuseSurplus($out, 1, 'delete');
+
+        return ['key' => $out[0] ?? null, 'dryRun' => $dryRun];
     }
 
     /**
      * Parse arguments for the `list` command.
      *
      * The -d option accepts both spellings: the attached form `-d:` (or
-     * `-d|`) and the separated form `-d :`. A bare -d at the end of the
-     * argument list keeps the pinned default tab delimiter.
+     * `-d|`) and the separated form `-d :`. A bare -d at the very end of
+     * the argument list keeps the pinned default tab delimiter, but a -d
+     * whose next token is another flag is a usage error — the delimiter
+     * must be visible in the command line, never borrowed from an option.
      *
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where list subcommand args begin.
      * @return array{mode: 'all'|'keys'|'values', reverse: bool, delimiter: string, pattern: string|null}
+     * @throws \InvalidArgumentException on unknown flags, extra positionals,
+     *         or a -d facing a flag-shaped token.
      */
     public static function list(array $argv, int $offset): array
     {
         $mode = 'all';
         $reverse = false;
         $delimiter = "\t";
-        $pattern = null;
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
+        $out = [];
 
-        $remaining = \array_slice($argv, $offset);
-        $positional = [];
-
-        $count = \count($remaining);
-        for ($i = 0; $i < $count; $i++) {
-            $arg = $remaining[$i];
+        $count = count($tokens);
+        for ($p = 0; $p < $count; $p++) {
+            $arg = $tokens[$p];
             if ($arg === '-k') {
                 $mode = 'keys';
             } elseif ($arg === '-v') {
                 $mode = 'values';
             } elseif ($arg === '-r') {
                 $reverse = true;
-            } elseif (\str_starts_with($arg, '-d')) {
-                $attached = \substr($arg, 2);
+            } elseif (str_starts_with($arg, '-d')) {
+                $attached = substr($arg, 2);
                 if ($attached !== '') {
                     $delimiter = $attached;
                 } else {
-                    $next = $remaining[$i + 1] ?? null;
-                    $delimiter = $next ?? "\t";
-                    if ($next !== null) {
-                        $i++;
+                    $next = $tokens[$p + 1] ?? null;
+                    if ($next === null && $tail === []) {
+                        // Bare -d at end of list: keep the documented tab default.
+                        continue;
                     }
+                    if ($next === null || str_starts_with($next, '-')) {
+                        throw new \InvalidArgumentException(
+                            'Option -d requires a delimiter value, got flag-like "' . ($next ?? '') . '".'
+                        );
+                    }
+                    $delimiter = $next;
+                    $p++;
                 }
-            } elseif (\str_starts_with($arg, '-')) {
-                // Ignore unknown flags.
+            } elseif (self::isOptionLike($arg)) {
+                throw self::unknownOption($arg, 'list');
             } else {
-                $positional[] = $arg;
+                $out[] = $arg;
             }
         }
+        $out = array_merge($out, $tail);
+
+        self::refuseSurplus($out, 1, 'list');
 
         return [
             'mode' => $mode,
             'reverse' => $reverse,
             'delimiter' => $delimiter,
-            'pattern' => $positional[0] ?? null,
+            'pattern' => $out[0] ?? null,
         ];
     }
 
@@ -136,27 +225,28 @@ final class ArgParser
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where import subcommand args begin.
      * @return array{format: string|null, path: string|null, atomic: bool}
+     * @throws \InvalidArgumentException on unknown flags or extra positionals.
      */
     public static function import(array $argv, int $offset): array
     {
-        $format = null;
-        $path = null;
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
         $atomic = true;
+        $out = [];
 
-        $remaining = \array_slice($argv, $offset);
-        foreach ($remaining as $arg) {
-            if (\str_starts_with($arg, '--')) {
-                if ($arg === '--no-atomic') {
-                    $atomic = false;
-                }
-            } elseif ($format === null) {
-                $format = $arg;
-            } elseif ($path === null) {
-                $path = $arg;
+        foreach ($tokens as $arg) {
+            if ($arg === '--no-atomic') {
+                $atomic = false;
+            } elseif (self::isOptionLike($arg)) {
+                throw self::unknownOption($arg, 'import');
+            } else {
+                $out[] = $arg;
             }
         }
+        $out = array_merge($out, $tail);
 
-        return ['format' => $format, 'path' => $path, 'atomic' => $atomic];
+        self::refuseSurplus($out, 2, 'import');
+
+        return ['format' => $out[0] ?? null, 'path' => $out[1] ?? null, 'atomic' => $atomic];
     }
 
     /**
@@ -165,28 +255,136 @@ final class ArgParser
      * @param list<string> $argv  Full argv array.
      * @param int         $offset Offset where export subcommand args begin.
      * @return array{format: string|null, db: string|null, pattern: string|null}
+     * @throws \InvalidArgumentException on unknown flags or extra positionals.
      */
     public static function export(array $argv, int $offset): array
     {
-        $format = null;
-        $db = null;
-        $pattern = null;
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
+        $out = [];
 
-        $remaining = \array_slice($argv, $offset);
-        $positional = [];
-
-        foreach ($remaining as $arg) {
-            if (\str_starts_with($arg, '-')) {
-                // Ignore unknown flags.
-            } else {
-                $positional[] = $arg;
+        foreach ($tokens as $arg) {
+            if (self::isOptionLike($arg)) {
+                throw self::unknownOption($arg, 'export');
             }
+            $out[] = $arg;
+        }
+        $out = array_merge($out, $tail);
+
+        self::refuseSurplus($out, 3, 'export');
+
+        return ['format' => $out[0] ?? null, 'db' => $out[1] ?? null, 'pattern' => $out[2] ?? null];
+    }
+
+    /**
+     * Parse arguments for the `prune` command: it takes none.
+     *
+     * @param list<string> $argv  Full argv array.
+     * @param int         $offset Offset where prune subcommand args begin.
+     * @throws \InvalidArgumentException on any extra token.
+     */
+    public static function prune(array $argv, int $offset): void
+    {
+        [$tokens, $tail] = self::splitPositional($argv, $offset);
+        if ($tokens !== [] || $tail !== []) {
+            $extra = $tokens[0] ?? $tail[0];
+            throw new \InvalidArgumentException(
+                'prune takes no arguments, got "' . $extra . '".'
+            );
+        }
+    }
+
+    /**
+     * Validate a TTL option payload as a bounded POSITIVE integer.
+     *
+     * Two refusals, both load-bearing:
+     *  - Zero: `--ttl 0` used to mean "forever" (the writer drops any
+     *    non-positive TTL), the exact opposite of what an expiry flag
+     *    spells. A forever entry is made by OMITTING --ttl, so 0 is a
+     *    usage error, not a silent inversion.
+     *  - Oversized: an unbounded token like 99999999999999999999
+     *    overflows int arithmetic downstream and mints an un-expirable
+     *    zombie row — exactly the silent failure a TTL flag exists to avoid.
+     *
+     * @throws \InvalidArgumentException naming the offending value.
+     */
+    private static function ttlSeconds(string $raw): int
+    {
+        if (preg_match('/^[0-9]{1,9}$/', $raw) !== 1) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    'Option --ttl expects an integer of seconds from 1 to %d, got "%s".',
+                    self::TTL_MAX_SECONDS,
+                    $raw
+                )
+            );
+        }
+        // The 9-digit regex ceiling IS TTL_MAX_SECONDS (999999999), so no
+        // second upper comparison is needed here — keep the const as the
+        // single documented bound.
+        $seconds = (int) $raw;
+        if ($seconds < 1) {
+            throw new \InvalidArgumentException(
+                'Option --ttl must be at least 1 second; omit --ttl for a forever entry.'
+            );
         }
 
-        $format = $positional[0] ?? null;
-        $db = $positional[1] ?? null;
-        $pattern = $positional[2] ?? null;
+        return $seconds;
+    }
 
-        return ['format' => $format, 'db' => $db, 'pattern' => $pattern];
+    /**
+     * Split argv at $offset around a `--` end-of-options sentinel.
+     * Everything after the sentinel is data and never option-parsed.
+     *
+     * @param list<string> $argv
+     * @return array{0: list<string>, 1: list<string>} tokens subject to
+     *         option parsing, and the pure-positional tokens that followed
+     *         a `--` sentinel (empty list when there was none)
+     */
+    private static function splitPositional(array $argv, int $offset): array
+    {
+        $tokens = array_slice($argv, $offset);
+        $stop = array_search('--', $tokens, true);
+        if ($stop === false) {
+            return [$tokens, []];
+        }
+
+        return [array_slice($tokens, 0, $stop), array_slice($tokens, $stop + 1)];
+    }
+
+    /**
+     * True for anything flag-shaped, except the bare "-" STDIN convention
+     * (documented on import and honored by every subcommand as a positional).
+     */
+    private static function isOptionLike(string $token): bool
+    {
+        return $token !== '-' && \str_starts_with($token, '-');
+    }
+
+    /**
+     * Refuse more positionals than the subcommand can use, naming the first
+     * dropped token so scripts see the same class of error they'd get from
+     * a bad flag.
+     *
+     * @param list<string> $positional
+     */
+    private static function refuseSurplus(array $positional, int $max, string $command): void
+    {
+        if (count($positional) > $max) {
+            throw new \InvalidArgumentException(
+                sprintf('%s takes at most %d argument(s), got extra "%s".', $command, $max, $positional[$max])
+            );
+        }
+    }
+
+    private static function unknownOption(string $token, string $command): \InvalidArgumentException
+    {
+        // Report the flag NAME, not any =payload: a typo'd flag may carry
+        // secret material, and usage errors echo into terminals, logs,
+        // and shell history.
+        $name = strtok($token, '=');
+
+        return new \InvalidArgumentException(
+            sprintf('Unknown option "%s" for %s. Run "candy-kv --help" for usage.', $name, $command)
+        );
     }
 }

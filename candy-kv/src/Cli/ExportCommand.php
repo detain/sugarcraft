@@ -22,13 +22,18 @@ final class ExportCommand
     /**
      * Run the export command.
      *
-     * @param string $format 'json' or 'yaml'
+     * @param string $format 'json', 'yaml' or 'yml'
      * @param string|null $dbName Database to export (null = default).
      * @param string|null $pattern Optional glob pattern to filter keys.
-     * @return int Exit code (0 = success, 1 = failure).
+     * @return int Exit code (0 = success, 1 = failure, 2 = bad usage).
      */
     public function run(string $format, ?string $dbName = null, ?string $pattern = null): int
     {
+        // Usage-class error first: an unknown format is caller intent, not a store failure.
+        if (!\in_array($format, ['json', 'yaml', 'yml'], true)) {
+            \fwrite(STDERR, "Unknown export format: {$format}. Use 'json', 'yaml' or 'yml'.\n");
+            return 2;
+        }
         try {
             $output = $this->exportToString($format, $dbName, $pattern);
             \fwrite(STDOUT, $output);
@@ -42,7 +47,7 @@ final class ExportCommand
     /**
      * Export entries to a string (does not write to STDOUT).
      *
-     * @param string $format 'json' or 'yaml'
+     * @param string $format 'json', 'yaml' or 'yml'
      * @param string|null $dbName Database to export (null = default).
      * @param string|null $pattern Optional glob pattern to filter keys.
      * @return string The formatted export output.
@@ -114,7 +119,10 @@ final class ExportCommand
             $entries['_binary'] = $binaryKeys;
         }
 
-        $flags = \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE;
+        // Binary values survive export: JSON_INVALID_UTF8_SUBSTITUTE replaces the
+        // lone surrogates/invalid sequences a byte-blob carries with U+FFFD instead
+        // of failing the whole encode (one binary value used to poison the store dump).
+        $flags = \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE;
         $json = \json_encode($entries, $flags, 512);
         if ($json === false) {
             throw new \RuntimeException('Failed to encode JSON: ' . \json_last_error_msg());

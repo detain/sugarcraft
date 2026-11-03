@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get exige uma chave exata, não um padrão. Use "{bin} list <pattern>" para padrões glob.',
     'store.did_you_mean'         => 'chave não encontrada; você quis dizer \'{key}\'?',
     'database.query_failed'      => 'A consulta ao banco de dados falhou.',
+    'cli.key_not_found'          => 'chave não encontrada: {key}',
+    'cli.deleted_one'            => '1 entrada excluída.',
+    'cli.imported_one'           => '1 entrada importada.',
+    'cli.imported_n'             => '{count} entradas importadas.',
+    'cli.would_delete_one'       => '1 entrada seria excluída.',
+    'cli.would_delete_n'         => '{count} entradas seriam excluídas.',
+    'cli.pruned_n'               => '{count} entradas expiradas removidas.',
+    'cli.pruned_none'            => 'Nenhuma entrada expirada para remover.',
 ];

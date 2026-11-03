@@ -24,4 +24,12 @@ return [
     'cli.pattern_not_supported'  => 'get requiere una clave exacta, no un patrón. Use "{bin} list <pattern>" para patrones glob.',
     'store.did_you_mean'         => 'clave no encontrada; ¿quiso decir \'{key}\'?',
     'database.query_failed'      => 'La consulta a la base de datos falló.',
+    'cli.key_not_found'          => 'clave no encontrada: {key}',
+    'cli.deleted_one'            => '1 entrada eliminada.',
+    'cli.imported_one'           => '1 entrada importada.',
+    'cli.imported_n'             => '{count} entradas importadas.',
+    'cli.would_delete_one'       => 'Se eliminaría 1 entrada.',
+    'cli.would_delete_n'         => 'Se eliminarían {count} entradas.',
+    'cli.pruned_n'               => '{count} entradas caducadas eliminadas.',
+    'cli.pruned_none'            => 'No hay entradas caducadas que eliminar.',
 ];

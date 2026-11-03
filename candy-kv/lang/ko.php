@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get은 정확한 키를 받습니다, 패턴이 아닙니다. 패턴 검색은 "{bin} list <pattern>"을(를) 사용하세요.',
     'store.did_you_mean'         => '키를 찾을 수 없습니다; \'{key}\'을(를) 의미했나요?',
     'database.query_failed'      => '데이터베이스 쿼리가 실패했습니다.',
+    'cli.key_not_found'          => '키를 찾을 수 없습니다: {key}',
+    'cli.deleted_one'            => '1개를 삭제했습니다.',
+    'cli.imported_one'           => '1개를 가져왔습니다.',
+    'cli.imported_n'             => '{count}개를 가져왔습니다.',
+    'cli.would_delete_one'       => '1개를 삭제합니다.',
+    'cli.would_delete_n'         => '{count}개를 삭제합니다.',
+    'cli.pruned_n'               => '만료된 항목 {count}개를 제거했습니다.',
+    'cli.pruned_none'            => '제거할 만료된 항목이 없습니다.',
 ];

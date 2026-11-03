@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get verwacht een exacte sleutel, geen patroon. Gebruik "{bin} list <pattern>" voor glob-patronen.',
     'store.did_you_mean'         => 'sleutel niet gevonden; bedoelde je \'{key}\'?',
     'database.query_failed'      => 'De databasequery is mislukt.',
+    'cli.key_not_found'          => 'sleutel niet gevonden: {key}',
+    'cli.deleted_one'            => '1 item verwijderd.',
+    'cli.imported_one'           => '1 item geïmporteerd.',
+    'cli.imported_n'             => '{count} items geïmporteerd.',
+    'cli.would_delete_one'       => '1 item zou worden verwijderd.',
+    'cli.would_delete_n'         => '{count} items zouden worden verwijderd.',
+    'cli.pruned_n'               => '{count} verlopen items verwijderd.',
+    'cli.pruned_none'            => 'Geen verlopen items om te verwijderen.',
 ];

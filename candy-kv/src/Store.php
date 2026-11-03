@@ -128,7 +128,13 @@ final class Store
     }
 
     /**
-     * Get a value by key, with levenshtein-based typo suggestions on miss.
+     * Get a value by key.
+     *
+     * Pure lookup: a miss returns $fallback and nothing is written to any
+     * stream. Typo suggestions are a CLI concern — the library never emits
+     * to STDERR (a consumer embedding the store in a pipeline would get
+     * attacker-controlled key material echoed into its output). Ask
+     * {@see self::suggestionFor()} for the closest existing key instead.
      *
      * @param string $key      Key name. Supports @dbname suffix for cross-database access.
      * @param string $fallback Value to return if the key does not exist.
@@ -143,13 +149,23 @@ final class Store
             return $entry->rawValue();
         }
 
-        $suggestion = $this->suggestSimilar($entryKey, $dbName);
-        if ($suggestion !== null) {
-            // Emit suggestion to stderr so it doesn't pollute stdout
-            \fwrite(STDERR, Lang::t('store.did_you_mean', ['key' => $suggestion]) . \PHP_EOL);
-        }
-
         return $fallback;
+    }
+
+    /**
+     * Suggest the closest existing key to $key, or null when nothing is
+     * near enough to help. Backs the CLI's "did you mean" line.
+     *
+     * Distance is the legacy byte-based Levenshtein; a candidate must lie
+     * within half the query's byte length (a deliberate skate tolerance —
+     * long ASCII queries get proportionally more slack). The comparison
+     * scans every non-expired key of the target database.
+     */
+    public function suggestionFor(string $key): ?string
+    {
+        [$dbName, $entryKey] = $this->parseKey($key);
+
+        return $this->suggestSimilar($entryKey, $dbName);
     }
 
     /**
@@ -367,10 +383,24 @@ final class Store
     }
 
     /**
+     * Remove every already-expired entry from the default database and
+     * return how many rows were dropped.
+     *
+     * Expired entries are invisible to get/list/count but continue to
+     * occupy their rows (and disk) until pruned — this is the maintenance
+     * verb the CLI `prune` command calls.
+     */
+    public function pruneExpired(): int
+    {
+        return $this->database($this->defaultDb)->pruneExpired();
+    }
+
+    /**
      * Delete an entire database (all its entries).
      */
     public function deleteDatabase(string $dbName): bool
     {
+
         $path = $this->dbPath($dbName);
         if (!\file_exists($path)) {
             return false;

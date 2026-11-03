@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get richiede una chiave esatta, non un pattern. Usa "{bin} list <pattern>" per i pattern glob.',
     'store.did_you_mean'         => 'chiave non trovata; intendevi \'{key}\'?',
     'database.query_failed'      => 'La query del database non è riuscita.',
+    'cli.key_not_found'          => 'chiave non trovata: {key}',
+    'cli.deleted_one'            => '1 voce eliminata.',
+    'cli.imported_one'           => '1 voce importata.',
+    'cli.imported_n'             => '{count} voci importate.',
+    'cli.would_delete_one'       => 'Verrà eliminata 1 voce.',
+    'cli.would_delete_n'         => 'Verranno eliminate {count} voci.',
+    'cli.pruned_n'               => 'Rimosse {count} voci scadute.',
+    'cli.pruned_none'            => 'Nessuna voce scaduta da rimuovere.',
 ];

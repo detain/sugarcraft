@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get требует точный ключ, а не шаблон. Для glob-шаблонов используйте "{bin} list <pattern>".',
     'store.did_you_mean'         => 'ключ не найден; вы имели в виду \'{key}\'?',
     'database.query_failed'      => 'Запрос к базе данных выполнен с ошибкой.',
+    'cli.key_not_found'          => 'ключ не найден: {key}',
+    'cli.deleted_one'            => 'Удалена 1 запись.',
+    'cli.imported_one'           => 'Импортирована 1 запись.',
+    'cli.imported_n'             => 'Импортировано {count} записей.',
+    'cli.would_delete_one'       => 'Будет удалена 1 запись.',
+    'cli.would_delete_n'         => 'Будет удалено {count} записей.',
+    'cli.pruned_n'               => 'Удалено {count} просроченных записей.',
+    'cli.pruned_none'            => 'Нет просроченных записей для удаления.',
 ];

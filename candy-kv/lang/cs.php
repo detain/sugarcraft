@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get očekává přesný klíč, nikoli vzor. Pro glob vzory použijte "{bin} list <pattern>".',
     'store.did_you_mean'         => 'klíč nenalezen; mysleli jste \'{key}\'?',
     'database.query_failed'      => 'Dotaz do databáze selhal.',
+    'cli.key_not_found'          => 'klíč nenalezen: {key}',
+    'cli.deleted_one'            => 'Smazána 1 položka.',
+    'cli.imported_one'           => 'Importována 1 položka.',
+    'cli.imported_n'             => 'Importováno {count} položek.',
+    'cli.would_delete_one'       => '1 položka by byla smazána.',
+    'cli.would_delete_n'         => '{count} položek by bylo smazáno.',
+    'cli.pruned_n'               => 'Odstraněno {count} expirovaných položek.',
+    'cli.pruned_none'            => 'Žádné expirované položky k odstranění.',
 ];

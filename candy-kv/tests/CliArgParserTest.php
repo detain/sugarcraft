@@ -54,12 +54,12 @@ final class CliArgParserTest extends TestCase
         $this->assertSame('hunter2', $result['value']);
     }
 
-    public function testSetOptsUnknownFlagIsIgnored(): void
+    public function testSetUnknownFlagIsRefused(): void
     {
-        // --no-atomic is not applicable to set and must be silently ignored
-        $result = ArgParser::set(['candy-kv', 'set', 'key', 'val', '--no-atomic'], 2);
-        $this->assertSame('key', $result['key']);
-        $this->assertSame('val', $result['value']);
+        // Strict contract: a flag the verb does not know is a usage error, never a silent no-op.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown option');
+        ArgParser::set(['candy-kv', 'set', 'key', 'val', '--no-atomic'], 2);
     }
 
     public function testSetOptsEmptyReturnsNulls(): void
@@ -203,11 +203,12 @@ final class CliArgParserTest extends TestCase
         $this->assertNull($result['pattern']);
     }
 
-    public function testExportOptsUnknownFlagsIgnored(): void
+    public function testExportUnknownFlagsRefused(): void
     {
-        // No flags are defined for export; unknown ones must be ignored.
-        $result = ArgParser::export(['candy-kv', 'export', 'json', '--unknown-flag'], 2);
-        $this->assertSame('json', $result['format']);
+        // Strict contract: export defines no flags; unknown ones are refused by name.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown option');
+        ArgParser::export(['candy-kv', 'export', 'json', '--unknown-flag'], 2);
     }
 
     // ─── both-form option parsing (docs-fix D4, M1) ─────────────────────────
@@ -236,7 +237,7 @@ final class CliArgParserTest extends TestCase
     public function testSetRefusesNonNumericTtlAttached(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('non-negative integer');
+        $this->expectExceptionMessage('integer of seconds');
         ArgParser::set(['candy-kv', 'set', 'mykey', '--ttl=soon'], 2);
     }
 
@@ -278,5 +279,97 @@ final class CliArgParserTest extends TestCase
     {
         $result = ArgParser::list(['candy-kv', 'list', '-d'], 2);
         $this->assertSame("\t", $result['delimiter']);
+    }
+
+    // ─── strict contract (lib-fixes-1103 wave A) ────────────────────────────
+
+    public function testSetRefusesZeroTtl(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('at least 1 second');
+        ArgParser::set(['candy-kv', 'set', 'mykey', 'myvalue', '--ttl=0'], 2);
+    }
+
+    public function testSetRefusesTtlOverflow(): void
+    {
+        // 10 digits exceeds the 999999999-second ceiling: refuse, never clamp to a zombie.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('integer of seconds');
+        ArgParser::set(['candy-kv', 'set', 'mykey', 'myvalue', '--ttl=10000000000'], 2);
+    }
+
+    public function testSetRefusesSurplusPositional(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('takes at most');
+        ArgParser::set(['candy-kv', 'set', 'mykey', 'myvalue', 'extra'], 2);
+    }
+
+    public function testUnknownOptionNamesTheFlagNotItsPayload(): void
+    {
+        try {
+            ArgParser::set(['candy-kv', 'set', 'k', 'v', '--frobnicate=secret'], 2);
+            $this->fail('expected refusal');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('--frobnicate', $e->getMessage());
+            $this->assertStringNotContainsString('secret', $e->getMessage());
+        }
+    }
+
+    public function testListRefusesFlagShapedDelimiterValue(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('delimiter');
+        ArgParser::list(['candy-kv', 'list', '-d', '-r'], 2);
+    }
+
+    public function testListRefusesSurplusPositional(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ArgParser::list(['candy-kv', 'list', 'a', 'b'], 2);
+    }
+
+    public function testPruneRefusesAnyArgument(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('prune takes no arguments');
+        ArgParser::prune(['candy-kv', 'prune', 'oops'], 2);
+    }
+
+    public function testSentinelMakesFlagShapedTailPositional(): void
+    {
+        $result = ArgParser::set(['candy-kv', 'set', 'mykey', '--', '--ttl=60'], 2);
+        $this->assertSame('mykey', $result['key']);
+        $this->assertSame('--ttl=60', $result['value']);
+        $this->assertNull($result['ttl']);
+    }
+
+    public function testGetDefaultsToRawBytes(): void
+    {
+        $result = ArgParser::get(['candy-kv', 'get', 'mykey'], 2);
+        $this->assertSame('mykey', $result['key']);
+        $this->assertFalse($result['sanitize']);
+    }
+
+    public function testGetSanitizeOptIn(): void
+    {
+        $result = ArgParser::get(['candy-kv', 'get', 'mykey', '--sanitize'], 2);
+        $this->assertTrue($result['sanitize']);
+    }
+
+    public function testDeleteDryRunFlag(): void
+    {
+        $result = ArgParser::delete(['candy-kv', 'delete', 'mykey', '--dry-run'], 2);
+        $this->assertTrue($result['dryRun']);
+    }
+
+    public function testSetBinaryAndTextForceFlags(): void
+    {
+        $binary = ArgParser::set(['candy-kv', 'set', 'k', 'v', '--binary'], 2);
+        $this->assertTrue($binary['binary']);
+        $text = ArgParser::set(['candy-kv', 'set', 'k', 'v', '--text'], 2);
+        $this->assertFalse($text['binary']);
+        $auto = ArgParser::set(['candy-kv', 'set', 'k', 'v'], 2);
+        $this->assertNull($auto['binary']);
     }
 }

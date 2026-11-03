@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get tam bir anahtar ister, desen değil. Glob desenleri için "{bin} list <pattern>" kullanın.',
     'store.did_you_mean'         => 'anahtar bulunamadı; \'{key}\' mi demek istediniz?',
     'database.query_failed'      => 'Veritabanı sorgusu başarısız oldu.',
+    'cli.key_not_found'          => 'anahtar bulunamadı: {key}',
+    'cli.deleted_one'            => '1 kayıt silindi.',
+    'cli.imported_one'           => '1 kayıt içe aktarıldı.',
+    'cli.imported_n'             => '{count} kayıt içe aktarıldı.',
+    'cli.would_delete_one'       => '1 kayıt silinecek.',
+    'cli.would_delete_n'         => '{count} kayıt silinecek.',
+    'cli.pruned_n'               => '{count} süresi dolmuş kayıt kaldırıldı.',
+    'cli.pruned_none'            => 'Kaldırılacak süresi dolmuş kayıt yok.',
 ];

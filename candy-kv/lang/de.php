@@ -24,4 +24,12 @@ return [
     'cli.pattern_not_supported'  => 'get erwartet einen exakten Schlüssel, kein Muster. Verwende "{bin} list <pattern>" für Glob-Muster.',
     'store.did_you_mean'         => 'Schlüssel nicht gefunden; meinst du \'{key}\'?',
     'database.query_failed'      => 'Die Datenbankabfrage ist fehlgeschlagen.',
+    'cli.key_not_found'          => 'Schlüssel nicht gefunden: {key}',
+    'cli.deleted_one'            => '1 Eintrag gelöscht.',
+    'cli.imported_one'           => '1 Eintrag importiert.',
+    'cli.imported_n'             => '{count} Einträge importiert.',
+    'cli.would_delete_one'       => '1 Eintrag würde gelöscht.',
+    'cli.would_delete_n'         => '{count} Einträge würden gelöscht.',
+    'cli.pruned_n'               => '{count} abgelaufene Einträge entfernt.',
+    'cli.pruned_none'            => 'Keine abgelaufenen Einträge zum Entfernen.',
 ];

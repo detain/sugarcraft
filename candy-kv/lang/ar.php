@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get يتطلب مفتاحًا دقيقًا وليس نمطًا. استخدم "{bin} list <pattern>" لمطابقة أنماط glob.',
     'store.did_you_mean'         => 'المفتاح غير موجود؛ هل قصدت \'{key}\'؟',
     'database.query_failed'      => 'فشل استعلام قاعدة البيانات.',
+    'cli.key_not_found'          => 'المفتاح غير موجود: {key}',
+    'cli.deleted_one'            => 'تم حذف مدخل واحد.',
+    'cli.imported_one'           => 'تم استيراد مدخل واحد.',
+    'cli.imported_n'             => 'تم استيراد {count} مدخلًا.',
+    'cli.would_delete_one'       => 'سيتم حذف مدخل واحد.',
+    'cli.would_delete_n'         => 'سيتم حذف {count} مدخلًا.',
+    'cli.pruned_n'               => 'تمت إزالة {count} مدخلًا منتهي الصلاحية.',
+    'cli.pruned_none'            => 'لا توجد مدخلات منتهية الصلاحية لإزالتها.',
 ];

@@ -24,4 +24,12 @@ return [
     'cli.pattern_not_supported'  => 'get attend une clé exacte, pas un motif. Utilisez "{bin} list <pattern>" pour les motifs glob.',
     'store.did_you_mean'         => 'clé introuvable ; vouliez-vous dire \'{key}\' ?',
     'database.query_failed'      => 'La requête base de données a échoué.',
+    'cli.key_not_found'          => 'clé introuvable : {key}',
+    'cli.deleted_one'            => '1 entrée supprimée.',
+    'cli.imported_one'           => '1 entrée importée.',
+    'cli.imported_n'             => '{count} entrées importées.',
+    'cli.would_delete_one'       => '1 entrée serait supprimée.',
+    'cli.would_delete_n'         => '{count} entrées seraient supprimées.',
+    'cli.pruned_n'               => '{count} entrées expirées supprimées.',
+    'cli.pruned_none'            => 'Aucune entrée expirée à supprimer.',
 ];

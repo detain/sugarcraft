@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get には完全なキーが必要です。パターンは使用できません。パターン検索は "{bin} list <pattern>" を使用してください。',
     'store.did_you_mean'         => 'キーが見つかりません: \'{key}\' のことですか?',
     'database.query_failed'      => 'データベースクエリが失敗しました。',
+    'cli.key_not_found'          => 'キーが見つかりません: {key}',
+    'cli.deleted_one'            => '1 件を削除しました。',
+    'cli.imported_one'           => '1 件をインポートしました。',
+    'cli.imported_n'             => '{count} 件をインポートしました。',
+    'cli.would_delete_one'       => '1 件を削除します。',
+    'cli.would_delete_n'         => '{count} 件を削除します。',
+    'cli.pruned_n'               => '期限切れの {count} 件を削除しました。',
+    'cli.pruned_none'            => '削除対象の期限切れエントリはありません。',
 ];

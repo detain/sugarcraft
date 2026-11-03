@@ -391,6 +391,28 @@ final class Database
     }
 
     /**
+     * Physically remove every already-expired entry.
+     *
+     * Same liveness predicate as every reader, negated: a row is dead when
+     * expires_at is not NULL and its epoch is strictly before "now" — the
+     * exact complement of the `>= :now` read filter, so a row this method
+     * keeps can never be one a read would skip.
+     */
+    public function pruneExpired(): int
+    {
+        $stmt = $this->db->prepare(
+            'DELETE FROM entries
+             WHERE expires_at IS NOT NULL AND CAST(expires_at AS INTEGER) < :now'
+        );
+        $stmt->bindValue(':now', \time(), \SQLITE3_INTEGER);
+        $stmt->execute();
+        $deleted = $this->db->changes();
+        $stmt->close();
+
+        return $deleted;
+    }
+
+    /**
      * Convert a glob pattern (* and ?) to a SQL LIKE string.
      */
     private function globToLike(string $pattern): string

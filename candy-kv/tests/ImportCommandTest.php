@@ -113,14 +113,16 @@ final class ImportCommandTest extends TestCase
 
     // ─── error cases ─────────────────────────────────────────────────────────
 
-    public function testRunUnknownFormatReturnsOne(): void
+    public function testRunUnknownFormatReturnsTwo(): void
     {
+        // Usage-class error: an unsupported format is caller intent, not an
+        // import failure — exit 2, and the refusal lists every accepted spelling.
         $path = $this->tmpDir . '/data.csv';
         \file_put_contents($path, 'col1,col2');
 
         $exit = $this->cmd->run('csv', $path, false);
 
-        $this->assertSame(1, $exit);
+        $this->assertSame(2, $exit);
     }
 
     public function testRunNonexistentFileReturnsOne(): void

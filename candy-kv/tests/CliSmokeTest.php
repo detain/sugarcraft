@@ -9,12 +9,11 @@ use PHPUnit\Framework\TestCase;
 /**
  * End-to-end smoke test that runs the real `bin/candy-kv` binary via proc_open.
  *
- * This is the regression net for the two "fatal on ship" bugs (W15): the CLI
- * shipped calling a non-existent `Store::sanitizeForTty()` (crashed every
- * `list`) and a private `Store::suggestSimilar()` (crashed every missing-key
- * `get`). Neither had any test that actually executed the binary, so both
- * fatals sailed through. These tests execute the binary and assert it never
- * fatals.
+ * This is the regression net for the two "fatal on ship" bugs: the CLI
+ * shipped calling a non-existent method (crashed every `list`) and reaching
+ * a private one (crashed every missing-key `get`). Neither had any test that
+ * actually executed the binary, so both fatals sailed through. These tests
+ * execute the binary and assert it never fatals.
  *
  * The CLI has no --data-dir flag; it resolves its data directory from
  * XDG_CONFIG_HOME (falling back to HOME/.config), so each test isolates state
@@ -70,7 +69,7 @@ final class CliSmokeTest extends TestCase
     {
         $this->runSkate(['set', 'color', 'blue']);
 
-        // "colar" is one edit from "color" — get() itself emits the suggestion.
+        // "colar" is one edit from "color" — the CLI emits the suggestion.
         $get = $this->runSkate(['get', 'colar']);
         $this->assertSame(1, $get['exit']);
         $this->assertNoFatal($get);
@@ -247,7 +246,7 @@ final class CliSmokeTest extends TestCase
      */
     public function testGetPatternIsRefusedWithPointerToList(): void
     {
-        // M2: get is exact-key; a glob must be refused loudly, not silently
+        // get is exact-key; a glob must be refused loudly, not silently
         // treated as a literal miss.
         $this->runSkate(['set', 'user-1', 'alice']);
         $get = $this->runSkate(['get', 'user-*']);
@@ -258,7 +257,7 @@ final class CliSmokeTest extends TestCase
 
     public function testDeleteMissingKeyExitsOne(): void
     {
-        // n-minor: delete of a non-matching key used to print "0 entries" and
+        // delete of a non-matching key used to print "0 entries" and
         // exit 0 — indistinguishable from success for scripts.
         $hit = $this->runSkate(['delete', 'absent-key']);
         $this->assertSame(1, $hit['exit'], 'delete of a missing key must exit 1');
@@ -281,7 +280,7 @@ final class CliSmokeTest extends TestCase
 
     public function testTtlSpaceFormWorksEndToEnd(): void
     {
-        // M1: the documented space form must actually store a TTL.
+        // The documented space form must actually store a TTL.
         $set = $this->runSkate(['set', 'ttl-space', 'v', '--ttl', '3600']);
         $this->assertSame(0, $set['exit']);
         $list = $this->runSkate(['list', '-v']);

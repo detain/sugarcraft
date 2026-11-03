@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get wymaga dokładnego klucza, nie wzorca. Użyj "{bin} list <pattern>", aby dopasować wzorce glob.',
     'store.did_you_mean'         => 'nie znaleziono klucza; czy chodziło o \'{key}\'?',
     'database.query_failed'      => 'Zapytanie do bazy danych nie powiodło się.',
+    'cli.key_not_found'          => 'nie znaleziono klucza: {key}',
+    'cli.deleted_one'            => 'Usunięto 1 wpis.',
+    'cli.imported_one'           => 'Zaimportowano 1 wpis.',
+    'cli.imported_n'             => 'Zaimportowano {count} wpisów.',
+    'cli.would_delete_one'       => '1 wpis zostałby usunięty.',
+    'cli.would_delete_n'         => '{count} wpisów zostałoby usuniętych.',
+    'cli.pruned_n'               => 'Usunięto {count} wygasłych wpisów.',
+    'cli.pruned_none'            => 'Brak wygasłych wpisów do usunięcia.',
 ];

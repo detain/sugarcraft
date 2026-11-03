@@ -322,12 +322,23 @@ final class ImportExportTest extends TestCase
         $this->assertStringContainsString('token@mydb', $output);
     }
 
-    public function testExportRunReturnsOneOnException(): void
+    public function testExportRunReturnsTwoForUnknownFormat(): void
     {
         $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
 
-        // Calling run() with invalid format should catch the exception and return 1
+        // Unknown format is a usage error under the strict contract: exit 2.
         $exitCode = $cli->run('invalid-format');
+        $this->assertSame(2, $exitCode);
+    }
+
+    public function testExportRunReturnsOneOnFailure(): void
+    {
+        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
+
+        // The runtime-failure leg (exit 1) stays reachable: a database name
+        // the store refuses (invalid spelling) is a failure to report, not a
+        // usage exit 2 — the format itself was fine.
+        $exitCode = $cli->run('json', 'not a valid db name');
         $this->assertSame(1, $exitCode);
     }
 

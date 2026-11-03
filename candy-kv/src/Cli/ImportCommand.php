@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Cli;
 
 use SugarCraft\Kv\Import\JsonImporter;
 use SugarCraft\Kv\Import\YamlImporter;
+use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Store;
 
 /**
@@ -29,10 +30,10 @@ final class ImportCommand
     /**
      * Run the import command.
      *
-     * @param string $format 'json' or 'yaml'
+     * @param string $format 'json', 'yaml' or 'yml'
      * @param string $path   File path to import from (use '-' for STDIN)
      * @param bool   $atomic Whether to use an atomic transaction.
-     * @return int Exit code (0 = success, 1 = failure).
+     * @return int Exit code (0 = success, 1 = failure, 2 = bad usage).
      */
     public function run(string $format, string $path, bool $atomic = true): int
     {
@@ -43,8 +44,9 @@ final class ImportCommand
         };
 
         if ($importer === null) {
-            \fwrite(STDERR, "Unknown import format: {$format}. Use 'json' or 'yaml'.\n");
-            return 1;
+            // Usage-class error: the format the caller asked for is not a format at all.
+            \fwrite(STDERR, "Unknown import format: {$format}. Use 'json', 'yaml' or 'yml'.\n");
+            return 2;
         }
 
         try {
@@ -71,7 +73,7 @@ final class ImportCommand
                 }
             }
 
-            \fwrite(STDOUT, "Imported {$count} entries.\n");
+            \fwrite(STDOUT, Lang::t($count === 1 ? 'cli.imported_one' : 'cli.imported_n', ['count' => $count]) . "\n");
             return 0;
         } catch (\Throwable $e) {
             \fwrite(STDERR, "Import failed: {$e->getMessage()}\n");

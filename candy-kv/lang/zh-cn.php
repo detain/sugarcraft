@@ -22,4 +22,12 @@ return [
     'cli.pattern_not_supported'  => 'get 需要精确的键，而不是模式。使用 "{bin} list <pattern>" 来匹配通配符模式。',
     'store.did_you_mean'         => '未找到键；您是想要 \'{key}\' 吗？',
     'database.query_failed'      => '数据库查询失败。',
+    'cli.key_not_found'          => '未找到键：{key}',
+    'cli.deleted_one'            => '已删除 1 个条目。',
+    'cli.imported_one'           => '已导入 1 个条目。',
+    'cli.imported_n'             => '已导入 {count} 个条目。',
+    'cli.would_delete_one'       => '将删除 1 个条目。',
+    'cli.would_delete_n'         => '将删除 {count} 个条目。',
+    'cli.pruned_n'               => '已移除 {count} 个过期条目。',
+    'cli.pruned_none'            => '没有需要移除的过期条目。',
 ];

@@ -7,26 +7,25 @@ declare(strict_types=1);
  * CandyKv CLI — charmbracelet/skate equivalent.
  *
  * Usage:
- *   candy-kv set <key> [value] [--ttl SECONDS]  Set a key (reads from stdin if no value)
- *   candy-kv get <key>                         Get a value (suggests typo on miss)
- *   candy-kv list [-k|-v] [-r] [-d DELIM] [pattern]  List entries
- *   candy-kv delete <key>                       Delete a key (supports glob)
- *   candy-kv list-dbs                          List all databases
- *   candy-kv import <format> <path>           Import from JSON/YAML file
- *   candy-kv export <format> [db] [pattern]    Export to JSON/YAML
+ *   candy-kv set <key> [value] [--ttl SECONDS] [--binary|--text]
+ *   candy-kv get <key> [--sanitize]
+ *   candy-kv list [-k|-v] [-r] [-d DELIM] [pattern]
+ *   candy-kv delete <key> [--dry-run]
+ *   candy-kv list-dbs
+ *   candy-kv prune
+ *   candy-kv import <format> <path> [--no-atomic]
+ *   candy-kv export <format> [db] [pattern]
+ *   candy-kv --help | --version
  *
- * Database suffix: key@dbname
- *
- * Formats: json, yaml (or yml)
- * Path '-' or '/dev/stdin' reads from standard input for import.
+ * See the help() output below (or `candy-kv help`) for the full contract:
+ * exit codes, output discipline, and option details live there.
  */
 namespace SugarCraft\Kv;
 
 (static function () {
-    // Guard shape ported from candy-code/candy-top (DST-1, measured on PHP
-    // 8.3.6): when `php candy-kv.phar` runs, THIS file is the archive's
-    // stub and the process is NOT inside the archive — Phar::running()
-    // answers '' there, and a bare '/x.phar/entry' path fails
+    // Guard shape measured on PHP 8.3.6: when `php candy-kv.phar` runs, THIS
+    // file is the archive's stub and the process is NOT inside the archive —
+    // Phar::running() answers '' there, and a bare '/x.phar/entry' path fails
     // is_file()/require for every caller. Two identities cover the two phar
     // shapes: the stub names itself in __FILE__, and a require-from-inside
     // names the archive in Phar::running(). Both are addressed the only way
@@ -52,12 +51,19 @@ namespace SugarCraft\Kv;
     exit(1);
 })();
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Kv\Cli\ArgParser;
 use SugarCraft\Kv\Cli\ImportCommand;
 use SugarCraft\Kv\Cli\ExportCommand;
 use SugarCraft\Kv\Lang;
 use SugarCraft\Kv\Store;
 use SugarCraft\Kv\Support\Version;
+
+// Locale wiring: honour LC_ALL/LC_MESSAGES/LANG like every translated lib.
+// Translated surface = diagnostics + success lines. By design, --help stays
+// English (option grammar mirrors the flag spellings) and ArgParser /
+// importer parse errors are English — see README.
+T::setLocale(T::detect());
 
 $bin = basename($argv[0]);
 
@@ -73,17 +79,37 @@ if (($argv[1] ?? '') === '--version') {
     exit(0);
 }
 
+// Same purity law for the help verbs, and for commands we will not run at
+// all: an unknown command is a usage error, not a reason to create state.
+switch ($argv[1]) {
+    case '--help':
+    case '-h':
+    case 'help':
+        help($bin);
+        exit(0);
+}
+if (!in_array($argv[1], ['set', 'get', 'list', 'delete', 'list-dbs', 'prune', 'import', 'export'], true)) {
+    fwrite(STDERR, Lang::t('cli.unknown_command', ['cmd' => Store::sanitizeForTty($argv[1])]) . "\n");
+    help($bin);
+    exit(2);
+}
+
 $store = new Store();
 $cmd = $argv[1];
 
-// ArgParser refuses malformed option values (e.g. --ttl=soon) with an
-// InvalidArgumentException; usage errors exit 2, distinct from runtime
-// failures (1) and missing keys (get/delete exit 1).
+// Exit-code contract:
+//   2  usage error — bad/missing flag or argument, unknown command
+//      (ArgParser + the missing-key guards below throw/fold into this)
+//   1  the key/pattern found no match, or a runtime failure
+//   0  success
 try {
     run($store, $cmd, $argv, $bin);
 } catch (\InvalidArgumentException $e) {
     fwrite(STDERR, 'candy-kv: ' . $e->getMessage() . "\n");
     exit(2);
+} catch (\Throwable $e) {
+    fwrite(STDERR, 'candy-kv: error: ' . $e->getMessage() . "\n");
+    exit(1);
 }
 
 exit(0);
@@ -93,9 +119,8 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
     switch ($cmd) {
     case 'set':
         $opts = ArgParser::set($argv, 2);
-        if ($opts['key'] === null) {
-            fwrite(STDERR, Lang::t('cli.usage_set', ['bin' => $bin]) . "\n");
-            exit(1);
+        if ($opts['key'] === null || $opts['key'] === '') {
+            usage($bin, 'cli.usage_set');
         }
         // Read value from stdin if not provided as argument
         $value = $opts['value'];
@@ -105,36 +130,55 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
                 $value = '';
             }
         }
-        $store->set($opts['key'], $value, false, $opts['ttl']);
+        // Binary handling: the column is TEXT, so NUL bytes get truncated at
+        // the C string end and invalid UTF-8 breaks the whole-store JSON
+        // export. Unless the caller forced --binary/--text, auto-detect both
+        // shapes and store base64 with the binary flag set.
+        $binary = $opts['binary'] ?? (str_contains($value, "\0") || !mb_check_encoding($value, 'UTF-8'));
+        $store->set($opts['key'], $value, $binary, $opts['ttl']);
         break;
 
     case 'get':
-        if (\count($argv) < 3) {
-            fwrite(STDERR, Lang::t('cli.usage_get', ['bin' => $bin]) . "\n");
-            exit(1);
+        $opts = ArgParser::get($argv, 2);
+        if ($opts['key'] === null) {
+            usage($bin, 'cli.usage_get');
         }
         // get() is exact-key by design; glob patterns belong to list.
-        if (\strpbrk($argv[2], '*?') !== false) {
+        if (\strpbrk($opts['key'], '*?') !== false) {
             fwrite(STDERR, Lang::t('cli.pattern_not_supported', ['bin' => $bin]) . "\n");
             exit(2);
         }
-        // get() already emits any "did you mean" typo suggestion to stderr on a
-        // miss; branch on entry existence so a truly-missing key exits 1 while an
-        // existing key that holds an empty value still exits 0.
-        $val = $store->get($argv[2]);
-        if ($val === '' && $store->entry($argv[2]) === null) {
+        // Single query; null = miss (an existing key holding '' is a hit).
+        $entry = $store->entry($opts['key']);
+        if ($entry === null) {
+            // Suggestions are CLI policy. Everything echoed here may be
+            // attacker-chosen (typo key, poisoned store keys) → sanitize.
+            $suggestion = $store->suggestionFor($opts['key']);
+            $line = $suggestion !== null
+                ? Lang::t('store.did_you_mean', ['key' => Store::sanitizeForTty($suggestion)])
+                : Lang::t('cli.key_not_found', ['key' => Store::sanitizeForTty($opts['key'])]);
+            fwrite(STDERR, $line . "\n");
             exit(1);
         }
-        echo $val;
+        // Byte-exact by contract: print stored bytes untouched (no trailing
+        // newline added). --sanitize opts INTO the single-line scrub.
+        $raw = $entry->rawValue();
+        echo $opts['sanitize'] ? Store::sanitizeForTty($raw) : $raw;
         break;
 
     case 'list':
         $opts = ArgParser::list($argv, 2);
-        $delim = Store::sanitizeForTty($opts['delimiter']);
+        // The delimiter is CONTROLLED by the operator (awk -F contract), so
+        // it prints byte-untouched; only the STORED key/value columns get
+        // the escape-smuggling scrub. Binary entries never dump bytes.
+        $delim = $opts['delimiter'];
         foreach ($store->list($opts['pattern'], null, $opts['reverse'], $opts['mode'], $opts['delimiter']) as $item) {
             if ($item instanceof Entry) {
                 $key = Store::sanitizeForTty($item->key);
-                $val = Store::sanitizeForTty($item->rawValue());
+                $bytes = $item->rawValue();
+                $val = $item->binary
+                    ? '<binary ' . strlen($bytes) . ' bytes>'
+                    : Store::sanitizeForTty($bytes);
                 echo "{$key}{$delim}{$val}\n";
             } else {
                 // keys-only or values-only mode: sanitize the yielded string
@@ -144,16 +188,35 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         break;
 
     case 'delete':
-        if (\count($argv) < 3) {
-            fwrite(STDERR, Lang::t('cli.usage_delete', ['bin' => $bin]) . "\n");
-            exit(1);
+        $opts = ArgParser::delete($argv, 2);
+        if ($opts['key'] === null) {
+            usage($bin, 'cli.usage_delete');
         }
-        $n = $store->delete($argv[2]);
+        if ($opts['dryRun']) {
+            $n = countMatches($store, $opts['key']);
+            if ($n === 0) {
+                fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => Store::sanitizeForTty($opts['key'])]) . "\n");
+                exit(1);
+            }
+            echo Lang::t($n === 1 ? 'cli.would_delete_one' : 'cli.would_delete_n', ['count' => $n]) . "\n";
+            break;
+        }
+        $n = $store->delete($opts['key']);
         if ($n === 0) {
-            fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => $argv[2]]) . "\n");
+            fwrite(STDERR, Lang::t('cli.deleted_none', ['key' => Store::sanitizeForTty($opts['key'])]) . "\n");
             exit(1);
         }
-        echo Lang::t('cli.deleted_n', ['count' => $n]) . "\n";
+        echo Lang::t($n === 1 ? 'cli.deleted_one' : 'cli.deleted_n', ['count' => $n]) . "\n";
+        break;
+
+    case 'prune':
+        ArgParser::prune($argv, 2);
+        $n = $store->pruneExpired();
+        if ($n > 0) {
+            echo Lang::t('cli.pruned_n', ['count' => $n]) . "\n";
+        } else {
+            echo Lang::t('cli.pruned_none') . "\n";
+        }
         break;
 
     case 'list-dbs':
@@ -165,8 +228,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
     case 'import':
         $opts = ArgParser::import($argv, 2);
         if ($opts['format'] === null || $opts['path'] === null) {
-            fwrite(STDERR, Lang::t('cli.usage_import', ['bin' => $bin]) . "\n");
-            exit(1);
+            usage($bin, 'cli.usage_import');
         }
         $exitCode = (new ImportCommand($store))->run(
             $opts['format'],
@@ -178,8 +240,7 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
     case 'export':
         $opts = ArgParser::export($argv, 2);
         if ($opts['format'] === null) {
-            fwrite(STDERR, Lang::t('cli.usage_export', ['bin' => $bin]) . "\n");
-            exit(1);
+            usage($bin, 'cli.usage_export');
         }
         $exitCode = (new ExportCommand($store))->run(
             $opts['format'],
@@ -187,57 +248,101 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
             $opts['pattern'],
         );
         exit($exitCode);
-
-    case '--help':
-    case '-h':
-    case 'help':
-        help($bin);
-        break;
-
-    default:
-        fwrite(STDERR, Lang::t('cli.unknown_command', ['cmd' => $cmd]) . "\n");
-        help($bin);
-        exit(1);
     }
+}
+
+/**
+ * How many live entries a delete argument would touch (no writes).
+ * Mirrors Store::delete's routing: glob → pattern list, else exact key.
+ */
+function countMatches(Store $store, string $key): int
+{
+    $at = strrpos($key, '@');
+    $entryKey = $at === false ? $key : substr($key, 0, $at);
+    $dbName = $at === false ? null : substr($key, $at + 1);
+
+    if (strpbrk($entryKey, '*?') !== false) {
+        return iterator_count($store->list($entryKey, $dbName, false, 'keys'));
+    }
+
+    return $store->entry($key) === null ? 0 : 1;
+}
+
+/**
+ * Emit a localized usage line and exit with the usage-error code.
+ */
+function usage(string $bin, string $messageKey): never
+{
+    fwrite(STDERR, Lang::t($messageKey, ['bin' => $bin]) . "\n");
+    exit(2);
 }
 
 function help(string $bin): void
 {
     echo <<<HELP
-CandyKv — personal key/value store
+    CandyKv — personal key/value store
 
-Usage:
-  {$bin} set <key> [value] [--ttl SECONDS]
-                                  Set a key (reads stdin if no value)
-  {$bin} get <key>                Get a value (suggests typo on miss)
-  {$bin} list [-k|-v] [-r] [-d DELIM] [pattern]
-                                  List entries (default: keys+values)
-  {$bin} delete <key>             Delete a key (glob patterns supported)
-  {$bin} list-dbs                 List all databases
-  {$bin} import <format> <path>   Import entries (json|yaml|yml, path=- for stdin)
-  {$bin} export <format> [db] [pattern]
-                                  Export entries (json|yaml|yml)
-  {$bin} --help                   Show this help
-  {$bin} --version                Print the version
+    Usage:
+      {$bin} set <key> [value] [--ttl SECONDS] [--binary|--text]
+                                      Set a key (reads stdin if no value)
+      {$bin} get <key> [--sanitize]    Get a value (byte-exact by default)
+      {$bin} list [-k|-v] [-r] [-d DELIM] [pattern]
+                                      List entries (default: keys+values)
+      {$bin} delete <key> [--dry-run]  Delete a key or glob pattern
+      {$bin} list-dbs                  List all databases
+      {$bin} prune                     Remove expired entries from the default db
+      {$bin} import <format> <path> [--no-atomic]
+                                      Import entries (json|yaml|yml, path=- for stdin)
+      {$bin} export <format> [db] [pattern]
+                                      Export entries (json|yaml|yml)
+      {$bin} --help                    Show this help
+      {$bin} --version                 Print the version
 
-Options:
-  --ttl SECONDS                   Set a TTL (expiry in seconds) for the key.
-  --ttl=SECONDS                   Same as above; both spellings accepted.
-  -d DELIM, -dDELIM               Output delimiter for list (default: tab).
-  --no-atomic                     Disable atomic transaction for import.
+    Options:
+      --ttl SECONDS | --ttl=SECONDS   Expiry in seconds (1..999999999). Omit
+                                      --ttl for a forever entry; --ttl 0 is a
+                                      usage error, not "expire immediately".
+      --binary | --text               Force how `set` stores the value.
+                                      Default: auto-detect — values with NUL
+                                      bytes or invalid UTF-8 are stored
+                                      base64-encoded with the binary flag.
+      --sanitize                      `get`: collapse the value to one
+                                      control-free line. Without it, get
+                                      prints the exact stored bytes.
+      -d DELIM | -dDELIM              `list` column delimiter (default: tab).
+                                      Printed untouched — safe for awk -F.
+      -k, -v, -r                      `list`: keys-only, values-only, reverse.
+      --dry-run                       `delete`: report match count, write
+                                      nothing.
+      --no-atomic                     `import`: skip the wrapping transaction.
+      --                              End option processing; later tokens are
+                                      data (`set backup -- --ttl=60` stores
+                                      the literal value --ttl=60).
 
-Patterns:
-  *  matches any characters
-  ?  matches a single character
-  Patterns apply to list and delete; get is exact-key.
+    Exit codes:
+      0  success        1  key/pattern missed, or a runtime error
+      2  usage error (unknown command, bad or missing arguments)
 
-Database suffix:
-  Use key@dbname to target a specific database.
-  E.g. {$bin} get token@passwords
+    Patterns:
+      *  matches any characters;  ?  matches one character.
+      Patterns apply to list and delete; get is exact-key.
+      Matching is byte-wise and case-sensitive; a literal * or ? can be
+      introduced with a backslash.
 
-Import/Export:
-  JSON and YAML formats supported.
-  Use path '-' to read import data from STDIN.
+    Database suffix:
+      Use key@dbname to target a specific database.
+      E.g. {$bin} get token@passwords
+      A literal @ in a key is spelled \\@ (never "a@b@c").
 
-HELP;
+    Output discipline:
+      get    exact stored bytes, no added newline.
+      list   one row per line; stored columns are control-scrubbed for the
+             terminal, the -d delimiter is not. Binary values print as
+             <binary N bytes>.
+
+    Language:
+      Diagnostics and success lines follow LC_ALL/LC_MESSAGES/LANG. Help and
+      parse errors stay English by design.
+
+    HELP;
 }

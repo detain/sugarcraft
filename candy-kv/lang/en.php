@@ -24,4 +24,12 @@ return [
     'cli.pattern_not_supported' => 'get takes an exact key, not a pattern. Use "{bin} list <pattern>" to match glob patterns.',
     'store.did_you_mean'        => 'key not found; did you mean \'{key}\'?',
     'database.query_failed'     => 'The database query failed.',
+    'cli.key_not_found'          => 'key not found: {key}',
+    'cli.deleted_one'            => 'Deleted 1 entry.',
+    'cli.imported_one'           => 'Imported 1 entry.',
+    'cli.imported_n'             => 'Imported {count} entries.',
+    'cli.would_delete_one'       => 'Would delete 1 entry.',
+    'cli.would_delete_n'         => 'Would delete {count} entries.',
+    'cli.pruned_n'               => 'Removed {count} expired entries.',
+    'cli.pruned_none'            => 'No expired entries to remove.',
 ];
