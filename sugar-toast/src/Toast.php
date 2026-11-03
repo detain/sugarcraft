@@ -27,6 +27,15 @@ use SugarCraft\Core\Util\Width;
  */
 final class Toast
 {
+    /**
+     * sugar-mouse zone sentinels (U+E000 OPEN / U+E001 CLOSE). This lib does
+     * NOT emit them and depends on nothing that does — the constants exist
+     * solely so a marked-frame host's OWN markers survive the composite
+     * (see carryHostZoneMarkers()).
+     */
+    private const ZONE_OPEN = "\u{e000}";
+    private const ZONE_CLOSE = "\u{e001}";
+
     // Configuration
     private int $maxWidth   = 50;
     private int $minWidth   = 0;
@@ -603,6 +612,7 @@ final class Toast
         }
 
         $viewport = $layout['viewport'];
+        $bgGrid = $viewport;
 
         // Region spans exactly the box, so nothing right of a narrow box is
         // overwritten with blanks; geometry comes from the shared layout()
@@ -611,9 +621,81 @@ final class Toast
             $box = $placed['buffer'];
             $region = new Region(BufferPosition::new($placed['x'], $placed['y']), $box->width(), $box->height());
             $viewport = $viewport->withRegion($region, $box);
+            $viewport = $this->carryHostZoneMarkers($viewport, $bgGrid, $placed['x'], $placed['y'], $box->width(), $box->height());
         }
 
         return $viewport->toAnsi();
+    }
+
+    /**
+     * Carry the host's sugar-mouse zone sentinels THROUGH the opaque blit.
+     *
+     * The composite replaced a rectangle without knowing what lived there.
+     * A marked-frame host (zones marked U+E000 OPEN .. payload .. U+E001
+     * CLOSE) previously lost every marker the box covered — and, worse, lost
+     * ONE half of a pair, tearing the frame: an open-without-close row makes
+     * every later zone on that row mis-route (lib-reviews-1102 C2: the
+     * consolidator sweep lost a marker in 8/27 geometries and left 5 rows
+     * unpaired; qa's wider sweep counted 45).
+     *
+     * The rule is row-local and pairing-first: on each box row, ORIGINAL
+     * background cells inside every OPEN..CLOSE span (payload included) are
+     * restored over the box chrome; a dangling span extends to the row edge,
+     * which is where the partner half already lived. The visible cost is
+     * deliberate: where a host zone ran under the toast, the box shows a hole
+     * instead of chrome. A click map that silently mis-pairs is a worse UI
+     * than a chipped border — and the review's alternative (declare
+     * marked-frame hosts unsupported) stayed the documented fallback only if
+     * this carry-through ever regresses.
+     *
+     * Sentinels inside the TOAST's own message text are untouched: they pass
+     * through as ordinary printable PUA glyphs exactly as the trust boundary
+     * documents, and this method only ever restores ORIGINAL background
+     * cells, never the box's.
+     */
+    private function carryHostZoneMarkers(Buffer $viewport, Buffer $bg, int $x, int $y, int $w, int $h): Buffer
+    {
+        $frameWidth = $bg->width();
+        for ($row = $y; $row < $y + $h && $row < $bg->height(); $row++) {
+            $protect = [];
+            $openCol = null;
+            for ($col = 0; $col < $frameWidth; $col++) {
+                $rune = $bg->cellAt($col, $row)->rune();
+                if ($rune === self::ZONE_OPEN) {
+                    if ($openCol === null) {
+                        $openCol = $col;
+                    }
+                    $protect[$col] = true;
+                } elseif ($rune === self::ZONE_CLOSE) {
+                    if ($openCol !== null) {
+                        for ($c = $openCol; $c <= $col; $c++) {
+                            $protect[$c] = true;
+                        }
+                        $openCol = null;
+                    } else {
+                        for ($c = 0; $c <= $col; $c++) {
+                            $protect[$c] = true;
+                        }
+                    }
+                } elseif ($openCol !== null) {
+                    $protect[$col] = true;
+                }
+            }
+            if ($openCol !== null) {
+                for ($c = $openCol; $c < $frameWidth; $c++) {
+                    $protect[$c] = true;
+                }
+            }
+            if ($protect === []) {
+                continue;
+            }
+            for ($col = $x; $col < $x + $w && $col < $frameWidth; $col++) {
+                if (isset($protect[$col])) {
+                    $viewport = $viewport->withCellAt($col, $row, $bg->cellAt($col, $row));
+                }
+            }
+        }
+        return $viewport;
     }
 
     /**

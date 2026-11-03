@@ -473,6 +473,13 @@ output stream contains only the SGR sequences the renderer itself emits:
   composed frame. Hosts that parse zone markers from rendered output must run
   `Sanitize::untrustedForMarkedFrames()` on attacker-authored text BEFORE
   enqueueing it.
+- **Your own zone markers survive the overlay**: when `view()` receives a
+  marked background frame, the composite CARRIES the host's U+E000..U+E001
+  spans through — covered sentinel cells are restored over the box, so every
+  open marker keeps its close (pairing preserved in all nine positions;
+  unmarked frames stay byte-identical). The deliberate cost is cosmetic: box
+  chrome shows holes where a marker was restored. The sweep duty above still
+  applies to attacker-authored *toast text*, never to the host's own markers.
 
 The full fleet-wide contract lives in
 [`docs/TRUST-BOUNDARY.md`](../docs/TRUST-BOUNDARY.md)
