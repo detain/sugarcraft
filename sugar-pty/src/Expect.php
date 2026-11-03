@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Recorder;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Exception\ExpectEofException;
 use SugarCraft\Pty\Exception\ExpectTimeoutException;
+use SugarCraft\Pty\Posix\PosixMasterPty;
 
 /**
  * Fluent expect-style driver over a {@see MasterPty}. Models Python
@@ -33,6 +35,8 @@ use SugarCraft\Pty\Exception\ExpectTimeoutException;
  */
 final class Expect
 {
+    use Mutable;
+
     /** Default per-expect timeout in seconds. Matches Python pexpect's. */
     public const DEFAULT_TIMEOUT_SEC = 5.0;
 
@@ -76,7 +80,17 @@ final class Expect
         public readonly ?Recorder $recorder = null,
         public readonly ?int $maxBuffer = null,
         public readonly ?int $searchWindow = null,
-    ) {}
+    ) {
+        if ($readChunk <= 0) {
+            throw new \InvalidArgumentException("readChunk must be > 0, got {$readChunk}");
+        }
+        if ($maxBuffer !== null && $maxBuffer <= 0) {
+            throw new \InvalidArgumentException("maxBuffer must be > 0 or null, got {$maxBuffer}");
+        }
+        if ($searchWindow !== null && $searchWindow <= 0) {
+            throw new \InvalidArgumentException("searchWindow must be > 0 or null, got {$searchWindow}");
+        }
+    }
 
     /**
      * Open a fresh expect session on the given master. Equivalent to
@@ -112,35 +126,84 @@ final class Expect
         $written = 0;
         $total = \strlen($bytes);
         $stallDeadline = \microtime(true) + self::SEND_STALL_BUDGET_SEC;
-        while ($written < $total) {
-            $n = $this->master->write(\substr($bytes, $written));
-            if ($n > 0) {
-                $written += $n;
-                $stallDeadline = \microtime(true) + self::SEND_STALL_BUDGET_SEC;
-                continue;
+        // The stall guarantee only bites if the loop runs while the write
+        // is stuck. A bare write() against a BLOCKING master with a full
+        // queue never returns — it sleeps inside the kernel — so the
+        // deadline below would be checked too late or never. Arm a real
+        // write-readiness select over the remaining budget for the
+        // masters we own; foreign implementations (test fixtures, future
+        // backends without stream()) keep the write-and-backoff loop.
+        $writeStream = $this->master instanceof PosixMasterPty
+            ? $this->master->stream()
+            : null;
+        // A blocking stream cannot be interrupted from userspace at all:
+        // fwrite(2) on a full queue sleeps inside the kernel until room
+        // appears, no matter how carefully we gate the call. Borrow the
+        // pump pattern — non-blocking for the duration of the send, the
+        // caller's mode restored in finally — so the readiness select
+        // below actually owns the wait.
+        $restoreBlocking = false;
+        if ($writeStream !== null && (\stream_get_meta_data($writeStream)['blocked'] ?? true)) {
+            @\stream_set_blocking($writeStream, false);
+            $restoreBlocking = true;
+        }
+        try {
+                while ($written < $total) {
+                    if ($writeStream !== null) {
+                        $budget = $stallDeadline - \microtime(true);
+                        if ($budget <= 0) {
+                            throw $this->stalled($written, $total);
+                        }
+                        $read = [];
+                        $write = [$writeStream];
+                        $except = null;
+                        $ready = PosixMasterPty::retryOnEintr(
+                            $read,
+                            $write,
+                            $except,
+                            (int) $budget,
+                            (int) \round(($budget - (int) $budget) * 1_000_000),
+                        );
+                        if ($ready === false || $ready === 0) {
+                            continue;
+                        }
+                    }
+                    $n = $this->master->write(\substr($bytes, $written));
+                    if ($n > 0) {
+                        $written += $n;
+                        $stallDeadline = \microtime(true) + self::SEND_STALL_BUDGET_SEC;
+                        continue;
+                    }
+                    if (\microtime(true) >= $stallDeadline) {
+                        throw $this->stalled($written, $total);
+                    }
+                    // Would-block on a non-blocking master: back off briefly.
+                    \usleep(1000);
+                }
+                if ($restoreBlocking) {
+                    \stream_set_blocking($writeStream, true);
+                }
+        } finally {
+            if ($restoreBlocking) {
+                \stream_set_blocking($writeStream, true);
             }
-            if (\microtime(true) >= $stallDeadline) {
-                throw new \RuntimeException(\sprintf(
-                    'Failed to write to master PTY: no progress for %d ms with %d of %d bytes delivered',
-                    (int) (self::SEND_STALL_BUDGET_SEC * 1000),
-                    $written,
-                    $total,
-                ));
-            }
-            // Would-block on a non-blocking master: back off briefly.
-            \usleep(1000);
         }
         $this->recorder?->recordInputBytes($bytes);
-        return new self(
-            master: $this->master,
-            buffer: $this->buffer,
-            lastMatch: $this->lastMatch,
-            before: $this->before,
-            readChunk: $this->readChunk,
-            recorder: $this->recorder,
-            maxBuffer: $this->maxBuffer,
-            searchWindow: $this->searchWindow,
-        );
+        return $this->mutate([]);
+    }
+
+    /**
+     * The send-stall failure, shared by the pre-write select arm and the
+     * post-write fallback check so both spell the diagnosis identically.
+     */
+    private function stalled(int $written, int $total): \RuntimeException
+    {
+        return new \RuntimeException(\sprintf(
+            'Failed to write to master PTY: no progress for %d ms with %d of %d bytes delivered',
+            (int) (self::SEND_STALL_BUDGET_SEC * 1000),
+            $written,
+            $total,
+        ));
     }
 
     /**
@@ -163,16 +226,7 @@ final class Expect
      */
     public function withRecorder(?Recorder $recorder): self
     {
-        return new self(
-            master: $this->master,
-            buffer: $this->buffer,
-            lastMatch: $this->lastMatch,
-            before: $this->before,
-            readChunk: $this->readChunk,
-            recorder: $recorder,
-            maxBuffer: $this->maxBuffer,
-            searchWindow: $this->searchWindow,
-        );
+        return $this->mutate(['recorder' => $recorder]);
     }
 
     /**
@@ -180,20 +234,14 @@ final class Expect
      *
      * When set, the buffer is trimmed to at most `$maxBuffer` bytes after
      * each read, keeping enough trailing bytes to still match the longest
-     * needle. Null unsets the cap (unbounded growth, original behaviour).
+     * needle. Null removes the cap — HAZARD: the buffer then grows without
+     * bound for the life of the session (the pre-cap behaviour), which is
+     * only safe for short scripted conversations you intend to finish.
+     * Zero and negative caps are refused at construction.
      */
     public function withMaxBuffer(?int $maxBuffer): self
     {
-        return new self(
-            master: $this->master,
-            buffer: $this->buffer,
-            lastMatch: $this->lastMatch,
-            before: $this->before,
-            readChunk: $this->readChunk,
-            recorder: $this->recorder,
-            maxBuffer: $maxBuffer,
-            searchWindow: $this->searchWindow,
-        );
+        return $this->mutate(['maxBuffer' => $maxBuffer]);
     }
 
     /**
@@ -203,20 +251,18 @@ final class Expect
      * `$searchWindow` bytes of the buffer for a match (pexpect's
      * `searchwindowsize`). This bounds the O(n) re-scan cost for
      * long-running sessions. Null means search the full buffer
-     * (original behaviour).
+     * (original behaviour). Zero and negative windows are refused at
+     * construction.
+     *
+     * Straddle rule: with a window set, a needle whose FIRST byte lands
+     * before the tail window's start never matches — only occurrences
+     * beginning inside the last `$searchWindow` bytes are found. Size the
+     * window at or above your longest needle plus expected noise, or keep
+     * it null.
      */
     public function withSearchWindow(?int $searchWindow): self
     {
-        return new self(
-            master: $this->master,
-            buffer: $this->buffer,
-            lastMatch: $this->lastMatch,
-            before: $this->before,
-            readChunk: $this->readChunk,
-            recorder: $this->recorder,
-            maxBuffer: $this->maxBuffer,
-            searchWindow: $searchWindow,
-        );
+        return $this->mutate(['searchWindow' => $searchWindow]);
     }
 
     /**
@@ -297,16 +343,11 @@ final class Expect
                 /** @var int $bestPos — guarded above with $bestNeedle */
                 $before = \substr($buffer, 0, $bestPos);
                 $remaining = \substr($buffer, $bestPos + \strlen($bestNeedle));
-                return new self(
-                    master: $this->master,
-                    buffer: $remaining,
-                    lastMatch: $bestNeedle,
-                    before: $before,
-                    readChunk: $this->readChunk,
-                    recorder: $this->recorder,
-                    maxBuffer: $this->maxBuffer,
-                    searchWindow: $this->searchWindow,
-                );
+                return $this->mutate([
+                    'buffer' => $remaining,
+                    'lastMatch' => $bestNeedle,
+                    'before' => $before,
+                ]);
             }
 
             $remaining = $deadline - \microtime(true);
@@ -377,16 +418,11 @@ final class Expect
                     : $offset;
                 $before = \substr($buffer, 0, $absoluteOffset);
                 $remaining = \substr($buffer, $absoluteOffset + \strlen($matchText));
-                return new self(
-                    master: $this->master,
-                    buffer: $remaining,
-                    lastMatch: $matchText,
-                    before: $before,
-                    readChunk: $this->readChunk,
-                    recorder: $this->recorder,
-                    maxBuffer: $this->maxBuffer,
-                    searchWindow: $this->searchWindow,
-                );
+                return $this->mutate([
+                    'buffer' => $remaining,
+                    'lastMatch' => $matchText,
+                    'before' => $before,
+                ]);
             }
 
             $remaining = $deadline - \microtime(true);
@@ -414,11 +450,14 @@ final class Expect
     }
 
     /**
-     * Wait for the master to signal EOF on the PTY.
+     * Wait for the master to signal EOF on the PTY. EOF is SUCCESS here:
+     * the returned Expect carries the pre-EOF output in `$before` and a
+     * null `$lastMatch`.
      *
      * Mirrors charmbracelet/mbubbletea/expect.Exp.
      *
-     * @throws ExpectEofException when the master already reached EOF.
+     * @throws ExpectTimeoutException when the master never EOFs within
+     *         `$timeoutSec`. This method never throws ExpectEofException.
      */
     public function expectEof(float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self
     {
@@ -440,16 +479,11 @@ final class Expect
             }
             if ($chunk === '') {
                 // Genuine EOF — return with empty buffer, lastMatch = null.
-                return new self(
-                    master: $this->master,
-                    buffer: '',
-                    lastMatch: null,
-                    before: $buffer,
-                    readChunk: $this->readChunk,
-                    recorder: $this->recorder,
-                    maxBuffer: $this->maxBuffer,
-                    searchWindow: $this->searchWindow,
-                );
+                return $this->mutate([
+                    'buffer' => '',
+                    'lastMatch' => null,
+                    'before' => $buffer,
+                ]);
             }
             $this->recorder?->recordOutput($chunk);
             $buffer .= $chunk;

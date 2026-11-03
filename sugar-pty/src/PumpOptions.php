@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Readonly value object holding pump configuration for the PTY byte pump.
  *
@@ -14,6 +16,8 @@ namespace SugarCraft\Pty;
  */
 final class PumpOptions
 {
+    use Mutable;
+
     /** Bytes per fread/fwrite chunk in the pump loop. */
     public const DEFAULT_CHUNK_BYTES = 4096;
 
@@ -178,6 +182,18 @@ final class PumpOptions
                 "pumpDeadlineUs must be > 0 or null (unbounded); got {$pumpDeadlineUs}"
             );
         }
+        if ($chunkBytes < 1) {
+            throw new \InvalidArgumentException("chunkBytes must be >= 1; got {$chunkBytes}");
+        }
+        if ($selectTimeoutUs < 1) {
+            throw new \InvalidArgumentException("selectTimeoutUs must be >= 1; got {$selectTimeoutUs}");
+        }
+        if ($flushDeadlineSec < 0.0) {
+            throw new \InvalidArgumentException("flushDeadlineSec must be >= 0; got {$flushDeadlineSec}");
+        }
+        if ($stdinEofGraceSec < 0.0) {
+            throw new \InvalidArgumentException("stdinEofGraceSec must be >= 0; got {$stdinEofGraceSec}");
+        }
         $this->chunkBytes = $chunkBytes;
         $this->selectTimeoutUs = $selectTimeoutUs;
         $this->flushDeadlineSec = $flushDeadlineSec;
@@ -192,173 +208,67 @@ final class PumpOptions
     }
 
     /**
-     * SSH-session-tuned preset — matches values previously hardcoded
-     * in InProcessTransport for SSH session behaviour.
+     * SSH-session-tuned preset — historically the values hardcoded in
+     * InProcessTransport. Those values BECAME the class defaults, so this
+     * is now an alias for `new self()`: every field equals its
+     * `DEFAULT_*` constant. Kept as a named entry point for call sites
+     * that mean "pump an interactive SSH session" rather than "whatever
+     * the defaults happen to be".
      *
      * @see \SugarCraft\SshServer\Transport\InProcessTransport
      */
     public static function sshDefault(): self
     {
-        return new self(
-            chunkBytes: self::DEFAULT_CHUNK_BYTES,
-            selectTimeoutUs: self::DEFAULT_SELECT_TIMEOUT_US,
-            flushDeadlineSec: self::DEFAULT_FLUSH_DEADLINE_SEC,
-            stdinEofGraceSec: self::DEFAULT_STDIN_EOF_GRACE_SEC,
-            veof: self::DEFAULT_VEOF,
-        );
+        return new self();
     }
 
     public function withChunkBytes(int $v): self
     {
-        return new self(
-            chunkBytes: $v,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['chunkBytes' => $v]);
     }
 
     public function withSelectTimeoutUs(int $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $v,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['selectTimeoutUs' => $v]);
     }
 
     public function withFlushDeadlineSec(float $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $v,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['flushDeadlineSec' => $v]);
     }
 
     public function withStdinEofGraceSec(float $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $v,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['stdinEofGraceSec' => $v]);
     }
 
+    /**
+     * Replace the EOF byte (default \x04). Named after the termios
+     * spelling of the concept; the backing property is `$veof`.
+     */
     public function withVEOF(string $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $v,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['veof' => $v]);
     }
 
     public function withKeepalive(?\Closure $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $v,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['keepalive' => $v]);
     }
 
     public function withOnIdle(?\Closure $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $v,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['onIdle' => $v]);
     }
 
     public function withOnSigwinch(?\Closure $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $v,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['onSigwinch' => $v]);
     }
 
     public function withOnChildExit(?\Closure $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $v,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['onChildExit' => $v]);
     }
 
     /**
@@ -370,19 +280,7 @@ final class PumpOptions
      */
     public function withRecorder(?\SugarCraft\Core\Recorder $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $v,
-            pumpDeadlineUs: $this->pumpDeadlineUs,
-        );
+        return $this->mutate(['recorder' => $v]);
     }
 
     /**
@@ -393,18 +291,6 @@ final class PumpOptions
      */
     public function withPumpDeadlineUs(?int $v): self
     {
-        return new self(
-            chunkBytes: $this->chunkBytes,
-            selectTimeoutUs: $this->selectTimeoutUs,
-            flushDeadlineSec: $this->flushDeadlineSec,
-            stdinEofGraceSec: $this->stdinEofGraceSec,
-            veof: $this->veof,
-            keepalive: $this->keepalive,
-            onIdle: $this->onIdle,
-            onSigwinch: $this->onSigwinch,
-            onChildExit: $this->onChildExit,
-            recorder: $this->recorder,
-            pumpDeadlineUs: $v,
-        );
+        return $this->mutate(['pumpDeadlineUs' => $v]);
     }
 }
