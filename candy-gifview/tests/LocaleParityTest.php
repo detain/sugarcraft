@@ -72,31 +72,124 @@ final class LocaleParityTest extends TestCase
 
     /**
      * The usage string is the flag roster: a locale that omits --watch or
-     * --help tells its speakers the flag does not exist.
+     * --help tells its speakers the flag does not exist. The roster is
+     * DERIVED from the parser source (m2: a literal list here meant the
+     * next accepted flag could slip through 16 locales again) — value
+     * flags must appear with their `=`, bare flags by name.
      */
     #[DataProvider('localeFiles')]
     public function testEveryUsageLineNamesEveryAcceptedFlag(string $code, string $path): void
     {
         $locale = require $path;
-        foreach (['--fps=', '--speed=', '--duration=', '--watch', '--paused', '--help', '--version'] as $flag) {
+        foreach (self::derivedFlagSpellings() as $spelling) {
             $this->assertStringContainsString(
-                $flag,
+                $spelling,
                 $locale['cli.usage'],
-                "locale '$code' cli.usage must mention $flag",
+                "locale '$code' cli.usage must mention $spelling (derived from src/Cli.php)",
             );
         }
     }
 
-    public function testEnglishSourceOfTruthCarriesTheRefusalKeyFamily(): void
+    /**
+     * Every refusal key the code actually speaks must exist in en.php, and
+     * en.php may not carry undisclosed silent keys either (bidirectional
+     * census — the fleet REVERSE/PARITY genre). The sole tolerated
+     * call-site-free key is cli.no_autoload, printed by the bin shim before
+     * autoload exists, where translation cannot run (disclosed in README).
+     */
+    public function testEnglishSourceOfTruthCarriesExactlyTheSpokenKeyFamily(): void
     {
         $en = require __DIR__ . '/../lang/en.php';
-        foreach ([
-            'cli.usage', 'cli.no_autoload', 'cli.bad_flag', 'cli.bad_value', 'cli.too_many',
-            'cli.unexpected_value', 'cli.bad_preset', 'cli.no_frames', 'cli.cannot_play',
-            'cli.reason_frames_over', 'cli.reason_bytes_over', 'cli.reason_cells_over',
-            'cli.duration_static', 'cli.need_gd', 'cli.decoding', 'cli.truncated',
-        ] as $key) {
-            $this->assertArrayHasKey($key, $en);
+        $spoken = self::derivedSpokenKeys();
+
+        $this->assertGreaterThanOrEqual(
+            14,
+            count($spoken),
+            'the Lang::t call-site derivation went blind — the source shape changed',
+        );
+
+        foreach ($spoken as $key) {
+            $this->assertArrayHasKey($key, $en, "src/ speaks $key but en.php does not carry it");
         }
+
+        $silent = array_diff(array_keys($en), $spoken);
+        $this->assertSame(
+            ['cli.no_autoload'],
+            array_values($silent),
+            'en.php grew a key no code path prints (or lost the disclosed no_autoload exception)',
+        );
+    }
+
+    /**
+     * Long-option spellings Cli::main() accepts, derived from its source:
+     * the allow-list (value + bare flags), the value-taking switch cases
+     * (which the usage line must show with `=`), and the literal
+     * `=== '--x'` short-circuits (--help/--version).
+     *
+     * @return list<string>
+     */
+    private static function derivedFlagSpellings(): array
+    {
+        $src = self::cliSource();
+
+        self::assertSame(
+            1,
+            preg_match("/in_array\(\\\$flag, \[([^\]]+)\], true\)/", $src, $allow),
+            'the accepted-flag allow-list shape changed — update the derivation, not the roster',
+        );
+        preg_match_all("/'([a-z-]+)'/", $allow[1], $names);
+
+        preg_match_all("/=== '--([a-z-]+)'/", $src, $short);
+        self::assertGreaterThanOrEqual(2, count($short[1]), 'the --help/--version literals went unhidden');
+
+        preg_match_all("/case '([a-z-]+)':/", $src, $valueCases);
+        $takesValue = array_intersect($names[1], $valueCases[1]);
+        self::assertCount(3, $takesValue, 'exactly fps/speed/duration consume values');
+
+        $spellings = [];
+        foreach ($names[1] as $flag) {
+            $spellings[] = in_array($flag, $takesValue, true) ? "--$flag=" : "--$flag";
+        }
+        foreach ($short[1] as $flag) {
+            $spellings[] = "--$flag";
+        }
+
+        $spellings = array_values(array_unique($spellings));
+        sort($spellings);
+
+        return $spellings;
+    }
+
+    /**
+     * Every literal Lang::t('cli.…') key asked for anywhere under src/.
+     *
+     * @return list<string>
+     */
+    private static function derivedSpokenKeys(): array
+    {
+        $keys = [];
+        $files = array_merge(
+            (array) glob(__DIR__ . '/../src/*.php'),
+            (array) glob(__DIR__ . '/../src/*/*.php'),
+        );
+        foreach ($files as $file) {
+            $src = (string) file_get_contents((string) $file);
+            if (preg_match_all("/Lang::t\\('((?:cli|lang)\\.[a-z_]+)'/", $src, $m)) {
+                $keys = array_merge($keys, $m[1]);
+            }
+        }
+
+        $keys = array_values(array_unique($keys));
+        sort($keys);
+
+        return $keys;
+    }
+
+    private static function cliSource(): string
+    {
+        $src = file_get_contents(__DIR__ . '/../src/Cli.php');
+        self::assertIsString($src);
+
+        return $src;
     }
 }

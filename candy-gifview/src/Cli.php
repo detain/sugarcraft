@@ -141,7 +141,7 @@ final class Cli
                 }
 
                 if (!in_array($flag, ['fps', 'speed', 'duration', 'watch', 'paused'], true)) {
-                    \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => $flag]) . "\n");
+                    \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => self::printable($flag)]) . "\n");
                     \fwrite($stderr, Lang::t('cli.usage') . "\n");
 
                     return 1;
@@ -173,7 +173,7 @@ final class Cli
                     case 'fps':
                         $fps = self::parseSecondsLike('fps', $raw);
                         if ($fps === null) {
-                            \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--fps', 'value' => $raw]) . "\n");
+                            \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--fps', 'value' => self::printable($raw)]) . "\n");
 
                             return 1;
                         }
@@ -187,7 +187,7 @@ final class Cli
                             // chicle's Nfps spelling (chicle-options.c:1456-1458): an absolute rate.
                             $fps = self::parseSecondsLike('speed', substr($raw, 0, -3));
                             if ($fps === null) {
-                                \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--speed', 'value' => $raw]) . "\n");
+                                \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--speed', 'value' => self::printable($raw)]) . "\n");
 
                                 return 1;
                             }
@@ -195,7 +195,7 @@ final class Cli
                         }
                         $speed = self::parseSecondsLike('speed', $raw);
                         if ($speed === null) {
-                            \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--speed', 'value' => $raw]) . "\n");
+                            \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--speed', 'value' => self::printable($raw)]) . "\n");
 
                             return 1;
                         }
@@ -203,7 +203,7 @@ final class Cli
                     case 'duration':
                         $duration = self::parseSecondsLike('duration', $raw);
                         if ($duration === null) {
-                            \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--duration', 'value' => $raw]) . "\n");
+                            \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--duration', 'value' => self::printable($raw)]) . "\n");
 
                             return 1;
                         }
@@ -218,7 +218,7 @@ final class Cli
             if (\str_starts_with($token, '-') && $token !== '-') {
                 $body = substr($token, 1);
                 $name = rtrim(($eq = strpos($body, '=')) === false ? $body : substr($body, 0, $eq), '-');
-                \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => $name]) . "\n");
+                \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => self::printable($name)]) . "\n");
                 \fwrite($stderr, Lang::t('cli.usage') . "\n");
 
                 return 1;
@@ -232,7 +232,7 @@ final class Cli
                 // The preset slot accepts exactly the two documented presets;
                 // anything else is a refusal, not a silent fall back to solid.
                 if (!in_array($token, [Renderer::PRESET_SOLID, Renderer::PRESET_DENSITY], true)) {
-                    \fwrite($stderr, Lang::t('cli.bad_preset', ['preset' => $token]) . "\n");
+                    \fwrite($stderr, Lang::t('cli.bad_preset', ['preset' => self::printable($token)]) . "\n");
                     \fwrite($stderr, Lang::t('cli.usage') . "\n");
 
                     return 1;
@@ -241,7 +241,7 @@ final class Cli
                 continue;
             }
 
-            \fwrite($stderr, Lang::t('cli.too_many', ['arg' => $token]) . "\n");
+            \fwrite($stderr, Lang::t('cli.too_many', ['arg' => self::printable($token)]) . "\n");
 
             return 1;
         }
@@ -267,7 +267,7 @@ final class Cli
         if ($play === null) {
             // The real launch path is silent between exec and the first
             // frame; say what the pause is for. Seam-driven tests skip it.
-            \fwrite($stderr, Lang::t('cli.decoding', ['path' => self::printablePath($path)]) . "\n");
+            \fwrite($stderr, Lang::t('cli.decoding', ['path' => self::printable($path)]) . "\n");
         }
 
         try {
@@ -281,18 +281,21 @@ final class Cli
             // TypeError) from hostile bytes must exit 1 loudly here rather
             // than fatal mid-launch. Wrap the reason in the app's own brand
             // so a terminal never sees a bare library string as the CLI's
-            // final word (the engine message stays verbatim inside it).
+            // final word. The engine interpolates the RAW path into its own
+            // messages (decoder.no_file), so the relayed reason passes the
+            // same printable() choke as every other echo — wording survives,
+            // control bytes do not.
             $reason = preg_replace('/^sugar-animation: /', '', $e->getMessage()) ?? $e->getMessage();
             \fwrite($stderr, Lang::t('cli.cannot_play', [
-                'path' => self::printablePath($path),
-                'reason' => $reason,
+                'path' => self::printable($path),
+                'reason' => self::printable($reason),
             ]) . "\n");
 
             return 1;
         }
 
         if ($frames === []) {
-            \fwrite($stderr, Lang::t('cli.no_frames', ['path' => self::printablePath($path)]) . "\n");
+            \fwrite($stderr, Lang::t('cli.no_frames', ['path' => self::printable($path)]) . "\n");
 
             return 1;
         }
@@ -300,6 +303,11 @@ final class Cli
         if (count($frames) >= Decoder::MAX_FRAMES) {
             // Honest disclosure of the engine window: what plays is the
             // first Decoder::MAX_FRAMES frames, whatever the file holds.
+            // The notice fires when the decoded list FILLS the window: a
+            // genuinely 256-frame file is indistinguishable from a longer
+            // one truncated to 256 until the engine exposes totalFramesSeen
+            // (documented seam), so we deliberately over-disclose at the
+            // exact boundary rather than silently under-claim.
             \fwrite($stderr, Lang::t('cli.truncated', ['max' => (string) Decoder::MAX_FRAMES]) . "\n");
         }
 
@@ -431,13 +439,17 @@ final class Cli
     }
 
     /**
-     * A path echoed into a terminal must not smuggle control bytes (a
-     * filename can carry C0 characters and OSC introducers from `ls`
-     * completions of hostile names); replacement keeps the echo readable.
+     * Any text echoed into a terminal must not smuggle control bytes: a
+     * filename or argv token can carry C0 characters and OSC introducers
+     * (`ls` completion of hostile names), and the engine's own messages
+     * interpolate raw paths — so EVERY interpolated echo (paths, argv
+     * tokens, and the relayed engine reason) funnels through this single
+     * choke. Replacement keeps the echo readable without ever letting a
+     * quoted token redraw the screen.
      */
-    private static function printablePath(string $path): string
+    private static function printable(string $text): string
     {
-        return preg_replace('/[\x00-\x1F\x7F]/', '?', $path) ?? $path;
+        return preg_replace('/[\x00-\x1F\x7F]/', '?', $text) ?? $text;
     }
 
     /**

@@ -92,7 +92,11 @@ The key table is fixed in the player model; keys are not rebindable.
 
 - The engine decodes at most 256 frames per animation
   (`Decoder::MAX_FRAMES`); longer files are truncated to the first 256 at
-  intake and an explicit notice is printed on stderr. `Cli::MAX_FRAMES`
+  intake and an explicit notice is printed on stderr. The notice fires
+  whenever the decoded list fills the window — a file with exactly 256
+  frames also gets it, because until the engine reports the total seen,
+  "256 decoded" cannot tell a full window from a truncated stream, and
+  over-disclosing is the honest direction. `Cli::MAX_FRAMES`
   (4096) is only the outer belt.
 - Intake is also bounded by file size (`Cli::MAX_INPUT_BYTES`, 64 MiB —
   larger files are refused before being buffered) and by a resident-cell
@@ -130,6 +134,15 @@ The key table is fixed in the player model; keys are not rebindable.
 - All CLI messages are localized via environment locale
   (`LC_ALL`/`LC_MESSAGES`/`LANG`) across 16 languages; in-app playback
   chrome (the status line) is currently English-only.
+- **Reduced motion is not auto-detected**: unlike `sugar-spring`,
+  `sugar-toast` and `sugar-overlay`, this viewer does NOT read
+  `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` (nor
+  `Probe::reducedMotion()` from `sugar-colorprofile`) — a motion-averse
+  user must opt in with `--paused` (or step with `←`/`→`) rather than
+  relying on the environment signal. This is a known gap against the
+  fleet convention, disclosed here rather than silently ignored; the
+  engine exposes no autoplay-suppression seam for the app to honour the
+  flag today.
 
 ## Architecture
 
@@ -141,7 +154,7 @@ which this viewer does not expose) — lives in
 | File              | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
 | `bin/candy-gifview` | Autoload probe, locale wiring (`T::setLocale(T::detect())` before the first message), and a `Cli::main()` hand-off — deliberately a thin shim. |
-| `src/Cli.php`     | Argv parsing (`--help`/`--version`, preset token with loud refusal, `--fps`/`--speed`/`--duration`/`--watch`/`--paused`, single-dash refusals), gd preflight, viewport sizing (`viewportCells()` — descriptor 1 behind a core `stream_isatty` gate, two rows reserved for the status line), intake caps (frame belt, 64 MiB file gate, resident-cell budget), decode-failure exits (rescue catches take any `\Throwable` so a raw engine `\Error` still exits 1 loudly, wrapped in one localized `could not play` line with control characters neutralised), Player wiring, Program launch, and signal re-encoding (`stopSignal()` → 128+N). `$play`, `$watchStat` and `$decode` closure seams keep every branch testable without entering the blocking loop. |
+| `src/Cli.php`     | Argv parsing (`--help`/`--version`, preset token with loud refusal, `--fps`/`--speed`/`--duration`/`--watch`/`--paused`, single-dash refusals), gd preflight, viewport sizing (`viewportCells()` — descriptor 1 behind a core `stream_isatty` gate, two rows reserved for the status line), intake caps (frame belt, 64 MiB file gate, resident-cell budget), decode-failure exits (rescue catches take any `\Throwable` so a raw engine `\Error` still exits 1 loudly, wrapped in one localized `could not play` line; every interpolated echo — paths, argv tokens, and the relayed engine reason (which itself embeds a raw path) — passes a single `printable()` control-char choke before it reaches the terminal), Player wiring, Program launch, and signal re-encoding (`stopSignal()` → 128+N). `$play`, `$watchStat` and `$decode` closure seams keep every branch testable without entering the blocking loop. |
 | `src/Support/Version.php` | Resolves the version stamp: the phar's embedded `metadata['version']` when running from a phar (release `x.y.z` or an honest `dev-<sha>`/`dev-build` stamp), falling back to the compiled `CURRENT` constant. |
 | `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.bad_flag`, `cli.bad_value`, `cli.too_many`, `cli.unexpected_value`, `cli.bad_preset`, `cli.no_frames`, `cli.cannot_play`, `cli.reason_frames_over`, `cli.reason_bytes_over`, `cli.reason_cells_over`, `cli.duration_static`, `cli.need_gd`, `cli.decoding`, `cli.truncated` — all shipping in 16 locales). `cli.no_autoload` mirrors, for parity, the string the bin shim prints before autoload exists, where translation cannot run. |
 
