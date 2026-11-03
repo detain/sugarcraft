@@ -192,10 +192,16 @@ final class PtyPoolReactLoopTest extends TestCase
 
         $pool = new PtyPool(maxSize: 6);
 
-        // Stagger some acquires
+        // Stagger some acquires. The tick closures HOLD their pairs:
+        // the pool tracks in-flight slots through WeakReferences, so a
+        // caller that discards the return value lets the pair (and its
+        // slot) be collected at once — the pre-weak-pool version of the
+        // pool kept strong references and this same code silently pinned
+        // all 6 slots with three ownerless pairs.
+        $held = [];
         for ($i = 0; $i < 3; $i++) {
-            Loop::futureTick(function () use ($pool): void {
-                $pool->acquire(80, 24);
+            Loop::futureTick(function () use ($pool, &$held): void {
+                $held[] = $pool->acquire(80, 24);
             });
         }
         Loop::run();

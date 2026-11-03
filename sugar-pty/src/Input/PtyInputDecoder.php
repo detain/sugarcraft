@@ -23,27 +23,50 @@ use SugarCraft\Pty\Contract\MasterPty;
  */
 final class PtyInputDecoder
 {
+    private bool $sawEof = false;
+
     public function __construct(
         private readonly MasterPty $master,
         private readonly EscapeDecoder $decoder = new EscapeDecoder(),
         private int $readChunk = 8192,
-    ) {}
+    ) {
+        if ($readChunk < 1) {
+            throw new \InvalidArgumentException("readChunk must be >= 1, got {$readChunk}");
+        }
+    }
 
     /**
      * Read and decode the next chunk of input events.
      *
-     * Returns an empty array when no complete events are available yet
-     * (partial escape sequences are buffered internally).
+     * Returns an empty array for BOTH "nothing yet" and "the stream
+     * ended" — the master read taxonomy distinguishes them (null =
+     * idle, `''` = confirmed EOF) and the EOF verdict is latched here:
+     * ask {@see isEof()} when the caller must know whether an empty
+     * result means wait-more or stop-muxing (m2, round lib-fixes-1103).
+     * Partial escape sequences stay buffered across calls.
      *
      * @return list<Event>
      */
     public function readEvents(float $timeout = 0.05): array
     {
         $bytes = $this->master->read($this->readChunk, $timeout);
-        if ($bytes === null || $bytes === '') {
+        if ($bytes === '') {
+            $this->sawEof = true;
+            return [];
+        }
+        if ($bytes === null) {
             return [];
         }
         return $this->decoder->decode($bytes);
+    }
+
+    /**
+     * Latched once a read observed master EOF (`''`). Cleared only by
+     * {@see reset()}.
+     */
+    public function isEof(): bool
+    {
+        return $this->sawEof;
     }
 
     /**
@@ -90,10 +113,12 @@ final class PtyInputDecoder
     }
 
     /**
-     * Reset the decoder state (clears partial sequence buffer).
+     * Reset the decoder state (clears partial sequence buffer and the
+     * latched EOF verdict).
      */
     public function reset(): void
     {
         $this->decoder->reset();
+        $this->sawEof = false;
     }
 }

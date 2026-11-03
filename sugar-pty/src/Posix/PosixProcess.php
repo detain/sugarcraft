@@ -123,8 +123,16 @@ final class PosixProcess implements Process
      */
     public function kill(int $signal): void
     {
+        // Post-reap pid-reuse guard (see PosixChild::kill()).
+        if ($this->exited()) {
+            return;
+        }
         // Libc::kill(), not a bare posix_kill(): ext-posix is optional.
-        \SugarCraft\Pty\Libc::kill($this->pid, $signal);
+        if (!\SugarCraft\Pty\Libc::kill($this->pid, $signal) && !$this->exited()) {
+            throw new \SugarCraft\Pty\PtyException(
+                "kill(signal {$signal}) failed for pid {$this->pid}",
+            );
+        }
     }
 
     public function stdoutBytes(): string
@@ -148,18 +156,35 @@ final class PosixProcess implements Process
      * E717 contract holds unchanged: the loop carries no internal
      * deadline; callers MUST bound (exited() probe + caller-side kill).
      *
-     * Timing matches the trait's wait() byte-for-byte aside from the
-     * drain call — same `usleep(10_000)`, same `proc_close()` reap.
+     * Poll cadence and reap mirror the trait's wait() (`usleep(10_000)`
+     * loop, `proc_close()`), with the added per-iteration drain; unlike
+     * the trait, this variant does not take the FFI `waitpid(WNOHANG)`
+     * fast path — it must drain between probes, and a drain racing a
+     * waitpid reap could truncate the capture.
      *
      * @see creack/pty.Cmd.Wait()
      */
     public function wait(): int
     {
         if ($this->exitCode !== null) {
+            // A cached exit code must still settle the handles: capture
+            // pipes get one final drain (bytes produced before the
+            // earlier reap stay readable), and an un-closed proc
+            // resource is reaped here rather than lingering to the
+            // destructor.
+            $this->drainCapturePipes();
+            $this->closeCapturePipes();
+            if (\is_resource($this->process)) {
+                \proc_close($this->process);
+                $this->process = null;
+            }
             return $this->exitCode;
         }
         if (!\is_resource($this->process)) {
-            return $this->exitCode ?? 0;
+            // Destructor (or an external reap) already closed the
+            // handle: report the captured code, or -1 — NEVER a
+            // fabricated success. Matches the trait's wait() tail.
+            return $this->exitCode ?? -1;
         }
 
         while (true) {

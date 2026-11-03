@@ -61,7 +61,7 @@ final class Pty implements MasterPty
         $pair = (new PosixPtySystem())->open($cols, $rows);
         $impl = $pair->master();
 
-        return new self(new Master($impl->fd(), $pair->slave()->path()), $impl);
+        return new self(new Master($impl->fd(), $pair->slavePath()), $impl);
     }
 
     /**
@@ -77,20 +77,35 @@ final class Pty implements MasterPty
      * spawn itself. The post-spawn re-assert is best-effort: the child is
      * already running, and throwing would orphan it from the caller.
      *
+     * Omitting $cols/$rows (the defaults) KEEPS the pair's current
+     * geometry — spawn never restamps 80x24 over a size the caller
+     * already chose via {@see open()} or {@see resize()}. A partial
+     * request keeps the other dimension. This mirrors
+     * {@see PosixSlavePty::spawn()} (M21, round lib-fixes-1103).
+     *
      * @param list<string> $cmd
      * @param array<string,string>|null $env
      */
-    public function spawn(array $cmd, ?array $env = null, int $cols = self::DEFAULT_COLS, int $rows = self::DEFAULT_ROWS, bool $controllingTerminal = false): Child
+    public function spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child
     {
-        $this->impl->resize($cols, $rows);
+        $geometry = null;
+        if ($cols !== null || $rows !== null) {
+            $current = ($cols === null || $rows === null) ? $this->impl->size() : null;
+            $geometry = [$cols ?? $current['cols'], $rows ?? $current['rows']];
+            $this->impl->resize($geometry[0], $geometry[1]);
+        }
+
         $child = Spawn::proc($this->master, $cmd, $env, $controllingTerminal);
 
-        try {
-            $this->impl->resize($cols, $rows);
-        } catch (PtyException) {
-            // Best-effort post-spawn re-assert; the pre-spawn resize above
-            // already succeeded, so the geometry is right everywhere the
-            // kernel does not reset it on slave open.
+        if ($geometry !== null) {
+            // Re-assert AFTER proc_open: macOS xnu zeroes the winsize
+            // when a fresh slave fd opens. Best-effort — the pre-spawn
+            // write above stands on kernels that do not reset.
+            try {
+                $this->impl->resize($geometry[0], $geometry[1]);
+            } catch (PtyException) {
+                // Pre-spawn resize stands; see above.
+            }
         }
 
         return $child;

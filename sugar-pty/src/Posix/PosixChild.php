@@ -41,7 +41,16 @@ final class PosixChild extends ChildProcess implements Child
      */
     public function kill(int $signal): void
     {
+        // Post-reap pid-reuse guard: once we have observed the child
+        // exit, its pid may belong to another process — never signal it.
+        if ($this->exited()) {
+            return;
+        }
         // Libc::kill(), not a bare posix_kill(): ext-posix is optional.
-        \SugarCraft\Pty\Libc::kill($this->pid, $signal);
+        if (!\SugarCraft\Pty\Libc::kill($this->pid, $signal) && !$this->exited()) {
+            throw new \SugarCraft\Pty\PtyException(
+                "kill(signal {$signal}) failed for pid {$this->pid}",
+            );
+        }
     }
 }

@@ -27,9 +27,21 @@ use SugarCraft\Pty\Posix\PosixPtySystem;
  * slot and closes the master, so the next `acquire()` is free to open.
  *
  * A profile of `PosixPtySystem::open()` measured 0.05 ms per call with
- * the libc handle cached — cheap enough that handle reuse is not worth
+ * the cached libc handle — cheap enough that handle reuse is not worth
  * the complexity. This class is therefore a back-pressure ceiling and
- * session bookkeeper, not a syscall cache.
+ * session bookkeeper, not a syscall cache. The profile figure holds only
+ * for that cached-handle path (`Libc::lib()` warm); a cold first open in
+ * a process pays the cdef setup on top.
+ *
+ * Bookkeeping holds WEAK references to the pairs (m3, round
+ * lib-fixes-1103): a pair the caller drops on the floor without
+ * `release()` stops occupying a slot once the object is collected,
+ * instead of pinning pool capacity forever. Dropping without releasing
+ * is still NOT a safe teardown — {@see PosixPtyPair} is a plain value
+ * object with no destructor, so an abandoned pair's MASTER FD LEAKS
+ * until process end even though its slot frees. `release()` (or
+ * `drain()` at shutdown) remains the contract for closing masters.
+ * Dead slots are swept at the head of every bookkeeping call.
  */
 final class PtyPool
 {
@@ -43,7 +55,13 @@ final class PtyPool
      * pool can recognise the exact instance handed out by `acquire()`
      * without relying on the (non-public) underlying master fd.
      *
-     * @var array<int, PtyPair>
+     * Values are WEAK: an unreleased pair the caller abandons stops
+     * pinning capacity once collected (see class docblock for the
+     * leaked-fd caveat). Key ids recycle after collection; `sweepDead()`
+     * runs before every count/insert so a recycled id can only ever
+     * collide with an already-dead entry being overwritten.
+     *
+     * @var array<int, \WeakReference<PtyPair>>
      */
     private array $inFlight = [];
 
@@ -72,13 +90,29 @@ final class PtyPool
      */
     public function acquire(int $cols = 80, int $rows = 24): PtyPair
     {
+        $this->sweepDead();
         if (\count($this->inFlight) >= $this->maxSize) {
             throw PoolExhaustedException::atCapacity($this->maxSize);
         }
         $pair = $this->system->open($cols, $rows);
-        $this->inFlight[\spl_object_id($pair)] = $pair;
+        $this->inFlight[\spl_object_id($pair)] = \WeakReference::create($pair);
         $this->totalAcquired++;
         return $pair;
+    }
+
+    /**
+     * Forget slots whose pair has been collected without `release()`.
+     * The masters of dead pairs are already unreachable — nothing to
+     * close here (the fd leak until process end is documented on the
+     * class); this only frees the capacity the abandoner was pinning.
+     */
+    private function sweepDead(): void
+    {
+        foreach ($this->inFlight as $key => $ref) {
+            if ($ref->get() === null) {
+                unset($this->inFlight[$key]);
+            }
+        }
     }
 
     /**
@@ -89,7 +123,10 @@ final class PtyPool
     public function release(PtyPair $pair): void
     {
         $key = \spl_object_id($pair);
-        if (!isset($this->inFlight[$key])) {
+        $ref = $this->inFlight[$key] ?? null;
+        if ($ref === null || $ref->get() !== $pair) {
+            // Unknown pair, or an id collision against a dead slot —
+            // the stranger is not ours to close.
             return;
         }
         unset($this->inFlight[$key]);
@@ -103,6 +140,7 @@ final class PtyPool
     /** Number of pairs currently outstanding. */
     public function inFlight(): int
     {
+        $this->sweepDead();
         return \count($this->inFlight);
     }
 
@@ -115,7 +153,7 @@ final class PtyPool
     /** Capacity headroom left before the next `acquire()` rejects. */
     public function available(): int
     {
-        return $this->maxSize - \count($this->inFlight);
+        return $this->maxSize - $this->inFlight();
     }
 
     /**
@@ -124,7 +162,11 @@ final class PtyPool
      */
     public function drain(): void
     {
-        foreach ($this->inFlight as $pair) {
+        foreach ($this->inFlight as $ref) {
+            $pair = $ref->get();
+            if ($pair === null) {
+                continue; // already collected; master unreachable
+            }
             $master = $pair->master();
             if (!$master->isClosed()) {
                 $master->close();
