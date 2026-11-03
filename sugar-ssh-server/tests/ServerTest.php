@@ -256,4 +256,42 @@ final class ServerTest extends TestCase
 
         $this->assertSame(30, $stack[0]->interval());
     }
+
+    /**
+     * `use()` is the documented mutating call on this class (audit MINOR 7),
+     * and the consequence is what the docblock teaches: an alias and its
+     * receiver share one stack. Pinned rather than merely described, because
+     * every README example chains off one receiver and a silent switch to
+     * clone-on-append would leave those examples working while breaking the
+     * assumption behind them.
+     */
+    public function testAppendingThroughAnAliasReachesTheOriginalStack(): void
+    {
+        $log = [];
+        $marker = static function () use (&$log): Middleware {
+            return new class($log) implements Middleware {
+                /** @param list<string> $log */
+                public function __construct(private array &$log) {}
+
+                public function handle(Context $ctx, Session $session, callable $next): void
+                {
+                    $this->log[] = 'hit';
+                    $next($ctx, $session);
+                }
+            };
+        };
+
+        $original = Server::new()->use($marker());
+        $alias = $original->use($marker());
+
+        $this->assertSame(
+            $original,
+            $alias,
+            'use() returns the receiver: that mutation is the documented contract',
+        );
+
+        $original->serve($this->fakeSession());
+
+        $this->assertCount(2, $log, 'both middlewares run for a server reached through the original receiver');
+    }
 }

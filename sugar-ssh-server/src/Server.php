@@ -100,6 +100,19 @@ final class Server
         return new self();
     }
 
+    /**
+     * Append a middleware to the stack, in place.
+     *
+     * This is the one mutating call on the class, and it is deliberate:
+     * the upstream Go library this is a port of builds its option list by
+     * mutation, and every README example chains `->use(...)` off a single
+     * receiver. It does NOT clone, so the receiver and every alias of it
+     * share one stack - `$b = $a->use(X)` gives `$a` an X too. Build one
+     * server per process and add to it once, at boot; if you need two
+     * different stacks, construct two servers rather than branching off a
+     * shared one. {@see withTransport()} and {@see withKeepalive()} are the
+     * immutable half of the API (audit MINOR 7).
+     */
     public function use(Middleware $m): self
     {
         $this->stack[] = $m;
@@ -138,7 +151,7 @@ final class Server
      * Under HostSshdTransport it is a deliberate no-op — configure
      * sshd's ClientAliveInterval/ServerAliveInterval instead.
      *
-     * @param int $intervalSeconds Interval between keepalive writes (default 60)
+     * @param int $intervalSeconds Seconds of pump idle between keepalive bytes (default 60)
      */
     public function withKeepalive(int $intervalSeconds = 60): self
     {

@@ -465,4 +465,34 @@ final class RateLimitTest extends TestCase
             T::setLocale('en');
         }
     }
+
+    /**
+     * An address-less session lands in the shared `ip:_unknown` bucket. The
+     * docblock on `bucketsFor()` now says plainly that this is strict rather
+     * than safe (audit MINOR 8); this is the behaviour that sentence stands
+     * on, so that a future change to the key cannot quietly turn a shared
+     * switch into per-session throttling (or the reverse) without a red.
+     */
+    public function testSessionsWithNoClientAddressContendOnOneBucket(): void
+    {
+        $served = [];
+        $limiter = new RateLimit($this->statePath, 1, 0.0);
+
+        foreach (['', '', '198.51.100.9'] as $index => $ip) {
+            $who = 'session-' . $index;
+            $limiter->handle(
+                Context::background(),
+                $this->session($ip),
+                function () use (&$served, $who): void {
+                    $served[] = $who;
+                },
+            );
+        }
+
+        $this->assertSame(
+            ['session-0', 'session-2'],
+            $served,
+            'the second address-less session should have spent the shared bucket, the addressed one should not',
+        );
+    }
 }

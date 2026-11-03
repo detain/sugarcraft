@@ -144,6 +144,21 @@ final class RateLimit implements Middleware
      * per-IP bucket always, plus a per-username bucket when `$userBurst`
      * is configured. IP is listed first so it is evaluated first.
      *
+     * A session with no client address is not exempt: it lands in a single
+     * shared `ip:_unknown` bucket together with every other such session,
+     * which behind a proxy or on a transport that never learned the peer is
+     * one global throttle, not a per-client one (audit MINOR 8). That is
+     * The failure direction is worth naming: a shared bucket is strict, not
+     * safe. One noisy client that arrived without an address can burn the
+     * burst and lock out every other address-less client behind it, which is
+     * an availability bug wearing a security costume. It is still the right
+     * default - the alternative is to treat unattributed traffic as
+     * unthrottled, which is worse - but `clientHost` must actually be
+     * populated (see `Session::fromEnvironment()` and the
+     * `SSH_CONNECTION`/`SSH_CLIENT` note in the README) for the limiter to
+     * mean what its name says. The same naming rule applies to a blank
+     * username when `$userBurst` is set.
+     *
      * @return list<array{0:string,1:int,2:float}>
      */
     private function bucketsFor(Session $session): array
