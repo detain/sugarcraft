@@ -77,6 +77,20 @@ final class ReadmeRosterDriftTest extends TestCase
 
     private const README = __DIR__ . '/../../README.md';
 
+    /**
+     * Every registry id the Keys TABLE cites, sorted — the cited set pinned
+     * whole by roster 6b's second direction. Citing a row in the table and
+     * editing this list are one commit.
+     */
+    private const KEYS_TABLE_CITED_ROWS = [
+        'chat.cursor',
+        'chat.line-ends',
+        'chat.repaint',
+        'chat.voice',
+        'chat.word-motion',
+        'sessions.toggle',
+    ];
+
     private function readme(): string
     {
         $text = (string) file_get_contents(self::README);
@@ -509,7 +523,12 @@ final class ReadmeRosterDriftTest extends TestCase
      * re-read instead of drifting back into fiction; so does deleting a
      * citation, which is how the false sentence would return. The two retired
      * false claims are additionally pinned ABSENT by phrase, the direction a
-     * future well-meaning skimmer is most likely to break.
+     * future well-meaning skimmer is most likely to break. Since the 2026-11
+     * docs review the same method also guards the table's WHOLE citation
+     * surface: every id-shaped backtick token in it must be a declared
+     * registry row, and the cited set is pinned against
+     * {@see self::KEYS_TABLE_CITED_ROWS} — inventing a row or dropping a
+     * citation both redden here, in either direction.
      */
     public function testTheKeysTableCreditsTheChordsTheRegistryDeclares(): void
     {
@@ -548,6 +567,32 @@ final class ReadmeRosterDriftTest extends TestCase
             1,
             preg_match('/^\| `Ctrl\+L` \|.*chat\.repaint.*\|$/m', $keys),
             'the Ctrl+L row of the Keys table no longer credits chat.repaint',
+        );
+
+        // M10 (2026-11-03 docs review): the four ids above are the chords the
+        // ISS-122 lie touched, but they were the ONLY citations under guard —
+        // every other row could cite a registry id that never existed, or
+        // quietly stop crediting one that does. Two directions close that:
+        // every id-shaped backtick token in the table must be DECLARED (the
+        // table may not invent a row), and the cited set itself is pinned
+        // whole (dropping a citation, the way the false sentence outlived its
+        // real chord, reddens here instead of narrowing the guard unnoticed).
+        preg_match_all('/`([a-z][a-z0-9-]+\.[a-z][a-z0-9-]+)`/', $keys, $cited);
+        $citedIds = array_values(array_unique($cited[1]));
+        sort($citedIds);
+        foreach ($citedIds as $id) {
+            $this->assertArrayHasKey(
+                $id,
+                $declared,
+                'the Keys table cites registry row `' . $id . '` that KeyBindingRegistry::all() no longer declares',
+            );
+        }
+
+        $this->assertSame(
+            self::KEYS_TABLE_CITED_ROWS,
+            $citedIds,
+            'the Keys table\'s registry citations drifted from the pinned set — add the new citation here in the '
+            . 'same commit that credits it, and delete here only with the row it credited',
         );
 
         foreach (['has no cursor movement', 'types the letter `l`'] as $retired) {

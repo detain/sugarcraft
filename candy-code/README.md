@@ -328,7 +328,7 @@ all one component tree — not two parallel UIs.
 
 ### Keys
 
-> **Reference — safe to skim.** The full keyboard map for the chat pane; the in-app `?` overlay below is
+> **Reference — safe to skim.** A summary of the chat-pane keyboard; the in-app `?` overlay below is
 > generated live and is always the authority.
 
 | Key | Does |
@@ -372,7 +372,7 @@ all one component tree — not two parallel UIs.
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Cycle sessions — since the many-Chats deck a switch parks the streaming one and brings the other up, so a turn keeps running in the background |
 | `Ctrl+N` | Start a fresh session, keeping this one open (the deck gives it a new slot) |
 | `Alt+S` | Show or hide the **Sessions** pane — the deck's window list as a docked pane (registry row `sessions.toggle`) — see the fine print below. |
-| `Ctrl+L` | Repaint the whole frame - clears and redraws chat, transcript and every pane from current state (registry row `chat.repaint`) |
+| `Ctrl+L` | Repaint the whole frame — clears and redraws chat, transcript and every pane from current state (registry row `chat.repaint`) |
 | `F10` | Open the menu bar |
 | `y` / `n` / `a` / `p` / `e` / `r` / `x` | Answer a permission prompt: allow once, refuse, allow for the session, save a rule, edit the scope first, refuse with a note, refuse and stop — see the fine print below. |
 | First-run wizard (`←` / `→`, `Enter`, `Tab`, `s`, `Esc`) | On a launch with no provider chosen or configured, `Enter` the highlighted provider, type the key (masked), `Enter` stores it and switches the live session to it (the same path as `/model`); `Tab` defers to `candy-code login <provider>`, `s` skips, `Esc` cancels — any way you leave without storing a key stamps the wizard away for good |
@@ -383,7 +383,7 @@ The long claims the table above compresses, in full:
 
 **`?` on a blank draft.** Show the in-app keyboard reference. Blank means `trim()`-empty, i.e. empty or made only of the six bytes `trim()` strips — space, tab, newline, carriage return, `NUL` and vertical tab. Not the same as "whitespace-only", in both directions: a line of non-breaking spaces (`U+00A0`), ideographic spaces (`U+3000`) or a form feed is *not* blank, so `?` types a character there, while `NUL` **is** blank without being whitespace. Only two of those six bytes can be typed — space, and `NUL` via `Ctrl`+`Space`. A newline draft is *composed*, with `Alt`+`Enter` (or `Shift`+`Enter` / `Ctrl`+`Enter`, on terminals that report those distinguishably). The other three (tab, carriage return, vertical tab) have no key at all, and no route you can exercise on purpose: sending a message never puts one in your history either, because `Enter` trims the draft before it is sent. They reach the input box exactly one way, and not in the shipped binary — **`/rewind` to a checkpoint whose transcript contains a tool result, in a `Chat` embedded without a prompt-history file.** Restoring a checkpoint revives every non-`assistant` row as a `user` message with its content unchanged, and a tool row's output is full of tabs; with no prompt file wired, `↑` recalls from the transcript's user rows and so returns that revived message verbatim. `bin/candy-code` always wires `~/.candy-code/prompt_history.jsonl`, whose entries are prompts you typed and sent (trimmed), so there `↑` never produces such a draft. Same for the form feed in the non-blank list above — the chord a legacy terminal sends as `U+000C` is claimed by `Ctrl`+`L` below (registry row `chat.repaint`), so it types neither the letter `l` nor a form feed; and no dropped or delegated ctrl chord types its letter at all — `Ctrl`+`E`/`U`/`K`/`X` edit the draft readline-style, the rest type nothing. The draft is left untouched behind the overlay. `Esc`/`Enter`/`q` close it, and so does a second `?` (see the next row); `↑`/`↓`, `PgUp`/`PgDn` and the wheel scroll it (and the transcript behind it is left alone)
 
-**Two `?` make one letter.** Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed. The box does have cursor movement — one character on `←`/`→` (registry row `chat.cursor`), the line ends on `Home`/`End` (`chat.line-ends`), whole words on `Alt`+`←`/`Alt`+`→` (`chat.word-motion`) — but no motion helps on a blank line: the first `?` is claimed by the overlay before any character reaches the draft, wherever the cursor would be. Works after leading whitespace too: `␣??` leaves `␣?`
+**Two `?` make one letter.** Type a literal `?`. The second `?` closes the reference **and** puts the character in the input box, which is how a message that starts with `?` gets typed. The box does have cursor movement — one character on `←`/`→` (registry row `chat.cursor`), the line ends on `Home`/`End` (`chat.line-ends`), whole words on `Alt`+`←`/`Alt`+`→` (`chat.word-motion`) — but no motion helps on a blank line: the first `?` is claimed by the overlay before any character reaches the draft, wherever the cursor would be. Works after leading whitespace too: `␣??` leaves `␣?` (here and in the `?` rows, `␣` stands for a literal space)
 
 **`/keys` is not an escape hatch.** The same reference, by **name**: typing `/k` surfaces it in the `/` popup, which is where you find it if you do not already know about `?`. (`/help` was a second spelling of this and is now the **slash-command list** instead.) It is *not* an escape hatch for a half-typed draft — the command is matched against the whole trimmed input, so with `why` already in the box, `why/keys` + `Enter` is sent to the model as a prompt. Typing `/keys` onto a draft opens the reference exactly when `?` on that draft would — which is the sense in which it is not a hatch. It is *not* interchangeable with `?` more generally: a draft that **is** the command modulo surrounding whitespace (`␣/keys`, `/keys␣`) opens the reference on `Enter`, where `?` would type a character, and on a blank line `?` opens it while `Enter` sends nothing. Submitting `/keys` also clears the input line and `?` does not. Clear the line and either route works
 
@@ -425,13 +425,13 @@ The long claims the table above compresses, in full:
 `Ctrl+P`, `Ctrl+O`, `Ctrl+F`, `Ctrl+V`, `Ctrl+A`, `Ctrl+W`, `Ctrl+L` and `Ctrl+C` always belong to the chat
 content model — the shell never claims them, in any pane, so hosting chat
 inside the shell cannot silently steal a binding. `Ctrl+R` belongs to the chat
-too, with declared exceptions: while a shell view is itself driving the
-keyboard (the agent dashboard, an open skill picker, an open `F10` menu, an
-open settings editor or media form) the shell keeps `Ctrl+R` — the picker it opens is painted by the chat those views
-cover and moved by the `↑`/`↓`/`Enter` those views claim — and keeps `Ctrl+G`
-for **Broadcast**, the live agent feature those views are about. From an
-ordinary pane `Ctrl+R` opens the picker and `Ctrl+G` the history search; leave
-the view and both chords work for the chat as usual.
+too, with declared exceptions whose full reasoning lives on the registry
+rows themselves (`chat.session-picker` and `chat.history-search` carry a
+`yieldsToShellReason`): while one of the shell's keyboard-owning views is up,
+the shell keeps both chords — the picker `Ctrl+R` opens would be painted by the
+chat those views cover, and `Ctrl+G` is **Broadcast**, the live-agent feature
+those views are about. From an ordinary pane `Ctrl+R` opens the picker and
+`Ctrl+G` the history search; leave the view and both come back.
 
 The table above is a summary of the chat pane; **the reference `?` opens is the
 authority**, and it covers the overlays too (palette, session picker, permission

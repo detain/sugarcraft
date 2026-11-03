@@ -82,10 +82,12 @@ Editing `candy-code` means editing against drift guards that read the docs
 and the tests as data:
 
 - **Doc guards** re-derive documentation from code: `ReadmeRosterDriftTest`
-  (the README's tool, command and setting rosters), `EnvRosterDriftTest`
+  (the README's tool, command, setting and key-table rosters), `EnvRosterDriftTest`
   (the `ENVIRONMENT.md` variable table against the live read-site census,
   including the provider ambient variables), `KeyBindingDriftTest` (the
-  README key table against `KeyBindingRegistry`),
+  in-app `?` reference — every chord it shows is pressed through the real
+  handlers against `KeyBindingRegistry`; the README's own key table is
+  credited by `ReadmeRosterDriftTest`),
   `TrustKeyDocumentationDriftTest` and
   `ConfigWriteProducerDocumentationDriftTest` (the settings-tier claims).
   A tool, variable, key or setting added without its doc edit goes red.
