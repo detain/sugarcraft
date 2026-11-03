@@ -12,4 +12,6 @@ declare(strict_types=1);
 
 return [
     'rail.empty' => '(žádné položky)',
+    'card.failed' => '(nedostupné)',
+    'grid.empty' => '(žádné plakáty)',
 ];

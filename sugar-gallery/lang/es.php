@@ -12,4 +12,6 @@ declare(strict_types=1);
 
 return [
     'rail.empty' => '(sin elementos)',
+    'card.failed' => '(no disponible)',
+    'grid.empty' => '(sin pósters)',
 ];

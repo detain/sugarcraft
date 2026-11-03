@@ -12,4 +12,6 @@ declare(strict_types=1);
 
 return [
     'rail.empty' => '(нет элементов)',
+    'card.failed' => '(недоступно)',
+    'grid.empty' => '(нет постеров)',
 ];

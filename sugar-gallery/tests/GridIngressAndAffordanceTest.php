@@ -26,6 +26,29 @@ final class GridIngressAndAffordanceTest extends TestCase
         return new PosterCard($id, 'Card ' . $id);
     }
 
+    public function testAFailedCardIsReQueuedByTheFillPolicy(): void
+    {
+        // M4: a failed fetch is NOT a filled cell — the fill policy must keep
+        // offering the index so a retry pass can attach art later. The card
+        // carries stale art on purpose: only then is the failed short-circuit
+        // the difference between 'filled' and re-queueable.
+        $grid = PosterGrid::new(cardWidth: 10, posterHeight: 2, hSpacing: 1, vSpacing: 0)
+            ->withViewport(21, 18)
+            ->withTotal(2)
+            ->withItem(0, PosterCard::new('0', 'Blade', 'https://cdn/0.png')->withPoster('ZZZZ')->withFailed())
+            ->withItem(1, PosterCard::new('1', 'Dune', 'https://cdn/1.png')->withPoster('AAAA'));
+
+        self::assertSame([0], $grid->indicesNeedingPoster(), 'the failed cell re-queues; the loaded cell does not');
+    }
+
+    public function testEmptyMessageResolvesLiveAndTheEmptyGridStillRendersNothing(): void
+    {
+        // m5: the notice exists for app chrome WITHOUT changing the render
+        // contract — an empty grid's frame stays '' (pinned elsewhere).
+        self::assertSame('(no posters)', PosterGrid::emptyMessage());
+        self::assertSame('', $this->grid()->withTotal(0)->render());
+    }
+
     public function testAStringShapedKeyIsRefusedAtTheIngress(): void
     {
         // PHP 8 evaluates 'abc' >= 0 as TRUE, so this key used to land in the

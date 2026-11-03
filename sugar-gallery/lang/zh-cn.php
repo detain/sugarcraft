@@ -12,4 +12,6 @@ declare(strict_types=1);
 
 return [
     'rail.empty' => '(无项目)',
+    'card.failed' => '(不可用)',
+    'grid.empty' => '(无海报)',
 ];

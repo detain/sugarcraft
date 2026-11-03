@@ -46,6 +46,15 @@ final readonly class PosterCard
      *                                   range 0..MAX_IMAGES-1 likewise (C1) — so
      *                                   the cell renders as a skeleton and
      *                                   {@see hasPoster()} reports it unfilled.
+     * @param bool        $failed        Set once the owner's fetch for this
+     *                                   cell FAILED: the body then renders a
+     *                                   distinct unavailable state (localised
+     *                                   line over '?' fill rows) instead of the
+     *                                   loading skeleton, so a dead request is
+     *                                   not indistinguishable from a slow one
+     *                                   (M4). {@see hasPoster()} reports the
+     *                                   cell unfilled, keeping it inside the
+     *                                   re-queue policy for a retry.
      */
     public function __construct(
         public string $id,
@@ -56,6 +65,7 @@ final readonly class PosterCard
         public ?string $styledTitle = null,
         public ?string $posterImage = null,
         public ?int $imageId = null,
+        public bool $failed = false,
     ) {
     }
 
@@ -69,8 +79,29 @@ final readonly class PosterCard
         ?string $styledTitle = null,
         ?string $posterImage = null,
         ?int $imageId = null,
+        bool $failed = false,
     ): self {
-        return new self($id, $title, $posterUrl, $progress, $poster, $styledTitle, $posterImage, $imageId);
+        return new self($id, $title, $posterUrl, $progress, $poster, $styledTitle, $posterImage, $imageId, $failed);
+    }
+
+    /**
+     * Mark the cell's art-fetch as failed (or, passing false, back to loading):
+     * the body shows a localised unavailable line over '?' fill rows instead
+     * of the loading skeleton, and {@see hasPoster()} reports the cell
+     * unfilled so a retry policy still re-queues it (M4). Attaching real art
+     * afterwards (withPoster/withImage) does NOT clear the flag — pass
+     * withFailed(false) alongside the fill, which is exactly what a
+     * retry-resolved callback does.
+     */
+    public function withFailed(bool $failed = true): self
+    {
+        return $this->carrying(['failed' => $failed]);
+    }
+
+    /** Whether the last fetch for this cell failed (see {@see withFailed()}). */
+    public function isFailed(): bool
+    {
+        return $this->failed;
     }
 
     /**
@@ -268,10 +299,16 @@ final readonly class PosterCard
      *    0..MAX_IMAGES-1 — one poisoned id (a stale cache, a restored session,
      *    a host minting its own numbering) used to throw from every frame the
      *    grid drew and never re-queue, because {@see hasPoster()} called it
-     *    filled.
+     *    filled;
+     *  - a FAILED fetch (M4) — the cell shows the unavailable state, not art,
+     *    and stays re-queueable for a retry.
      */
     public function hasPoster(): bool
     {
+        if ($this->failed) {
+            return false;
+        }
+
         return $this->filledPoster() !== null || $this->paintableOverlayId() !== null;
     }
 
@@ -366,6 +403,14 @@ final readonly class PosterCard
      */
     private function bodyRows(int $width, int $posterHeight): array
     {
+        // A failed cell bypasses the memo entirely: its first line carries
+        // LOCALE-resolved text, and the process-wide memo must never freeze a
+        // translation against a later T::setLocale() (M4). The rebuild is a
+        // str_repeat plus one fit — no per-frame fit cost worth caching.
+        if ($this->failed) {
+            return self::failedRows($width, $posterHeight);
+        }
+
         // The key branches, the draw branches and hasPoster() all consult the
         // SAME predicates — paintableOverlayId()/filledPoster() — so a body can
         // never be cached under a branch key its draw disagrees with (the C1/M7
@@ -436,6 +481,24 @@ final readonly class PosterCard
         $cache = [];
 
         return $count;
+    }
+
+    /**
+     * The unavailable-state body rows for a failed cell (M4): a localised
+     * notice on the first row, neutral-width '?' fill on the rest — visually
+     * distinct from both the loading skeleton ('░') and blank overlay
+     * reservations, and never memoized so the locale stays live.
+     *
+     * @return list<string>
+     */
+    private static function failedRows(int $width, int $posterHeight): array
+    {
+        $lines = [self::fitWidth(Lang::t('card.failed'), $width)];
+        for ($i = 1; $i < $posterHeight; $i++) {
+            $lines[] = str_repeat('?', $width);
+        }
+
+        return $lines;
     }
 
     /**
@@ -523,11 +586,28 @@ final readonly class PosterCard
         return Width::string($text) <= $max ? $text : Width::truncate($text, max(0, $max - 1)) . '…';
     }
 
+    /**
+     * A clamped 0..1 bar. When the row can carry it, the exact percentage is
+     * spelled out as a trailing label inside the reserved width and the bar
+     * shrinks to match — the glyph run alone saturates at both clamped ends
+     * (every ▓ is a full bar, every ░ an empty one) and rounds coarse at
+     * typical widths, so '(60%)' tells the user what the blocks only suggest
+     * (M5). Too narrow for a bar beside the label, the label is dropped and
+     * the bar takes the full width as before.
+     */
     private static function progressBar(float $progress, int $width): string
     {
         $progress = max(0.0, min(1.0, $progress));
-        $filled = (int) round($progress * $width);
+        $label = ' (' . (int) round($progress * 100) . '%)';
+        $barWidth = $width - Width::string($label);
 
-        return str_repeat('▓', $filled) . str_repeat('░', max(0, $width - $filled));
+        if ($barWidth < 2) {
+            $barWidth = $width;
+            $label = '';
+        }
+
+        $filled = (int) round($progress * $barWidth);
+
+        return str_repeat('▓', $filled) . str_repeat('░', $barWidth - $filled) . $label;
     }
 }

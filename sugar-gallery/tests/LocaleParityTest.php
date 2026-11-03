@@ -59,10 +59,16 @@ final class LocaleParityTest extends TestCase
         }
     }
 
-    public function testEnglishSourceOfTruthCarriesTheRailEmptyKey(): void
+    public function testEnglishSourceOfTruthCarriesTheFullKeySet(): void
     {
         $en = require __DIR__ . '/../lang/en.php';
-        self::assertSame(['rail.empty'], array_keys($en), 'en.php is the key-set source of truth');
+        self::assertSame(
+            ['rail.empty', 'card.failed', 'grid.empty'],
+            array_keys($en),
+            'en.php is the key-set source of truth',
+        );
         self::assertSame('(no items)', $en['rail.empty']);
+        self::assertSame('(unavailable)', $en['card.failed']);
+        self::assertSame('(no posters)', $en['grid.empty']);
     }
 }

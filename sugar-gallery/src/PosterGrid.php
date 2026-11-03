@@ -516,6 +516,19 @@ final class PosterGrid
         return $this->total <= 0;
     }
 
+    /**
+     * The localised empty-state notice (lang key `grid.empty`) for owners that
+     * paint one. {@see render()} itself stays silent on an empty grid — it
+     * returns `''` because no geometry was reserved for a message, and the
+     * frame contract (exactly viewport-wide rows or nothing) outranks the
+     * nicety; this accessor exists so the sentence is not copy-pasted per app,
+     * and it resolves live so a T::setLocale() mid-session is honoured.
+     */
+    public static function emptyMessage(): string
+    {
+        return Lang::t('grid.empty');
+    }
+
     // ---- rendering -----------------------------------------------------
 
     /**

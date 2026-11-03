@@ -12,4 +12,6 @@ declare(strict_types=1);
 
 return [
     'rail.empty' => '(öğe yok)',
+    'card.failed' => '(kullanılamıyor)',
+    'grid.empty' => '(poster yok)',
 ];

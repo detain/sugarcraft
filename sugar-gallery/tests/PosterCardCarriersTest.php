@@ -14,7 +14,7 @@ use SugarCraft\Gallery\PosterCard;
 /**
  * The single-carrier law (docs-review-1023 m6): before the fix, five
  * hand-rolled positional `new self(...)` reconstructions each had to remember
- * all eight constructor fields — a ninth field added to the constructor would
+ * every constructor field — one more field added to the constructor would
  * have been silently dropped by every one of them. Every with*-mutator now
  * flows through the one private carrying(): full state snapshot + named
  * overrides + constructor rebuild.
@@ -35,6 +35,7 @@ final class PosterCardCarriersTest extends TestCase
         return match ($name) {
             'progress' => 0.25,
             'imageId' => 99,
+            'failed' => true,
             default => 'SENTINEL-' . $name,
         };
     }

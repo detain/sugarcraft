@@ -12,4 +12,6 @@ declare(strict_types=1);
 
 return [
     'rail.empty' => '(لا عناصر)',
+    'card.failed' => '(غير متاح)',
+    'grid.empty' => '(لا ملصقات)',
 ];

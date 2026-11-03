@@ -12,4 +12,6 @@ declare(strict_types=1);
 
 return [
     'rail.empty' => '(aucun élément)',
+    'card.failed' => '(indisponible)',
+    'grid.empty' => '(aucun poster)',
 ];

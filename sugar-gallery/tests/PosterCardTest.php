@@ -6,6 +6,7 @@ namespace SugarCraft\Gallery\Tests;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\AnsiGuard;
@@ -14,6 +15,19 @@ use SugarCraft\Style\Layout;
 
 final class PosterCardTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        // The failed-cell body resolves card.failed through the T registry;
+        // pin the locale so the '(unavailable)' assertions do not follow the
+        // runner's LANG environment.
+        T::setLocale('en');
+    }
+
+    protected function tearDown(): void
+    {
+        T::reset();
+    }
+
     public function testPlaceholderRowsWhenNoPosterLoaded(): void
     {
         $card = new PosterCard('1', 'Title');
@@ -59,8 +73,13 @@ final class PosterCardTest extends TestCase
         $full = (new PosterCard('1', 'X', null, 1.5))->render(false, 10, 1);
         $empty = (new PosterCard('1', 'X', null, -0.5))->render(false, 10, 1);
 
-        self::assertStringContainsString(str_repeat('▓', 10), $full);
-        self::assertStringContainsString(str_repeat('░', 10), explode("\n", $empty)[2]);
+        // M5 (gallery review, 2026-11): the clamped ends now spell themselves
+        // out — the label rides inside the row, so the saturated run shrinks
+        // to `width - label` (7 cells for ' (100%)', 5 for ' (0%)'). Exact
+        // shapes pinned; old pins demanded the full 10-glyph runs digits
+        // replace.
+        self::assertSame('▓▓▓ (100%)', explode("\n", $full)[2]);
+        self::assertSame('░░░░░ (0%)', explode("\n", $empty)[2]);
     }
 
     public function testTitleTruncatedToWidth(): void
@@ -319,19 +338,31 @@ final class PosterCardTest extends TestCase
         $zeroLines = explode("\n", $zero);
         self::assertCount(3, $zeroLines, '3 lines: poster + title + progress');
         $zeroProgressLine = $zeroLines[2]; // progress is the 3rd line
-        self::assertSame(str_repeat('░', 10), $zeroProgressLine, 'progress 0.0 produces full empty bar');
+        // M5: the label now lives inside the row — 5 bar cells + ' (0%)'.
+        self::assertSame('░░░░░ (0%)', $zeroProgressLine, 'progress 0.0 produces full empty bar with its label');
 
         // Progress at exactly 1.0 should produce a full bar
         $full = (new PosterCard('1', 'X', null, 1.0))->render(false, 10, 1);
         $fullLines = explode("\n", $full);
         $fullProgressLine = $fullLines[2];
-        self::assertSame(str_repeat('▓', 10), $fullProgressLine, 'progress 1.0 produces full filled bar');
+        // ' (100%)' is seven cells, so the saturated run shrinks to 3.
+        self::assertSame('▓▓▓ (100%)', $fullProgressLine, 'progress 1.0 produces full filled bar with its label');
 
         // Progress in the middle
         $mid = (new PosterCard('1', 'X', null, 0.5))->render(false, 10, 1);
         $midLines = explode("\n", $mid);
         $midProgressLine = $midLines[2];
+        self::assertSame('▓▓░░ (50%)', $midProgressLine, 'the mid bar splits the reserved run evenly');
         self::assertSame(10, Layout::width($midProgressLine), 'mid-progress bar is exactly 10 cells wide');
+    }
+
+    public function testTheProgressBarDropsItsLabelWhenTheRowIsTooNarrow(): void
+    {
+        // Floor width: ' (50%)' would leave no bar at all, so the label bows
+        // out and the full-width glyph run (the pre-M5 shape) renders.
+        $lines = explode("\n", (new PosterCard('1', 'X', null, 0.5))->render(false, 4, 1));
+
+        self::assertSame('▓▓░░', $lines[2], 'narrow rows keep the whole width for the bar');
     }
 
     public function testStripC0RemovesVariousControlBytes(): void
@@ -374,9 +405,12 @@ final class PosterCardTest extends TestCase
         $filled = substr_count($progressLine, '▓');
         $empty = substr_count($progressLine, '░');
 
-        self::assertSame(10, $filled + $empty, 'progress bar has exactly 10 cells');
-        self::assertSame(3, $filled, 'progress 0.3 × width 10 = 3 filled cells');
-        self::assertSame(7, $empty, '10 - 3 = 7 empty cells');
+        // M5: the '(30%)' label takes 6 of the 10 cells, so the ratio runs on
+        // the 4 remaining bar cells — 1 filled, 3 empty, label beside them.
+        self::assertSame(4, $filled + $empty, 'the bar run shrinks to leave room for the label');
+        self::assertSame(1, $filled, 'progress 0.3 × bar-width 4 = 1 filled cell');
+        self::assertSame(3, $empty, '4 - 1 = 3 empty cells');
+        self::assertSame('▓░░░ (30%)', $progressLine, 'the spelled-out share is exact');
     }
 
     // ---- the styled-title trust boundary --------------------------------
@@ -581,5 +615,75 @@ final class PosterCardTest extends TestCase
         self::assertStringContainsString('因果の物語', $frame);
         self::assertStringContainsString('Süß', $frame);
         self::assertStringNotContainsString("\x1b", $frame, 'a plain title carries no styling');
+    }
+
+    // ---- the failed-fetch state (M4) -------------------------------------
+
+    public function testAFailedCellRendersUnavailableNotTheLoadingSkeleton(): void
+    {
+        // Art carried ALONGSIDE the failure must not count as filled — this
+        // is the only combination where the hasPoster() failed short-circuit
+        // is observable (an art-less failed card reads unfilled anyway).
+        $card = (new PosterCard('1', 'Blade', 'https://cdn/1.png'))
+            ->withPoster("AAA\nBBB")
+            ->withFailed();
+
+        self::assertTrue($card->isFailed());
+        self::assertFalse($card->hasPoster(), 'an unavailable cell is not art — it stays re-queueable');
+
+        $lines = explode("\n", $card->render(false, 20, 3));
+        self::assertSame(str_pad('(unavailable)', 20), $lines[0], 'the notice heads the body, padded to the row');
+        self::assertSame(str_repeat('?', 20), $lines[1], "'?' fill is distinct from the '░' loading skeleton");
+        self::assertSame(str_repeat('?', 20), $lines[2]);
+        self::assertStringNotContainsString('░', $lines[0] . $lines[1] . $lines[2]);
+        self::assertStringNotContainsString('AAA', $card->render(false, 20, 3), 'the carried art stays hidden while failed');
+        foreach ($lines as $line) {
+            self::assertSame(20, Width::string($line), 'the failed state upholds the width law');
+        }
+    }
+
+    public function testTheFailedFlagOutlivesArtAttachedAlongsideItAndClearsOnDemand(): void
+    {
+        // A late async resolution that forgot the fetch had failed must not
+        // repaint over the failure — withFailed(false) is the deliberate
+        // retry-resolved transition.
+        $card = (new PosterCard('1', 'X', 'https://cdn/1.png'))
+            ->withFailed()
+            ->withPoster("AAA\nBBB");
+        self::assertStringContainsString('?', $card->render(false, 8, 2), 'failure wins while set');
+
+        $recovered = $card->withFailed(false);
+        self::assertFalse($recovered->isFailed());
+        self::assertTrue($recovered->hasPoster(), 'the stored art counts again once the flag clears');
+        $lines = explode("\n", $recovered->render(false, 8, 2));
+        self::assertStringContainsString('AAA', $lines[0]);
+        self::assertStringNotContainsString('?', $recovered->render(false, 8, 2));
+    }
+
+    public function testWithFailedCarriesEveryOtherFieldAndTheNoticeIsNotMemoized(): void
+    {
+        $card = (new PosterCard('1', 'X', 'https://cdn/1.png', 0.25, 'art', "\e[1mS", 'sixel', 5))
+            ->withFailed();
+        self::assertSame(
+            ['1', 'X', 'https://cdn/1.png', 0.25, 'art', "\e[1mS", 'sixel', 5],
+            [$card->id, $card->title, $card->posterUrl, $card->progress, $card->poster, $card->styledTitle, $card->posterImage, $card->imageId],
+            'withFailed() rides the single carrier',
+        );
+
+        // The failed body reads the locale live (memo bypass): switching T's
+        // locale between renders must change the notice — a cached frozen
+        // translation is the bug this pin catches.
+        $before = explode("\n", $card->render(false, 30, 1))[0];
+        self::assertStringContainsString('(unavailable)', $before);
+
+        $previous = T::locale();
+        try {
+            T::setLocale('de');
+            $after = explode("\n", $card->render(false, 30, 1))[0];
+            self::assertStringContainsString('(nicht verfügbar)', $after, 'the notice follows the live locale');
+            self::assertNotSame($before, $after);
+        } finally {
+            T::setLocale($previous);
+        }
     }
 }
