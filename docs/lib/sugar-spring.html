@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarSpring — SugarCraft</title>
-<meta name="description" content="SugarSpring: Damped spring physics + Newtonian projectile sim for smooth TUI animation.">
+<meta name="description" content="SugarSpring: Damped spring physics, projectile sim, easing/bezier timing and reduced-motion-aware animation for PHP TUIs (spring core ported from charmbracelet/harmonica).">
 <meta property="og:title" content="SugarSpring — SugarCraft">
-<meta property="og:description" content="Damped spring physics + Newtonian projectile sim for smooth TUI animation.">
+<meta property="og:description" content="Damped spring physics, projectile sim, easing/bezier timing and reduced-motion-aware animation for PHP TUIs.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-spring.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-spring.html">
 <meta property="og:type" content="website">
@@ -41,20 +41,20 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-spring.png" alt="SugarSpring">
       <div>
-        <h2>🐝 SugarSpring</h2>
+        <h2>🌀 SugarSpring</h2>
         <p class="detail-sub">Damped spring physics + Newtonian projectile sim</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/harmonica" style="color: inherit;">charmbracelet/harmonica</a></span>
           <span class="tag-chip">physics</span>
           <span class="tag-chip">animation</span>
           <span class="tag-chip">math</span>
-          <span class="tag-chip">no-deps</span>
+          <span class="tag-chip">reduced-motion</span>
         </div>
       </div>
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-spring"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-spring" alt="SugarSpring code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Pure-math animation engine. Damped harmonic oscillators (Ryan-Juckett) for smooth scroll / overshoot, Newtonian projectile sim for arcs and particle effects. No terminal dependency.</p>
+    <p class="lede" style="margin-top: 28px;">Pure-math animation engine. Damped harmonic oscillators (Ryan-Juckett form, spring core ported from <code>charmbracelet/harmonica</code>) for smooth scroll / overshoot, Newtonian projectile sim for arcs and particle effects, easing + bezier timing curves, spring chains and collections, and reduced-motion awareness throughout the spring-driven types. No terminal I/O anywhere.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-spring</code></pre>
@@ -68,28 +68,31 @@ $spring = new Spring(
     dampingRatio:     1.0,    // critical
 );
 $pos = 0.0; $vel = 0.0; $target = 100.0;
-for ($f = 0; $f &lt; 60; $f++) {
+$frame = 0;
+do {                                 // animate until settled, not for a
     [$pos, $vel] = $spring-&gt;update($pos, $vel, $target);
-}
+} while (!Spring::settled($pos, $vel, $target) &amp;&amp; ++$frame &lt; 600);
 
 $ball = Projectile::new(
     deltaTime:    Spring::fps(60),
     position:     Point::zero(),
-    velocity:     new Vector(5.0, -10.0),
+    velocity:     new Vector(5.0, 10.0),      // +y is up: Projectile::gravity() is (0, -9.81, 0)
     acceleration: Projectile::gravity(),
 );
 for ($i = 0; $i &lt; 60; $i++) {
-    $ball = $ball-&gt;update();
+    $ball = $ball-&gt;update();                   // update() returns a NEW projectile — reassign
 }</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Spring</strong><span><code>dampingRatio &lt; 1</code> oscillates, <code>= 1</code> critical (no overshoot, fastest), <code>&gt; 1</code> over-damped.</span></div>
-      <div class="feature"><strong>Projectile</strong><span>Position, velocity, acceleration vectors. <code>Projectile::gravity()</code> + <code>terminalGravity()</code> helpers.</span></div>
-      <div class="feature"><strong>Frame helpers</strong><span><code>Spring::fps(60)</code> returns 1/60 deltaTime. Pair with a 60Hz loop for smooth animation.</span></div>
-      <div class="feature"><strong>Pure functions</strong><span>No state hidden in the engine — caller passes <code>$pos</code> and <code>$vel</code> in, gets the next pair out.</span></div>
-      <div class="feature"><strong>Used everywhere</strong><span>AnimatedProgress, Viewport scroll, ItemList paging — every smooth motion in SugarWidgets goes through SugarSpring.</span></div>
-      <div class="feature"><strong>Zero deps</strong><span>No ReactPHP, no <code>ext-pcntl</code>, nothing. Drop into a job worker if you need physics in a non-TUI.</span></div>
+      <div class="feature"><strong>Spring</strong><span><code>dampingRatio &lt; 1</code> oscillates, <code>= 1</code> critical (no overshoot, fastest), <code>&gt; 1</code> over-damped. Zero/negative damping and near-zero frequency are refused at construction — a spring that cannot converge is illegal, not slow.</span></div>
+      <div class="feature"><strong>Projectile</strong><span>Position, velocity, acceleration vectors. <code>Projectile::gravity()</code> + <code>terminalGravity()</code> helpers (Y-up, with legacy Y-down spellings).</span></div>
+      <div class="feature"><strong>Easing &amp; bezier</strong><span>16 Penner-style <code>Easing</code> cases + <code>CubicBezier</code> matching the CSS <code>transition-timing-function</code> solver.</span></div>
+      <div class="feature"><strong>Chains &amp; collections</strong><span><code>SpringChain::tick()</code> hands off stage-to-stage on settle; <code>SpringCollection</code> drives many named springs with one tick and one <code>settled()</code> predicate.</span></div>
+      <div class="feature"><strong>Reduced motion</strong><span>Every spring-composed type snaps to target when <code>REDUCE_MOTION</code>/<code>PREFERS_REDUCED_MOTION</code> is set (via sugar-colorprofile's <code>Probe</code>), per instance or per call; gate <code>Projectile</code>/easing yourself — the README shows the recipe.</span></div>
+      <div class="feature"><strong>Used in-tree</strong><span>sugar-overlay transitions (Fade/Scale/Slide), candy-flappy's bird physics, sugar-widgets <code>AnimatedProgress</code>.</span></div>
+      <div class="feature"><strong>Terminal-agnostic</strong><span>No ReactPHP, no <code>ext-pcntl</code>, no render path — pure values in, pure values out. Its sugar-core + sugar-colorprofile deps never touch a TTY here.</span></div>
+      <div class="feature"><strong>i18n</strong><span>Every exception message runs through <code>Lang::t()</code> across 16 shipped locales.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -105,14 +108,18 @@ for ($i = 0; $i &lt; 60; $i++) {
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio)</td><td>Create a spring physics instance</td></tr>
-<tr><td>Spring</td><td>update(pos, vel, target)</td><td>Step the spring simulation</td></tr>
-<tr><td>Spring</td><td>fps($fps)</td><td>Create deltaTime for given FPS</td></tr>
-<tr><td>Projectile</td><td>new(deltaTime, position, velocity, acceleration)</td><td>Create a projectile</td></tr>
-<tr><td>Projectile</td><td>update()</td><td>Step the projectile simulation</td></tr>
-<tr><td>Projectile</td><td>gravity()</td><td>Standard gravity acceleration</td></tr>
-<tr><td>Point</td><td>zero()</td><td>Create point at origin</td></tr>
-<tr><td>Vector</td><td>new(x, y)</td><td>Create a 2D vector</td></tr>
+<tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio, reducedMotionOverride?)</td><td>Create a spring; non-finite / dt &lt; 0 / ω &lt; 1e-9 / ζ ≤ 0 refused</td></tr>
+<tr><td>Spring</td><td>update(pos, vel, target)</td><td>Step the simulation; snaps to [target, 0] under reduced motion</td></tr>
+<tr><td>Spring</td><td>settled(pos, vel, target, threshold?)</td><td>Completion predicate on position AND velocity</td></tr>
+<tr><td>Spring</td><td>fps($fps) / fromPreset($preset, $dt?, $override?)</td><td>deltaTime helper; five hand-tuned presets</td></tr>
+<tr><td>SpringConfig</td><td>new(tension, friction, mass) → spring()</td><td>react-spring-style triple; exposes public readonly ω/ζ</td></tr>
+<tr><td>SpringChain</td><td>tick(): self / isComplete() / currentPositions()</td><td>Stage hand-off on settle; one tick per stage under reduced motion</td></tr>
+<tr><td>SpringCollection</td><td>tick(): self / settled() / velocity($id) / get($id)</td><td>Many named springs, one driver</td></tr>
+<tr><td>Easing</td><td>Linear, QuadraticIn … CubicOut … BackInOut → ease($t)</td><td>16 preset curves implementing EasingFunction</td></tr>
+<tr><td>CubicBezier</td><td>new(x1, y1, x2, y2) → evaluate($t)</td><td>CSS-style timing function (Newton + bounded subdivision)</td></tr>
+<tr><td>Projectile</td><td>new(deltaTime, position, velocity, acceleration) → update()</td><td>Explicit Euler; returns a new instance — reassign it</td></tr>
+<tr><td>Point / Vector</td><td>new(x, y, z = 0.0)</td><td>Finite-checked 2D/3D values; Vector: add/sub/scale/dot/cross/normalize/lerp/length</td></tr>
+<tr><td>Gravity</td><td>standard() / terminal()</td><td>Y-up acceleration vectors (Y-down spellings available)</td></tr>
 </table>
   </div>
 </section>
@@ -131,6 +138,11 @@ for ($i = 0; $i &lt; 60; $i++) {
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/projectile.gif" alt="Projectile" onerror="this.parentElement.style.display='none'">
                 <h3>Projectile</h3>
                 <span class="demo-caption">Newtonian projectile sim with gravity + bouncing.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/particle.gif" alt="Particle" onerror="this.parentElement.style.display='none'">
+                <h3>Particle</h3>
+                <span class="demo-caption">Projectile-driven particle field with terminal gravity.</span>
             </div>
         </div>
     </div>
