@@ -55,6 +55,49 @@ final class SafeText
     }
 
     /**
+     * Sanitize a one-line display string that may legitimately carry SGR
+     * styling, stripping everything else {@see line()} would remove.
+     *
+     * Frame's title/status/body are documented pre-rendered: host apps pass
+     * strings built by sugar-style (Style::render), whose colors ARE escape
+     * sequences, so {@see line()} would flatten the very styling the caller
+     * asked for. This variant keeps exactly the CSI-SGR subset — ESC `[`
+     * parameter bytes (0x30-0x3b: digits, colon, semicolon) then `final  m` —
+     * verbatim, and runs every other chunk through {@see line()}. The split
+     * pattern requires the closing `m`, so a truncated or non-SGR sequence
+     * (`ESC ] … OSC`, `ESC [ ? 2 5 l`, a lone ESC) lands inside an even chunk
+     * and loses its ESC byte to the C0 strip; because no ESC can survive in
+     * an even chunk, a kept SGR can never re-form a longer escape with
+     * surrounding text, and the only ESC bytes in the result head a complete
+     * SGR. Newlines go: styled strings here are single-line cells, and a
+     * row count that changes is exactly the frame-desync this class exists
+     * to prevent.
+     */
+    public static function styledLine(string $s): string
+    {
+        // PREG_SPLIT_DELIM_CAPTURE puts SGR sequences at odd indices; even
+        // indices (including the leading chunk) are the untrusted remainder.
+        $parts = preg_split('/(\x1b\[[\x30-\x3b]*m)/', $s, -1, PREG_SPLIT_DELIM_CAPTURE);
+
+        if (!\is_array($parts)) {
+            // false (pattern error) and null (PCRE terminated mid-run) both land here.
+            // Same fail-loud shape as {@see line()}: coalescing a failed split
+            // to '' would report an unsanitized-looking blank cell instead of
+            // a bug, and the fixed class-with-final here cannot backtrack —
+            // null/false means PCRE was terminated, not that the input was dirty.
+            throw new \RuntimeException('SafeText::styledLine(): SGR split failed: ' . preg_last_error_msg());
+        }
+
+        foreach ($parts as $i => $chunk) {
+            if ($i % 2 === 0) {
+                $parts[$i] = self::line($chunk);
+            }
+        }
+
+        return implode('', $parts);
+    }
+
+    /**
      * Strip escape sequences and control bytes from a multi-line page,
      * preserving the line structure.
      *

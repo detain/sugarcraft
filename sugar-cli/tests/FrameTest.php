@@ -50,9 +50,10 @@ final class FrameTest extends TestCase
      * Fix wave: widths under the 4-cell floor (two border caps + one content
      * cell minimum) used to OVERFLOW — a 1-col frame emitted a 2-cell rule,
      * a 2-col frame a 3-cell title row — forcing terminal wraps that desync
-     * the diff renderer. render() now clamps $cols up to 4 (fail-safe: the
-     * host clips excess rather than re-flowing it), so every emitted line is
-     * exactly 4 cells for any cols in 1..4.
+     * the diff renderer. render() now clamps $cols up to 4, so every emitted
+     * line is exactly 4 cells for any cols in 1..4 (below the floor the rows
+     * wrap — terminals autowrap and nothing stays one line at 1-3 columns;
+     * the clamp keeps the wrap uniform).
      *
      * @dataProvider tinyCols
      */
@@ -253,5 +254,103 @@ final class FrameTest extends TestCase
         foreach (explode("\n", $out) as $line) {
             self::assertSame(80, Width::string($line), 'truncated styled line must fill terminal exactly');
         }
+    }
+
+    // -------------------------------------------------- ingress sanitization
+
+    /**
+     * A newline in the title used to add a row to the emitted frame, breaking
+     * the "exactly $rows lines" contract this class exists to guarantee (the
+     * diff renderer paints once per row; a row-count change corrupts remote
+     * ssh/tmux sessions). The title is now sanitized to a single line.
+     */
+    public function testNewlineInTitleCannotBreakTheRowCount(): void
+    {
+        $out = Frame::new()->withTitle("evil\ntitle")->render('body', 80, 8);
+        self::assertCount(8, explode("\n", $out), 'a rows-invariant despite the embedded newline');
+        self::assertStringContainsString('evil', $out);
+        self::assertStringContainsString('title', $out);
+
+        $status = Frame::new()->withStatus("st\natus")->render('body', 80, 8);
+        self::assertCount(8, explode("\n", $status), 'the status bar cannot add rows either');
+    }
+
+    /**
+     * Terminal-escape injection through title/status/body: clears, OSC
+     * payloads, and set-mode sequences must never reach the output.
+     */
+    public function testControlInjectionIsStrippedFromAllIngresses(): void
+    {
+        $out = Frame::new()
+            ->withTitle("t\x1b[2J\x1b]52;c;pwned\x07x")
+            ->withStatus("s\x1b[?1049h\x1b[1;1Hr")
+            ->render("body\x1b[2J\x1b]0;evil\x07line", 80, 24);
+
+        self::assertStringNotContainsString("\x1b[2J", $out);
+        self::assertStringNotContainsString("\x1b]52;c;", $out);
+        self::assertStringNotContainsString("\x1b]0;evil", $out);
+        self::assertStringNotContainsString("\x1b[?1049h", $out);
+        self::assertStringNotContainsString("\x1b[1;1H", $out);
+        self::assertStringNotContainsString("\x07", $out, 'BEL must not ride along after the payload died');
+        self::assertStringContainsString('body', $out);
+    }
+
+    /**
+     * The other half of the contract: a host app's LEGITIMATE styling (what
+     * sugar-style's Style::render produces) must survive ingress untouched —
+     * candy-sql passes exactly such rendered titles.
+     */
+    public function testSgrStylingSurvivesTitleStatusAndBody(): void
+    {
+        $title = Style::new()->bold()->foreground(Color::hex('#ff5fd2'))->render('Welcome');
+        $status = Style::new()->italic()->render(' ready ');
+        $body = Style::new()->foreground(Color::hex('#00ff00'))->render('green row');
+
+        $out = Frame::new()->withTitle($title)->withStatus($status)->render($body, 80, 24);
+
+        self::assertStringContainsString($title, $out, 'the styled title must appear verbatim');
+        self::assertStringContainsString($status, $out, 'the styled status must appear verbatim');
+        self::assertStringContainsString($body, $out, 'the styled body line must appear verbatim');
+    }
+
+    /** withTitleText() routes through withTitle(): its Style output survives. */
+    public function testWithTitleTextStylingSurvivesSanitization(): void
+    {
+        $out = Frame::new()
+            ->withTitleText('Welcome', Style::new()->bold())
+            ->render('body', 50, 10);
+
+        self::assertStringContainsString("\x1b[1m", $out);
+        self::assertStringContainsString('Welcome', $out);
+    }
+
+    /**
+     * Every remaining ESC byte in a rendered frame belongs to an SGR run:
+     * structural (non-`m`-terminated) introducers are gone by construction,
+     * so Width::string's ANSI-aware measure can only ever see styling.
+     */
+    public function testEveryEscapeInOutputStartsAnSgrSequence(): void
+    {
+        $out = Frame::new()
+            ->withTitle("t\x1b[2J\x1b]0;x\x07")
+            ->withStatus("s\x1b[?7l")
+            ->render("b\x1b(Bc\x1b]8;;http://evil\x07d", 60, 8);
+
+        $seen = 0;
+        for ($pos = strpos($out, "\x1b"); $pos !== false; $pos = strpos($out, "\x1b", $pos + 1)) {
+            $seen++;
+            self::assertMatchesRegularExpression(
+                '/^\x1b\[[\x30-\x3b]*m/',
+                substr($out, $pos),
+                'an ESC byte survived that does not head a complete SGR',
+            );
+        }
+
+        self::assertGreaterThan(0, $seen, 'the slate border styling should still be present');
+        // ESC dies (no sequence can form without it); the non-CSI charset
+        // fragment `(B` and the body's letters survive as inert visible text,
+        // while the OSC-8 hyperlink payload (including its URL) is stripped.
+        self::assertStringContainsString('b(Bcd', $out, 'visible body text survives its escorts');
+        self::assertStringNotContainsString('http://evil', $out);
     }
 }

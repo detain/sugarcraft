@@ -121,4 +121,47 @@ final class LogoTest extends TestCase
         $this->assertStringContainsString('╔', $rendered);
         $this->assertStringContainsString("\x1b[", $rendered);
     }
+
+    /**
+     * Ingress contract: art is plain text. Escapes and controls die, line
+     * feeds survive (they ARE the layout), so a forged splash cannot ride a
+     * caller's logo page onto the terminal.
+     */
+    public function testFromAsciiStripsEscapesButKeepsLineStructure(): void
+    {
+        $logo = Logo::fromAscii("a\x1b[2Jb\nc\td\r\x1b]0;pwn\x07e");
+        $this->assertSame("ab\ncde", $logo->render());
+    }
+
+    /**
+     * withColor() sets the render-time colour rather than wrapping stored
+     * bytes: repeated calls REPLACE (last wins), and no SGR ever accumulates
+     * in the art itself (the first call's escape stack was the old defect).
+     */
+    public function testWithColorReplacesInsteadOfStacking(): void
+    {
+        $pink = Logo::fromAscii('art')->withColor('#ff5fd2');
+        $blue = Logo::fromAscii('art')->withColor('#5fd2ff');
+        $both = $pink->withColor('#5fd2ff');
+
+        $this->assertSame($blue->render(), $both->render(), 'the later colour must win outright');
+        // The old defect was composition: withColor wrapping already-wrapped
+        // bytes stacked two different colours into one output. Equal-render
+        // above proves replacement; the ESC census proves the art stays a
+        // single (per-line-styled) SGR pass, not a nested stack.
+        $rendered = $both->render();
+        $this->assertStringNotContainsString(
+            '38;2;255;95;210',
+            $rendered,
+            'the replaced colour must not linger anywhere in the output',
+        );
+        $this->assertStringContainsString('38;2;95;210;255', $rendered);
+    }
+
+    /** A colourless logo renders its (sanitized) art byte-for-byte, no SGR. */
+    public function testUncoloredRenderCarriesNoStyling(): void
+    {
+        $this->assertStringNotContainsString("\x1b", Logo::fromAscii("plain\nart")->render());
+        $this->assertStringNotContainsString("\x1b", Logo::sugarcraft()->render());
+    }
 }

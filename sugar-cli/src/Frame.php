@@ -35,8 +35,12 @@ use SugarCraft\Style\Style;
  *   - emits NO `\x1b[2J` / screen clear — pure content for the diff renderer.
  *
  * The title and status strings are passed in pre-rendered (the host app builds
- * them — they are app-specific). Frame only draws and colours the box and lays
- * those bars into it.
+ * them — they are app-specific), as is the body: sugar-style output whose SGR
+ * sequences ARE the requested styling. They are still treated as untrusted at
+ * ingress: every line is run through the sanitizer that keeps exactly the
+ * CSI-SGR subset and discards all other escape/control bytes, so no caller can
+ * forge a screen clear, cursor move, OSC clipboard write, or extra row through
+ * Frame. Only validated SGR reaches the terminal.
  */
 final class Frame
 {
@@ -63,7 +67,7 @@ final class Frame
     /** The (pre-rendered) title-bar string, centred on the top row. */
     public function withTitle(string $title): self
     {
-        return new self($title, $this->status, $this->borderStyle);
+        return new self(Internal\SafeText::styledLine($title), $this->status, $this->borderStyle);
     }
 
     /**
@@ -80,7 +84,7 @@ final class Frame
     /** The (pre-rendered) status-bar string, left-aligned on the bottom row. */
     public function withStatus(string $status): self
     {
-        return new self($this->title, $status, $this->borderStyle);
+        return new self($this->title, Internal\SafeText::styledLine($status), $this->borderStyle);
     }
 
     /** Override the box-drawing border colour (defaults to slate). */
@@ -96,16 +100,23 @@ final class Frame
      * exactly max($cols, 4) display cells wide. Widths below 4 cannot host
      * the two border caps plus at least one content cell without overflowing
      * (a 1-col frame would emit a 2-cell rule, forcing a wrap that desyncs
-     * the diff renderer), so the width is clamped up to a 4-cell floor —
-     * the fail-safe direction: the host terminal clips the excess rather
-     * than re-flows it.
+     * the diff renderer), so the width is clamped up to a 4-cell floor. That
+     * floor is still wider than a 1-3 column terminal, so those rows DO wrap
+     * (terminals always autowrap — nothing can avoid it while staying one
+     * line); the clamp just keeps the wrap linear and predictable instead of
+     * each row wrapping a different amount, and the line COUNT only breaks
+     * for sub-floor widths, where no honest contract is possible anyway.
      *
      * @throws \InvalidArgumentException when $rows < {@see OVERHEAD}: there is
      *         no room for the border/title/divider/status chrome, so the frame
      *         cannot honour its "exactly $rows lines" contract (it would emit
      *         all OVERHEAD chrome lines regardless, overflowing the terminal
      *         and desyncing the diff renderer). Callers must guarantee the
-     *         terminal is at least OVERHEAD rows tall before framing.
+     *         terminal is at least OVERHEAD rows tall before framing. The
+     *         rows floor throws while the cols floor clamps because an
+     *         over-tall frame scrolls the alt-screen irrecoverably, whereas a
+     *         too-narrow one still paints every row — the asymmetry is
+     *         deliberate.
      */
     public function render(string $body, int $cols, int $rows): string
     {
@@ -127,12 +138,18 @@ final class Frame
         // Normalise the body to EXACTLY $contentHeight rows: hard-truncate the
         // overflow (a frame taller than the terminal scrolls the alt-screen and
         // permanently desyncs the renderer) and blank-pad anything shorter.
+        // Each row is then sanitized for the terminal (not for the row model —
+        // the explode above already consumed the body's newlines as layout):
+        // SGR survives, every other escape/control byte is dropped.
         $contentLines = explode("\n", $body);
         if (count($contentLines) > $contentHeight) {
             $contentLines = array_slice($contentLines, 0, $contentHeight);
         }
         for ($i = count($contentLines); $i < $contentHeight; $i++) {
             $contentLines[] = '';
+        }
+        foreach ($contentLines as $i => $line) {
+            $contentLines[$i] = Internal\SafeText::styledLine($line);
         }
 
         $bar = $this->borderStyle->render('║');

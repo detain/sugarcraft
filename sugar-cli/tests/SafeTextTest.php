@@ -230,4 +230,62 @@ final class SafeTextTest extends TestCase
 
         return implode('', \array_slice($lines, $start, $end - $start - 1));
     }
+
+    // ------------------------------------------------------------- styledLine
+
+    public function testStyledLineKeepsCleanTextIdentical(): void
+    {
+        $this->assertSame('Hello, World! 123', SafeText::styledLine('Hello, World! 123'));
+    }
+
+    /** The point of the variant: SGR styling a host app asked for SURVIVES. */
+    public function testStyledLineKeepsSgrSequencesVerbatim(): void
+    {
+        $input = "\x1b[38;2;255;0;0mred\x1b[0m normal";
+        $this->assertSame($input, SafeText::styledLine($input));
+
+        $boldUnder = "\x1b[1;4mhead\x1b[0m";
+        $this->assertSame($boldUnder, SafeText::styledLine($boldUnder));
+    }
+
+    /** Screen clears, OSC payloads, and lone controls must not survive. */
+    public function testStyledLineStripsNonSgrEscapes(): void
+    {
+        $this->assertSame('startafter', SafeText::styledLine("start\x1b[2Jafter"));
+        $this->assertSame('textmore', SafeText::styledLine("text\x1b]0;title\x07more"));
+        $this->assertSame('bare', SafeText::styledLine("b\x1bare"));
+        $this->assertSame('sme', SafeText::styledLine("s\x1b[?25lme"));
+        $this->assertSame('dcs', SafeText::styledLine("d\x1bP;q\x1b\\cs"));
+    }
+
+    /** No kept SGR can re-form a longer escape with a stripped neighbour:
+     *  an even chunk never yields an ESC byte, so adversarial sandwiches die. */
+    public function testStyledLineCannotReFormSequencesAcrossChunks(): void
+    {
+        // The ESC-introducer split across the SGR boundary: the trailing
+        // fragment's ESC is stripped with its chunk; only [31m's own ESC lives.
+        $out = SafeText::styledLine("\x1b[31m\x1b\x1b[2Jred");
+        $this->assertSame("\x1b[31m" . 'red', $out);
+
+        // A truncated SGR (no final m) is untrusted text, not styling: at most
+        // its introducer dies, and the result keeps exactly the one valid SGR.
+        $cut = SafeText::styledLine("cut\x1b[31m\x1b[9");
+        $this->assertSame(1, substr_count($cut, "\x1b"), 'only the valid SGR keeps its introducer');
+        $this->assertStringContainsString("\x1b[31m", $cut);
+        $this->assertStringStartsWith('cut', $cut);
+    }
+
+    public function testStyledLineStripsNewlinesAndControls(): void
+    {
+        // line() deletes control bytes (it does not substitute spaces yet);
+        // styledLine inherits that row-safety for embedded newlines.
+        $this->assertSame('eviltitle', SafeText::styledLine("evil\ntitle"));
+        $this->assertSame("a\x1b[1mb", SafeText::styledLine("a\x1b[1m\x07\tb"));
+    }
+
+    public function testStyledLineEmptyReturnsEmpty(): void
+    {
+        $this->assertSame('', SafeText::styledLine(''));
+        $this->assertSame('', SafeText::styledLine("\x1b[2J\x00\x1b]0;\x07"));
+    }
 }
