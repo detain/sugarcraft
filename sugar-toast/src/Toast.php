@@ -295,7 +295,7 @@ final class Toast
             $alert = $alert->withExpiry($clone->duration);
         }
 
-        $clone->queue = $this->appendBounded($clone->queue, $alert);
+        $clone->queue = $clone->appendBounded($clone->queue, $alert);
         return $clone;
     }
 
@@ -319,7 +319,7 @@ final class Toast
             $alert = $alert->withExpiry($clone->duration);
         }
 
-        $clone->queue = $this->appendBounded($clone->queue, $alert);
+        $clone->queue = $clone->appendBounded($clone->queue, $alert);
         return $clone;
     }
 
@@ -343,7 +343,7 @@ final class Toast
             $alert = $alert->withExpiry($clone->duration);
         }
 
-        $clone->queue = $this->appendBounded($clone->queue, $alert);
+        $clone->queue = $clone->appendBounded($clone->queue, $alert);
         return $clone;
     }
 
@@ -357,9 +357,13 @@ final class Toast
      * A dismissed instance refuses new writes outright rather than queueing
      * into a renderer that will not paint them — clear() revives first.
      *
-     * DropNewest discards the incoming alert; DropOldest evicts the oldest
-     * queued alert — at a zero cap there is nothing to evict, so the incoming
-     * alert is discarded too rather than letting the queue exceed the cap.
+     * DropNewest discards the INCOMING alert (it was never displayed, so it
+     * is not filed under history — a discard signal is recorded as a seam
+     * row, it would change the self-returning API shape); DropOldest evicts
+     * the oldest queued alert AND records the evictee in history, since it
+     * lived in the queue and may have been on screen. At a zero cap there is
+     * nothing to evict, so the incoming alert is discarded unrecorded rather
+     * than letting the queue exceed the cap.
      * An alert carrying an id that matches a live alert bypasses all policy:
      * it is an update, not an append (see the replace-by-id leg).
      * Enqueue lets the queue grow past the cap (DropOldest is the default).
@@ -404,7 +408,13 @@ final class Toast
                 if ($queue === []) {
                     return $queue;
                 }
-                \array_shift($queue);
+                $victim = \array_shift($queue);
+                // The evicted alert was live (queued, possibly rendered) and
+                // dies silently at the cap — file it in history like any
+                // dismissal so a host can still recover its text
+                // (lib-reviews-1102 M9: architect 'the evicted victim is
+                // never recorded; only dismiss() records').
+                $this->historyLog = $this->historyLog->push($victim, $this->historyLimit);
             }
             // Enqueue: fall through, allow exceeding max
         }
@@ -461,11 +471,14 @@ final class Toast
 
         $clone = clone $this;
 
-        // Move active (non-expired) alerts to history, then empty the queue.
+        // Move EVERY queued alert to history, then empty the queue —
+        // including alerts that expired but had not been pruned yet: they
+        // were live from the host's point of view (queued, possibly rendered)
+        // and dismiss() is the recovery door (lib-reviews-1102 a11y M3: the
+        // old filter gave transient info ZERO recovery on the default path,
+        // a WCAG 2.2.1 by-default failure).
         foreach ($clone->queue as $alert) {
-            if (!$alert->isExpired()) {
-                $clone->historyLog = $clone->historyLog->push($alert, $clone->historyLimit);
-            }
+            $clone->historyLog = $clone->historyLog->push($alert, $clone->historyLimit);
         }
         $clone->queue = [];
 
@@ -488,6 +501,10 @@ final class Toast
     /**
      * Clear the entire queue and reset the dismissed flag, resuming
      * rendering — the documented revival path after {@see dismiss()}.
+     *
+     * Survivors are DISCARDED, not dismissed: nothing is filed under
+     * {@see history()}. A host that wants the audit trail (or the recovery
+     * path) uses dismiss(); clear() is the reset door.
      */
     public function clear(): self
     {
@@ -527,37 +544,66 @@ final class Toast
 
     /**
      * Cancel the auto-dismiss timer on the alert at $index, making it
-     * persistent (sets the explicit sentinel via {@see
+     * persistent ($index addresses {@see activeAlerts()} — the live queue,
+     * not the raw array), via the explicit sentinel {@see
      * Alert::withoutExpiry()}). Indexes the raw queue, which may still hold
      * expired alerts that leave on the next write or prune. Has no effect if
      * $index is out of bounds or the alert is already persistent.
      */
+    /**
+     * Map a host-visible {@see activeAlerts()} index onto the raw queue
+     * offset (lib-reviews-1102 m1: cancelAlert()/extendAlert() used to index
+     * the RAW queue, so a11y P5's proof — an expired invisible entry at slot
+     * 0 — silently shifted every later index and cancelled the WRONG alert).
+     * Null when the index names no live alert.
+     */
+    private function queuedIndexAt(int $index): ?int
+    {
+        if ($index < 0) {
+            return null;
+        }
+        $seen = 0;
+        foreach ($this->queue as $offset => $alert) {
+            if ($alert->isExpired()) {
+                continue;
+            }
+            if ($seen === $index) {
+                return (int) $offset;
+            }
+            $seen++;
+        }
+        return null;
+    }
+
     public function cancelAlert(int $index): self
     {
-        if ($index < 0 || $index >= \count($this->queue)) {
+        $target = $this->queuedIndexAt($index);
+        if ($target === null) {
             return $this;
         }
         $queue = $this->queue;
-        $queue[$index] = $queue[$index]->withoutExpiry();
+        $queue[$target] = $queue[$target]->withoutExpiry();
         return $this->mutate(['queue' => $queue]);
     }
 
     /**
-     * Extend the auto-dismiss timer on the alert at $index by $additionalSeconds from now.
-     * Has no effect if $index is out of bounds or the alert never expires — a
+     * Extend the auto-dismiss timer on the alert at $index (a
+     * {@see activeAlerts()} index — the live queue) by $additionalSeconds
+     * from now. Has no effect if $index is out of bounds or the alert never expires — a
      * persistent alert has no timer to extend (mirrors {@see extendAll()}).
      */
     public function extendAlert(int $index, float $additionalSeconds): self
     {
-        if ($index < 0 || $index >= \count($this->queue)) {
+        $target = $this->queuedIndexAt($index);
+        if ($target === null) {
             return $this;
         }
-        $alert = $this->queue[$index];
+        $alert = $this->queue[$target];
         if ($alert->expiresAt === null) {
             return $this;
         }
         $queue = $this->queue;
-        $queue[$index] = $alert->withExtendedExpiry($additionalSeconds);
+        $queue[$target] = $alert->withExtendedExpiry($additionalSeconds);
         return $this->mutate(['queue' => $queue]);
     }
 

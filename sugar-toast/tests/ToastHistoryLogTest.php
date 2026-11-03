@@ -43,9 +43,13 @@ final class ToastHistoryLogTest extends TestCase
         $this->assertCount(2, $t2->history());
     }
 
-    public function testExpiredAlertsNotRecorded(): void
+    public function testExpiredAlertsAreRecordedOnDismiss(): void
     {
-        // Create an already-expired alert
+        // In-step flip (lib-reviews-1102 M9 / a11y M3, WCAG 2.2.1, 2026-11-03):
+        // dismiss() used to SILENTLY DISCARD expired-but-unpruned alerts — a
+        // transient error could expire unseen and leave no recovery trace.
+        // Dismissal is an explicit host act, so every queued survivor —
+        // expired or not — now rides the history log.
         $t = Toast::new(50)
             ->withPosition(Position::TopLeft)
             ->alert(ToastType::Success, 'keep')
@@ -54,9 +58,9 @@ final class ToastHistoryLogTest extends TestCase
         $dismissed = $t->dismiss();
         $history = $dismissed->history();
 
-        // Only the non-expired alert should be recorded
-        $this->assertCount(1, $history);
+        $this->assertCount(2, $history);
         $this->assertSame('keep', $history[0]->message);
+        $this->assertSame('expired', $history[1]->message);
     }
 
     public function testHistoryLogAll(): void

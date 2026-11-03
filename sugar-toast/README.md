@@ -128,6 +128,26 @@ only: the full message text and the complete action list still ride the
 `Alert` into history and `activeAlerts()`, so nothing is silently lost to a
 host that reads the data instead of the pixels.
 
+## Stacking & the frame
+
+The frame is NOT pinned to `viewportHeight`: `view()` composites a canvas
+whose height is `max(background rows, viewportHeight, total stack height)`.
+Deep stacks therefore GROW THE FRAME DOWNWARD past the viewport — on a real
+24-row terminal a ten-alert TopLeft stack emits thirty rows and the last
+ones scroll off (delta hosts should know the frame can dirty more rows than
+the screen). Bottom- and middle-anchored stacks count their offsets against
+that inflated height, so with enough persistent alerts the oldest boxes land
+below the physical screen too; the "clamped" wording only ever meant "inside
+the frame", never "inside the viewport".
+
+Overlapping stacks (the pile-up case: more box rows than the anchor has
+room for) composite NEWER alerts over older ones — an older sibling's
+message or action row can be visually occluded with no signal in the frame.
+Expiry reflow also MOVES surviving boxes (no stable anchors yet); a
+stable-row/`+N more` badge policy is an open owner-ruling seam (see lane
+PROGRESS), so hosts with accessibility-critical stacks should cap
+`maxConcurrent` or use `Enqueue` deliberately.
+
 ## Persistent Alerts
 
 
@@ -361,8 +381,8 @@ $toast = $toast->push($alert);
 
 
 
-`Toast` maintains an immutable history of every dismissed alert via
-`HistoryLog`:
+`Toast` maintains an immutable history of every DISMISSED and every
+overflow-EVICTED alert via `HistoryLog`:
 
 ```php
 // Dismiss live alerts: they move into the history log and rendering stops
@@ -377,10 +397,16 @@ foreach ($history as $alert) {
 }
 ```
 
+Recording rules: `dismiss()` files EVERY queued survivor — including alerts
+that had expired but not yet been pruned; a `DropOldest` eviction files the
+evictee; `DropNewest` refusals (never displayed) and `clear()` (a bulk reset,
+not a dismissal) file nothing.
+
 `HistoryLog` is immutable — `dismiss()` returns a new `Toast` with an
 updated log; prior instances are unchanged. The log is capped at 100 entries
 by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
-(`null` = unbounded).
+(`null` = unbounded). A newly LOWERED limit caps FUTURE pushes — entries
+already over the new cap survive until the next push evicts them.
 
 ## API Summary
 
