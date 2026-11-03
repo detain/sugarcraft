@@ -29,7 +29,7 @@ final class LogCommand extends Command
             ->addOption('level',     null,  InputOption::VALUE_REQUIRED, 'debug|info|warn|error|fatal', 'info')
             ->addOption('min-level', null,  InputOption::VALUE_REQUIRED, 'Suppress messages below this level.', 'debug')
             ->addOption('prefix',    null,  InputOption::VALUE_REQUIRED, 'Static prefix prepended to the badge.', '')
-            ->addOption('time',      't',   InputOption::VALUE_REQUIRED, 'PHP date() format for a leading timestamp (empty = none).', '')
+            ->addOption('time',      't',   InputOption::VALUE_REQUIRED, 'PHP date() format or Go-style alias (rfc3339, rfc3339nano, rfc822, rfc850, rfc1123, kitchen, stamp, stampmilli, stampmicro, ansic, unixdate, datetime, dateonly, timeonly, layout) for a leading timestamp (empty = none).', '')
             ->addOption('file',      'o',   InputOption::VALUE_REQUIRED, 'Append output to this file instead of stdout.', '')
             ->addOption('format',    'f',   InputOption::VALUE_REQUIRED, 'printf format for the message; "%s" is the text.', '')
             ->addOption('formatter', null,  InputOption::VALUE_REQUIRED, 'Output formatter: text (default) | json | logfmt.', 'text')
@@ -73,7 +73,7 @@ final class LogCommand extends Command
             fwrite(STDERR, Lang::t('runtime.unknown_choice', [
                     'option' => '--formatter',
                     'value' => $formatter,
-                    'allowed' => 'function|json|logfmt|text',
+                    'allowed' => 'text|json|logfmt',
                 ]) . "\n");
             return Command::FAILURE;
         }

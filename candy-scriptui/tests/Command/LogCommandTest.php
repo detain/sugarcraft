@@ -128,6 +128,9 @@ final class LogCommandTest extends TestCase
         $this->assertStringNotContainsString('unknown --formatter', $tester->getDisplay());
         $src = (string) file_get_contents(__DIR__ . '/../../src/Command/LogCommand.php');
         $this->assertStringContainsString("fwrite(STDERR, Lang::t('runtime.unknown_choice'", $src);
+        // The advertised allowed-set must equal the set the guard accepts.
+        $this->assertStringContainsString("'allowed' => 'text|json|logfmt'", $src);
+        $this->assertStringNotContainsString("'allowed' => 'function|json|logfmt|text'", $src);
     }
 
     public function testFileWriteFailureIsLoudNotSilentZero(): void
