@@ -19,6 +19,7 @@ use SugarCraft\Code\Todo\TodoStatus;
 use SugarCraft\Code\ToolResult;
 use SugarCraft\Code\Tools\BuiltIn\Todo;
 use SugarCraft\Code\Tui\Components\MenuBar;
+use SugarCraft\Code\Tui\Components\RowElide;
 use SugarCraft\Code\Tui\Components\TodoPane;
 use SugarCraft\Code\Tui\Menu\MenuNode;
 use SugarCraft\Code\Tui\Menu\ShellMenu;
@@ -131,6 +132,26 @@ final class TodoPaneTest extends TestCase
             Message::user('plan it'),
             Message::assistant('')->withToolResults([ToolResult::ok(Todo::NAME, Todo::UPDATED . "\n\n" . $list->render(), 'c1')]),
         ];
+    }
+
+    /**
+     * M12: the shared row seam — a name that does not fit ends with the
+     * ellipsis instead of stopping mid-word as if that were the whole string.
+     * Pinned through the pure function (every pane routes its name rows here):
+     * a fitting string is byte-untouched, a cut one spends its last cell on
+     * the marker, wide glyphs are measured in cells not codepoints, and a
+     * zero-width budget answers nothing rather than one orphan marker.
+     */
+    public function testTheRowSeamMarksCutsWithoutTouchingWhatFits(): void
+    {
+        $this->assertSame('fits', RowElide::text('fits', 6));
+        $this->assertSame('alpha…', RowElide::text('alphabet soup', 6));
+        $this->assertSame('', RowElide::text('anything', 0));
+
+        $emoji = RowElide::text('📄📄📄', 5);
+        $this->assertStringEndsWith(RowElide::MARKER, $emoji);
+        $this->assertLessThanOrEqual(5, Width::string($emoji));
+        $this->assertSame('📄📄' . RowElide::MARKER, $emoji);
     }
 
     private static function list(): TodoList

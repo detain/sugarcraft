@@ -52,7 +52,7 @@ final class TodoPane
 
         $title = ' ' . Pane::Todo->icon() . ' ' . Lang::t('tui.pane.title.todo') . ' ';
         if ($todos->isEmpty()) {
-            $body = Style::new()->foreground($theme->shellMuted)->render(Width::truncate(Lang::t(self::EMPTY_TEXT), $labelWidth));
+            $body = Style::new()->foreground($theme->shellMuted)->render(RowElide::text(Lang::t(self::EMPTY_TEXT), $labelWidth));
         } else {
             $title = ' ' . Pane::Todo->icon() . ' ' . Lang::t('tui.pane.title.todo') . ' ' . $todos->countOf(TodoStatus::Completed) . '/' . $todos->count() . ' ';
             $items = $todos->items();
@@ -81,7 +81,7 @@ final class TodoPane
                     TodoStatus::Pending => Style::new()->foreground($theme->shellForeground),
                     TodoStatus::Completed, TodoStatus::Cancelled => Style::new()->foreground($theme->shellMuted),
                 };
-                $lines[] = $style->render(Width::truncate($item->status->glyph() . ' ' . $item->content, $labelWidth));
+                $lines[] = $style->render(RowElide::text($item->status->glyph() . ' ' . $item->content, $labelWidth));
             }
             $body = implode("\n", $lines);
         }

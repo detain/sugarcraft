@@ -78,7 +78,7 @@ final class AgentsPane
             $offset = min($a->paneScroll(self::SCROLL_ID), max(0, count($entries) - 1));
             $lines = [];
             if ($offset > 0) {
-                $lines[] = $muted->render(Width::truncate(Lang::t('tui.pane.scrolled_more', ['count' => $offset]), $inner));
+                $lines[] = $muted->render(RowElide::text(Lang::t('tui.pane.scrolled_more', ['count' => $offset]), $inner));
                 $keys[] = null;
             }
 
@@ -104,7 +104,7 @@ final class AgentsPane
                     if (count($lines) >= $budget - 1) {
                         break;
                     }
-                    $lines[] = $muted->render(Width::truncate('  ' . PaneLabel::safe($text), $inner));
+                    $lines[] = $muted->render(RowElide::text('  ' . PaneLabel::safe($text), $inner));
                     $keys[] = null;
                 }
             }

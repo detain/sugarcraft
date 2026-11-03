@@ -55,7 +55,7 @@ final class SkillsPane
                 $isCursor = $row === $a->skillPickerIndex;
                 $lines[] = self::badgePrefix($skill, $theme) . Style::new()
                     ->foreground($isCursor ? $theme->shellPrimary : $theme->shellMuted)
-                    ->render(Width::truncate(
+                    ->render(RowElide::text(
                         ($isCursor ? '▸ ' : '  ') . $skill->name . ' — ' . $skill->description,
                         $labelWidth,
                     ));
@@ -76,7 +76,7 @@ final class SkillsPane
                     $prefix = $skill instanceof Skill ? self::badgePrefix($skill, $theme) : '';
                     $lines[] = $prefix . Style::new()
                         ->foreground($theme->shellForeground)
-                        ->render(Width::truncate('• ' . $label, $labelWidth));
+                        ->render(RowElide::text('• ' . $label, $labelWidth));
                 }
                 $body = implode("\n", $lines);
             } else {
@@ -93,7 +93,7 @@ final class SkillsPane
                         // and the pane must not read as if they were active.
                         $lines[] = self::badgePrefix($skill, $theme) . Style::new()
                             ->foreground($theme->shellMuted)
-                            ->render(Width::truncate('· ' . $skill->name, $labelWidth));
+                            ->render(RowElide::text('· ' . $skill->name, $labelWidth));
                     }
                     $body = implode("\n", $lines);
                 }

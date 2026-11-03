@@ -110,7 +110,7 @@ final class SessionsPane
 
         $keys = [self::zoneableKey(self::KEY_NEW)];
         $lines = [Style::new()->foreground($theme->shellMuted)
-            ->render(Width::truncate(Lang::t('tui.sessions.new'), $inner))];
+            ->render(RowElide::text(Lang::t('tui.sessions.new'), $inner))];
         for ($i = $offset; $i < $offset + $windowBudget && $i < count($flat); $i++) {
             [$raw, $line] = $flat[$i];
             $keys[] = self::zoneableKey($raw);
@@ -167,7 +167,7 @@ final class SessionsPane
         // The name yields space to everything else, never the frame: what
         // is left after glyph, badge and summary is what it may use.
         $overhead = Width::string($glyph) + Width::string(self::SEP) + Width::string($badge) + Width::string($summary);
-        $name = Width::truncate(self::name($entry), max(1, $inner - $overhead));
+        $name = RowElide::text(self::name($entry), max(1, $inner - $overhead));
 
         $line = Style::new()->foreground($entry->attention->color($theme))->render($glyph)
             . ($entry->ref->key === $focusedKey
@@ -184,7 +184,7 @@ final class SessionsPane
         $prefix = '  ' . self::BRANCH . self::SEP;
         $glyph = $agent->attention->glyph();
         $overhead = Width::string($prefix) + Width::string($glyph) + Width::string(self::SEP);
-        $name = Width::truncate('@' . self::name($agent), max(1, $inner - $overhead));
+        $name = RowElide::text('@' . self::name($agent), max(1, $inner - $overhead));
 
         $resolved = AgentColor::resolve($agent->ref->color, $theme);
         $line = Style::new()->foreground($theme->shellMuted)->render($prefix)

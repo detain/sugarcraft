@@ -45,7 +45,7 @@ final class FilesPane
             foreach ($files as $file) {
                 $lines[] = Style::new()
                     ->foreground($theme->shellForeground)
-                    ->render(Width::truncate(
+                    ->render(RowElide::text(
                         '📄 ' . PaneLabel::of(basename($file)),
                         max(1, $width - self::CHROME_COLS),
                     ));

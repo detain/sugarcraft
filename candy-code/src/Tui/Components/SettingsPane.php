@@ -125,13 +125,13 @@ final class SettingsPane
 
         $lines = [];
         foreach (self::settings($a) as [$label, $value]) {
-            $lines[] = $labelStyle->render(Width::truncate($label, $inner));
+            $lines[] = $labelStyle->render(RowElide::text($label, $inner));
             $lines[] = $valueStyle->render(str_repeat(' ', self::VALUE_INDENT) . Width::truncateMiddle(
                 PaneLabel::of($value),
                 max(1, $inner - self::VALUE_INDENT),
             ));
         }
-        $lines[] = $labelStyle->render(Width::truncate(Lang::t(self::FOOTER), $inner));
+        $lines[] = $labelStyle->render(RowElide::text(Lang::t(self::FOOTER), $inner));
 
         $st = Style::new()
             ->border(Border::rounded()->withTitle(' ' . Pane::Settings->icon() . ' ' . Lang::t('tui.pane.title.settings') . ' '))
