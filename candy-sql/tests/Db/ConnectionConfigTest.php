@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Tests\Db;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Sql\Db\ConnectionFactory;
 use SugarCraft\Sql\Db\ConnectionConfig;
 
 /**
@@ -89,8 +90,11 @@ final class ConnectionConfigTest extends TestCase
         $this->assertSame('db.example.com', $config->host);
         $this->assertSame(5432, $config->port);
         // sslMode reaches Postgres only through the DSN — libpq has no PDO
-        // driver option equivalent. Pinned by the docs-review-1023 F1 fix.
-        $this->assertSame('pgsql:host=db.example.com;port=5432;dbname=mydb;sslmode=require', $config->dsn);
+        // driver option equivalent. 'require' lands on verify-full (review M4,
+        // 2026-11-03): the MySQL arm treats the word as TLS-WITH-VERIFICATION,
+        // and one flag feeding both drivers must carry one guarantee — libpq's
+        // bare 'require' is unverified and MITM-able.
+        $this->assertSame('pgsql:host=db.example.com;port=5432;dbname=mydb;sslmode=verify-full', $config->dsn);
     }
 
     /** MySQL-flavoured spellings must translate to libpq's hyphen forms. */
@@ -98,20 +102,23 @@ final class ConnectionConfigTest extends TestCase
     {
         $translate = new \ReflectionMethod(ConnectionConfig::class, 'pgsqlSslModeSuffix');
 
+        // Review M4 (2026-11-03): every verification-demanding spelling lands
+        // on verify-full — the MySQL-side meaning of those same words — and
+        // unknown spellings THROW instead of silently inheriting libpq's
+        // 'prefer' default.
         $cases = [
             '' => '',
             'disable' => ';sslmode=disable',
             'DISABLE' => ';sslmode=disable',
             'allow' => ';sslmode=allow',
             'prefer' => ';sslmode=prefer',
-            'required' => ';sslmode=require',
-            'verify_ca' => ';sslmode=verify-ca',
-            'VERIFY-CA' => ';sslmode=verify-ca',
+            'PREFERRED' => ';sslmode=prefer',
+            'require' => ';sslmode=verify-full',
+            'required' => ';sslmode=verify-full',
+            'verify_ca' => ';sslmode=verify-full',
+            'VERIFY-CA' => ';sslmode=verify-full',
             'verify_identity' => ';sslmode=verify-full',
             'verify-full' => ';sslmode=verify-full',
-            // Unknown names omit the suffix and inherit libpq's default;
-            // the ssl-mode vocabulary is validated per-driver elsewhere.
-            'tls' => '',
         ];
 
         foreach ($cases as $mode => $expected) {
@@ -121,6 +128,10 @@ final class ConnectionConfigTest extends TestCase
                 'pgsql sslmode translation for ' . var_export($mode, true),
             );
         }
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown PostgreSQL ssl-mode: tls');
+        $translate->invoke(null, 'tls');
     }
 
     /** A pgsql config with no sslMode at all keeps the plain DSN (constructor path). */
@@ -188,4 +199,61 @@ final class ConnectionConfigTest extends TestCase
         $this->assertSame('oracle', $config->driver);
         $this->assertSame('oracle:host=localhost;port=1521;dbname=orcl', $config->dsn);
     }
+    // ---- review m6/mn-6 + m7/mn-7 (2026-11-03): path honesty + DSN splice ----
+
+    public function testSqliteRelativePathAnchorsAtTheWorkingDirectoryNotTheRoot(): void
+    {
+        $config = ConnectionConfig::new(driver: 'sqlite', host: '', port: 0, user: '', pass: '', dbname: 'app.sqlite');
+
+        self::assertSame('sqlite:' . getcwd() . DIRECTORY_SEPARATOR . 'app.sqlite', $config->dsn);
+    }
+
+    public function testSqliteAbsolutePathIsUsedVerbatim(): void
+    {
+        $config = ConnectionConfig::new(driver: 'sqlite', host: '', port: 0, user: '', pass: '', dbname: '/var/data/app.sqlite');
+
+        self::assertSame('sqlite:/var/data/app.sqlite', $config->dsn);
+    }
+
+    public function testSqliteMemoryDsnStillSpecialCases(): void
+    {
+        $config = ConnectionConfig::new(driver: 'sqlite', host: '', port: 0, user: '', pass: '', dbname: ':memory:');
+
+        self::assertSame('sqlite::memory:', $config->dsn);
+    }
+
+    public function testSqliteDoubleSlashRelativeFormIsNotSilentlyMemory(): void
+    {
+        // sqlite://data.db parses with the path in the host segment; it used
+        // to fall through the empty-remainder arm and open an anonymous
+        // in-memory database — every write vanishing at exit.
+        $config = ConnectionFactory::fromDsn('sqlite://data.db');
+
+        self::assertSame('data.db', $config->dbname);
+        self::assertSame('sqlite:' . getcwd() . DIRECTORY_SEPARATOR . 'data.db', $config->dsn);
+    }
+
+    public function testSemicolonInHostOrNameIsRefusedBeforeTheDsnIsBuilt(): void
+    {
+        // ';' is the PDO option separator: interpolating it would append or
+        // override driver options in the shared connection string.
+        $this->expectException(\InvalidArgumentException::class);
+        ConnectionConfig::new(driver: 'mysql', host: 'h;dbname=x', port: 3306, user: '', pass: '', dbname: 'd');
+    }
+
+    public function testSemicolonInDbnameIsRefusedForPostgresToo(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        ConnectionConfig::new(driver: 'pgsql', host: 'h', port: 5432, user: '', pass: '', dbname: 'd;sslmode=disable');
+    }
+
+    public function testPgsqlRequireModeOnTheDsnBuilderDemandsWithVerifiedFull(): void
+    {
+        // The fail-loud half of review M4: an unparseable mode must throw at
+        // config-build time, never reach libpq.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown PostgreSQL ssl-mode');
+        ConnectionConfig::new(driver: 'pgsql', host: 'h', port: 5432, user: '', pass: '', dbname: 'd', sslMode: 'tls');
+    }
+
 }

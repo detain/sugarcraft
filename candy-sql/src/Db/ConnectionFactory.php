@@ -75,9 +75,13 @@ final class ConnectionFactory
                     );
                 }
 
-                // File path: remainder starts with / (e.g., ///path -> remainder is //path)
-                // or is empty (meaning ///path but we captured the leading /)
-                $path = $remainder;
+                // File path: 'sqlite:///abs/path' puts the whole absolute path
+                // in $remainder; 'sqlite://relative.db' parses with the path in
+                // the HOST segment (review m6, 2026-11-03 — it used to fall
+                // through to the empty-path arm below and become an in-memory
+                // database, silently losing every write when the process
+                // exited).
+                $path = ($hostPart === '' ? $remainder : $hostPart . $remainder);
                 if ($path === '' || $path === '/') {
                     // sqlite:// with no path is :memory:
                     return ConnectionConfig::new(
@@ -91,8 +95,11 @@ final class ConnectionFactory
                     );
                 }
 
-                // Normalize path: ensure leading slash for PDO sqlite
-                $dbname = str_starts_with($path, '/') ? $path : '/' . $path;
+                // Keep the path as written: absolute stays absolute, relative
+                // reaches the disk via ConnectionConfig::buildDsn()'s working-
+                // directory anchor (a forced leading '/' here re-invented the
+                // filesystem-root bug).
+                $dbname = $path;
                 return ConnectionConfig::new(
                     driver: 'sqlite',
                     host: '',

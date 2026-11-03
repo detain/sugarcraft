@@ -51,8 +51,27 @@ final readonly class ConnectionConfig
         string $dbname,
         string $sslMode = '',
     ): string {
+        // SQLite: ':memory:' stays in-memory; a path is used as written —
+        // an absolute one verbatim, a relative one resolved against the
+        // process working directory (review m6, 2026-11-03: the old
+        // 'sqlite:/' . ltrim() form silently turned `candy-sql app.sqlite`
+        // into /app.sqlite at the filesystem root).
+        if ($driver === 'sqlite') {
+            return 'sqlite:' . self::resolveSqlitePath($dbname);
+        }
+
+        // ';' is the PDO DSN option separator: a host or dbname carrying one
+        // appends/overrides libpq/mysql options in the shared connection string
+        // (review m7, 2026-11-03). Refuse the splice at the boundary instead of
+        // half-escaping — ';' is legal in no hostname and in no database name
+        // worth dialing.
+        if (str_contains($host, ';') || str_contains($dbname, ';')) {
+            throw new \InvalidArgumentException(
+                'Database host and name must not contain \';\' — it is the PDO DSN option separator',
+            );
+        }
+
         return match ($driver) {
-            'sqlite' => $dbname === ':memory:' ? 'sqlite::memory:' : 'sqlite:/' . ltrim($dbname, '/'),
             'mysql' => sprintf(
                 'mysql:host=%s;port=%d;dbname=%s',
                 $host,
@@ -70,8 +89,11 @@ final readonly class ConnectionConfig
      *
      * MySQL-flavoured spellings (underscores, 'required', 'verify_identity')
      * are accepted because one --ssl-mode flag feeds both drivers; case is
-     * irrelevant. '' / unknown-to-pg names omit the suffix and inherit libpq's
-     * default; 'verify_full'/'verify_identity' both mean full verification.
+     * irrelevant. '' omits the suffix and inherits libpq's default; every
+     * verification-demanding spelling ('require' included, exactly like the
+     * MySQL arm) lands on 'verify-full'. An unknown spelling throws — the
+     * same fail-loud contract {@see \SugarCraft\Sql\Db\MysqlDatabase::sslDriverOptions()}
+     * enforces, so a typo can never negotiate silently on either driver.
      *
      * @return string Either '' or ';sslmode=<libpq-mode>'
      */
@@ -81,17 +103,46 @@ final readonly class ConnectionConfig
             return '';
         }
 
+        // One doctrine across drivers (review M4, 2026-11-03): the MySQL arm
+        // (MysqlDatabase::sslDriverOptions) treats 'require' as TLS-with-
+        // certificate-verification — libpq's bare 'require' is TLS-without-
+        // verification, so passing the word through kept the weaker,
+        // MITM-able reading the MySQL side explicitly rejected as the original
+        // downgrade bug. Every verification-demanding spelling therefore
+        // lands on libpq 'verify-full' here, and typos THROW instead of
+        // falling through to '' (which silently inherited libpq's 'prefer'
+        // default while the identical MySQL spelling failed loud).
         $libpqMode = match (strtolower(str_replace('_', '-', $sslMode))) {
             'disable' => 'disable',
             'allow' => 'allow',
             'prefer', 'preferred' => 'prefer',
-            'require', 'required' => 'require',
-            'verify-ca' => 'verify-ca',
+            'require', 'required',
+            'verify-ca',
             'verify-full', 'verify-identity' => 'verify-full',
-            default => '',
+            default => throw new \InvalidArgumentException(
+                'Unknown PostgreSQL ssl-mode: ' . $sslMode,
+            ),
         };
 
-        return $libpqMode === '' ? '' : ';sslmode=' . $libpqMode;
+        return ';sslmode=' . $libpqMode;
+    }
+
+    /**
+     * The on-disk path a SQLite dbname means: absolute paths verbatim,
+     * ':memory:' verbatim, relative paths anchored at the working directory
+     * (never the filesystem root — review m6).
+     */
+    private static function resolveSqlitePath(string $dbname): string
+    {
+        if ($dbname === ':memory:' || $dbname === '') {
+            return $dbname === '' ? ':memory:' : $dbname;
+        }
+
+        if (str_starts_with($dbname, '/') || preg_match('#^[A-Za-z]:[/\\\\]#', $dbname)) {
+            return $dbname;
+        }
+
+        return (string) getcwd() . DIRECTORY_SEPARATOR . $dbname;
     }
 
     /**
