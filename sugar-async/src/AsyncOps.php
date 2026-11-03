@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Async;
 
+use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\Deferred;
@@ -35,7 +36,7 @@ final class AsyncOps
      * consumer's in-flight gate open forever — use the cancelling sibling
      * {@see withDeadline()} instead.
      *
-     * @param LoopInterface $loop
+     * @param null|LoopInterface $loop  Event loop; pass null to use the shared Loop::get().
      * @param PromiseInterface $promise
      * @param float $seconds  Timeout in seconds (must be > 0 and finite)
      * @param string|null $label  Operation name woven into the rejection
@@ -45,7 +46,7 @@ final class AsyncOps
      * @return PromiseInterface
      */
     public static function withTimeout(
-        LoopInterface $loop,
+        ?LoopInterface $loop,
         PromiseInterface $promise,
         float $seconds,
         ?string $label = null,
@@ -53,6 +54,8 @@ final class AsyncOps
         if ($seconds <= 0 || !is_finite($seconds)) {
             throw new \InvalidArgumentException('Timeout seconds must be a positive finite number');
         }
+
+        $loop ??= Loop::get();
 
         $settled = false;
         /** @var \React\EventLoop\TimerInterface|null */
@@ -138,7 +141,7 @@ final class AsyncOps
      * hook fired, inner cancelled, OperationCancelledException — the wait
      * ending early is still a wait that must not outlive its work.
      *
-     * @param LoopInterface $loop
+     * @param null|LoopInterface $loop  Event loop; pass null to use the shared Loop::get().
      * @param PromiseInterface $promise
      * @param float $seconds  Deadline in seconds (must be > 0 and finite)
      * @param null|callable(): void $onTimeout  Abort hook, fired once when the
@@ -149,7 +152,7 @@ final class AsyncOps
      * @return PromiseInterface
      */
     public static function withDeadline(
-        LoopInterface $loop,
+        ?LoopInterface $loop,
         PromiseInterface $promise,
         float $seconds,
         ?callable $onTimeout = null,
@@ -158,6 +161,8 @@ final class AsyncOps
         if ($seconds <= 0 || !is_finite($seconds)) {
             throw new \InvalidArgumentException('Deadline seconds must be a positive finite number');
         }
+
+        $loop ??= Loop::get();
 
         $settled = false;
         /** @var \React\EventLoop\TimerInterface|null */
