@@ -15,4 +15,16 @@ final readonly class UndoAction
         public string $label,
     ) {
     }
+
+    /**
+     * Fleet-convention factory (lib-reviews-1102 M37): docs and siblings
+     * teach `UndoAction::new(...)`; the constructor-only shape violated
+     * the ::new() law every other SugarCraft value object follows.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public static function new(UndoActionType $type, array $payload, string $label): self
+    {
+        return new self($type, $payload, $label);
+    }
 }

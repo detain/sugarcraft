@@ -17,9 +17,9 @@ namespace SugarCraft\Core;
  * `Closure(): ?Msg`. PHP lacks tuples; destructure with
  * `[$model, $cmd] = $model->update($msg)`.
  *
- * @method list<\SugarCraft\Core\Pane> panes() Panes implementation: list of panes
- * @method int activeIndex() Panes implementation: index of active pane
- * @method int count() Panes implementation: number of panes
+ * Pane bookkeeping is NOT part of this contract: {@see Panes} is a
+ * standalone helper class with its own `panes()`, `activeIndex()` and
+ * `count()` — models that adopt it expose them themselves.
  */
 interface Model
 {

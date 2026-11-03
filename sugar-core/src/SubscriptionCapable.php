@@ -9,8 +9,6 @@ namespace SugarCraft\Core;
  * returns null (no subscriptions). Use this trait in model classes that
  * don't need subscriptions to satisfy the interface contract without
  * boilerplate.
- *
- * @internal
  */
 trait SubscriptionCapable
 {

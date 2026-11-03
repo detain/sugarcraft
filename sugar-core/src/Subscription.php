@@ -11,8 +11,6 @@ namespace SugarCraft\Core;
  * (ticks, key events, signals). The runtime reconciles the subscription
  * set after each update cycle — new subscriptions are started, dropped
  * ones are cancelled, stable ones are kept.
- *
- * @internal
  */
 final class Subscription
 {

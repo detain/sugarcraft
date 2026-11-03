@@ -39,8 +39,6 @@ use SugarCraft\Core\Util\Width;
  * (where `ONLCR` is disabled) still return to column 1. Frames are
  * wrapped in DEC 2026 synchronized-update markers so the terminal
  * commits each repaint atomically.
- *
- * @internal
  */
 final class Renderer
 {

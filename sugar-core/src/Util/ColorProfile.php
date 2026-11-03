@@ -27,14 +27,15 @@ enum ColorProfile: int
      *      treated as NoTTY unless CLICOLOR_FORCE=1 is set").
      *   3. `NO_COLOR` set → `Ascii`: colour off, text decoration (bold, faint,
      *      italic …) kept, per no-color.org. It outranks the force variables.
-     *   4. `CLICOLOR_FORCE`/`FORCE_COLOR` truthy → `TrueColor`
-     *   5. `COLORTERM` ∈ {truecolor, 24bit} → `TrueColor`
-     *   6. Known `TERM_PROGRAM` values → matched tier
-     *   7. `WT_SESSION` (Windows Terminal) set → `TrueColor`
-     *   8. `TERM` substring match: `*direct*`/`*truecolor*` → `TrueColor`,
+     *   4. `CLICOLOR=0` → `Ascii` (BSD opt-out), unless a force variable wins.
+     *   5. `CLICOLOR_FORCE`/`FORCE_COLOR` truthy → `TrueColor`
+     *   6. `COLORTERM` ∈ {truecolor, 24bit} → `TrueColor`
+     *   7. Known `TERM_PROGRAM` values → matched tier
+     *   8. `WT_SESSION` (Windows Terminal) set → `TrueColor`
+     *   9. `TERM` substring match: `*direct*`/`*truecolor*` → `TrueColor`,
      *      `*256*` → `Ansi256`, `*color*`/xterm/screen/tmux → `Ansi`
-     *   9. CI environment → `Ansi` (most CI logs render 16-color OK)
-     *  10. fallback → `Ascii`
+     *  10. CI environment → `Ansi` (most CI logs render 16-color OK)
+     *  11. fallback → `Ascii`
      *
      * @param array<string,string>|null $env  defaults to a snapshot of getenv()
      * @param resource|null             $stdout used to query `stream_isatty`;
@@ -64,6 +65,16 @@ enum ColorProfile: int
         }
 
         if (self::truthy($env['NO_COLOR'] ?? '')) {
+            return self::Ascii;
+        }
+
+        // BSD-family colour opt-out (lib-reviews-1102 M34): CLICOLOR=0
+        // means "colour off", and sugar-pty already short-circuits it —
+        // until now this fleet-wide colour authority did not, so the two
+        // answers split per library. Unlike NO_COLOR it does NOT outrank
+        // an explicit force variable: CLICOLOR=0 + CLICOLOR_FORCE=1
+        // publishes colour.
+        if (!$force && ($env['CLICOLOR'] ?? '') === '0') {
             return self::Ascii;
         }
 

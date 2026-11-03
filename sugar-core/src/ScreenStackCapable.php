@@ -11,8 +11,6 @@ namespace SugarCraft\Core;
  * screen-stack routing should be activated: the runtime will call
  * {@see screens()} to obtain the current stack and route
  * init/update/view to the active screen's model.
- *
- * @internal
  */
 interface ScreenStackCapable
 {

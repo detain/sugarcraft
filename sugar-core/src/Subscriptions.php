@@ -12,8 +12,6 @@ namespace SugarCraft\Core;
  * The runtime diffs the old set against the new one on each update cycle,
  * starting new subscriptions, cancelling dropped ones, and leaving stable
  * ones untouched.
- *
- * @internal
  */
 final class Subscriptions
 {
