@@ -57,4 +57,7 @@ return [
     'attachment.invalid_cid'       => 'Formato de Content-ID no válido: {cid} (RFC 2392 exige el formato msg-id)',
     'cli.unknown_option'           => 'Opción desconocida: {option}',
     'cli.invalid_port'             => 'Puerto SMTP no válido: {port} (debe estar entre 1 y 65535)',
+    'cli.missing_value'             => 'La opción {option} requiere un valor (para valores que empiezan con guion use --{option}=VALOR)',
+    'cli.no_sender'                 => 'Sin dirección de remitente: pase --from=DIRECCION o defina CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'          => 'La variable de entorno {name} tiene un valor de indicador no válido {value}; use 1/true/yes/on o 0/false/no/off',
 ];

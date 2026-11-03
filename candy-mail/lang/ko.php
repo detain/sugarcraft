@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => '잘못된 Content-ID 형식: {cid} (RFC 2392는 msg-id 형식 필요)',
     'cli.unknown_option'           => '알 수 없는 옵션: {option}',
     'cli.invalid_port'             => '잘못된 SMTP 포트: {port} (1~65535 사이여야 함)',
+    'cli.missing_value'             => '옵션 {option}에 값이 필요합니다(대시로 시작하는 값은 --{option}=값 형식으로 전달)',
+    'cli.no_sender'                 => '보내는 사람 주소 없음: --from=주소를 전달하거나 CANDY_MAIL_FROM을 설정하세요',
+    'cli.invalid_env_flag'          => '환경 변수 {name}에 잘못된 플래그 값 {value}가 있습니다: 1/true/yes/on 또는 0/false/no/off 사용',
 ];

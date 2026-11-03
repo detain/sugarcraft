@@ -193,6 +193,10 @@ if (PHP_SAPI === 'cli' && isset($argv[0]) && realpath($argv[0]) === __FILE__) {
  * Email the same shape. Unknown long flags and unknown short flags throw
  * rather than being silently dropped. `--` ends option parsing so later
  * tokens are positional recipients even if they start with a dash.
+ * A value-taking flag never consumes the next token when that token is
+ * missing or itself looks like a switch (M-G): `--subject --render` used
+ * to silently steal the switch and mail an empty subject. Pass values
+ * that begin with a dash via the inline `--flag=VALUE` form.
  *
  * @return array{positional: list<string>, opts: array<string, mixed>, help: bool, version: bool, render: bool}
  */
@@ -251,9 +255,19 @@ function parseArgs(array $argv): array
         if (isset($boolFlags[$name])) {
             $opts[$boolFlags[$name]] = true;
         } elseif (isset($listFlags[$name])) {
-            $opts[$listFlags[$name]][] = $inlineValue ?? (string) ($argv[++$i] ?? '');
+            if ($inlineValue !== null) {
+                $opts[$listFlags[$name]][] = $inlineValue;
+            } else {
+                $opts[$listFlags[$name]][] = nextValue($argv, $i, $arg);
+                $i++;
+            }
         } else {
-            $opts[$scalarFlags[$name]] = $inlineValue ?? (string) ($argv[++$i] ?? '');
+            if ($inlineValue !== null) {
+                $opts[$scalarFlags[$name]] = $inlineValue;
+            } else {
+                $opts[$scalarFlags[$name]] = nextValue($argv, $i, $arg);
+                $i++;
+            }
         }
         $i++;
     }
@@ -270,6 +284,22 @@ function parseArgs(array $argv): array
         'version'    => ($opts['version'] ?? false) === true,
         'render'     => ($opts['render'] ?? false) === true,
     ];
+}
+
+/**
+ * The next token as a flag value (M-G). Refuses a missing value and refuses
+ * to eat a switch: only a token that does not begin with '-' (or the lone
+ * '-') is eligible. Dash-leading data belongs in the inline form
+ * `--flag=VALUE`, which never routes through here.
+ */
+function nextValue(array $argv, int $i, string $flag): string
+{
+    $next = $argv[$i + 1] ?? null;
+    if ($next === null || (\str_starts_with((string) $next, '-') && \strlen((string) $next) > 1)) {
+        throw new \InvalidArgumentException(Lang::t('cli.missing_value', ['option' => $flag]));
+    }
+
+    return (string) $next;
 }
 
 /**
@@ -303,7 +333,9 @@ function senderFromEnvironment(): string
 
 /**
  * Boolean env switch: unset/empty keeps the default; '1'/'true'/'yes'/'on'
- * turn it on, anything else turns it off.
+ * turn it on and '0'/'false'/'no'/'off' turn it off. Anything else throws
+ * (M-B): a typo like 'ture' once silently disabled REQUIRE_TLS — the safe
+ * reading of an unrecognised switch is a loud refusal, never a guess.
  */
 function envFlag(string $name, bool $default): bool
 {
@@ -312,7 +344,15 @@ function envFlag(string $name, bool $default): bool
         return $default;
     }
 
-    return \in_array(\strtolower($raw), ['1', 'true', 'yes', 'on'], true);
+    $word = \strtolower($raw);
+    if (\in_array($word, ['1', 'true', 'yes', 'on'], true)) {
+        return true;
+    }
+    if (\in_array($word, ['0', 'false', 'no', 'off'], true)) {
+        return false;
+    }
+
+    throw new \InvalidArgumentException(Lang::t('cli.invalid_env_flag', ['name' => $name, 'value' => $raw]));
 }
 
 /**
@@ -336,8 +376,13 @@ function portFromEnvironment(): int
 function buildEmail(array $opts, string $stdinBody): Email
 {
     $envFrom = senderFromEnvironment();
-    $from    = $opts['from'] ?? ($envFrom !== '' ? $envFrom : 'unknown@localhost');
-    $to      = $opts['to'] ?? [];
+    // M-C: no flag and no CANDY_MAIL_FROM is a refusal, not a fabrication —
+    // 'unknown@localhost' once forged a real sender into every message.
+    $from = $opts['from'] ?? ($envFrom !== '' ? $envFrom : null);
+    if ($from === null) {
+        throw new \InvalidArgumentException(Lang::t('cli.no_sender'));
+    }
+    $to = $opts['to'] ?? [];
 
     if ($to === []) {
         throw new \InvalidArgumentException(Lang::t('cli.no_to_recipient'));
@@ -375,7 +420,12 @@ function buildEmail(array $opts, string $stdinBody): Email
 
 function buildTransport(): Transport
 {
-    if (($apiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true)) !== '' && $apiKey !== false) {
+    // M-P: trim the raw value first — a whitespace-only RESEND_API_KEY used
+    // to hijack transport selection (resolving truthy while ignoring the
+    // full SMTP config). An absent or blank key means "not configured".
+    $rawApiKey = $_ENV['RESEND_API_KEY'] ?? \getenv('RESEND_API_KEY', true);
+    $apiKey    = \is_string($rawApiKey) ? \trim($rawApiKey) : '';
+    if ($apiKey !== '') {
         return new ResendTransport($apiKey);
     }
 

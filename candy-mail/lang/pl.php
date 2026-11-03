@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => 'Nieprawidłowy format Content-ID: {cid} (RFC 2392 wymaga formatu msg-id)',
     'cli.unknown_option'           => 'Nieznana opcja: {option}',
     'cli.invalid_port'             => 'Nieprawidłowy port SMTP: {port} (musi być między 1 a 65535)',
+    'cli.missing_value'             => 'Opcja {option} wymaga wartości (dla wartości zaczynających się od myślnika użyj --{option}=WARTOSC)',
+    'cli.no_sender'                 => 'Brak adresu nadawcy: podaj --from=ADRES albo ustaw CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'          => 'Zmienna środowiskowa {name} ma nieprawidłową wartość flagi {value}; użyj 1/true/yes/on albo 0/false/no/off',
 ];

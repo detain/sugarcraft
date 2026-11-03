@@ -233,6 +233,32 @@ final class CliTest extends TestCase
         \SugarCraft\Mail\parseArgs(['candy-mail', '--to', 'a@b.c', '-z']);
     }
 
+    public function testParseArgsRefusesToStealASwitchAsAValue(): void
+    {
+        // M-G: `--subject --render` used to swallow the switch as the value.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires a value');
+
+        \SugarCraft\Mail\parseArgs(['candy-mail', '--to', 'a@b.c', '--subject', '--render']);
+    }
+
+    public function testParseArgsRefusesAMissingTrailingValue(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('--attach');
+
+        \SugarCraft\Mail\parseArgs(['candy-mail', '--to', 'a@b.c', '--attach']);
+    }
+
+    public function testParseArgsInlineFormCarriesDashLeadingValues(): void
+    {
+        // The documented escape hatch: a value that begins with a dash rides
+        // the --option=value form and must survive untouched.
+        $result = \SugarCraft\Mail\parseArgs(['candy-mail', '--to', 'a@b.c', '--subject=-50% off']);
+
+        $this->assertSame('-50% off', $result['opts']['subject']);
+    }
+
     public function testDoubleDashTerminatesOptionParsing(): void
     {
         $result = \SugarCraft\Mail\parseArgs(['candy-mail', '--', '--weird@host']);
@@ -336,6 +362,35 @@ final class CliTest extends TestCase
         $this->assertTrue(\SugarCraft\Mail\envFlag('CANDY_MAIL_SMTP_IMPLICIT_TLS', false));
     }
 
+    public function testEnvFlagAcceptsTheWholeOffAndOnVocabulary(): void
+    {
+        foreach (['0', 'false', 'no', 'off', 'NO', 'Off'] as $off) {
+            $this->setEnv('CANDY_MAIL_SMTP_REQUIRE_TLS', $off);
+            $this->assertFalse(\SugarCraft\Mail\envFlag('CANDY_MAIL_SMTP_REQUIRE_TLS', true), "'{$off}' means off");
+        }
+
+        foreach (['1', 'true', 'yes', 'on', 'YES', 'True'] as $on) {
+            $this->setEnv('CANDY_MAIL_SMTP_REQUIRE_TLS', $on);
+            $this->assertTrue(\SugarCraft\Mail\envFlag('CANDY_MAIL_SMTP_REQUIRE_TLS', false), "'{$on}' means on");
+        }
+    }
+
+    public function testEnvFlagRefusesWordsItCannotInterpret(): void
+    {
+        // M-B: a typo in a security switch ('ture') used to silently disable
+        // REQUIRE_TLS. Unrecognised values must fail loudly instead.
+        foreach (['ture', '2', 'maybe', 'y', 'nope', 'x'] as $garbage) {
+            $this->setEnv('CANDY_MAIL_SMTP_REQUIRE_TLS', $garbage);
+            try {
+                \SugarCraft\Mail\envFlag('CANDY_MAIL_SMTP_REQUIRE_TLS', true);
+                $this->fail("flag '{$garbage}' must be refused");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('invalid flag value', $e->getMessage());
+                $this->assertStringContainsString($garbage, $e->getMessage());
+            }
+        }
+    }
+
     public function testCliVersionResolvesFromComposerMetadata(): void
     {
         $version = \SugarCraft\Mail\cliVersion();
@@ -373,6 +428,15 @@ final class CliTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         \SugarCraft\Mail\buildEmail(['from' => 'me@example.com'], '');
+    }
+
+    public function testBuildEmailRefusesAFabricatedSender(): void
+    {
+        // M-C: the missing --from case used to invent unknown@localhost.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('No sender address');
+
+        \SugarCraft\Mail\buildEmail(['to' => ['a@b.c'], 'body' => 'Hi'], '');
     }
 
     public function testBuildEmailSurvivesUnsetSignatureEnv(): void

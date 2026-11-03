@@ -57,4 +57,7 @@ return [
     'cli.no_transport'           => 'No transport configured. Set RESEND_API_KEY or CANDY_MAIL_SMTP_HOST environment variable.',
     'cli.unknown_option'         => 'Unknown option: {option}',
     'cli.invalid_port'           => 'Invalid SMTP port: {port} (must be between 1 and 65535)',
+    'cli.missing_value'           => 'Option {option} requires a value (use --{option}=VALUE for values that begin with a dash)',
+    'cli.no_sender'               => 'No sender address: pass --from=ADDRESS or set CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'        => 'Environment variable {name} has an invalid flag value {value}; use one of 1/true/yes/on or 0/false/no/off',
 ];

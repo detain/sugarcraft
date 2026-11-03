@@ -198,6 +198,14 @@ final class ResendTransport implements Transport
 
     private function firstAddr(array $addrs): string
     {
-        return $addrs[0] ?? 'unknown@localhost';
+        // M-C: 'unknown@localhost' was a fabrication — it mailed every
+        // senderless Resend payload from a forged address. Refuse instead;
+        // Mailer/Email already guarantee a real from on the normal path.
+        $first = $addrs[0] ?? null;
+        if (!\is_string($first) || $first === '') {
+            throw new \InvalidArgumentException(Lang::t('mailer.no_from'));
+        }
+
+        return $first;
     }
 }

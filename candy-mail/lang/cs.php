@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => 'Neplatný formát Content-ID: {cid} (RFC 2392 vyžaduje formát msg-id)',
     'cli.unknown_option'           => 'Neznámá volba: {option}',
     'cli.invalid_port'             => 'Neplatný port SMTP: {port} (musí být mezi 1 a 65535)',
+    'cli.missing_value'             => 'Možnost {option} vyžaduje hodnotu (pro hodnoty začínající pomlčkou použijte --{option}=HODNOTA)',
+    'cli.no_sender'                 => 'Chybí adresa odesílatele: předejte --from=ADRESA nebo nastavte CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'          => 'Proměnná prostředí {name} má neplatnou hodnotu příznaku {value}; použijte 1/true/yes/on nebo 0/false/no/off',
 ];

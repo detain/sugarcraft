@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => '无效的 Content-ID 格式：{cid}（RFC 2392 要求 msg-id 格式）',
     'cli.unknown_option'           => '未知选项：{option}',
     'cli.invalid_port'             => '无效的 SMTP 端口：{port}（必须介于 1 和 65535 之间）',
+    'cli.missing_value'             => '选项 {option} 需要一个值（以破折号开头的值请写成 --{option}=值 形式）',
+    'cli.no_sender'                 => '没有发件人地址：请传入 --from=地址 或设置 CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'          => '环境变量 {name} 的开关值 {value} 无效；请使用 1/true/yes/on 或 0/false/no/off',
 ];

@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => 'Ongeldige Content-ID-indeling: {cid} (RFC 2392 vereist de msg-id-indeling)',
     'cli.unknown_option'           => 'Onbekende optie: {option}',
     'cli.invalid_port'             => 'Ongeldige SMTP-poort: {port} (moet tussen 1 en 65535 liggen)',
+    'cli.missing_value'             => 'Optie {option} heeft een waarde nodig (waarden met een koppelteken: --{option}=WAARDE)',
+    'cli.no_sender'                 => 'Geen afzenderadres: geef --from=ADRES op of stel CANDY_MAIL_FROM in',
+    'cli.invalid_env_flag'          => 'Omgevingsvariabele {name} heeft een ongeldige vlagwaarde {value}; gebruik 1/true/yes/on of 0/false/no/off',
 ];

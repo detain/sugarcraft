@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => 'Geçersiz Content-ID biçimi: {cid} (RFC 2392 msg-id biçimini gerektirir)',
     'cli.unknown_option'           => 'Bilinmeyen seçenek: {option}',
     'cli.invalid_port'             => 'Geçersiz SMTP bağlantı noktası: {port} (1 ile 65535 arasında olmalı)',
+    'cli.missing_value'             => '{option} seçeneği bir değer gerektirir (tire ile başlayan değerler için --{option}=DEĞER yazın)',
+    'cli.no_sender'                 => 'Gönderen adresi yok: --from=ADRES verin veya CANDY_MAIL_FROM ayarlayın',
+    'cli.invalid_env_flag'          => '{name} ortam değişkeni geçersiz bayrak değeri {value} içeriyor; 1/true/yes/on veya 0/false/no/off kullanın',
 ];

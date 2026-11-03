@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => 'Недопустимый формат Content-ID: {cid} (RFC 2392 требует формат msg-id)',
     'cli.unknown_option'           => 'Неизвестная опция: {option}',
     'cli.invalid_port'             => 'Недопустимый порт SMTP: {port} (должен быть от 1 до 65535)',
+    'cli.missing_value'             => 'Параметр {option} требует значение (для значений через дефис пишите --{option}=ЗНАЧЕНИЕ)',
+    'cli.no_sender'                 => 'Не указан адрес отправителя: передайте --from=АДРЕС или задайте CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'          => 'Переменная окружения {name} содержит недопустимое значение флага {value}; используйте 1/true/yes/on или 0/false/no/off',
 ];

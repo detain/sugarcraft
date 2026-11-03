@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => '無効なContent-ID形式: {cid} (RFC 2392ではmsg-id形式が必要)',
     'cli.unknown_option'           => '不明なオプション: {option}',
     'cli.invalid_port'             => '無効なSMTPポート: {port} (1〜65535の間である必要があります)',
+    'cli.missing_value'             => 'オプション {option} には値が必要です（値がダッシュで始まる場合は --{option}=値 の形を使ってください）',
+    'cli.no_sender'                 => '送信者アドレスがありません: --from=アドレス を指定するか CANDY_MAIL_FROM を設定してください',
+    'cli.invalid_env_flag'          => '環境変数 {name} のフラグ値 {value} が不正です: 1/true/yes/on または 0/false/no/off を使ってください',
 ];

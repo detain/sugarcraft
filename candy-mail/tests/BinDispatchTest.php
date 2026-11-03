@@ -432,6 +432,62 @@ final class BinDispatchTest extends TestCase
         }
     }
 
+    // ------------------------------------------------------------------
+    // B4b (lib-reviews-1102 fix wave): M-B / M-C / M-G / M-P end to end.
+    // ------------------------------------------------------------------
+
+    public function testSwitchIsNeverStolenAsAFlagValue(): void
+    {
+        // M-G: `--subject --render` once swallowed the switch, mailed an
+        // empty subject and silently skipped the render the user asked for.
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e', '--subject', '--render'],
+            'hello'
+        );
+
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('requires a value', $result['err']);
+        $this->assertStringNotContainsString('MIME-Version', $result['out'], 'a refused parse must not render anything');
+    }
+
+    public function testTypoInASecuritySwitchRefusesTheSend(): void
+    {
+        // M-B: 'ture' once read as OFF and silently disabled REQUIRE_TLS.
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e'],
+            'hello',
+            ['CANDY_MAIL_SMTP_HOST' => 'smtp.invalid.test', 'CANDY_MAIL_SMTP_REQUIRE_TLS' => 'ture']
+        );
+
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('invalid flag value', $result['err']);
+        $this->assertStringContainsString('CANDY_MAIL_SMTP_REQUIRE_TLS', $result['err']);
+    }
+
+    public function testMissingSenderIsRefusedNotFabricated(): void
+    {
+        // M-C: the child used to mail from a forged 'unknown@localhost'.
+        $result = $this->runCli(['--to', 'c@d.e'], 'hello');
+
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('No sender address', $result['err']);
+        $this->assertStringNotContainsString('unknown@localhost', $result['err'] . $result['out']);
+    }
+
+    public function testWhitespaceOnlyResendKeyDoesNotHijackTransportChoice(): void
+    {
+        // M-P: a RESEND_API_KEY of ' ' resolved truthy and bypassed the
+        // whole SMTP configuration; a blank key now reads as unconfigured.
+        $result = $this->runCli(
+            ['--from', 'a@b.c', '--to', 'c@d.e'],
+            'hello',
+            ['RESEND_API_KEY' => ' ']
+        );
+
+        $this->assertSame(1, $result['status']);
+        $this->assertStringContainsString('No transport configured', $result['err']);
+    }
+
     private function reapHostileServer(int $pid): void
     {
         $deadline = \microtime(true) + 5.0;

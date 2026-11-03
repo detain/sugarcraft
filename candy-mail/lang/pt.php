@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => 'Formato de Content-ID inválido: {cid} (a RFC 2392 exige o formato msg-id)',
     'cli.unknown_option'           => 'Opção desconhecida: {option}',
     'cli.invalid_port'             => 'Porta SMTP inválida: {port} (deve estar entre 1 e 65535)',
+    'cli.missing_value'             => 'A opção {option} exige um valor (para valores iniciados por traço use --{option}=VALOR)',
+    'cli.no_sender'                 => 'Sem endereço de remetente: passe --from=ENDERECO ou defina CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'          => 'A variável de ambiente {name} tem um valor de sinalização inválido {value}; use 1/true/yes/on ou 0/false/no/off',
 ];

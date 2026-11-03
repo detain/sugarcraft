@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => 'تنسيق معرّف المحتوى غير صالح: {cid} (RFC 2392 يتطلب تنسيق msg-id)',
     'cli.unknown_option'           => 'خيار غير معروف: {option}',
     'cli.invalid_port'             => 'منفذ SMTP غير صالح: {port} (يجب أن يكون بين 1 و65535)',
+    'cli.missing_value'             => 'الخيار {option} يتطلب قيمة (للقيم التي تبدأ بشرطة اكتب --{option}=قيمة)',
+    'cli.no_sender'                 => 'لا يوجد عنوان مُرسِل: مرّر --from=عنوان أو عيّن CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'          => 'متغير البيئة {name} يحتوي على قيمة علم غير صالحة {value}؛ استخدم 1/true/yes/on أو 0/false/no/off',
 ];

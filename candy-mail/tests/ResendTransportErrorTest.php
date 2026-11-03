@@ -78,11 +78,24 @@ final class ResendTransportErrorTest extends TestCase
         $this->assertSame('a@example.com', $first);
     }
 
-    public function testFirstAddrReturnsDefaultWhenEmpty(): void
+    public function testFirstAddrRefusesAnEmptyList(): void
     {
         $transport = new ResendTransport('test_key');
-        $first = $this->invokeFirstAddr($transport, []);
-        $this->assertSame('unknown@localhost', $first);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('from address');
+
+        $this->invokeFirstAddr($transport, []);
+    }
+
+    public function testFirstAddrRefusesAForcedEmptyFirstElement(): void
+    {
+        $transport = new ResendTransport('test_key');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('from address');
+
+        $this->invokeFirstAddr($transport, ['']);
     }
 
     /**

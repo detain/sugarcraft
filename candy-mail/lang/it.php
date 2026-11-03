@@ -50,4 +50,7 @@ return [
     'attachment.invalid_cid'       => 'Formato Content-ID non valido: {cid} (RFC 2392 richiede il formato msg-id)',
     'cli.unknown_option'           => 'Opzione sconosciuta: {option}',
     'cli.invalid_port'             => 'Porta SMTP non valida: {port} (deve essere compresa tra 1 e 65535)',
+    'cli.missing_value'             => "L'opzione {option} richiede un valore (per valori che iniziano con un trattino scrivere --{option}=VALORE)",
+    'cli.no_sender'                 => 'Nessun indirizzo mittente: passare --from=INDIRIZZO o impostare CANDY_MAIL_FROM',
+    'cli.invalid_env_flag'          => "La variabile d'ambiente {name} ha un valore di opzione non valido {value}; usare 1/true/yes/on oppure 0/false/no/off",
 ];
