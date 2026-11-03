@@ -125,6 +125,13 @@ final class ExportCommand
         if ($binaryKeys !== []) {
             $entries['_binary'] = $binaryKeys;
         }
+        if ($entries === []) {
+            // An empty store dumps as an empty OBJECT, not `[]` — the
+            // envelope is documented as a mapping, and json consumers
+            // legitimately assume dict shape (candy-kv's own importers
+            // spare an empty list, foreign ones would not).
+            return '{}' . \PHP_EOL;
+        }
 
         // Binary values survive export: JSON_INVALID_UTF8_SUBSTITUTE replaces the
         // lone surrogates/invalid sequences a byte-blob carries with U+FFFD instead

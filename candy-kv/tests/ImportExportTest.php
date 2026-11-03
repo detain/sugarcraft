@@ -336,6 +336,16 @@ final class ImportExportTest extends TestCase
         $this->assertLessThanOrEqual(3600, $decoded['_ttl']['t']);
     }
 
+    public function testJsonExportOfEmptyStoreIsAnObjectNotAList(): void
+    {
+        // The documented envelope is a mapping. `json_encode([])` would
+        // dump an empty store as `[]` — list shape — and consumers that
+        // trust the object contract (jq, python, a foreign importer) choke.
+        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
+
+        $this->assertSame('{}' . \PHP_EOL, $cli->exportToString('json'));
+    }
+
     // ─── ExportCommand error paths ─────────────────────────────────────────────
 
     public function testExportToStringThrowsOnUnknownFormat(): void
