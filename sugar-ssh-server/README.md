@@ -634,6 +634,11 @@ Shell requests are deliberately *not* gated, because they name no program: the
 interpreter is the configured `$shell`, then the server-side `SHELL`, then
 `FALLBACK_SHELL`, and a client-supplied `SHELL` is stripped as a dangerous var.
 
+Replacing the handler replaces the policy. `ChannelHandler` is an interface, so
+a custom implementation of `handleExec()` is bound by nothing here: if you
+substitute one, the default-closed question - may this peer run this program? -
+becomes yours to answer inside your method.
+
 On a shell request, `DefaultChannelHandler` resolves the login shell in this
 order: the explicit `$shell` configured at construction time, then the
 server-side `SHELL` environment variable (under sshd that is the authenticated
@@ -653,6 +658,7 @@ use SugarCraft\SshServer\Channel\Msg\SignalMsg;
 use SugarCraft\SshServer\Channel\Msg\EnvMsg;
 use SugarCraft\SshServer\Channel\Msg\BreakMsg;
 use SugarCraft\SshServer\Session;
+use SugarCraft\SshServer\Transport\InProcessTransport;
 
 final class DebugChannelHandler implements ChannelHandler
 {
@@ -688,6 +694,9 @@ final class DebugChannelHandler implements ChannelHandler
 
     public function handleExec(ExecMsg $msg, Session $session): void
     {
+        // Implementing the interface means implementing the policy: the
+        // default-closed allowlist below belongs to DefaultChannelHandler,
+        // and nothing inherits it into this specimen.
         fwrite(STDERR, "exec: {$msg->command}\n");
     }
 
@@ -708,8 +717,8 @@ final class DebugChannelHandler implements ChannelHandler
 }
 
 // Hand the handler to InProcessTransport (handler seam is a setter —
-// the constructor takes only the optional PtySystem).
-$transport = new InProcessTransport($ptySystem);
+// the constructor takes only an optional PtySystem, and defaults it).
+$transport = new InProcessTransport();
 $transport->setChannelHandler(new DebugChannelHandler());
 ```
 

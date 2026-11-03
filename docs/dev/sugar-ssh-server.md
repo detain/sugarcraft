@@ -163,6 +163,16 @@ pty-req, window-change, shell, exec, signal, env, break) to a
 to customise channel-level behaviour — replacing PTY allocation, signal
 delivery, shell spawning, etc.
 
+Only one of those messages is produced by anything in this library today:
+`WindowChangeMsg`, from the `SIGWINCH` the kernel raises when sshd's PTY is
+resized. The rest need a wire decoder this library does not have (it speaks
+no SSH), so a custom handler's `handleExec()` is reached only by code you
+write yourself - typically by decoding `SSH_ORIGINAL_COMMAND` and handing the
+result to the public `DefaultChannelHandler::decodeCommandString()`. The
+default handler is default-closed for exec either way: nothing spawns unless
+the program is in its `$allowedExec` list and the optional `$execGate` returns
+exactly `true`.
+
 ```php
 use SugarCraft\SshServer\Channel\Msg\PtyReqMsg;
 use SugarCraft\SshServer\Channel\Msg\WindowChangeMsg;
@@ -195,7 +205,7 @@ Pass a custom handler to `InProcessTransport`:
 ```php
 use SugarCraft\SshServer\Transport\InProcessTransport;
 
-$transport = new InProcessTransport($ptySystem);
+$transport = new InProcessTransport();
 $transport->setChannelHandler(new MyCustomChannelHandler());
 Server::new()->withTransport($transport)->serve();
 ```

@@ -220,9 +220,50 @@ final class DocSurfaceTruthTest extends TestCase
         $this->assertStringNotContainsString('and SIGHUP on EOF', $flatGuide);
     }
 
+    /**
+     * The channel specimen used to end with `new InProcessTransport($ptySystem)
+     * ` — a class the snippet never imports and a variable it never defines, so
+     * copy-pasting the documented wiring died on the line that was supposed to
+     * wire it. Pinned together with the truth the specimen now carries: a
+     * custom handler is not covered by the default-closed exec policy, and the
+     * dev guide may no longer imply the seven channel messages all arrive.
+     */
+    public function testTheChannelSpecimenCompilesAsWritten(): void
+    {
+        $readme = (string) $this->readme();
+        $this->assertStringContainsString(
+            'use SugarCraft\\SshServer\\Transport\\InProcessTransport;',
+            $readme,
+            'the specimen must import the class it instantiates'
+        );
+        $this->assertStringNotContainsString('new InProcessTransport($ptySystem)', $readme);
+        $flatReadme = (string) \preg_replace('/\s+/', ' ', $readme);
+        $this->assertStringContainsString('Replacing the handler replaces the policy', $flatReadme);
+
+        $dev = $this->devGuide();
+        if ($dev === null) {
+            return;
+        }
+
+        $this->assertStringNotContainsString('new InProcessTransport($ptySystem)', $dev);
+        $flatDev = (string) \preg_replace('/\s+/', ' ', $dev);
+        $this->assertStringContainsString('Only one of those messages is produced', $flatDev);
+        $this->assertStringContainsString('decodeCommandString()', $flatDev);
+    }
+
     private function adminGuide(): ?string
     {
         $path = \dirname(__DIR__, 3) . '/docs/admin/sugar-ssh-server.md';
+        if (!\is_file($path)) {
+            return null;
+        }
+
+        return (string) \file_get_contents($path);
+    }
+
+    private function devGuide(): ?string
+    {
+        $path = \dirname(__DIR__, 3) . '/docs/dev/sugar-ssh-server.md';
         if (!\is_file($path)) {
             return null;
         }
