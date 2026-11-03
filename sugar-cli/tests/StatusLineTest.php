@@ -4,12 +4,29 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli\Tests;
 
+use SugarCraft\Cli\AutoWidth;
 use SugarCraft\Cli\StatusLine;
 use SugarCraft\Cli\Theme;
+use SugarCraft\Cli\Tests\Support\SandboxTerminalColumns;
+use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 
 final class StatusLineTest extends TestCase
 {
+    use SandboxTerminalColumns;
+
+    protected function setUp(): void
+    {
+        // The default clamp resolves AutoWidth — hide any terminal width the
+        // runner advertises so the 80-fallback pins below stay honest.
+        $this->sandboxTerminalColumns();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->restoreTerminalColumns();
+    }
+
     public function testSuccessGlyphPlain(): void
     {
         $this->assertSame('✓ done', StatusLine::success('done', Theme::plain()));
@@ -75,5 +92,68 @@ final class StatusLineTest extends TestCase
     public function testCleanMessageUnchanged(): void
     {
         $this->assertSame('✓ Deployment complete', StatusLine::success('Deployment complete', Theme::plain()));
+    }
+
+    /** A message wider than the budget is cut with the house ellipsis. */
+    public function testLongMessageIsClippedToWidth(): void
+    {
+        $out = StatusLine::success(str_repeat('x', 100), Theme::plain(), width: 10);
+        $this->assertSame('✓ xxxxxxx…', $out);
+        $this->assertLessThanOrEqual(10, Width::string($out));
+    }
+
+    /** Messages that already fit come back byte-identical — the clamp is opt-nothing. */
+    public function testFittingMessageUnchangedByWidth(): void
+    {
+        $this->assertSame('✓ done', StatusLine::success('done', Theme::plain(), width: 6));
+    }
+
+    /** null opts out of the clamp entirely: the full message renders. */
+    public function testNullWidthKeepsFullMessage(): void
+    {
+        $long = str_repeat('y', 200);
+        $this->assertSame('✓ ' . $long, StatusLine::success($long, Theme::plain(), null));
+    }
+
+    /** The default resolves the advertised terminal width, not the hardcoded 80. */
+    public function testAutoClipsToAdvertisedColumns(): void
+    {
+        $this->pinTerminalColumns(8);
+        $out = StatusLine::success(str_repeat('z', 40), Theme::plain());
+        // Budget 8-2=6 cells: five z's + the house ellipsis.
+        $this->assertSame('✓ zzzzz…', $out);
+    }
+
+    /** The SGR around the glyph costs no cells: the budget is measured in cells. */
+    public function testClampMeasuresStyledPrefixInCells(): void
+    {
+        $out = StatusLine::success(str_repeat('w', 50), Theme::ansi(), width: 12);
+        $this->assertStringContainsString("\x1b[", $out, 'glyph still styled');
+        $this->assertSame(12, Width::string($out), 'styled bytes cost no cells: full budget lands on the message');
+        $this->assertStringEndsWith(str_repeat('w', 9) . '…', $out);
+    }
+
+    /** Multi-cell glyphs clip by cells, never mid-character. */
+    public function testCjkMessageClipsByCells(): void
+    {
+        $out = StatusLine::success('日本語のテキスト', Theme::plain(), width: 7);
+        $this->assertLessThanOrEqual(7, Width::string($out), "line fits: '{$out}'");
+        $this->assertStringStartsWith('✓ 日本', $out);
+    }
+
+    /** AutoWidth::Auto may be named explicitly (parity with omitting it). */
+    public function testExplicitAutoEqualsOmitted(): void
+    {
+        $long = str_repeat('v', 120);
+        $this->assertSame(
+            StatusLine::info($long, Theme::plain()),
+            StatusLine::info($long, Theme::plain(), AutoWidth::Auto),
+        );
+    }
+
+    public function testWidthBelowOneThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        StatusLine::warn('x', Theme::plain(), 0);
     }
 }

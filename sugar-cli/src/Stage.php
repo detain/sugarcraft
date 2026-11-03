@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli;
 
+use SugarCraft\Cli\Internal\Clip;
 use SugarCraft\Cli\Internal\SafeText;
+use SugarCraft\Cli\Internal\WidthGuard;
+use SugarCraft\Cli\Internal\WidthProbe;
+use SugarCraft\Core\Util\Width;
 
 /**
  * Render a numbered "stage" line — an arrow / marker glyph + step
@@ -24,10 +28,25 @@ final class Stage
     public const GLYPH_BULLET  = '•';
     public const GLYPH_HASH    = '#';
 
+    /** Spinner frames for the indeterminate progress path, in cycle order. */
+    public const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
     /**
      * Render a stage line. Pass `total = 0` to omit the `/total` suffix.
      * Counts are clamped to the range `[0, total]` (i.e. negative values
      * become `0`, and `current > total` is capped at `total`).
+     *
+     * @param string $glyph  leading marker, sanitized like the message (it is
+     *                       caller-supplied display text) but never clipped —
+     *                       a glyph wider than the budget overflows with the
+     *                       message dropped first.
+     * @param int|AutoWidth|null $width  cell budget for the whole line; the
+     *                       message is cut to fit with the house `…` ellipsis.
+     *                       Omitted (or `AutoWidth::Auto`) resolves to the
+     *                       terminal width, falling back to 80 cells; `null`
+     *                       disables the clamp (see {@see WidthProbe}).
+     *
+     * @throws \InvalidArgumentException when `$width` is less than 1
      */
     public static function step(
         int $current,
@@ -35,19 +54,20 @@ final class Stage
         string $message,
         ?Theme $theme = null,
         string $glyph = self::GLYPH_ARROW,
+        int|AutoWidth|null $width = AutoWidth::Auto,
     ): string {
-        $theme  ??= Theme::detect();
-        $current = max(0, $current);
-        $total   = max(0, $total);
+        $theme   ??= Theme::detect();
+        $current  = max(0, $current);
+        $total    = max(0, $total);
         if ($total > 0) {
             $current = min($current, $total);
         }
         $count = $total > 0
             ? $current . '/' . $total
             : (string) $current;
-        return $theme->accent->render($glyph)
-             . ' ' . $theme->muted->render($count)
-             . ' ' . SafeText::line($message);
+        $prefix = $theme->accent->render(SafeText::line($glyph))
+              . ' ' . $theme->muted->render($count) . ' ';
+        return self::clipped($prefix, SafeText::line($message), $width, 'Stage::step');
     }
 
     /**
@@ -57,17 +77,22 @@ final class Stage
      * @param bool $isLast  use the corner glyph (`└─`) for the
      *                      terminal step in a sequence; defaults
      *                      to the tee (`├─`).
+     * @param int|AutoWidth|null $width  cell budget for the whole line; the
+     *                      message is cut to fit — see {@see step()}.
+     *
+     * @throws \InvalidArgumentException when `$width` is less than 1
      */
     public static function subStep(
         string $message,
         ?Theme $theme = null,
         bool $isLast = false,
         int $indent = 2,
+        int|AutoWidth|null $width = AutoWidth::Auto,
     ): string {
         $theme ??= Theme::detect();
         $glyph = $isLast ? '└─' : '├─';
         $pad   = str_repeat(' ', max(0, $indent));
-        return $pad . $theme->muted->render($glyph) . ' ' . SafeText::line($message);
+        return self::clipped($pad . $theme->muted->render($glyph) . ' ', SafeText::line($message), $width, 'Stage::subStep');
     }
 
     /**
@@ -81,9 +106,22 @@ final class Stage
      *
      * @param string $message  descriptive label for the step
      * @param int    $current  completed units
-     * @param int    $total    total units; pass 0 to show a indeterminate spinner
+     * @param int    $total    total units; pass 0 to show an indeterminate spinner
      * @param bool   $isLast   use the corner glyph (`└─`) for the terminal step
      * @param int    $indent   left margin in cells
+     * @param int|AutoWidth|null $width  cell budget for the whole line; the
+     *                       message is cut to fit between the tree prefix and
+     *                       the bar — see {@see step()}.
+     * @param int|null $frame  spinner frame index for the indeterminate path
+     *                       (`total = 0`), normalized modulo the frame count
+     *                       (negative indices cycle backwards). `null` — the
+     *                       default — derives the frame from the wall clock so
+     *                       repeated renders animate; pass an explicit index
+     *                       whenever the output byte must be deterministic
+     *                       (golden files, tests, recorded sessions). Ignored
+     *                       by the determinate bar (`total > 0`).
+     *
+     * @throws \InvalidArgumentException when `$width` is less than 1
      */
     public static function subStepWithProgress(
         string $message,
@@ -92,6 +130,8 @@ final class Stage
         ?Theme $theme = null,
         bool $isLast = false,
         int $indent = 2,
+        int|AutoWidth|null $width = AutoWidth::Auto,
+        ?int $frame = null,
     ): string {
         $theme   ??= Theme::detect();
         $current  = max(0, $current);
@@ -108,22 +148,46 @@ final class Stage
                . $theme->muted->render(str_repeat('░', 10 - $filled));
             $pct = $theme->muted->render(sprintf(' %3d%%', (int) round(100 * $current / $total)));
         } else {
-            // Indeterminate: cycle through a rotating spinner glyph.
-            // microtime(true) returns a float (seconds); microtime(false) returns
-            // the string "0.xxxxxx sssss" which triggers a non-numeric-value warning
-            // when used in arithmetic (fatal here under failOnWarning). The integer
-            // seconds contribute a multiple of 10 to `* 10`, so only the fractional
-            // part drives the frame index — behaviour is unchanged.
-            static $spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-            $frame = $spinnerFrames[(int) (microtime(true) * 10) % 10];
-            $bar = $theme->accent->render($frame);
+            // Indeterminate: cycle through a rotating spinner glyph. With no
+            // explicit frame, microtime(true) — the float seconds — supplies
+            // one: `* 10` then mod the frame count. (microtime(false) would
+            // return the string "0.xxxxxx sssss" and raise a non-numeric
+            // warning in the arithmetic — fatal under failOnWarning.) Callers
+            // who need the byte deterministic pass $frame.
+            $index = $frame === null
+                ? (int) (microtime(true) * 10) % 10
+                : (($frame % 10) + 10) % 10;
+            $bar = $theme->accent->render(self::SPINNER_FRAMES[$index]);
         }
 
         $glyph = $isLast ? '└─' : '├─';
         $pad   = str_repeat(' ', max(0, $indent));
 
-        return $pad . $theme->muted->render($glyph) . ' '
-             . SafeText::line($message) . ' '
-             . $bar . $pct;
+        $prefix = $pad . $theme->muted->render($glyph) . ' ';
+        $suffix = ' ' . $bar . $pct;
+        return self::clipped($prefix, SafeText::line($message), $width, 'Stage::subStepWithProgress', Width::string($suffix)) . $suffix;
+    }
+
+    /**
+     * Lay `$prefix` + message (+ optional `$suffix` cells reserved) into the
+     * width budget: the message alone is cut with the house ellipsis, the
+     * tree furniture never is. Null width renders the message in full; a
+     * budget that cannot fit even one message cell drops it entirely.
+     *
+     * @throws \InvalidArgumentException when the resolved width is less than 1
+     */
+    private static function clipped(
+        string $prefix,
+        string $message,
+        int|AutoWidth|null $width,
+        string $presenter,
+        int $suffixCells = 0,
+    ): string {
+        $resolved = WidthProbe::resolve($width);
+        WidthGuard::assert($presenter, $resolved, 'render the full message');
+        if ($resolved !== null) {
+            $message = Clip::text($message, $resolved - Width::string($prefix) - $suffixCells);
+        }
+        return $prefix . $message;
     }
 }

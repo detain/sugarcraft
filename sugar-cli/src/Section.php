@@ -50,6 +50,7 @@ final class Section
         self::assertWidth($width);
         $theme   ??= Theme::detect();
         $label   = SafeText::line($label);  // neutralize escape/control injection
+        $rune    = SafeText::line($rune);   // the fill rune is caller display text too
         $runeW   = max(1, Width::string($rune));  // cell width of the fill rune
         // $leftPad is a rune count (not cell count) — each rune repeats once
         $leadRunes = max(0, $leftPad);
@@ -88,6 +89,7 @@ final class Section
         $width = WidthProbe::resolve($width);
         self::assertWidth($width);
         $theme  ??= Theme::detect();
+        $rune   = SafeText::line($rune);
         $runeW  = max(1, Width::string($rune));
         $repeat = intdiv($width ?? 2, $runeW);
         $bare   = str_repeat($rune, $repeat);
@@ -129,6 +131,7 @@ final class Section
         self::assertWidth($width);
         $theme  ??= Theme::detect();
         $label  = SafeText::line($label);  // neutralize escape/control injection
+        $rune   = SafeText::line($rune);   // the divider rune is caller display text too
         $runeW  = max(1, Width::string($rune));
         $indent = max(0, $indent);
         if ($width === null) {

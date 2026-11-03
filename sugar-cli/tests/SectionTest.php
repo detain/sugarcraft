@@ -260,4 +260,29 @@ final class SectionTest extends TestCase
         $this->assertSame('──', Section::rule(Theme::plain(), null));
         $this->assertSame('漢', Section::rule(Theme::plain(), null, '漢'));
     }
+
+    /**
+     * Security: the fill rune is caller-supplied display text and passes
+     * through SafeText at entry — injected SGR / OSC never reach the line
+     * (the fill would otherwise repeat the payload once per cell).
+     */
+    public function testRuneInjectionNeutralized(): void
+    {
+        $out = Section::header('X', Theme::plain(), leftPad: 2, width: 12, rune: "\x1b[1m=");
+        $this->assertStringNotContainsString("\x1b", $out, 'ESC must not survive the rune path');
+        $this->assertStringContainsString('=', $out);
+
+        $rule = Section::rule(Theme::plain(), width: 4, rune: "\x1b]0;a\x07-");
+        $this->assertStringNotContainsString("\x1b", $rule);
+        $this->assertStringNotContainsString("\x07", $rule);
+        $this->assertSame('----', $rule);
+    }
+
+    /** An empty rune string renders without crash (min-1 width guard inside). */
+    public function testEmptyRuneRendersWithoutCrash(): void
+    {
+        $out = Section::header('A', Theme::plain(), width: 10, rune: '');
+        $this->assertLessThanOrEqual(10, Width::string($out));
+        $this->assertStringContainsString('A', $out);
+    }
 }
