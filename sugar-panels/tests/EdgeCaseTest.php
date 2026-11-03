@@ -206,7 +206,7 @@ final class EdgeCaseTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Audit #4 — explicit clears are observable (state + rendered)
+    // Explicit clears are observable (state + rendered)
     // -------------------------------------------------------------------------
 
     public function testBorderStyleNullClearsTheStyle(): void

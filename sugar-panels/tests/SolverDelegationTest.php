@@ -24,8 +24,8 @@ use SugarCraft\Panels\Tests\Support\ReadsFrames;
  * distribute() maps each child to a Fill weighted by minWidth/minHeight solved
  * with {@see GreedySolver::withMinShare()} — whose sequential min-share floor
  * reproduces distribute()'s bespoke "reserve >=1 col per not-yet-placed child"
- * clamp. A 28 280-case offset sweep + 960-layout rendered-byte sweep confirmed
- * the distribute() migration is byte-identical; a 3456-layout offset + 6448-layout
+ * clamp. A swept grid of offset cases and rendered-byte layouts confirmed
+ * the distribute() migration is byte-identical; a further swept offset + layout
  * byte sweep did the same for distributeFlex(). These tests fail if either
  * delegation is reverted or mis-parameterised — e.g. dropping the min-share floor
  * (trailing child collapses to 0) or changing distributeFlex's compat axes
@@ -171,7 +171,7 @@ final class SolverDelegationTest extends TestCase
 
     /**
      * Characterized non-flex splits: representative offset arrays captured from
-     * the pre-migration hand-rolled distribute(). A 28 280-case sweep proved the
+     * the pre-migration hand-rolled distribute(). The swept offset grid proved the
      * withMinShare() delegation reproduces these byte-for-byte; these pins fail if
      * the mapping or the floor's reserveGap/reserveLead frame ever drifts.
      */

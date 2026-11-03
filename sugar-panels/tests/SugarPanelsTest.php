@@ -838,7 +838,7 @@ final class SugarPanelsTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Audit #1 — alignment padding must stay inside the content region
+    // Alignment padding must stay inside the content region
     // -------------------------------------------------------------------------
 
     public function testRightAlignedLineKeepsTheRightBorderIntact(): void
@@ -863,7 +863,7 @@ final class SugarPanelsTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Audit #2 — bordered boxes render their frame at min sizes
+    // Bordered boxes render their frame at min sizes
     // -------------------------------------------------------------------------
 
     public function testBorderedLeafAtTwoRowsStillDrawsFullFrame(): void
@@ -903,7 +903,7 @@ final class SugarPanelsTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Audit #5 — incremental diff keeps wide/styled cell columns truthful
+    // The incremental diff keeps wide/styled cell columns truthful
     // -------------------------------------------------------------------------
 
     public function testWideGlyphDeltaPlacesCellsAtVisibleColumns(): void
