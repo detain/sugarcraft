@@ -21,7 +21,7 @@ use SugarCraft\Input\KeyModifier;
  * Each reply family must be recognized and either mapped to a documented Msg
  * (KeyEvent/MouseEvent/FocusEvent) or drained as a TerminalReplyEvent —
  * never left in the decode buffer (stall/poisoning) and never mis-parsed as
- * a keystroke. Covers: DA1/DA2, DSR/CPR, XTWINOPS, kitty keyboard flags
+ * a keystroke. Covers: DA1/DA2, DSR/CPR, XTWINOPS, Kitty keyboard flags
  * (including the empty-codepoint `CSI ? u` form), DECRPM, private-mode CSIs,
  * OSC/DCS strings, and X10/SGR mouse — each also arriving mid keystroke
  * stream and split across reads.
@@ -204,7 +204,7 @@ final class TerminalReplyDrainTest extends TestCase
 
     public function testKittyEmptyCodepointQueryIsDrainedNotMisConsumed(): void
     {
-        // The reported symptom: `ESC [ ? u` (kitty empty-codepoint form) mis-consumed
+        // The reported symptom: `ESC [ ? u` (Kitty empty-codepoint form) mis-consumed
         // its parameters downstream. The decoder must drain it as a flags reply with
         // NO key event and NO leftover bytes feeding the next consumer.
         $events = $this->decoder->decode("\x1b[?u");
@@ -246,7 +246,7 @@ final class TerminalReplyDrainTest extends TestCase
 
     public function testKittyFlagsDrainedEvenWithKittyProtocolDisabled(): void
     {
-        // A reply is not a kitty KEY; protocol gating must not re-buffer it.
+        // A reply is not a Kitty KEY; protocol gating must not re-buffer it.
         $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableKitty: false));
         $events = $decoder->decode("\x1b[?3u");
         $this->assertCount(1, $events);

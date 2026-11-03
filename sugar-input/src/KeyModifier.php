@@ -90,9 +90,9 @@ final class KeyModifier
     }
 
     /**
-     * Build a modifier mask from a raw kitty modifier bitmask (bits already
+     * Build a modifier mask from a raw Kitty modifier bitmask (bits already
      * de-based by the caller: the wire field is 1 + mask). Bit layout per the
-     * kitty keyboard protocol: bit 0=Shift, bit 1=Alt, bit 2=Control,
+     * Kitty keyboard protocol: bit 0=Shift, bit 1=Alt, bit 2=Control,
      * bit 3=Super, bit 4=Hyper, bit 5=Meta, bit 6=CapsLock, bit 7=NumLock.
      *
      * The lock-state bits arrive only on the explicit-event-type form (legacy

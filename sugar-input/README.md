@@ -20,7 +20,7 @@ New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-repl
 - **X10 mouse** — `CSI M` three-byte compressed reports (mode 1000), not printable-key spam
 - **Focus events** — DECSET 1004 via `CSI I` / `CSI O`
 - **Bracketed paste** — `CSI 200 ~` … `CSI 201 ~` with 1 MiB safety cap (a paste over the cap announces one truncated `PasteEvent`, then DISCARDS the remaining body bytes until the real terminator — see [Bracketed paste](#bracketed-paste))
-- **Terminal replies** — DA1/DA2, DSR/CPR, XTWINOPS, kitty flags, DECRPM and OSC/DCS/APC/PM strings are drained as `TerminalReplyEvent` — never buffered, never mis-parsed as keys (see below)
+- **Terminal replies** — DA1/DA2, DSR/CPR, XTWINOPS, Kitty flags, DECRPM and OSC/DCS/APC/PM strings are drained as `TerminalReplyEvent` — never buffered, never mis-parsed as keys (see below)
 
 ## Quickstart
 
@@ -143,7 +143,7 @@ the right shape first:
   waiting in the canonical line buffer.
 - **mode negotiation** — DECSET/DECRST for mouse reporting (`?1000`/`?1003`/
   `?1006`), bracketed paste (`?2004`), focus reporting (`?1004`), and the
-  kitty keyboard flags query/enable sequence are the host's writes. The
+  Kitty keyboard flags query/enable sequence are the host's writes. The
   decoder is stateless about which modes are on; a disabled
   `EscapeDecoderOptions` family only filters parsing, it does not enable or
   disable anything on the wire.
@@ -201,18 +201,18 @@ compare `isRelease()` rather than parsing the prefix.
 | Text | every printable character (`a`… `Z`, digits, punctuation, Unicode runes as the character itself), `Space` |
 | Editing/whitespace | `Tab`, `Enter`, `Backspace`, `Escape`, `Backtab`, `Insert`, `Delete`, `Home`, `End`, `PageUp`, `PageDown` |
 | Arrows | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` |
-| Function | `F1`–`F24` (legacy families), up to `F35` via kitty |
+| Function | `F1`–`F24` (legacy families), up to `F35` via Kitty |
 | Keypad | `KP0`–`KP9`, `KPDecimal`, `KPDivide`, `KPMultiply`, `KPSubtract`, `KPAdd`, `KPEnter`, `KPEqual`, `KPSeparator`, `KPBegin`, `KPLeft`, `KPRight`, `KPUp`, `KPDown`, `KPPageUp`, `KPPageDown`, `KPHome`, `KPEnd`, `KPInsert`, `KPDelete` |
 | Locks/navigation state | `CapsLock`, `ScrollLock`, `NumLock`, `PrintScreen`, `Pause`, `Menu` |
-| Media (kitty) | `MediaPlay`…`MediaRecord`, `LowerVolume`, `RaiseVolume`, `MuteVolume` |
-| Modifier-as-key (kitty) | `LeftShift`, `RightShift`, `LeftCtrl`, `RightCtrl`, `LeftAlt`, `RightAlt`, `LeftSuper`, `RightSuper`, `LeftHyper`, `RightHyper`, `LeftMeta`, `RightMeta`, `IsoLevel3Shift`, `IsoLevel5Shift` |
+| Media (Kitty) | `MediaPlay`…`MediaRecord`, `LowerVolume`, `RaiseVolume`, `MuteVolume` |
+| Modifier-as-key (Kitty) | `LeftShift`, `RightShift`, `LeftCtrl`, `RightCtrl`, `LeftAlt`, `RightAlt`, `LeftSuper`, `RightSuper`, `LeftHyper`, `RightHyper`, `LeftMeta`, `RightMeta`, `IsoLevel3Shift`, `IsoLevel5Shift` |
 | Ctrl-paired | lowercase letter with the Ctrl modifier (`0x01` → `a`+Ctrl) |
 | Raw fallback | NUL and 0x1C–0x1F as the byte itself |
 
 Shift+letter is protocol-dependent — code accordingly: legacy terminals send
-the capital directly (`Shift+a` → key `"A"`, NO `SHIFT` bit), the kitty
+the capital directly (`Shift+a` → key `"A"`, NO `SHIFT` bit), the Kitty
 protocol sends key `"a"` WITH the `SHIFT` bit. A match arm on `"A"` silently
-dies the moment kitty negotiation turns on; match `mb_strtolower($key)` plus
+dies the moment Kitty negotiation turns on; match `mb_strtolower($key)` plus
 `$modifiers->includes(KeyModifier::SHIFT)` if you need case-independent
 handling of both worlds.
 
@@ -226,7 +226,7 @@ $event->modifiers->value(); // the underlying bitmask, for caching/comparison
 
 The constants `SHIFT`, `ALT`, `CTRL`, `META`, `SUPER`, `HYPER` (plus
 `CAPS_LOCK`, `NUM_LOCK`) document the wire bit layout the decoders map from:
-`KeyModifier::fromKittyInt()` reads kitty bits 0–5 plus the lock-state bits
+`KeyModifier::fromKittyInt()` reads Kitty bits 0–5 plus the lock-state bits
 64/128 (which ride only the explicit `:event-type` sub-param form — the
 legacy form masks them off), `fromXtermParam()` converts the legacy
 `1 + bitmask` field, `fromSgrMouse()` extracts mouse-report bits. `all()`
@@ -236,13 +236,13 @@ the named factories (`none()`, `alt()`, `ctrl()`, `shift()`, `altShift()`,
 combining API. The xterm legacy `+8` modifier slot is named `META` in this
 library's mapping (the spec calls that bit "meta"; ctlseqs reserves "super"
 for different reporting) — treat legacy `;9A` as Meta+ArrowUp and rely on the
-kitty path for true Super.
+Kitty path for true Super.
 
 Reserved combinations (the legacy wire cannot distinguish these — do not
 design keymaps against the distinction): `Ctrl+I` IS `Tab`, `Ctrl+J`/`Ctrl+M`
 ARE `Enter`, `Ctrl+[` IS `Escape`, `Ctrl+@`/`Ctrl+Space` collide with NUL,
 and Alt via the `ESC` prefix collapses with Meta/Escape-then-key on legacy
-terminals. The kitty protocol disambiguates all of them; negotiating it is
+terminals. The Kitty protocol disambiguates all of them; negotiating it is
 the host's duty (above).
 
 ## Terminal replies — drained, not dropped
@@ -250,7 +250,7 @@ the host's duty (above).
 A terminal answers its queries on the **same file descriptor the user types
 on**, so unsolicited reply bytes land in the middle of the keystroke stream:
 a DA1 answer right after an arrow key, a cursor-position report (`ESC [ row ;
-col R`) while the user holds a key, kitty keyboard flags (`ESC [ ? flags u`).
+col R`) while the user holds a key, Kitty keyboard flags (`ESC [ ? flags u`).
 The decoder recognizes every reply family below, **structurally consumes it**
 (so the buffer never stalls and later keystrokes never vanish behind it), and
 surfaces it as a `TerminalReplyEvent`:
@@ -261,7 +261,7 @@ surfaces it as a `TerminalReplyEvent`:
 | `cursor-position` | `CSI row ; col R` | DSR/CPR report (never a phantom `F3`) |
 | `dsr-status` | `CSI 0 n` / `CSI 3 n` (any `CSI … n` final drains) | DSR ok / not-ok reply — every `n`-final frame is drained so an echoed query can never mis-parse as a key |
 | `window-report` | `CSI Pm t` | XTWINOPS geometry/resize report |
-| `kitty-flags` | `CSI ? flags u` (incl. bare `CSI ? u`) | kitty keyboard flags query/reply |
+| `kitty-flags` | `CSI ? flags u` (incl. bare `CSI ? u`) | Kitty keyboard flags query/reply |
 | `mode-report` | `CSI ? mode ; status $ y` (public `CSI mode ; status $ y` too) | DECRPM mode report |
 | `csi-private` | any other complete `CSI ? …` / `CSI > …` | private-mode sequence, drained |
 | `string` | `OSC / DCS / APC / PM … ST/BEL` | string replies (color reports, termcap, tmux echo); `body` + `truncated` carry the payload |
@@ -303,8 +303,8 @@ $decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
 `droppedUnknownCount()` means bytes were consumed but produced no event. That
 includes genuinely unrecognized sequences (unknown private CSIs, unmapped SS3
-finals, malformed or non-numeric mouse reports, kitty `u`-frames below the
-functional block such as `11u`) **and** recognized-but-filtered ones — a kitty
+finals, malformed or non-numeric mouse reports, Kitty `u`-frames below the
+functional block such as `11u`) **and** recognized-but-filtered ones — a Kitty
 event frame when the progressive protocol is disabled, or a stray `CSI 201~`
 paste-end marker with no paste open — so a non-zero count is not necessarily a
 terminal this decoder fails to model. `reset()` zeroes all counters along with

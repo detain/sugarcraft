@@ -27,7 +27,7 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
  *  - SS3 keys incl. application-keypad mode (ESC O p..y, l, m, M — DECKPAM)
  *  - Focus events (CSI I / CSI O)
  *  - Bracketed paste (CSI 200 ~ ... CSI 201 ~)
- *  - Unsolicited terminal REPLIES (DA1/DA2, DSR/CPR, XTWINOPS, kitty flags,
+ *  - Unsolicited terminal REPLIES (DA1/DA2, DSR/CPR, XTWINOPS, Kitty flags,
  *    DECRPM, OSC/DCS/APC/PM strings) — structurally consumed and surfaced as
  *    {@see \SugarCraft\Input\Event\TerminalReplyEvent}, never left in the
  *    buffer and never mis-parsed as a keystroke.
@@ -185,7 +185,7 @@ final class EscapeDecoder
     /** Lifetime count of complete-but-unrecognized sequences consumed silently */
     private int $droppedUnknownCount = 0;
 
-    /** Protocol toggles gating mouse / kitty / focus / paste parsing. */
+    /** Protocol toggles gating mouse / Kitty / focus / paste parsing. */
     private readonly EscapeDecoderOptions $options;
 
     /**
@@ -803,7 +803,7 @@ final class EscapeDecoder
      * Handle a Kitty keyboard protocol EVENT frame: CSI unicode-key-code
      * [:shift-code[:base-code...]] ; modifiers[:event-type] u
      *
-     * Real kitty frames carry NO private-mode "?" prefix — `CSI ? … u` is the
+     * Real Kitty frames carry NO private-mode "?" prefix — `CSI ? … u` is the
      * keyboard-flags QUERY/REPLY family and is drained as a TerminalReplyEvent
      * instead (see classifyPrivateReply). The old decoder had this inverted:
      * it parsed keys only behind "?" (so "\x1b[97;5u" produced nothing) and
@@ -1099,7 +1099,7 @@ final class EscapeDecoder
                 // The modifyOtherKeys modifier field is 1 + bitmask; 0 is malformed.
                 // Passing 0 to fromXtermParam computes (0 - 1) = -1 and sets EVERY
                 // bit, fabricating phantom Shift+Alt+Ctrl+Meta — reject it (fail fast)
-                // the same way the kitty path clamps its de-based field.
+                // the same way the Kitty path clamps its de-based field.
                 return $this->dropUnknown($rest);
             }
             $moKeyName = $this->modifyOtherKeysName((int) $mk[2]);
@@ -1355,10 +1355,10 @@ final class EscapeDecoder
      * Classify a complete private-mode CSI ("ESC [" + "?" / ">" params + final).
      *
      * A private-mode sequence on the INPUT stream is a terminal reply (or an
-     * echo of a query) — never a keystroke. Families per xterm ctlseqs / kitty
+     * echo of a query) — never a keystroke. Families per xterm ctlseqs / Kitty
      * keyboard protocol:
      *  - final "c"   → DA1 (`CSI ? Ps ; Ps c`) / DA2 (`CSI > Ps ; Ps c`) reply
-     *  - final "u"   → kitty keyboard-flags reply (`CSI ? flags u`); the bare
+     *  - final "u"   → Kitty keyboard-flags reply (`CSI ? flags u`); the bare
      *                  empty-codepoint `CSI ? u` form carries no flags
      *  - "$" + "y"   → DECRPM mode report (`CSI ? mode ; status $ y`)
      *  - final "t"   → private XTWINOPS variant (drained as window-report)
@@ -1669,7 +1669,7 @@ final class EscapeDecoder
      * those forms now count as drops instead of mis-naming printable ASCII
      * (11 is literally the control-K byte). Names use this lib's house
      * vocabulary (ArrowUp, KP0, KPDecimal — not the spec's KpUp spellings) so
-     * kitty frames and their SS3/CSI equivalents decode to one name.
+     * Kitty frames and their SS3/CSI equivalents decode to one name.
      *
      * @see https://sw.kovidgoyal.net/kitty/keyboard-protocol/ — functional key codes.
      */
@@ -1808,7 +1808,7 @@ final class EscapeDecoder
         // Space
         if ($code === 32) return 'Space';
 
-        // Letters (kitty reports the shifted codepoint; we name the letter)
+        // Letters (Kitty reports the shifted codepoint; we name the letter)
         if ($code >= 97 && $code <= 122) return chr($code);
         if ($code >= 65 && $code <= 90)  return chr($code + 32);
 
@@ -1818,13 +1818,13 @@ final class EscapeDecoder
     /**
      * Resolve a modifyOtherKeys `keysym` field to a key name.
      *
-     * The `CSI 27 ; <mods> ; <keysym> ~` report carries an X11 keysym, NOT a kitty
+     * The `CSI 27 ; <mods> ; <keysym> ~` report carries an X11 keysym, NOT a Kitty
      * functional codepoint, so it must not be fed to kittyKeyCodeToName() blindly:
      * keysyms below 0xE000 are character codes, and passing them through the text
      * leg would name control-adjacent keysyms wrong. Printable ASCII (32..126) is
      * reported as the literal character so typing '!', '"' or ' ' under
      * modifyOtherKeys=2 still reaches the app; the shared control keysyms keep
-     * their symbolic names; only the modern kitty functional range (>= 0xE000,
+     * their symbolic names; only the modern Kitty functional range (>= 0xE000,
      * arrows etc.) falls back to the shared table. Anything else is unnamed -> null.
      *
      * @see xterm ctlseqs — "modifyOtherKeys".
@@ -1869,7 +1869,7 @@ final class EscapeDecoder
 
     /**
      * Lifetime count of complete-but-unrecognized sequences consumed with no
-     * event (unknown CSI finals, malformed runs, unknown kitty key codes).
+     * event (unknown CSI finals, malformed runs, unknown Kitty key codes).
      */
     public function droppedUnknownCount(): int
     {

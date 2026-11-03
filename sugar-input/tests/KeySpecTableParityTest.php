@@ -11,7 +11,7 @@ use SugarCraft\Input\EscapeDecoder;
 use SugarCraft\Input\Event\KeyEvent;
 
 /**
- * Cross-library partition pin: sugar-input's kitty functional table and
+ * Cross-library partition pin: sugar-input's Kitty functional table and
  * sugar-core's KeyType::kittyFunctionalKeys() MUST agree on exactly which
  * codepoints at 0xE000+ name which keys. Before this lane the two libs
  * disagreed at 57399-57402 (sugar-input claimed arrows; the spec and sugar-core
@@ -104,7 +104,7 @@ final class KeySpecTableParityTest extends TestCase
         self::assertSame(
             array_keys($core),
             array_keys($ours),
-            'kitty functional codepoint partition drifted from sugar-core KeyType',
+            'Kitty functional codepoint partition drifted from sugar-core KeyType',
         );
     }
 

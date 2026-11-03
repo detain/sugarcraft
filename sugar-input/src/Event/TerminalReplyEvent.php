@@ -9,7 +9,7 @@ use SugarCraft\Input\Event;
 /**
  * A terminal REPLY that arrived unsolicited on the input stream.
  *
- * Terminals answer queries (DA1/DA2, DSR/CPR, XTWINOPS, kitty keyboard flags,
+ * Terminals answer queries (DA1/DA2, DSR/CPR, XTWINOPS, Kitty keyboard flags,
  * DECRPM, ...) and echo private-mode sequences on the SAME file descriptor the
  * user types on. Such a reply is never a keystroke: the decoder structurally
  * consumes it and emits this event instead of leaving it in the buffer (which
@@ -21,7 +21,7 @@ use SugarCraft\Input\Event;
  *  - "dsr-status"        — DSR status report `CSI 0 n` / `CSI 3 n`; any
  *                          `CSI … n` final drains, not only these two
  *  - "window-report"     — XTWINOPS `CSI Pm t`
- *  - "kitty-flags"       — kitty keyboard flags `CSI ? flags u` (incl. bare `CSI ? u`)
+ *  - "kitty-flags"       — Kitty keyboard flags `CSI ? flags u` (incl. bare `CSI ? u`)
  *  - "mode-report"       — DECRPM `CSI ? mode ; status $ y`
  *  - "csi-private"       — any other complete private-mode CSI (drained)
  *  - "string"            — OSC/DCS/APC/PM payload drained to its terminator

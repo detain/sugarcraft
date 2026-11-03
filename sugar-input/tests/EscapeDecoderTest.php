@@ -904,7 +904,7 @@ final class EscapeDecoderTest extends TestCase
 
     public function testKittyLockStateBitsRideTheExplicitEventTypeForm(): void
     {
-        // m4: kitty modifier bits 6=CapsLock(64) and 7=NumLock(128) map to the
+        // m4: Kitty modifier bits 6=CapsLock(64) and 7=NumLock(128) map to the
         // CAPS_LOCK/NUM_LOCK constants on the explicit-event-type form.
         $caps = $this->decoder->decode("\x1b[97;65:1u");  // 1 + 64
         $this->assertTrue($caps[0]->modifiers->includes(KeyModifier::CAPS_LOCK));
@@ -1875,10 +1875,10 @@ final class EscapeDecoderTest extends TestCase
         $this->assertCount(1, $paste);
         $this->assertInstanceOf(PasteEvent::class, $paste[0]);
 
-        $kitty = $decoder->decode("\x1b[97;1u");
-        $this->assertCount(1, $kitty);
-        $this->assertInstanceOf(KeyEvent::class, $kitty[0]);
-        $this->assertSame('a', $kitty[0]->key);
+        $Kitty = $decoder->decode("\x1b[97;1u");
+        $this->assertCount(1, $Kitty);
+        $this->assertInstanceOf(KeyEvent::class, $Kitty[0]);
+        $this->assertSame('a', $Kitty[0]->key);
     }
 
     /**
@@ -1920,7 +1920,7 @@ final class EscapeDecoderTest extends TestCase
     }
 
     /**
-     * Load-bearing: kitty disabled → CSI ?…u emits no KeyEvent and is consumed.
+     * Load-bearing: Kitty disabled → CSI ?…u emits no KeyEvent and is consumed.
      */
     public function testKittyDisabledSuppressesKeyEvent(): void
     {
@@ -1950,7 +1950,7 @@ final class EscapeDecoderTest extends TestCase
 
     /**
      * Disabling one protocol leaves the others intact: mouse off, but focus /
-     * kitty / paste still decode normally.
+     * Kitty / paste still decode normally.
      */
     public function testSelectiveDisableLeavesOthersEnabled(): void
     {
@@ -2339,7 +2339,7 @@ final class EscapeDecoderTest extends TestCase
     public function testModifyOtherKeysPunctuationNotMisNamedAsFunctionKey(): void
     {
         // Regression for the keysym-vs-kitty-codepoint conflation: X11 keysym 33 is
-        // ASCII '!' and 34 is '"'. The kitty legacy 11..34 F-key table used to shadow
+        // ASCII '!' and 34 is '"'. The Kitty legacy 11..34 F-key table used to shadow
         // these into 'F19'/'F20'. Printable keysyms must report the literal glyph.
         $bang = $this->decoder->decode("\x1b[27;1;33~")[0];
         $this->assertSame('!', $bang->key);
@@ -2366,7 +2366,7 @@ final class EscapeDecoderTest extends TestCase
     public function testModifyOtherKeysPreservesLetterCase(): void
     {
         // The keysym field carries the exact character; case must not be forced to
-        // lower (kitty's table maps both 65 and 97 to 'a'). keysym 65 -> 'A'.
+        // lower (Kitty's table maps both 65 and 97 to 'a'). keysym 65 -> 'A'.
         $shiftA = $this->decoder->decode("\x1b[27;2;65~")[0];
         $this->assertSame('A', $shiftA->key);
         $this->assertTrue($shiftA->modifiers->includes(KeyModifier::SHIFT));
