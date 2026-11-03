@@ -186,69 +186,138 @@ final class GameTest extends TestCase
         @rmdir($tmp);
     }
 
-    public function testReadScoresThrowsOnNonArrayJson(): void
+    public function testReadScoresQuarantinesNonArrayTopLevelInsteadOfThrowing(): void
     {
+        // M3 in-step flip: the old pin asserted launch THREW on a non-array
+        // save (the brick). Launch now fails soft with a quarantine artifact.
         $tmp = sys_get_temp_dir() . '/candy-flappy-test-' . uniqid();
         mkdir($tmp . '/.candy-flappy', 0755, true);
         file_put_contents($tmp . '/.candy-flappy/scores.json', '42');
-        $this->expectException(\RuntimeException::class);
-        Game::start(static fn(int $_max): int => 0, $tmp);
+        $g = Game::start(static fn(int $_max): int => 0, $tmp);
+        $this->assertSame([], $g->highScores());
+        $this->assertFileDoesNotExist($tmp . '/.candy-flappy/scores.json');
+        array_map('unlink', glob($tmp . '/.candy-flappy/scores.json.corrupt-*') ?: []);
+        @rmdir($tmp . '/.candy-flappy');
+        @rmdir($tmp);
     }
 
-    public function testReadScoresRejectsNonArrayScalarViaSharedGuard(): void
+    public function testCorruptSaveIsQuarantinedAndLaunchContinues(): void
     {
-        // A present-but-corrupt saved-state file whose top level is a JSON
-        // scalar (not an array) must be rejected with a clean RuntimeException
-        // via the sugar-core Json::decodeArray SSOT — never a raw TypeError
-        // from array_filter() on a non-array. The pre-SSOT loader ALREADY
-        // rejected a non-array via a local is_array() check, so a bare
-        // expectException(RuntimeException) pins nothing the migration added.
-        // Assert the chained cause instead: decodeArray's own \RuntimeException
-        // (top level not an array) is wrapped with the localized file-format
-        // message, whereas the old is_array() path threw with no cause.
-        $tmp = sys_get_temp_dir() . '/candy-flappy-test-' . uniqid();
-        mkdir($tmp . '/.candy-flappy', 0755, true);
-        file_put_contents($tmp . '/.candy-flappy/scores.json', '"corrupt"');
-        try {
-            Game::start(static fn(int $_max): int => 0, $tmp);
-            $this->fail('Expected a non-array saved-state top level to be rejected');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Invalid high score file format', $e->getMessage());
-            $this->assertInstanceOf(\RuntimeException::class, $e->getPrevious());
-            $this->assertStringContainsString(
-                'Expected JSON top level to be an array',
-                (string) $e->getPrevious()?->getMessage(),
-            );
-        } finally {
-            @unlink($tmp . '/.candy-flappy/scores.json');
+        // M3 (lib-reviews-1102): a corrupt scores.json used to BRICK launch
+        // (RuntimeException propagating out of start() -> bin exit 255).
+        // Launch now fails soft: the bad file is quarantined aside, play
+        // starts with an empty board, and the next record republishes cleanly.
+        foreach (['"corrupt"', '{not valid json', '[]oops'] as $i => $junk) {
+            $tmp = sys_get_temp_dir() . '/candy-flappy-quarantine-' . getmypid() . '-' . $i;
+            mkdir($tmp . '/.candy-flappy', 0755, true);
+            $target = $tmp . '/.candy-flappy/scores.json';
+            file_put_contents($target, $junk);
+            $g = Game::start(static fn(int $_max): int => 0, $tmp);
+            $this->assertSame([], $g->highScores(), "junk shape {$i} must seed an empty board");
+            $this->assertFileDoesNotExist($target, 'quarantine must move the bad file aside');
+            $quarantined = array_values(array_filter(
+                scandir($tmp . '/.candy-flappy'),
+                static fn(string $f): bool => str_starts_with($f, 'scores.json.corrupt-'),
+            ));
+            $this->assertCount(1, $quarantined, 'exactly one quarantine artifact per corrupt file');
+            array_map('unlink', array_map(
+                static fn(string $f): string => $tmp . '/.candy-flappy/' . $f,
+                $quarantined,
+            ));
             @rmdir($tmp . '/.candy-flappy');
             @rmdir($tmp);
         }
     }
 
-    public function testReadScoresRejectsMalformedJsonViaSharedGuard(): void
+    public function testForgedAndOversizedScoresAreClampedOnRead(): void
     {
-        // Malformed (unparseable) JSON is likewise rejected with a
-        // RuntimeException carrying the file path, preserving the pre-SSOT
-        // contract. The migration's added JSON_THROW_ON_ERROR is what makes
-        // decodeArray surface a \JsonException here; the pre-SSOT json_decode()
-        // returned null (no throw) and the is_array() check threw with NO
-        // cause. Asserting the chained \JsonException therefore pins the
-        // guard rather than the pre-existing is_array() rejection.
-        $tmp = sys_get_temp_dir() . '/candy-flappy-test-' . uniqid();
+        // m7/m8: read is the legality gate, not just is_int. Negatives,
+        // zero, absurd forgeries, non-ints, and past-cap entries never
+        // reach the board; a save file larger than the read cap is treated
+        // as corrupt (quarantined) rather than parsed.
+        $tmp = sys_get_temp_dir() . '/candy-flappy-clamp-' . getmypid();
         mkdir($tmp . '/.candy-flappy', 0755, true);
-        file_put_contents($tmp . '/.candy-flappy/scores.json', '{not valid json');
-        try {
-            Game::start(static fn(int $_max): int => 0, $tmp);
-            $this->fail('Expected malformed saved-state JSON to be rejected');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Invalid high score file format', $e->getMessage());
-            $this->assertInstanceOf(\JsonException::class, $e->getPrevious());
-        } finally {
-            @unlink($tmp . '/.candy-flappy/scores.json');
-            @rmdir($tmp . '/.candy-flappy');
-            @rmdir($tmp);
+        $forged = [
+            -5, 0, 3, '7', 4.0, 9, 11, 12, 13, 14, 15, 16, 17,
+            18, 19, 20, 999999999999999999999, 100000,
+        ];
+        file_put_contents(
+            $tmp . '/.candy-flappy/scores.json',
+            json_encode($forged, JSON_THROW_ON_ERROR),
+        );
+        $g = Game::start(static fn(int $_max): int => 0, $tmp);
+        $scores = $g->highScores();
+        // Twelve legal entries survive the clamp; the ascending top-10 cap
+        // then keeps 11..20 and sheds 3 and 9 — a cap, not a rejection.
+        $this->assertSame(range(11, 20), $scores);
+        $this->assertNotContains(-5, $scores);
+        $this->assertNotContains(0, $scores);
+        $this->assertNotContains(100000, $scores);
+        $this->assertLessThanOrEqual(Game::MAX_HIGH_SCORES, count($scores));
+        foreach ($scores as $v) {
+            $this->assertIsInt($v);
+            $this->assertGreaterThan(0, $v);
+            $this->assertLessThan(Game::SCORE_CEILING + 1, $v);
         }
+        @unlink($tmp . '/.candy-flappy/scores.json');
+        @rmdir($tmp . '/.candy-flappy');
+        @rmdir($tmp);
+    }
+
+    public function testOversizedSaveFileIsQuarantinedWithoutBeingParsed(): void
+    {
+        $tmp = sys_get_temp_dir() . '/candy-flappy-bigsave-' . getmypid();
+        mkdir($tmp . '/.candy-flappy', 0755, true);
+        $target = $tmp . '/.candy-flappy/scores.json';
+        file_put_contents($target, str_repeat('[1,2,3]', Game::MAX_SCORE_FILE_BYTES));
+        $g = Game::start(static fn(int $_max): int => 0, $tmp);
+        $this->assertSame([], $g->highScores());
+        $this->assertFileDoesNotExist($target);
+        array_map('unlink', glob($tmp . '/.candy-flappy/scores.json.corrupt-*') ?: []);
+        @rmdir($tmp . '/.candy-flappy');
+        @rmdir($tmp);
+    }
+
+    public function testPersistPublishesPrivatelyAndAtomically(): void
+    {
+        // M4: the write goes through sugar-core AtomicJsonFile with an
+        // explicit 0600 publish mode (the old bare file_put_contents landed
+        // 0664/0644 under common umasks and could tear on ENOSPC).
+        $tmp = sys_get_temp_dir() . '/candy-flappy-atomic-' . getmypid();
+        $bird = Bird::spawn(Game::BIRD_COL, (float) Game::HEIGHT);
+        for ($i = 0; $i < 5; $i++) {
+            $bird = $bird->tick();
+        }
+        $g = new Game(
+            bird: $bird,
+            pipes: [],
+            score: 5,
+            crashed: false,
+            highScores: [],
+            configDir: $tmp,
+        );
+        // Drive the real production path: the crash tick hands back the
+        // persist Cmd; executing it is what writes the file.
+        [$updated, $cmd] = $g->update(new TickMsg());
+        $this->assertTrue($updated->newRecord);
+        $this->assertNotNull($cmd);
+        $cmd();
+        $target = $tmp . '/.candy-flappy/scores.json';
+        $this->assertFileExists($target);
+        $mode = fileperms($target) & 0777;
+        $this->assertSame(0600, $mode, 'leaderboard must publish 0600');
+        $this->assertSame([5], json_decode((string) file_get_contents($target), true, 512, JSON_THROW_ON_ERROR));
+        // No temp residue: only the target + its stable lock sidecar exist.
+        $leftovers = array_values(array_filter(
+            scandir($tmp . '/.candy-flappy'),
+            static fn(string $f): bool => !in_array($f, ['.', '..', '.scores.json.lock', 'scores.json'], true),
+        ));
+        $this->assertSame([], $leftovers);
+        @chmod($tmp . '/.candy-flappy', 0755);
+        @unlink($target);
+        @unlink($tmp . '/.candy-flappy/.scores.json.lock');
+        @rmdir($tmp . '/.candy-flappy');
+        @rmdir($tmp);
     }
 
     public function testReadScoresMissingFileReturnsEmptyList(): void

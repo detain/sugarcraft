@@ -9,7 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Core\Util\Json;
+use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Flappy\PipeGenerator;
 
 /**
@@ -53,6 +53,20 @@ final class Game implements Model
     /** Upper bound on the retained high-score leaderboard. */
     public const MAX_HIGH_SCORES = 10;
 
+    /**
+     * Read ceiling (m8): a save larger than this is not a leaderboard, it is
+     * garbage or an attack — it is quarantined without being parsed.
+     */
+    public const MAX_SCORE_FILE_BYTES = 65536;
+
+    /**
+     * Legality ceiling (m7), exclusive: scores at or above this cannot have
+     * been earned at 30 ticks/s (one point per pipe, pipes spawn every
+     * PIPE_EVERY ticks), so a save claiming them is forged and the entry is
+     * dropped on read.
+     */
+    public const SCORE_CEILING = 100000;
+
     /** @var \Closure(int): int */
     private \Closure $rand;
 
@@ -80,10 +94,17 @@ final class Game implements Model
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
         $this->configDir = $configDir;
-        $this->highScoreFilePath = ($configDir ?? $this->getDefaultConfigDir()) . '/' . self::HIGH_SCORE_FILE;
+        $this->highScoreFilePath = self::scoreFilePath($configDir);
     }
 
-    private function getDefaultConfigDir(): string
+    /** Single path resolution shared by the constructor and start()
+     *  (m32: start() no longer mints a throwaway Game just to learn it). */
+    private static function scoreFilePath(?string $configDir): string
+    {
+        return ($configDir ?? self::getDefaultConfigDir()) . '/' . self::HIGH_SCORE_FILE;
+    }
+
+    private static function getDefaultConfigDir(): string
     {
         // Prefer XDG_CONFIG_HOME, then HOME, then fail closed.
         $xdg = getenv('XDG_CONFIG_HOME');
@@ -98,43 +119,57 @@ final class Game implements Model
     }
 
     /**
+     * Load the leaderboard, failing SOFT (M3, lib-reviews-1102).
+     *
+     * A corrupt, unreadable, or oversized save must never brick launch —
+     * the old path threw out of start() and bin/candy-flappy died with 255.
+     * Any such file is QUARANTINED aside (`scores.json.corrupt-<ts>`, kept
+     * for forensics, never re-read) and the board starts empty; the decode
+     * itself rides sugar-core's AtomicJsonFile::read() (Json::decodeArray
+     * SSOT underneath). Entries are legality-clamped on the way in (m7) and
+     * the raw size is capped pre-parse (m8).
+     *
      * @return list<int>
      */
     private static function readScores(string $path): array
     {
-            if (file_exists($path) === false) {
+        if (is_file($path) === false) {
             return [];
         }
-        $contents = @file_get_contents($path);
-        if ($contents === false) {
-            throw new \RuntimeException("Cannot read high score file: {$path}");
+        $size = @filesize($path);
+        if ($size === false || $size > self::MAX_SCORE_FILE_BYTES) {
+            self::quarantine($path);
+            return [];
         }
         try {
-            // Delegate decode + top-level array guard to the sugar-core SSOT
-            // so a corrupt/non-array saved-state file cannot masquerade as
-            // valid []-shaped data or surface as a raw TypeError downstream.
-            $decoded = Json::decodeArray($contents);
-        } catch (\JsonException | \RuntimeException $e) {
-            throw new \RuntimeException("Invalid high score file format: {$path}", 0, $e);
+            $decoded = AtomicJsonFile::new($path)->read();
+        } catch (\JsonException | \RuntimeException) {
+            self::quarantine($path);
+            return [];
         }
-        $scores = array_values(array_filter($decoded, 'is_int'));
+        $scores = array_values(array_filter(
+            $decoded,
+            static fn(mixed $s): bool => is_int($s) && $s > 0 && $s < self::SCORE_CEILING,
+        ));
         sort($scores, SORT_NUMERIC);
+        if (count($scores) > self::MAX_HIGH_SCORES) {
+            $scores = array_values(array_slice($scores, -self::MAX_HIGH_SCORES));
+        }
         /** @var list<int> */
         return $scores;
     }
 
+    /** Best-effort rename of a poisoned save aside; if even that fails the
+     *  file is simply left in place and ignored (launch still must not
+     *  break — every later read goes through the same soft gate). */
+    private static function quarantine(string $path): void
+    {
+        @rename($path, $path . '.corrupt-' . date('Ymd-His'));
+    }
+
     public static function start(?\Closure $rand = null, ?string $configDir = null): self
     {
-        // Derive configDir the same way the constructor does (first instance, no scores yet).
-        $tmp = new self(
-            bird:  Bird::spawn(self::BIRD_COL, self::HEIGHT / 2.0),
-            pipes: [],
-            highScores: [],
-            rand:  $rand,
-            configDir: $configDir,
-        );
-        $path = $tmp->highScoreFilePath;
-        $scores = self::readScores($path);
+        $scores = self::readScores(self::scoreFilePath($configDir));
 
         return new self(
             bird:  Bird::spawn(self::BIRD_COL, self::HEIGHT / 2.0),
@@ -197,17 +232,19 @@ final class Game implements Model
         );
     }
 
+    /**
+     * Publish the leaderboard through sugar-core's AtomicJsonFile (M4):
+     * flock-serialised temp+rename (no torn writes on ENOSPC/kill), an
+     * explicit 0600 publish mode (m9: the bare write landed 0664/0644 under
+     * common umasks), and the 0700 parent dir creation the old hand-rolled
+     * version did. A short write used to slip past the old `=== false`
+     * guard entirely (file_put_contents returns bytes, not false).
+     */
     private function persistHighScores(): void
     {
-        $dir = dirname($this->highScoreFilePath);
-        if (is_dir($dir) === false && mkdir($dir, 0700, true) === false && is_dir($dir) === false) {
-            throw new \RuntimeException("Cannot create high score directory: {$dir}");
-        }
-        $json = json_encode($this->highScores, JSON_PRETTY_PRINT);
-        $written = @file_put_contents($this->highScoreFilePath, $json);
-        if ($written === false) {
-            throw new \RuntimeException("Cannot write high score file: {$this->highScoreFilePath}");
-        }
+        AtomicJsonFile::new($this->highScoreFilePath)
+            ->withPermissions(0600)
+            ->write($this->highScores);
     }
 
     public function init(): ?\Closure
