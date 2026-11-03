@@ -11,6 +11,7 @@ use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\Direction;
 use SugarCraft\Constraints\GreedySolver;
 use SugarCraft\Constraints\Region;
+use SugarCraft\Panels\Tests\Support\ReadsFrames;
 
 /**
  * Load-bearing pins for the distribute()/distributeFlex() → sugar-constraints
@@ -31,6 +32,7 @@ use SugarCraft\Constraints\Region;
  */
 final class SolverDelegationTest extends TestCase
 {
+    use ReadsFrames;
     /**
      * @param list<int> $bases
      * @param list<int> $flexes
@@ -152,7 +154,7 @@ final class SolverDelegationTest extends TestCase
             Node::leaf('CCC')->withBorder(false)->withMinWidth(3),
         )->withBorder(false)->withSpacing(0);
 
-        $out = SugarPanels::new()->render($layout, 5, 1);
+        $out = self::body(SugarPanels::new()->render($layout, 5, 1));
         $this->assertSame('AA│CC', \rtrim($out));
     }
 

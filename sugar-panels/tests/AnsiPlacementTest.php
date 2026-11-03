@@ -8,6 +8,7 @@ use SugarCraft\Panels\{Node, SugarPanels};
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Panels\Tests\Support\ReadsFrames;
 
 /**
  * ANSI-aware content placement: escape sequences ride with the grapheme they
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class AnsiPlacementTest extends TestCase
 {
+    use ReadsFrames;
     private SugarPanels $panels;
 
     protected function setUp(): void
@@ -48,7 +50,7 @@ final class AnsiPlacementTest extends TestCase
 
     private function renderLine(string $line, int $w, int $h = 1): string
     {
-        return $this->panels->render(Node::leaf($line)->withBorder(false), $w, $h);
+        return self::body($this->panels->render(Node::leaf($line)->withBorder(false), $w, $h));
     }
 
     public function testEscapesDoNotConsumeColumns(): void
@@ -291,7 +293,7 @@ final class AnsiPlacementTest extends TestCase
         // End-to-end: a reverse-video body line in a bordered leaf. The right
         // border cell must stay an unstyled box character (no colour bleed).
         $layout = Node::leaf("\e[7mhighlighted")->withBorder(true)->withMinWidth(8)->withMinHeight(1);
-        $out = $this->panels->render($layout, 12, 3);
+        $out = self::body($this->panels->render($layout, 12, 3));
 
         // The reset appears before the row's right border glyph on the body row.
         $this->assertStringContainsString("\e[0m", $out);

@@ -9,6 +9,7 @@ use SugarCraft\Panels\Node;
 use SugarCraft\Panels\Sanitize;
 use SugarCraft\Panels\SugarPanels;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Panels\Tests\Support\ReadsFrames;
 
 /**
  * The paint boundary (sugar-core's Sanitize cannot be used wholesale here:
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class SanitizeBoundaryTest extends TestCase
 {
+    use ReadsFrames;
     private const ZONE_OPEN = "\u{E000}";
     private const ZONE_CLOSE = "\u{E001}";
 
@@ -48,7 +50,7 @@ final class SanitizeBoundaryTest extends TestCase
             ->withTitle(self::ZONE_OPEN . 'menu' . self::ZONE_CLOSE);
 
         $this->assertSame('menu', $node->title);
-        $this->assertStringNotContainsString(self::ZONE_OPEN, $this->panels->render($node, 12, 3));
+        $this->assertStringNotContainsString(self::ZONE_OPEN, self::body($this->panels->render($node, 12, 3)));
     }
 
     public function testAFrameCarriesNoZoneSentinelFromEitherTextChannel(): void
@@ -57,7 +59,7 @@ final class SanitizeBoundaryTest extends TestCase
             Node::leaf(self::ZONE_OPEN . 'click-me' . self::ZONE_CLOSE)->withBorder(true),
             Node::leaf('x')->withTitle(self::ZONE_OPEN . 'tab' . self::ZONE_CLOSE)->withBorder(true),
         );
-        $frame = $this->panels->render($layout, 20, 3);
+        $frame = self::body($this->panels->render($layout, 20, 3));
 
         $this->assertStringNotContainsString(self::ZONE_OPEN, $frame);
         $this->assertStringNotContainsString(self::ZONE_CLOSE, $frame);
@@ -106,7 +108,7 @@ final class SanitizeBoundaryTest extends TestCase
         // like part of the span, and the painted row then returns to column 0
         // over the border the renderer already drew.
         $layout = Node::leaf("\x1b[7mleft\rX")->withBorder(true);
-        $frame = $this->panels->render($layout, 10, 3);
+        $frame = self::body($this->panels->render($layout, 10, 3));
 
         $this->assertStringNotContainsString("\r", $frame, 'no control byte may reach the terminal from a frame');
         $this->assertSame(3, \count(\explode("\n", $frame)), 'the frame keeps its row count');
@@ -129,8 +131,8 @@ final class SanitizeBoundaryTest extends TestCase
         // Fresh renderers: a repeated size on one instance takes the diff path
         // and legitimately paints nothing.
         $this->assertSame(
-            SugarPanels::new()->render($spaced, 12, 1),
-            SugarPanels::new()->render($tabbed, 12, 1),
+            self::body(SugarPanels::new()->render($spaced, 12, 1)),
+            self::body(SugarPanels::new()->render($tabbed, 12, 1)),
             'the renderer charges a tab what the terminal advances by, so both shapes agree',
         );
     }
@@ -157,7 +159,7 @@ final class SanitizeBoundaryTest extends TestCase
         $this->assertSame($osc, Sanitize::painted($osc));
 
         // The frame keeps the payload visible and the sequence zero-width.
-        $row = \explode("\n", SugarPanels::new()->render(Node::leaf($osc)->withBorder(false), 8, 1))[0];
+        $row = \explode("\n", self::body(SugarPanels::new()->render(Node::leaf($osc)->withBorder(false), 8, 1)))[0];
 
         $this->assertStringContainsString("\x1b]0;title\x07", $row);
         $this->assertSame('after', \rtrim(\preg_replace('/\x1b\][^\x07]*\x07/', '', $row) ?? '', ' '));
@@ -179,7 +181,7 @@ final class SanitizeBoundaryTest extends TestCase
         $styled = "\x1b[31mred\x1b[0m\nsecond\n\x1b[1mbold";
 
         $this->assertSame($styled, Sanitize::painted($styled));
-        $this->assertStringContainsString("\x1b[31mred", $this->panels->render(Node::leaf($styled)->withBorder(false), 12, 3));
+        $this->assertStringContainsString("\x1b[31mred", self::body($this->panels->render(Node::leaf($styled)->withBorder(false), 12, 3)));
     }
 
     public function testTitlesFlattenLineBreaksBecauseTheyPaintOnOneRow(): void
@@ -241,7 +243,7 @@ final class SanitizeBoundaryTest extends TestCase
             Node::leaf('Status: ok')->withBorder(true),
             Node::leaf('second line')->withBorder(true),
         );
-        $frame = $this->panels->render($layout, 20, 8);
+        $frame = self::body($this->panels->render($layout, 20, 8));
         $stripped = \preg_replace('/\x1b\[[0-9;]*m/', '', $frame);
 
         $this->assertStringContainsString('Status: ok', $stripped);

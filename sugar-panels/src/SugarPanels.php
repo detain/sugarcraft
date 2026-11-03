@@ -52,6 +52,26 @@ final class SugarPanels
     private const MAX_PENDING_ESCAPES = 8192;
 
     /**
+     * Absolute cursor home (CUP to row 1, column 1) prefixed to EVERY frame.
+     *
+     * A frame is only replayable if the terminal knows where it starts. Diff
+     * ops address cells absolutely, but the encoder skips a leading CUP when
+     * the first change is at (0,0) — it then paints wherever the previous
+     * frame happened to leave the cursor, which is how one 'A' plus one 'B'
+     * came to read 'AB'. Homing each frame makes full repaints and deltas land
+     * on the same origin regardless of cursor history.
+     */
+    private const HOME = "\x1b[H";
+
+    /**
+     * Erase-in-display, prefixed to a full frame only when the viewport
+     * RESIZED. Cells outside the new viewport are never visited by the new
+     * frame, so without an erase the old frame's glyphs sit on screen as
+     * ghosts (a shrink leaves stale columns and rows behind).
+     */
+    private const ERASE = "\x1b[2J";
+
+    /**
      * Per-Style SGR-prefix cache, keyed by the Style OBJECT via a WeakMap.
      *
      * A WeakMap ties each entry's lifetime to its Style: when a style is GC'd,
@@ -138,6 +158,23 @@ final class SugarPanels
      * On subsequent renders with the same dimensions, emits only the
      * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
      *
+     * FRAME PROTOCOL — every returned string is self-positioning: it opens with
+     * an absolute cursor home (ESC [ H), so a full frame and a delta both paint
+     * from row 1 column 1 of the viewport no matter where the previous frame
+     * left the cursor. Diff ops address cells absolutely but the encoder omits a
+     * leading CUP for a change at (0, 0), so without the home a delta lands
+     * wherever the last frame happened to stop. A full frame that follows a
+     * RESIZE additionally opens with erase-in-display (ESC [ 2J): cells that the
+     * new viewport cannot reach are never visited by the new frame, and would
+     * otherwise keep the old frame's glyphs on screen. The erase is emitted only
+     * on a resize — never for a first frame, a zero-area frame or a delta — so a
+     * host is never surprised by a wipe it did not cause.
+     *
+     * Because a delta only carries changed cells, the sequence is opaque to text
+     * extraction: capture a full frame (first render, after {@see
+     * resetPreviousFrame()}, or after any resize) when a screen reader, clipboard
+     * or log needs readable text rather than a cell patch.
+     *
      * @param Node $root   Layout node tree
      * @param int  $width  Viewport width in cells (0 allowed → empty rows; negative rejected)
      * @param int  $height Viewport height in lines (0 allowed → ''; negative rejected)
@@ -182,8 +219,17 @@ final class SugarPanels
             $this->previousCells = null;
             $this->previousFrame = null;
 
+            // Nothing is painted, so nothing needs positioning: a zero-area
+            // frame costs no protocol bytes either.
             return $fullOutput;
         }
+
+        // 'Had state' and 'the state does not fit this viewport' are different
+        // events: only a RESIZE needs the erase. A renderer that was merely
+        // reset (or that just painted a zero-area frame) has nothing on screen
+        // to clear, and the host's own startup paint must not wipe the terminal.
+        $hadState = $this->previousCells !== null;
+        $resized = $hadState && ($this->prevWidth !== $width || $this->prevHeight !== $height);
 
         // First frame (or after a resize): emit the full output and remember the
         // cell GRID. Building the diff buffer here is pure waste for callers that
@@ -192,12 +238,15 @@ final class SugarPanels
         // grid — not the flattened string — is the retained state: re-splitting
         // the flat string cannot recover cell boundaries once multi-byte glyphs
         // and escape-prefixed cells have been concatenated.
-        if ($this->previousCells === null || $this->prevWidth !== $width || $this->prevHeight !== $height) {
+        if (!$hadState || $resized) {
             $this->previousCells = $cells;
             $this->prevWidth = $width;
             $this->prevHeight = $height;
             $this->previousFrame = null;
-            return $fullOutput;
+
+            // A resize retires cells that the new frame cannot reach: their old
+            // glyphs would otherwise sit on screen permanently.
+            return ($resized ? self::ERASE : '') . self::HOME . $fullOutput;
         }
 
         // Subsequent frames with same dimensions: materialise the previous buffer lazily
@@ -211,7 +260,7 @@ final class SugarPanels
         $this->previousCells = $cells;
 
         $encoder = new DiffEncoder();
-        return $encoder->encode($ops);
+        return self::HOME . $encoder->encode($ops);
     }
 
     /**
@@ -1211,6 +1260,16 @@ final class SugarPanels
     /**
      * Reset the previous-frame buffer, forcing the next render to emit
      * a full frame (used on window resize or cursor-position-lost events).
+     *
+     * The next frame carries the cursor home but NO erase: this renderer may own
+     * a region rather than the whole screen, and wiping on a manual reset is a
+     * surprise the caller did not ask for. Call it when the terminal state is
+     * suspect, or to capture a full frame for text extraction (a delta only
+     * carries changed cells and is unreadable as text).
+     *
+     * The per-Style SGR-prefix cache is deliberately NOT dropped: a cached
+     * opening run belongs to a Style object, not to a frame, so it stays valid
+     * across a reset — rebuilding it only bought a re-derivation pass.
      */
     public function resetPreviousFrame(): void
     {
@@ -1218,8 +1277,5 @@ final class SugarPanels
         $this->previousCells = null;
         $this->prevWidth = null;
         $this->prevHeight = null;
-        // Drop the per-Style SGR-prefix cache too: a reset means "forget prior
-        // render state", so the prefix cache is rebuilt alongside the frame.
-        $this->sgrPrefixCache = new \WeakMap();
     }
 }

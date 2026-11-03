@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Panels\{Node, SugarPanels};
 use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Panels\Tests\Support\ReadsFrames;
 
 /**
  * Flex / grow children: a layout can express "header=1 fixed, content=FILL,
@@ -17,6 +18,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class FlexLayoutTest extends TestCase
 {
+    use ReadsFrames;
     private SugarPanels $panels;
 
     protected function setUp(): void
@@ -27,7 +29,7 @@ final class FlexLayoutTest extends TestCase
     /** @return list<string> rendered rows (rtrimmed) */
     private function rows(Node $layout, int $w, int $h): array
     {
-        return array_map('rtrim', explode("\n", $this->panels->render($layout, $w, $h)));
+        return array_map('rtrim', explode("\n", self::body($this->panels->render($layout, $w, $h))));
     }
 
     /** Count rows whose first non-space content matches /^c\d/ (content body lines). */
@@ -83,7 +85,7 @@ final class FlexLayoutTest extends TestCase
             $this->panels->leaf("b1\nb2\nb3\nb4\nb5\nb6\nb7\nb8\nb9")->withBorder(false)->withFlex(1),
         )->withBorder(false)->withSpacing(1);
 
-        $rows = array_map('rtrim', explode("\n", $this->panels->render($layout, 12, 13)));
+        $rows = array_map('rtrim', explode("\n", self::body($this->panels->render($layout, 12, 13))));
         $a = count(array_filter($rows, static fn (string $r): bool => str_starts_with(ltrim($r), 'a')));
         $b = count(array_filter($rows, static fn (string $r): bool => str_starts_with(ltrim($r), 'b')));
 
@@ -101,7 +103,7 @@ final class FlexLayoutTest extends TestCase
             $this->panels->leaf('TENCHARABC')->withBorder(false)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
-        $out = $this->panels->render($layout, 20, 1);
+        $out = self::body($this->panels->render($layout, 20, 1));
         $this->assertStringContainsString('TENCHARABC', $out);
         $this->assertStringContainsString('S', $out);
     }
@@ -134,7 +136,7 @@ final class FlexLayoutTest extends TestCase
             $this->panels->leaf('BOT')->withBorder(false)->withMinHeight(3),
         )->withBorder(false);
 
-        $out = $this->panels->render($layout, 10, 2); // only 2 rows for 6+ requested
+        $out = self::body($this->panels->render($layout, 10, 2)); // only 2 rows for 6+ requested
         $this->assertIsString($out);
         $this->assertStringContainsString('TOP', $out);
     }
@@ -186,7 +188,7 @@ final class FlexLayoutTest extends TestCase
             $this->panels->leaf(str_repeat('X', 20))->withBorder(false)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
-        $out = $this->panels->render($layout, 12, 1);
+        $out = self::body($this->panels->render($layout, 12, 1));
 
         // Fixed child now reserves its full footprint → its content is not clipped.
         $this->assertStringContainsString('SIDE', $out);
@@ -206,7 +208,7 @@ final class FlexLayoutTest extends TestCase
             $this->panels->leaf("b1\nb2\nb3\nb4\nb5\nb6")->withBorder(false)->withGrow(),
         )->withBorder(false)->withSpacing(1);
 
-        $rows = array_map('rtrim', explode("\n", $this->panels->render($layout, 10, 7)));
+        $rows = array_map('rtrim', explode("\n", self::body($this->panels->render($layout, 10, 7))));
 
         // Header survives: blank top-margin row, then 'TOP' on row 1.
         $this->assertSame('', $rows[0]);
