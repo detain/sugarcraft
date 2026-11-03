@@ -215,6 +215,15 @@ final class Table
     {
         $clone = clone $this;
         $clone->rows    = $rows;
+        // Expansion is tracked by Row object identity: rows swapped out from
+        // under the table can no longer be expanded, and retaining the stale
+        // objects would pin them forever (audit M12: the leak was released
+        // only by re-toggling the SAME object, which a refresh makes
+        // impossible). Prune to the identities that still exist.
+        $clone->expandedRows = \array_values(\array_filter(
+            $clone->expandedRows,
+            static fn (Row $r): bool => \in_array($r, $rows, true),
+        ));
         $clone->resetCursor();
         $clone->invalidateRenderCaches();
         return $clone;
@@ -240,12 +249,15 @@ final class Table
      * search edited — re-anchors here: a selection index chosen against the
      * old view has no meaning in the new one, and a page beyond the shrunken
      * result would render an empty table (audit #5/#9: one cursor domain,
-     * always inside the view).
+     * always inside the view). Scrolling re-anchors with the cursor: a deep
+     * scroll against a narrowed view stranded the frame as a header-only box
+     * (audit M9).
      */
     private function resetCursor(): void
     {
         $this->selectedIndex = 0;
         $this->page = 0;
+        $this->scrollY = 0;
     }
 
     /**
@@ -709,6 +721,7 @@ final class Table
         $clone = clone $this;
         $clone->selectedIndex = \min(\count($view) - 1, $clone->selectedIndex + 1);
         $clone->page = $this->pageForIndex($clone->selectedIndex);
+        $clone->followCursor();
         return $clone;
     }
 
@@ -723,6 +736,7 @@ final class Table
         $clone = clone $this;
         $clone->selectedIndex = \max(0, $clone->selectedIndex - 1);
         $clone->page = $this->pageForIndex($clone->selectedIndex);
+        $clone->followCursor();
         return $clone;
     }
 
@@ -741,6 +755,30 @@ final class Table
     }
 
     /**
+     * Keep the cursor inside the viewport window on this (clone) instance:
+     * scrolling follows the selection the way paging already does. Without
+     * it the highlight can walk out of existence under a fixed viewport
+     * (audit M9: SelectNext moved the page but never scrollY).
+     */
+    private function followCursor(): void
+    {
+        if ($this->viewportHeight <= 0) {
+            return;
+        }
+        $pageOffset = $this->pageSize > 0 ? $this->page * $this->pageSize : 0;
+        $slot = $this->selectedIndex - $pageOffset;
+        if ($slot < 0) {
+            $slot = 0;
+        }
+        if ($slot < $this->scrollY) {
+            $this->scrollY = $slot;
+        } elseif ($slot >= $this->scrollY + $this->viewportHeight) {
+            $this->scrollY = $slot - $this->viewportHeight + 1;
+        }
+        $this->scrollY = \max(0, \min($this->scrollY, $this->maxScrollY()));
+    }
+
+    /**
      * Move the selection directly to a 0-based index in the PAGE-GLOBAL
      * filtered/sorted view, clamped to it, and auto-page so the cursor stays
      * visible (page = intdiv(index, pageSize)) — exactly what a caller
@@ -756,6 +794,7 @@ final class Table
         $clone = clone $this;
         $clone->selectedIndex = \max(0, \min(\count($view) - 1, $index));
         $clone->page = $this->pageForIndex($clone->selectedIndex);
+        $clone->followCursor();
         return $clone;
     }
 
@@ -844,18 +883,22 @@ final class Table
     }
 
     /**
-     * Compute the maximum allowed scrollY value.
+     * The largest scrollY the current view can show.
      *
-     * When viewportHeight is 0, no scrolling is possible so max is 0.
-     * Otherwise max is max(0, totalFilteredRows - viewportHeight).
+     * Page-aware: with pagination on, the scrollable region is the rows of
+     * the CURRENT page, not the whole filtered set (audit M9: a page-blind
+     * End key parked the viewport past the page and rendered a header-only
+     * box with live matches stranded off-screen). Public so hosts can drive
+     * paging UI from it instead of re-deriving the geometry (audit M19).
      */
-    private function maxScrollY(): int
+    public function maxScrollY(): int
     {
         if ($this->viewportHeight <= 0) {
             return 0;
         }
-        $total = $this->TotalRows();
-        return \max(0, $total - $this->viewportHeight);
+        $visible = $this->pageSize > 0 ? \count($this->pagedRows()) : $this->TotalRows();
+
+        return \max(0, $visible - $this->viewportHeight);
     }
 
     // -------------------------------------------------------------------------
@@ -1475,13 +1518,13 @@ final class Table
         // Compute and cache column widths for this render pass
         $this->computedColumnWidths = $this->computeColumnWidths($totalWidth);
 
-        // Apply viewport virtualization — scrollY offset into the paged view
+        // Viewport virtualization " scrollY offsets into the paged view,
+        // clamped to what the view can actually show: a stale deep scroll
+        // must never strand the frame into an empty box (audit M9). With no
+        // viewport the scroll contributes nothing (maxScrollY is 0).
+        $scroll = \min($this->scrollY, $this->maxScrollY());
         if ($this->viewportHeight > 0) {
-            if ($this->scrollY >= \count($rows)) {
-                $rows = [];
-            } else {
-                $rows = \array_slice($rows, $this->scrollY, $this->viewportHeight);
-            }
+            $rows = \array_slice($rows, $scroll, $this->viewportHeight);
         }
 
         // Calculate buffer dimensions
@@ -1563,7 +1606,7 @@ final class Table
             $bufferRow++;
         } else {
             foreach ($rows as $ri => $row) {
-                $isSelected = (($pageOffset + $ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
+                $isSelected = (($pageOffset + $ri + $scroll) === $this->selectedIndex) && $this->selectable;
                 if ($this->isExpandedByRow($row)) {
                     $buffer = $this->fillExpandedRow($buffer, $bufferRow, $row, $ri, $isSelected, $visibleWidth, $visibleColumnIndices);
                     $bufferRow++;
