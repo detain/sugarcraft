@@ -124,11 +124,58 @@ final class YamlDialectTest extends TestCase
         $this->assertSame('', YamlDialect::buildFallback([]));
     }
 
+
+
     public function testFallbackStillRefusesGarbageWithSyntaxError(): void
     {
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Syntax error');
         YamlDialect::parseFallback('- just a list item');
+    }
+
+    public function testFallbackRefusalNamesTheLineAndReason(): void
+    {
+        // A bare 'Syntax error' on a large file gave nothing to fix; the
+        // fallback now reports the offending line number and its defect.
+        try {
+            YamlDialect::parseFallback("good: 1\nalso-good: 2\nthis line has no colon at all");
+            $this->fail('expected RuntimeException');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Syntax error on line 3', $e->getMessage());
+            $this->assertStringContainsString('key: value', $e->getMessage());
+        }
+    }
+
+    public function testFallbackSkipsWhitespaceOnlyLines(): void
+    {
+        // Whitespace-only lines used to reach the pair splitter as empty
+        // strings and read offset 0 of nothing (a PHP warning — fatal under
+        // failOnWarning, garbage in every other consumer).
+        $parsed = YamlDialect::parseFallback("a: 1\n   \n\t\nb: 2\n");
+        $this->assertSame(['a' => '1', 'b' => '2'], $parsed);
+    }
+
+    public function testReservedKeyReasonIsFormatScoped(): void
+    {
+        // The JSON envelope reserves _ttl/_binary; the YAML dialect reserves
+        // the skate_* prefixes. Each format must refuse ONLY its own.
+        $this->assertNull(YamlDialect::reservedKeyReason('skate_ttl_backup', 'json'));
+        $this->assertStringContainsString('collides', (string) YamlDialect::reservedKeyReason('skate_ttl_backup', 'yaml'));
+        $this->assertStringContainsString('reserved', (string) YamlDialect::reservedKeyReason('_ttl', 'json'));
+        $this->assertNull(YamlDialect::reservedKeyReason('_ttl', 'yaml'));
+        // Legacy unscoped call still refuses both families.
+        $this->assertNotNull(YamlDialect::reservedKeyReason('skate_ttl_backup'));
+        $this->assertNotNull(YamlDialect::reservedKeyReason('_ttl'));
+    }
+
+    public function testJsonExportOfKeyWithSkatePrefixSucceeds(): void
+    {
+        // Regression: a store key starting skate_ttl_ used to block JSON
+        // export entirely, although the JSON envelope never reads it.
+        $this->store->set('skate_ttl_evil', 'x');
+        $exportCmd = new ExportCommand($this->store);
+        $decoded = \json_decode($exportCmd->exportToString('json'), true);
+        $this->assertSame('x', $decoded['skate_ttl_evil']);
     }
 
     public function testParseRefusesNonMappingTopLevel(): void

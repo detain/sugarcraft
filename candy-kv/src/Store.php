@@ -137,8 +137,10 @@ final class Store
      * Pure lookup: a miss returns $fallback and nothing is written to any
      * stream. Typo suggestions are a CLI concern — the library never emits
      * to STDERR (a consumer embedding the store in a pipeline would get
-     * attacker-controlled key material echoed into its output). Ask
+     * attacker-controlled key material echoed into its output); ask
      * {@see self::suggestionFor()} for the closest existing key instead.
+     * A binary-flagged row holding invalid base64 raises rather than
+     * returning the corrupt text (see Entry::rawValue).
      *
      * @param string $key      Key name. Supports @dbname suffix for cross-database access.
      * @param string $fallback Value to return if the key does not exist.
@@ -604,6 +606,24 @@ final class Store
      */
     private function parseKey(string $key): array
     {
+        return self::splitKey($key, $this->defaultDb);
+    }
+
+    /**
+     * The key-spelling law as a pure function: split an import/export key
+     * into [database, entry key] using the same rightmost-unescaped-'@'
+     * rule Store::set() routes by. Importers derive their per-database
+     * transaction roster through HERE, so a key spelled `a\@b` (a literal
+     * at-sign) can never be misread as naming a second database — the
+     * naive strrpos() version of this walk used to route `{"k@x":5,...}`
+     * imports through a roster that silently missed `x`.
+     *
+     * @return array{0: string, 1: string} [database name, decoded entry key]
+     * @throws \InvalidArgumentException when the entry part keeps an
+     *                                   unescaped '@' (ambiguous "a@b@c").
+     */
+    public static function splitKey(string $key, string $defaultDb): array
+    {
         // Rightmost unescaped '@' is the separator.
         $at = false;
         for ($i = \strlen($key) - 1; $i > 0; $i--) {
@@ -613,7 +633,7 @@ final class Store
             }
         }
         if ($at === false) {
-            return [$this->defaultDb, \str_replace('\\@', '@', $key)];
+            return [$defaultDb, \str_replace('\\@', '@', $key)];
         }
 
         $dbName = \substr($key, $at + 1);

@@ -6,6 +6,7 @@ namespace SugarCraft\Kv\Import;
 
 use SugarCraft\Core\Util\Json;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\YamlDialect;
 
 /**
  * Imports key/value pairs into a Store from a JSON file.
@@ -26,6 +27,15 @@ use SugarCraft\Kv\Store;
  *   "_ttl": { "key1": 3600 },
  *   "key1": "value1"
  * }
+ * and a "_binary" list naming keys whose values are base64 of raw bytes:
+ * {
+ *   "_binary": ["key1"],
+ *   "key1": "AH/7"
+ * }
+ *
+ * Anything the store cannot hold faithfully is refused up front, before a
+ * single write: a list top level, non-scalar values, and non-numeric or
+ * non-positive TTLs all raise \RuntimeException naming the offending entry.
  */
 final class JsonImporter
 {
@@ -61,25 +71,39 @@ final class JsonImporter
      * @param string $json   Raw JSON string.
      * @param bool   $atomic Whether to wrap all sets in a single transaction.
      * @return int Number of entries imported.
+     * @throws \RuntimeException when the document shape cannot round-trip.
      */
     public function importFromString(string $json, bool $atomic = true): int
     {
         // Guarded decode: a non-array top level (bare scalar/null) is rejected
         // with a clear \RuntimeException instead of silently iterating as an
         // empty foreach downstream. Malformed JSON still surfaces \JsonException.
-        /** @var array<string, mixed> $data */
+        /** @var array<array-key, mixed> $data */
         $data = Json::decodeArray($json);
 
-        // Extract TTL map if present
+        // A JSON list is not a key/value document. Its integer subscripts
+        // would import as entries "0", "1", ... — a silent reshape of the
+        // caller's data — so refuse the shape outright.
+        if ($data !== [] && \array_is_list($data)) {
+            throw new \RuntimeException('Expected a JSON object mapping keys to values, got a list.');
+        }
+
+        // Extract TTL map if present (values must be whole seconds).
         $ttlMap = [];
         if (isset($data['_ttl']) && \is_array($data['_ttl'])) {
-            /** @var array<string, int> $ttlMap */
-            $ttlMap = $data['_ttl'];
+            foreach ($data['_ttl'] as $ttlKey => $seconds) {
+                if (!\is_int($seconds) && !\is_numeric($seconds)) {
+                    throw new \RuntimeException(
+                        \sprintf('_ttl entry "%s" must be an integer number of seconds, got %s.', (string) $ttlKey, \get_debug_type($seconds))
+                    );
+                }
+                $ttlMap[(string) $ttlKey] = (int) $seconds;
+            }
             unset($data['_ttl']);
         }
 
-        // Extract binary key list (D4 M5: binary entries ride base64 values
-        // plus this flag; without it reimport would store the base64 text).
+        // Binary entries ride base64 values plus the "_binary" flag list;
+        // without it a reimport would store the base64 text as the value.
         $binaryKeys = [];
         if (isset($data['_binary']) && \is_array($data['_binary'])) {
             foreach ($data['_binary'] as $bKey) {
@@ -93,22 +117,34 @@ final class JsonImporter
         // Merge constructor options with file-level TTL
         $ttlMap = \array_merge($this->options['ttl'] ?? [], $ttlMap);
 
-        $import = function () use ($data, $ttlMap, $binaryKeys): int {
+        // Normalise every row BEFORE any write (fail-fast: a document with
+        // one bad entry imports nothing rather than importing a prefix of
+        // itself and reporting a partial count).
+        $rows = [];
+        foreach ($data as $key => $value) {
+            $key = (string) $key; // JSON object keys are strings; PHP may hand us int subscripts.
+            $binary = ($binaryKeys[$key] ?? false) === true;
+            $ttl = self::resolveTtl($ttlMap, $key);
+
+            if ($value === null) {
+                $value = '';
+            } elseif (\is_int($value) || \is_float($value)) {
+                $value = (string) $value;
+            } elseif (!\is_string($value)) {
+                throw new \RuntimeException(
+                    \sprintf('Entry "%s" has a %s value; only strings and numbers round-trip.', $key, \get_debug_type($value))
+                );
+            }
+
+            if ($binary) {
+                $value = YamlDialect::decodeBinary($value, $key);
+            }
+            $rows[] = [$key, $value, $binary, $ttl];
+        }
+
+        $import = function () use ($rows): int {
             $count = 0;
-            foreach ($data as $key => $value) {
-                if ($value === null) {
-                    $value = '';
-                } elseif (\is_int($value) || \is_float($value)) {
-                    $value = (string) $value;
-                }
-                if (!\is_string($key) || !\is_string($value)) {
-                    continue;
-                }
-                $ttl = $ttlMap[$key] ?? null;
-                $binary = ($binaryKeys[$key] ?? false) === true;
-                if ($binary) {
-                    $value = \SugarCraft\Kv\YamlDialect::decodeBinary($value, $key);
-                }
+            foreach ($rows as [$key, $value, $binary, $ttl]) {
                 $this->store->set($key, $value, $binary, $ttl);
                 $count++;
             }
@@ -116,17 +152,16 @@ final class JsonImporter
         };
 
         if ($atomic) {
-            // Collect the databases actually used by the parsed keys so we can
-            // route each to its own transaction rather than blindly wrapping
-            // everything on the default database (which would NOT cover keys
-            // that carry @db suffixes — those land on entirely different dbs).
+            // Collect the databases the validated keys route to so the whole
+            // import runs inside that database's transaction. The roster MUST
+            // see every row (and use the same escape-aware '@' law Store::set
+            // routes by): the old value-type-filtered strrpos() walk missed
+            // rows whose values were numbers, letting their writes land on a
+            // second database OUTSIDE any transaction without ever tripping
+            // the multi-database refusal below.
             $dbNames = [];
-            foreach ($data as $key => $value) {
-                if (!\is_string($key) || !\is_string($value)) {
-                    continue;
-                }
-                $at = \strrpos($key, '@');
-                $dbNames[] = $at === false ? $this->store->defaultDatabase() : \substr($key, $at + 1);
+            foreach ($rows as [$key]) {
+                $dbNames[] = Store::splitKey($key, $this->store->defaultDatabase())[0];
             }
 
             $uniqueDbs = \array_unique($dbNames);
@@ -136,8 +171,8 @@ final class JsonImporter
             if (\count($uniqueDbs) > 1) {
                 throw new \RuntimeException(
                     'Atomic import is not supported across multiple databases. ' .
-                    'Use atomic=false for multi-database imports, or import each ' .
-                    'database separately.'
+                    'Use --no-atomic (atomic=false in the library) for ' .
+                    'multi-database imports, or import each database separately.'
                 );
             }
 
@@ -149,5 +184,22 @@ final class JsonImporter
         }
 
         return $import();
+    }
+
+    /**
+     * @param array<string, int> $ttlMap
+     */
+    private static function resolveTtl(array $ttlMap, string $key): ?int
+    {
+        if (!\array_key_exists($key, $ttlMap)) {
+            return null;
+        }
+        $ttl = $ttlMap[$key];
+        if ($ttl <= 0) {
+            throw new \RuntimeException(
+                \sprintf('TTL for entry "%s" must be at least 1 second; omit it for a forever entry.', $key)
+            );
+        }
+        return $ttl;
     }
 }

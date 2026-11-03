@@ -175,13 +175,14 @@ final class EntryTest extends TestCase
         $this->assertSame($raw, $entry->rawValue());
     }
 
-    public function testRawValueBinaryInvalidBase64FallsBackToValue(): void
+    public function testRawValueBinaryInvalidBase64Raises(): void
     {
-        // "not-valid-base64!!" is not valid base64 but Entry should not throw
+        // "not-valid-base64!!" cannot decode; returning the broken text (the
+        // old behaviour) dressed corruption up as content. Fail loudly.
         $entry = new Entry('k', 'not-valid-base64!!', true);
-        $result = $entry->rawValue();
-        // base64_decode with strict=true returns false, so rawValue returns original
-        $this->assertSame('not-valid-base64!!', $result);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("Binary entry 'k' does not hold valid base64.");
+        $entry->rawValue();
     }
 
     public function testRawValueEmptyBinaryEntry(): void

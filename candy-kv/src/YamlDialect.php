@@ -7,8 +7,8 @@ namespace SugarCraft\Kv;
 /**
  * The flat scalar YAML dialect shared by `candy-kv` export and import.
  *
- * D4 (docs-fix-1023 M4/M5): candy-kv YAML is a single-level `key: value`
- * map with reserved metadata prefixes:
+ * candy-kv YAML is a single-level `key: value` map with reserved metadata
+ * prefixes:
  *
  *   skate_ttl_<key>: <seconds>     per-entry TTL
  *   skate_binary_<key>: 1          entry value is base64 of raw bytes
@@ -19,7 +19,11 @@ namespace SugarCraft\Kv;
  * implement exactly this dialect — including proper double-quote escaping
  * (backslashes, newlines, control characters) and quoted-key support — so
  * an export of `C:\temp` or a multi-line value reimports intact instead of
- * corrupting. Both engines read each other's output.
+ * corrupting. Within the dialect's flat-scalar shape the two engines read
+ * each other's output; the one asymmetry is that symfony may wrap very
+ * long plain scalars across lines, which the fallback refuses loudly
+ * rather than half-parses. A single process always uses one engine for
+ * both directions, so its own round-trips are exact.
  *
  * @internal This class is the export/import wire format, not a public API.
  */
@@ -36,11 +40,6 @@ final class YamlDialect
 
     public const JSON_BINARY_KEY = '_binary';
 
-    /**
-     * Render a flat key => scalar map as YAML.
-     *
-     * @param array<string, string|int> $flat
-     */
     /**
      * Render a flat key => scalar map as YAML with the strict fallback
      * emitter (the published behaviour when symfony/yaml is absent; the
@@ -107,13 +106,21 @@ final class YamlDialect
             try {
                 $data = \Symfony\Component\Yaml\Yaml::parse($yaml);
             } catch (\Throwable $e) {
-                throw new \RuntimeException('Syntax error', 0, $e);
+                // Relay symfony's own diagnosis (it names the offending
+                // line and nearby text) — replacing it with a bare
+                // 'Syntax error' threw away the only location the caller
+                // could act on. First line only: symfony appends the whole
+                // fragment with newlines.
+                $reason = \strtok($e->getMessage(), "\n") ?: 'unparseable document';
+                throw new \RuntimeException('Syntax error: ' . $reason, 0, $e);
             }
             if ($data === null) {
                 return [];
             }
             if (!\is_array($data)) {
-                throw new \RuntimeException('Syntax error');
+                throw new \RuntimeException(
+                    'Syntax error: expected a mapping of key: value entries, got ' . \get_debug_type($data) . '.'
+                );
             }
 
             return $data;
@@ -126,14 +133,25 @@ final class YamlDialect
      * Does this key need to be refused at export time because the envelope
      * would corrupt it on reimport (it collides with a reserved form)?
      *
+     * The two formats reserve DIFFERENT namespaces: the JSON envelope rides
+     * `_ttl`/`_binary` keys, the YAML dialect rides `skate_ttl_`/
+     * `skate_binary_` line prefixes. Checking one format's reserves against
+     * the other used to refuse legitimate entries (`skate_ttl_backup` could
+     * not be exported as JSON at all). Pass the export format to scope the
+     * check; null checks every reserved family (legacy callers).
+     *
+     * @param string|null $format 'json', 'yaml', 'yml', or null for all.
      * @return string|null the refusal reason, or null when the key is safe.
      */
-    public static function reservedKeyReason(string $key): ?string
+    public static function reservedKeyReason(string $key, ?string $format = null): ?string
     {
-        if ($key === self::JSON_TTL_KEY || $key === self::JSON_BINARY_KEY) {
-            return \sprintf('the key "%s" is reserved by the %s export envelope and cannot round-trip', $key, 'JSON');
+        $json = $format === null || $format === 'json';
+        $yaml = $format === null || $format === 'yaml' || $format === 'yml';
+
+        if ($json && ($key === self::JSON_TTL_KEY || $key === self::JSON_BINARY_KEY)) {
+            return \sprintf('the key "%s" is reserved by the JSON export envelope and cannot round-trip', $key);
         }
-        if (\str_starts_with($key, self::TTL_PREFIX) || \str_starts_with($key, self::BINARY_PREFIX)) {
+        if ($yaml && (\str_starts_with($key, self::TTL_PREFIX) || \str_starts_with($key, self::BINARY_PREFIX))) {
             return \sprintf('the key "%s" collides with the YAML metadata prefixes and cannot round-trip', $key);
         }
 
@@ -241,18 +259,32 @@ final class YamlDialect
     private static function parseFlat(string $yaml): array
     {
         $result = [];
+        $lineNo = 0;
         foreach (\explode("\n", $yaml) as $line) {
-            if ($line === '' || \str_starts_with(\trim($line), '#')) {
+            $lineNo++;
+            $trimmed = \trim($line);
+            if ($trimmed === '' || \str_starts_with($trimmed, '#')) {
+                // Blank AND whitespace-only lines carry no pair; feeding an
+                // empty string to splitPair read offset 0 of nothing.
                 continue;
             }
-
-            $trimmed = \trim($line);
 
             if ($trimmed === '---' || $trimmed === '...') {
                 continue;
             }
 
-            [$key, $val] = self::splitPair($trimmed);
+            try {
+                [$key, $val] = self::splitPair($trimmed);
+            } catch (\RuntimeException $e) {
+                // One bare 'Syntax error' for a 500-line file told the user
+                // nothing they could fix; every dialect error now names its
+                // line and its reason.
+                throw new \RuntimeException(
+                    \sprintf('Syntax error on line %d: %s', $lineNo, $e->getMessage()),
+                    0,
+                    $e,
+                );
+            }
             $result[$key] = $val;
         }
 
@@ -263,7 +295,8 @@ final class YamlDialect
      * Split a `key: value` line, honouring quoted keys and values.
      *
      * @return array{0: string, 1: string}
-     * @throws \RuntimeException when the line is not a flat pair.
+     * @throws \RuntimeException when the line is not a flat pair (the
+     *         message names the defect; parseFlat prepends the line number).
      */
     private static function splitPair(string $trimmed): array
     {
@@ -274,7 +307,7 @@ final class YamlDialect
             $keySrc = \substr($trimmed, 0, $end + 1);
             $rest = \trim(\substr($trimmed, $end + 1));
             if ($rest === '' || $rest[0] !== ':') {
-                throw new \RuntimeException('Syntax error');
+                throw new \RuntimeException("expected ':' after the quoted key");
             }
             $key = self::unescapeQuoted($keySrc);
             $valueRaw = \trim(\substr($rest, 1));
@@ -288,7 +321,7 @@ final class YamlDialect
             $key = $m[1];
             $valueRaw = \trim($m[2] ?? '');
             if ($key === '' || $key !== \rtrim($key)) {
-                throw new \RuntimeException('Syntax error');
+                throw new \RuntimeException('missing key');
             }
 
             return [$key, self::parseValueToken($valueRaw)];
@@ -297,10 +330,10 @@ final class YamlDialect
         // A block-scalar continuation line (indent + text) is only legal
         // under a parser we do not have — refuse loudly like before.
         if (\str_starts_with($trimmed, '- ') || $trimmed === '-') {
-            throw new \RuntimeException('Syntax error');
+            throw new \RuntimeException('sequence entries are not part of this dialect');
         }
 
-        throw new \RuntimeException('Syntax error');
+        throw new \RuntimeException('not a key: value pair');
     }
 
     /**
@@ -322,7 +355,7 @@ final class YamlDialect
             if ($end !== \strlen($token) - 1) {
                 // Trailing junk after the closing quote: refuse rather than
                 // silently truncating.
-                throw new \RuntimeException('Syntax error');
+                throw new \RuntimeException('unexpected text after the closing quote');
             }
 
             return self::unescapeQuoted($token);
@@ -338,7 +371,7 @@ final class YamlDialect
         if (\str_starts_with($token, '!!binary ')) {
             $decoded = \base64_decode(\substr($token, 9), true);
             if ($decoded === false) {
-                throw new \RuntimeException('Syntax error');
+                throw new \RuntimeException('invalid base64 in a !!binary value');
             }
 
             return $decoded;
@@ -346,7 +379,7 @@ final class YamlDialect
 
         if (\str_starts_with($token, '!!')) {
             // Any other explicit tag is beyond this dialect — refuse loudly.
-            throw new \RuntimeException('Syntax error');
+            throw new \RuntimeException('unsupported YAML tag');
         }
 
         return $token;
@@ -375,7 +408,7 @@ final class YamlDialect
             return $i;
         }
 
-        throw new \RuntimeException('Syntax error');
+        throw new \RuntimeException('unterminated quoted string');
     }
 
     private static function unescapeQuoted(string $quoted): string
@@ -418,7 +451,7 @@ final class YamlDialect
     {
         $hex = \substr($inner, $i + 1, 2);
         if (\preg_match('/^[0-9A-Fa-f]{2}$/', $hex) !== 1) {
-            throw new \RuntimeException('Syntax error');
+            throw new \RuntimeException('invalid hex escape');
         }
         $i += 2;
 

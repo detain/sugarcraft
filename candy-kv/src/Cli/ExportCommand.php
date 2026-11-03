@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Kv\Cli;
 
+use SugarCraft\Kv\Entry;
 use SugarCraft\Kv\Store;
+use SugarCraft\Kv\YamlDialect;
 
 /**
  * CLI command handler for `candy-kv export`.
@@ -60,46 +62,51 @@ final class ExportCommand
         $ttlMap = [];
 
         foreach ($this->store->list($pattern, $dbName) as $entry) {
-            if ($entry instanceof \SugarCraft\Kv\Entry) {
-                $ttl = null;
-                if ($entry->expiresAt !== null) {
-                    $diff = $entry->expiresAt->getTimestamp() - (new \DateTimeImmutable())->getTimestamp();
-                    if ($diff > 0) {
-                        $ttl = $diff;
-                    }
-                }
-                $key = $entry->key;
-                if ($dbName !== null) {
-                    $key = "{$entry->key}@{$dbName}";
-                } else {
-                    $key = $entry->key;
-                }
+            // list()'s default mode yields Entry; the string-row guard keeps
+            // the walk honest if a caller ever swaps modes underneath us.
+            if (!$entry instanceof Entry) {
+                continue;
+            }
 
-                // Fail loud on envelope collisions: exporting a key that
-                // looks like a reserved metadata form would silently turn
-                // into TTL/binary state on reimport.
-                $reason = \SugarCraft\Kv\YamlDialect::reservedKeyReason($key);
-                if ($reason !== null) {
-                    throw new \RuntimeException(\ucfirst($reason) . '.');
+            $ttl = null;
+            if ($entry->expiresAt !== null) {
+                $diff = $entry->expiresAt->getTimestamp() - (new \DateTimeImmutable())->getTimestamp();
+                if ($diff > 0) {
+                    $ttl = $diff;
                 }
+            }
+            // Exporting one named database qualifies its keys, so the dump
+            // can be reimported into a store whose default database is
+            // different (the @ suffix is how Store routes on write).
+            $key = $dbName !== null ? "{$entry->key}@{$dbName}" : $entry->key;
 
-                // Binary entries export their stored base64 (an ASCII-safe
-                // wire form) plus a flag; raw bytes through a text format is
-                // exactly what broke JSON export (D4 M5).
-                $entries[$key] = $entry->binary ? $entry->value : $entry->rawValue();
-                if ($entry->binary) {
-                    $binaryKeys[] = $key;
-                }
-                if ($ttl !== null) {
-                    $ttlMap[$key] = $ttl;
-                }
+            // Fail loud on envelope collisions: exporting a key that looks
+            // like a reserved metadata form for THIS format would silently
+            // turn into TTL/binary state on reimport. The check is
+            // format-scoped — JSON reserves _ttl/_binary, YAML reserves the
+            // skate_* line prefixes — because refusing the other format's
+            // namespace blocked entries that round-trip perfectly well.
+            $reason = YamlDialect::reservedKeyReason($key, $format);
+            if ($reason !== null) {
+                throw new \RuntimeException(\ucfirst($reason) . '.');
+            }
+
+            // Binary entries export their stored base64 (an ASCII-safe
+            // wire form) plus a flag; raw bytes through a text format is
+            // exactly what used to break JSON export.
+            $entries[$key] = $entry->binary ? $entry->value : $entry->rawValue();
+            if ($entry->binary) {
+                $binaryKeys[] = $key;
+            }
+            if ($ttl !== null) {
+                $ttlMap[$key] = $ttl;
             }
         }
 
         $output = match ($format) {
             'json' => $this->exportJson($entries, $ttlMap, $binaryKeys),
             'yaml', 'yml' => $this->exportYaml($entries, $ttlMap, $binaryKeys),
-            default => throw new \RuntimeException("Unknown export format: {$format}. Use 'json' or 'yaml'."),
+            default => throw new \RuntimeException("Unknown export format: {$format}. Use 'json', 'yaml' or 'yml'."),
         };
 
         return $output;
@@ -138,15 +145,15 @@ final class ExportCommand
     private function exportYaml(array $entries, array $ttlMap, array $binaryKeys): string
     {
         // One flat dialect on both engines: TTL rides skate_ttl_<key>,
-        // binary rides skate_binary_<key> (D4 M4: the symfony route used to
-        // dump a nested _ttl map the README never described).
+        // binary rides skate_binary_<key> (the symfony route used to dump a
+        // nested _ttl map the README never described).
         foreach ($ttlMap as $key => $seconds) {
-            $entries[\SugarCraft\Kv\YamlDialect::TTL_PREFIX . $key] = $seconds;
+            $entries[YamlDialect::TTL_PREFIX . $key] = $seconds;
         }
         foreach ($binaryKeys as $key) {
-            $entries[\SugarCraft\Kv\YamlDialect::BINARY_PREFIX . $key] = 1;
+            $entries[YamlDialect::BINARY_PREFIX . $key] = 1;
         }
 
-        return \SugarCraft\Kv\YamlDialect::build($entries);
+        return YamlDialect::build($entries);
     }
 }

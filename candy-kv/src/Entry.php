@@ -105,7 +105,13 @@ final class Entry
     /**
      * Get the raw (decoded) value if this is binary data.
      *
+     * A binary-flagged row whose stored text is not valid base64 can only
+     * come from a corrupted or hand-edited database; returning the broken
+     * text (the old behaviour) dressed up corruption as content, so it now
+     * raises. Non-binary entries pass their value through untouched.
+     *
      * @return string The base64-decoded value, or the original value if not binary.
+     * @throws \RuntimeException when a binary entry holds invalid base64.
      */
     public function rawValue(): string
     {
@@ -113,7 +119,12 @@ final class Entry
             return $this->value;
         }
         $decoded = \base64_decode($this->value, true);
-        return $decoded !== false ? $decoded : $this->value;
+        if ($decoded === false) {
+            throw new \RuntimeException(
+                \sprintf("Binary entry '%s' does not hold valid base64.", $this->key)
+            );
+        }
+        return $decoded;
     }
 
     /**

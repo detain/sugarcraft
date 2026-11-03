@@ -114,20 +114,83 @@ final class ImportExportTest extends TestCase
         $importer->importFromFile($path, true);
     }
 
-    public function testJsonImporterCoercesScalarsSkipsComplexValues(): void
+    public function testJsonImporterCoercesScalarsRefusesComplexValues(): void
     {
-        // D4 (docs-fix-1023): null and numeric JSON scalars now import as
-        // text (matching what the flat YAML dialect stores); arrays and
-        // nested objects remain unrepresentable and are skipped.
+        // null and numeric JSON scalars import as text (matching what the
+        // flat YAML dialect stores); arrays and nested objects cannot
+        // round-trip and are refused loudly — silently skipping them let a
+        // typo'd document "import" a fraction of itself with a clean exit.
         $path = $this->tmpDir . '/mixed.json';
         \file_put_contents($path, '{"str":"value","num":123,"arr":[1,2,3],"obj":{"a":1}}');
 
         $importer = new JsonImporter($this->store);
-        $count = $importer->importFromFile($path, false);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "arr" has a array value; only strings and numbers round-trip.');
+        $importer->importFromFile($path, false);
+    }
 
-        $this->assertSame(2, $count);
-        $this->assertSame('value', $this->store->get('str'));
-        $this->assertSame('123', $this->store->get('num'));
+    public function testJsonImporterRefusesComplexValuesBeforeWritingAnything(): void
+    {
+        // The refusal happens in the validation pre-pass: a document with a
+        // bad entry imports NOTHING, not a prefix of itself.
+        $path = $this->tmpDir . '/mixed2.json';
+        \file_put_contents($path, '{"good":"kept","bad":{"a":1}}');
+
+        $importer = new JsonImporter($this->store);
+        try {
+            $importer->importFromFile($path, false);
+            $this->fail('expected RuntimeException');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('has a array value', $e->getMessage());
+        }
+        $this->assertSame('', $this->store->get('good'));
+    }
+
+    public function testJsonImporterRefusesTopLevelList(): void
+    {
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('got a list');
+        $importer->importFromString('["a","b"]', false);
+    }
+
+    public function testYamlImporterRefusesTopLevelSequence(): void
+    {
+        $importer = new YamlImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        // symfony route: the parse hands us a list and the importer refuses
+        // it; fallback route: the dialect parser refuses sequence lines.
+        $this->expectExceptionMessageMatches('/got a sequence|sequence entries are not part of/');
+        $importer->importFromString("- a\n- b\n", false);
+    }
+
+    public function testJsonImporterRefusesNonIntegerTtl(): void
+    {
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_ttl entry "k" must be an integer');
+        $importer->importFromString('{"_ttl":{"k":"soon"},"k":"v"}', false);
+    }
+
+    public function testJsonImporterRefusesZeroTtl(): void
+    {
+        // A zero TTL silently meant "forever" — the opposite of what the
+        // document asked for. The CLI refuses the same spelling.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('must be at least 1 second');
+        $importer->importFromString('{"_ttl":{"k":0},"k":"v"}', false);
+    }
+
+    public function testAtomicRosterSeesNumericValuesOnSecondDatabase(): void
+    {
+        // The old roster skipped non-string values while the write loop
+        // coerced them: this document reached a SECOND database outside any
+        // transaction without ever tripping the multi-database refusal.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Atomic import is not supported across multiple databases');
+        $importer->importFromString('{"a@roster1":"x","b@roster2":5}', true);
     }
 
     /**
