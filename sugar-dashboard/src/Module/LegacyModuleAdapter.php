@@ -4,38 +4,68 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Module;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
-use SugarCraft\Dashboard\Module\LegacyModule;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\Dashboard\Msg\AdapterTickMsg;
 
 /**
- * Adapter that wraps a LegacyModule to satisfy the Module contract.
+ * Adapter letting a legacy plugin implement the {@see Module} contract.
  *
- * Allows the Registry to host both new-style Modules and legacy
- * modules without breaking existing third-party code.
+ * The legacy view(state, width, height) API is preserved; the adapter
+ * satisfies the new contract by carrying the wrapped module's state in
+ * an array and remembering the most recent window size it observed.
  *
- * @internal
+ * @param array<string, mixed> $state
  */
 final class LegacyModuleAdapter implements Module
 {
     /**
-     * @param LegacyModule $legacy The wrapped legacy module
-     * @param array<string, mixed> $state Current state accumulated across updates
+     * Panel width/height last observed from a {@see WindowSizeMsg}.
+     * The legacy contract wants dimensions on view(), but the framework
+     * delivers them through update(); a cold start before any resize
+     * message uses the documented 80×24 default.
+     *
+     * @var array{0:int,1:int}
+     */
+    private array $size = [80, 24];
+
+    /**
+     * Refresh interval advertised by the init() handshake; drives the
+     * tick the adapter subscribes to so the plugin panel actually moves
+     * on its own cadence.
+     */
+    private float $refreshSeconds = 30.0;
+
+    /**
+     * Whether the init() handshake has already run.
+     */
+    private bool $handshaked = false;
+
+    /**
+     * @param array<string, mixed> $state
      */
     public function __construct(
         private readonly LegacyModule $legacy,
         private array $state = [],
-    ) {}
+    ) {
+    }
 
     /**
-     * Factory to create from a legacy module constructor.
+     * Create an adapter from a legacy-module constructor.
+     *
+     * Construction performs no handshake: the plugin's init() runs
+     * exactly once, when the framework drives {@see self::init()}.
+     * (This entry point used to run the handshake itself and throw the
+     * result away, and then init() ran it again — spawning the plugin
+     * child twice and orphaning the first.)
      *
      * @param callable(): LegacyModule $constructor
      */
     public static function from(callable $constructor): self
     {
-        $legacy = $constructor();
-        $meta = $legacy->init();
-        return new self($legacy, []);
+        return new self($constructor());
     }
 
     public function name(): string
@@ -45,32 +75,56 @@ final class LegacyModuleAdapter implements Module
 
     public function init(): ?\Closure
     {
-        // Legacy init() returns array metadata; we return null since
-        // the legacy pattern does not produce a startup Cmd.
-        $this->legacy->init();
+        // The legacy handshake returns metadata, not a startup command.
+        // Run it exactly once and capture the refresh cadence it
+        // advertises; the cadence used to be read and then silently
+        // dropped, so plugin panels only advanced when an unrelated
+        // source woke them.
+        if ($this->handshaked) {
+            return null;
+        }
+        $this->handshaked = true;
+
+        $meta = $this->legacy->init();
+
+        $interval = $meta['interval'] ?? null;
+        if (is_numeric($interval)) {
+            $this->refreshSeconds = max(1.0, (float) $interval);
+        }
+
         return null;
     }
 
     /**
-     * Update the legacy module.
-     *
-     * NOTE: The $msg parameter is intentionally discarded. Legacy modules
-     * operate on accumulated array state rather than typed messages.
-     * The adapter advances state on every message, regardless of type.
-     * This is a design limitation — legacy modules cannot filter by Msg type.
+     * @return array{0:Module,1:?Cmd}
      */
     public function update(Msg $msg): array
     {
+        if ($msg instanceof WindowSizeMsg) {
+            $this->size = [max(1, $msg->cols), max(1, $msg->rows)];
+        }
+
+        // Only the adapter's own refresh tick and resizes advance the
+        // legacy round-trip; every other routed message — keys
+        // included — returns the same instance. (The wrapper used to
+        // forward every message into a synchronous plugin round-trip,
+        // making each keystroke block the frame on a child-process
+        // write+read.)
+        if (!$msg instanceof AdapterTickMsg && !$msg instanceof WindowSizeMsg) {
+            return [$this, null];
+        }
+
         $this->state = $this->legacy->update($this->state);
+
+        // Returned in place: the wrapped child is itself stateful, so a
+        // shallow clone would share it anyway — pretending snapshot
+        // semantics here would be a lie the type cannot keep.
         return [$this, null];
     }
 
     public function view(): string
     {
-        // Legacy view() takes state + width + height; we pass stored state
-        // and use a sensible default for dimensions. Callers that need
-        // exact dimensions should use the LegacyModule interface directly.
-        return $this->legacy->view($this->state, 80, 24);
+        return $this->legacy->view($this->state, $this->size[0], $this->size[1]);
     }
 
     public function minSize(): array
@@ -78,8 +132,15 @@ final class LegacyModuleAdapter implements Module
         return $this->legacy->minSize();
     }
 
-    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    /**
+     * Schedule the plugin's advertised refresh interval.
+     */
+    public function subscriptions(): ?Subscriptions
     {
-        return null;
+        return (new Subscriptions())->withTick(
+            'plugin-refresh',
+            $this->refreshSeconds,
+            static fn (): Msg => new AdapterTickMsg(),
+        );
     }
 }

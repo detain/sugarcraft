@@ -45,6 +45,16 @@ final class SystemModule extends BaseModule
      */
     private bool $gpuSpawnFailed = false;
 
+    /**
+     * @param float $refreshSeconds sampling cadence; the constructor knob
+     *     exists so hosts (and tests) can retune what used to be a frozen
+     *     class constant.
+     */
+    public function __construct(
+        private readonly float $refreshSeconds = self::TICK_INTERVAL,
+    ) {
+    }
+
     public function name(): string
     {
         return 'system';
@@ -52,7 +62,7 @@ final class SystemModule extends BaseModule
 
     public function init(): ?\Closure
     {
-        return Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new RefreshMsg());
+        return Cmd::tick($this->refreshSeconds, static fn(): Msg => new RefreshMsg());
     }
 
     public function update(Msg $msg): array
@@ -65,7 +75,7 @@ final class SystemModule extends BaseModule
 
         return [
             $this->withSystemState(),
-            Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new RefreshMsg()),
+            Cmd::tick($this->refreshSeconds, static fn(): Msg => new RefreshMsg()),
         ];
     }
 

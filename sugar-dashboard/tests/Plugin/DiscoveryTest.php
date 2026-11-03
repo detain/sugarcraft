@@ -97,6 +97,76 @@ final class DiscoveryTest extends TestCase
         $this->assertStringContainsString('plugins', $defaultDir);
     }
 
+    /**
+     * The fallback used to compute dirname($HOME) . '/.config' — collapsing
+     * /home/user to /home and pointing plugin discovery at /home/.config,
+     * a path no user owns. HOME itself is the anchor.
+     */
+    public function testDefaultDirectoryAnchorsOnHomeNotItsParent(): void
+    {
+        $savedHome = getenv('HOME');
+        $savedXdg = getenv('XDG_CONFIG_HOME');
+        putenv('HOME=/home/tester');
+        putenv('XDG_CONFIG_HOME');
+
+        try {
+            $this->assertSame(
+                '/home/tester/.config/sugar-dashboard/plugins',
+                Discovery::defaultDirectory(),
+            );
+        } finally {
+            putenv($savedHome === false ? 'HOME' : "HOME=$savedHome");
+            putenv($savedXdg === false ? 'XDG_CONFIG_HOME' : "XDG_CONFIG_HOME=$savedXdg");
+        }
+    }
+
+    public function testXdgConfigHomeWinsOverHome(): void
+    {
+        $savedHome = getenv('HOME');
+        $savedXdg = getenv('XDG_CONFIG_HOME');
+        putenv('HOME=/home/tester');
+        putenv('XDG_CONFIG_HOME=/xdg/root');
+
+        try {
+            $this->assertSame(
+                '/xdg/root/sugar-dashboard/plugins',
+                Discovery::defaultDirectory(),
+            );
+        } finally {
+            putenv($savedHome === false ? 'HOME' : "HOME=$savedHome");
+            putenv($savedXdg === false ? 'XDG_CONFIG_HOME' : "XDG_CONFIG_HOME=$savedXdg");
+        }
+    }
+
+    /**
+     * FilesystemIterator hands back directory order — plugin load order
+     * used to vary between machines and runs. scan() sorts.
+     */
+    public function testScanReturnsDeterministicOrder(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/sugar-dashboard-order-' . uniqid();
+        mkdir($tmpDir, 0755, true);
+
+        foreach (['zulu.php', 'alpha.php', 'mike.php'] as $name) {
+            file_put_contents($tmpDir . '/' . $name, "#!/usr/bin/env php\n");
+            chmod($tmpDir . '/' . $name, 0755);
+        }
+
+        try {
+            $result = Discovery::scan($tmpDir);
+            $this->assertSame([
+                $tmpDir . '/alpha.php',
+                $tmpDir . '/mike.php',
+                $tmpDir . '/zulu.php',
+            ], $result);
+        } finally {
+            foreach (['zulu.php', 'alpha.php', 'mike.php'] as $name) {
+                unlink($tmpDir . '/' . $name);
+            }
+            rmdir($tmpDir);
+        }
+    }
+
     public function testScanDefaultReturnsArray(): void
     {
         $result = Discovery::scanDefault();

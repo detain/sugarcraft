@@ -9,7 +9,10 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Modules\Weather\HttpClient;
 use SugarCraft\Dashboard\Modules\Weather\TickMsg;
 use SugarCraft\Dashboard\Modules\Weather\WeatherModule;
+use SugarCraft\Dashboard\Modules\Weather\WeatherFailureMsg;
+use SugarCraft\Dashboard\Modules\Weather\WeatherResultMsg;
 use SugarCraft\Dashboard\Modules\Weather\WeatherSnapshot;
+use SugarCraft\Core\BatchMsg;
 
 final class WeatherModuleTest extends TestCase
 {
@@ -78,13 +81,132 @@ final class WeatherModuleTest extends TestCase
         $this->assertNull($cmd);
     }
 
-    public function testViewReturnsUnavailableWhenNoData(): void
+    /**
+     * A panel that has never attempted a lookup cannot honestly claim the
+     * data is unavailable — it promises "loading…" and, once an attempt
+     * has failed, names the reason instead of hiding behind a dash.
+     */
+    public function testViewPromisesLoadingBeforeAnyAttempt(): void
     {
         $client = $this->createMock(HttpClient::class);
         $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
 
         $view = $module->view();
-        $this->assertSame('—°C unavailable', $view);
+        $this->assertSame('—°C loading…', $view);
+    }
+
+    // =====================================================================
+    //  M-26 failure taxonomy + M-43 age truth + M-27/M-50 (batch 3)
+    // =====================================================================
+
+    public function testColdInitDispatchesImmediateTick(): void
+    {
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+
+        $cmd = $module->init();
+        $this->assertInstanceOf(\Closure::class, $cmd);
+
+        $batch = $cmd();
+        $this->assertInstanceOf(BatchMsg::class, $batch);
+        $this->assertCount(2, $batch->cmds);
+        $this->assertInstanceOf(TickMsg::class, ($batch->cmds[0])());
+    }
+
+    public function testFailureReasonBecomesVisible(): void
+    {
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+
+        [$updated] = $module->update(new WeatherFailureMsg(
+            new \DateTimeImmutable(),
+            'wttr.in connection refused',
+        ));
+        $this->assertInstanceOf(WeatherModule::class, $updated);
+
+        $view = $updated->view();
+        $this->assertStringContainsString('unavailable (last attempt failed:', $view);
+        $this->assertStringContainsString('wttr.in connection refused', $view);
+    }
+
+    public function testFailureReasonCannotInjectTerminalControlBytes(): void
+    {
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+
+        [$updated] = $module->update(new WeatherFailureMsg(
+            new \DateTimeImmutable(),
+            "\x1b[31mRED \x07 bell",
+        ));
+        $this->assertInstanceOf(WeatherModule::class, $updated);
+
+        $view = $updated->view();
+        $this->assertStringNotContainsString("\x1b", $view);
+        $this->assertStringNotContainsString("\x07", $view);
+    }
+
+    public function testSuccessClearsAFailureRecordedEarlier(): void
+    {
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+
+        [$afterFailure] = $module->update(new WeatherFailureMsg(new \DateTimeImmutable(), 'boom'));
+        $this->assertInstanceOf(WeatherModule::class, $afterFailure);
+
+        $snapshot = new WeatherSnapshot(22.0, 'Sunny', 'TestCity', new \DateTimeImmutable());
+        [$afterSuccess] = $afterFailure->update(new WeatherResultMsg($snapshot));
+        $this->assertInstanceOf(WeatherModule::class, $afterSuccess);
+
+        $view = $afterSuccess->view();
+        $this->assertStringNotContainsString('boom', $view);
+        $this->assertStringContainsString('22°C', $view);
+    }
+
+    public function testStaleSnapshotDisplaysItsAge(): void
+    {
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'berlin', $this->cacheDir);
+
+        $stale = new WeatherSnapshot(12.0, 'Fog', 'berlin', new \DateTimeImmutable('-2 hours'));
+
+        [$updated] = $module->update(new WeatherResultMsg($stale));
+        $this->assertInstanceOf(WeatherModule::class, $updated);
+
+        $view = $updated->view();
+        $this->assertStringContainsString('12°C', $view);
+        $this->assertStringContainsString('h ago', $view, 'a two-hour-old snapshot must not read as fresh');
+        $this->assertStringNotContainsString('just now', $view);
+    }
+
+    public function testFreshSnapshotReadsJustNow(): void
+    {
+        $client = $this->createMock(HttpClient::class);
+        $module = new TestableWeatherModule($client, 'berlin', $this->cacheDir);
+
+        $fresh = new WeatherSnapshot(12.0, 'Clear', 'berlin', new \DateTimeImmutable());
+
+        [$updated] = $module->update(new WeatherResultMsg($fresh));
+        $this->assertInstanceOf(WeatherModule::class, $updated);
+
+        $this->assertStringContainsString('(just now)', $updated->view());
+    }
+
+    /**
+     * M-50: cadence and TTL were frozen constants. With a zero TTL a fresh
+     * cache file must NOT be served synchronously — the tick schedules the
+     * fetch path instead.
+     */
+    public function testTtlSecondsIsAConstructorKnob(): void
+    {
+        $client = $this->createMock(HttpClient::class);
+        $seeder = new TestableWeatherModule($client, 'auto', $this->cacheDir);
+        $seeder->writeCacheForTest(new WeatherSnapshot(30.0, 'Hot', 'nowhere', new \DateTimeImmutable()));
+
+        $module = new TestableWeatherModule($client, 'auto', $this->cacheDir, 1800.0, 0);
+        [$next, $cmd] = $module->update(new TickMsg());
+
+        $this->assertSame($module, $next, 'TTL 0 must not serve the cache file synchronously');
+        $this->assertInstanceOf(\Closure::class, $cmd);
     }
 
     public function testMinSize(): void
@@ -159,12 +281,12 @@ final class WeatherModuleTest extends TestCase
         $this->assertNotNull($cmd);
         $this->assertInstanceOf(\Closure::class, $cmd);
 
-        // In the test (no event loop), WeatherResultMsg is not dispatched, so
-        // the view still shows unavailable. In a real program, the promise
-        // rejection resolves with WeatherResultMsg(staleSnapshot) which the
-        // event loop dispatches, and the view would show the cached data.
+        // In the test (no event loop), the fetch command is never dispatched,
+        // so no result or failure has landed on the module yet. The honest
+        // pre-attempt label is "loading…" — the old flat "unavailable" read
+        // as a verdict when it was only a placeholder.
         $view = $nextModule->view();
-        $this->assertSame('—°C unavailable', $view);
+        $this->assertSame('—°C loading…', $view);
     }
 
     public function testMultipleUpdatesCreateNewInstances(): void
@@ -337,9 +459,9 @@ final class TestableWeatherModule extends WeatherModule
 {
     private string $testCacheDir;
 
-    public function __construct(HttpClient $httpClient, string $location, string $testCacheDir)
+    public function __construct(HttpClient $httpClient, string $location, string $testCacheDir, float $tickSeconds = 1800.0, int $ttlSeconds = 1800)
     {
-        parent::__construct($httpClient, $location);
+        parent::__construct($httpClient, $location, $tickSeconds, $ttlSeconds);
         $this->testCacheDir = $testCacheDir;
     }
 

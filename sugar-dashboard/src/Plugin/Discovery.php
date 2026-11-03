@@ -48,6 +48,11 @@ final class Discovery
             $plugins[] = $entry->getPathname();
         }
 
+        // FilesystemIterator hands entries out in raw directory order,
+        // which varies across filesystems and over time. Sorting makes
+        // plugin load order — and therefore panel order — deterministic.
+        sort($plugins);
+
         return $plugins;
     }
 
@@ -58,8 +63,14 @@ final class Discovery
      */
     public static function defaultDirectory(): string
     {
-        $configHome = getenv('XDG_CONFIG_HOME') ?: dirname($_SERVER['HOME'] ?? '/tmp') . '/.config';
-        return $configHome . '/sugar-dashboard/plugins';
+        // XDG wins; the fallback is the HOME directory itself joined to
+        // '.config'. (This line once ran dirname() on HOME, collapsing
+        // /home/user to /home and pointing every non-XDG host at a
+        // /home/.config path that structurally cannot exist.)
+        $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '/tmp');
+
+        return (getenv('XDG_CONFIG_HOME') ?: $home . '/.config')
+            . '/sugar-dashboard/plugins';
     }
 
     /**

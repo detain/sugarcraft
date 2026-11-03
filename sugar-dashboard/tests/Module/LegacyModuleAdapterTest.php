@@ -8,6 +8,9 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dashboard\Module\LegacyModule;
 use SugarCraft\Dashboard\Module\LegacyModuleAdapter;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\Dashboard\Msg\AdapterTickMsg;
 use SugarCraft\Dashboard\Module\Module;
 
 /**
@@ -84,10 +87,10 @@ final class LegacyModuleAdapterTest extends TestCase
         };
 
         $adapter = LegacyModuleAdapter::from(fn() => $legacy);
-        $msg = new class implements Msg {};
 
-        // First update to set state
-        $adapter->update($msg);
+        // Only the adapter's own refresh tick advances the plugin — the
+        // blanket every-msg policy was re-judged (see the gate test below).
+        $adapter->update(new AdapterTickMsg());
 
         // View should reflect the state
         $view = $adapter->view();
@@ -108,18 +111,17 @@ final class LegacyModuleAdapterTest extends TestCase
         };
 
         $adapter = LegacyModuleAdapter::from(fn() => $legacy);
-        $msg = new class implements Msg {};
 
-        // First update
-        [$next1] = $adapter->update($msg);
+        // First tick
+        [$next1] = $adapter->update(new AdapterTickMsg());
         $view1 = $next1->view();
 
-        // Second update
-        [$next2] = $next1->update($msg);
+        // Second tick
+        [$next2] = $next1->update(new AdapterTickMsg());
         $view2 = $next2->view();
 
-        // Third update
-        [$next3] = $next2->update($msg);
+        // Third tick
+        [$next3] = $next2->update(new AdapterTickMsg());
         $view3 = $next3->view();
 
         $this->assertStringContainsString('count=1', $view1);
@@ -128,16 +130,19 @@ final class LegacyModuleAdapterTest extends TestCase
     }
 
     /**
-     * E726 pin (finding M-3, verdict documented-contract): legacy modules
-     * predate the Msg protocol — LegacyModule::update() takes only array
-     * state and receives no message at all — so the adapter DISCARDS $msg on
-     * purpose (see the limitation note on update()). Every message advances
-     * the wrapped module exactly once, regardless of its type; nothing is
-     * filtered, forwarded, or fake-bridged. If a future change starts routing
-     * or suppressing by Msg type, this pin reddens and forces the docblock
-     * limitation to be re-judged rather than silently violated.
+     * This test used to pin the OPPOSITE policy — "every message advances
+     * the legacy module exactly once" — as a documented contract. That
+     * contract is now re-judged and rejected: LegacyModule::update() drives
+     * a synchronous write+read round-trip against the plugin child, so
+     * advancing on every message made EVERY routed keystroke block the
+     * whole UI on a child process round-trip.
+     *
+     * The adapter now advances only on its own refresh tick (produced by
+     * the interval subscription it advertises) and on window resizes
+     * (which refresh too, since the plugin renders to the new grid).
+     * Unrelated messages are passed through the reducer untouched.
      */
-    public function testMsgIsDeliberatelyDiscardedEveryMessageAdvancesLegacyExactlyOnce(): void
+    public function testOnlyRefreshTicksAndResizesAdvanceTheLegacyModule(): void
     {
         $calls = 0;
         $legacy = new class($calls) implements LegacyModule {
@@ -152,23 +157,17 @@ final class LegacyModuleAdapterTest extends TestCase
 
         $adapter = LegacyModuleAdapter::from(fn() => $legacy);
 
-        // Three structurally different message types — the adapter must not
-        // privilege one over another; the type is what gets thrown away.
-        $first = new class implements Msg {};
-        $second = new class implements Msg {};
+        $unrelated = new class implements Msg {};
+        [$next, $cmd] = $adapter->update($unrelated);
+        $this->assertSame($adapter, $next, 'unrelated messages must not even copy the adapter');
+        $this->assertNull($cmd);
+        $this->assertSame(0, $calls, 'an unrelated message must not block on a child round-trip');
 
-        [$next, $cmd] = $adapter->update($first);
-        $this->assertSame($adapter, $next, 'the adapter accumulates in place and returns itself');
-        $this->assertNull($cmd, 'legacy bridging never emits a Cmd — there is nothing to bridge to');
+        [$next] = $adapter->update(new AdapterTickMsg());
+        $this->assertSame(1, $calls);
 
-        $adapter->update($second);
-        $adapter->update($first);
-
-        $this->assertSame(
-            3,
-            $calls,
-            'every message advances the legacy module exactly once, whatever its type',
-        );
+        [$next] = $next->update(new WindowSizeMsg(120, 40));
+        $this->assertSame(2, $calls, 'a resize re-renders against the new grid, so it advances');
     }
 
     public function testMinSizeDelegatesToLegacy(): void
@@ -199,5 +198,91 @@ final class LegacyModuleAdapterTest extends TestCase
         $adapter = LegacyModuleAdapter::from(fn() => $legacy);
 
         $this->assertSame('my-legacy-module', $adapter->name());
+    }
+
+    /**
+     * The handshake used to run TWICE — once eagerly inside from() (whose
+     * result was thrown away, orphaning the spawned child) and again in
+     * init(). Construction must be side-effect free; init() is the single
+     * handshake point.
+     */
+    public function testConstructionRunsNoHandshakeAndInitRunsExactlyOne(): void
+    {
+        $inits = 0;
+        $legacy = new class($inits) implements LegacyModule {
+            private int $inits;
+            public function __construct(int &$inits) { $this->inits =& $inits; }
+            public function name(): string { return 'handshake'; }
+            public function init(): array { $this->inits++; return ['name' => 'handshake', 'interval' => 0]; }
+            public function update(array $state): array { return $state; }
+            public function view(array $state, int $_width, int $_height): string { return ''; }
+            public function minSize(): array { return [10, 3]; }
+        };
+
+        $adapter = LegacyModuleAdapter::from(fn() => $legacy);
+        $this->assertSame(0, $inits, 'from() must not handshake');
+
+        $adapter->init();
+        $this->assertSame(1, $inits);
+
+        $adapter->init();
+        $this->assertSame(1, $inits, 'a second init must not spawn a second child');
+    }
+
+    /**
+     * view() used to hardcode 80x24 forever. Real dimensions now ride in
+     * via WindowSizeMsg, with 80x24 as the documented cold-start default.
+     */
+    public function testRealDimensionsReachTheLegacyView(): void
+    {
+        $legacy = new class implements LegacyModule {
+            public function name(): string { return 'dims'; }
+            public function init(): array { return ['name' => 'dims', 'interval' => 0]; }
+            public function update(array $state): array { return $state; }
+            public function view(array $state, int $width, int $height): string
+            {
+                return "$width x $height";
+            }
+            public function minSize(): array { return [10, 3]; }
+        };
+
+        $adapter = LegacyModuleAdapter::from(fn() => $legacy);
+        $this->assertSame('80 x 24', $adapter->view(), 'cold start renders at the documented default');
+
+        [$resized] = $adapter->update(new WindowSizeMsg(120, 40));
+        $this->assertSame('120 x 40', $resized->view(), 'the plugin re-renders against the real grid');
+    }
+
+    /**
+     * The interval a plugin advertises in its init meta was decoration —
+     * nothing scheduled it. The adapter now turns it into a real tick
+     * subscription.
+     */
+    public function testAdvertisedIntervalBecomesATickSubscription(): void
+    {
+        $legacy = new class implements LegacyModule {
+            public function name(): string { return 'paced'; }
+            public function init(): array { return ['name' => 'paced', 'interval' => 7]; }
+            public function update(array $state): array { return $state; }
+            public function view(array $state, int $_width, int $_height): string { return ''; }
+            public function minSize(): array { return [10, 3]; }
+        };
+
+        $adapter = LegacyModuleAdapter::from(fn() => $legacy);
+        $adapter->init();
+
+        $subs = $adapter->subscriptions();
+        $this->assertInstanceOf(Subscriptions::class, $subs);
+        $this->assertTrue($subs->has('plugin-refresh'));
+
+        $tick = null;
+        foreach ($subs->all() as $subscription) {
+            if ($subscription->id === 'plugin-refresh') {
+                $tick = $subscription;
+            }
+        }
+        $this->assertNotNull($tick);
+        $this->assertSame(7.0, $tick->params['seconds'], 'the plugin-advertised interval is honoured');
+        $this->assertInstanceOf(AdapterTickMsg::class, ($tick->produce)());
     }
 }

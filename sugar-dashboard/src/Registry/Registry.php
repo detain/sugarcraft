@@ -15,15 +15,16 @@ use SugarCraft\Dashboard\Module\Module;
  * instantiated by name. Used by the plugin system to dynamically
  * create modules.
  *
- * Accepts both new-style Module instances and legacy LegacyModule
- * instances. Legacy modules are automatically wrapped with
- * LegacyModuleAdapter so the registry always returns Module.
- *
- * Mirrors the lattice registry pattern.
+ * Accepts both new-style Module constructors and legacy LegacyModule
+ * constructors. A legacy constructor is wrapped at instantiation time
+ * with LegacyModuleAdapter, so get() always yields a Module factory.
+ * Registration itself performs no instantiation — probing the
+ * constructor eagerly would run real plugin side effects (a child
+ * spawn) at boot and throw the result away.
  */
 final class Registry
 {
-    /** @var array<string, array{0: callable, 1: bool}> */
+    /** @var array<string, callable(): Module> */
     private static array $registry = [];
 
     /**
@@ -39,28 +40,25 @@ final class Registry
             throw new \RuntimeException("Module '{$name}' is already registered");
         }
 
-        // Probe to determine if this is a legacy or new-style constructor.
-        // We call it once at registration time to avoid repeated type checks.
-        $isLegacy = false;
-        $module = $constructor();
-        if ($module instanceof LegacyModule) {
-            $isLegacy = true;
-            // For legacy modules, re-wrap with adapter so get() always
-            // returns Module regardless of the underlying type.
-            self::$registry[$name] = [
-                fn(): Module => new LegacyModuleAdapter($constructor()),
-                true,
-            ];
-        } else {
-            self::$registry[$name] = [$constructor, false];
-        }
+        // Defer the legacy-vs-new decision to instantiation time: the
+        // only moment a real module object exists anyway. (Registration
+        // used to CALL the constructor purely to inspect its type,
+        // which spawned plugin children that were immediately
+        // discarded — leaked process plus file descriptors.)
+        self::$registry[$name] = static function () use ($constructor): Module {
+            $module = $constructor();
+
+            return $module instanceof Module
+                ? $module
+                : new LegacyModuleAdapter($module);
+        };
     }
 
     /**
-     * Get a module constructor by name.
+     * Get a module factory by name.
      *
      * @param string $name Module name
-     * @return Constructor(): Module
+     * @return callable(): Module
      * @throws \RuntimeException If no module with this name is registered
      */
     public static function get(string $name): callable
@@ -68,7 +66,7 @@ final class Registry
         if (!isset(self::$registry[$name])) {
             throw new \RuntimeException("Module '{$name}' is not registered");
         }
-        return self::$registry[$name][0];
+        return self::$registry[$name];
     }
 
     /**
