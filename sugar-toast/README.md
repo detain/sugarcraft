@@ -24,6 +24,7 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **Auto-dismiss**: duration-based expiry support
 - **Multiple alerts**: queue of toasts rendered in order
 - **Progress toasts**: inline progress bar (0–100%) beneath the message body
+- **Accessible text mode**: `withAccessibleText()` names the severity in words and prints progress percentages — a text channel beside the frame's colour/glyph language (WCAG 1.4.1)
 - **Action buttons**: `[Label]` buttons attached to an alert with closure callbacks
 - **Styled alerts**: per-alert background/foreground/border colour overrides
 - **History log**: immutable, bounded record of dismissed alerts (default cap 100)
@@ -395,6 +396,7 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 | `->withMinWidth(int)` | Minimum alert width in cells |
 | `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or Ascii symbols |
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
+| `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + numeric percentage on progress rows; default off keeps every frame byte-identical |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded) |
@@ -406,6 +408,7 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 | `->extendAlert(int $index, float $additionalSeconds): self` | Push one alert's expiry later |
 | `->extendAll(float $additionalSeconds): self` | Push every expiring alert's expiry later |
 | `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it; the renderer handles no input) |
+| `->accessibleText(): bool` | Read the accessible-text preference flag |
 | `->error/warning/info/success(string)` | Convenience alert helpers |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
 | `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds) of an auto-dismissing alert, or `null` |

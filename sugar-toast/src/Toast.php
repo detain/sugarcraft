@@ -87,6 +87,9 @@ final class Toast
     /** Host-consumed flag: whether the host should dismiss on Escape key press. The renderer stores this preference; it does not handle input itself. */
     private bool $allowEscToClose = true;
 
+    /** Opt-in accessible chrome (M11): severity word in the header + numeric percentage on progress rows. Default OFF keeps every existing frame byte-identical. */
+    private bool $accessibleText = false;
+
     /**
      * Maximum number of concurrent alerts (null = unlimited).
      *
@@ -164,6 +167,25 @@ final class Toast
     public function withAllowEscToClose(bool $allow): self
     {
         return $this->mutate(['allowEscToClose' => $allow]);
+    }
+
+    /**
+     * Opt into a text channel for information the frame otherwise carries
+     * ONLY as colour, glyph, or block-run length (lib-reviews-1102 M11):
+     * the severity word (`Warning`, `Error`, … via `ToastType::label()`, so
+     * it follows the active locale) joins the header, and progress rows
+     * print the numeric percentage beside the bar. Default OFF — the plain
+     * renderer's byte output is unchanged for every existing host.
+     */
+    public function withAccessibleText(bool $on = true): self
+    {
+        return $this->mutate(['accessibleText' => $on]);
+    }
+
+    /** Returns the accessible-text preference flag (see {@see withAccessibleText()}). */
+    public function accessibleText(): bool
+    {
+        return $this->accessibleText;
     }
 
     /**
@@ -1053,6 +1075,16 @@ final class Toast
             ? $icon . ' '
             : Ansi::CSI . $color . 'm' . $icon . Ansi::reset() . ' ';
 
+        if ($this->accessibleText) {
+            // M11: meaning must survive colour-blindness, a palette-less
+            // terminal, and text-only extraction. The word rides AFTER the
+            // icon's reset — plain cells, never styled chrome — and the
+            // icon-drop degrade below can remove it along with the icon at
+            // hopeless widths (ellipsize, never delete: the message keeps
+            // priority over the word).
+            $prefix .= $alert->type->label() . ' ';
+        }
+
         // Top / bottom borders: '─' is a 3-byte UTF-8 grapheme but one
         // display cell, so repeat it $inner times for $inner cells.
         $top    = '╭' . \str_repeat('─', $inner) . '╮';
@@ -1089,7 +1121,13 @@ final class Toast
 
         // Render progress bar if set
         if ($alert->progress !== null) {
-            $middleLines[] = $this->renderProgressBar($alert->progress, $inner);
+            $middleLines[] = $this->renderProgressBar(
+                $alert->progress,
+                $inner,
+                $this->accessibleText
+                    ? \sprintf('%d%%', (int) \round(\max(0.0, \min(1.0, $alert->progress)) * 100))
+                    : ''
+            );
         }
 
         // Render action buttons if any
@@ -1661,8 +1699,10 @@ final class Toast
      *
      * @param float $progress  0.0 to 1.0
      * @param int $width  Available width in cells
+     * @param string $percent  '' (bar only) or a ready-printed numeric label
+     *                         like '80%' (accessible mode, M11)
      */
-    private function renderProgressBar(float $progress, int $width): string
+    private function renderProgressBar(float $progress, int $width, string $percent = ''): string
     {
         // $width is the inner cell width (between the vertical borders) —
         // the bar fills EXACTLY that budget. It used to floor at 4 cells,
@@ -1670,6 +1710,17 @@ final class Toast
         // right border fell off mid-box (lib-reviews-1102 m8).
         $width = \max(1, $width);
         $progress = \max(0.0, \min(1.0, $progress));
+
+        if ($percent !== '' && Width::string($percent) + 2 <= $width) {
+            // M11 numeric read-out: the percentage label plus one space is
+            // carved out of the bar's budget. Below that floor the number
+            // would only survive mangled ('10' for '100%'), so the honest
+            // degrade is the plain bar — every cell the box has is content.
+            $barWidth = $width - Width::string($percent) - 1;
+            $barFilled = \max(0, \min($barWidth, (int) \round($progress * $barWidth)));
+            return '│' . $percent . ' '
+                . \str_repeat('█', $barFilled) . \str_repeat('░', $barWidth - $barFilled) . '│';
+        }
         $filled = (int) \round($progress * $width);
         $filled = \max(0, \min($width, $filled));
         $empty = $width - $filled;
