@@ -245,6 +245,12 @@ final class QuickPick
 
     /**
      * Apply a border from sugar-style.
+     *
+     * Frames every rendered row: top/bottom rules, side runes on interior
+     * rows, and the header separator joins with the border's T-runes. An
+     * explicit setWindowWidth() counts the frame (content shrinks by two);
+     * auto width adds the frame on top of the computed content width.
+     * Pass null to render borderless.
      */
     public function withBorder(?Border $border): self
     {
@@ -255,6 +261,10 @@ final class QuickPick
 
     /**
      * Apply a style from sugar-style.
+     *
+     * Each rendered frame row is passed through Style::render(), so the
+     * style's SGR attributes paint the whole overlay window (including the
+     * border runes when one is set). Pass null to render unstyled.
      */
     public function withStyle(?Style $style): self
     {
@@ -564,14 +574,34 @@ final class QuickPick
             return $backgroundView;
         }
 
-        $winWidth = $this->windowWidth > 0 ? $this->windowWidth : ($this->cachedComputedWidth ??= $this->computeWidth());
+        $border = $this->border;
+
+        if ($this->windowWidth > 0) {
+            // The caller chose the OUTER width; a border frame consumes two
+            // of its cells for the side runes.
+            $outerWidth = $this->windowWidth;
+            $innerWidth = $border !== null ? \max(1, $outerWidth - 2) : $outerWidth;
+        } else {
+            // Auto width sizes the CONTENT; the border is added on top so
+            // item text never loses two cells to the frame.
+            $innerWidth = $this->cachedComputedWidth ??= $this->computeWidth();
+            $outerWidth = $border !== null ? $innerWidth + 2 : $innerWidth;
+        }
 
         $bgLines = \explode("\n", $backgroundView);
         if (\end($bgLines) === '') \array_pop($bgLines);
 
         // Build the overlay once — the previous code built it twice (once just to
         // count lines for padding, once to composite).
-        $lines = $this->buildOverlayLines($winWidth);
+        $lines = $this->buildOverlayLines($innerWidth);
+        if ($border !== null) {
+            $lines = $this->applyBorder($lines, $border, $innerWidth);
+        }
+        if ($this->style !== null) {
+            $style = $this->style;
+            $lines = \array_map(static fn(string $line): string => $style->render($line), $lines);
+        }
+
         $totalOverlayLines = \count($lines);
         if ($totalOverlayLines > \count($bgLines)) {
             // Pad background with empty lines so compositeOver has room.
@@ -579,7 +609,39 @@ final class QuickPick
             $bgLines = \array_merge($bgLines, $padding);
         }
 
-        return $this->compositeOver($lines, $winWidth, $bgLines);
+        return $this->compositeOver($lines, $outerWidth, $bgLines);
+    }
+
+    /**
+     * Frame a list of overlay lines with a sugar-style Border.
+     *
+     * The header separator row (index 1) uses the border's top rule with
+     * left/right T-junctions (├────┤) instead of the borderless plain
+     * ──── rule, so the frame reads as one connected rectangle.
+     *
+     * @param list<string> $lines      Rows already padded to $innerWidth
+     * @param Border       $border     Host-configured runes (trusted input)
+     * @param int          $innerWidth Content width between the side runes
+     * @return list<string>            Framed rows (count + 2)
+     */
+    private function applyBorder(array $lines, Border $border, int $innerWidth): array
+    {
+        if (\count($lines) >= 2) {
+            $lines[1] = \str_repeat($border->top, $innerWidth);
+        }
+        foreach ($lines as $i => $line) {
+            [$l, $r] = $i === 1
+                ? [$border->middleLeft, $border->middleRight]
+                : [$border->left, $border->right];
+            $lines[$i] = $l . $line . $r;
+        }
+        \array_unshift(
+            $lines,
+            $border->topLeft . \str_repeat($border->top, $innerWidth) . $border->topRight
+        );
+        $lines[] = $border->bottomLeft . \str_repeat($border->bottom, $innerWidth) . $border->bottomRight;
+
+        return $lines;
     }
 
     /**

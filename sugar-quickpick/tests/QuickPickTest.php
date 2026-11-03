@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\QuickPick\Tests;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\QuickPick\{QuickPick, FilteredItem, Item, HelpBar, StatusBar};
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -254,7 +255,81 @@ final class QuickPickTest extends TestCase
         $this->assertSame(0, $h->cursor());
     }
 
-    public function testBorderStyleComposition(): void
+    /**
+     * withBorder()/withStyle() used to be inert storage: the frame renderer
+     * never read them (C3). These pins are render tests — they fail loud if
+     * the decoration stops reaching view() again. An accessor round-trip
+     * would pass while the feature stayed dead, which is exactly how the
+     * defect survived.
+     */
+    public function testBorderFramesTheRenderedOverlay(): void
+    {
+        $h = $this->makeQuickPick()
+            ->setWindowWidth(12)
+            ->setWindowHeight(6)
+            ->withBorder(Border::rounded())
+            ->show();
+
+        $lines = \explode("\n", $h->view(\str_repeat('.', 12)));
+
+        // Outer width honoured: content kept 10 cells, 2 for the side runes.
+        $this->assertSame('╭──────────╮', $lines[0]);
+        $this->assertSame('╰──────────╯', $lines[\count($lines) - 1]);
+        // N4: the header separator is a connected rule with T-junctions,
+        // not a floating strip of ─.
+        $this->assertSame('├──────────┤', $lines[2]);
+        // Every interior row is side-framed.
+        $this->assertStringStartsWith('│', $lines[1]);
+        $this->assertStringEndsWith('│', $lines[1]);
+        $this->assertStringStartsWith('│', $lines[3]);
+    }
+
+    public function testBorderAutoWidthAddsFrameCells(): void
+    {
+        $bare = $this->makeQuickPick()->show();
+        $framed = $this->makeQuickPick()->withBorder(Border::normal())->show();
+
+        $bareLines = \explode("\n", $bare->view(''));
+        $framedLines = \explode("\n", $framed->view(''));
+
+        // Auto width sizes the content; the border rides on top of it (+2),
+        // so item text is never squeezed by enabling a frame.
+        $this->assertSame(
+            Width::of($bareLines[0]) + 2,
+            Width::of($framedLines[0])
+        );
+        $this->assertSame('┌' . \str_repeat('─', Width::of($bareLines[0])) . '┐', $framedLines[0]);
+    }
+
+    public function testStylePaintsEveryFrameLine(): void
+    {
+        $style = Style::new()->on('#0000ff');
+        $h = $this->makeQuickPick()
+            ->setWindowWidth(12)
+            ->setWindowHeight(6)
+            ->withStyle($style)
+            ->show();
+
+        $lines = \explode("\n", $h->view(\str_repeat('.', 12)));
+        foreach ($lines as $line) {
+            if ($line === '') {
+                continue;
+            }
+            $this->assertStringContainsString("\x1b[48;2;0;0;255m", $line, 'style SGR must reach rendered rows');
+            $this->assertStringContainsString("\x1b[0m", $line, 'each styled row must close its SGR');
+        }
+    }
+
+    public function testBorderlessShapeIsUnchanged(): void
+    {
+        // Byte-pin: the borderless header+separator rows must keep their
+        // exact pre-C3 spelling (existing frame pins depend on it).
+        $h = $this->makeQuickPick()->setWindowWidth(12)->show();
+        $lines = \explode("\n", $h->view(\str_repeat('.', 12)));
+        $this->assertSame(\str_repeat('─', 12), $lines[1]);
+    }
+
+    public function testBorderAndStyleImmutability(): void
     {
         $border = Border::rounded();
         $style = Style::new()->fg('#ffffff')->on('#0000ff');
