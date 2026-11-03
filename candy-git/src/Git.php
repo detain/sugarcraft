@@ -195,6 +195,10 @@ final class Git implements GitDriver
 
     public function deleteBranch(string $name): void
     {
+        // Same option-injection door as every other ref-taking method: an
+        // unguarded leading dash reaches `git branch -d -sneaky` and git
+        // parses it as flags (audit A9).
+        $this->guardRef($name);
         $this->run(['branch', '-d', $name]);
     }
 
@@ -294,12 +298,18 @@ final class Git implements GitDriver
     /**
      * Reject a ref/branch/path that begins with `-` to prevent option injection.
      *
-     * @throws \InvalidArgumentException
+     * RuntimeException, not InvalidArgumentException: every caller in the App
+     * funnels git failures through one `catch (\RuntimeException)` lane, and a
+     * guard refusal is exactly such a failure — a sibling that threw another
+     * Exception type would crash the TUI instead of showing an error row
+     * (audit K4). The type now matches what {@see self::run()} throws.
+     *
+     * @throws \RuntimeException
      */
     private function guardRef(string $ref): void
     {
         if (str_starts_with($ref, '-')) {
-            throw new \InvalidArgumentException(Lang::t('git.error', ['stderr' => "ref cannot start with '-': {$ref}"]));
+            throw new \RuntimeException(Lang::t('git.error', ['stderr' => "ref cannot start with '-': {$ref}"]));
         }
     }
 
@@ -313,17 +323,17 @@ final class Git implements GitDriver
      * CWD-relative or `foo/../../etc`-style value cannot plant a worktree
      * outside the intended tree. Returns the absolute path handed to git.
      *
-     * @throws \InvalidArgumentException
+     * @throws \RuntimeException (see {@see self::guardRef()} on the type)
      */
     private function guardWorktreePath(string $path): string
     {
         $this->guardRef($path);
         if ($path === '') {
-            throw new \InvalidArgumentException(Lang::t('git.unsafe_path', ['path' => $path]));
+            throw new \RuntimeException(Lang::t('git.unsafe_path', ['path' => $path]));
         }
         foreach (preg_split('#[\\\\/]#', $path) as $segment) {
             if ($segment === '..') {
-                throw new \InvalidArgumentException(Lang::t('git.unsafe_path', ['path' => $path]));
+                throw new \RuntimeException(Lang::t('git.unsafe_path', ['path' => $path]));
             }
         }
         $isAbsolute = str_starts_with($path, '/')
@@ -333,7 +343,7 @@ final class Git implements GitDriver
         }
         $base = realpath($this->cwd);
         if ($base === false) {
-            throw new \InvalidArgumentException(Lang::t('git.unsafe_path', ['path' => $path]));
+            throw new \RuntimeException(Lang::t('git.unsafe_path', ['path' => $path]));
         }
         return $base . '/' . $path;
     }

@@ -1030,8 +1030,15 @@ final class App implements Model
     /** Handle 'r' key: show rebase menu if rebase in progress. */
     private function handleRebaseKey(): self
     {
-        if ($this->isRebaseInProgress()) {
-            return $this->withRebaseMenu(true);
+        // The probe shells out (git rev-parse); a failing git must land in the
+        // error lane like every other operation, not as an uncaught fatal
+        // that takes the TUI down (audit K4).
+        try {
+            if ($this->git->rebaseInProgress()) {
+                return $this->withRebaseMenu(true);
+            }
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
         }
         return $this->withError(Lang::t('rebase.no_rebase'));
     }
@@ -1039,12 +1046,6 @@ final class App implements Model
     private function withRebaseMenu(bool $show): self
     {
         return $this->withAll(showRebaseMenu: $show);
-    }
-
-    /** Check if a rebase is currently in progress. */
-    private function isRebaseInProgress(): bool
-    {
-        return $this->git->rebaseInProgress();
     }
 
     private function executeRebaseContinue(): self

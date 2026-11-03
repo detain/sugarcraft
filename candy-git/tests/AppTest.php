@@ -114,7 +114,7 @@ final class FixtureGit implements GitDriver
     }
     public function worktreeAdd(string $path, string $branch): void { $this->maybeThrow('worktreeAdd'); $this->worktreeAdds[] = ['path' => $path, 'branch' => $branch]; }
     public function worktreeRemove(string $path): void { $this->maybeThrow('worktreeRemove'); $this->worktreeRemoves[] = $path; }
-    public function rebaseInProgress(): bool { return $this->rebaseInProgressResult; }
+    public function rebaseInProgress(): bool { $this->maybeThrow('rebaseInProgress'); return $this->rebaseInProgressResult; }
 }
 
 final class AppTest extends TestCase
@@ -652,7 +652,7 @@ final class AppTest extends TestCase
         $g = $this->git();
         $a = App::start($g);
         // Simulate rebase in progress by checking if showRebaseMenu becomes true
-        // when we press 'r'. The isRebaseInProgress check returns false for fixture git
+        // when we press 'r'. The rebaseInProgress() probe returns false for the fixture
         // so we can't actually test this without a real git repo.
         // Instead, just verify the key doesn't crash and shows error when no rebase
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
@@ -669,6 +669,20 @@ final class AppTest extends TestCase
         $this->assertTrue($a->showRebaseMenu, 'r with rebase in progress must open the menu');
         [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertFalse($a->showRebaseMenu, 'Escape must close the rebase menu, not quit');
+    }
+
+    public function testRKeySurvivesAFailingRebaseProbe(): void
+    {
+        // K4: the 'r' probe shells out (git rev-parse); when git fails the
+        // answer must arrive as an error row — the uncaught RuntimeException
+        // used to take the whole TUI down on that keypress.
+        $g = $this->git();
+        $g->throwOn['rebaseInProgress'] = new \RuntimeException('fatal: not a git repository');
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertNotNull($a->error);
+        $this->assertStringContainsString('not a git repository', $a->error);
+        $this->assertFalse($a->showRebaseMenu);
     }
 
     public function testSKeyOpensStashManager(): void

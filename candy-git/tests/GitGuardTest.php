@@ -31,56 +31,79 @@ final class GitGuardTest extends TestCase
     public function testCheckoutRejectsLeadingDashBranch(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->checkout('-f');
     }
 
     public function testMergeRejectsLeadingDashBranch(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->merge('--force');
     }
 
     public function testCreateBranchRejectsLeadingDashName(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->createBranch('-evil');
+    }
+
+    public function testDeleteBranchRejectsLeadingDashName(): void
+    {
+        // A9: deleteBranch was the one ref-taking method that skipped the
+        // guard, so 'git branch -d -sneaky' reached git as flag soup.
+        $git = new Git($this->cwd);
+        $this->expectException(\RuntimeException::class);
+        $git->deleteBranch('-d');
+    }
+
+    public function testGuardRefusalTravelsTheSameLaneAsGitFailures(): void
+    {
+        // K4 structural claim: guard refusals must be catchable by exactly
+        // the handler the App uses for `git` failures — a probe through
+        // RuntimeException proves no foreign exception type escapes.
+        $git = new Git($this->cwd);
+        try {
+            $git->checkout('-f');
+            $this->fail('expected a RuntimeException refusal');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString("cannot start with '-'", $e->getMessage());
+        }
     }
 
     public function testCherryPickRejectsLeadingDashRef(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->cherryPick('--abort');
     }
 
     public function testStashApplyRejectsLeadingDashRef(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->stashApply('--invalid');
     }
 
     public function testWorktreeAddRejectsLeadingDashPath(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->worktreeAdd('-/fake/path', 'main');
     }
 
     public function testWorktreeAddRejectsLeadingDashBranch(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->worktreeAdd('/fake/path', '-evil');
     }
 
     public function testWorktreeRemoveRejectsLeadingDashPath(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->worktreeRemove('-fake');
     }
 
@@ -119,21 +142,21 @@ final class GitGuardTest extends TestCase
     public function testWorktreeAddRejectsDotDotPath(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->worktreeAdd('../evil', 'main');
     }
 
     public function testWorktreeAddRejectsEmbeddedTraversal(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->worktreeAdd('foo/../../etc', 'main');
     }
 
     public function testWorktreeAddRejectsBackslashTraversal(): void
     {
         $git = new Git($this->cwd);
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
         $git->worktreeAdd('foo\\..\\bar', 'main');
     }
 
