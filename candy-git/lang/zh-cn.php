@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git：命令在 {seconds}秒后超时',
     'git.unsafe_path'         => 'git：不安全的 worktree 路径：{path}',
+    'git.unsafe_merge_driver' => 'git：该仓库定义了无法安全禁用的合并驱动程序；已拒绝合并',
     'cli.not_a_repo'          => 'candy-git：不是 git 仓库：{cwd}',
     'cli.unknown_flag'        => 'candy-git: 未知参数: {flag}',
     'cli.no_git'              => 'candy-git: git 不可用 -- 请安装 git 并确保其在 PATH 中',

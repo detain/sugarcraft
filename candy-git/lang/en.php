@@ -14,6 +14,7 @@ return [
     'git.error'        => 'git: {stderr}',
     'git.timeout'      => 'git: command timed out after {seconds}s',
     'git.unsafe_path'  => 'git: unsafe worktree path: {path}',
+    'git.unsafe_merge_driver' => 'git: the repository defines a merge driver that cannot be safely disabled; merge refused',
 
     // CLI errors
     'cli.not_a_repo'   => 'candy-git: not a git repository: {cwd}',

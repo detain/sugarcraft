@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: انتهت مهلة الأمر بعد {seconds} ثانية',
     'git.unsafe_path'         => 'git: مسار worktree غير آمن: {path}',
+    'git.unsafe_merge_driver' => 'git:عرّف المستودع مشغّل دمج لا يمكن تعطيله بأمان؛ تم رفض الدمج',
     'cli.not_a_repo'          => 'candy-git: ليس مستودع git: {cwd}',
     'cli.unknown_flag'        => 'candy-git: وسيط غير معروف: {flag}',
     'cli.no_git'              => 'candy-git: git غير متوفر -- ثبّت git وتأكد أنه في PATH',

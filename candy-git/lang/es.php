@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: el comando expiró tras {seconds}s',
     'git.unsafe_path'         => 'git: ruta de worktree no segura: {path}',
+    'git.unsafe_merge_driver' => 'git: el repositorio define un controlador de fusión que no se puede desactivar de forma segura; fusión rechazada',
     'cli.not_a_repo'          => 'candy-git: no es un repositorio git: {cwd}',
     'cli.unknown_flag'        => 'candy-git: argumento desconocido: {flag}',
     'cli.no_git'              => 'candy-git: git no está disponible -- instala git y asegúrate de que esté en el PATH',

@@ -116,7 +116,7 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 | `RebaseCommit`      | Immutable rebase todo entry — `sha`, `subject`, `action` + `withAction()` / `displayLine()`.                                      |
 | `InteractiveRebase` | Immutable interactive-rebase state — `commits` todo list, `cursor`, `selectingN`/`countInput`, `cycleAction()`, `dropCurrent()`.    |
 
-`CandyGit` shells out to `git` directly via the system, so users keep their existing commit hooks and signing config — while the repo-controlled executable hooks that could fire unasked (`core.fsmonitor`, `diff.external`) are switched off, per **Trust boundary**.
+`CandyGit` shells out to `git` directly via the system, so users keep their existing commit hooks and signing config — while the repo-controlled executable hooks that could fire unasked (`core.fsmonitor`, `diff.external`, and any `merge.<name>.driver` the repository's own config defines) are switched off, per **Trust boundary**.
 
 **Note:** All git operations are synchronous and block the event loop. This is by design for v1 — a TTY application naturally runs synchronously at the terminal. Async git operations are planned for v2 (see `GitDriver` interface for deprecation notes).
 
@@ -185,6 +185,21 @@ call through a fixed argument prelude that closes the clone-time surfaces:
   hostile clone would otherwise achieve instant code execution before you see
   a pane. `diff.external` is the same class of hazard and is disabled with
   `--no-ext-diff` on every diff.
+- Merge drivers are enumerated and neutralized on every merge-capable
+  command. `merge.<name>.driver` is the same species of executable-naming
+  key: one `.gitattributes` line (`*.txt merge=evil`) plus a driver definition
+  in the repository's *own* config — local, `config.worktree`, or pulled in
+  through `include.path` — sends git's 3-way merge machinery to an
+  attacker-chosen program, and a merge is exactly what a conflict prompts
+  you to do. Before running `merge`, `rebase --continue`/`--skip`,
+  `cherry-pick`, or `stash apply`/`pop`, CandyGit lists every reachable
+  `merge.*.driver` key in the merged config scope and overrides each one with
+  `false` (git's inert exit-1 builtin): a hostile clone then produces a plain
+  CONFLICT instead of code execution. If a driver key exists in a shape that
+  cannot be re-expressed as an override, the merge is *refused*, not run.
+  Side effect, disclosed on purpose: **your own** custom merge drivers —
+  global, system, or repo — never execute under CandyGit merges; plain `git`
+  in a terminal is unaffected.
 - Child environment is pinned: `GIT_TERMINAL_PROMPT=0`, `GIT_PAGER=cat`,
   `GIT_EDITOR`/`GIT_SEQUENCE_EDITOR=true` (no credential, pager, or editor
   can hijack the TUI's terminal), and `LC_ALL=C`/`LANG=C` because the
@@ -192,11 +207,18 @@ call through a fixed argument prelude that closes the clone-time surfaces:
 - The child's stdin is `/dev/null` unless we deliberately pipe a patch into
   `git apply`, so no git subprocess can read (or block on) your keystrokes.
 
-Deliberately **out of scope**: git's own commit machinery — `pre-commit`,
-`commit-msg`, `post-checkout`, and the like — still runs when you ask
-CandyGit to commit, because you are invoking git on that repository and
-expecting its normal behavior. Treat repository hooks as executing code:
-clone, and open, only what you trust.
+Deliberately **out of scope**: git's own commit machinery still runs when you
+ask CandyGit to commit — that means the standard `pre-commit`, `commit-msg`,
+`post-checkout`, and friends, *and* the same redirections that make them
+repo-controlled: `core.hooksPath` (a cloned repo can point it at any path,
+including one outside itself, and the hooks there fire on your commit) and
+`include.path`-delivered hook settings. These are not disarmed on purpose:
+running a project's hooks as `false` would silently delete somebody's commit
+gate, which is a correctness harm the app has no license to inflict on a
+repository you chose to commit in. The exec exception stays bounded and
+honest: hooks fire exactly when you invoke a command whose normal git
+behavior includes them, never unasked. Treat repository hooks as executing
+code: clone, open, and commit only what you trust.
 
 ## Shared foundations
 

@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: команда завершена по таймауту после {seconds}с',
     'git.unsafe_path'         => 'git: небезопасный путь worktree: {path}',
+    'git.unsafe_merge_driver' => 'git: репозиторий определяет драйвер слияния, который нельзя безопасно отключить; слияние отклонено',
     'cli.not_a_repo'          => 'candy-git: это не git-репозиторий: {cwd}',
     'cli.unknown_flag'        => 'candy-git: неизвестный аргумент: {flag}',
     'cli.no_git'              => 'candy-git: git недоступен -- установите git и добавьте его в PATH',

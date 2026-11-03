@@ -73,7 +73,11 @@ final class Git implements GitDriver
         if ($cwd === '' || !is_dir($cwd)) {
             return false;
         }
-        $r = Process::run(['git', '-C', $cwd, 'rev-parse', '--absolute-git-dir'], null, self::DEFAULT_TIMEOUT);
+        $r = Process::run(
+            array_merge(self::gitBase($cwd), ['rev-parse', '--absolute-git-dir']),
+            null,
+            self::DEFAULT_TIMEOUT,
+        );
         return $r['exit'] === 0 && trim($r['stdout']) !== '';
     }
 
@@ -85,7 +89,11 @@ final class Git implements GitDriver
      */
     public static function isBareRepository(string $cwd): bool
     {
-        $r = Process::run(['git', '-C', $cwd, 'rev-parse', '--is-bare-repository'], null, self::DEFAULT_TIMEOUT);
+        $r = Process::run(
+            array_merge(self::gitBase($cwd), ['rev-parse', '--is-bare-repository']),
+            null,
+            self::DEFAULT_TIMEOUT,
+        );
 
         return $r['exit'] === 0 && trim($r['stdout']) === 'true';
     }
@@ -422,10 +430,151 @@ final class Git implements GitDriver
      */
     private function argv(array $args): array
     {
-        return array_merge(
-            ['git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', '-C', $this->cwd],
-            $args,
+        return array_merge(self::gitBase($this->cwd), $args);
+    }
+
+    /**
+     * The one and only git-spawn funnel: program name, the trust prelude, and
+     * the working-directory selector. EVERY `git` invocation in this class is
+     * assembled from here (directly, or via {@see self::argv()}), which is
+     * what lets {@see GitSpawnPreludeGuardTest} pin structurally that no
+     * spawn path can silently grow an unprefluded sibling.
+     *
+     * @return list<string>
+     */
+    private static function gitBase(string $cwd): array
+    {
+        return ['git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', '-C', $cwd];
+    }
+
+    /**
+     * Commands whose machinery can invoke a MERGE DRIVER: `merge.<name>.driver`
+     * is a repo-configurable key naming an executable, reached by a matching
+     * `.gitattributes` entry (`*.txt merge=evil`) — the same class of
+     * clone-time code execution as core.fsmonitor, but fired by the merge
+     * machinery rather than by `status`. The verbs listed here are every
+     * command this class runs that performs a 3-way merge: `git merge`,
+     * `git rebase --continue/--skip`, `git cherry-pick` (bare or `--continue`;
+     * `--abort` tears state down without merging), and `git stash apply/pop`
+     * (stash application merges into the worktree).
+     */
+    private const MERGE_CAPABLE_DISPATCH = [
+        'merge'           => null,   // any argument shape
+        'rebase'          => ['--continue', '--skip'],
+        'cherry-pick'     => ['__not_abort__'],
+        'stash'           => ['apply', 'pop'],
+    ];
+
+    /**
+     * Assemble argv for run()/runPatch(): the fixed prelude PLUS, for the
+     * merge-capable verbs, per-invocation overrides that neutralize every
+     * `merge.<name>.driver` git would consult for this repository (see
+     * {@see self::mergeDriverDisarms()}).
+     *
+     * @param list<string> $args
+     * @return list<string>
+     */
+    private function argvWithDisarms(array $args): array
+    {
+        if (!self::isMergeCapable($args)) {
+            return $this->argv($args);
+        }
+
+        return array_merge(self::gitBase($this->cwd), $this->mergeDriverDisarms(), $args);
+    }
+
+    /** @param list<string> $args */
+    private static function isMergeCapable(array $args): bool
+    {
+        $head = $args[0] ?? '';
+        if (!array_key_exists($head, self::MERGE_CAPABLE_DISPATCH)) {
+            return false;
+        }
+        $tails = self::MERGE_CAPABLE_DISPATCH[$head];
+        if ($tails === null) {
+            return true;
+        }
+        $next = $args[1] ?? '';
+        if ($tails === ['__not_abort__']) {
+            return $next !== '--abort';
+        }
+
+        return in_array($next, $tails, true);
+    }
+
+    /**
+     * Enumerate and disarm the merge drivers reachable from this repository.
+     *
+     * `git config --get-regexp` (merged scope, one read-only spawn) lists
+     * exactly what the merge machinery would consult — including keys from
+     * `.git/config` includes and from `config.worktree` under
+     * `extensions.worktreeConfig`, both of which `--local` is blind to while
+     * merges honor them (measured on git 2.43). Each name is overridden with
+     * `-c merge.<name>.driver=false`: the driver then resolves to the inert
+     * shell builtin `false`, which exits non-zero, which git reports as a
+     * plain CONFLICT — fail loud, lose nothing, execute nothing the repo
+     * wrote. Empty-string overrides are rejected because git emits a scary
+     * `cannot run :` line for them; `true` is rejected because it would
+     * silently keep OUR version of every matched path (silent data loss).
+     *
+     * The enumeration runs on EVERY merge-capable invocation, never memoized:
+     * a repo that mutates its own config between two app commands must not be
+     * able to merge under the previous, narrower disarm set.
+     *
+     * Keys whose subsection name carries characters that cannot be safely
+     * re-expressed through `-c` (spaces and other exotica) cannot be
+     * enumerated-then-overridden at all; on git 2.43 they are also
+     * unreachable from `.gitattributes`, but we do not merge on the strength
+     * of a parser accident — the merge is refused instead (fail closed).
+     *
+     * @return list<string> pairs of `-c` / `merge.<name>.driver=false`
+     */
+    private function mergeDriverDisarms(): array
+    {
+        $probe = Process::run(
+            array_merge(self::gitBase($this->cwd), ['config', '--get-regexp', '^merge\\..*\\.driver$']),
+            null,
+            self::DEFAULT_TIMEOUT,
         );
+        if ($probe['timedOut']) {
+            // Cannot verify which drivers exist => cannot allow one to run.
+            throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => self::DEFAULT_TIMEOUT]));
+        }
+        if ($probe['exit'] === 1) {
+            return []; // no merge.<name>.driver defined anywhere — nothing to disarm
+        }
+        if ($probe['exit'] !== 0) {
+            // 128 and friends: unreadable/corrupt config. The merge command
+            // itself will hit the same wall with a more specific message —
+            // returning [] lets git's own error surface instead of ours.
+            return [];
+        }
+
+        $names = [];
+        foreach (explode("\n", rtrim($probe['stdout'], "\n")) as $line) {
+            if ($line === '') {
+                continue;
+            }
+            if (preg_match('/^merge\.([A-Za-z0-9._-]+)\.driver(?= |$)/i', $line, $m) === 1) {
+                $names[$m[1]] = true;
+                continue;
+            }
+            if (preg_match('/^merge\./i', $line) === 1 && stripos($line, '.driver') !== false) {
+                // A key git printed that we cannot safely re-express via -c
+                // (subsection carrying spaces/odd bytes, or a multi-line value
+                // continuation that looks key-shaped). Cannot enumerate =>
+                // cannot guarantee disarmed => refuse.
+                throw new \RuntimeException(Lang::t('git.unsafe_merge_driver'));
+            }
+        }
+
+        $overrides = [];
+        foreach (array_keys($names) as $name) {
+            $overrides[] = '-c';
+            $overrides[] = 'merge.' . $name . '.driver=false';
+        }
+
+        return $overrides;
     }
 
     /**
@@ -494,7 +643,7 @@ final class Git implements GitDriver
     /** @return list<string> */
     private function run(array $args): array
     {
-        $r = Process::run($this->argv($args), null, $this->timeout);
+        $r = Process::run($this->argvWithDisarms($args), null, $this->timeout);
         $this->assertNotTimedOut($r);
         if ($r['exit'] !== 0) {
             throw new \RuntimeException(Lang::t('git.error', ['stderr' => self::errorDetail($r)]));
@@ -505,7 +654,7 @@ final class Git implements GitDriver
     /** Like run() but passes $input via stdin and does not capture stdout. */
     private function runPatch(string $path, string $hunk, array $args): void
     {
-        $r = Process::run($this->argv($args), $hunk, $this->timeout);
+        $r = Process::run($this->argvWithDisarms($args), $hunk, $this->timeout);
         $this->assertNotTimedOut($r);
         if ($r['exit'] !== 0) {
             throw new \RuntimeException(Lang::t('git.error', ['stderr' => self::errorDetail($r)]));

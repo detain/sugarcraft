@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: Befehl nach {seconds}s abgelaufen',
     'git.unsafe_path'         => 'git: unsicherer Worktree-Pfad: {path}',
+    'git.unsafe_merge_driver' => 'git: Das Repository definiert einen Merge-Treiber, der nicht sicher deaktiviert werden kann; Merge abgelehnt',
     'cli.not_a_repo'          => 'candy-git: kein Git-Repository: {cwd}',
     'cli.unknown_flag'        => 'candy-git: unbekanntes Argument: {flag}',
     'cli.no_git'              => 'candy-git: git ist nicht verfuegbar -- installieren Sie git und stellen Sie es in den PATH',

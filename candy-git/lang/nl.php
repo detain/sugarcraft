@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: opdracht verlopen na {seconds}s',
     'git.unsafe_path'         => 'git: onveilig worktree-pad: {path}',
+    'git.unsafe_merge_driver' => 'git: de repository definieert een merge-driver die niet veilig uitgeschakeld kan worden; merge geweigerd',
     'cli.not_a_repo'          => 'candy-git: geen git-repository: {cwd}',
     'cli.unknown_flag'        => 'candy-git: onbekend argument: {flag}',
     'cli.no_git'              => 'candy-git: git is niet beschikbaar -- installeer git en zorg dat het in PATH staat',

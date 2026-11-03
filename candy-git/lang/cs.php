@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: časový limit překročen po {seconds}s',
     'git.unsafe_path'         => 'git: nezabezpečená cesta worktree: {path}',
+    'git.unsafe_merge_driver' => 'git: repozitář definuje slučovací ovladač, který nelze bezpečně zakázat; slučování zamítnuto',
     'cli.not_a_repo'          => 'candy-git: není git repozitář: {cwd}',
     'cli.unknown_flag'        => 'candy-git: neznámý argument: {flag}',
     'cli.no_git'              => 'candy-git: git není k dispozici -- nainstalujte git a ujistěte se, že je v PATH',

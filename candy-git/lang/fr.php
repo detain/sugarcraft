@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git : commande expirée après {seconds}s',
     'git.unsafe_path'         => 'git : chemin de worktree non sûr : {path}',
+    'git.unsafe_merge_driver' => 'git : le dépôt définit un pilote de fusion qui ne peut pas être désactivé sans risque ; fusion refusée',
     'cli.not_a_repo'          => 'candy-git : pas un dépôt git : {cwd}',
     'cli.unknown_flag'        => 'candy-git : argument inconnu : {flag}',
     'cli.no_git'              => 'candy-git : git indisponible -- installez git et verifiez qu\'il est dans le PATH',

@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: コマンドが {seconds}秒でタイムアウトしました',
     'git.unsafe_path'         => 'git: 安全でないworktreeパス: {path}',
+    'git.unsafe_merge_driver' => 'git: このリポジトリは安全に無効化できないマージドライバーを定義しているため、マージを拒否しました',
     'cli.not_a_repo'          => 'candy-git: gitリポジトリではありません: {cwd}',
     'cli.unknown_flag'        => 'candy-git: 不明な引数: {flag}',
     'cli.no_git'              => 'candy-git: git を利用できません -- git をインストールし PATH に含まれることを確認してください',

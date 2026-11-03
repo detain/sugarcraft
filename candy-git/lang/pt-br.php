@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: comando expirou após {seconds}s',
     'git.unsafe_path'         => 'git: caminho de worktree inseguro: {path}',
+    'git.unsafe_merge_driver' => 'git: o repositório define um driver de mesclagem que não pode ser desativado com segurança; mesclagem recusada',
     'cli.not_a_repo'          => 'candy-git: não é um repositório git: {cwd}',
     'cli.unknown_flag'        => 'candy-git: argumento desconhecido: {flag}',
     'cli.no_git'              => 'candy-git: o git não está disponível -- instale o git e verifique se ele está no PATH',

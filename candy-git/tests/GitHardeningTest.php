@@ -254,6 +254,164 @@ final class GitHardeningTest extends TestCase
         self::assertStringStartsWith('diff --git', $lines[0]);
     }
 
+    // ------------------------------------------- merge-driver integration (real git)
+
+    /**
+     * Shared setup for the merge-driver pins: a repo whose git config routes
+     * a custom driver at *.txt (local `.git/config` or, when $worktreeScope,
+     * `.git/config.worktree`), plus two branches diverging on the same line so
+     * any merge is guaranteed to reach the driver decision. The driver script
+     * touches $sentinel and exits 1 (git treats that as a failed merge).
+     */
+    private function makeMergeDriverRepo(string $sentinel, bool $worktreeScope): string
+    {
+        $repo   = $this->makeRepo();
+        $driver = $this->writeExecutable($this->cwd(), 'evil-merge-driver-' . bin2hex(random_bytes(4)) . '.sh',
+            "#!/bin/sh\ntouch " . escapeshellarg($sentinel) . "\nexit 1\n");
+        $value  = escapeshellarg($driver . ' %A %O %B %L %P');
+
+        if ($worktreeScope) {
+            exec('git -C ' . escapeshellarg($repo) . ' config extensions.worktreeConfig true 2>/dev/null');
+            exec('git -C ' . escapeshellarg($repo) . ' config --worktree merge.evil.driver ' . $value . ' 2>/dev/null');
+        } else {
+            exec('git -C ' . escapeshellarg($repo) . ' config merge.evil.driver ' . $value . ' 2>/dev/null');
+        }
+
+        file_put_contents($repo . '/.gitattributes', "*.txt merge=evil\n");
+        exec('git -C ' . escapeshellarg($repo) . ' add .gitattributes 2>/dev/null');
+        exec('git -C ' . escapeshellarg($repo) . ' commit -m attrs 2>/dev/null');
+
+        $base = trim((string) shell_exec('git -C ' . escapeshellarg($repo) . ' rev-parse --abbrev-ref HEAD'));
+        exec('git -C ' . escapeshellarg($repo) . ' checkout -b conflicting 2>/dev/null');
+        file_put_contents($repo . '/file.txt', "line 1\nother branch line\nline 3\n");
+        exec('git -C ' . escapeshellarg($repo) . ' commit -aqm other 2>/dev/null');
+        exec('git -C ' . escapeshellarg($repo) . ' checkout ' . escapeshellarg($base) . ' 2>/dev/null');
+        file_put_contents($repo . '/file.txt', "line 1\nmaster branch line\nline 3\n");
+        exec('git -C ' . escapeshellarg($repo) . ' commit -aqm ours 2>/dev/null');
+
+        return $repo;
+    }
+
+    public function testRepoControlledMergeDriverNeverExecutesOnMerge(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/mergedrv_fired.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $repo = $this->makeMergeDriverRepo($sentinel, false);
+
+        // Control: the vulnerability is real on this git build — a plain
+        // `git merge` in the repo DOES fire the configured driver. Without
+        // it, the negative proof below would pass vacuously, so skip.
+        exec('git -C ' . escapeshellarg($repo) . ' merge conflicting 2>/dev/null');
+        if (!file_exists($sentinel)) {
+            $this->markTestSkipped('this git build does not fire a custom merge driver on conflict');
+        }
+        @unlink($sentinel);
+        exec('git -C ' . escapeshellarg($repo) . ' merge --abort 2>/dev/null');
+        exec('git -C ' . escapeshellarg($repo) . ' reset --hard HEAD 2>/dev/null');
+
+        // The fix: Git::merge() enumerates merge.<name>.driver keys and
+        // overrides each with `false` (inert, exits non-zero => git reports a
+        // plain CONFLICT). Driver never runs; user still sees git's conflict.
+        try {
+            (new Git($repo))->merge('conflicting');
+            self::fail('expected RuntimeException on a conflicting merge');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('CONFLICT', $e->getMessage());
+        }
+
+        self::assertFalse(file_exists($sentinel), 'repo-controlled merge driver executed through Git::merge()');
+    }
+
+    public function testWorktreeConfigMergeDriverNeverExecutesOnMerge(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/mergedrv_wtd_fired.' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        $repo = $this->makeMergeDriverRepo($sentinel, true);
+
+        exec('git -C ' . escapeshellarg($repo) . ' merge conflicting 2>/dev/null');
+        if (!file_exists($sentinel)) {
+            $this->markTestSkipped('this git build does not honor config.worktree merge drivers');
+        }
+        @unlink($sentinel);
+        exec('git -C ' . escapeshellarg($repo) . ' merge --abort 2>/dev/null');
+        exec('git -C ' . escapeshellarg($repo) . ' reset --hard HEAD 2>/dev/null');
+
+        try {
+            (new Git($repo))->merge('conflicting');
+            self::fail('expected RuntimeException on a conflicting merge');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('CONFLICT', $e->getMessage());
+        }
+
+        self::assertFalse(
+            file_exists($sentinel),
+            'merge driver defined only in .git/config.worktree executed through Git::merge() — '
+            . 'disarm enumeration must use the merged scope, not --local',
+        );
+    }
+
+    public function testUnrepresentableMergeDriverKeyRefusesTheMerge(): void
+    {
+        $this->requireGit();
+
+        $repo = $this->makeRepo();
+        // Hand-written so the subsection carries a character outside the set
+        // that -c can re-express unambiguously (the CLI itself would accept
+        // it — we do not trust parser accidents for a security door).
+        $cfg = (string) file_get_contents($repo . '/.git/config');
+        file_put_contents($repo . '/.git/config', $cfg . "\n[merge \"evil~key\"]\n\tdriver = /bin/true\n");
+
+        try {
+            (new Git($repo))->merge('HEAD');
+            self::fail('expected refusal when a merge driver key cannot be disarmed');
+        } catch (\RuntimeException $e) {
+            self::assertSame(\SugarCraft\Git\Lang::t('git.unsafe_merge_driver'), $e->getMessage());
+        }
+    }
+
+    public function testMergeCapableArgvCarriesDriverDisarms(): void
+    {
+        $this->requireGit();
+
+        $repo = $this->makeRepo();
+        exec('git -C ' . escapeshellarg($repo) . ' config merge.evil.driver "/bin/true %A %O %B" 2>/dev/null');
+        exec('git -C ' . escapeshellarg($repo) . ' config merge.MyEvil2.driver "/bin/true" 2>/dev/null');
+
+        $argv = $this->callDisarmedArgv($repo, ['merge', '--no-edit', '--', 'x']);
+        self::assertSame([
+            'git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', '-C', $repo,
+            '-c', 'merge.evil.driver=false',
+            '-c', 'merge.MyEvil2.driver=false',
+            'merge', '--no-edit', '--', 'x',
+        ], $argv, 'every enumerated driver (case-preserving subsection) must be overridden before the subcommand');
+
+        // Case preserved, deduped; a non-merge-capable verb gets none of it.
+        self::assertSame([
+            'git', '-c', 'core.quotepath=off', '-c', 'core.fsmonitor=false', '-C', $repo,
+            'status', '--porcelain=v1',
+        ], $this->callDisarmedArgv($repo, ['status', '--porcelain=v1']));
+        // cherry-pick --abort must NOT carry the disarms (teardown-only verb),
+        // bare cherry-pick and rebase --continue must.
+        self::assertStringNotContainsString('.driver=false', implode("\0", $this->callDisarmedArgv($repo, ['cherry-pick', '--abort'])));
+        self::assertStringContainsString('merge.evil.driver=false', implode("\0", $this->callDisarmedArgv($repo, ['cherry-pick', 'abc123'])));
+        self::assertStringContainsString('merge.evil.driver=false', implode("\0", $this->callDisarmedArgv($repo, ['rebase', '--continue'])));
+        self::assertStringContainsString('merge.evil.driver=false', implode("\0", $this->callDisarmedArgv($repo, ['stash', 'apply'])));
+        self::assertStringNotContainsString('.driver=false', implode("\0", $this->callDisarmedArgv($repo, ['rebase', '--abort'])));
+    }
+
+    /** @param list<string> $args */
+    private function callDisarmedArgv(string $cwd, array $args): array
+    {
+        $method = new \ReflectionMethod(Git::class, 'argvWithDisarms');
+        $method->setAccessible(true);
+
+        return $method->invoke(new Git($cwd), $args);
+    }
+
     // ------------------------------------------- A6: honest failure detail (real git)
 
     public function testMergeConflictFailureCarriesGitsOwnExplanation(): void

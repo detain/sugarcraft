@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: comando scaduto dopo {seconds}s',
     'git.unsafe_path'         => 'git: percorso worktree non sicuro: {path}',
+    'git.unsafe_merge_driver' => 'git: il repository definisce un driver di merge che non può essere disattivato in modo sicuro; merge rifiutato',
     'cli.not_a_repo'          => 'candy-git: non è un repository git: {cwd}',
     'cli.unknown_flag'        => 'candy-git: argomento sconosciuto: {flag}',
     'cli.no_git'              => 'candy-git: git non disponibile -- installa git e assicurati che sia nel PATH',

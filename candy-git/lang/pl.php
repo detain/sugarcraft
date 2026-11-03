@@ -13,6 +13,7 @@ return [
     'git.error'               => 'git: {stderr}',
     'git.timeout'             => 'git: przekroczono limit {seconds}s',
     'git.unsafe_path'         => 'git: niebezpieczna ścieżka worktree: {path}',
+    'git.unsafe_merge_driver' => 'git: repozytorium definiuje sterownik scalania, którego nie można bezpiecznie wyłączyć; scalanie odrzucone',
     'cli.not_a_repo'          => 'candy-git: to nie jest repozytorium git: {cwd}',
     'cli.unknown_flag'        => 'candy-git: nieznany argument: {flag}',
     'cli.no_git'              => 'candy-git: git jest niedostępny -- zainstaluj git i upewnij się, że jest w PATH',
