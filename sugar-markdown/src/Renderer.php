@@ -1268,8 +1268,36 @@ final class Renderer
         };
     }
 
+    /**
+     * Hard ceiling on nested block nesting (blockquote + list levels).
+     * Deeper blocks render their content with NO added decoration: the
+     * quote bar, list markers and per-level re-wrap stop, the bytes of the
+     * text itself survive. This is the hostile-document bound — re-wrapping
+     * the accumulated child at every quote level doubled output (and time)
+     * per level once the width floor was reached, so 2^depth growth was a
+     * one-line DoS against any untrusted README. The parser itself caps
+     * nesting at 1000; the render ceiling is far lower because a bar
+     * column past this depth is unreadable anyway. CommonMark and glamour
+     * impose no such cap; this divergence is deliberate and disclosed.
+     */
+    public const MAX_NESTED_BLOCK_DEPTH = 32;
+
+    /**
+     * A quote re-wrap below this many usable cells is skipped: the wrapped
+     * lines can no longer hold a word plus the bar, so every extra level
+     * would merely double the line count. Overflowing lines are finite and
+     * the depth cap bounds their growth.
+     */
+    private const MIN_QUOTE_WRAP_CELLS = 4;
+
     private function renderBlockQuote(BlockQuote $q): string
     {
+        // Past the nesting ceiling the quote flattens: content renders,
+        // decoration and re-wrap stop (see MAX_NESTED_BLOCK_DEPTH).
+        if ($this->blockStack->depth() >= self::MAX_NESTED_BLOCK_DEPTH) {
+            return $this->renderChildren($q);
+        }
+
         // Push BlockQuote context onto the stack.
         $parentCtx = $this->blockStack->peek();
         $depth = $this->blockStack->depth();
@@ -1294,7 +1322,9 @@ final class Renderer
             $inner = rtrim($this->renderChildren($q), "\n");
             if ($this->wrapWidth !== null) {
                 $avail = $this->blockStack->availableWidth($this->wrapWidth);
-                $inner = Width::wrapAnsi($inner, max(1, $avail));
+                if ($avail >= self::MIN_QUOTE_WRAP_CELLS) {
+                    $inner = Width::wrapAnsi($inner, $avail);
+                }
             }
             $lines = explode("\n", $inner);
             $out   = [];
@@ -1340,6 +1370,12 @@ final class Renderer
 
     private function renderList(ListBlock $list): string
     {
+        // Past the nesting ceiling the list flattens: item content renders,
+        // markers and indent stops (see MAX_NESTED_BLOCK_DEPTH).
+        if ($this->blockStack->depth() >= self::MAX_NESTED_BLOCK_DEPTH) {
+            return $this->renderChildren($list);
+        }
+
         // Push List context onto the stack.
         $parentCtx = $this->blockStack->peek();
         $depth = $this->blockStack->depth();
