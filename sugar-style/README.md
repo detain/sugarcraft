@@ -38,6 +38,10 @@ echo Style::new()
 ```
 
 `fg` / `bg` / `on` / `pad` / `mg` / `of` are short-form ergonomic aliases.
+The string colour form is **hex-only** (it routes through `Color::hex`):
+`fg('white')` / `on('red')` throw — pass `Color` instances built with
+`Color::parse('white')`, or use colour names inside `[...]` markup
+(`[bg:red]`), which accepts names.
 The full-length names (`foreground` / `background` / `padding`
 / `margin` / `setString`) work identically — pick whichever reads better at
 the call site:
@@ -154,8 +158,10 @@ the factory reads `SUGARCRAFT_LAYOUT_SOLVER` once per process:
   partitioner).
 - exactly `cassowary` → `CassowarySolver`, which today **delegates to
   GreedySolver** — sugar-constraints's simplex engine was removed, so the
-  opt-in is a deprecated-but-harmless setting that raises an
-  `E_USER_DEPRECATED` notice once. Behaviour is identical either way.
+  opt-in is a deprecated-but-harmless setting: the factory announces the
+  delegation once per process, and the shim itself raises an
+  `E_USER_DEPRECATED` notice on **every** `solve()` it takes. Behaviour is
+  identical either way.
 
 The decision (not the instance) is memoized in a static; tests that toggle
 the variable mid-process call
@@ -227,7 +233,14 @@ echo Tree::new()
 
 ## Public API
 
-- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `accent`/`muted` default to `primary`/`secondary` in the `dark()`/`light()`/`ansi()` themes, but are set to distinct colour values in the richer named themes (dracula, tokyoNight, oneDark, githubDark, solarizedDark/Light); consumers must NOT assume `$theme->accent === $theme->primary`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs.
+- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `accent`/`muted` fall back to `primary`/`secondary` only in `dark()`; in
+`light()`, `accent` equals `primary` but `muted` is its own grey
+(`#6b7280`, while `secondary` is green `#10b981`), and in `ansi()` both
+slots are distinct palette colours (primary cyan `#00cdcd` vs accent
+magenta `#cd00cd`; secondary green `#00cd00` vs muted grey `#7f7f7f`).
+Every richer named theme (dracula, tokyoNight, oneDark, githubDark,
+solarizedDark/Light) sets them explicitly; consumers must NOT assume
+`$theme->accent === $theme->primary`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs.
 - **`Style`** — the immutable value object. Style is the fleet's legacy
   builder: its setters are bare-named (`bold()`, `fg()`, `width()`) rather
   than `with*()`-prefixed, yet each returns a **new** `Style` — measured
@@ -259,9 +272,14 @@ echo Tree::new()
   colors and returns a blend whose `sides(): list<Color>` (top / right / bottom /
   left) are interpolated around the perimeter. Apply via
   `Style::borderForegroundBlend()` or the per-side `Style::border*Foreground()`.
-- **`AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor`** — pick the
-  right concrete colour at render time per `ColorProfile` (TrueColor / 256 /
-  Ansi) or per dark-vs-light background.
+- **`AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor`** — value
+  holders carrying per-profile (TrueColor / 256 / Ansi) and dark-vs-light
+  colour choices. Truth about resolution: `Style` stores and `render()` reads
+  **concrete `Color` slots only** — the renderer never resolves an adaptive
+  value at render time. Resolve first, then store the concrete colour:
+  `$s = $r->newStyle()->foreground($r->resolveAdaptive($c));` for the
+  profile pick, or `$c = ($r->lightDark())($light, $dark);` for the
+  scheme pick (`lightDark()` returns a `Closure(Color $light, Color $dark): Color`).
 - **`LightDark`** — pick helper for dark-bg vs light-bg colour schemes.
 - **`Layout`** (package-level) — `place`, `placeHorizontal`, `placeVertical`,
   `joinHorizontal`, `joinVertical`, `joinHorizontalWithSpacing`,
@@ -280,11 +298,11 @@ echo Tree::new()
   Constraints: `Constraint::length/min/max/percentage/ratio/fill`.
   State: `Rect` (x, y, width, height) + `Direction` (Horizontal/Vertical).
 - **`Listing\ItemList`** + **`Listing\Enumerator`** — bullet, dash, asterisk,
-  arabic, alphabet, roman, romanUpper, decimal, none. Nested sublists +
+  arabic, alphabet, roman, romanUpper, decimal, tree, none. Nested sublists +
   per-item style hooks.
 - **`Tree\Tree`** + **`Tree\Enumerator`** — default / rounded / ascii
   connector sets; per-section style overrides; custom indenter.
-- **`Table\Table`** — `headers` / `row(s)` / `border` / `align` /
+- **`Table\Table`** — `headers` / `row(s)` / `border` /
   `headerAlign` / `rowAlign` / `styleFunc` / per-side border toggles /
   `width` / `offset` / `clearRows` / `data(Data)` / `wrap(\Closure(string $cell,
   int $colWidth): list<string>)` (every returned line renders; a wrapped row
@@ -304,17 +322,22 @@ echo Tree::new()
   when you pass `null` (meaning “unknown — don't switch schemes”); it does
   not probe the terminal by itself.
 - **`UnderlineStyle`** — enum (None / Single / Double / Curly /
-  Dotted / Dashed) for SGR `4:N` sub-style emit.
+  Dotted / Dashed) for SGR `4:N` sub-style emit. Inert on its own: the
+  `4:N` form is emitted only when `underline()` is also set.
 - **`Hsl`** — CSS-style HSL factory: `Hsl::color($h, $s, $l)` (hue 0-360,
   saturation/lightness 0-100) and `Hsl::parse('hsl(200,80%,50%)')` for
   string input.
 - **`Markup`** — Rich-style `[tag]text[/]` parser returning `list<Cell>`.
   Distinct from `StyleParser` (which uses `[text](fg:red,bold)` syntax).
   Supports color names, fg:/bg: shortcuts, and bold/dim/italic/
-  underline/reverse/strikethrough.
-- **`StyleParser`** — `StyleParser::parse(string)` for the termui-style
-  `[text](fg:red,bg:blue,bold)` inline form, returning `list<Cell>`
-  (port of sugar-dashboard's inline parser).
+  underline/reverse/strikethrough. A bracketed run that applies no effect
+  (unknown word, empty tag) is re-emitted **verbatim** — text is never
+  silently deleted; within an effective tag, unknown words are still
+  ignored. Nesting beyond 128 open tags throws.
+- **`StyleParser`** — `StyleParser::parse($input, $defaultStyle)` for the
+  termui-style `[text](fg:red,bg:blue,bold)` inline form, returning
+  `list<Cell>` (port of sugar-dashboard's inline parser). Both parameters
+  are required; there is no one-argument form.
 - **`Cell`** — one styled grapheme produced by `Markup`/`StyleParser`.
 - **`Canvas` / `Layer`** — multi-layer compositor: `Canvas::new()->addLayer(
   Layer::new($block)->withX(...)->withY(...)->withZ(...))->render()`
@@ -323,6 +346,23 @@ echo Tree::new()
 - **`Bar\StatusBar` / `Bar\HelpBar`** — one-line chrome widgets: StatusBar
   holds left/center/right `Segment` lists with separator/style/width knobs;
   HelpBar binds key→label pairs (`fromMap`) with key/label styles.
+
+```php
+use SugarCraft\Style\Bar\{Segment, StatusBar};
+use SugarCraft\Style\Style;
+
+echo StatusBar::new()
+    ->width(80)
+    ->style(Style::new()->fg('#cdd6f4')->on('#1e1e2e'))
+    ->left('main()', Segment::of('2 modified', Style::new()->fg('#e0af68')))
+    ->right('142 tests')
+    ->render() . "\n";
+```
+
+Trap: a bar-wide background `style()` and per-segment styles can be
+combined, but a per-segment style that ends in an SGR reset interrupts the
+bar background from that segment on — the two modes (bar-wide colour vs
+per-segment colour) are normally used one at a time.
 - **`TitleSgr`** — `@internal` border-title alignment enum; not part of the
   public surface.
 
@@ -448,9 +488,12 @@ reverse, strikethrough, fg:color, bg:color.
 OSC 8 escapes — `\x1b]8;;URL\x1b\\` (with the `id=…` parameter segment
 inserted only when `$id` is non-empty) and the no-op closing sequence —
 so modern terminals turn it into a clickable link, while the rest strip
-the sequences and fall through to plain text. URL and id
-pass through OSC control-byte stripping, so host-supplied values cannot
-inject a second hyperlink.
+the sequences and fall through to plain text. URL and id pass through OSC
+control-byte stripping, so host-supplied values cannot inject a second
+hyperlink envelope. Parameter-splitting is a separate matter: a `;` in the id
+would open a new OSC parameter and could relocate the destination, so
+`hyperlink()` refuses ids containing `;` or `:` with `InvalidArgumentException`
+(these characters are illegal in an id per the kitty OSC-8 grammar anyway).
 
 For underlines, combine `Style::underline()` with
 `Style::underlineStyle(UnderlineStyle::Curly)` (the SGR `4:N` sub-style)
@@ -525,9 +568,9 @@ Available factories:
 | `Theme::adaptive()` | Auto-detect via `COLORFGBG` env var |
 
 All themes expose 13 colour slots: `foreground`, `background`,
-`primary`, `secondary`, `accent`/`muted` (default to primary/secondary in basic
-themes; distinct in richer named themes), `error`, `warning`, `success`,
-`info`, `border`, `separator`, `cursor`.
+`primary`, `secondary`, `accent`/`muted` (fall back to primary/secondary
+only in `dark()` — see the slot note under **Theme** above), `error`,
+`warning`, `success`, `info`, `border`, `separator`, `cursor`.
 
 ## Measurement utilities
 
@@ -545,7 +588,7 @@ names are declared.)
 
 All three strip ANSI escapes before measuring, honour East-Asian
 wide cells, and round the same way `Style::render()` does — so
-you can `Layout::Width($style->render('xx'))` to budget a
+you can `Layout::width($style->render('xx'))` to budget a
 component's footprint reliably.
 
 ## Table StyleFunc + per-section borders
@@ -569,10 +612,12 @@ $striped = Table::new()
 echo $striped->render();
 ```
 
-The four border-section flags (`borderHeader` / `borderRow` /
-`borderColumn` / `borderTop/Right/Bottom/Left`) decide which
-separators draw. Defaults: rounded outer + header rule + column
-verticals; row separators off.
+Seven border flags decide what draws: three section rules (`borderHeader` /
+`borderRow` / `borderColumn`) and four sides (`borderTop` / `borderRight` /
+`borderBottom` / `borderLeft`). Defaults: a bare `Table::new()` carries **no**
+border — the frame appears only after an explicit `->border(Border::rounded())`
+(or other `Border`). Once a border is set, the defaults are header rule +
+column verticals on, row separators off.
 
 ## Embedded border titles + seam junctions
 
@@ -668,8 +713,34 @@ documented and the text keeps its own colour.
 
 Use `Style::colorProfile(ColorProfile::Ansi)` for a forced
 downgrade or `Renderer::fromEnvironment()` to auto-detect from
-`NO_COLOR` / `CLICOLOR_FORCE` / `TERM` / `COLORTERM` /
-`TERM_PROGRAM` / `WT_SESSION` / CI markers.
+`NO_COLOR` / `CLICOLOR_FORCE` / `FORCE_COLOR` / `TERM` / `COLORTERM` /
+`TERM_PROGRAM` / `WT_SESSION` / CI markers. `CLICOLOR` (the "prefer colour
+when not a tty" convention) is deliberately **not** consulted.
+
+## Trust and sanitisation
+
+`sugar-style` is a **renderer, not a sanitizer** — by fleet design it never
+strips hostile bytes from the content it wraps:
+
+- ESC / OSC sequences carried in content pass through untouched (they are
+  part of width arithmetic — `render()` must measure what a terminal will
+  see). `Style::hyperlink()` adds one targeted guard on top of core's OSC
+  control-byte stripping: ids containing `;` or `:` are refused so a
+  host-supplied id cannot relocate a link destination.
+- `\t` is expanded per `tabWidth()` (default 4), `\n` is a structural line
+  break, and `\r` is never collapsed or stripped.
+- Wrapping **pre-styled content** (`$outer->of($inner->render())`) composes
+  at the byte level: where the inner block emits its own reset (`ESC[0m`),
+  the outer style is **not** re-applied to the remainder — attributes are
+  lost from that point on, and `width()` truncation can make the loss
+  visible. Keep style composition to one pass, or re-render inner content
+  under the outer style.
+
+Untrusted strings (tool output, prompts, file names) must be sanitized
+**before** being styled, at the consumer boundary — the fleet law, honoured
+by e.g. sugar-navstack (`NavStack` / `Breadcrumb`), sugar-overlay (`Veil`),
+sugar-gallery, sugar-quickpick and sugar-readline, which route ingress
+through `Sanitize::untrusted()` / `Sanitize::untrustedForMarkedFrames()`.
 
 ## Accessibility
 

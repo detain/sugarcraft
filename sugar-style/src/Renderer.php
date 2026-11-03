@@ -27,7 +27,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * $bold = $r->newStyle()->bold()->render('hi');
  *
  * // Branch a colour pick on dark background:
- * $col  = $r->lightDark()->pick($lightCol, $darkCol);
+ * $col  = ($r->lightDark())($lightCol, $darkCol);
  * ```
  */
 final class Renderer

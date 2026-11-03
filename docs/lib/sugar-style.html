@@ -87,10 +87,11 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
       <div class="feature"><strong>Table</strong><span>Headers, rows, per-cell styleFunc. ANSI-aware width calc with grapheme cluster support. Optional <code>wrap()</code> callback: every line it returns renders, so a wrapped row spans several physical lines.</span></div>
       <div class="feature"><strong>List + Tree</strong><span>Bulleted lists and ASCII trees with custom enumerators.</span></div>
       <div class="feature"><strong>Layout</strong><span><code>joinHorizontal</code>, <code>joinVertical</code>, <code>place</code>, plus the ratatui-style constraint solver (<code>Layout\Layout::vertical([...])-&gt;split()</code>) and <code>RegionBridge</code> for handing rectangles between sugar-constraints and sugar-cellbuffer.</span></div>
-      <div class="feature"><strong>Canvas</strong><span>Multi-layer compositor. Z-ordered overlays, alpha-aware merge, ideal for modals + tooltips.</span></div>
+      <div class="feature"><strong>Canvas</strong><span>Multi-layer compositor. Z-ordered overlays merged by a cell-aware row splice (no alpha blending — upper cells replace lower ones), ideal for modals + tooltips.</span></div>
       <div class="feature"><strong>Theme</strong><span>SSOT colour palette. 10 named factories (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized*/ansi/adaptive). 13 colour slots (foreground/background/primary/secondary/accent/muted/error/warning/success/info/border/separator/cursor). All <code>with*()</code> setters return a new Theme. <code>adaptive()</code> reads <code>$COLORFGBG</code>: the last field's palette slot decides light vs dark by luminance (7/15 light, 0/8 dark); unset or unparseable falls back to dark.</span></div>
       <div class="feature"><strong>Embedded titles + seams</strong><span>btop-style box titles: <code>Border::withEmbeddedTitle()</code> brackets text in junctions (<code>╭─┐cpu┌────┐12:00┌───────╮</code>) on any of six anchors; <code>Border::seam()</code> picks the <code>┬ ┴ ├ ┤ ┼</code> rune where an internal divider meets the frame, preserving the border family.</span></div>
       <div class="feature"><strong>Colour degradation</strong><span>A Style carries a <code>ColorProfile</code> and <code>render()</code> downsamples to it, as charmbracelet/colorprofile's Writer does: TrueColor → 38;2, Ansi256 → 38;5, Ansi → 30..37/90..97, <code>Ascii</code> (what <code>NO_COLOR</code> selects) drops colour but keeps bold/italic/underline and OSC 8 links, and <code>NoTty</code> strips every escape — including ones carried in by pre-styled content, a <code>transform()</code> or a border title — while padding, borders and alignment stay.</span></div>
+      <div class="feature"><strong>Underline truth</strong><span>Sub-style shapes ride the numeric SGR <code>4:N</code> form emitted only alongside <code>underline()</code> — terminals that ignore <code>4:N</code> typically draw no underline at all (no plain SGR 4 companion is sent). SGR <code>58</code> has no 4-bit spelling, so at the <code>Ansi</code> tier the underline colour is applied through the foreground attribute instead — it recolours the glyphs rather than tinting the rule.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Embedded border titles</h3>
@@ -145,6 +146,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <tr><td>Table</td><td>wrap(?\Closure(string $cell, int $colWidth): list&lt;string&gt; $fn)</td><td>Per-cell wrapping; a wrapped row spans several physical lines</td></tr>
 <tr><td>Layout</td><td>joinVertical(), joinHorizontal()</td><td>Join layouts</td></tr>
 <tr><td>Canvas</td><td>new()</td><td>Create multi-layer canvas</td></tr>
+<tr><td>Bar</td><td>StatusBar::new()-&gt;left()/center()/right(Segment|string ...)-&gt;width()/style()-&gt;render(); HelpBar::fromMap()</td><td>One-line chrome: positioned segment groups + key→label help rows</td></tr>
 </table>
   </div>
 </section>
