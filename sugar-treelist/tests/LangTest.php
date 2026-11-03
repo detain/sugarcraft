@@ -11,14 +11,18 @@ final class LangTest extends TestCase
 {
     public function testTranslateNoItemsKey(): void
     {
+        // 2026-11-03 RE-PIN (named disclosure): the 'NoItems:' Go-sentinel prefix
+        // was retired from the English copy — users receive a sentence.
         $result = Lang::t('list.no_items');
-        $this->assertSame('NoItems: list has no items', $result);
+        $this->assertSame('The list has no items to display.', $result);
     }
 
     public function testTranslateZeroViewportKey(): void
     {
+        // 2026-11-03 RE-PIN (named disclosure): grammar truth-flip alongside the
+        // NoItems sentence; still carries the 'viewport' word render pins rely on.
         $result = Lang::t('list.zero_viewport');
-        $this->assertSame("Can't display with zero width or height of viewport", $result);
+        $this->assertSame('The viewport has zero width or height, so the list cannot be displayed.', $result);
     }
 
     public function testTranslateWithParams(): void

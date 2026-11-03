@@ -12,8 +12,7 @@ namespace SugarCraft\TreeList;
  * `prefix()` is then called once per line of that item to produce the actual
  * prefix string. Because every item's returned width feeds its own layout,
  * implementations must derive any padding from a pass-invariant value —
- * e.g. `$totalItems`, not `$currentIndex` — or columns render ragged
- * (audit M6 fix wave).
+ * e.g. `$totalItems`, not `$currentIndex` — or columns render ragged.
  */
 interface Prefixer
 {

@@ -12,7 +12,7 @@ use SugarCraft\Core\Util\Width;
 /**
  * Core list model — stores items, renders visible lines within a viewport.
  *
- * Port of treilik/bubblelister Model. Key properties:
+ * List view model. Key properties:
  * - Items are stored as {@see Item} wrappers around \Stringable values
  * - CursorOffset keeps the cursor N lines from the visible viewport edge
  * - lineOffset controls how many lines *before* the cursor to show in the
@@ -237,7 +237,7 @@ final class Model
     }
 
     // -------------------------------------------------------------------------
-    // Accessors (bare, per repo convention — audit M7/#11 fix wave)
+    // Accessors (bare, per repo convention)
     // -------------------------------------------------------------------------
 
     public function width(): int { return $this->width; }
@@ -926,7 +926,7 @@ final class Model
     /**
      * Generator wrapper over lines().
      *
-     * HONEST SCOPE (audit #17): rendering is EAGER — lines() computes the
+     * HONEST SCOPE: rendering is EAGER — lines() computes the
      * complete array before the first yield, so this provides no interleaving
      * points for event loops. It exists only for generator-shaped consumers;
      * output is identical to lines() when fully consumed.
@@ -1067,7 +1067,7 @@ final class Model
         // Row budget: no item can usefully contribute more rows than the
         // viewport shows (wrap() caps tighter still), so the wrap loop stops
         // there — a pathological 200k-line value now costs O(budget) per
-        // frame instead of O(value) (M6).
+        // frame instead of O(value).
         $rawLines = $this->hardWrap(
             Sanitize::untrustedForMarkedFrames((string) $item->value),
             $contentWidth,
@@ -1313,7 +1313,7 @@ final class Model
         $codes = \trim($style, "\e\x1b[]m");
         if (\preg_match('/^[0-9;]*$/', $codes) !== 1) {
             throw new \InvalidArgumentException(
-                'Style must contain only ANSI SGR parameters ([0-9;]); '
+                'Style must contain only ANSI SGR parameters (digits and semicolons); '
                 . 'escape or control sequences are not allowed.',
             );
         }

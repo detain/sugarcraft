@@ -19,15 +19,15 @@ sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Re
 
 - **Customisable Prefixer** — generates per-line prefix strings (line numbers, box-drawing borders, tree branches)
 - **Customisable Suffixer** — generates per-line suffix strings (status markers, padding)
-- **Line wrapping** — items wrap to multiple lines within a fixed viewport width
+- **Line wrapping** — items wrap to multiple lines within a fixed viewport width, whitespace-faithfully (indentation and inter-word runs survive)
 - **Cursor navigation** — current item highlighted with configurable style
-- **Viewport awareness** — respects `Width` × `Height` viewport; `CursorOffset` gap from edges
+- **Viewport awareness** — fixed-height rendering via `setViewport()`; `setCursorOffset()` controls the context gap kept above the cursor (render-clamped so it can never exceed the viewport)
 - **`Stringable` items** — any PHP object with `__toString()` or `Stringable` works as a list item
 - **`StringItem` adapter** — wrap plain strings as list items without a class
 - **`LessFunc` / `EqualsFunc`** — plug-in sorting and equality comparison
 - **Fuzzy matching** — `FuzzyMatch` scores candidates by delegating to sugar-fuzzy's `SmithWatermanMatcher` (SSOT — see [Deprecation & delegation](#deprecation--delegation))
-- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering)
-- **Delta rendering** — `view()` emits a full frame first, then buffer diffs against the previous frame; `resetPreviousFrame()` forces a repaint; integrates with any TUI framework (see [Buffer diffing](#buffer-diffing))
+- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering); a filter is a live view, mutations project through it
+- **Delta rendering** — `view()` emits a full frame first, then repaints only the rows that changed; `resetPreviousFrame()` forces a repaint (see [Delta rendering](#delta-rendering))
 
 ## Install
 
@@ -42,7 +42,7 @@ use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer, DefaultSuffixer};
 
 // Fluent setters RETURN NEW Models — rebind (or chain); instances are immutable
 // as far as data goes — but view()/resetPreviousFrame() mutate the delta-render
-// frame memo in place (see Buffer diffing).
+// row memo in place (see Delta rendering).
 $model = Model::new()->setWidth(80)->setHeight(24);
 $model = $model->addItem(new StringItem('First item'));
 $model = $model->addItem(new StringItem('Second item'));
@@ -51,16 +51,20 @@ $model = $model->setPrefixer(new DefaultPrefixer());
 $model = $model->setSuffixer(new DefaultSuffixer());
 
 echo $model->view();
-// Renders the list with ╭ ├ │ prefixes, line numbers, and > cursor marker
+// Renders the list with a ╭ ├ ╰ box-drawing gutter, line numbers, and > cursor marker
 ```
 
 ## Item Types
 
 **Note:** Item values are rendered through the sugar-core sanitize choke point
-(`Sanitize::untrusted`): C0/C1 control bytes, DEL, and any ANSI embedded in the
-item text are stripped at render time. The only styles that reach the output
-are the SGR parameters you pass to `setLineStyle()`/`setCurrentStyle()` (both
-reject non-SGR escapes).
+(`Sanitize::untrustedForMarkedFrames`): C0/C1 control bytes, DEL, any ANSI
+embedded in the item text, and mouse-zone sentinels (U+E000/U+E001) are
+stripped at render time — item content can forge neither a frame nor a click
+zone. The only styles that reach the output are the SGR parameters you pass to
+`setLineStyle()`/`setCurrentStyle()` (both reject non-SGR escapes), and the
+`DefaultPrefixer`/`DefaultSuffixer` glyph knobs refuse control bytes at init.
+The library emits no colour of its own: if your host honours `NO_COLOR`, pass
+empty style strings — sugar-treelist neither reads nor acts on the variable.
 
 ```php
 // Plain string adapter
@@ -74,6 +78,21 @@ $model = $model->addItem(new MyItem());
 ```
 
 ## Custom Prefixer
+
+`DefaultPrefixer` renders the box-drawing gutter and has public knobs (all
+glyph strings are validated at init — control bytes and malformed UTF-8 are
+refused): `$firstSep` (top corner, default `╭`), `$separator` (middle join,
+default `├`), `$lastSep` (bottom corner, default `╰`), `$separatorWrap`
+(continuation rows of a wrapped item, default `│`), `$currentMarker` (`>`),
+`$emptyMarker` (a single space on non-cursor rows), `$number` (toggle the
+number column — its field width is derived from the item count, so columns
+stay aligned past nine items), `$numberRelative` (number as each item's
+unsigned distance from the cursor: 2 1 0 1 2), and `$prefixWrap` (continuation
+rows use `$separatorWrap` instead of the join glyph). The join glyph follows
+the item's **position in the list**, so a rendered window shows a real tree.
+`DefaultSuffixer::$currentMarker` (default `<`) marks the cursor row.
+
+To implement the contract yourself:
 
 ```php
 use SugarCraft\TreeList\{Prefixer, Model};
@@ -114,9 +133,19 @@ $model = $model->setSuffixer(new class implements Suffixer {
 Set the rendering viewport dimensions before calling `view()`:
 
 ```php
-$model = $model->setWidth(80)->setHeight(25);
-$model = $model->setCursorOffset(3); // keep 3 lines between cursor and screen edge
+$model = $model->setViewport(80, 25);     // or setWidth(80)->setHeight(25)
+$model = $model->setCursorOffset(3);      // keep up to 3 rows between cursor and the frame top
+$model = $model->setLineOffset(5);        // context rows reported to initPrefixer()/initSuffixer() for relative markers (the viewport anchor is cursorOffset, not this)
+$model = $model->setWrap(2);              // per-item displayed-row cap (0 = no cap)
 ```
+
+Geometry setters reject negative values and dimensions beyond the
+`MAX_DIMENSION`/`MAX_TOTAL_CELLS` caps (zero is accepted at set time and
+refused loudly at render). `setCursorOffset` is additionally **clamped at
+render** to `height - 1`, so it can never ask for more context rows than the
+viewport has. Scrolling uses a scroll-end clamp: near the bottom of the list
+the window slides back so the frame stays full and the cursor row is always
+inside it — short lists simply show everything.
 
 ## Filtering
 
@@ -153,6 +182,15 @@ Filter state transitions:
 |------|----|---------|
 | `unfiltered` | `filtering` | `withFilterFn()` called (filter applied, items reduced) |
 | `filtering` | `unfiltered` | `withoutFilter()` called (original items restored) |
+
+A filter is a **live view**, not a one-time snapshot: while filtering,
+`addItem()`/`addItems()`/`addItemsFromArray()`/`removeItem()`/`clear()`/`sort()`
+all act on the authoritative list and the projection is re-derived immediately
+— added items appear when (and only when) the predicate accepts them, removals
+stick, and lifting the filter with `withoutFilter()` reveals exactly the
+mutations that happened underneath. `removeItem()` re-anchors the cursor by
+item **identity**: it stays on the same logical item it was on (clamping only
+when that item was itself removed).
 
 ## Fuzzy Matching
 
@@ -193,7 +231,7 @@ candidate cap is not searched.**
 
 ## Deprecation & delegation
 
-This lib is a façade over [sugar-fuzzy](https://github.com/detain/sugarcraft-sugar-fuzzy)
+This lib is a façade over [sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy)
 for fuzzy scoring (reciprocally documented in sugar-fuzzy's README):
 
 - `SugarCraft\TreeList\ScoringProfile` is a **`@deprecated` `class_alias`** to
@@ -209,21 +247,51 @@ for fuzzy scoring (reciprocally documented in sugar-fuzzy's README):
 `sugar-fuzzy`'s `SmithWatermanMatcher` / `ScoringProfile`; the re-exports here
 exist only for back-compat.
 
-## Buffer diffing
+## Delta rendering
 
-The `Model::view()` maintains a `?Buffer $previousFrame` across renders. On each render it
-builds the current Buffer, computes `current->diff(previous)` (from
-[sugar-cellbuffer](https://github.com/detain/sugarcraft-sugar-cellbuffer)), and emits only
-the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
-`previousFrame` for the next render. `resetPreviousFrame()` clears the stored frame,
-forcing the next `view()` to emit a full repaint (window resize, cursor-position-lost).
+`Model::view()` keeps a memo of the rows it emitted last time
+(`?list<string> $previousRows` — styled row text, one entry per viewport row).
+The first render emits a full frame; each later render compares rows one by
+one and repaints **only the changed rows**, each addressed absolutely
+(cursor-position + erase-line before and after the row's own bytes). Unchanged
+rows cost nothing; a changed row costs its own content plus a fixed addressing
+overhead. A resize, a filter transition, or `resetPreviousFrame()` clears the
+memo and forces the next `view()` to emit a full repaint.
 
-**SSH bandwidth + flicker win:** a one-character change in an 80×24 viewport
-produces ~8 bytes of delta ops instead of ~1 940 bytes for a full repaint.
-Over an SSH session this means far less per-frame data on the wire and
-eliminates the full-screen flicker of rewrite-based terminals. The first render
-after startup or a resize still emits a full Buffer (no diff possible), so
-behaviour is always correct.
+Because rows are written whole, styled rows round-trip exactly — wide glyphs
+are never split and SGR bytes never land in the grid as literal glyph cells.
+(The earlier cell-granular design projected rows into sugar-cellbuffer and
+diffed them; its style transport could not carry palette SGR spellings, so it
+corrupted styled frames after the first repaint. That dependency was retired
+with the row-granular rewrite.)
+
+**SSH bandwidth win:** over a slow link only changed rows ride the wire, which
+greatly reduces per-frame data and the full-screen flicker of rewrite-based
+rendering.
+
+**Lineage caveat:** the memo is per-instance render state **carried through
+clones**. If you fork a model and later switch which fork's frames you paint
+onto the same terminal region, call `resetPreviousFrame()` on the fork you are
+about to render — otherwise it diffs against its sibling's last frame. Same
+rule after any out-of-band write to the list's screen area.
+
+## Cursor & navigation API
+
+Beyond the fluent setters shown above, the navigation surface is:
+
+- `setCursor(int $index)` — clamped to `0..count-1` (an out-of-range value lands on the nearest end; the setter always returns a fresh clone).
+- `cursorUp(int $n = 1)`/`cursorDown(int $n = 1)` and the page helpers `cursorPageUp(int $pages = 1)`/`cursorPageDown(int $pages = 1)` — movement **saturates** at the list ends (`cursorDown(PHP_INT_MAX)` lands on the last item, never wraps or overflows). A page spans `height` **items**, not displayed lines — a list of multi-line items pages visually faster. `cursorToStart()`/`cursorToEnd()` jump to the ends.
+- `cursorIndex()` — the current row position. `cursorItem()` — the cursor item's `\Stringable`; throws `RuntimeException` on an empty list. `tryCursorItem()` returns `null` instead, matching the `tryItemAt()`/`itemAt()` pair.
+- `length()`, `isEmpty()`, `itemAt(int)`, `tryItemAt(int)`, `find(\Stringable)`, `itemIds()` — read-only item access (indices address the **visible** projection, so they follow the active filter).
+- `lines()` — the laid-out frame rows without any delta bookkeeping; throws `RuntimeException` with a localized message (see below) on an empty list or zero viewport. `linesStream()` is a generator-shaped wrapper over the same eager computation — it interleaves nothing.
+- `view()` — full frame or row delta as described above; the only method that mutates in place (its render memo), which is why the immutability contract is scoped to item/configuration data.
+
+## Localisation
+
+The two refusal strings `lines()` can raise are live `Lang::t()` lookups
+(`list.no_items`, `list.zero_viewport`) across the 16 shipped locales under
+`lang/`. Locale selection is the host application's concern; the renderer only
+formats through `SugarCraft\TreeList\Lang`.
 
 ## License
 
