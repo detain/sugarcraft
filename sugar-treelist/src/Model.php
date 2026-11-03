@@ -1064,9 +1064,14 @@ final class Model
         // zone markers downstream; the marked-frames variant is the fleet cure.)
         // The legitimate SGR ESC is injected LATER by applyStyle(), after this
         // point, and therefore survives — item-value ANSI is stripped by design.
+        // Row budget: no item can usefully contribute more rows than the
+        // viewport shows (wrap() caps tighter still), so the wrap loop stops
+        // there — a pathological 200k-line value now costs O(budget) per
+        // frame instead of O(value) (M6).
         $rawLines = $this->hardWrap(
             Sanitize::untrustedForMarkedFrames((string) $item->value),
             $contentWidth,
+            $this->wrap > 0 ? $this->wrap : $this->height,
         );
         if ($this->wrap > 0 && \count($rawLines) > $this->wrap) {
             $rawLines = \array_slice($rawLines, 0, $this->wrap);
@@ -1101,41 +1106,120 @@ final class Model
     }
 
     /**
-     * Wrap text at contentWidth without breaking words mid-word.
-     * Returns list of lines.
+     * Wrap text at contentWidth, preserving whitespace runs (2026-11-03).
+     *
+     * The old splitter broke on /\s+/ and rejoined with single spaces, which
+     * silently ate indentation and double-spaced columns — exactly the tree
+     * data a list renderer is for. Wrapping now tokenizes into word and
+     * whitespace runs: a leading run (indent) stays attached to its line, an
+     * interior run survives inside a line, a run straddling a wrap boundary
+     * is consumed, and an empty logical line renders as an empty row
+     * (paragraph breaks are content, not noise). An indent run wider than
+     * the content column cannot be honoured and is dropped, matching the
+     * old collapse.
+     *
+     * A word alone wider than the budget is split at DISPLAY-width boundaries
+     * (SugarCore Width — CJK/emoji count 2 cells); a grapheme wider than the
+     * whole budget cannot be split further and keeps its own (overflowing)
+     * chunk.
+     *
+     * @param int|null $maxLines Stop after this many rows (row budget: one
+     *                           pathological value costs O(budget) per frame,
+     *                           not O(value)).
      *
      * @return list<string>
      */
-    private function hardWrap(string $text, int $contentWidth): array
+    private function hardWrap(string $text, int $contentWidth, ?int $maxLines = null): array
     {
         if ($contentWidth <= 0) {
             return [''];
         }
+        $budget = $maxLines ?? \PHP_INT_MAX;
 
         $lines = [];
+        // Full split: a bounded explode() would fuse the tail paragraphs on
+        // their newlines into one "line" and smuggle raw \n into a rendered
+        // row. The savings that matter come from stopping the wrap loop at
+        // the budget below, not from the split.
         foreach (\explode("\n", $text) as $paragraphLine) {
-            $words = \preg_split('/\s+/', $paragraphLine) ?: [];
-            $current = '';
+            // HTAB is a layout command, not content: the host terminal would
+            // expand it to a tab stop no width calculation here can see, so
+            // the frame could exceed its column budget. Expand to spaces
+            // (run length preserved) instead of smuggling a jump into a row.
+            // (The old /\s+/ splitter collapsed tabs with everything else;
+            // CR never reaches here — the sanitize choke strips it, pinned.)
+            $paragraphLine = \strtr($paragraphLine, "\t", ' ');
+            if ($paragraphLine === '') {
+                $lines[] = '';
+                if (\count($lines) >= $budget) {
+                    return $lines;
+                }
+                continue;
+            }
 
-            foreach ($words as $word) {
-                $withWord = $current === '' ? $word : $current . ' ' . $word;
-                if ($this->ansiWidth($withWord) <= $contentWidth) {
-                    $current = $withWord;
-                } else {
+            // Alternate: word, run, word, run, … (first element may be ''
+            // when the line opens with whitespace).
+            $tokens = \preg_split('/(\s+)/u', $paragraphLine, -1, \PREG_SPLIT_DELIM_CAPTURE)
+                ?: [$paragraphLine];
+
+            $current = '';
+            $pending = '';
+            foreach ($tokens as $token) {
+                if ($token === '') {
+                    continue;
+                }
+                if (\preg_match('/\A\s+\z/u', $token) === 1) {
+                    $pending = $token;
+                    continue;
+                }
+
+                if ($this->ansiWidth($token) > $contentWidth) {
+                    // Unbreakable word: flush, then chunk it with the pending
+                    // run still attached (the indent rides the first chunk).
                     if ($current !== '') {
                         $lines[] = $current;
+                        $current = '';
+                        if (\count($lines) >= $budget) {
+                            return $lines;
+                        }
                     }
-                    // If single word exceeds width, split it
-                    if ($this->ansiWidth($word) > $contentWidth) {
-                        $lines = \array_merge($lines, $this->splitOverWidth($word, $contentWidth));
-                    } else {
-                        $current = $word;
+                    $chunks = $this->splitOverWidth(
+                        $pending . $token,
+                        $contentWidth,
+                        $budget - \count($lines),
+                    );
+                    $pending = '';
+                    foreach ($chunks as $chunk) {
+                        $lines[] = $chunk;
+                        if (\count($lines) >= $budget) {
+                            return $lines;
+                        }
                     }
+                    continue;
                 }
+
+                if ($current === '' && $this->ansiWidth($pending) > $contentWidth) {
+                    $pending = ''; // an indent wider than the column cannot fit
+                }
+
+                $candidate = $current . $pending . $token;
+                if ($current !== '' && $this->ansiWidth($candidate) > $contentWidth) {
+                    $lines[] = $current; // the run straddling the break is consumed
+                    if (\count($lines) >= $budget) {
+                        return $lines;
+                    }
+                    $current = $token;
+                } else {
+                    $current = $candidate;
+                }
+                $pending = '';
             }
 
             if ($current !== '') {
                 $lines[] = $current;
+                if (\count($lines) >= $budget) {
+                    return $lines;
+                }
             }
         }
 
@@ -1146,14 +1230,16 @@ final class Model
      * Split a word that exceeds maxWidth into cell-budgeted chunks.
      *
      * Chunks accumulate whole graphemes while their DISPLAY WIDTH (SugarCore
-     * Width — CJK/emoji count 2 cells) fits maxWidth; the previous
-     * grapheme-count chunking let a CJK word of width 16 through a 12-cell
-     * viewport unsplitted (audit M5 fix wave). A grapheme wider than the whole
-     * budget cannot be split further and keeps its own (overflowing) chunk.
+     * Width — CJK/emoji count 2 cells) fits maxWidth; grapheme-count
+     * chunking let a CJK word of width 16 through a 12-cell viewport
+     * unsplitted. A grapheme wider than the whole budget cannot be split
+     * further and keeps its own (overflowing) chunk.
+     *
+     * @param int|null $maxChunks Stop after this many chunks (row budget).
      *
      * @return list<string>
      */
-    private function splitOverWidth(string $word, int $maxWidth): array
+    private function splitOverWidth(string $word, int $maxWidth, ?int $maxChunks = null): array
     {
         $chunks = [];
         // grapheme_str_split() is unavailable on older bundled ext-intl, so
@@ -1173,6 +1259,9 @@ final class Model
             }
             $chunks[] = \grapheme_substr($word, $start, $end - $start);
             $start = $end;
+            if ($maxChunks !== null && $maxChunks > 0 && \count($chunks) >= $maxChunks) {
+                break; // row budget reached: the remainder is never displayed
+            }
         }
 
         return $chunks ?: [''];

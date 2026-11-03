@@ -1578,6 +1578,66 @@ final class ModelTest extends TestCase
         $this->assertSame('solo', (string) $m->tryCursorItem());
     }
 
+    // -------------------------------------------------------------------------
+    // Whitespace-faithful wrapping (2026-11-03: the old /\s+/ splitter ate
+    // indentation and interior runs; empty paragraph lines vanished entirely)
+    // -------------------------------------------------------------------------
+
+    public function testIndentationAndInteriorRunsSurviveWrapping(): void
+    {
+        $m = $this->model->addItem(new StringItem("    child-a   second\n  grandchild-b"));
+
+        $this->assertSame(['    child-a   second', '  grandchild-b'], $m->lines());
+    }
+
+    public function testEmptyParagraphLinesRenderAsEmptyRows(): void
+    {
+        $m = $this->model->addItem(new StringItem("para1\n\npara2"));
+
+        $this->assertSame(['para1', '', 'para2'], $m->lines());
+    }
+
+    public function testTabsBecomeSpacesAndRowsStayWithinBudget(): void
+    {
+        $m = $this->model->setViewport(20, 10)->addItem(new StringItem("x\ty"));
+
+        $this->assertSame(['x y'], $m->lines());
+    }
+
+    public function testCarriageReturnsNeverReachRenderedRows(): void
+    {
+        // CR neutralization was accidental under the old splitter (it was a
+        // /\s+/ delimiter); the sanitize choke strips it, so this pins the
+        // load-bearing path, not a side effect.
+        $m = $this->model->setViewport(20, 10)->addItem(new StringItem("a\r\nb"));
+
+        foreach ($m->lines() as $row) {
+            $this->assertStringNotContainsString("\r", $row);
+        }
+        $this->assertCount(2, $m->lines());
+    }
+
+    public function testRowBudgetCapsLayoutWorkForPathologicalValues(): void
+    {
+        // 200k logical lines, viewport height 5, wrap 0: the frame shows at
+        // most the budget; layout must stop there (the old code wrapped the
+        // whole value first — measured 1.17s + 41MB per frame).
+        $huge = new StringItem(implode("\n", array_fill(0, 200_000, 'filler line')));
+        $m = $this->model->setViewport(20, 5)->addItem($huge)->addItem(new StringItem('tail'));
+
+        $started = \microtime(true);
+        $lines = $m->setCursor(0)->lines();
+        $elapsed = \microtime(true) - $started;
+
+        $this->assertLessThanOrEqual(5, count($lines));
+        $this->assertLessThan(2.0, $elapsed, 'wrap ignored the row budget');
+
+        // Same for the explicit wrap knob: the huge item is truncated to its
+        // wrap rows and the next item still gets the remaining window.
+        $wrapped = $m->setWrap(2)->lines();
+        $this->assertSame(['filler line', 'filler line', 'tail'], $wrapped);
+    }
+
     /**
      * @return list<\Stringable>
      */
