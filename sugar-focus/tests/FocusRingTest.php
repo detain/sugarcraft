@@ -131,8 +131,8 @@ final class FocusRingTest extends TestCase
 
     public function testFocusDisabledRegionIsANoOp(): void
     {
-        // Audit 2026-10-07 ruling: focus() refuses disabled ids so it cannot
-        // teleport past the wall next()/previous() skip.
+        // focus() refuses disabled ids so it cannot teleport past the wall that
+        // next()/previous() skip.
         $ring = FocusRing::of('a', 'b', 'c')->disable('b');
 
         $same = $ring->focus('b');
@@ -549,7 +549,7 @@ final class FocusRingTest extends TestCase
         $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('c');
 
         self::assertSame(
-            ['ids' => ['a', 'b', 'c'], 'index' => 1, 'disabled' => ['c']],
+            ['ids' => ['a', 'b', 'c'], 'focused' => 'b', 'index' => 1, 'disabled' => ['c']],
             $ring->jsonSerialize(),
         );
     }
@@ -557,7 +557,7 @@ final class FocusRingTest extends TestCase
     public function testJsonSerializeOnEmptyRing(): void
     {
         self::assertSame(
-            ['ids' => [], 'index' => -1, 'disabled' => []],
+            ['ids' => [], 'focused' => null, 'index' => -1, 'disabled' => []],
             FocusRing::new()->jsonSerialize(),
         );
     }
@@ -567,7 +567,7 @@ final class FocusRingTest extends TestCase
         $ring = FocusRing::of('a', 'b')->disable('b');
 
         self::assertSame(
-            '{"ids":["a","b"],"index":0,"disabled":["b"]}',
+            '{"ids":["a","b"],"focused":"a","index":0,"disabled":["b"]}',
             json_encode($ring, JSON_THROW_ON_ERROR),
         );
     }
@@ -660,7 +660,7 @@ final class FocusRingTest extends TestCase
         );
 
         // The private disabled set may only name registered ids; a phantom entry
-        // makes the counts disagree with the id lists (crush_libs sugar-focus #1).
+        // makes the counts disagree with the id lists.
         $disabledRef = new \ReflectionProperty(FocusRing::class, 'disabled');
         /** @var array<string, true> $disabledSet */
         $disabledSet = $disabledRef->getValue($ring);
@@ -743,7 +743,7 @@ final class FocusRingTest extends TestCase
     }
 
     /**
-     * Regression (crush_libs sugar-focus #2): focus parked on a disabled region
+     * Regression: focus parked on a disabled region
      * with exactly one enabled region left must still be carried off by next().
      * The sole-enabled no-op guard used to fire first and strand the user on a
      * dimmed panel forever, contradicting the documented contract.
@@ -876,7 +876,7 @@ final class FocusRingTest extends TestCase
 
     // ─── reorder() × disabled set ──────────────────────────────────────────
 
-    /** Regression (crush_libs sugar-focus #1): reorder() must not leak the flag of an id it drops. */
+    /** Regression: reorder() must not leak the flag of an id it drops. */
     public function testReorderDroppingDisabledIdLeavesNoPhantomFlag(): void
     {
         $ring = FocusRing::of('a', 'b', 'c')->disable('b')->reorder('a', 'c');
@@ -887,7 +887,7 @@ final class FocusRingTest extends TestCase
         self::assertSame(2, $ring->enabledCount());
         self::assertSame(count($ring->enabledIds()), $ring->enabledCount());
         self::assertSame(
-            '{"ids":["a","c"],"index":0,"disabled":[]}',
+            '{"ids":["a","c"],"focused":"a","index":0,"disabled":[]}',
             json_encode($ring, JSON_THROW_ON_ERROR),
         );
         self::assertCacheConsistent($ring);
@@ -918,9 +918,9 @@ final class FocusRingTest extends TestCase
     }
 
     /**
-     * Fallback law (lane W3, carried REV-C finding): when the focused region is
-     * dropped, reorder() must not land on a disabled head — the same wall
-     * focus() refuses (audit 010c58c67). It advances to the first ENABLED survivor.
+     * Fallback law: when the focused region is dropped, reorder() must not land
+     * on a disabled head — the same wall focus() refuses. It advances to the
+     * first ENABLED survivor.
      */
     public function testReorderFallbackSkipsDisabledHeadToFirstEnabled(): void
     {
@@ -972,14 +972,14 @@ final class FocusRingTest extends TestCase
 
     // ─── numeric-string ids ────────────────────────────────────────────────
 
-    /** Regression (crush_libs sugar-focus #4): PHP key coercion must not turn "1" into int(1). */
+    /** Regression: PHP key coercion must not turn "1" into int(1). */
     public function testJsonSerializeKeepsNumericStringDisabledIdsAsStrings(): void
     {
         $ring = FocusRing::of('0', '1', '2')->disable('1');
 
         self::assertSame(['1'], $ring->jsonSerialize()['disabled']);
         self::assertSame(
-            '{"ids":["0","1","2"],"index":0,"disabled":["1"]}',
+            '{"ids":["0","1","2"],"focused":"0","index":0,"disabled":["1"]}',
             json_encode($ring, JSON_THROW_ON_ERROR),
         );
     }
@@ -1014,9 +1014,285 @@ final class FocusRingTest extends TestCase
         self::assertSame($original->next()->current(), $restored->next()->current());
     }
 
+    // ─── unregister() × disabled landing: focus must not strand ────────────
+
+    public function testUnregisterFocusedRegionAdvancesPastDisabledSlot(): void
+    {
+        // 'a' is focused, 'b' disabled. Removing 'a' would keep the slot only
+        // to park on the wall; the landing must skip past it onto 'c'.
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b')->unregister('a');
+
+        self::assertSame(['b', 'c'], $ring->ids());
+        self::assertSame('c', $ring->current(), 'lands past the disabled slot-taker');
+        self::assertTrue($ring->isEnabled($ring->current() ?? ''));
+        self::assertCacheConsistent($ring);
+    }
+
+    public function testUnregisterFocusedRegionWrapsAroundPastTrailingDisabledRun(): void
+    {
+        // b disabled; removing focused 'a' skips b, lands c, proving the walk
+        // continues into the survivor list rather than clamping blindly.
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b')->unregister('a');
+
+        self::assertSame('c', $ring->current());
+        self::assertCacheConsistent($ring);
+    }
+
+    public function testUnregisterFocusedRegionWrapsToFirstEnabledAtTheEnd(): void
+    {
+        // Focused 'c' is last; after removal the slot is gone (clamped) and the
+        // only enabled survivor sits BEFORE the slot — landing wraps to it.
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b')->focus('c')->unregister('c');
+
+        self::assertSame(['a', 'b'], $ring->ids());
+        self::assertSame('a', $ring->current(), 'wraps to the first enabled survivor');
+        self::assertCacheConsistent($ring);
+    }
+
+    public function testUnregisterFocusedRegionWithNothingEnabledParksOnTheSlot(): void
+    {
+        // Every survivor disabled: nowhere enabled to go, so focus keeps the
+        // (clamped) slot — the parked state traversal carries off later.
+        $ring = FocusRing::of('a', 'b', 'c')
+            ->focus('a')->disable('b')->disable('c')->unregister('a');
+
+        self::assertSame('b', $ring->current());
+        self::assertSame(0, $ring->enabledCount());
+        self::assertSame($ring, $ring->next(), 'traversal is a no-op while nothing is enabled');
+        self::assertCacheConsistent($ring);
+    }
+
+    public function testUnregisterLandingLeavesTraversalImmediatelyUsable(): void
+    {
+        // Consequence pin for the strand bug: after a landing that skipped a
+        // disabled wall, the very next Tab moves again (it cannot be stuck).
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b')->unregister('a');
+        self::assertSame('c', $ring->current());
+
+        $ring = $ring->next();
+        self::assertSame('d', $ring->current(), 'the landing did not strand traversal');
+    }
+
+    // ─── reorder() no-op identity on an empty ring ─────────────────────────
+
+    public function testReorderOnEmptyRingIsIdentity(): void
+    {
+        $empty = FocusRing::new();
+
+        self::assertSame($empty, $empty->reorder(), 'emptying an empty ring changes nothing');
+        self::assertSame($empty, $empty->reorder(...[]));
+    }
+
+    // ─── restore(): the clamped inverse of jsonSerialize() ─────────────────
+
+    public function testRestoreRoundTripsEveryEmittedSnapshot(): void
+    {
+        $original = FocusRing::of('10', 'grid', '2', 'side')
+            ->focus('2')
+            ->disable('10')
+            ->disable('side');
+
+        /** @var array<array-key, mixed> $snapshot */
+        $snapshot = json_decode(json_encode($original, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+        $restored = FocusRing::restore($snapshot);
+
+        self::assertSame($original->jsonSerialize(), $restored->jsonSerialize());
+        self::assertSame($original->next()->current(), $restored->next()->current());
+        self::assertCacheConsistent($restored);
+    }
+
+    public function testRestoreClampsAStaleIndexInsteadOfCrashing(): void
+    {
+        // A snapshot from a longer session must load, not TypeError the
+        // constructor at startup.
+        $ring = FocusRing::restore(['ids' => ['a', 'b'], 'index' => 7]);
+
+        self::assertSame('b', $ring->current(), 'index clamped into range');
+
+        $negative = FocusRing::restore(['ids' => ['a', 'b'], 'index' => -5]);
+        self::assertSame('a', $negative->current(), 'negative legacy index clamps to the head');
+    }
+
+    public function testRestoreOfEmptySnapshotBuildsEmptyRing(): void
+    {
+        self::assertSame(FocusRing::new()->jsonSerialize(), FocusRing::restore(['ids' => [], 'index' => -1])->jsonSerialize());
+    }
+
+    public function testRestorePrefersFocusedIdAndDegradesUnknownGracefully(): void
+    {
+        $byId = FocusRing::restore(['ids' => ['a', 'b', 'c'], 'focused' => 'b', 'index' => 0]);
+        self::assertSame('b', $byId->current(), 'the id leg wins over the positional leg');
+
+        $unknown = FocusRing::restore(['ids' => ['a', 'b'], 'focused' => 'gone', 'index' => 1]);
+        self::assertSame('a', $unknown->current(), 'an unknown focused id degrades to the first region, not the stale index');
+    }
+
+    public function testRestoreRestoresAParkedFocus(): void
+    {
+        $restored = FocusRing::restore(['ids' => ['a', 'b', 'c'], 'focused' => 'b', 'index' => 1, 'disabled' => ['b']]);
+
+        self::assertSame('b', $restored->current(), 'focus may land on a disabled region (parked)');
+        self::assertFalse($restored->isEnabled('b'));
+        self::assertNull($restored->enabledIndex());
+        self::assertCacheConsistent($restored);
+        self::assertSame(
+            '{"ids":["a","b","c"],"focused":"b","index":1,"disabled":["b"]}',
+            json_encode($restored, JSON_THROW_ON_ERROR),
+        );
+    }
+
+    public function testRestoreDropsStaleAndMalformedDisabledEntries(): void
+    {
+        $restored = FocusRing::restore(['ids' => ['a', 'b'], 'disabled' => ['gone', 3, 'b', null]]);
+
+        self::assertSame(['b'], $restored->disabledIds(), 'only registered string ids keep a flag');
+        self::assertCacheConsistent($restored);
+    }
+
+    public function testRestoreRejectsMalformedIdLists(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('FocusRing::restore() requires "ids" to be a list of strings');
+
+        FocusRing::restore(['ids' => ['a', 3]]);
+    }
+
+    public function testRestoreRejectsNonListIds(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('FocusRing::restore() requires "ids" to be a list of strings');
+
+        FocusRing::restore(['ids' => ['a' => 'x']]);
+    }
+
+    public function testRestoreDedupesIdsLikeOfDoes(): void
+    {
+        self::assertSame(['a', 'b'], FocusRing::restore(['ids' => ['a', 'b', 'a']])->ids());
+    }
+
+    // ─── nextOf() / previousOf(): pure traversal queries ───────────────────
+
+    public function testNextOfAndPreviousOfMirrorTraversalWithoutMovingFocus(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c');
+
+        self::assertSame('c', $ring->nextOf('b'));
+        self::assertSame('a', $ring->nextOf('c'), 'wraps like next()');
+        self::assertSame('a', $ring->previousOf('b'));
+        self::assertSame('c', $ring->previousOf('a'), 'wraps like previous()');
+        self::assertSame('a', $ring->current(), 'the query never moves focus');
+    }
+
+    public function testNextOfSkipsDisabledRegions(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b');
+
+        self::assertSame('c', $ring->nextOf('a'), 'steps past the wall');
+        self::assertSame('a', $ring->previousOf('c'));
+    }
+
+    public function testNextOfFromAParkedDisabledFocusCarriesItOff(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('b');
+
+        self::assertSame('c', $ring->nextOf('b'));
+        self::assertSame('a', $ring->previousOf('b'));
+    }
+
+    public function testNextOfAnswersWithItselfWhenThereIsNowhereToGo(): void
+    {
+        $sole = FocusRing::of('a', 'b')->disable('b');
+        self::assertSame('a', $sole->nextOf('a'), 'sole enabled mirrors the next() no-op');
+        self::assertSame('a', $sole->previousOf('a'));
+
+        $allOff = FocusRing::of('a', 'b')->disable('a')->disable('b');
+        self::assertSame('a', $allOff->nextOf('a'), 'nothing enabled mirrors the no-op too');
+    }
+
+    public function testNextOfIsNullForUnregisteredIds(): void
+    {
+        $ring = FocusRing::of('a', 'b');
+
+        self::assertNull($ring->nextOf('gone'));
+        self::assertNull($ring->previousOf('gone'));
+    }
+
+    // ─── enabledIndex() / focusFirst() / focusLast() ───────────────────────
+
+    public function testEnabledIndexCountsOnlyEnabledRegions(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c', 'd')->disable('b');
+
+        self::assertSame(0, $ring->focus('a')->enabledIndex());
+        self::assertSame(1, $ring->focus('c')->enabledIndex());
+        self::assertSame(2, $ring->focus('d')->enabledIndex(), "'d' is third among enabled, despite being fourth registered");
+    }
+
+    public function testEnabledIndexIsNullWhenParkedOrEmpty(): void
+    {
+        self::assertNull(FocusRing::new()->enabledIndex(), 'empty ring has no ordinal');
+
+        $parked = FocusRing::of('a', 'b')->focus('b')->disable('b');
+        self::assertNull($parked->enabledIndex(), 'focus on a disabled region is not among the enabled');
+    }
+
+    public function testFocusFirstAndLastSkipDisabledEnds(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('a')->disable('c');
+
+        self::assertSame('b', $ring->focusFirst()->current(), 'skips the disabled head');
+        self::assertSame('b', $ring->focusLast()->current(), 'skips the disabled tail');
+
+        $open = FocusRing::of('a', 'b', 'c');
+        self::assertSame('c', $open->focusLast()->current());
+        self::assertSame('a', $open->focusLast()->focusFirst()->current());
+    }
+
+    public function testFocusFirstAndLastAreIdentityWhenAlreadyThereOrNothingEnabled(): void
+    {
+        $ring = FocusRing::of('a', 'b');
+        self::assertSame($ring, $ring->focusFirst(), 'already at the head');
+
+        $last = $ring->focusLast();
+        self::assertSame($last, $last->focusLast(), 'already at the tail');
+
+        $allOff = FocusRing::of('a', 'b')->disable('a')->disable('b');
+        self::assertSame($allOff, $allOff->focusFirst());
+        self::assertSame($allOff, $allOff->focusLast());
+    }
+
+    // ─── ofStrict() error-message hardening ────────────────────────────────
+
+    public function testOfStrictErrorMessageCannotSmuggleControlBytes(): void
+    {
+        $hostile = chr(27) . '[31;1mPOW' . chr(7) . 'ed';
+
+        try {
+            FocusRing::ofStrict($hostile, 'x', $hostile);
+            self::fail('expected the duplicate to throw');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringNotContainsString(chr(27), $e->getMessage());
+            self::assertStringNotContainsString(chr(7), $e->getMessage());
+            self::assertStringContainsString('\033', $e->getMessage(), 'control bytes arrive as printable escapes');
+        }
+    }
+
+    public function testOfStrictErrorMessageClipsAbsurdlyLongIds(): void
+    {
+        $long = str_repeat('y', 200);
+
+        try {
+            FocusRing::ofStrict($long, 'x', $long);
+            self::fail('expected the duplicate to throw');
+        } catch (\InvalidArgumentException $e) {
+            self::assertLessThan(200, strlen($e->getMessage()));
+            self::assertStringContainsString('...', $e->getMessage());
+        }
+    }
+
     // ─── Countable ─────────────────────────────────────────────────────────
 
-    /** Regression (crush_libs sugar-focus #5): count($ring) must work, not throw a TypeError. */
+    /** Regression: count($ring) must work, not throw a TypeError. */
     public function testRingIsCountable(): void
     {
         $ring = FocusRing::of('a', 'b', 'c')->disable('b');
