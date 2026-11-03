@@ -45,7 +45,28 @@ if ($archive !== '') {
     }
     require $path;
 } else {
-    require __DIR__ . '/../vendor/autoload.php';
+    // Composer consumers get this file via a symlink at
+    // <project>/vendor/bin/candy-mail, so __DIR__ resolves through to
+    // <project>/vendor/sugarcraft/candy-mail/bin — the package-local
+    // `../vendor` only exists in a monorepo checkout, and the project's
+    // autoloader sits three levels up from bin. First hit wins; neither
+    // candidate existing is a broken install, so fail loud (exit 1)
+    // rather than fatal on a bare require or, worse, exit 0 silently.
+    $autoloadCandidates = [
+        __DIR__ . '/../vendor/autoload.php',
+        __DIR__ . '/../../../autoload.php',
+    ];
+    foreach ($autoloadCandidates as $path) {
+        if (is_file($path)) {
+            require $path;
+            $autoloadFound = true;
+            break;
+        }
+    }
+    if (!isset($autoloadFound)) {
+        fwrite(STDERR, "candy-mail: cannot find composer autoload.php — install the package with composer or run scripts/refresh-deps.php from a monorepo checkout.\n");
+        exit(1);
+    }
 }
 
 use SugarCraft\Mail\{Email, Lang, Mailer, ResendTransport, SmtpTransport};

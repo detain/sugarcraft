@@ -37,11 +37,12 @@ final class BinDispatchTest extends TestCase
     /**
      * @param list<string>                      $args
      * @param array<string, string>             $env
+     * @param string|null                       $binOverride  alternate bin path (layout pins)
      * @return array{status: int, out: string, err: string}
      */
-    private function runCli(array $args, string $stdin = '', array $env = []): array
+    private function runCli(array $args, string $stdin = '', array $env = [], ?string $binOverride = null): array
     {
-        $bin = \realpath(__DIR__ . '/../bin/candy-mail');
+        $bin = $binOverride ?? \realpath(__DIR__ . '/../bin/candy-mail');
         $this->assertIsString($bin);
 
         $childEnv = [];
@@ -204,5 +205,119 @@ final class BinDispatchTest extends TestCase
 
         $this->assertSame(1, $result['status']);
         $this->assertStringContainsString('Unknown option: --nope', $result['err']);
+    }
+
+    /**
+     * Build a throwaway directory tree from a ['relative path' => contents]
+     * map and return its root. The caller removes it with removeTree().
+     *
+     * @param array<string, string> $files
+     */
+    private function makeTree(array $files): string
+    {
+        $root = \sys_get_temp_dir() . '/candy-mail-bin-' . \uniqid('', true);
+        foreach ($files as $relative => $contents) {
+            $full = $root . '/' . $relative;
+            if (!\is_dir(\dirname($full))) {
+                $this->assertNotFalse(\mkdir(\dirname($full), 0777, true));
+            }
+            \file_put_contents($full, $contents);
+        }
+
+        return $root;
+    }
+
+    private function removeTree(string $root): void
+    {
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            $item->isDir() ? \rmdir($item->getPathname()) : \unlink($item->getPathname());
+        }
+        \rmdir($root);
+    }
+
+    public function testBootstrapFindsTheConsumerProjectAutoloaderInAVendorLayout(): void
+    {
+        // C1 behaviour pin: composer installs bins as symlinks, so at runtime
+        // __DIR__ is <project>/vendor/sugarcraft/candy-mail/bin — the package
+        // local ../vendor does not exist there and the old bare require
+        // fataled for every consumer install. The ladder must land on the
+        // project's vendor/autoload.php; the fake autoloader marks the hit
+        // and ends the process from inside the require.
+        $binSource = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-mail');
+        $root = $this->makeTree([
+            'vendor/sugarcraft/candy-mail/bin/candy-mail' => $binSource,
+            'vendor/autoload.php' => "<?php \\fwrite(\\STDERR, 'LADDER-HIT'); exit(0);\n",
+        ]);
+
+        try {
+            $result = $this->runCli(['--version'], '', [], $root . '/vendor/sugarcraft/candy-mail/bin/candy-mail');
+
+            $this->assertSame(0, $result['status'], $result['err']);
+            $this->assertStringContainsString('LADDER-HIT', $result['err']);
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
+    public function testBootstrapPrefersThePackageLocalVendorWhenBothExist(): void
+    {
+        // Order pin (behavioural): a monorepo checkout carries BOTH a
+        // package-local vendor and (via the same ladder arithmetic) an
+        // outer autoload; the local one must win so the lib boots against
+        // its own linked siblings.
+        $binSource = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-mail');
+        $root = $this->makeTree([
+            'vendor/sugarcraft/candy-mail/bin/candy-mail' => $binSource,
+            'vendor/sugarcraft/candy-mail/vendor/autoload.php' => "<?php \\fwrite(\\STDERR, 'LOCAL'); exit(0);\n",
+            'vendor/autoload.php' => "<?php \\fwrite(\\STDERR, 'OUTER'); exit(0);\n",
+        ]);
+
+        try {
+            $result = $this->runCli(['--version'], '', [], $root . '/vendor/sugarcraft/candy-mail/bin/candy-mail');
+
+            $this->assertSame(0, $result['status'], $result['err']);
+            $this->assertStringContainsString('LOCAL', $result['err']);
+            $this->assertStringNotContainsString('OUTER', $result['err']);
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
+    public function testBootstrapFailsLoudWhenNoAutoloadCandidateExists(): void
+    {
+        // Neither candidate exists: exit 1 with the named failure — never a
+        // silent success and never an unlabelled fatal.
+        $binSource = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-mail');
+        $root = $this->makeTree([
+            'nowhere/candy-mail/bin/candy-mail' => $binSource,
+        ]);
+
+        try {
+            $result = $this->runCli(['--version'], '', [], $root . '/nowhere/candy-mail/bin/candy-mail');
+
+            $this->assertSame(1, $result['status']);
+            $this->assertStringContainsString('cannot find composer autoload.php', $result['err']);
+            $this->assertStringNotContainsString('Usage:', $result['out']);
+        } finally {
+            $this->removeTree($root);
+        }
+    }
+
+    public function testBootstrapLadderListsPackageLocalCandidateBeforeProjectCandidate(): void
+    {
+        $src = (string) \file_get_contents((string) \realpath(__DIR__ . '/../bin/candy-mail'));
+
+        $packageLocal = \strpos($src, "/../vendor/autoload.php");
+        $projectRoot = \strpos($src, "/../../../autoload.php");
+        $this->assertNotFalse($packageLocal);
+        $this->assertNotFalse($projectRoot);
+        // Package-local first: a monorepo checkout must boot on its linked
+        // siblings, not on whatever project happens to surround it.
+        $this->assertLessThan($projectRoot, $packageLocal, 'candidate order drifted');
+        $this->assertStringContainsString('cannot find composer autoload.php', $src);
     }
 }

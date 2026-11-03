@@ -64,18 +64,23 @@ final class PharBuildScriptTest extends TestCase
         self::assertStringContainsString('"#!/usr/bin/env php\\n<?php"', $script, 'The stub-shape refusal.');
     }
 
-    public function testTheBinCarriesTheMeasuredPharGuardAndUntouchedComposerRequire(): void
+    public function testTheBinCarriesTheMeasuredPharGuardAndTheComposerAutoloadLadder(): void
     {
         $bin = self::source(self::PACKAGE . '/bin/candy-mail');
 
         // Archive identity via the pure helper, addressed as phar://, archive-
-        // vendor EXCLUSIVE, and the composer-mode require kept verbatim in the
-        // else arm (this app's bin had a single bare require — no candidate
-        // list to preserve an order of).
+        // vendor EXCLUSIVE. The composer-mode else arm was widened by the C1
+        // fix: a bare `../vendor` require fataled every consumer install
+        // (composer symlinks the bin, so __DIR__ lands inside vendor/), and
+        // the ladder below is pinned behaviourally in BinDispatchTest — the
+        // candidate literals are pinned here so neither arm can silently
+        // shrink back.
         self::assertStringContainsString('hostArchiveFrom(\Phar::running(false), __FILE__)', $bin);
         self::assertStringContainsString("'phar://' . \$archive . '/vendor/autoload.php'", $bin);
         self::assertStringContainsString('the archive has no vendor/autoload.php', $bin);
-        self::assertStringContainsString("require __DIR__ . '/../vendor/autoload.php';", $bin);
+        self::assertStringContainsString("__DIR__ . '/../vendor/autoload.php'", $bin);
+        self::assertStringContainsString("__DIR__ . '/../../../autoload.php'", $bin);
+        self::assertStringContainsString('cannot find composer autoload.php', $bin);
     }
 
     public function testCliVersionPrefersThePharStampOverInstalledVersions(): void
