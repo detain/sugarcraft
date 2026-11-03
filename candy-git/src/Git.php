@@ -202,6 +202,20 @@ final class Git implements GitDriver
         $this->run(['branch', '-d', $name]);
     }
 
+    /**
+     * Re-point a branch name at a recorded commit (undo of a deletion).
+     *
+     * `git branch <name> <sha>` creates the ref without moving HEAD —
+     * unlike createBranch's `checkout -b`, restoring a branch must never
+     * switch the user's working tree (audit A2).
+     */
+    public function restoreBranch(string $name, string $sha): void
+    {
+        $this->guardRef($name);
+        $this->guardRef($sha);
+        $this->run(['branch', $name, $sha]);
+    }
+
     public function merge(string $branch): void
     {
         $this->guardRef($branch);

@@ -710,12 +710,31 @@ final class App implements Model
         if (!is_array($branch) || !isset($branch['name'])) {
             return $this->withError(Lang::t('checkout.no_branch'));
         }
+        // Captured BEFORE the switch: the branches list is still the
+        // pre-checkout snapshot, so this names the branch the user is
+        // leaving (audit A2 — the inverse needs an origin to return to).
+        $from = $this->currentBranchName();
         try {
             $this->git->checkout($branch['name']);
-            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::checkout($branch['name'])))->refresh();
+            return $this->withAll(history: $this->requireHistory()->push(HistoryEntry::checkout($from, (string) $branch['name'])))->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
+    }
+
+    /**
+     * Name of the branch the cached branches list marks as current, or ''
+     * when none is (detached HEAD, or the list has not loaded yet).
+     */
+    private function currentBranchName(): string
+    {
+        foreach ($this->branches as $row) {
+            if (is_array($row) && ($row['current'] ?? false) === true) {
+                return (string) ($row['name'] ?? '');
+            }
+        }
+
+        return '';
     }
 
     /** Opens inline commit message collection — sets collectingCommit=true, clears commitMessage. */
@@ -895,7 +914,7 @@ final class App implements Model
         $undoStack = $this->history->undoStack;
         $top       = $undoStack[array_key_last($undoStack)];
         if ($top->inverseOp === HistoryEntry::UNRECOVERABLE_INVERSE) {
-            return $this->withError(Lang::t('history.cannot_undo', ['op' => $top->op]));
+            return $this->withError(Lang::t('history.cannot_undo', ['op' => $this->opLabel($top->op)]));
         }
         $result = $this->history->undo();
         $entry = $result['entry'];
@@ -946,6 +965,7 @@ final class App implements Model
                 'amend' => $this->git->amend(),
                 'createBranch' => $this->git->createBranch($args['name']),
                 'deleteBranch' => $this->git->deleteBranch($args['name']),
+                'restoreBranch' => $this->git->restoreBranch($args['name'], $args['sha']),
                 'stageAll' => $this->git->stageAll(),
                 'unstageAll' => $this->git->unstageAll(),
                 'stagePatch' => $this->git->stagePatch($args['path'], $args['hunk']),
@@ -955,13 +975,18 @@ final class App implements Model
                 // Belt to executeUndo's peek: if a refuse-shaped inverse ever
                 // reaches here (via a future caller), fail loud, never silent.
                 HistoryEntry::UNRECOVERABLE_INVERSE => throw new \RuntimeException(
-                    Lang::t('history.cannot_undo', ['op' => $entry->op]),
+                    Lang::t('history.cannot_undo', ['op' => $this->opLabel($entry->op)]),
                 ),
                 // An op nobody implements must NOT be reported as "undone" —
                 // the old `default => null` claimed success on garbage.
                 default => throw new \RuntimeException(Lang::t('history.unknown_op', ['op' => $op])),
             };
-            $msg = Lang::t('history.undone', ['op' => $entry->op]);
+            // A redo must not announce itself as an undo (audit A19); both
+            // lanes name the operation through its humanized label (A17).
+            $label  = $this->opLabel($entry->op);
+            $msg    = $forward
+                ? Lang::t('history.redone', ['op' => $label])
+                : Lang::t('history.undone', ['op' => $label]);
             $refreshed = $this->refresh();
             if ($newHistory !== null) {
                 $refreshed = $refreshed->withAll(history: $newHistory);
@@ -970,6 +995,20 @@ final class App implements Model
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
+    }
+
+    /**
+     * Human-readable name for a history op (audit A17): 'createBranch'
+     * becomes "branch creation" via the history.op.<op> keys. Unknown ops
+     * fall back to the raw identifier — Lang::t returns the key itself
+     * when no translation exists, so the substitution is detectable.
+     */
+    private function opLabel(string $op): string
+    {
+        $key = 'history.op.' . $op;
+        $value = Lang::t($key);
+
+        return $value === $key ? $op : $value;
     }
 
     /** Delete the currently selected branch. */
@@ -985,7 +1024,10 @@ final class App implements Model
         try {
             $this->git->deleteBranch($branch['name']);
             return $this
-                ->withAll(history: $this->requireHistory()->push(HistoryEntry::deleteBranch($branch['name'])))
+                ->withAll(history: $this->requireHistory()->push(HistoryEntry::deleteBranch(
+                    (string) $branch['name'],
+                    (string) ($branch['sha'] ?? ''),
+                )))
                 ->refresh()
                 ->withAll(successMessage: Lang::t('branch.deleted', ['name' => $branch['name']]));
         } catch (\RuntimeException $e) {

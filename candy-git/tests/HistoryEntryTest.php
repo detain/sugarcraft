@@ -43,12 +43,26 @@ final class HistoryEntryTest extends TestCase
 
     public function testCheckoutFactoryCreatesCorrectEntry(): void
     {
-        $entry = HistoryEntry::checkout('feature-branch');
+        $entry = HistoryEntry::checkout('main', 'feature-branch');
 
         $this->assertSame('checkout', $entry->op);
-        $this->assertSame(['branch' => 'feature-branch'], $entry->args);
+        $this->assertSame(['branch' => 'feature-branch', 'from' => 'main'], $entry->args);
         $this->assertSame('checkout', $entry->inverseOp);
-        $this->assertSame(['branch' => 'feature-branch'], $entry->inverseArgs);
+        $this->assertSame(['branch' => 'main', 'from' => 'feature-branch'], $entry->inverseArgs);
+    }
+
+    /**
+     * Audit A2: with no recorded origin (detached HEAD / unknown current)
+     * the entry must REFUSE undo — the old shape "undone" a switch that
+     * only ever re-checked-out the destination.
+     */
+    public function testCheckoutWithoutOriginRefusesUndo(): void
+    {
+        $entry = HistoryEntry::checkout('', 'feature-branch');
+
+        $this->assertSame('checkout', $entry->op);
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
+        $this->assertSame([], $entry->inverseArgs);
     }
 
     public function testCommitFactoryCreatesCorrectEntry(): void
@@ -115,12 +129,22 @@ final class HistoryEntryTest extends TestCase
 
     public function testDeleteBranchFactoryCreatesCorrectEntry(): void
     {
-        $entry = HistoryEntry::deleteBranch('old-feature');
+        $entry = HistoryEntry::deleteBranch('old-feature', 'deadbeef');
 
         $this->assertSame('deleteBranch', $entry->op);
-        $this->assertSame(['name' => 'old-feature'], $entry->args);
-        $this->assertSame('createBranch', $entry->inverseOp);
-        $this->assertSame(['name' => 'old-feature'], $entry->inverseArgs);
+        $this->assertSame(['name' => 'old-feature', 'sha' => 'deadbeef'], $entry->args);
+        // Audit A2: the inverse restores AT the recorded sha ('createBranch'
+        // would recreate at HEAD and yank the working tree onto it).
+        $this->assertSame('restoreBranch', $entry->inverseOp);
+        $this->assertSame(['name' => 'old-feature', 'sha' => 'deadbeef'], $entry->inverseArgs);
+    }
+
+    public function testDeleteBranchWithoutShaRefusesUndo(): void
+    {
+        $entry = HistoryEntry::deleteBranch('old-feature', '');
+
+        $this->assertSame('deleteBranch', $entry->op);
+        $this->assertSame(HistoryEntry::UNRECOVERABLE_INVERSE, $entry->inverseOp);
     }
 
     public function testConstructorSetsPropertiesCorrectly(): void

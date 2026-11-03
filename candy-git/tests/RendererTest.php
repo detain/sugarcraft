@@ -93,6 +93,7 @@ final class RendererTest extends TestCase
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
             public function deleteBranch(string $_name): void {}
+            public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}
@@ -151,6 +152,7 @@ final class RendererTest extends TestCase
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
             public function deleteBranch(string $_name): void {}
+            public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}
@@ -398,6 +400,7 @@ final class RendererTest extends TestCase
             public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
             public function deleteBranch(string $_name): void {}
+            public function restoreBranch(string $_name, string $_sha): void {}
             public function merge(string $branch): void {}
             public function rebaseContinue(): void {}
             public function rebaseAbort(): void {}

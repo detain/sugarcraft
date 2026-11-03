@@ -57,11 +57,26 @@ final readonly class HistoryEntry
     }
 
     /**
-     * Convenience factory for checkout operations.
+     * Convenience factory for checkout (branch switch) operations.
+     *
+     * Records the ORIGIN branch so the inverse returns there: the old
+     * one-argument shape stored only the destination and its "inverse"
+     * re-checked-out the same branch — a no-op that reported "undone"
+     * (audit A2). When no origin is known (detached HEAD, branch list
+     * empty), the entry refuses undo rather than guessing.
      */
-    public static function checkout(string $branch): self
+    public static function checkout(string $from, string $to): self
     {
-        return new self('checkout', ['branch' => $branch], 'checkout', ['branch' => $branch]);
+        if ($from === '') {
+            return new self('checkout', ['branch' => $to, 'from' => ''], self::UNRECOVERABLE_INVERSE, []);
+        }
+
+        return new self(
+            'checkout',
+            ['branch' => $to, 'from' => $from],
+            'checkout',
+            ['branch' => $from, 'from' => $to],
+        );
     }
 
     /**
@@ -125,9 +140,24 @@ final readonly class HistoryEntry
 
     /**
      * Convenience factory for delete branch.
+     *
+     * Stores the branch tip sha so the inverse can restore the branch AT
+     * that commit: the old inverse was 'createBranch', which runs
+     * `git checkout -b` — recreating the name at HEAD (wrong commit) and
+     * yanking the working tree onto it (audit A2). Without a sha (fixture
+     * rows, stripped branch lists) the entry refuses undo.
      */
-    public static function deleteBranch(string $name): self
+    public static function deleteBranch(string $name, string $sha): self
     {
-        return new self('deleteBranch', ['name' => $name], 'createBranch', ['name' => $name]);
+        if ($sha === '') {
+            return new self('deleteBranch', ['name' => $name, 'sha' => ''], self::UNRECOVERABLE_INVERSE, []);
+        }
+
+        return new self(
+            'deleteBranch',
+            ['name' => $name, 'sha' => $sha],
+            'restoreBranch',
+            ['name' => $name, 'sha' => $sha],
+        );
     }
 }

@@ -86,6 +86,9 @@ interface GitDriver
     /** Delete a branch (safe, -d flag). */
     public function deleteBranch(string $name): void;
 
+    /** Restore a deleted branch pointing at a previously recorded sha. */
+    public function restoreBranch(string $name, string $sha): void;
+
     /** Merge a branch into the current branch. */
     public function merge(string $branch): void;
 

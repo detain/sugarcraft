@@ -35,6 +35,8 @@ final class FixtureGit implements GitDriver
     public array $unstagePatches = [];
     public array $branchCreations = [];
     public array $branchDeletions = [];
+    /** @var list<array{name:string,sha:string}> */
+    public array $restoredBranches = [];
     public array $merges = [];
     public bool $resetCalled = false;
     public bool $rebaseContinueCalled = false;
@@ -93,6 +95,7 @@ final class FixtureGit implements GitDriver
     public function unstagePatch(string $path, string $hunk): void { $this->maybeThrow('unstagePatch'); $this->unstagePatches[$path] = $hunk; }
     public function createBranch(string $name): void { $this->maybeThrow('createBranch'); $this->branchCreations[] = $name; }
     public function deleteBranch(string $name): void { $this->maybeThrow('deleteBranch'); $this->branchDeletions[] = $name; }
+    public function restoreBranch(string $name, string $sha): void { $this->maybeThrow('restoreBranch'); $this->restoredBranches[] = ['name' => $name, 'sha' => $sha]; }
     public function merge(string $branch): void { $this->maybeThrow('merge'); $this->merges[] = $branch; }
     public function rebaseContinue(): void { $this->maybeThrow('rebaseContinue'); $this->rebaseContinueCalled = true; }
     public function rebaseAbort(): void { $this->maybeThrow('rebaseAbort'); $this->rebaseAbortCalled = true; }
@@ -584,6 +587,72 @@ final class AppTest extends TestCase
         $this->assertSame(1, $a->branchesCursor);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'D'));
         $this->assertSame(['feature'], $g->branchDeletions);
+    }
+
+    /**
+     * Audit A2: undoing a branch switch must return to the ORIGIN branch,
+     * not re-checkout the destination (the old single-arg entry made "undo"
+     * a silent no-op that still reported success).
+     */
+    public function testUndoCheckoutReturnsToOriginBranch(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));    // → branches
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));  // cursor → feature (from main)
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));  // switch
+        $this->assertSame(['feature'], $g->checkouts);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));  // undo → back to main
+        $this->assertSame(['feature', 'main'], $g->checkouts);
+        // Audit A17: the message names the op in human words, not 'checkout'.
+        $this->assertStringContainsString('undone: branch switch', (string) $a->successMessage);
+    }
+
+    /**
+     * Audit A2: undoing a branch deletion restores the ref AT the recorded
+     * sha via `git branch <name> <sha>` — no checkout, no HEAD movement.
+     */
+    public function testUndoDeleteBranchRestoresAtRecordedSha(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'D'));
+        $this->assertSame(['feature'], $g->branchDeletions);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertSame([['name' => 'feature', 'sha' => 'def2']], $g->restoredBranches);
+        $this->assertSame([], $g->checkouts, 'restoring a branch must never move HEAD');
+        $this->assertStringContainsString('undone: branch deletion', (string) $a->successMessage);
+        $this->assertStringNotContainsString('deleteBranch', (string) $a->successMessage);
+    }
+
+    /**
+     * Audit A19: a redo must announce itself as "redone", not "undone".
+     */
+    public function testRedoReportsRedone(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 's'));  // unstage src/A.php
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));  // undo → stage it back
+        $this->assertStringContainsString('undone:', (string) $a->successMessage);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));  // redo → unstage again
+        $this->assertSame(['src/A.php', 'src/A.php'], $g->unstages);
+        $this->assertStringContainsString('redone: unstage', (string) $a->successMessage);
+        $this->assertStringNotContainsString('undone', (string) $a->successMessage);
+    }
+
+    /**
+     * Audit A17: refusing an unrecoverable undo also speaks the humanized
+     * op name ('discard' has no recoverable inverse).
+     */
+    public function testCannotUndoMessageUsesHumanizedOp(): void
+    {
+        $a = App::start($this->git());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));   // discard src/A.php
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'u'));
+        $this->assertStringContainsString('cannot undo discard', (string) $a->error);
     }
 
     public function testDKeyDoesNotDeleteCurrentBranch(): void
