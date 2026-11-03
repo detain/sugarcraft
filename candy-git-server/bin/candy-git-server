@@ -54,7 +54,7 @@ namespace SugarCraft\GitServer\Bin;
     exit(1);
 })();
 
-use SugarCraft\GitServer\{Config, Lang, Repo, User};
+use SugarCraft\GitServer\{Config, Lang, Repo, User, UserStore};
 
 // Pre-rename env compatibility (plan_rename.md R4.5): CANDY_SERVE_DATA_PATH was // @rename-keep
 // this app's data-dir var before the 2026-10 rename. Import any old-prefix
@@ -326,6 +326,29 @@ function cmdUser(array $args): int
     };
 }
 
+/**
+ * Resolve the data directory the same way every persistence-touching
+ * command does: explicit positional arg, then CANDY_GIT_SERVER_DATA_PATH,
+ * then the /tmp default (undisclosed until docs-fix; see README "Data
+ * directory" — a systemd-tmpfiles-hostile default, so set the env for real
+ * deployments).
+ */
+function bin_data_path(?string $explicit): string
+{
+    return $explicit ?? (\getenv('CANDY_GIT_SERVER_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-git-server');
+}
+
+/**
+ * Account names double as file-store keys, so the old /^[a-zA-Z0-9._-]+$/
+ * gate is not enough on its own: '.' and '..' pass it and would address
+ * parent paths wherever a name is later interpolated into a path
+ * (review C-05's shape). Reject all-dot names outright.
+ */
+function bin_valid_account_name(string $name): bool
+{
+    return \preg_match('/^[a-zA-Z0-9._-]+$/', $name) === 1 && \preg_match('/^\.+$/', $name) !== 1;
+}
+
 function cmdUserAdd(array $args): int
 {
     if (!isset($args[0])) {
@@ -333,10 +356,25 @@ function cmdUserAdd(array $args): int
     }
 
     $username = $args[0];
-    $user = User::new($username)->withAdmin(true);
+    $dataPath = bin_data_path($args[1] ?? null);
+    if (!bin_valid_account_name($username)) {
+        return error("Invalid username: '{$username}' (letters, digits, dot, underscore, hyphen; not all dots)\n");
+    }
+
+    try {
+        $store = UserStore::forDataPath($dataPath);
+        if ($store->find($username) !== null) {
+            return error("User '{$username}' already exists in {$store->path()}\n");
+        }
+        $store->add(User::new($username)->withAdmin(true));
+        $store->save();
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
 
     echo Lang::t('cli.user_created', ['username' => $username]) . "\n";
     echo Lang::t('cli.user_key_hint', ['username' => $username]) . "\n";
+    echo "Persisted to {$store->path()}\n";
 
     return 0;
 }
@@ -348,16 +386,34 @@ function cmdUserKey(array $args): int
     }
 
     [$username, $keyFile] = $args;
-    $key = $keyFile === '-' ? \stream_get_contents(\STDIN) : \file_get_contents($keyFile);
+    $dataPath = bin_data_path($args[2] ?? null);
+    $key = $keyFile === '-' ? \stream_get_contents(\STDIN) : @\file_get_contents($keyFile);
 
     if ($key === false || $key === '') {
         return error(Lang::t('cli.user_key_read_failed', ['file' => $keyFile]) . "\n");
     }
 
-    $user = User::new($username)->addAuthorizedKey(\trim($key));
+    try {
+        $store = UserStore::forDataPath($dataPath);
+        // Keys belong to accounts that EXIST in the store — the pre-fix
+        // version built a throwaway User in memory, printed success, and
+        // persisted nothing (review C-03).
+        $user = $store->find($username);
+        if ($user === null) {
+            return error("No such user '{$username}' in {$store->path()} — run 'candy-git-server user add {$username}' first.\n");
+        }
+        $updated = $user->addAuthorizedKey(\trim($key));
+        $store->put($updated);
+        $store->save();
+    } catch (\InvalidArgumentException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
+
     echo Lang::t('cli.user_key_added', ['username' => $username]) . "\n";
     echo Lang::t('cli.user_keys_header') . "\n";
-    foreach ($user->authorizedKeysList() as $k) {
+    foreach ($updated->authorizedKeysList() as $k) {
         echo Lang::t('cli.user_key_entry', ['prefix' => \substr($k, 0, 60)]) . "\n";
     }
 
@@ -366,7 +422,33 @@ function cmdUserKey(array $args): int
 
 function cmdUserList(array $args): int
 {
-    echo Lang::t('cli.user_list_empty') . "\n";
+    $dataPath = bin_data_path($args[0] ?? null);
+    try {
+        $store = UserStore::forDataPath($dataPath);
+    } catch (\RuntimeException $e) {
+        return error('candy-git-server: ' . $e->getMessage() . "\n");
+    }
+
+    $users = $store->all();
+    if ($users === []) {
+        echo Lang::t('cli.user_list_empty') . "\n";
+
+        return 0;
+    }
+
+    echo Lang::t('cli.user_list_header', ['path' => $store->path()]) . "\n";
+    foreach ($users as $user) {
+        echo \sprintf(
+            "  %s (admin: %s, active: %s, %d key%s, password: %s)\n",
+            $user->username,
+            $user->isAdmin ? Lang::t('cli.bool_yes') : Lang::t('cli.bool_no'),
+            $user->isActive ? Lang::t('cli.bool_yes') : Lang::t('cli.bool_no'),
+            \count($user->authorizedKeysList()),
+            \count($user->authorizedKeysList()) === 1 ? '' : 's',
+            $user->passwordHash !== null ? 'set' : 'none',
+        );
+    }
+
     return 0;
 }
 

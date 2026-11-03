@@ -50,6 +50,7 @@ return [
     'cli.user_keys_header'     => 'Autorisierte Schlüssel:',
     'cli.user_key_entry'       => '  {prefix}...',
     'cli.user_list_empty'      => "Benutzer:\n  (Keine Benutzer registriert. Verwenden Sie 'candy-git-server user add <username>')",
+    'cli.user_list_header' => "Benutzer ({path}):",
 
     // bin/candy-git-server — repo
     'cli.usage_repo_root'      => 'Nutzung: candy-git-server repo list|create|info',

@@ -44,6 +44,7 @@ return [
     'cli.user_keys_header'     => 'Yetkili anahtarlar:',
     'cli.user_key_entry'       => '  {prefix}...',
     'cli.user_list_empty'      => "Kullanıcılar:\n  (Kayıtlı kullanıcı yok. 'candy-git-server user add <username>' kullanın)",
+    'cli.user_list_header' => "Kullanıcılar ({path}):",
     'cli.usage_repo_root'      => 'Kullanım: candy-git-server repo list|create|info',
     'cli.usage_repo_create'    => 'Kullanım: candy-git-server repo create <name>',
     'cli.usage_repo_info'      => 'Kullanım: candy-git-server repo info <name>',

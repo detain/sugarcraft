@@ -44,6 +44,7 @@ return [
     'cli.user_keys_header'     => '승인된 키:',
     'cli.user_key_entry'       => '  {prefix}...',
     'cli.user_list_empty'      => "사용자:\n  (등록된 사용자가 없습니다. 'candy-git-server user add <username>'을 사용하세요)",
+    'cli.user_list_header' => "사용자 ({path}):",
     'cli.usage_repo_root'      => '사용법: candy-git-server repo list|create|info',
     'cli.usage_repo_create'    => '사용법: candy-git-server repo create <name>',
     'cli.usage_repo_info'      => '사용법: candy-git-server repo info <name>',

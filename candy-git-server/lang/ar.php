@@ -44,6 +44,7 @@ return [
     'cli.user_keys_header'     => 'المفاتيح المصرح بها:',
     'cli.user_key_entry'       => '  {prefix}...',
     'cli.user_list_empty'      => "المستخدمون:\n  (لا يوجد مستخدمون مسجلون. استخدم 'candy-git-server user add <username>')",
+    'cli.user_list_header' => "المستخدمون ({path}):",
     'cli.usage_repo_root'      => 'الاستخدام: candy-git-server repo list|create|info',
     'cli.usage_repo_create'    => 'الاستخدام: candy-git-server repo create <name>',
     'cli.usage_repo_info'      => 'الاستخدام: candy-git-server repo info <name>',

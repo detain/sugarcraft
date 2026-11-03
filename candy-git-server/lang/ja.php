@@ -44,6 +44,7 @@ return [
     'cli.user_keys_header'     => '承認済み鍵：',
     'cli.user_key_entry'       => '  {prefix}...',
     'cli.user_list_empty'      => "ユーザー：\n  （登録ユーザーがいません。'candy-git-server user add <username>' を使用してください）",
+    'cli.user_list_header' => "ユーザー（{path}）:",
     'cli.usage_repo_root'      => '用法：candy-git-server repo list|create|info',
     'cli.usage_repo_create'    => '用法：candy-git-server repo create <name>',
     'cli.usage_repo_info'      => '用法：candy-git-server repo info <name>',

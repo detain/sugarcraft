@@ -20,6 +20,14 @@ final class User
     public readonly bool $isActive;
     public readonly ?string $password;
 
+    /**
+     * password_hash() digest for HTTP Basic auth. The on-disk UserStore keeps
+     * ONLY this digest — a stored cleartext password is what review M-11
+     * called the account store's worst property. $password remains the
+     * in-memory (test/dev) channel until M-11 folds it away.
+     */
+    public readonly ?string $passwordHash;
+
     /** Full authorized_keys content (one key per line). */
     private string $authorizedKeys;
 
@@ -29,11 +37,13 @@ final class User
         bool $isActive = true,
         ?string $password = null,
         string $authorizedKeys = '',
+        ?string $passwordHash = null,
     ) {
         $this->username       = $username;
         $this->isAdmin        = $isAdmin;
         $this->isActive       = $isActive;
         $this->password       = $password;
+        $this->passwordHash   = $passwordHash;
         $this->authorizedKeys = $authorizedKeys;
     }
 
@@ -44,12 +54,12 @@ final class User
 
     public function withUsername(string $u): self
     {
-        return new self($u, $this->isAdmin, $this->isActive, $this->password, $this->authorizedKeys);
+        return new self($u, $this->isAdmin, $this->isActive, $this->password, $this->authorizedKeys, $this->passwordHash);
     }
 
     public function withAdmin(bool $v = true): self
     {
-        return new self($this->username, $v, $this->isActive, $this->password, $this->authorizedKeys);
+        return new self($this->username, $v, $this->isActive, $this->password, $this->authorizedKeys, $this->passwordHash);
     }
 
     public function withActive(bool $v = true): self
@@ -59,12 +69,58 @@ final class User
         // write $v into the isAdmin slot, so 'deactivating' a user stripped
         // admin and left the account ACTIVE. A trust gate on isActive cannot
         // exist while this flips the wrong field.
-        return new self($this->username, $this->isAdmin, $v, $this->password, $this->authorizedKeys);
+        return new self($this->username, $this->isAdmin, $v, $this->password, $this->authorizedKeys, $this->passwordHash);
     }
 
     public function withPassword(?string $password): self
     {
-        return new self($this->username, $this->isAdmin, $this->isActive, $password, $this->authorizedKeys);
+        return new self($this->username, $this->isAdmin, $this->isActive, $password, $this->authorizedKeys, $this->passwordHash);
+    }
+
+    /** Attach a password_hash() digest (the only password form the store keeps). */
+    public function withPasswordHash(?string $hash): self
+    {
+        return new self($this->username, $this->isAdmin, $this->isActive, $this->password, $this->authorizedKeys, $hash);
+    }
+
+    /**
+     * Serializable form used by UserStore. Deliberately never emits a
+     * cleartext password: persistence carries the digest only.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'username'        => $this->username,
+            'admin'           => $this->isAdmin,
+            'active'          => $this->isActive,
+            'password_hash'   => $this->passwordHash,
+            'authorized_keys' => $this->authorizedKeysList(),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    public static function fromArray(array $row): self
+    {
+        $username = (string) ($row['username'] ?? '');
+        if ($username === '') {
+            throw new \RuntimeException('user store row without a username');
+        }
+
+        $keys = $row['authorized_keys'] ?? [];
+        $user = new self(
+            $username,
+            (bool) ($row['admin'] ?? false),
+            (bool) ($row['active'] ?? true),
+            null,
+            \is_array($keys) ? \implode("\n", \array_map('strval', $keys)) : '',
+            isset($row['password_hash']) ? (string) $row['password_hash'] : null,
+        );
+
+        return $user;
     }
 
     public function withAuthorizedKeys(string $keys): self

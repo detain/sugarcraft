@@ -44,6 +44,7 @@ return [
     'cli.user_keys_header'     => 'Autorizované klíče:',
     'cli.user_key_entry'       => '  {prefix}...',
     'cli.user_list_empty'      => "Uživatelé:\n  (Žádní registrovaní uživatelé. Použijte 'candy-git-server user add <username>')",
+    'cli.user_list_header' => "Uživatelé ({path}):",
     'cli.usage_repo_root'      => 'Použití: candy-git-server repo list|create|info',
     'cli.usage_repo_create'    => 'Použití: candy-git-server repo create <name>',
     'cli.usage_repo_info'      => 'Použití: candy-git-server repo info <name>',

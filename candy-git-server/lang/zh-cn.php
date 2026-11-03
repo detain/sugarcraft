@@ -44,6 +44,7 @@ return [
     'cli.user_keys_header'     => '授权密钥：',
     'cli.user_key_entry'       => '  {prefix}...',
     'cli.user_list_empty'      => "用户：\n  （尚无注册用户。请使用 'candy-git-server user add <username>'）",
+    'cli.user_list_header' => "用户（{path}）:",
     'cli.usage_repo_root'      => '用法：candy-git-server repo list|create|info',
     'cli.usage_repo_create'    => '用法：candy-git-server repo create <name>',
     'cli.usage_repo_info'      => '用法：candy-git-server repo info <name>',
