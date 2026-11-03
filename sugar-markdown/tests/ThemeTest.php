@@ -256,4 +256,132 @@ final class ThemeTest extends TestCase
         $this->assertStringContainsString($fgSeq('foreground'),  $t->codeBlock->render('x'));
         $this->assertStringContainsString($bgSeq('background'),  $t->codeBlock->render('x'));
     }
+
+    public function testNoColorEnvironmentWinsOverGlamourStyle(): void
+    {
+        putenv('NO_COLOR=1');
+        putenv('GLAMOUR_STYLE=dracula');
+        try {
+            $this->assertEquals(Theme::plain(), Theme::fromEnvironment());
+            $this->assertEquals(Theme::plain(), Theme::fromEnvironment(Theme::dark()));
+        } finally {
+            putenv('NO_COLOR');
+            putenv('GLAMOUR_STYLE');
+        }
+    }
+
+    public function testAnEmptyNoColorValueLeavesTheChannelAlone(): void
+    {
+        putenv('NO_COLOR=');
+        putenv('GLAMOUR_STYLE=dracula');
+        try {
+            $this->assertEquals(Theme::dracula(), Theme::fromEnvironment());
+        } finally {
+            putenv('NO_COLOR');
+            putenv('GLAMOUR_STYLE');
+        }
+    }
+
+    public function testAGlamourDocumentPayloadRoutesThroughStyleGuide(): void
+    {
+        $json = json_encode([
+            'document' => ['margin' => 2],
+            'h1'       => ['color' => '#ff0000', 'bold' => true],
+        ]);
+        $rendered = (new Renderer(Theme::fromJsonString($json)))->render("# Hi\n");
+        $this->assertStringContainsString("\x1b[1m\x1b[38;2;255;0;0m# Hi\x1b[0m", $rendered, 'the routed theme must style the heading, not swallow the schema (M6)');
+        $this->assertStringStartsWith("\n\n", $rendered, 'the document margin pads the run');
+    }
+
+    public function testAFlatPayloadStillDecodesFlat(): void
+    {
+        $theme = Theme::fromJsonString(json_encode(['heading1' => ['foreground' => '#00ff00']]));
+        $this->assertStringContainsString("\x1b[38;2;0;255;0m", $theme->heading1->render('x'));
+    }
+
+    public function testAFlatFlagSpelledFalseStaysOff(): void
+    {
+        $theme = Theme::fromJsonString(json_encode(['bold' => ['bold' => 'false']]));
+        $this->assertSame('x', $theme->bold->render('x'), 'm12: the string "false" must not switch a flag on');
+    }
+
+    public function testAGlamourFlagSpelledFalseStaysOff(): void
+    {
+        $theme = Theme::fromJsonString(json_encode([
+            'document' => [],
+            'strong'   => ['bold' => 'false'],
+        ]));
+        $this->assertSame('x', $theme->bold->render('x'));
+    }
+
+    public function testAWarningingReadIsRefusedRatherThanDecoded(): void
+    {
+        if (!in_array('mdwarning', stream_get_wrappers(), true)) {
+            stream_wrapper_register('mdwarning', WarningReadingStreamTest::class);
+        }
+        try {
+            Theme::fromJson('mdwarning://style.json');
+            $this->fail('a file_get_contents() warning must not be swallowed into a decoded theme');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('simulated degraded read', $e->getMessage());
+        }
+    }
+}
+
+/**
+ * Fault injection for the warning-read refusal: presents as a regular
+ * file of fixed bytes, but warns on its first read — the asymmetry
+ * StyleGuide::fromFile already refuses and Theme::fromJson now mirrors.
+ */
+final class WarningReadingStreamTest
+{
+    /** @var resource|null */
+    public $context;
+
+    private const BODY = '{"bold": {"bold": true}}';
+
+    private int $position = 0;
+
+    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
+    {
+        $this->position = 0;
+
+        return true;
+    }
+
+    public function stream_read(int $count): string
+    {
+        if ($this->position === 0) {
+            trigger_error('simulated degraded read', E_USER_WARNING);
+        }
+        $chunk = substr(self::BODY, $this->position, $count);
+        $this->position += strlen($chunk);
+
+        return $chunk;
+    }
+
+    public function stream_eof(): bool
+    {
+        return $this->position >= strlen(self::BODY);
+    }
+
+    /** @return array<int,int> */
+    public function url_stat(string $path, int $flags): array
+    {
+        $now = time();
+
+        return [
+            'dev'   => 0,
+            'ino'   => 0,
+            'mode'  => 0100644,
+            'nlink' => 1,
+            'uid'   => 0,
+            'gid'   => 0,
+            'rdev'  => 0,
+            'size'  => strlen(self::BODY),
+            'mtime' => $now,
+            'atime' => $now,
+            'ctime' => $now,
+        ];
+    }
 }

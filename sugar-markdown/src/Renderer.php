@@ -492,8 +492,9 @@ final class Renderer
 
     /**
      * Wrap paragraph + blockquote + list-item bodies at `$cols` cells.
-     * Code blocks and tables are never wrapped (they have their own
-     * width semantics). Pass null or 0 to disable wrapping.
+     * Headings, code blocks and tables are never wrapped (they carry
+     * their own width semantics; heading passthrough matches glamour).
+     * Pass null or 0 to disable wrapping.
      *
      * Mirrors glamour's `WithWordWrap`.
      */

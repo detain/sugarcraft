@@ -82,11 +82,19 @@ final class Theme
         public readonly int $horizontalRuleLength = 40,
 
         // ---- table substyles ----
-        /** Style applied to GFM-table header cells. Default null = inherit `bold`. */
+        /**
+         * Style applied to GFM-table header cells. Default null = NO header
+         * styling (M17): bold is not inherited, set this slot explicitly to
+         * emphasise the header row.
+         */
         public readonly ?Style $tableHeader    = null,
         /** Style applied to body-row cells. Default null = no styling. */
         public readonly ?Style $tableCell      = null,
-        /** Style applied to the separator characters that join cells. */
+        /**
+         * RESERVED (M18): the border glyphs are taken from the
+         * tableColumnSeparator/tableCenterSeparator/tableRowSeparator
+         * strings; this style slot is not applied to them yet.
+         */
         public readonly ?Style $tableSeparator = null,
 
         /**
@@ -306,21 +314,28 @@ final class Theme
     }
 
     /**
-     * Glamour-compatible env-var auto-selection. Reads the
-     * `GLAMOUR_STYLE` environment variable; if set to a known preset
-     * name, returns it. The literal string `auto` (matching glamour's
-     * convention) returns {@see notty()} when STDOUT is not a TTY and
-     * {@see dark()} otherwise. Falls back to `$default` (default
-     * `ansi()`) when the env var is missing or unrecognised.
+     * Glamour-compatible env-var auto-selection. `NO_COLOR`, when set to
+     * any non-empty value, wins first (M16): the no-color.org convention
+     * asks for plain output regardless of anything else configured, so
+     * {@see plain()} is returned even against a `GLAMOUR_STYLE` preset.
+     * Otherwise `GLAMOUR_STYLE` names a preset, and the literal string
+     * `auto` (matching glamour's convention) returns {@see notty()} when
+     * STDOUT is not a TTY and {@see dark()} otherwise. Falls back to
+     * `$default` (default `ansi()`) when no variable applies or the name
+     * is unrecognised. Note that `new Renderer()` keeps its own `ansi()`
+     * hard default — honouring the environment is exactly what this
+     * channel is for.
      */
     public static function fromEnvironment(?self $default = null): self
     {
+        $noColor = getenv('NO_COLOR');
+        if ($noColor !== false && $noColor !== '') {
+            return self::plain();
+        }
         $env = getenv('GLAMOUR_STYLE');
         if ($env !== false && $env !== '') {
             if (strtolower($env) === 'auto') {
-                $isTty = function_exists('stream_isatty')
-                    ? @stream_isatty(STDOUT)
-                    : posix_isatty(STDOUT);
+                $isTty = @stream_isatty(STDOUT); // n7: stream_isatty is always present on PHP >= 8.1.
                 return $isTty ? self::dark() : self::notty();
             }
             $named = self::byName($env);
@@ -573,14 +588,35 @@ final class Theme
         } finally {
             restore_error_handler();
         }
-        if ($raw === false) {
+        if ($raw === false || $warning !== null) {
             $msg = $warning ?? 'unknown error';
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]) . ": {$msg}");
         }
         return self::fromJsonString($raw);
     }
 
-    /** @see fromJson() */
+    /**
+     * Decode a theme from JSON. Two schemas are accepted (M6):
+     *
+     * - a payload carrying a `document` block is glamour's styles.json and
+     *   routes through {@see StyleGuide}, so element and chroma vocabulary
+     *   decodes as documented there;
+     * - anything else is this library's FLAT schema: an object whose keys
+     *   name style slots (heading1..heading6, paragraph, bold, italic,
+     *   code, codeBlock, link, blockquote, listMarker, rule, keyword,
+     *   string, number, comment, strike, linkText, image, htmlBlock,
+     *   htmlSpan, definitionTerm, definitionDescription, text, autolink),
+     *   each an object of `foreground`/`background` colour strings plus
+     *   boolean flags.
+     *
+     * WHAT THE FLAT READER LEAVES AT DEFAULTS (m17): documentMargin and
+     * documentIndent, paragraph and document affixes, heading prefixes
+     * and suffixes, bullet and table separator glyphs, definition-list
+     * and task glyphs, and the rule glyph and length. Unknown keys are
+     * ignored; absent slots become plain styles.
+     *
+     * @see fromJson()
+     */
     public static function fromJsonString(string $json): self
     {
         $data = json_decode($json, associative: true);
@@ -589,6 +625,9 @@ final class Theme
         }
         if (!is_array($data)) {
             throw new \InvalidArgumentException(Lang::t('theme.json_object'));
+        }
+        if (StyleGuide::isGlamourSchema($data)) {
+            return StyleGuide::fromDecoded($data)->theme();
         }
         $pick = static fn(string $k): Style
             => isset($data[$k]) && is_array($data[$k])
@@ -626,6 +665,28 @@ final class Theme
         );
     }
 
+    /**
+     * Flag truth for a JSON config value (m12). A real boolean answers
+     * directly; a string counts as OFF only for the negative spellings
+     * `false`, `0`, `no`, `off` (case-insensitive) or the empty string;
+     * an integer is zero-or-not. Plain `!empty()` would flip
+     * `"bold": "false"` ON, because any non-empty string is truthy.
+     */
+    private static function flagOn(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            return !in_array(strtolower($value), ['', 'false', '0', 'no', 'off'], true);
+        }
+        if (is_int($value)) {
+            return $value !== 0;
+        }
+
+        return false;
+    }
+
     /** @param array<string,mixed> $cfg */
     private static function parseStyle(array $cfg): Style
     {
@@ -639,7 +700,7 @@ final class Theme
             if ($c !== null) $s = $s->background($c);
         }
         foreach (['bold', 'italic', 'underline', 'strike', 'faint', 'blink', 'reverse'] as $flag) {
-            if (!empty($cfg[$flag])) {
+            if (self::flagOn($cfg[$flag] ?? null)) {
                 $s = match ($flag) {
                     'bold'      => $s->bold(),
                     'italic'    => $s->italic(),

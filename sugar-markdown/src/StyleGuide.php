@@ -278,6 +278,26 @@ final class StyleGuide
         return null;
     }
 
+    /**
+     * Flag truth for a primitive's boolean slot (m12, shared law with
+     * {@see Theme::flagOn()}): glamour JSON carries flags as real
+     * booleans, but a `"false"` string must not switch one on.
+     */
+    private static function flagOn(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_string($value)) {
+            return !in_array(strtolower($value), ['', 'false', '0', 'no', 'off'], true);
+        }
+        if (is_int($value)) {
+            return $value !== 0;
+        }
+
+        return false;
+    }
+
     /** @param array<string, mixed> $primitive */
     private static function styleFrom(array $primitive): Style
     {
@@ -292,19 +312,19 @@ final class StyleGuide
             $style = $style->background($background);
         }
 
-        if (!empty($primitive['bold'])) {
+        if (self::flagOn($primitive['bold'] ?? null)) {
             $style = $style->bold();
         }
-        if (!empty($primitive['italic'])) {
+        if (self::flagOn($primitive['italic'] ?? null)) {
             $style = $style->italic();
         }
-        if (!empty($primitive['underline'])) {
+        if (self::flagOn($primitive['underline'] ?? null)) {
             $style = $style->underline();
         }
-        if (!empty($primitive['strikethrough'])) {
+        if (self::flagOn($primitive['strikethrough'] ?? null)) {
             $style = $style->strikethrough();
         }
-        if (!empty($primitive['faint'])) {
+        if (self::flagOn($primitive['faint'] ?? null)) {
             $style = $style->faint();
         }
 
