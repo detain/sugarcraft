@@ -203,9 +203,26 @@ final class App implements Model
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
-        if ($msg->type === KeyType::Escape
-            || ($msg->type === KeyType::Char && $msg->rune === 'q' && $this->ui->pane !== Pane::Query)
-            || ($msg->ctrl && $msg->rune === 'c')) {
+        // D-C5: the quit keys must not hijack the layers below them.
+        // Ctrl+C is the unconditional escape hatch. Escape/q quit only from
+        // the browser panes — in the Query pane Escape must not silently
+        // discard a drafted query, and on the Admin pane a modal page
+        // (variable editor dialog, GTID dialog, kill confirmation) owns
+        // every key while open, while a plain q returns to Tables via
+        // handleAdminKey() (previously dead code behind this guard).
+        if ($msg->ctrl && $msg->rune === 'c') {
+            return [$this, Cmd::quit()];
+        }
+        if ($this->ui->pane === Pane::Admin) {
+            $page = $this->admin->page;
+            if ($page !== null && ($msg->type === KeyType::Escape || $page->isModal())) {
+                [$newPage, $cmd] = $page->update($msg);
+                return [$this->withAdminPage($newPage), $cmd];
+            }
+        }
+        if (($msg->type === KeyType::Escape
+            || ($msg->type === KeyType::Char && $msg->rune === 'q'))
+            && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows)) {
             return [$this, Cmd::quit()];
         }
         if ($msg->type === KeyType::Tab) {

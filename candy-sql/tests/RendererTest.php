@@ -41,7 +41,11 @@ final class RendererTest extends TestCase
     {
         $out = Renderer::render(App::start($this->db()));
         $this->assertStringContainsString('switch pane', $out);
-        $this->assertStringContainsString('run query', $out);
+        // D-C4 (2026-11-03): the old pin asserted 'run query' in the Tables-pane
+        // footer, but ctrl+r/ctrl+e only fire in the Query pane — the browser
+        // legend now states what actually works there.
+        $this->assertStringContainsString('load table', $out);
+        $this->assertStringContainsString('esc', $out);
     }
 
     public function testRenderShowsEmptyState(): void

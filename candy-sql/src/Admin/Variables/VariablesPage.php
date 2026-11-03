@@ -930,6 +930,12 @@ final class VariablesPage extends PageBase implements RowNavigable
         return $this->catalog;
     }
 
+    /** The edit/confirm dialog is open — it owns every keystroke. */
+    public function isModal(): bool
+    {
+        return $this->editDialogPhase !== null;
+    }
+
     public function editor(): ?VariableEditor
     {
         return $this->editor;

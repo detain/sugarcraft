@@ -49,6 +49,7 @@ final class AppBuilder
     private array $queryFavorites = [];
     private ?string $historyDbPath = null;
     private ?string $sslMode = null;
+    private ?\SugarCraft\Sql\Admin\PageBase $adminPage = null;
 
     public function withDb(DatabaseInterface $db): self
     {
@@ -117,6 +118,17 @@ final class AppBuilder
     {
         $clone = clone $this;
         $clone->pane = $pane;
+        return $clone;
+    }
+
+    /**
+     * Seed the admin layer with a concrete page instance (tests reach for
+     * this to drive modal routing without driving the whole pane UI).
+     */
+    public function withAdminPage(?\SugarCraft\Sql\Admin\PageBase $page): self
+    {
+        $clone = clone $this;
+        $clone->adminPage = $page;
         return $clone;
     }
 
@@ -208,7 +220,7 @@ final class AppBuilder
                 error: $this->error,
                 status: $this->status,
             ),
-            new AdminState(historyRecorder: $historyRecorder),
+            new AdminState(page: $this->adminPage, historyRecorder: $historyRecorder),
         );
     }
 }

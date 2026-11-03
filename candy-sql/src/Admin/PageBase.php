@@ -50,6 +50,19 @@ abstract class PageBase implements Model
     }
 
     /**
+     * Whether the page currently owns an open modal editing surface.
+     *
+     * While this is true the App routes every keystroke to the page before
+     * its own key handling, so dialog text (including 'q' or modifier-free
+     * characters) types instead of triggering app-level navigation (D-C5).
+     * Non-modal pages keep the default false.
+     */
+    public function isModal(): bool
+    {
+        return false;
+    }
+
+    /**
      * Render the error screen.
      *
      * With no specific message, show a neutral "no data" line rather than a

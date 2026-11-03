@@ -126,11 +126,13 @@ final class AdminRowNavigationRoutingTest extends TestCase
     }
 
     /**
-     * q stays app-global on a row-navigable pane. update() intercepts it
-     * BEFORE pane dispatch as a full quit (not a Tables return), so the page
-     * must not observe the key.
+     * q on a row-navigable admin page is handled ABOVE the page: it returns
+     * to the Tables pane without quitting (D-C5, 2026-11-03 — it used to be
+     * swallowed by the app-global quit guard, which made both this branch and
+     * every "press [q] to return" label a lie, and killed admin dialogs on
+     * stray keystrokes). The page must never observe the key.
      */
-    public function testQuitStaysGlobalOnRowNavigablePages(): void
+    public function testQReturnsToTablesOnRowNavigableAdminPanes(): void
     {
         $a = $this->adminApp();
         [$a,] = $a->update(new KeyMsg(KeyType::Char, '2'));
@@ -138,8 +140,8 @@ final class AdminRowNavigationRoutingTest extends TestCase
 
         [$a, $cmd] = $a->update(new KeyMsg(KeyType::Char, 'q'));
 
-        $this->assertNotNull($cmd, 'q must produce the global quit command');
-        $this->assertSame(Pane::Admin, $a->ui->pane, 'q must not reach the page');
+        $this->assertNull($cmd, 'q on the admin pane returns, it must not quit');
+        $this->assertSame(Pane::Tables, $a->ui->pane, 'q must return to Tables');
     }
 
     /** Digits stay app-global on a row-navigable pane: they switch panes. */

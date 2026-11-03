@@ -54,6 +54,12 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     private ?ProcesslistResult $pendingKill = null;
     /** True when the pending action is KILL QUERY rather than KILL CONNECTION. */
     private bool $pendingKillIsQuery = false;
+
+    /** The kill confirmation is armed — it owns every keystroke. */
+    public function isModal(): bool
+    {
+        return $this->pendingKill !== null;
+    }
     /** Transient feedback line shown after an action (kill sent/failed/cancelled). */
     private ?string $actionMessage = null;
 

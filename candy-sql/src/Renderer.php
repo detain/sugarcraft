@@ -141,7 +141,7 @@ final class Renderer
             $query = self::queryPane($a, $cols);
             $paneCount = count(AdminPane::orderedCases());
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render("1-{$paneCount}  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  quit");
+                ->render("1-{$paneCount}  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  back  ·  esc  cancel dialog");
             $status = '';
             if ($a->ui->error !== null) {
                 // Driver/server error text is untrusted for the terminal —
@@ -167,10 +167,10 @@ final class Renderer
         // Help text differs per pane
         if ($a->ui->pane === Pane::Query) {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('tab  switch pane  ·  ctrl+r  run  ·  ctrl+e  clear  ·  ctrl+h  history  ·  q  quit');
+                ->render('tab  switch pane  ·  ctrl+r / ctrl+e  run  ·  enter  newline  ·  ctrl+c  quit');
         } else {
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('tab  switch pane  ·  enter  load table  ·  ctrl+r  run query  ·  q  quit');
+                ->render('tab  switch pane  ·  enter  load table  ·  q / esc  quit');
         }
 
         $status = '';

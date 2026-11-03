@@ -62,6 +62,12 @@ final class ServerStatusPage extends PageBase
      */
     private string $gtidError = '';
 
+    /** The GTID dialog is open — it owns every keystroke. */
+    public function isModal(): bool
+    {
+        return $this->gtidDialog;
+    }
+
     public function __construct(
         ServerContextInterface $context,
         ?ReplicaStatusProvider $replicaProvider = null,
