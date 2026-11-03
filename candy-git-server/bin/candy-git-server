@@ -18,10 +18,10 @@ declare(strict_types=1);
  *
  * PHP port of the charmbracelet/soft-serve Go project; the binary was
  * named `soft-serve` before the 2026-10 rename to candy-git-server.
- * STATUS: scaffold for ssh/daemon transports — bare `serve` still refuses
- * (assembly not implemented); `serve --http` starts the real smart-HTTP
- * READ listener (push answers an honest 501). See README
- * "Known gaps". // @rename-keep
+ * STATUS: scaffold for the ssh/daemon host wiring — bare `serve` still
+ * refuses (no assembled multi-transport entrypoint); `serve --http`
+ * starts the smart-HTTP listener: clone, fetch, push (auth-gated) and
+ * LFS. See README "Known gaps". // @rename-keep
  */
 
 namespace SugarCraft\GitServer\Bin;

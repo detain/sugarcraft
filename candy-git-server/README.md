@@ -14,17 +14,20 @@
 
 # CandyGitServer
 
-candy-git-server — **status: scaffold.** Library building blocks for a
-self-hostable Git server, for PHP 8.3+. No assembled server ships yet.
+candy-git-server — a self-hostable Git server, for PHP 8.3+. The
+smart-HTTP transport (clone, fetch, push, LFS) runs as a real service via
+`serve --http`; the SSH and git-daemon transports are libraries awaiting
+host wiring.
 
 ## Overview
 
 This package is a PHP port of pieces of the charmbracelet/soft-serve Go
 project. The domain classes are real and individually tested, and the
-**smart-HTTP read path is now a running service**: `serve --http` starts a
-listener that real `git clone`/`git fetch` succeed against (owner ruling
-1b, phase 1 — r1024/githttp). Every other transport stays assembly-less:
-the default `serve` still refuses, and so do `--daemon`/`--pid-file`:
+**smart-HTTP transport is a running service**: `serve --http` starts a
+listener that real `git clone`, `git fetch`, and `git push` succeed
+against, with LFS batch and object routes alongside. Every other
+transport stays assembly-less: the default `serve` still refuses, and so
+do `--daemon`/`--pid-file`:
 
 ```console
 $ candy-git-server serve
@@ -36,17 +39,21 @@ $ echo $?
 
 The bare command refuses loudly (non-zero exit, honest stderr) rather than
 printing a startup banner while serving nothing — the ssh and git-daemon
-transports remain scaffold until their phases land, and push
-(`git-receive-pack` over HTTP) is a pinned phase-2 refusal (501) even on
-the live listener. Nothing forks.
+transports remain scaffold until their phases land. On the live listener
+push is served: authorization runs before a single ref byte or pack body
+is touched, and hook declines ride back in-band in the report-status
+stream. Nothing forks.
 
 **What is implemented:**
 
 - `Config` — YAML config loader (symfony/yaml) with typed accessors
 - `Repo` — bare-repository model: init (Git at `<path>/.git`), refs,
   branches/tags, file reads, mirror metadata, visibility
-- `User`, `AccessControl`, `Visibility` — user model, per-repo permission
-  checks, visibility enum (no persistence layer — see Known gaps)
+- `User`, `AccessControl`, `Visibility` — user model (passwords stored
+  only as `password_hash` digests), per-repo permission checks,
+  visibility enum
+- `UserStore` — accounts persist atomically in `<data_path>/users.json`
+  (temp-file + rename, mode `0600`, corrupt store refuses to load)
 - `Git\PktLine` — the single pkt-line codec (spec `%04x` ASCII-hex length
   prefixes, `0000` flush, tolerant decode); it replaced four ad-hoc
   binary-framed emitters
@@ -54,15 +61,17 @@ the live listener. Nothing forks.
   --stateless-rpc` children the HTTP read path delegates to (bounded
   stdin write + bounded drain on one deadline, cap refusal, TERM→KILL
   reap per spawn)
-- `Git\UploadPack`, `Git\ReceivePack` — in-process clone/push command
-  handlers for the daemon/CGI shapes (framing now goes through the codec;
-  the daemon's own dialect still deviates — see Known gaps)
-- `Git\GitDaemon` — socket daemon class with PID file + signal handling
-  (class-complete, but its protocol dialect deviates from spec and no
-  shipped entrypoint constructs it)
-- `HttpSmartProtocol\Server` — request router for the Git smart-HTTP and
-  LFS batch APIs; the smart-HTTP **read** path is live (advertisement +
-  negotiation behind trust gates; push POST answers 501)
+- `Git\UploadPack`, `Git\ReceivePack` — authorize, then delegate to the
+  real `git upload-pack` / `git receive-pack` over a bounded stdio pump
+  (`Git\StdioPipe`); the SSH `ForceCommand` dispatch path uses these
+- `Git\GitDaemon` — git-daemon protocol class: read-only by design,
+  answers the `git-upload-pack` advertisement via a real
+  `git upload-pack --advertise-refs` child and refuses `git-receive-pack`
+  outright. No shipped entrypoint constructs it (library-level), and
+  completing a fetch over `git://` is open work (Known gaps)
+- `HttpSmartProtocol\Server` — request router for the Git smart-HTTP
+  clone/fetch/push flow and the LFS batch + object APIs, all behind the
+  same access-control gates
 - `HttpSmartProtocol\HttpListener` — the HTTP/1.1 socket server that
   hosts that router, started only by `serve --http`
 - `SSH\SSHServer` — a `ForceCommand`-style git-shell gate for host sshd
@@ -75,17 +84,18 @@ the live listener. Nothing forks.
 - `Support\PromisePool`, `Support\Version` — bounded-concurrency helper,
   phar build-stamp resolver
 - `bin/candy-git-server` — CLI: `serve` (refuses), `serve --http
-  --repo-root DIR` (starts the smart-HTTP read listener), `init` (writes
-  a config skeleton), `repo create|list|info` (works against the local
-  data dir), `user` subcommands (in-memory only — nothing persists),
-  `help`, `version`
+  --repo-root DIR` (starts the smart-HTTP listener), `init` (writes a
+  config skeleton), `repo create|list|info` (`--public` opts a repo into
+  anonymous reads via an on-disk visibility marker), `user
+  add|key|list|token` (persisted accounts, hashed passwords, expiring
+  proxy-token minting), `help`, `version`
 
 **What does not exist:** any TUI (there is no terminal UI of any kind); a
 listener on `:23231`/`:23232`/`:9418` by default (`serve --http` binds only
-the address you pass it); user storage; `git push` end-to-end (phase 2 —
-the wire refuses you with 403/501); LFS end-to-end proof (the batch routes
-ride the same listener but are pinned only at router level); an SSH or
-git-daemon transport that answers traffic.
+the address you pass it); a git-daemon transport that completes fetches
+(advertisement only) or takes pushes (refused by design); a shipped SSH
+host wiring (the `ForceCommand` dispatcher works end-to-end once your
+sshd routes git commands into it — the deployment recipe is open work).
 `Clipboard/Osc52.php` is a standalone OSC 52 encoder with zero consumers —
 it was written for a TUI that was never built.
 
@@ -182,7 +192,7 @@ run for real: the local-data CLI pieces, and the opt-in smart-HTTP read
 listener:
 
 ```bash
-# phase 1 read path: clone/fetch only — push stays a 501 refusal
+# clone, fetch, push (auth-gated) and LFS all ride this one listener
 candy-git-server serve --http --repo-root /var/lib/candy-git-server/repositories \
     --http-port 23232
 git clone http://localhost:23232/myrepo.git
@@ -192,10 +202,12 @@ git clone http://localhost:23232/myrepo.git
 `<dir>/.git` under it is registered under its basename), `--http-port N`
 (default `23232`), `--http-host H` (default `127.0.0.1`), `--config F`
 (the YAML config, defaults applied when absent). Exit codes: `1` for a
-flag or bind error, `0` after SIGINT/SIGTERM shutdown; anonymous reads of
-public repos are served, private repos answer 403, and `git push` fails on
-the wire. The CLI pieces that work without any listener operate on the
-local data directory:
+flag or bind error, `0` after SIGINT/SIGTERM shutdown. Anonymous reads
+are served only when `git.allow_anonymous_read: true` is configured
+(default off — fail-closed); unauthenticated requests for gated content
+answer 401 with a `WWW-Authenticate: Basic` challenge so git prompts for
+credentials. Push requires an account with write access. The CLI pieces
+that work without any listener operate on the local data directory:
 
 ```bash
 candy-git-server init /var/lib/candy-git-server   # writes config skeleton + dirs
@@ -204,9 +216,13 @@ candy-git-server repo list /var/lib/candy-git-server
 candy-git-server repo info myrepo /var/lib/candy-git-server
 ```
 
-`repo create` prints no clone URL on purpose: nothing listens for git
-traffic yet. `CANDY_GIT_SERVER_INITIAL_ADMIN_KEYS` is **not** read by any
-code (it appears only in a stale `init` next-steps string) — see Known gaps.
+`repo create` makes repos PRIVATE by default; pass `--public` to opt a
+repo into anonymous reads (this writes a visibility marker inside the git
+dir, which `serve --http --repo-root` reads back on every launch). The
+data path resolves as: explicit argument → `CANDY_GIT_SERVER_DATA_PATH`
+→ `sys_get_temp_dir()/candy-git-server`; the `/tmp` default is a
+convenience for trials, not a deploy location — set a real data path in
+production.
 
 ## SSH Access (not shipped)
 
@@ -214,9 +230,12 @@ No SSH server is wired. `SSH\SSHServer` is a `ForceCommand`-style
 git-shell gate: it parses a single
 `git-upload-pack`/`git-receive-pack <repo>` request, validates the repo name
 and the provided SSH public key against a `User`, and dispatches to
-`Git\UploadPack`/`Git\ReceivePack`. It does not implement the SSH wire
+`Git\UploadPack`/`Git\ReceivePack`, which delegate to the real git
+services over a bounded stdio pump — wired through host sshd today, clone
+and push both work end-to-end. It does not implement the SSH wire
 protocol — it expects to run under the host's OpenSSH daemon via
-`ForceCommand`, which is a deployment step nobody has shipped here.
+`ForceCommand`, and that deployment recipe is not shipped here (Known
+gaps).
 
 ### See also — SSH middleware (sugar-ssh-server)
 
@@ -238,9 +257,10 @@ run `serve --http`:
    `git upload-pack --stateless-rpc --advertise-refs` themselves
 2. Client POSTs `/repo.git/git-upload-pack` — the body is fed to
    `git upload-pack --stateless-rpc`; the pack comes back side-banded
-3. For push: Client POSTs `/repo.git/git-receive-pack` — answers **501**:
-   receive-pack is phase 2; the route refuses before touching the access
-   layer
+3. For push: Client POSTs `/repo.git/git-receive-pack` — after the write
+   gate, the body is relayed to a `git receive-pack --stateless-rpc`
+   child; oversized bodies answer 413, stalls answer 504, and hook
+   declines ride back in-band in the report-status stream
 
 Both advertisement routes are gated **before** a single ref byte is
 built: `git-upload-pack` requires `canRead` (anonymous passes only for
@@ -250,24 +270,24 @@ advertisement hole is gone). Authentication uses HTTP Basic auth or the
 `X-CandyGitServer-User` header — the header path additionally requires
 `user_trust_mode`, `trusted_proxies` and `auth_secret` to be configured
 (Server.php), otherwise the header is ignored; deactivated
-(`isActive === false`) users authenticate to nothing on either path. The
-Known gaps list below still records the plaintext-password storage and
-403-without-challenge shapes as open work — the read path deliberately
-ships no new credential surface.
+(`isActive === false`) users authenticate to nothing on either path. Passwords are stored only as `password_hash` digests (cleartext never
+touches disk), unauthenticated requests for gated content receive a real
+401 + `WWW-Authenticate` challenge, and proxy tokens carry an expiry
+(`user token` mints `<expiry>.<hmac>` values). Each request is logged
+one-per-line to stderr for operators.
 
 ## Git Protocol (daemon class only — not assembled)
 
 `Git\GitDaemon` is a class, not a service: nothing in the shipped CLI or
-composer scripts constructs it, and its wire behavior still deviates from
-the git-daemon spec (Known gaps #2 — its packet *framing* went through the
-shared `Git\PktLine` codec in r1024/githttp, but the request-line dialect,
-capabilities and negotiation gaps are open). The descriptions below
-document the class surface for whoever wires it, not a promise of working
-`git://` clones.
+composer scripts constructs it, and it serves the **advertisement only**
+— completing a fetch past the advertisement (want/have negotiation and
+pack transfer over `git://`) is open work, and pushes are refused at
+dispatch by design. The descriptions below document the class surface for
+whoever wires it, not a promise of working `git://` clones.
 
 **Class behavior:**
-- Uses `pcntl_fork()` to detach and become a session leader (`serve()`'s
-  `--daemon`-style argument path)
+- Runs synchronously in the calling process — it never forks or detaches;
+  daemonize with systemd/supervisord if you host it
 - Listens on `git.listen_addr` from `config.yaml` (default `:9418`)
 - Writes PID to the given file (or a caller-chosen default)
 - Handles `SIGTERM`, `SIGINT` (graceful shutdown) and `SIGHUP`
@@ -301,13 +321,14 @@ Loop::addTimer(3600, fn () => $daemon->shutdown());  // graceful stop from loop 
 Loop::run();
 ```
 
-Both modes share the same protocol code; `shutdown()` (or a
+Both modes share the same protocol code; `stop()` / `stopAsync()` (or a
 `SIGTERM`/`SIGINT`) tears down every loop registration — server stream,
 per-client streams, housekeeping timer — unsubscribes sugar-async
 `Subscriptions`, closes connections, and removes the PID file. The
-per-request work (ref advertisement, `git pack-objects`, `git
-update-ref`) is the same synchronous code the blocking mode runs; it
-executes inside the readiness callback.
+per-request work is spawning a real `git upload-pack --advertise-refs`
+child through `Git\StdioPipe` (bounded pump, TERM→KILL reap); requests
+past the pre-auth byte cap or deadline are closed, and capacity refusal
+kicks the NEWCOMER, never an established transfer.
 
 LFS batches have the same split: `LFSHandler::handleBatch()` is the
 synchronous path, `handleBatchAsync()` resolves the identical response
@@ -321,9 +342,8 @@ asynchronous.
 
 The smart-HTTP router implements the [Git LFS batch API](https://github.com/git-lfs/git-lfs/blob/main/docs/api/batch.md)
 plus basic object transfer when `lfs.enabled` is true (reachable through
-`serve --http`; the routes are pinned at router level only — no end-to-end
-LFS client proof ships in phase 1; repo keys use the `.git`-suffixed
-form):
+`serve --http`; the routes are pinned end-to-end at router level against
+recording backends):
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -339,7 +359,13 @@ Rules enforced at the HTTP boundary:
   verifies, and `upload` batches require write access — the same auth
   (Basic or `X-CandyGitServer-User`) as the pack endpoints.
 - Uploads are capped by `http.max_pack_bytes` (413 when exceeded) and the
-  body's SHA-256 must match the OID (422 on mismatch).
+  body's SHA-256 must match the OID (422 on mismatch); downloads refuse an
+  oversize object before it is read, and storage writes publish atomically
+  (temp + `0600` + rename, no residue on failure).
+- Batch requests validate every entry before touching storage: 64-hex
+  oids, sizes within the cap, operations from `{download, upload}`, and a
+  transfer list that must include `basic` — malformed entries answer with
+  per-object 400 errors, never storage probes.
 - TLS keys in config are refused at load (`config.tls_not_supported`) —
   HTTPS termination is out of scope for the class.
 
@@ -430,77 +456,53 @@ $repo->isPublic;           // false (BC readonly property)
 $repo->isVisiblePublic();  // false
 ```
 
-Collaborator lists live on the `Repo` object in memory. There is **no
-storage layer**: the CLI's `user add`/`user key` commands construct
-throwaway objects and persist nothing (`user list` always reports empty),
-and a host must re-supply users on every run until a store exists
-(Known gaps).
+Collaborator lists live on the `Repo` object in memory. Accounts do not:
+`user add`/`user key` persist through `UserStore` into
+`<data_path>/users.json`, and `serve --http` loads every stored account
+at launch.
 
-## Known gaps — open work on the remaining transports
+## Known gaps — open work
 
-Non-exhaustive inventory from the docs-review-1023 audit, renumbered
-2026-10-24 (r1024/githttp, owner ruling 1b phase 1). Fixed since the
-audit: the binary pkt-line framing (one `Git\PktLine` codec replaced all
-four emitters — the byte-exact pins that deliberately recorded the broken
-shape were flipped with dated comments), the unauthenticated receive-pack
-advertisement (both advertisement routes are now gated before a single
-ref byte is built), and the `isActive` skip on the HTTP auth path. Line
-numbers below are as of this commit. The daemon and SSH transports remain
-unreachable from the shipped CLI — plain `serve` refuses them — which is
-why those phases still carry the scaffold label.
+Re-derived 2026-11-03 against the live tree, after the review-driven
+repair pass. Fixed and covered by pins since the earlier audit: pkt-line
+framing through one codec, the unauthenticated receive-pack advertisement,
+the `isActive` skip, push wired over smart-HTTP with authorization ahead
+of the body, plaintext passwords replaced by `password_hash` digests,
+replayable proxy tokens replaced by expiring HMACs (with a mint command),
+401 + `WWW-Authenticate` challenges, LFS batch validation parity and
+atomic size-capped object storage, persisted accounts and repo
+visibility, the daemon's blocking loop / capacity eviction / pre-auth
+caps, SSH services delegating to real git, argv-only bounded subprocesses
+everywhere, and the extension manifest. What remains open:
 
-1. **Server assembly partial.** `serve --http` constructs
-   `HttpSmartProtocol\Server` + `HttpSmartProtocol\HttpListener` for the
-   read path (phase 1); nothing yet assembles `GitDaemon` or `SSHServer`,
-   and the old `serve` command's simulated success (banner + exit 0)
-   remains replaced by the refusal (docs-fix-1023 N4). Push over HTTP is
-   a pinned 501 refusal — receive-pack wiring is phase 2.
-2. **git-daemon dialect deviates from spec**: bare request line without
-   the pkt-framed host/user delimiter (`Git/GitDaemon.php:575`), no
-   side-band multiplexing or want/have depth negotiation, capabilities
-   joined with `|` where the spec uses NUL/space separators
-   (`Git/GitDaemon.php:813`). Packet *framing* went through the shared
-   codec in r1024/githttp; these dialect gaps remain.
-3. **Plaintext password comparison**: `User::$password` stores the raw
-   string and is compared with `hash_equals` — no hashing
-   (`HttpSmartProtocol/Server.php:716`, `User.php`). The phase-1 read
-   path ships no new credential surface; fixing this is phase-2 push
-   groundwork.
-4. **Proxy HMAC replayable**: the signature covers only the username — no
-   timestamp, nonce, or request binding (`HttpSmartProtocol/Server.php:782-792`).
-5. **403 without `WWW-Authenticate`**: private repos answer 403 with no
-   challenge header, so git clients never prompt for credentials
-   (`HttpSmartProtocol/Server.php:246`, `:281`) — live behavior of the
-   phase-1 read path under the anonymous-public doctrine.
-6. **Async receive-pack race**: the loop can dispatch a push before the
-   pack body has arrived, yielding `unpack no packfile received`
-   (`Git/GitDaemon.php:424`, `:848-853`).
-7. **`SIGHUP` shuts down instead of reloading** — all three signals share
-    one handler (`Git/GitDaemon.php:1151`).
-8. **No user/repo persistence at all**: `user add`/`user key` discard
-    their objects (bin CLI, `cmdUserAdd`/`cmdUserKey`), `db.driver`/
-    `db.data_source` config is parsed but consumed nowhere, and
-    `CANDY_GIT_SERVER_INITIAL_ADMIN_KEYS` is read by no code (it survives
-    only in a stale `init` hint, `lang/en.php` `cli.next_step_3`).
-9. **Extension reality mismatch**: the daemon uses ext-sockets
-    (`Git/GitDaemon.php:1078-1093`) without declaring `ext-sockets`
-    (composer.json requires only json/openssl/ssh2), and `ext-ssh2` is
-    declared but has zero call sites (vestigial).
-10. **`AccessControl::allowAnonymousRead()` is hardcoded `true`** with no
-    config knob (`AccessControl.php:78-81`) — `serve --http` therefore
-    serves every public repo to anyone by design (phase-1 doctrine); a
-    knob belongs with the auth hardening.
-11. **`User::keysMatch` requires the comment field to match verbatim**
-    (whitespace-normalized) — a key offered without its stored comment
-    fails; fail-closed but surprising (`User.php:208-213`).
-12. **`max_connections` kicks the oldest client silently** — no warning,
-    no error packet (`Git/GitDaemon.php:351-352`; the HTTP listener is
-    one-request-per-connection and carries no concurrency throttle).
-13. **`composer serve --daemon …` flags are intercepted by composer**;
-    use `php bin/candy-git-server …` directly.
-14. **Stale CLI strings**: `help` and the `init` next-step lines still
-    describe a starting server; per the i18n law they cannot be fixed in
-    one locale, so all 16 files must be touched together (deferred).
+1. **git:// completes nothing past the advertisement.** `GitDaemon`
+   answers `git-upload-pack` advertisement via a real git child and
+   refuses `git-receive-pack` outright; want/have negotiation and pack
+   transfer over `git://` (stateless-rpc relay per connection) is open
+   work.
+2. **No shipped SSH deployment.** The `ForceCommand` dispatcher and its
+   delegated git services work end-to-end over inherited stdio, but the
+   sshd `command=` wiring recipe (and account key provisioning into
+   `authorized_keys` semantics) is operator work not documented here yet.
+3. **No process manager.** `serve --http` is one foreground process:
+   `Jobs\MirrorPuller` has no built-in host (call `runOnce()` from cron
+   or `attach()` to your loop), and `StatsServer` does not start with the
+   listener.
+4. **Dead config keys.** `log_format`, `ssh.client_key_path` and
+   `lfs.ssh_enabled` are parsed but read by nothing. Live keys worth
+   knowing: `git.allow_anonymous_read` (default false), `git.max_timeout`
+   (stateless child deadline), `http.max_pack_bytes` (the single
+   request-body cap shared by socket and router), `http.public_url`
+   (LFS hrefs), `http.user_trust_mode` + `http.trusted_proxies` +
+   `http.auth_secret` (proxy identity).
+5. **No TLS termination.** `tls.key_path`/`tls.cert_path` refuse at
+   config load (`config.tls_not_supported`) by design — terminate HTTPS
+   in a reverse proxy.
+6. **`SIGHUP` shuts down instead of reloading** — all three signals share
+   one handler.
+7. **Locale coverage of CLI help copy** — the en strings are the reference
+   and every key exists in all 16 locales, but a few translated help
+   lines lag en wording changes.
 
 ## Shared foundations
 

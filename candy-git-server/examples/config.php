@@ -23,8 +23,6 @@ echo "SSH listen  : {$config->sshListenAddr}\n";
 echo "SSH pub URL : {$config->sshPublicUrl}\n";
 echo "Git listen  : {$config->gitListenAddr}\n";
 echo "HTTP listen : {$config->httpListenAddr}\n";
-echo "DB driver   : {$config->dbDriver}\n";
-echo "DB path     : {$config->dbPath()}\n";
 echo "LFS enabled : " . ($config->lfsEnabled ? 'yes' : 'no') . "\n";
 echo "Log format  : {$config->logFormat}\n";
 
@@ -66,7 +64,6 @@ try {
     echo "SSH listen   : {$cfg->sshListenAddr}\n";
     echo "Git listen   : {$cfg->gitListenAddr}\n";
     echo "HTTP listen  : {$cfg->httpListenAddr}\n";
-    echo "DB path      : {$cfg->dbPath()}\n";
     echo "LFS SSH      : " . ($cfg->lfsSshEnabled ? 'enabled' : 'disabled') . "\n";
 } catch (\Throwable $e) {
     echo "Error loading config: {$e->getMessage()}\n";

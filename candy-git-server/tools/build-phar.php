@@ -152,7 +152,7 @@ if (!is_file($package . '/vendor/autoload.php')) {
 /** Roots packaged at the archive, verbatim. Everything else stays out. */
 const INCLUDE_ROOTS = ['bin', 'src', 'lang', 'vendor'];
 /** Loose files packaged at the archive root. */
-const INCLUDE_FILES = ['LICENSE'];
+const INCLUDE_FILES = ['LICENSE', 'README.md'];
 /** Never shipped, at any depth. */
 const EXCLUDE_SEGMENTS = ['.git', '.phpunit.cache', 'node_modules'];
 

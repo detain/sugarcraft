@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-git-server",
-    "description": "Scaffold library pieces for a self-hostable Git server: config, repo, user/access-control, git-daemon, smart-HTTP, ForceCommand SSH-gate and LFS classes, each individually tested. No assembled server ships yet — the serve command refuses; see README 'Known gaps'. Modeled on the charmbracelet/soft-serve Go project.",
+    "description": "Self-hostable Git server: smart-HTTP clone/fetch/push plus LFS run today via 'serve --http' behind fail-closed access gates; config, accounts, repos, git-daemon advertisement and a ForceCommand SSH dispatcher round out the library. Modeled on the charmbracelet/soft-serve Go project.",
     "type": "project",
     "license": "MIT",
     "keywords": [

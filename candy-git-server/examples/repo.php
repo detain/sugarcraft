@@ -25,7 +25,6 @@ $config = Config::fromDefaults();
 echo "=== Config ===\n";
 echo "  reposPath: {$config->reposPath()}\n";
 echo "  sshPath  : {$config->sshPath()}\n";
-echo "  dbPath   : {$config->dbPath()}\n\n";
 
 // Build a public, push-allowed Repo with one collaborator.
 $repo = Repo::new('hello-world', $config->reposPath() . '/hello-world.git')
