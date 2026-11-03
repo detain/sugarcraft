@@ -38,6 +38,10 @@ final class SqliteDatabase implements DatabaseInterface
     /** @return list<string> */
     public function tables(): array
     {
+        if ($this->pdo === null) {
+            return [];
+        }
+
         $rows = $this->pdo->query(
             "SELECT name FROM sqlite_master "
             . "WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' "
@@ -56,6 +60,10 @@ final class SqliteDatabase implements DatabaseInterface
     /** @return list<array<string,mixed>> */
     public function rows(string $table, int $limit = 100): array
     {
+        if ($this->pdo === null) {
+            return [];
+        }
+
         $sql = sprintf('SELECT * FROM %s LIMIT %d', Identifier::quote(Flavor::Sqlite, $table), $limit);
         $stmt = $this->pdo->query($sql);
         return $stmt === false ? [] : $stmt->fetchAll(\PDO::FETCH_ASSOC);
@@ -77,16 +85,28 @@ final class SqliteDatabase implements DatabaseInterface
 
     public function lastInsertId(): string|int
     {
+        if ($this->pdo === null) {
+            return 0;
+        }
+
         return $this->pdo->lastInsertId();
     }
 
     public function quote(string $value): string
     {
+        if ($this->pdo === null) {
+            throw new \RuntimeException('Cannot quote without connection');
+        }
+
         return $this->pdo->quote($value);
     }
 
     public function exec(string $sql): int
     {
+        if ($this->pdo === null) {
+            return 0;
+        }
+
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute();
         return $stmt->rowCount();
@@ -94,11 +114,20 @@ final class SqliteDatabase implements DatabaseInterface
 
     public function close(): void
     {
+        // Post-close contract (D-M32, 2026-11-03): every member access is
+        // guarded like MysqlDatabase's — list readers answer [] / 0, version
+        // readers say 'unknown', quote() fails loudly — so a late call after
+        // teardown degrades like every other driver instead of dying with a
+        // "call to member function on null" fatal.
         $this->pdo = null;
     }
 
     public function serverVersion(): string
     {
+        if ($this->pdo === null) {
+            return 'SQLite version unknown';
+        }
+
         return 'SQLite version ' . ($this->pdo->query('SELECT sqlite_version()')?->fetchColumn() ?? 'unknown');
     }
 

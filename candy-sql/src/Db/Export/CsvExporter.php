@@ -12,6 +12,12 @@ use SugarCraft\Sql\Db\Identifier;
  * CSV import/export service using a DatabaseInterface instance.
  *
  * Driver-agnostic, safe SQL (no eval, no password logging).
+ *
+ * Exception copy carries file and table names VERBATIM (D-M26, 2026-11-03):
+ * htmlspecialchars is web-template armor, and in a CLI message it mangled
+ * the very name the user must hunt down ("Bob&#039;s data.csv"). Terminal
+ * safety of server- and user-sourced text is the renderer's contract, not
+ * this one - see CellValue::sanitize at the paint choke.
  * Produces RFC-4180 compliant CSV with formula-injection protection.
  * Mirrors charmbracelet/lazysql CSV export logic.
  */
@@ -54,24 +60,24 @@ final class CsvExporter
     public function importCsv(string $path, string $table): void
     {
         if (!is_file($path)) {
-            throw new \RuntimeException("CSV file not found: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
+            throw new \RuntimeException("CSV file not found: " . $path);
         }
 
         $handle = fopen($path, 'r');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open CSV file: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
+            throw new \RuntimeException("Cannot open CSV file: " . $path);
         }
 
         try {
             $headers = fgetcsv($handle);
             if ($headers === false || $headers === null) {
-                throw new \RuntimeException("Cannot read CSV headers from: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
+                throw new \RuntimeException("Cannot read CSV headers from: " . $path);
             }
 
             $headers = array_map('trim', $headers);
             $columnCount = count($headers);
             if ($columnCount === 0) {
-                throw new \RuntimeException("CSV file has no columns: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
+                throw new \RuntimeException("CSV file has no columns: " . $path);
             }
 
             // Build column list with identifier quoting (MySQL backtick standard)
@@ -116,7 +122,7 @@ final class CsvExporter
     {
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open file for writing: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
+            throw new \RuntimeException("Cannot open file for writing: " . $path);
         }
 
         try {
@@ -171,7 +177,7 @@ final class CsvExporter
 
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open file for writing: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
+            throw new \RuntimeException("Cannot open file for writing: " . $path);
         }
 
         try {
@@ -227,7 +233,7 @@ final class CsvExporter
                 return array_keys($result[0]);
             }
         } catch (\PDOException $e) {
-            throw new \RuntimeException("Table not found: " . htmlspecialchars($table, ENT_QUOTES, 'UTF-8'));
+            throw new \RuntimeException("Table not found: " . $table);
         }
 
         // LIMIT 0 returned empty - try LIMIT 1 to get sample row
@@ -238,7 +244,7 @@ final class CsvExporter
                 return array_keys($sampleResult[0]);
             }
         } catch (\PDOException $e) {
-            throw new \RuntimeException("Table not found: " . htmlspecialchars($table, ENT_QUOTES, 'UTF-8'));
+            throw new \RuntimeException("Table not found: " . $table);
         }
 
         // Both returned empty - verify table exists
@@ -246,7 +252,7 @@ final class CsvExporter
             $safeTable = Identifier::quote($this->quoteFlavor(), $table);
             $this->db->query("SELECT 1 FROM {$safeTable} LIMIT 1");
         } catch (\PDOException $e) {
-            throw new \RuntimeException("Table not found: " . htmlspecialchars($table, ENT_QUOTES, 'UTF-8'));
+            throw new \RuntimeException("Table not found: " . $table);
         }
 
         // Table exists but we couldn't get columns (shouldn't happen for non-empty tables)

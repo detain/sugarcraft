@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sql\Admin\History;
 
+use SugarCraft\Sql\Admin\QueryLogger;
 use SugarCraft\Sql\Admin\StatusSnapshot;
 use SugarCraft\Sql\Admin\StatusSnapshotProviderInterface;
 
@@ -33,7 +34,17 @@ final class HistoryRecorder implements StatusSnapshotProviderInterface
      */
     public function record(StatusSnapshot $snapshot): void
     {
-        $this->store->save($snapshot);
+        // The recorder sits inside the admin poll promise (D-M11, 2026-11-03).
+        // A persist failure - corrupt file, disk full, foreign owner - must
+        // cost the session its audit rows, NEVER the live dashboard: an
+        // exception thrown here escaped the ->then callback as an unhandled
+        // rejection and froze admin refresh for good. In-memory state stays
+        // authoritative; the error is logged once per call for diagnosis.
+        try {
+            $this->store->save($snapshot);
+        } catch (\Throwable $e) {
+            QueryLogger::log('error', 'history-record', 0, $e->getMessage());
+        }
         $this->lastSnapshot = $snapshot;
         $this->lastSnapshotTs = $snapshot->ts;
     }

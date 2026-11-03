@@ -52,6 +52,23 @@ final class CsvExporterTest extends TestCase
         $this->exporter->importCsv('/nonexistent/path/to/file.csv', 'users');
     }
 
+    /**
+     * D-M26 (2026-11-03): exception copy used to run names through
+     * htmlspecialchars - web-template armor in a CLI sentence, so the
+     * file "Bob's data.csv" was reported as "Bob&#039;s data.csv" and
+     * users hunted a file that never existed. Copy is verbatim now.
+     */
+    public function testMissingFileCopyCarriesTheNameVerbatim(): void
+    {
+        try {
+            $this->exporter->importCsv("/tmp/Bob's data.csv", 'users');
+            $this->fail('expected RuntimeException');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString("Bob's data.csv", $e->getMessage());
+            $this->assertStringNotContainsString('&#039;', $e->getMessage());
+        }
+    }
+
     public function testImportCsvHandlesEmptyValuesAsNull(): void
     {
         $csvPath = tempnam(sys_get_temp_dir(), 'csv');

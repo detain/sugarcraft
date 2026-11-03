@@ -43,15 +43,57 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         // left untouched.
         $fileCreated = !\is_file($dbPath);
         $this->db = new \SQLite3($dbPath);
-        if ($dirCreated) {
-            @\chmod($dir, 0700);
-        }
-        if ($fileCreated) {
-            @\chmod($dbPath, 0600);
-        }
         $this->db->busyTimeout(5000);
         $this->db->exec('PRAGMA journal_mode = WAL');
+
+        // Modes are settled AFTER the WAL pragma (D-M9, 2026-11-03): WAL
+        // creates the -wal and -shm sidecars, and a chmod that ran before
+        // the pragma could never see them - the main file went private
+        // while its write-ahead twin stayed world-readable at the umask.
+        // @-suppression is gone too: a chmod that fails means another
+        // uid owns the store, and silently continuing to write server
+        // variables through it is the opposite of the fail-loud law.
+        if ($dirCreated) {
+            self::setPrivateMode($dir, 0700, created: true);
+        }
+        self::setPrivateMode($dbPath, 0600, created: $fileCreated);
+        foreach ([$dbPath . '-wal', $dbPath . '-shm'] as $sidecar) {
+            if (\is_file($sidecar)) {
+                self::setPrivateMode($sidecar, 0600, created: true);
+            }
+        }
+
         $this->init();
+    }
+
+    /**
+     * Force a private mode on the history store's own files.
+     *
+     * A file this constructor created must land exactly on $mode; a
+     * pre-existing file is only TIGHTENED (group/world bits cleared), never
+     * loosened - the store may hold server-variable values that were made
+     * readable by an earlier, less careful build.
+     */
+    private static function setPrivateMode(string $path, int $mode, bool $created): void
+    {
+        \clearstatcache(true, $path);
+        $perms = \fileperms($path);
+        if ($perms === false) {
+            return; // vanished between open and mode-set - SQLite holds its own handle
+        }
+        $current = $perms & 0777;
+        if (!$created && ($current & 0077) === 0) {
+            return; // already private - leave stranger files exactly as found
+        }
+        $target = $created ? $mode : ($current & ~0077);
+        if ($current === $target) {
+            return;
+        }
+        if (!\chmod($path, $target)) {
+            throw new \RuntimeException(
+                "Cannot secure history store file: {$path} (mode " . \substr(\sprintf('%o', $target), -4) . ')'
+            );
+        }
     }
 
     private function init(): void
@@ -77,6 +119,13 @@ final class SqliteHistoryStore implements HistoryStoreInterface
             'INSERT INTO history (ts, recorded_at, variables)
              VALUES (:ts, :recorded_at, :variables)'
         );
+        // Corrupt-store defense (D-M11): prepare() answers false for a file
+        // SQLite cannot read as a database; the old code died inside
+        // bindValue() on null, and an un-rejected promise in the admin poll
+        // bricked live refresh for the whole session. Fail with a sentence.
+        if ($stmt === false) {
+            throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+        }
         $stmt->bindValue(':ts', $snapshot->ts, \SQLITE3_FLOAT);
         $stmt->bindValue(':recorded_at', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
         $stmt->bindValue(':variables', \json_encode($snapshot->variables), \SQLITE3_TEXT);
@@ -99,6 +148,9 @@ final class SqliteHistoryStore implements HistoryStoreInterface
              WHERE ts >= :since AND ts <= :until
              ORDER BY ts ASC'
         );
+        if ($stmt === false) {
+            throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+        }
         $stmt->bindValue(':since', $sinceEpoch, \SQLITE3_TEXT);
         $stmt->bindValue(':until', $untilEpoch, \SQLITE3_TEXT);
 
@@ -119,6 +171,9 @@ final class SqliteHistoryStore implements HistoryStoreInterface
     public function count(): int
     {
         $r = $this->db->query('SELECT COUNT(*) FROM history');
+        if ($r === false) {
+            throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+        }
         $row = $r->fetchArray();
         return (int) ($row[0] ?? 0);
     }
@@ -128,6 +183,9 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         $stmt = $this->db->prepare(
             'DELETE FROM history WHERE ts < :before'
         );
+        if ($stmt === false) {
+            throw new \RuntimeException('History store is unusable: ' . $this->db->lastErrorMsg());
+        }
         $stmt->bindValue(':before', $before->format('U.u'), \SQLITE3_TEXT);
         $stmt->execute();
         $changes = $this->db->changes();

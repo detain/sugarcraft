@@ -85,7 +85,19 @@ try {
 
     $historyRecorder = null;
     if ($historyPath !== null) {
-        $historyRecorder = new HistoryRecorder(new SqliteHistoryStore($historyPath));
+        // D-M11: the history store is an offline audit trail, not a boot
+        // dependency. A corrupt or unsecureable file warns once and the
+        // session runs without snapshots - the whole client used to exit 2
+        // over an unreadable $HOME/.candy-sql/history.db.
+        try {
+            $historyRecorder = new HistoryRecorder(new SqliteHistoryStore($historyPath));
+        } catch (\Throwable $e) {
+            fwrite(STDERR, sprintf(
+                "candy-sql: history recording DISABLED (%s): %s\n",
+                CellValue::sanitize($historyPath),
+                CellValue::sanitize($e->getMessage() !== '' ? $e->getMessage() : $e::class),
+            ));
+        }
     }
 
     // One-time loud notice BEFORE the alt screen swallows the shell: a

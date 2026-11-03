@@ -15,9 +15,12 @@ final class ConnectionFactory
     /**
      * Supported database drivers.
      *
+     * Public so the README's driver table and consumers can cite the
+     * authoritative list instead of hand-copying it (review m3).
+     *
      * @var list<string>
      */
-    private const SUPPORTED_DRIVERS = ['sqlite', 'mysql', 'pgsql'];
+    public const SUPPORTED_DRIVERS = ['sqlite', 'mysql', 'pgsql'];
 
     /**
      * Parse a DSN string into a ConnectionConfig.
@@ -234,10 +237,24 @@ final class ConnectionFactory
     }
 
     /**
+     * Option names accepted by fromArgv().
+     *
+     * @var list<string>
+     */
+    private const ARGV_OPTIONS = ['dsn', 'driver', 'db', 'host', 'port', 'user', 'pass', 'ssl-mode'];
+
+    /**
      * Parse argv array into key-value map.
+     *
+     * Unknown --flags fail loudly (review m9): silently swallowing them
+     * turned typos like --sslmode=require into a quiet downgrade to the
+     * default, and --db name=mydb into a missing-argument error three
+     * layers away. Positional arguments are skipped - the bin script
+     * resolves those before calling fromArgv().
      *
      * @param array<string> $argv
      * @return array<string, string>
+     * @throws \InvalidArgumentException On an unknown option or a valueless flag
      */
     private static function parseArgv(array $argv): array
     {
@@ -251,10 +268,16 @@ final class ConnectionFactory
             $arg = substr($arg, 2);
 
             if (!str_contains($arg, '=')) {
-                continue;
+                if (in_array($arg, self::ARGV_OPTIONS, true)) {
+                    throw new \InvalidArgumentException("Option --{$arg} requires a value");
+                }
+                throw new \InvalidArgumentException("Unknown option: --{$arg}");
             }
 
             [$key, $value] = explode('=', $arg, 2);
+            if (!in_array($key, self::ARGV_OPTIONS, true)) {
+                throw new \InvalidArgumentException("Unknown option: --{$key}");
+            }
             $args[$key] = $value;
         }
 

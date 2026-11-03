@@ -42,6 +42,7 @@ use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Db\MysqlDatabase;
 use SugarCraft\Sql\Db\PreviewQuery;
+use SugarCraft\Sql\Db\ReconnectException;
 use SugarCraft\Sql\App\AdminState;
 use SugarCraft\Sql\App\AppBuilder;
 use SugarCraft\Sql\App\BrowseState;
@@ -471,7 +472,7 @@ final class App implements Model
                 'query' => $this->query->withEditor($this->editor()->reset())->withHistory($history),
                 'ui' => $this->ui->withError(null)->withStatus(count($rows) . ' rows'),
             ]);
-        } catch (\PDOException $e) {
+        } catch (\PDOException | ReconnectException $e) {
             return $this->mutate([
                 'query' => $this->query->withHistory($history),
                 'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
@@ -801,7 +802,7 @@ final class App implements Model
                     ->withRowsLoading(false),
                 'ui' => $this->ui->withError(null)->withStatus(count($rows) . ' rows'),
             ]);
-        } catch (\PDOException $e) {
+        } catch (\PDOException | ReconnectException $e) {
             return $this->mutate([
                 'browse' => $this->browse->withRowsLoading(false),
                 'ui' => $this->ui->withError($e->getMessage())->withStatus(null),
