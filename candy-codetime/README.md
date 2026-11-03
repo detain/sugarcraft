@@ -27,21 +27,34 @@ dashboard is a SugarCraft TUI that reads whichever backend you selected.
 
 ```bash
 composer global require sugarcraft/candy-codetime
-# the binary lands in the composer global bin dir (~/.composer/vendor/bin):
-~/.composer/vendor/bin/candy-codetime push myproj php src/Main.php 120
+# the global bin dir varies by composer version and platform; ask composer:
+BIN="$(composer global config bin-dir --absolute)"
+"$BIN/candy-codetime" push myproj php src/Main.php 120
 ```
 
 Or from a clone: `composer install && php bin/candy-codetime`.
+
+## Quick start
+
+```bash
+candy-codetime push myproj php src/Main.php 120   # record one heartbeat
+candy-codetime                                    # open the dashboard
+candy-codetime export csv 30                      # headless dump of 30 days
+```
+
+`php examples/dashboard.php` seeds a throwaway data directory with a pretend
+week and opens the dashboard, so you can see the TUI before recording
+anything real.
 
 ## Commands
 
 | Command | Arguments | What it does |
 |---------|-----------|--------------|
-| `dashboard` | — | Open the TUI (reads the selected backend). Default when no command is given. |
+| `dashboard` | — | Open the TUI (reads the selected backend). Default when no command is given. Without an interactive terminal it refuses with a pointer to `export` instead of hanging. |
 | `push` | `<project> <language> <file> [duration]` | Record one heartbeat. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0. |
-| `milestone` | `<add\|list> [name] [description]` | Manage release markers. Milestones live only in SQLite, so this command forces the sqlite backend regardless of `--backend`. |
+| `milestone` | `<add\|list> [name] [description]` | Manage release markers. Milestones live only in SQLite, so this command forces the sqlite backend regardless of `--backend`; the dashboard never displays them. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]). |
-| `gaps` | `[days]` | List untracked stretches longer than 300 seconds within the last N days (default 7). |
+| `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7). |
 | `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data. **The SQLite database is not archived**: a byte copy of a live `.db` is a torn snapshot, so sqlite users must use `sqlite3 <db> ".backup <dest>"` or `VACUUM INTO '<dest>'` (the CLI prints this reminder when a `.db` is present). |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
@@ -50,17 +63,25 @@ Options (accepted before or after the command):
 
 | Option / env | Effect |
 |--------------|--------|
-| `--backend=file\|sqlite` | Storage for `push`/`export`/`gaps`/`dashboard` (default: `file`). The sqlite backend needs the `sqlite3` PHP extension; without it the CLI exits with a clear message instead of crashing. |
+| `--backend=file\|sqlite` | Storage for `push`/`export`/`gaps`/`dashboard` (default: `file`). Both forms work: `--backend=sqlite` and `--backend sqlite`. The sqlite backend needs the `sqlite3` PHP extension; without it the CLI exits with a clear message instead of crashing. |
 | `CANDY_CODETIME_DIR=<path>` | Data directory (default `$XDG_DATA_HOME/candy-codetime`, falling back to `~/.local/share/candy-codetime` — note that an unset `HOME` resolves to `./.local/share/…`). |
+
+A storage failure ends any command with a one-line message on stderr and exit
+status 1 — never a bare PHP fatal.
 
 Legacy `SUGARTICK_*` environment variables are still read (with a deprecation
 notice) and the old default data directory is migrated once on first launch.
+CLI messages follow `LC_ALL`/`LC_MESSAGES`/`LANG` across the 16 shipped
+locales.
 
 ## Ignoring files
 
-A `.sugartrackignore` in the current directory, or in the tracked file's
-directory, holds glob patterns (one per line); a `push` whose file matches is
-reported as skipped and never stored.
+A `.sugartrackignore` in the current directory — or, failing that, in the
+tracked file's own directory (the first found wins) — holds glob patterns one
+per line; a `push` whose file matches is reported as skipped and never
+stored. A bare pattern (`secret.log`) matches by file name at any depth; a
+path pattern (`vendor/*`) matches below any `vendor` directory, whether the
+tracked path is relative or absolute.
 
 ## Data layout
 
@@ -71,18 +92,43 @@ $CANDY_CODETIME_DIR/
 <dir>-backups/          created by `backup`
 ```
 
+Each line of a day file is one JSON object:
+`{"time": <unix seconds>, "project": <string>, "language": <string>, "file":
+<absolute path>, "duration": <seconds>, "tags": <array>}`. `tags` is always
+empty for now — no CLI command sets one yet, and readers should ignore
+unknown keys.
+
+Day files are keyed by the machine's **local** calendar date, so history
+written while crossing time zones stays filed under the date it was tracked.
+Nothing is ever deleted: beats accumulate until you remove them by hand or
+archive them with `backup` (which copies and never trims).
+
+### Fixing a bad entry
+
+There is no edit command, and that is deliberate — the store is plain files.
+With the file backend, close the dashboard (or press `r` afterwards), fix or
+drop the offending JSON line in the day file, and reload. With the sqlite
+backend, open the database with `sqlite3` and fix the row in `heartbeats`.
+
 ### Privacy
 
 The data directory and every file in it are owner-private: directories are
 `0700`, day files and the database are `0600`, created under a narrowed umask
 so they are never world-readable for an instant — and a directory or file left
 loose by an older version is tightened on the next write (if that fails, the
-write aborts rather than storing your paths in the open). The `backup` archive
+write aborts rather than storing your paths in the open — and every
+`print`/`echo` of a stored project or file name goes through a control-byte
+strip, so a doctored store cannot paint escape sequences into your terminal).
+The `backup` archive
 under `<dir>-backups/` is held to the same contract: it is created `0700` and
 every copied day file is tightened to `0600`, because an archive of those files
 is the same path map one directory over. Heartbeats carry absolute file paths
-and project names; treat the directory accordingly. `NO_COLOR=1` renders the
-dashboard without any colour tints.
+and project names; treat the directory accordingly.
+
+Colour is driven by the detected `ColorProfile` for the terminal: a profile
+below 256-colour (which `NO_COLOR=1`, `CLICOLOR=0` and `TERM=dumb` all land
+on) renders the dashboard without any tints, and a resize or capability
+report mid-session updates it live.
 
 ## Keys (dashboard)
 
@@ -94,8 +140,11 @@ dashboard without any colour tints.
 | `q` / `Esc`    | Quit                         |
 | `Ctrl+C`       | Quit                         |
 
-The two ranking panes render side by side on terminals ≥56 columns and stack
-vertically below that; the timeline sparkline follows the terminal width.
+The two ranking panes render side by side from 62 columns up (two 30-cell
+frames plus a gap) and stack vertically below that. Every dashboard line is
+clipped to the terminal width — frames fill it exactly, nothing wraps into
+garbage on narrow shells, and days that cannot be drawn are counted
+("+N earlier") rather than silently dropped.
 
 ## Architecture
 
@@ -106,8 +155,8 @@ vertically below that; the timeline sparkline follows the terminal width.
 | `Storage\SqliteBackend` | Optional indexed storage; implements `HeartbeatReader`; also owns milestones. |
 | `Storage\HeartbeatReader` | The read contract (`loadRange`/`invalidate`) both storages satisfy — what lets every subcommand honour `--backend` uniformly. |
 | `Stats` | Pure fold — totals per project / language + per-day timeline buckets. |
-| `Dashboard` | SugarCraft Model — window shifts (`←/→`), reload (`r`), quit; reads through a `HeartbeatReader`. |
-| `Renderer` | View — header + ranking panes + Sparkline timeline (SugarCharts); NO_COLOR aware. |
+| `Dashboard` | SugarCraft Model — window shifts one day per press (`←/→`), reload (`r`), quit; reads through a `HeartbeatReader`. |
+| `Renderer` | View — header + ranking panes + Sparkline timeline (SugarCharts); colour-ladder aware (honours the detected `ColorProfile`). |
 | `Report\GapsReport` | Pure gap detection over sorted heartbeats (threshold 300 s). |
 | `Backup\AutoBackup` | Copy-only archiver; throws loudly on any failed copy. |
 | `Ignore\SugarTrackIgnore` | `.sugartrackignore` matcher used by `push`. |

@@ -55,7 +55,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-codetime"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-codetime" alt="CandyCodetime code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Tracks edit-time per project / language to a local append-only JSONL file — or to an optional embedded SQLite backend via <code>--backend=sqlite</code> (no cloud, no database server either way) — and renders a SugarCharts-driven dashboard. Editor plugins record heartbeats with the <code>push</code> CLI subcommand; the dashboard reads whichever backend you picked.</p>
+    <p class="lede" style="margin-top: 28px;">Tracks edit-time per project / language to a local append-only JSONL file — or to an optional embedded SQLite backend via <code>--backend=sqlite</code> (no cloud, no database server either way) — and renders a SugarCharts-driven dashboard. Editor integrations can record heartbeats with the <code>push</code> CLI subcommand; the dashboard reads whichever backend you picked.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codetime</code></pre>
@@ -69,17 +69,18 @@ candy-codetime
 
 # Override the data dir:
 CANDY_CODETIME_DIR=/var/data/codetime candy-codetime</code></pre>
-<p>Formerly shipped as <code>sugar-tick</code>: the old <code>SUGARTICK_DIR</code> // @rename-keep
-env var and the <code>~/.local/share/sugar-tick</code> data directory are still // @rename-keep
+<p>Formerly shipped as <code>sugar-tick</code>: the old <code>SUGARTICK_DIR</code>
+env var and the <code>~/.local/share/sugar-tick</code> data directory are still
 honoured once and migrated automatically on first launch.</p> <!-- @rename-keep -->
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Heartbeat schema</strong><span><code>{time, project, language, file, duration}</code> — JSONL, one beat per line.</span></div>
+      <div class="feature"><strong>Heartbeat schema</strong><span><code>{time, project, language, file, duration, tags}</code> — JSONL, one beat per line; <code>tags</code> is reserved (no CLI command sets one yet).</span></div>
       <div class="feature"><strong>Per-day files</strong><span>Storage is one <code>YYYY-MM-DD.jsonl</code> per day — append-only, easy to ship to cold storage.</span></div>
       <div class="feature"><strong>Top projects + languages</strong><span>Two ranking panes side-by-side, sorted by total time descending.</span></div>
       <div class="feature"><strong>Daily timeline</strong><span>SugarCharts <code>Sparkline</code> driven by per-day minute buckets.</span></div>
-      <div class="feature"><strong>Window navigation</strong><span><code>←</code> / <code>→</code> shift the 7-day window; <code>r</code> reloads.</span></div>
+      <div class="feature"><strong>Window navigation</strong><span><code>←</code> / <code>→</code> shift the 7-day window one day per press; <code>r</code> reloads.</span></div>
+      <div class="feature"><strong>Milestones</strong><span><code>milestone add|list</code> markers — sqlite-only, and the dashboard never shows them.</span></div>
       <div class="feature"><strong>Pure folding</strong><span><code>Stats::compute</code> is total-input deterministic — every dashboard test runs against fixed beats.</span></div>
     </div>
 
@@ -87,7 +88,7 @@ honoured once and migrated automatically on first launch.</p> <!-- @rename-keep 
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-codetime">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-codetime/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-codetime/tree/master/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/detain/sugarcraft/tree/master/candy-codetime/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/Rtarun3606k/TakaTime">TakaTime</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
