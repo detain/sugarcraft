@@ -19,8 +19,14 @@ namespace SugarCraft\AnsiParser\Parser;
  * structurally-completed rune byte sequence is forwarded verbatim (overlong,
  * surrogate and >U+10FFFF encodings included). Pass `$replaceMalformed =
  * true` to the constructor for validation with U+FFFD replacement (needs
- * ext-mbstring). Lone continuation bytes and invalid lead bytes never reach
- * the rune path either way; they follow the table's default drop row.
+ * ext-mbstring); that flag substitutes ONLY completed invalid encodings.
+ * The raw byte space is decided by the state table first, in both modes:
+ * 0x80-0x9F are live C1 controls (executed, or introducers of DCS/SOS/OSC/
+ * PM/APC — never dropped and never replaced, even though UTF-8 would read
+ * them as lone continuation bytes), while the bytes that truly vanish on the
+ * default drop row are lone continuations 0xA0-0xBF and invalid leads
+ * 0xC0-0xC1 and 0xF5-0xFF — those are lost silently, with no U+FFFD, even
+ * under `$replaceMalformed`. See README "Limits & hostile input".
  *
  * @see https://github.com/charmbracelet/x/tree/main/ansi/parser
  * @see https://vt100.net/emu/dec_ansi_parser
@@ -150,9 +156,13 @@ final class Parser
     /**
      * Feed a complete byte sequence and guarantee end-of-stream flush.
      *
-     * This is the safe one-shot entry point: it calls feed() then flush()
-     * so a trailing unterminated OSC/DCS or in-flight rune is not silently
-     * lost. Use feed()+flush() separately for streaming (incremental) use.
+     * This is the one-shot entry point: it calls feed() then flush(), so a
+     * trailing unterminated OSC/DCS/SOS/PM/APC string still dispatches with
+     * the payload collected so far, and — only when the parser was built
+     * with `$replaceMalformed` — a trailing partial rune surfaces as
+     * U+FFFD. In default mode that rune IS dropped, and an in-flight CSI or
+     * bare ESC always is (there is no final byte to dispatch). Use
+     * feed()+flush() separately for streaming (incremental) use.
      */
     public function parseComplete(string $bytes): void
     {
@@ -165,11 +175,16 @@ final class Parser
      * dispatch with whatever payload has been collected, and return
      * to ground. Useful at end-of-stream.
      *
-     * F-16: only a DCS that reached DcsString is flushed. A DCS still in its
-     * PRELUDE (DcsEntry/DcsParam/DcsIntermediate — no final byte ever seen)
-     * is an aborted sequence and dispatches nothing; its raw bytes are the
-     * caller's tail (candy-ansi-inspect recovers them itself). Fabricating a
-     * dispatch here would change that library's byte-fidelity goldens.
+     * What flush does NOT recover:
+     * - a DCS still in its PRELUDE (DcsEntry/DcsParam/DcsIntermediate — no
+     *   final byte ever seen): an aborted sequence, dispatches nothing; its
+     *   raw bytes are the caller's tail (candy-ansi-inspect recovers them
+     *   itself). Fabricating a dispatch here would change that library's
+     *   byte-fidelity goldens.
+     * - an in-flight CSI or bare ESC: no final byte exists yet, so the
+     *   partial sequence is dropped.
+     * - an in-flight partial rune: dropped in default mode; U+FFFD only when
+     *   built with `$replaceMalformed`.
      */
     public function flush(): void
     {
@@ -267,6 +282,10 @@ final class Parser
      * `candy-ansi-inspect`'s `AnsiHandler` does exactly that — and a driver reads them
      * after `feed()` for the last completed sequence; they reset when the next
      * sequence's params start accumulating. This is the PULL route.
+     *
+     * The pull window ends at {@see flush()}: flush clears the flags, so a
+     * driver that used {@see parseComplete()} must read them from INSIDE the
+     * dispatch — after the call returns they are gone.
      *
      * The alternative — the one the sugar-vterm and candy-codeshot sinks now use — is
      * the PUSH: implement {@see SubparamsAwareHandler} and be handed the same
@@ -465,7 +484,7 @@ final class Parser
 
     private function start(int $byte, State $from): void
     {
-        // C1 (lane A3a): a DIFFERENT-type string introducer mid-sequence is
+        // A DIFFERENT-type C1 string introducer mid-sequence is
         // an implicit cancel of the pending one — its payload must not ride
         // into the new sequence's dispatch (an APC fragment arriving as OSC
         // title data is a title-injection vector from untrusted peers).

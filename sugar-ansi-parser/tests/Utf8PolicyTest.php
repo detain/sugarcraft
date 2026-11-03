@@ -11,7 +11,9 @@ use PHPUnit\Framework\TestCase;
 final class Utf8PolicyTest extends TestCase
 {
     /**
-     * With replaceMalformed=false (default), invalid UTF-8 is silently dropped.
+     * With replaceMalformed=false (default), a COMPLETED invalid rune
+     * sequence is silently dropped (with the flag on it becomes U+FFFD —
+     * see the replacement tests below).
      */
     public function testInvalidContinuationDroppedWhenFlagOff(): void
     {
@@ -145,5 +147,46 @@ final class Utf8PolicyTest extends TestCase
         $this->assertCount(1, $prints);
         // U+FFFD is the UTF-8 encoding \xEF\xBF\xBD
         $this->assertSame("\xef\xbf\xbd", $prints[0]['detail']);
+    }
+
+    /**
+     * The bytes the state table truly drops — invalid leads 0xF5-0xFF and
+     * lone continuations 0xA0-0xBF — vanish silently in BOTH modes:
+     * replaceMalformed substitutes only completed invalid encodings.
+     */
+    public function testDroppedBytesNeverSurfaceAsReplacementInEitherMode(): void
+    {
+        foreach ([false, true] as $flag) {
+            $handler = new DebugHandler();
+            $parser = new Parser($handler, $flag);
+
+            $parser->feed("\xf5A\xffB\xa0C\xb0D");
+
+            $prints = $handler->filter('print');
+            $this->assertCount(4, $prints, 'flag=' . var_export($flag, true));
+            $this->assertSame(['A', 'B', 'C', 'D'], array_map(static fn ($e) => $e['detail'], $prints));
+        }
+    }
+
+    /**
+     * The 0x80-0x9F band is live C1 control, never dropped text, even under
+     * replaceMalformed: 0x92 executes and 0x9D introduces an OSC string.
+     */
+    public function testC1BandStaysLiveControlsUnderReplacementMode(): void
+    {
+        $handler = new DebugHandler();
+        $parser = new Parser($handler, true);
+
+        $parser->feed("\x92\x9d0;hi\x07");
+
+        $executes = $handler->filter('execute');
+        $this->assertCount(1, $executes);
+        $this->assertSame(0x92, $executes[0]['detail']);
+
+        $osc = $handler->filter('osc');
+        $this->assertCount(1, $osc);
+        $this->assertSame('0;hi', $osc[0]['detail']);
+
+        $this->assertCount(0, $handler->filter('print'), 'C1 bytes must not print or replace');
     }
 }

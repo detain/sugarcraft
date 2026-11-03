@@ -33,6 +33,10 @@ interface Handler
 
     /**
      * Execute a C0 or C1 control character (HT, LF, CR, BEL, BS, IND, RI, …).
+     *
+     * Bytes arriving here are never UTF-8 candidates: the C1 range 0x80-0x9F
+     * executes (or introduces a string sequence) by table design, so a lone
+     * continuation byte in that band is a control, not malformed text.
      */
     public function execute(int $byte): void;
 
@@ -42,9 +46,13 @@ interface Handler
      * @param int        $final        Final command byte (e.g. ord('m')).
      * @param list<int>  $params       Numeric params; -1 marks a missing/default param.
      * @param int        $prefix       Private-marker byte 0x3C-0x3F (e.g. ord('?')); 0 if none.
-     *                                 SINGLE-BYTE slot: a multi-prefix CSI keeps only the last byte.
+     *                                 SINGLE-BYTE slot, FIRST-WINS: only the entry state accepts a
+     *                                 prefix, and once it has routed the sequence into the param
+     *                                 state, later 0x3C-0x3F bytes are ignored by the table — so
+     *                                 `ESC [ ? < 25 h` reports ord('?') and the '<' vanishes.
      * @param int        $intermediate Intermediate byte 0x20-0x2F; 0 if none.
-     *                                 SINGLE-BYTE slot: a multi-intermediate CSI
+     *                                 SINGLE-BYTE slot, LAST-WINS: Collect re-runs on every
+     *                                 0x20-0x2F byte, so a multi-intermediate CSI
      *                                 (`CSI 0x2F 0x21 m`) keeps only the last byte — a
      *                                 known, documented parity deviation of the original design.
      */
@@ -67,7 +75,7 @@ interface Handler
     /**
      * Dispatch a completed DCS sequence.
      *
-     * F-16: `$final === 0` means no final byte (0x40-0x7E) was ever seen.
+     * `$final === 0` means no final byte (0x40-0x7E) was ever seen.
      * The VT500 grammar lets DcsEntry hand the control bytes 0x08-0x0D (and a
      * tmux-quirk ESC) straight into the string payload, so such a sequence
      * dispatches with this sentinel. Zero is not a legal DCS final byte, so it
