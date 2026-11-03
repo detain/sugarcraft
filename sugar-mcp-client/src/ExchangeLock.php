@@ -343,7 +343,13 @@ final class ExchangeLock
     }
 
     /**
-     * Rewrite the whole state: phase byte plus buffer.
+     * Rewrite the whole state: phase byte plus buffer. This is a FULL
+     * truncate-and-write of everything the exchange carries, on every
+     * exchange, under the lock: the cost tracks the read buffer's size
+     * (bounded by the transport frame cap), a deliberate price for state an
+     * external kill can only ever leave whole-or-empty. An append-delta
+     * design would need a cross-process offset ledger to stay recoverable —
+     * it re-earns nothing the phase byte could not already say.
      *
      * @return bool false when the state did not land whole. The file is then
      *         truncated to empty (best-effort), which {@see load()} reads as

@@ -160,7 +160,9 @@ final class StdioMcpServer implements McpServer
     private const MAX_STDERR_BYTES = 65536;
 
     /**
-     * Ceiling on a single unread frame. A stream with no newline for 64MiB is
+     * Ceiling on the read buffer: it bounds every byte held between newline
+     * discovery and frame consumption (the whole pending buffer, not just one
+     * unread line). A stream with no newline for 64MiB is
      * not speaking NDJSON no matter what it eventually says, and letting the
      * buffer grow toward it trades a protocol error for memory pressure.
      * The product family pins this same value via EngineBackend::MAX_FRAME_BYTES;
@@ -1497,7 +1499,11 @@ final class StdioMcpServer implements McpServer
      * non-conforming server, so each read counts them and refuses the
      * exchange after {@see UNATTRIBUTABLE_FRAMES_BEFORE_REFUSAL}; the
      * refusal throws and callTool() reports it as an error payload (the call
-     * error rails), while the handshake legs fail the start loudly.
+     * error rails), while the handshake legs fail the start loudly. Method-bearing frames are exempt
+     * from the count by design: they are ANSWERED (or fire the notification
+     * handler), so a server that streams progress forever is within its
+     * rights; the convoy cost of a wedged answerer is the documented
+     * serialisation law — one pipe, one conversation — not a counting defect.
      *
      * $deadline is taken by reference because answering a server request
      * pauses it: the wall clock a server-request handler spends is added
