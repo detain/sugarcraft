@@ -97,6 +97,21 @@ final class RenderSession
     }
 
     /**
+     * The FULL frame behind the most recent emission, or null if nothing
+     * has been painted through this session yet.
+     *
+     * Whether the last composite() returned a full frame or a delta, this
+     * is the complete frame it was derived from — the only string whose
+     * zone markers a scanner can read. Deltas carry no envelopes, so
+     * hit-testing must scan THIS, not the returned delta (see
+     * {@see Veil::lastFullFrame()}).
+     */
+    public function lastFullFrame(): ?string
+    {
+        return $this->previousOutput;
+    }
+
+    /**
      * Build diff delta between the given full output and the remembered previous output.
      *
      * @param string   $output        Current full-frame output string
@@ -111,6 +126,13 @@ final class RenderSession
 
         // First diff call with no prior output: return empty diff but prime
         // previousFrame so the NEXT call can diff properly.
+        //
+        // TRUTH OF THE PRIME: the caller gets '' back, which paints nothing —
+        // the frame is REMEMBERED (so later diffs measure against it) but not
+        // emitted. Veil::composite() never hits this arm (its shouldEmitFull()
+        // gate routes a cold session through the full path first); it exists
+        // for direct session drivers, which must then print their own initial
+        // full frame from lastFullFrame() or the screen desyncs silently.
         if ($this->previousOutput === null) {
             $this->previousFrame = $bufferFactory('', $width, $height);
             $this->previousOutput = $output;

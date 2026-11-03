@@ -1146,8 +1146,14 @@ final class VeilTest extends TestCase
     // ─── dimLine ANSI preservation ─────────────────────────────────────────────
 
     /**
-     * Test that dimLine preserves lines that start with ANSI escape sequences.
-     * Lines starting with \e[ are returned unchanged (old FAINT behavior).
+     * dimLine wraps EVERY non-empty line when a dim is active — M4, 2026-11-03.
+     *
+     * The old early-return for escape-led lines meant a fully styled backdrop
+     * (a syntax-highlighted file, an OSC-8 hyperlink row) never dimmed under a
+     * scrim at all: stacked modals showed un-dimmed bands. The wrap only
+     * prepends/appends SGRs, so the payload still survives byte-intact; the
+     * line's own colour pen (set after the dim pen) wins for its styled cells,
+     * and only default-pen cells read dimmed.
      */
     public function testDimLinePreservesAnsiPrefixedLines(): void
     {
@@ -1160,11 +1166,14 @@ final class VeilTest extends TestCase
         $result = $v->composite("X", $bg, Position::TOP, Position::LEFT);
         $lines = $this->veil->splitLines($result);
 
-        // The ANSI line should survive intact in the background
-        // (not dimmed with truecolor)
+        // The payload survives intact inside the dim wrap…
         $this->assertStringContainsString("\e[1mBOLD TEXT\e[0m", $result);
-        // Should NOT contain the dim code 38;2;0;0;0 on that line since ANSI lines are preserved
-        $this->assertStringNotContainsString("38;2;0;0;0", $lines[1]);
+        // …and the escape-led line IS now dimmed (old pin asserted the
+        // opposite; flipped with M4 — the scrim reaching styled rows is the
+        // whole point of a scrim).
+        $this->assertStringContainsString("38;2;0;0;0", $lines[1] ?? '');
+        $this->assertStringStartsWith("\e[38;2;0;0;0m\e[1m", $lines[1] ?? '');
+        $this->assertStringEndsWith("\e[0m\e[39m", $lines[1] ?? '');
     }
 
     /**

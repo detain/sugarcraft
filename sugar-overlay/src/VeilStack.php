@@ -12,6 +12,16 @@ namespace SugarCraft\Overlay;
  */
 final class VeilStack implements \Countable
 {
+    /**
+     * Hard ceiling on stacked layers. composite()/compositeAll() are
+     * O(layers) full-frame repaints whose canvas grows with each layer, so
+     * an unbounded stack is a CPU/memory amplifier a hostile caller can
+     * drive directly; 256 is far above any real UI and bounds the worst
+     * case. (Stack construction is value-semantics — add() clones — so
+     * this is the only mutation gate needed.)
+     */
+    public const MAX_LAYERS = 256;
+
     /** @var list<Veil> */
     private array $veils = [];
 
@@ -28,9 +38,16 @@ final class VeilStack implements \Countable
 
     /**
      * Add a veil to the stack.
+     *
+     * @throws \OverflowException when the stack already holds MAX_LAYERS veils
      */
     public function add(Veil $veil): self
     {
+        if (\count($this->veils) >= self::MAX_LAYERS) {
+            throw new \OverflowException(
+                "VeilStack holds at most " . self::MAX_LAYERS . " layers; remove one before adding another",
+            );
+        }
         $next = clone $this;
         $next->veils[] = $veil;
         $next->sortedCache = null;
@@ -70,7 +87,18 @@ final class VeilStack implements \Countable
      * up on top — each layer sees everything beneath it, including dims
      * applied by earlier layers.
      *
-     * @param string $background The base content
+     * The stack never diffs: each layer renders a FULL frame through
+     * withoutSession(), and the chain returns one full canvas. Delta state
+     * belongs to standalone Veil composites only — a chained delta would
+     * encode cursor moves against a screen the NEXT layer then repaints.
+     *
+     * TRUST BOUNDARY: every veil's content() — and the $background — is
+     * spliced into the frame VERBATIM. The stack runs no sanitizer sweep of
+     * its own; forged U+E000/U+E001 zone sentinels or OSC 8 links in ANY
+     * layer mint real zones/links in the result. Sweep untrusted layers at
+     * construction (Veil::withUntrustedContent()) before adding them.
+     *
+     * @param string $background The base content (trust boundary — see above)
      * @param Position $vertical Vertical position anchor
      * @param Position $horizontal Horizontal position anchor
      * @param int $xOffset Additional columns rightward (+) / leftward (-)
@@ -105,9 +133,11 @@ final class VeilStack implements \Countable
      * vPosition()/hPosition() anchor (CENTER when unset) with
      * positionX()/positionY() offsets, painting its own
      * {@see Veil::content()}, so higher z-index veils appear on top of
-     * lower ones.
+     * lower ones. Like composite(), this pass emits only FULL frames and
+     * reads content() verbatim — sweep untrusted layers with
+     * {@see Veil::withUntrustedContent()} before stacking (see composite()).
      *
-     * @param string $background The base content
+     * @param string $background The base content (trust boundary — see composite())
      * @return string The composited output
      */
     public function compositeAll(string $background): string

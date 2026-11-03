@@ -60,6 +60,9 @@ final class Veil
     /** @var Mark Zone marker helper */
     private readonly Mark $marker;
 
+    /** @var bool Reduced-motion: animate() treats every progress as 1.0 (no intermediate frames) */
+    private readonly bool $reducedMotion;
+
     /** @var RenderSession Mutable diff/session state shared across with*() clones */
     private readonly RenderSession $session;
 
@@ -87,6 +90,8 @@ final class Veil
      * @param Border|null $border Border chrome
      * @param Scanner|null $scanner Self-contained mouse hit-testing scanner
      * @param string|null $lastRendered Last rendered output for scanner
+     * @param Mark|null $marker Zone marker helper (null = enabled Mark)
+     * @param bool $reducedMotion Snap animate() progress to 1.0
      * @param RenderSession|null $session Mutable diff/session state
      * @param Position|null $vPosition Vertical position anchor
      * @param Position|null $hPosition Horizontal position anchor
@@ -103,12 +108,14 @@ final class Veil
         ?Border $border = null,
         ?Scanner $scanner = null,
         ?string $lastRendered = null,
+        ?Mark $marker = null,
         ?RenderSession $session = null,
         ?Position $vPosition = null,
         ?Position $hPosition = null,
         int $posX = 0,
         int $posY = 0,
         string $content = '',
+        bool $reducedMotion = false,
     ) {
         $this->backdropOpacity = \max(0, \min(100, $backdropOpacity));
         $this->animationKind = $animationKind;
@@ -118,7 +125,8 @@ final class Veil
         $this->border = $border;
         $this->scanner = $scanner ?? Scanner::new();
         $this->lastRendered = $lastRendered;
-        $this->marker = new Mark();
+        $this->marker = $marker ?? new Mark();
+        $this->reducedMotion = $reducedMotion;
         $this->session = $session ?? new RenderSession();
         $this->vPosition = $vPosition;
         $this->hPosition = $hPosition;
@@ -289,26 +297,99 @@ final class Veil
     }
 
     /**
-     * withContent() for text you do NOT trust: the sweep applies
-     * Sanitize::untrustedForMarkedFrames() before attaching — SGR/OSC/C1
-     * control sequences and forged U+E000/U+E001 zone sentinels are
-     * stripped, image markers (U+E002 and up) are preserved by design.
+     * withContent() for text you do NOT trust: before attaching, the sweep
+     * applies Sanitize::untrustedForDisplay() (SGR/OSC/C1 controls marked
+     * invisible, CRLF and lone CR folded to LF) plus stripZoneSentinels()
+     * (forged U+E000/U+E001 zone sentinels removed), then folds TAB to
+     * four spaces — the cell the terminal moves to, so the compositor's
+     * width accounting cannot be poisoned by a byte whose painted width
+     * differs from the one Width charges. Image markers (U+E002 and up)
+     * are preserved by design.
      *
      * This is the sugar-core house law: untrusted text enters render
      * pipelines only through the sanitizer, never through the raw channel.
-     * Content attached here can no longer mint phantom hit-zones or hidden
-     * hyperlinks; the veil's own mark() calls remain effective because
-     * they wrap AFTER this point (mark the sanitized text, then compose).
+     * Content attached here can no longer mint phantom hit-zones, hidden
+     * hyperlinks, or width-desyncing carriage returns; the veil's own
+     * mark() calls remain effective because they wrap AFTER this point
+     * (mark the sanitized text, then compose).
+     *
+     * Why not untrustedForMarkedFrames(): that contract PRESERVES CR and
+     * TAB for frame transports whose writers re-frame every row. A veil
+     * row is emitted verbatim into a terminal — a surviving CR makes the
+     * line after it overwrite a previous one while the diff model still
+     * believed the cell was blank, and a TAB measures 4 cells to Width
+     * but terminals advance to the next 8-column stop. Neither is a
+     * marked-FRAME concern; both are marked-DISPLAY ones, so the stricter
+     * display sweep is the right floor here.
      */
     public function withUntrustedContent(string $content): self
     {
-        return $this->withContent(Sanitize::untrustedForMarkedFrames($content));
+        $swept = Sanitize::stripZoneSentinels(Sanitize::untrustedForDisplay($content));
+
+        return $this->withContent(\str_replace("\t", '    ', $swept));
     }
 
     /** Read-only accessor for the stack-driven overlay content ('' = none). */
     public function content(): string
     {
         return $this->content;
+    }
+
+    /**
+     * Return a copy whose mark() emits no zone envelopes at all.
+     *
+     * With markers disabled, mark($id, $content) returns $content
+     * byte-for-byte — the zone is not registered and the scanner sees
+     * nothing — while id/content VALIDATION still runs (a bad id throws
+     * exactly as before, so disabling is never a validation bypass).
+     *
+     * This is the opt-out for hosts that cannot strip the U+E000 id
+     * U+E001 envelopes before display: withoutZoneMarkers() means the
+     * frame carries no sentinel bytes at all, so no consumer-side sweep
+     * duty exists (see README "Zone markers & presentation"). Hit-testing
+     * (scan()/hit()/isClickOutside()) is unavailable on such a veil by
+     * construction — clickOutsideDismiss on a markerless veil can never
+     * find its own zone.
+     */
+    public function withoutZoneMarkers(): self
+    {
+        return $this->mutate(marker: Mark::disabled());
+    }
+
+    /**
+     * Honour the user's reduced-motion preference.
+     *
+     * When enabled, animate() treats every progress value as 1.0: no
+     * intermediate slide/fade/scale frames, no scrim ramp — the overlay
+     * simply appears fully settled in one frame (with the backdrop at its
+     * configured opacity).
+     *
+     * This lib does not probe the terminal itself (sugar-colorprofile is
+     * not a dependency); the host app decides, typically from
+     * Probe::reducedMotion() and/or a user setting, and passes the verdict
+     * in — mirroring the sugar-animation house convention that motion
+     * preferences are a wiring concern, not a rendering one.
+     */
+    public function withReducedMotion(bool $reduced = true): self
+    {
+        return $this->mutate(reducedMotion: $reduced);
+    }
+
+    /**
+     * The FULL (non-delta) frame the last composite()/animate() emitted,
+     * or null if none has been painted through this veil's session yet.
+     *
+     * When diffing is enabled, the RETURNED string of most frames is a
+     * cursor-addressed delta that carries no zone markers — zones live only
+     * in full frames. Feed THIS string to scan() (or sugar-mouse's
+     * Scanner) to hit-test a modal across animated/diffed frames; scanning
+     * the delta itself silently registers zero zones.
+     *
+     * @see RenderSession::lastFullFrame()
+     */
+    public function lastFullFrame(): ?string
+    {
+        return $this->session->lastFullFrame();
     }
 
     /** Read-only accessor for vertical position anchor. */
@@ -355,9 +436,16 @@ final class Veil
      * Check if a mouse message is outside the veil zone.
      *
      * Requires scan($renderedOutput) to be called first with the
-     * rendered veil output so the scanner knows the zone bounds.
+     * rendered veil output so the scanner knows the zone bounds
+     * (with diffing active, scan {@see lastFullFrame()}, not the delta).
      *
-     * @throws \RuntimeException if called without prior scan()
+     * The mouse coordinates are passed straight to {@see hit()}, which is
+     * 1-based like every sugar-mouse zone — a host whose MouseMsg carries
+     * 0-based cells must add 1 to each axis before calling.
+     *
+     * @throws \RuntimeException if click-outside dismissal is ENABLED and
+     *         no scan() has run yet (with the flag off this answers false
+     *         unconditionally — the guard never fires)
      *
      * @see scan()
      * @see hit()
@@ -383,6 +471,13 @@ final class Veil
      * Call this after animate() or composite() return, before calling
      * hit() or isClickOutside().
      *
+     * DIFFING LAW: when the session has emitted more than one frame, the
+     * string composite()/animate() RETURNED is usually a cursor-addressed
+     * delta with no zone envelopes in it — scanning it registers ZERO
+     * zones and every click then reads as outside. Scan
+     * {@see lastFullFrame()} instead; it is the complete frame the delta
+     * was derived from, markers and all.
+     *
      * Uses sugar-mouse Scanner internally — no external Manager needed.
      *
      * The clone carries a FRESH scanner holding only this render's zones:
@@ -392,6 +487,11 @@ final class Veil
      * together with lastRendered, so hit-testing survives model updates
      * (e.g. withContent()) made between the render and the click; only a
      * subsequent scan() replaces it.
+     *
+     * @throws \InvalidArgumentException if the frame contains two zones
+     *         with the same id (Scanner::scan() rejects duplicate ids —
+     *         reuse of a marker id across rows of one frame is a bug in
+     *         the caller's mark() layout, not something to catch)
      */
     public function scan(string $rendered): self
     {
@@ -401,10 +501,11 @@ final class Veil
     }
 
     /**
-     * Return the zone at the given terminal coordinate, or null if
-     * no zone contains that cell.
+     * Return the zone at the given terminal cell, or null if no zone
+     * contains it. Columns and rows are 1-based (sugar-mouse zone space).
      *
-     * Requires scan() to have been called after the last render.
+     * Requires scan() to have been called after the last render — of
+     * {@see lastFullFrame()} when the session is diffing.
      */
     public function hit(int $col, int $row): ?Zone
     {
@@ -412,8 +513,17 @@ final class Veil
     }
 
     /**
-     * Wrap $content with an invisible zone marker so the scanner
-     * can later extract bounding boxes.
+     * Wrap $content with a zone marker so the scanner can later extract
+     * its bounding box.
+     *
+     * The envelope is NOT invisible: it costs zero CELLS in this lib's
+     * width accounting (MarkedFrame/compositor/paintRow all skip it) but
+     * its U+E000 id U+E001 bytes ship verbatim inside the frame, and the
+     * id between them is ordinary printable text — a terminal that does
+     * not strip the private-use sentinels paints the id as garbage.
+     * Hosts that emit raw frames to such terminals must strip envelopes
+     * for display (Sanitize::stripZoneSentinels) or opt out entirely with
+     * withoutZoneMarkers(). See README "Zone markers & presentation".
      *
      * Uses sugar-mouse Mark internally — no external Manager needed.
      *
@@ -433,10 +543,10 @@ final class Veil
      * Apply animation and composite the overlay onto the background.
      *
      * @param string    $foreground  The overlay content (e.g. a modal). TRUST BOUNDARY: passed through verbatim — forged zone sentinels / OSC 8 links inside it become REAL zones and links (see withContent()).
-     * @param string    $background    The base content
+     * @param string    $background    The base content. TRUST BOUNDARY: equally attacker-reachable — forged sentinels or OSC 8 links in the BACKDROP mint real zones and links too, so sweep background text the same way you sweep foreground text.
      * @param Position  $vertical     Vertical position anchor
      * @param Position  $horizontal   Horizontal position anchor
-     * @param float     $progress    Animation progress 0.0–1.0 (0=start, 1=end)
+     * @param float     $progress    Animation progress — clamped to 0.0–1.0 (0=start, 1=end); values outside the interval saturate instead of overshooting
      * @param int       $xOffset      Additional columns rightward (+) / leftward (-)
      * @param int       $yOffset     Additional lines downward (+) / upward (-)
      * @return string                 The composited output
@@ -450,43 +560,52 @@ final class Veil
         int $xOffset = 0,
         int $yOffset = 0,
     ): string {
+        $progress = \max(0.0, \min(1.0, $progress));
+        if ($this->reducedMotion) {
+            $progress = 1.0;
+        }
+
         $animFg = $foreground;
         $animXOffset = $xOffset;
         $animYOffset = $yOffset;
 
         if ($this->animationKind !== null && $progress < 1.0) {
             $result = $this->applyAnimation($foreground, $progress, $vertical, $horizontal);
-            $animFg = $result['foreground'];
-            $animXOffset = $xOffset + $result['horizontalOffset'];
-            $animYOffset = $yOffset + $result['verticalOffset'];
+            $animFg = $result->foreground;
+            $animXOffset = $xOffset + $result->horizontalOffset;
+            $animYOffset = $yOffset + $result->verticalOffset;
         }
 
-        return $this->composite($animFg, $background, $vertical, $horizontal, $animXOffset, $animYOffset);
+        // Mid-animation the scrim fades IN with the content: at progress 0
+        // the backdrop is untouched, at 1.0 it carries the configured
+        // opacity. Without this ramp, a fade-open overlay paints its
+        // dimming at full strength on the very first frame — the scrim
+        // snaps while the modal glides.
+        $veil = $this;
+        if ($this->animationKind !== null && $progress < 1.0 && $this->backdropOpacity > 0) {
+            $veil = $this->mutate(backdropOpacity: (int) \round($this->backdropOpacity * $progress));
+        }
+
+        return $veil->composite($animFg, $background, $vertical, $horizontal, $animXOffset, $animYOffset);
     }
 
     /**
      * Apply the configured animation to the foreground at the given progress.
-     *
-     * @return array{foreground: string, verticalOffset: int, horizontalOffset: int}
      */
     private function applyAnimation(
         string $foreground,
         float $progress,
         Position $vertical,
         Position $horizontal,
-    ): array {
+    ): AnimationFrame {
         return match ($this->animationKind) {
-            AnimationKind::SLIDE => (new Slide())->apply($foreground, $progress, $vertical, $horizontal),
-            AnimationKind::FADE => [
-                'foreground' => (new Fade())->apply($foreground, $progress),
-                'verticalOffset' => 0,
-                'horizontalOffset' => 0,
-            ],
-            AnimationKind::SCALE => [
-                'foreground' => (new Scale())->apply($foreground, $progress),
-                'verticalOffset' => 0,
-                'horizontalOffset' => 0,
-            ],
+            AnimationKind::SLIDE => AnimationFrame::fromArray((new Slide())->apply($foreground, $progress, $vertical, $horizontal)),
+            AnimationKind::FADE => new AnimationFrame(
+                foreground: (new Fade())->apply($foreground, $progress),
+            ),
+            AnimationKind::SCALE => new AnimationFrame(
+                foreground: (new Scale())->apply($foreground, $progress),
+            ),
         };
     }
 
@@ -506,7 +625,7 @@ final class Veil
      * the session, forcing the next one out in full.
      *
      * @param string    $foreground  The overlay content (e.g. a modal). TRUST BOUNDARY: passed through verbatim — forged zone sentinels / OSC 8 links inside it become REAL zones and links (see withContent()).
-     * @param string    $background   The base content
+     * @param string    $background   The base content. TRUST BOUNDARY: equally attacker-reachable — forged sentinels or links in the BACKDROP mint real zones and links too (the same zero-assumption walk paints it); sweep untrusted backdrop text before compositing.
      * @param Position $vertical     Vertical position anchor
      * @param Position $horizontal    Horizontal position anchor
      * @param int       $xOffset      Additional columns rightward (+) / leftward (-)
@@ -559,6 +678,13 @@ final class Veil
         // and the overflow is clipped at the bottom — the least-surprising
         // reading of "clip to canvas". Explicit $yOffset below is NOT
         // clamped: negative offsets stay legal for slide-in animations.
+        //
+        // baseX is deliberately the ASYMMETRIC axis: it is not clamped, so
+        // a RIGHT/LEFT anchor with a too-wide overlay (or a slide offset)
+        // can push the block off the columns and whole rows drop. This
+        // matches upstream's horizontal slide semantics; a fit-to-canvas
+        // mode that shrinks the backdrop's canvas instead is a product
+        // design seam, not silently added here.
         $baseX = $horizontal->xOffset($fgWidth, $bgWidth);
         $baseY = \max(0, $vertical->yOffset($fgHeight, $bgHeight));
 
@@ -596,39 +722,49 @@ final class Veil
             // ends at or left of column 0 (negative xOffset, or an anchor
             // centre where fg is wider than bg) shows nothing — including a
             // zero-width line, whose drop below lands at x=0.
-            if ($x + Width::string($fgLines[$fy]) <= 0) {
+            if ($x + MarkedFrame::measure($fgLines[$fy]) <= 0) {
                 $output[$row] = $this->dimLine($bgLine);
                 continue;
             }
 
             // Clip the foreground line to the row, keeping its escapes cell-
-            // aware (via Width): drop the head when x < 0 so off-screen-left
-            // columns never leak onto col 0, then truncate to the room left.
+            // aware — and its zone envelopes BALANCED (MarkedFrame: Width's
+            // ANSI walkers charge the marker bytes, so a marked line would
+            // anchor, clip and splice as though those cells were visible).
+            // Drop the head when x < 0 so off-screen-left columns never leak
+            // onto col 0, then truncate to the room left.
             $fgLine = $x < 0
-                ? Width::truncateAnsi(Width::dropAnsi($fgLines[$fy], -$x), $bgWidth)
-                : Width::truncateAnsi($fgLines[$fy], $bgWidth - $x);
-            $fgVis  = Width::string($fgLine);
+                ? MarkedFrame::take(MarkedFrame::drop($fgLines[$fy], -$x), $bgWidth)
+                : MarkedFrame::take($fgLines[$fy], $bgWidth - $x);
+            $fgVis  = MarkedFrame::measure($fgLine);
 
             // Compute prefix/suffix from the background; with the head clipped
             // the overlay always starts at column max(0, x).
             $prefixWidth = \max(0, $x);
-            $prefix = Width::padRight(Width::truncateAnsi($bgLine, $prefixWidth), $prefixWidth);
+            $prefix = MarkedFrame::take($bgLine, $prefixWidth);
+            $prefix .= \str_repeat(' ', $prefixWidth - MarkedFrame::measure($prefix));
             $cut = $prefixWidth + $fgVis;
-            $suffix = Width::dropAnsi($bgLine, $cut);
-            // Width::dropAnsi() drops a wide backdrop grapheme straddling the
+            $suffix = MarkedFrame::drop($bgLine, $cut);
+            // MarkedFrame::drop() drops a wide backdrop grapheme straddling the
             // cut WHOLE — it consumes its right-half cell one column BEYOND
             // the overlay footprint. Without a replacement the rest of the
             // row slides left and the composite is a cell narrower than the
             // backdrop (e.g. 'abcde語fgh' + 'ZZZ' at x=3 yielded 9 cells).
             // Measure the shortfall cell-aware and blank the straddled cell
             // so every composited row keeps the backdrop's exact width; the
-            // left edge needs no twin because padRight above already re-blanks.
-            $straddled = Width::string($bgLine) - $cut - Width::string($suffix);
+            // left edge needs no twin because the pad above already re-blanks.
+            $straddled = MarkedFrame::measure($bgLine) - $cut - MarkedFrame::measure($suffix);
             if ($straddled > 0) {
                 $suffix = \str_repeat(' ', $straddled) . $suffix;
             }
 
-            $output[$row] = $this->dimLine($prefix) . $fgLine . $this->dimLine($suffix);
+            // Splice with pen isolation: a segment that ends on a non-default
+            // colour pen (crop mid-style, no trailing reset) must not bleed
+            // that pen into the next segment — the dim wrap and the reset
+            // order below make each of the three segments self-contained.
+            $dp = $this->dimLine($prefix);
+            $output[$row] = $dp . MarkedFrame::isolation($dp) . $fgLine
+                . MarkedFrame::isolation($fgLine) . $this->dimLine($suffix);
         }
 
         return $this->emitFrame(\implode("\n", $output), $bgWidth, $bgHeight);
@@ -672,25 +808,22 @@ final class Veil
      * This replaces the old nested FAINT approach which only produced ~2 visual
      * states; the truecolor blend gives a smooth gradient across 0–100%.
      *
-     * For backdrop lines (lines without embedded ANSI styling that starts the
-     * line), the gray blend achieves visible dimming. For lines that START
-     * with an escape sequence (CSI styling like bold/color codes, or OSC
-     * payloads such as hyperlinks), the line is returned unchanged to
-     * preserve original styling (matching the old FAINT behavior where
-     * styled text was not dimmed) — wrapping an escape-led line in color SGR
-     * would corrupt the payload it carries.
+     * Every non-empty line is wrapped when a dim is active — including lines
+     * that START with an escape sequence. The wrap only PREPENDS and APPENDS
+     * SGR sequences; embedded OSC/CSI payloads are never rewritten, so a
+     * hyperlink-led line keeps its target. A styled line whose own SGR sets a
+     * colour after the dim pen keeps that colour (the pen inside wins): the
+     * dim reaches exactly the cells that were on the default foreground.
+     *
+     * Two honest limits: dims do not COMPOUND (each call replaces the pen,
+     * so stacking two veils at 50% does not read as 75%), and the blend
+     * assumes a light default foreground — on a light terminal the gray pen
+     * can brighten dark text instead of dimming it.
      */
     private function dimLine(string $line): string
     {
         $opacity = $this->backdropOpacity;
         if ($opacity === 0 || $line === '') {
-            return $line;
-        }
-
-        // If line starts with ANY escape introducer (CSI 'ESC [', OSC 'ESC ]',
-        // charset selects, …), preserve it unchanged. A lone trailing ESC is
-        // length-guarded so no offset read walks past the string end.
-        if ($line[0] === "\e" && $line !== "\e") {
             return $line;
         }
 
@@ -727,17 +860,23 @@ final class Veil
         $max = 0;
         foreach ($lines as $line) {
             $w = $this->lineWidth($line);
-            if ($w > $max) $max = $w;
+            if ($w > $max) {
+                $max = $w;
+            }
         }
         return $max;
     }
 
     /**
-     * Get the display width of a single line (stripping ANSI escape codes).
+     * Get the display width of a single line, in terminal cells.
+     *
+     * ANSI escapes and sugar-mouse zone markers (the U+E000 id U+E001
+     * envelopes {@see mark()} adds) cost zero cells and are excluded —
+     * the same accounting the compositor and the Scanner use.
      */
     public function lineWidth(string $line): int
     {
-        return Width::string($line);
+        return MarkedFrame::measure($line);
     }
 
     /**
@@ -759,6 +898,7 @@ final class Veil
         ?Scanner $scanner = null,
         ?string $lastRendered = null,
         bool $lastRenderedSet = false,
+        ?Mark $marker = null,
         ?Position $vPosition = null,
         bool $vPositionSet = false,
         ?Position $hPosition = null,
@@ -766,6 +906,7 @@ final class Veil
         ?int $posX = null,
         ?int $posY = null,
         ?string $content = null,
+        ?bool $reducedMotion = null,
     ): self {
         return new self(
             backdropOpacity: $backdropOpacity ?? $this->backdropOpacity,
@@ -780,12 +921,14 @@ final class Veil
             // empty zone set — every click would read as outside.
             scanner: $scanner ?? $this->scanner,
             lastRendered: $lastRenderedSet ? $lastRendered : $this->lastRendered,
+            marker: $marker ?? $this->marker,
             session: $this->session,
             vPosition: $vPositionSet ? $vPosition : $this->vPosition,
             hPosition: $hPositionSet ? $hPosition : $this->hPosition,
             posX: $posX ?? $this->posX,
             posY: $posY ?? $this->posY,
             content: $content ?? $this->content,
+            reducedMotion: $reducedMotion ?? $this->reducedMotion,
         );
     }
 
@@ -807,8 +950,16 @@ final class Veil
      *  - OSC 8 hyperlinks open/close a running link pen (an empty URI
      *    closes; SGR reset does NOT, per xterm) and other OSC sequences
      *    are consumed through BEL/ST — never emitted as visible cells.
-     *  - sugar-mouse zone sentinels (U+E000 id U+E001 triples) are
-     *    invisible to terminals, so they consume ZERO columns here.
+     *  - sugar-mouse zone sentinels (U+E000 id U+E001 triples) are the
+     *    scanner's addressing, not content: they consume ZERO columns
+     *    here, exactly as MarkedFrame/composite() charge them (they still
+     *    occupy bytes in the frame — see mark() and the README strip duty).
+     *
+     * Rows are split with a raw explode("\n"), NOT {@see Lines::split()}:
+     * the buffer addresses fixed-height rows, so a trailing empty line
+     * must STAY (it is a real blank row at the frame's bottom edge);
+     * Lines::split() drops it, which would desync row indexing from the
+     * height the caller passed in.
      *
      * @param string $output Multi-line string from composite()
      * @param int    $width  Buffer width in cells
@@ -875,14 +1026,24 @@ final class Veil
                 }
 
                 if ($intro === ']') {
-                    // OSC: terminated by BEL or ST (ESC \). Unterminated OSC
-                    // swallows the rest of the row, matching the emulator.
+                    // OSC: terminated by BEL or ST (ESC \). An ESC NOT
+                    // followed by the ST backslash terminates the OSC at
+                    // the ESC itself, and that ESC is re-parsed as the next
+                    // sequence's introducer — swallowing it blind (plus one
+                    // more byte, the old `$tail + 2`) used to paint the
+                    // opener's parameters (e.g. "0m") as literal cells.
                     $tail = $pos + 2 + \strcspn($line, "\x07\x1b", $pos + 2);
                     $body = \substr($line, $pos + 2, $tail - $pos - 2);
-                    if ($tail < $len && $line[$tail] === "\x1b") {
-                        $pos = $tail + 2; // swallow ESC + the ST backslash
+                    if ($tail >= $len) {
+                        // Unterminated OSC swallows the rest of the row,
+                        // matching the emulator.
+                        $pos = $len;
+                    } elseif ($line[$tail] === "\x07") {
+                        $pos = $tail + 1; // BEL consumed
+                    } elseif (($line[$tail + 1] ?? '') === '\\') {
+                        $pos = $tail + 2; // real ST (ESC \)
                     } else {
-                        $pos = $tail < $len ? $tail + 1 : $len; // BEL consumed
+                        $pos = $tail;     // bare ESC: re-read it as an introducer
                     }
                     $link = self::linkFromOsc($body, $link);
                     continue;
@@ -899,7 +1060,7 @@ final class Veil
             // zero-column to a terminal. An unmatched open swallows the tail.
             if ($byte === "\xEE" && $pos + 2 < $len && $line[$pos + 1] === "\x80") {
                 if ($line[$pos + 2] === "\x80") { // U+E000 OPEN — skip id to CLOSE
-                    $close = \strpos($line, "\xEE\x80\x81", $pos + 3);
+                    $close = \strpos($line, Sanitize::ZONE_SENTINEL_CLOSE, $pos + 3);
                     $pos = $close === false ? $len : $close + 3;
                     continue;
                 }
@@ -939,10 +1100,13 @@ final class Veil
     /**
      * Next user-perceived grapheme cluster starting at byte $pos.
      *
-     * grapheme_str_split() is PHP 8.4+; on 8.3 fall back to the UTF-8
-     * lead-byte walk (same cascade sugar-charts' BufferHelper uses) so
-     * clustering is stable across PHP versions. Combining marks ride with
-     * their base character here rather than becoming stray cells.
+     * Pure UTF-8 lead-byte walk (same cascade sugar-charts' BufferHelper
+     * uses): a 1-4 byte base character, then following combining marks
+     * (U+0300–U+036F) and variation selectors (U+FE00–U+FE0F) ride along
+     * so one cell = one rendered glyph rather than stray cells. grapheme_*
+     * is intentionally NOT used: full UAX#29 clustering disagrees with
+     * Width::of()'s East-Asian model on emoji ZWJ sequences, and the diff
+     * must agree with what the emulator paints.
      */
     private static function nextCluster(string $s, int $pos): string
     {
@@ -1080,7 +1244,11 @@ final class Veil
         return \max(0, \min(255, $component));
     }
 
-    /** Base-16 palette hexes, matching Buffer::ansiColorToHex(). */
+    /** Base-16 palette hexes, matching Buffer::ansiColorToHex() — including
+     *  the bright-black special case: an SGR 90 (or 38;5;8) cell must carry
+     *  the exact 0x7f7f7f the diff model records, or a style-only change
+     *  diffs as a false no-op (xterm bright black is a fixed gray, not a
+     *  40% lift of black — which would stay 0x000000). */
     private static function ansiColorToHex(int $idx, bool $bright = false): int
     {
         $palette = [
@@ -1090,6 +1258,12 @@ final class Veil
         $base = $palette[$idx] ?? 0xffffff;
         if ($bright === false) {
             return $base;
+        }
+        if ($idx === 0) {
+            // Bright black is the fixed gray (xterm 'color8' when bold,
+            // sugar-colorprofile StandardColors::$brightBlack) — matching
+            // Buffer::ansiColorToHex's identical case (sugar-cellbuffer).
+            return 0x7f7f7f;
         }
         $lift = static fn(int $c): int => min(255, (int) ($c + ($c * 0.4)));
         return ($lift(($base >> 16) & 0xFF) << 16) | ($lift(($base >> 8) & 0xFF) << 8) | $lift($base & 0xFF);
@@ -1146,9 +1320,16 @@ final class Veil
 
         // BEL/ST terminated the body already, so the URL carries no C0
         // controls by construction; Hyperlink's own guard stays load-bearing
-        // against anything that skips past this parse.
+        // against anything that skips past this parse — and a hostile frame
+        // reaching it (a raw-with-content URL with an embedded newline) must
+        // degrade to "no link" rather than abort the whole diff pass: the
+        // ctor throws InvalidArgumentException on such URLs.
         \preg_match('/(?:\A|:)id=([^:]*)/', $params, $m);
-        return new Hyperlink($url, $m[1] ?? '');
+        try {
+            return new Hyperlink($url, $m[1] ?? '');
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**
@@ -1191,12 +1372,14 @@ final class Veil
             border: $this->border,
             scanner: $this->scanner,
             lastRendered: $this->lastRendered,
+            marker: $this->marker,
             session: new RenderSession(),
             vPosition: $this->vPosition,
             hPosition: $this->hPosition,
             posX: $this->posX,
             posY: $this->posY,
             content: $this->content,
+            reducedMotion: $this->reducedMotion,
         );
     }
 }

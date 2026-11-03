@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Overlay\Animation;
 
 use SugarCraft\Spring\Easing\CubicBezier;
-use SugarCraft\Core\Util\Width;
 use SugarCraft\Overlay\Lines;
+use SugarCraft\Overlay\MarkedFrame;
 use SugarCraft\Overlay\Position;
 
 /**
@@ -136,6 +136,9 @@ final class Slide
 
     private function strWidth(string $str): int
     {
-        return Width::string($str);
+        // Travel distance must equal the columns composite() actually
+        // paints: zone envelopes/links cost zero cells there, so Width::string
+        // (which charges their bytes) would slide a marked modal too far.
+        return MarkedFrame::measure($str);
     }
 }
