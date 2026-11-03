@@ -196,11 +196,11 @@ The 2026-06-30 findings above were superseded/re-verified during the full
 | # | Finding | Status |
 |---|---------|--------|
 | H1 | scoring/collision off-by-one | NOT A DEFECT (re-verified: score fires at x=7, one frame AFTER the x=8 collision window passes — clearing, not pre-collision; misread in the original audit) |
-| H2 | `\Closure` hint too broad | FIXED — `@var \Closure(int $maxInclusive): int` on the property + `makePipe` docblock contract (34f3adeeb + closeout commit) |
+| H2 | `\Closure` hint too broad | FIXED — property `@var` now spells `\Closure(int $maxInclusive): int` (dab34d0f1; the m12 pass in 34f3adeeb had fixed only the `makePipe` docblock) |
 | M3 | Style allocation in render loop | FIXED — memoised cells + per-x wall precompute, goldens byte-identical (59fbe374e) |
 | M4 | non-atomic high-score write | FIXED — `AtomicJsonFile` 0600 flock+temp+rename (c5018b217) |
 | M5 | `tickN()` bypasses crash gate | DOCUMENTED + PINNED — public test helper by design; world stepping goes through `update(TickMsg)` which is gated (crash, ready, too-small, NoTty) |
-| L6 | trailing-slash double slash | FIXED — `scoreFilePath` joins `rtrim`'d dir (closeout probe: current `self::scoreFilePath()` builds `dir.'/.candy-flappy/scores.json'` from a configDir param; no caller appends slashes) |
+| L6 | trailing-slash double slash | FIXED at closeout (dab34d0f1) — `scoreFilePath` now `rtrim`s the dir; reflection pin asserts the exact joined path, mutation-discriminating (revert reddens exactly it). A first ledger draft said already-landed; the disk probe caught the misrecord |
 | L7 | `rand()` exposes closure | KEPT — in-process test seam, no secret; type contract now documented |
 | L8 | `json_decode` unchecked | FIXED — quarantine-on-corrupt launch path, size cap, clamp (c5018b217) |
 | L9 | first-class callables | N/A (closures passed as data) |
@@ -223,8 +223,15 @@ documented = spec), M23 (59fbe374e), M25 i18n→DECLINED in-lane (16-locale
 wiring is its own lane; minesweeper `Lang` pattern cited), M27/m25 (83abebf7a),
 M28-M32 minors (spread across 546eebba3/0ecfbec60/34f3adeeb), m1-m32 sweep
 (34f3adeeb + commits above). NOT-REPRODUCED: golden contamination under
-polluted HOME (proven hermetic x2, poison-HOME run), `.vhs/play.gif` stale
-nit (file absent — CI regenerates), Renderer dead code leg (rewritten).
+polluted HOME (proven hermetic x2, poison-HOME run), Renderer dead code
+leg (rewritten with the posture pass). CORRECTED AT CLOSEOUT: `.vhs/play.gif`
+IS tracked (907 KB) and candy-flappy is in the vhs.yml matrix — CI re-renders
+it, so the ready-card copy refreshes on the next CI run (house convention;
+r77 ruling says AGENTS.md's "Don't commit GIFs" line is the stale one). The
+`getDefaultConfigDir` fail-closed throw also had NO pin before this lane's
+closeout (an interim note wrongly claimed one did);
+`testAnUnresolvableConfigDirectoryFailsLoud` now covers it, and
+`m1`/`m3`-ctrl key-gating shipped with 150a1c9e0/efdd83108.
 DECLINED w/ SEAM: mouse flap, pause/focus (m34), gapY-delta clamp (m33,
 caps), `?` help overlay + key-surface unification (m2), alt-gate on keys
 (m3b, InputReader C0-rune ambiguity), persist-fail stderr trace (m6,
