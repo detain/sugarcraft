@@ -202,9 +202,21 @@ final class Toast
     /**
      * Set the maximum number of concurrent alerts.
      * Pass null for unlimited.
+     *
+     * A cap below 1 is refused: it would silence the entire notification
+     * system with no error (lib-reviews-1102 minor-4, the fail-fast asymmetry
+     * against withHistoryLimit()'s negative throw).
+     *
+     * @throws \InvalidArgumentException when $max is set but smaller than 1
      */
     public function withMaxConcurrent(?int $max): self
     {
+        if ($max !== null && $max < 1) {
+            throw new \InvalidArgumentException(
+                "withMaxConcurrent() expects a cap >= 1 or null for unlimited; got {$max} — "
+                . 'a zero/negative cap silently suppresses every alert'
+            );
+        }
         return $this->mutate(['maxConcurrent' => $max]);
     }
 
@@ -280,10 +292,19 @@ final class Toast
      * Expired alerts sitting in the queue are pruned first, on this write.
      *
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the message
+     * @throws \InvalidArgumentException when $expiresAt is a number below the
+     *         epoch floor — a relative duration typed into the wrong slot is a
+     *         silently invisible alert otherwise (lib-reviews-1102 minor-2)
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
     {
+        if ($expiresAt !== null && $expiresAt < 1_000_000_000) {
+            throw new \InvalidArgumentException(
+                'alert() $expiresAt must be an absolute epoch timestamp (microtime(true)); '
+                . "a relative duration belongs in withDuration() — got {$expiresAt}"
+            );
+        }
         $resolvedType = $type instanceof ToastType
             ? $type
             : ToastType::tryFrom(\strtolower($type))
@@ -304,10 +325,18 @@ final class Toast
      *
      * @param float $progress  Value between 0.0 and 1.0 (clamped)
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the progress bar
+     * @throws \InvalidArgumentException when $expiresAt is below the epoch floor,
+     *         or $progress is non-finite (it reaches the Alert constructor)
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
     {
+        if ($expiresAt !== null && $expiresAt < 1_000_000_000) {
+            throw new \InvalidArgumentException(
+                'progressToast() $expiresAt must be an absolute epoch timestamp (microtime(true)); '
+                . "a relative duration belongs in withDuration() — got {$expiresAt}"
+            );
+        }
         $resolvedType = $type instanceof ToastType
             ? $type
             : ToastType::tryFrom(\strtolower($type))
@@ -363,7 +392,8 @@ final class Toast
      * the oldest queued alert AND records the evictee in history, since it
      * lived in the queue and may have been on screen. At a zero cap there is
      * nothing to evict, so the incoming alert is discarded unrecorded rather
-     * than letting the queue exceed the cap.
+     * than letting the queue exceed the cap (withMaxConcurrent() now refuses
+     * caps below 1 — the leg is defensive depth for the shared engine).
      * An alert carrying an id that matches a live alert bypasses all policy:
      * it is an update, not an append (see the replace-by-id leg).
      * Enqueue lets the queue grow past the cap (DropOldest is the default).

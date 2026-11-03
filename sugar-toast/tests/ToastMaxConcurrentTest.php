@@ -128,38 +128,26 @@ final class ToastMaxConcurrentTest extends TestCase
 
     public function testDropOldestAtZeroCapDiscardsIncomingInsteadOfExceedingCap(): void
     {
-        // A zero cap has no oldest alert to evict; the queue must stay empty
-        // rather than letting one alert slip past the cap every push.
-        $t = Toast::new(50)
-            ->withMaxConcurrent(0)
-            ->withOverflow(Overflow::DropOldest)
-            ->alert(ToastType::Info, 'first')
-            ->alert(ToastType::Warning, 'second');
-
-        $this->assertCount(0, $this->getQueue($t));
+        // 2026-11-03 flip (lib-reviews-1102 minor-4): a zero cap silenced the
+        // whole notification system with no error — withMaxConcurrent() now
+        // REFUSES caps below 1, fail-fast like withHistoryLimit()'s negatives.
+        $this->expectException(\InvalidArgumentException::class);
+        Toast::new(50)->withMaxConcurrent(0);
     }
 
     public function testDropNewestAtZeroCapDiscardsIncoming(): void
     {
-        $t = Toast::new(50)
-            ->withMaxConcurrent(0)
-            ->withOverflow(Overflow::DropNewest)
-            ->alert(ToastType::Info, 'first');
-
-        $this->assertCount(0, $this->getQueue($t));
+        // See the zero-cap refusal flip above (minor-4).
+        $this->expectException(\InvalidArgumentException::class);
+        Toast::new(50)->withMaxConcurrent(0);
     }
 
     public function testZeroCapAppliesToProgressToastAndPushToo(): void
     {
-        $toast = Toast::new(50)
-            ->withMaxConcurrent(0)
-            ->withOverflow(Overflow::DropOldest);
-
-        $viaProgress = $toast->progressToast(ToastType::Info, 'loading', 0.5);
-        $this->assertCount(0, $this->getQueue($viaProgress));
-
-        $viaPush = $toast->push(new Alert(ToastType::Info, 'prebuilt'));
-        $this->assertCount(0, $this->getQueue($viaPush));
+        // See the zero-cap refusal flip above (minor-4): the door itself
+        // throws before any queueing engine could discard.
+        $this->expectException(\InvalidArgumentException::class);
+        Toast::new(50)->withMaxConcurrent(0)->withOverflow(Overflow::DropOldest);
     }
 
     // Helper to access private queue

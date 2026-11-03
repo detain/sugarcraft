@@ -22,7 +22,7 @@ enum ToastType: string
     public function nerdIcon(): string
     {
         return match ($this) {
-            self::Error   => "\xf3\xb0\x85\x99",
+            self::Error   => '󰅙',
             self::Warning => '󱔗',
             self::Info    => '󰋽',
             self::Success => '󰄬',

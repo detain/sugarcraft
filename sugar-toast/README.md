@@ -110,7 +110,7 @@ Overflow::Enqueue     // allow queue to exceed maxConcurrent
 
 Control the maximum number of concurrent alerts with `withMaxConcurrent(int|null)`:
 
-- Pass an integer to cap the queue size
+- Pass an integer `>= 1` to cap the queue size — `0` and negatives throw
 - Pass `null` for unlimited (default) — expired alerts still leave the queue on
   the next write, but persistent (non-expiring) alerts accumulate until the
   host calls `clear()` or `dismiss()`
@@ -296,7 +296,7 @@ re-inherits the expiry, so a progress bar whose host stopped ticking
 eventually expires on its own instead of freezing on screen forever.
 `alert()` and `push()` accept ids too; `removeAlert(string $id)` retires a
 single alert by identity. `progressToast()` accepts the same `$expiresAt`
-override as `alert()`. The progress value (0.0–1.0) is clamped automatically.
+override as `alert()`. The progress value (0.0–1.0) is clamped automatically when finite; `NAN`/`INF` are refused with an `InvalidArgumentException` rather than rendering a lying bar.
 
 ## Action Buttons
 
@@ -402,7 +402,7 @@ that had expired but not yet been pruned; a `DropOldest` eviction files the
 evictee; `DropNewest` refusals (never displayed) and `clear()` (a bulk reset,
 not a dismissal) file nothing.
 
-`HistoryLog` is immutable — `dismiss()` returns a new `Toast` with an
+`HistoryLog` is immutable and implements `\Countable`; its constructor accepts only a `list<Alert>` (garbage payloads and string-keyed arrays throw) — `dismiss()` returns a new `Toast` with an
 updated log; prior instances are unchanged. The log is capped at 100 entries
 by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 (`null` = unbounded). A newly LOWERED limit caps FUTURE pushes — entries
@@ -423,11 +423,11 @@ already over the new cap survive until the next push evicts them.
 | `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or Ascii symbols |
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
 | `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + numeric percentage on progress rows; default off keeps every frame byte-identical |
-| `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
+| `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited; `< 1` throws `InvalidArgumentException`) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded) |
-| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place) |
-| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0); same `id` = same box |
+| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` below the epoch floor throws — durations belong in `withDuration()`) |
+| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0, finite — NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws |
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
 | `->removeAlert(string $id): self` | Retire the queued alert with this id, unrecorded (companion of id updates) |
@@ -445,7 +445,7 @@ already over the new cap survive until the next push evicts them.
 
 | Class | Method | Description |
 |-------|--------|-------------|
-| `Alert` | `withProgress(float)` | Attach progress bar (0.0–1.0, clamped) |
+| `Alert` | `withProgress(float)` | Attach progress bar (0.0–1.0, finite out-of-range clamped, NAN/INF throw) |
 | `Alert` | `withActions(list<Action>)` | Attach action buttons |
 | `Alert` | `isExpired(): bool` | Check expiry |
 | `Alert` | `withExpiry(float $duration)` | Set expiry from now |

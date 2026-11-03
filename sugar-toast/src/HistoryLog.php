@@ -11,14 +11,29 @@ namespace SugarCraft\Toast;
  * inspect what was shown and then cleared. Kept bounded via the $limit
  * argument of {@see push()} (driven by Toast::withHistoryLimit()).
  */
-final class HistoryLog
+final class HistoryLog implements \Countable
 {
     /**
      * @param list<Alert> $entries  Dismissed alerts in chronological order
+     * @throws \InvalidArgumentException when $entries is not a list of Alerts
+     *         (lib-reviews-1102 minor-5: the documented shape was enforced by
+     *         nothing — a string-keyed or garbage payload rode through until a
+     *         consumer loop warned/Error'd far from here)
      */
     public function __construct(
         private readonly array $entries = [],
-    ) {}
+    ) {
+        if (!\array_is_list($entries)) {
+            throw new \InvalidArgumentException('HistoryLog entries must be a list (sequential, zero-based keys)');
+        }
+        foreach ($entries as $position => $entry) {
+            if (!$entry instanceof Alert) {
+                throw new \InvalidArgumentException(
+                    "HistoryLog entry {$position} must be an Alert; got " . \get_debug_type($entry)
+                );
+            }
+        }
+    }
 
     /**
      * Append an alert, returning a new log instance.

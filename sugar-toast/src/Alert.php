@@ -20,7 +20,7 @@ final class Alert
      *        timer when one is set; a truly never-expiring alert is expressed
      *        by $persistent (via withoutExpiry()/withCancelledExpiry() or
      *        Toast::cancelAlert()), not by null alone (lib-reviews-1102 M15).
-     * @param float|null $progress  Progress 0.0–1.0; null = no progress bar
+     * @param float|null $progress  Progress 0.0–1.0 (finite; out-of-range clamps, NAN/INF throw); null = no progress bar
      * @param list<Action> $actions  Clickable action buttons
      * @param Color|null $backgroundColor  Optional box background fill (null = no fill, plain render)
      * @param Color|null $foregroundColor  Optional message-text colour (null = terminal default)
@@ -47,7 +47,15 @@ final class Alert
         public readonly ?Color $borderColor = null,
         public readonly bool $persistent = false,
         public readonly ?string $id = null,
-    ) {}
+    ) {
+        if ($progress !== null && !\is_finite($progress)) {
+            throw new \InvalidArgumentException(
+                'Alert progress must be a finite 0.0-1.0 float (out-of-range values '
+                . 'clamp); NAN/INF have no honest bar to render (lib-reviews-1102 minor-6: '
+                . 'NAN-as-full-bar was the worst possible fallback)'
+            );
+        }
+    }
 
     /**
      * Factory mirroring Action::new() / Toast::new() (lib-reviews-1102 n4:
@@ -118,10 +126,18 @@ final class Alert
     }
 
     /**
-     * Attach a progress value (0.0–1.0). Values outside range are clamped.
+     * Attach a progress value (0.0–1.0). Finite out-of-range values are
+     * clamped; non-finite values are refused (see the constructor law).
+     *
+     * @throws \InvalidArgumentException when $progress is NAN or INF
      */
     public function withProgress(float $progress): self
     {
+        if (!\is_finite($progress)) {
+            throw new \InvalidArgumentException(
+                'withProgress() requires a finite 0.0-1.0 float (clamped); NAN/INF are refused'
+            );
+        }
         $clamped = \max(0.0, \min(1.0, $progress));
         return new self($this->type, $this->message, $this->expiresAt, $clamped, $this->actions, $this->backgroundColor, $this->foregroundColor, $this->borderColor, $this->persistent, $this->id);
     }
