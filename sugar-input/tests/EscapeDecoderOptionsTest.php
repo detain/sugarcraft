@@ -37,6 +37,21 @@ final class EscapeDecoderOptionsTest extends TestCase
         $this->assertFalse($opts->enablePaste);
     }
 
+    public function testOptionsAreImmutable(): void
+    {
+        // m1: a decoder captures its options at construction; a mid-session
+        // property write would silently diverge the live decoder from the
+        // object the host still holds. The flags are readonly — changing a
+        // protocol mix means passing a new instance to a new decoder.
+        $opts = new EscapeDecoderOptions();
+
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessage('Cannot modify readonly property');
+
+        /** @phpstan-ignore-next-line intentional readonly-violation probe */
+        $opts->enableMouse = false;
+    }
+
     public function testPartialCustomization(): void
     {
         $opts = new EscapeDecoderOptions(enableMouse: false);

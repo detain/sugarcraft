@@ -8,7 +8,9 @@ namespace SugarCraft\Input;
  * Configuration options for EscapeDecoder protocol filtering.
  *
  * Allows applications to disable unused protocol parsing to reduce overhead.
- * By default all protocols are enabled.
+ * By default all protocols are enabled. The options are immutable — the
+ * decoder reads them at construction; a different mix means a new instance
+ * (named arguments make that a one-liner).
  *
  * @example
  * ```php
@@ -36,10 +38,10 @@ final class EscapeDecoderOptions
      *                            by a plain byte merges into Alt+<char> unless flushed first.
      */
     public function __construct(
-        public bool $enableMouse = true,
-        public bool $enableKitty = true,
-        public bool $enableFocus = true,
-        public bool $enablePaste = true,
-        public bool $deferTrailingEscape = false,
+        public readonly bool $enableMouse = true,
+        public readonly bool $enableKitty = true,
+        public readonly bool $enableFocus = true,
+        public readonly bool $enablePaste = true,
+        public readonly bool $deferTrailingEscape = false,
     ) {}
 }
