@@ -47,10 +47,10 @@ final class Position implements \JsonSerializable
      */
     public function __unserialize(array $data): void
     {
-        // Reconstruct via constructor to properly initialize readonly promoted properties.
-        $instance = new self($data['col'], $data['row']);
-        $this->col = $instance->col;
-        $this->row = $instance->row;
+        // Direct initialization is legal for readonly properties inside
+        // __unserialize (the object is fresh); no throwaway instance needed.
+        $this->col = (int) $data['col'];
+        $this->row = (int) $data['row'];
     }
 
     /**

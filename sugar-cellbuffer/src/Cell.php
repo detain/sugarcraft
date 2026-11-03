@@ -46,14 +46,25 @@ final class Cell implements \JsonSerializable
      *                            C0/DEL control bytes from untrusted text (see class docblock).
      * @param Style|null $style  Per-cell style or null for defaults
      * @param Hyperlink|null $link OSC 8 hyperlink or null
-     * @param int         $width  Display width in cells (1 or 2; 0 for continuation)
+     * @param int         $width  Columns the rune occupies (0 continuation,
+     *                            1 normal, 2 wide; run-length spans carry their
+     *                            column count). Negative widths are refused.
+     *
+     * @throws \InvalidArgumentException when $width is negative.
      */
     public function __construct(
         public readonly string $rune,
         public readonly ?Style $style,
         public readonly ?Hyperlink $link,
         public readonly int $width,
-    ) {}
+    ) {
+        // Negative widths desync every column computation (toAnsi, diff,
+        // encoder cursor). Widths above 2 are a legal run-length idiom
+        // (sugar-table border fills), so only the sign is enforced here.
+        if ($width < 0) {
+            throw new \InvalidArgumentException("Cell width must not be negative: {$width}");
+        }
+    }
 
     /**
      * Default factory — blank cell.
@@ -93,7 +104,9 @@ final class Cell implements \JsonSerializable
 
     /**
      * Display width in terminal cells.
-     * @return int 0 (continuation), 1 (normal), or 2 (wide/CJK/emoji)
+     *
+     * @return int 0 (continuation), 1 (normal), 2 (wide/CJK/emoji), or a
+     *              larger column count for run-length spans (0 or above).
      */
     public function width(): int { return $this->width; }
 
@@ -134,10 +147,15 @@ final class Cell implements \JsonSerializable
      */
     public function __unserialize(array $data): void
     {
+        $width = (int) ($data['width'] ?? 1);
+        if ($width < 0) {
+            throw new \InvalidArgumentException("Cell width must not be negative: {$width}");
+        }
+
         $this->rune = $data['rune'];
         $this->style = $data['style'] !== null ? new Style($data['style']['fg'], $data['style']['bg'], $data['style']['attrs']) : null;
         $this->link = $data['link'] !== null ? new Hyperlink($data['link']['url'], $data['link']['id']) : null;
-        $this->width = $data['width'];
+        $this->width = $width;
     }
 
     /**

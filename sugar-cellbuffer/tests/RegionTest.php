@@ -211,4 +211,12 @@ final class RegionTest extends TestCase
         $this->assertSame(-3, $decoded['origin']['col']);
         $this->assertSame(-4, $decoded['origin']['row']);
     }
+
+    public function testUnserializeRefusesForgedNegativeDimensions(): void
+    {
+        $fresh = (new \ReflectionClass(Region::class))->newInstanceWithoutConstructor();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Region dimensions must not be negative: -1x2');
+        $fresh->__unserialize(['origin' => ['col' => 0, 'row' => 0], 'width' => -1, 'height' => 2]);
+    }
 }

@@ -33,7 +33,7 @@ final class Buffer implements \JsonSerializable
     {
         if ($width <= 0 || $height <= 0) {
             throw new \InvalidArgumentException(
-                'Buffer dimensions must be positive'
+                "Buffer dimensions must be positive (got {$width}x{$height})"
             );
         }
         $size = $width * $height;
@@ -70,7 +70,7 @@ final class Buffer implements \JsonSerializable
     {
         if ($width <= 0 || $height <= 0) {
             throw new \InvalidArgumentException(
-                'Buffer dimensions must be positive'
+                "Buffer dimensions must be positive (got {$width}x{$height})"
             );
         }
         if ($ansi === null || $ansi === '') {
@@ -362,7 +362,7 @@ final class Buffer implements \JsonSerializable
     {
         if ($width <= 0 || $height <= 0) {
             throw new \InvalidArgumentException(
-                'Buffer dimensions must be positive'
+                "Buffer dimensions must be positive (got {$width}x{$height})"
             );
         }
         $expected = $width * $height;
@@ -429,7 +429,8 @@ final class Buffer implements \JsonSerializable
      * Blit (composite) $source into this buffer's $region.
      *
      * Cells from $source are copied into the region defined by
-     * $region->origin and $region->size, clipped to buffer edges.
+     * $region->origin and $region->width/$region->height, clipped to the
+     * buffer edges.
      *
      * Note: negative origins are silently clipped — a region origin at
      * (-1, -1) starts one cell left/above the buffer's top-left corner
@@ -445,28 +446,22 @@ final class Buffer implements \JsonSerializable
         $srcW = $source->width;
         $srcH = $source->height;
 
-        for ($dy = 0; $dy < $region->height; $dy++) {
-            for ($dx = 0; $dx < $region->width; $dx++) {
-                $srcCol = $dx;
-                $srcRow = $dy;
+        // Loop bounds are clipped to the region ∩ source ∩ buffer
+        // intersection BEFORE iterating: a data-driven region far larger
+        // than the grid costs the intersection, never the full area.
+        $dxStart = max(0, -$region->origin->col);
+        $dyStart = max(0, -$region->origin->row);
+        $dxEnd = min($region->width, $srcW, $this->width - $region->origin->col);
+        $dyEnd = min($region->height, $srcH, $this->height - $region->origin->row);
 
-                if ($srcCol >= $srcW || $srcRow >= $srcH) {
-                    continue;
-                }
-
-                $dstCol = $region->origin->col + $dx;
-                $dstRow = $region->origin->row + $dy;
-
-                if ($dstCol < 0 || $dstRow < 0) {
-                    // Negative origins: silently skip cells outside buffer bounds.
-                    continue;
-                }
-
-                if ($dstCol >= $this->width || $dstRow >= $this->height) {
-                    continue;
-                }
-
-                $this->placeWithPair($grid, $dstCol, $dstRow, $source->grid[$srcRow * $srcW + $srcCol]);
+        for ($dy = $dyStart; $dy < $dyEnd; $dy++) {
+            for ($dx = $dxStart; $dx < $dxEnd; $dx++) {
+                $this->placeWithPair(
+                    $grid,
+                    $region->origin->col + $dx,
+                    $region->origin->row + $dy,
+                    $source->grid[$dy * $srcW + $dx],
+                );
             }
         }
 
@@ -477,29 +472,30 @@ final class Buffer implements \JsonSerializable
      * Efficiently fill a rectangular $region with a single $cell.
      *
      * Wide-cell pairing is enforced per written cell exactly as in
-     * {@see withCellAt()}.
+     * {@see withCellAt()} — a width-2 lead's continuation partner may land
+     * one column OUTSIDE the fill region at its right edge (same shape as
+     * withRegion()), and a lead whose partner falls outside the region
+     * still gets it written in bounds; a region-terminating sweep leaves a
+     * single lead cell at the end of a filled wide run, as elsewhere.
      *
      * @param Region $region The region to fill (clipped to buffer bounds)
-     * @param Cell   $cell   The cell to write at each position in the region
+     * @param Cell   $cell   The cell to write across the region
      */
     public function fill(Region $region, Cell $cell): self
     {
         $grid = $this->grid;
 
-        for ($dy = 0; $dy < $region->height; $dy++) {
-            for ($dx = 0; $dx < $region->width; $dx++) {
-                $dstCol = $region->origin->col + $dx;
-                $dstRow = $region->origin->row + $dy;
+        // Loop bounds clipped to the region ∩ buffer intersection: a
+        // data-driven region far larger than the grid costs the
+        // intersection, never the full area.
+        $dxStart = max(0, -$region->origin->col);
+        $dyStart = max(0, -$region->origin->row);
+        $dxEnd = min($region->width, $this->width - $region->origin->col);
+        $dyEnd = min($region->height, $this->height - $region->origin->row);
 
-                if ($dstCol < 0 || $dstRow < 0) {
-                    continue;
-                }
-
-                if ($dstCol >= $this->width || $dstRow >= $this->height) {
-                    continue;
-                }
-
-                $this->placeWithPair($grid, $dstCol, $dstRow, $cell);
+        for ($dy = $dyStart; $dy < $dyEnd; $dy++) {
+            for ($dx = $dxStart; $dx < $dxEnd; $dx++) {
+                $this->placeWithPair($grid, $region->origin->col + $dx, $region->origin->row + $dy, $cell);
             }
         }
 
@@ -507,13 +503,46 @@ final class Buffer implements \JsonSerializable
     }
 
     /**
+     * Upper bound on the cells a single {@see copy()} may extract. The copy
+     * output is region-sized by contract, so unlike fill()/withRegion() its
+     * cost cannot be clipped to an intersection — it must be capped.
+     */
+    public const MAX_COPY_CELLS = 1_000_000;
+
+    /**
      * Extract a sub-region of this buffer into a new buffer.
+     *
+     * The output is always exactly $region-sized; positions outside this
+     * buffer's bounds are filled with blank cells (this differs from
+     * withRegion()/fill(), which CLIP away out-of-bounds work — copy()
+     * pads, because its contract is a definite output shape).
+     *
+     * Wide-cell pairs are blitted verbatim: cropping a pair's partner
+     * column leaves the lead without its continuation (documented hazard
+     * of the region window, not normalised here).
      *
      * @param Region $region The region to copy (origin is always (0,0) in the returned buffer)
      * @return self A new buffer containing the copied region
+     * @throws \InvalidArgumentException on a zero-area region (an output
+     *         buffer cannot be empty) or a region whose area exceeds
+     *         {@see self::MAX_COPY_CELLS}.
      */
     public function copy(Region $region): self
     {
+        if ($region->width <= 0 || $region->height <= 0) {
+            throw new \InvalidArgumentException(
+                "Buffer::copy() requires a region with positive dimensions (got {$region->width}x{$region->height})",
+            );
+        }
+
+        if ($region->width * $region->height > self::MAX_COPY_CELLS) {
+            throw new \InvalidArgumentException(sprintf(
+                'Buffer::copy() region of %d cells exceeds the %d-cell safety cap.',
+                $region->width * $region->height,
+                self::MAX_COPY_CELLS,
+            ));
+        }
+
         $newWidth = $region->width;
         $newHeight = $region->height;
         $newGrid = [];
@@ -989,12 +1018,27 @@ final class Buffer implements \JsonSerializable
     /**
      * Unserialization hook for caching/IPC use cases.
      *
+     * Fail-closed: the dimension and grid-size invariants are re-checked
+     * here (and every inner Cell/Hyperlink rebuild routes its own
+     * constructor guards), so a forged payload cannot mint a structurally
+     * invalid buffer.
+     *
      * @param array{width: int, height: int, grid: list<array>} $data
      */
     public function __unserialize(array $data): void
     {
-        $this->width = $data['width'];
-        $this->height = $data['height'];
+        $width = (int) ($data['width'] ?? 0);
+        $height = (int) ($data['height'] ?? 0);
+        $grid = $data['grid'] ?? [];
+        if ($width <= 0 || $height <= 0) {
+            throw new \InvalidArgumentException("Buffer dimensions must be positive (got {$width}x{$height})");
+        }
+        if (!is_array($grid) || count($grid) !== $width * $height) {
+            throw new \InvalidArgumentException('Buffer grid must contain exactly ' . ($width * $height) . " cells ({$width}x{$height}), got " . (is_array($grid) ? count($grid) : '???'));
+        }
+
+        $this->width = $width;
+        $this->height = $height;
         $this->grid = array_map(function (array $cellData): Cell {
             $style = $cellData['style'] !== null
                 ? new Style($cellData['style']['fg'], $cellData['style']['bg'], $cellData['style']['attrs'])

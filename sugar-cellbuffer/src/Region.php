@@ -10,7 +10,10 @@ namespace SugarCraft\CellBuffer;
  *
  * Dimensions must be non-negative. A zero-area region (0×N or N×0) is
  * explicitly allowed and behaves as a no-op in {@see Buffer::fill()} /
- * {@see Buffer::copy()} — the fill/copy loops simply run zero iterations.
+ * {@see Buffer::withRegion()} — the loops simply run zero iterations.
+ * {@see Buffer::copy()} is the exception: its result is region-sized by
+ * contract, so a zero-area region cannot be represented and copy()
+ * rejects it with a named error.
  * A NEGATIVE width or height is rejected at construction: previously such
  * a region was silently accepted and then quietly produced no output
  * (the `$dx < $width` loop guard was false immediately), masking the
@@ -18,7 +21,7 @@ namespace SugarCraft\CellBuffer;
  *
  * Note: zero-width or zero-height regions are edge cases — a cell at
  * the origin is contained only if the region has positive dimensions.
- * See {@see contains()} for the zero-size boundary behaviour.
+ * See {@see self::contains()} for the zero-size boundary behaviour.
  *
  * @readonly
  */
@@ -66,9 +69,8 @@ final class Region implements \JsonSerializable
     }
 
     /**
-     * Whether a cell at ($col, $row) falls within this region.
-     *
-     * @see For zero-width/height edge cases, see class docblock.
+     * Whether a cell at ($col, $row) falls within this region. A zero-area
+     * region contains nothing (see class docblock).
      */
     public function contains(int $col, int $row): bool
     {
@@ -95,13 +97,22 @@ final class Region implements \JsonSerializable
     /**
      * Unserialization hook for caching/IPC use cases.
      *
+     * Fail-closed: the constructor's non-negative dimension check is a
+     * safety control, so a forged payload cannot mint an invalid region.
+     *
      * @param array{origin: array{col: int, row: int}, width: int, height: int} $data
      */
     public function __unserialize(array $data): void
     {
-        $this->origin = new Position($data['origin']['col'], $data['origin']['row']);
-        $this->width = $data['width'];
-        $this->height = $data['height'];
+        $width = (int) ($data['width'] ?? 0);
+        $height = (int) ($data['height'] ?? 0);
+        if ($width < 0 || $height < 0) {
+            throw new \InvalidArgumentException("Region dimensions must not be negative: {$width}x{$height}");
+        }
+
+        $this->origin = new Position((int) $data['origin']['col'], (int) $data['origin']['row']);
+        $this->width = $width;
+        $this->height = $height;
     }
 
     /**

@@ -1861,4 +1861,73 @@ final class BufferTest extends TestCase
         $this->assertSame('', $result->cellAt(1, 0)->rune());
         $this->assertSame(0, $result->cellAt(1, 0)->width());
     }
+
+    public function testCopyRefusesAZeroAreaRegionByName(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('positive dimensions');
+        Buffer::new(4, 4)->copy(new Region(Position::new(0, 0), 0, 4));
+    }
+
+    public function testCopyRefusesARegionBeyondTheSafetyCap(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('safety cap');
+        Buffer::new(4, 4)->copy(new Region(Position::new(0, 0), 1001, 1000));
+    }
+
+    public function testFillingARegionFarLargerThanTheBufferCostsTheIntersection(): void
+    {
+        $buf = Buffer::new(8, 2);
+        $buf = $buf->fill(new Region(Position::new(0, 0), 1_000_000_000, 1_000_000_000), Cell::new('x'));
+        for ($row = 0; $row < 2; $row++) {
+            for ($col = 0; $col < 8; $col++) {
+                $this->assertSame('x', $buf->cellAt($col, $row)->rune());
+            }
+        }
+    }
+
+    public function testWithRegionClipsToTheSourceAndBufferIntersection(): void
+    {
+        $source = Buffer::new(2, 2)->fill(new Region(Position::new(0, 0), 2, 2), Cell::new('x'));
+        $buf = Buffer::new(8, 8)->withRegion(new Region(Position::new(0, 0), 1_000_000_000, 1_000_000_000), $source);
+        $this->assertSame('x', $buf->cellAt(0, 0)->rune());
+        $this->assertSame('x', $buf->cellAt(1, 1)->rune());
+        $this->assertSame(' ', $buf->cellAt(2, 0)->rune(), 'Beyond the source width the blit stops.');
+        $this->assertSame(' ', $buf->cellAt(0, 2)->rune(), 'Beyond the source height the blit stops.');
+    }
+
+    public function testUnserializeRefusesNonPositiveDimensions(): void
+    {
+        $fresh = (new \ReflectionClass(Buffer::class))->newInstanceWithoutConstructor();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Buffer dimensions must be positive (got 0x1)');
+        $fresh->__unserialize(['width' => 0, 'height' => 1, 'grid' => []]);
+    }
+
+    public function testUnserializeRefusesAForgedGridCount(): void
+    {
+        $blank = ['rune' => ' ', 'style' => null, 'link' => null, 'width' => 1];
+        $fresh = (new \ReflectionClass(Buffer::class))->newInstanceWithoutConstructor();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('exactly 4 cells (2x2), got 3');
+        $fresh->__unserialize(['width' => 2, 'height' => 2, 'grid' => [$blank, $blank, $blank]]);
+    }
+
+    public function testUnserializeRefusesAForgedNegativeCellWidth(): void
+    {
+        $fresh = (new \ReflectionClass(Buffer::class))->newInstanceWithoutConstructor();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cell width must not be negative: -1');
+        $fresh->__unserialize(['width' => 1, 'height' => 1, 'grid' => [
+            ['rune' => 'a', 'style' => null, 'link' => null, 'width' => -1],
+        ]]);
+    }
+
+    public function testTheCellConstructorRefusesANegativeWidth(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cell width must not be negative: -1');
+        new Cell('a', null, null, -1);
+    }
 }
