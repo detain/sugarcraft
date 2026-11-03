@@ -2454,6 +2454,70 @@ final class PlayerTest extends TestCase
         // Last line is the status text.
         $this->assertSame('loading...  space play  q quit', $lines[$cellsH]);
     }
+    /**
+     * @testdox M11: a budgeted forward seek yields to the frame budget and records the landed playhead
+     */
+    public function testAForwardSeekYieldsToTheFrameBudget(): void
+    {
+        $frames = [];
+        for ($i = 0; $i < 900; $i++) {
+            $frames[] = new RgbFrame(str_repeat("\x10\x20\x30", 12), 4, 1);
+        }
+        $decoder = new CountingDecoder($frames);
+        $player = Player::fromDecoder(
+            decoder: $decoder,
+            cellsW: 4,
+            cellsH: 1,
+            fps: 30.0,
+            mode: Mode::Ascii,
+            frameBudgetMs: 5.0,
+        );
+
+        $seeked = $player->withSeek(800);
+
+        $this->assertLessThan(
+            200,
+            $decoder->pulls,
+            'the walk must bail on the budget long before the 800-frame target',
+        );
+        $this->assertGreaterThan(0.0, $seeked->position(), 'guaranteed progress: at least one frame was consumed');
+        // The forward walk from 0 pulls exactly `landed` frames, so the
+        // recorded playhead must equal the pull count — the position the
+        // decoder is ACTUALLY at, never ahead of it.
+        $this->assertSame(
+            (float) $decoder->pulls / 30.0,
+            $seeked->position(),
+            'the recorded playhead must be exactly where the walk stopped',
+        );
+        $this->assertLessThan(800, $decoder->pulls, 'the seek did not reach the requested target');
+    }
+
+    /**
+     * @testdox M11: without a budget the forward and backward walks still land EXACTLY on the target
+     */
+    public function testAnUnbudgetedSeekStillLandsOnTheExactTarget(): void
+    {
+        $frames = [];
+        for ($i = 0; $i < 900; $i++) {
+            $frames[] = new RgbFrame(str_repeat("\x10\x20\x30", 12), 4, 1);
+        }
+        $decoder = new CountingDecoder($frames);
+        $player = Player::fromDecoder(
+            decoder: $decoder,
+            cellsW: 4,
+            cellsH: 1,
+            fps: 30.0,
+            mode: Mode::Ascii,
+        );
+
+        $forward = $player->withSeek(600);
+        $this->assertSame(600, $decoder->pulls, 'budget 0 walks the whole span, exactly the pre-budget behaviour');
+        $this->assertEqualsWithDelta(600 / 30.0, $forward->position(), 1e-9);
+
+        $backward = $forward->withSeek(100);
+        $this->assertEqualsWithDelta(100 / 30.0, $backward->position(), 1e-9, 'an unbudgeted backward rebuild lands on the requested index');
+    }
+
 }
 
 /**

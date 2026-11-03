@@ -677,7 +677,7 @@ final class Player implements Model
         $cols = $pending->cols;
         $rows = $pending->rows;
 
-        [$decoder, $frame] = $this->rebuildDecoderAt($cols, $rows, $this->mode, $this->frameIndex);
+        [$decoder, $frame, $landed] = $this->rebuildDecoderAt($cols, $rows, $this->mode, $this->frameIndex);
 
         // Rebuild the renderer to match the new cell dimensions (same mode/ramp/cellPx),
         // and clear the pending slot in the same mutate() so the apply is atomic: no
@@ -688,6 +688,10 @@ final class Player implements Model
             'pendingResize' => null,
             'decoder' => $decoder,
             'currentFrame' => $frame ?? $this->currentFrame,
+            // The rebuild may have yielded mid-walk on the frame budget; the
+            // recorded playhead must be where the decoder ACTUALLY is.
+            'frameIndex' => $landed,
+            'videoTime' => $landed / $this->fps,
             'lastTickTime' => microtime(true),
             'renderer' => RendererFactory::new($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH),
         ]);
@@ -870,12 +874,15 @@ final class Player implements Model
                 ]), null];
             }
 
-            [$decoder, $frame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
+            [$decoder, $frame, $landed] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
 
             $nextPlayer = $this->mutate([
                 'mode' => $nextMode,
                 'decoder' => $decoder,
                 'currentFrame' => $frame ?? $this->currentFrame,
+                // Budget-yielded walk: record the true landed playhead.
+                'frameIndex' => $landed,
+                'videoTime' => $landed / $this->fps,
                 'renderer' => RendererFactory::new($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
             ]);
             return [$nextPlayer, null];
@@ -1327,7 +1334,15 @@ final class Player implements Model
      *    from the source path via DecoderFactory, re-presenting the request
      *    headers so a signed stream survives the rebuild.
      *
-     * @return array{0: Decoder, 1: ?RgbFrame}
+     * The forward walk honours the player's frameBudgetMs wall clock (like the
+     * tick pump's catch-up): when the budget expires with frames still to walk,
+     * the walk stops at the last frame actually consumed and its content index
+     * comes back as element 2 — the landed index — so every caller re-records
+     * the TRUE playhead instead of the requested one and later ticks converge
+     * from there rather than desyncing ahead of the decoder. Budget 0 (default)
+     * walks the whole span, exactly the pre-budget behaviour.
+     *
+     * @return array{0: Decoder, 1: ?RgbFrame, 2: int} decoder, last frame, landed content index
      */
     private function rebuildDecoderAt(int $cellsW, int $cellsH, Mode $mode, int $frameIndex): array
     {
@@ -1339,14 +1354,24 @@ final class Player implements Model
             $decoder = DecoderFactory::new($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->cellPxW, $this->cellPxH, $this->headers);
         }
         $frame = null;
+        $landed = 0;
+        $deadline = $this->frameBudgetMs > 0.0
+            ? microtime(true) + ($this->frameBudgetMs / 1000.0)
+            : null;
         for ($i = 0; $i <= $frameIndex; $i++) {
             $f = $decoder->next();
             if ($f === null) {
                 break;
             }
             $frame = $f;
+            $landed = $i;
+            // Same guaranteed-progress rule as the tick pump: the first pulled
+            // frame is never abandoned, and only a still-pending walk bails.
+            if ($deadline !== null && $i < $frameIndex && microtime(true) >= $deadline) {
+                break;
+            }
         }
-        return [$decoder, $frame];
+        return [$decoder, $frame, $landed];
     }
 
     /**
@@ -1365,13 +1390,15 @@ final class Player implements Model
         // decoder and skip forward to the target. rebuildDecoderAt() closes the
         // old decoder first (F21: no leaked ffmpeg process) on the real path.
         if ($targetIndex < $this->frameIndex) {
-            [$decoder, $frame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, $targetIndex);
-            $newVideoTime = $targetIndex / $this->fps; // videoTime = content time (not scaled)
+            [$decoder, $frame, $landed] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, $targetIndex);
+            // videoTime = content time (not scaled); the landed index, not the
+            // requested one, when the walk yielded on the frame budget.
+            $newVideoTime = $landed / $this->fps;
 
             return $this->mutate([
                 'decoder' => $decoder,
                 'videoTime' => $newVideoTime,
-                'frameIndex' => $targetIndex,
+                'frameIndex' => $landed,
                 'currentFrame' => $frame,
                 'lastTickTime' => microtime(true),
                 'audioPlayer' => $newAudio,
@@ -1383,15 +1410,26 @@ final class Player implements Model
             return $this;
         }
 
-        // Forward seek: advance decoder to target frame.
+        // Forward seek: advance decoder to target frame — under the player's
+        // frame budget when one is set, so a deep digit-seek on a long clip
+        // yields to the event loop instead of walking thousands of frames
+        // inside one keypress (the landed $idx below then records the true
+        // position and later ticks converge, exactly like the tick pump).
         $frame = $this->currentFrame;
         $idx = $this->frameIndex;
+        $fwdDeadline = $this->frameBudgetMs > 0.0
+            ? microtime(true) + ($this->frameBudgetMs / 1000.0)
+            : null;
         while ($idx < $targetIndex) {
-            $frame = $this->decoder->next();
-            if ($frame === null) {
+            $pulled = $this->decoder->next();
+            if ($pulled === null) {
                 break;
             }
+            $frame = $pulled;
             $idx++;
+            if ($fwdDeadline !== null && $idx < $targetIndex && microtime(true) >= $fwdDeadline) {
+                break;
+            }
         }
 
         // F4 fix: videoTime = content time (not scaled by speed).
@@ -1443,7 +1481,8 @@ final class Player implements Model
      * The time-domain companion to {@see withSeek()} (which is frame-indexed):
      * it re-spawns the decoder with a fast ffmpeg input seek (`-ss`) so jumping
      * deep into a multi-GB network stream is instant rather than decoding every
-     * intervening frame. Audio is realigned to the same offset. Returns a new
+     * intervening frame. A decoder without `-ss` falls back to the index walk,
+     * which honours the player's frame budget like every other forward pull. Audio is realigned to the same offset. Returns a new
      * Player (immutable); a host screen decides whether to re-arm the tick.
      */
     public function seekToSeconds(float $sec): self
