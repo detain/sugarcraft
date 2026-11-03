@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * SugarTable — interactive table component demo.
+ * SugarTable — data table component demo.
  *
  * Run: php examples/basic.php
  */

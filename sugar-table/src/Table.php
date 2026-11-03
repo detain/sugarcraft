@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Table;
 
 /**
- * Customizable interactive table component.
+ * Customizable data table component: programmatic row cursor, keyboard-driven
+ * scrolling, and per-cell styling. It never handles mouse input itself — wire
+ * input events in the host application.
  *
  * Features: column definitions, row data, styled cells, selection,
  * pagination, sorting, filtering, frozen columns, horizontal scroll,
