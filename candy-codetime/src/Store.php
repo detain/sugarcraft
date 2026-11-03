@@ -72,10 +72,13 @@ final class Store implements HeartbeatReader
      * states about silent copy loss, applied one file over (the shape is
      * candy-code's PrivateDir::ensure, vendored small).
      *
+     * @param string $label nouns the message uses for the path, so a caller
+     *                      creating a *backup* directory does not report a
+     *                      "data directory" failure
      * @throws \RuntimeException if the directory cannot be created or cannot
      *                           be made owner-private
      */
-    public static function ensurePrivateDir(string $dir): void
+    public static function ensurePrivateDir(string $dir, string $label = 'data directory'): void
     {
         if (!is_dir($dir)) {
             $previous = umask(0o077);
@@ -87,12 +90,25 @@ final class Store implements HeartbeatReader
             if (!$created && !is_dir($dir)) {
                 $last = error_get_last();
                 throw new \RuntimeException(
-                    'candy-codetime: cannot create data directory ' . $dir
+                    'candy-codetime: cannot create ' . $label . ' ' . $dir
                     . (isset($last['message']) ? ': ' . $last['message'] : ''),
                 );
             }
         }
-        self::makePrivate($dir, 0o077, 0o700, 'data directory');
+        self::makePrivate($dir, 0o077, 0o700, $label);
+    }
+
+    /**
+     * Tighten an existing file to owner-private 0600, throwing when the chmod
+     * fails. Public because {@see AutoBackup} must apply the same law to the
+     * copies it writes: a byte-for-byte clone of a private day file, left at
+     * the umask default, leaks the same absolute paths one directory over.
+     *
+     * @throws \RuntimeException if the mode cannot be settled
+     */
+    public static function ensurePrivateFile(string $path, string $label = 'data file'): void
+    {
+        self::makePrivate($path, 0o077, 0o600, $label);
     }
 
     /**

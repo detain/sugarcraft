@@ -319,6 +319,11 @@ if ($cmd === 'gaps') {
 if ($cmd === 'backup') {
     $dataDir = $store->dir;
     $backupDir = $dataDir . '-backups';
+    // M1: the archive only clones `*.jsonl`. A sqlite user who believes they
+    // are covered must be told otherwise on every run, not by a footnote.
+    if (is_file($dbPath)) {
+        fwrite(STDERR, Lang::t('cli.backup_sqlite_notice', ['db' => $dbPath]) . "\n");
+    }
     $autoBackup = new AutoBackup($backupDir, [$dataDir]);
     try {
         $count = $autoBackup->rotate(30);

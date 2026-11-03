@@ -42,7 +42,7 @@ Or from a clone: `composer install && php bin/candy-codetime`.
 | `milestone` | `<add\|list> [name] [description]` | Manage release markers. Milestones live only in SQLite, so this command forces the sqlite backend regardless of `--backend`. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]). |
 | `gaps` | `[days]` | List untracked stretches longer than 300 seconds within the last N days (default 7). |
-| `backup` | — | Archive data files older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data. |
+| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data. **The SQLite database is not archived**: a byte copy of a live `.db` is a torn snapshot, so sqlite users must use `sqlite3 <db> ".backup <dest>"` or `VACUUM INTO '<dest>'` (the CLI prints this reminder when a `.db` is present). |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
 
@@ -77,9 +77,12 @@ The data directory and every file in it are owner-private: directories are
 `0700`, day files and the database are `0600`, created under a narrowed umask
 so they are never world-readable for an instant — and a directory or file left
 loose by an older version is tightened on the next write (if that fails, the
-write aborts rather than storing your paths in the open). Heartbeats carry
-absolute file paths and project names; treat the directory accordingly.
-`NO_COLOR=1` renders the dashboard without any colour tints.
+write aborts rather than storing your paths in the open). The `backup` archive
+under `<dir>-backups/` is held to the same contract: it is created `0700` and
+every copied day file is tightened to `0600`, because an archive of those files
+is the same path map one directory over. Heartbeats carry absolute file paths
+and project names; treat the directory accordingly. `NO_COLOR=1` renders the
+dashboard without any colour tints.
 
 ## Keys (dashboard)
 

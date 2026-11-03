@@ -30,6 +30,7 @@ return [
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} 個のファイルをアーカイブしました",
     'cli.backup_none' => "backup: アーカイブする新しいファイルはありません",
+    'cli.backup_sqlite_notice' => "backup: SQLite データベース {db} はこのコマンドではアーカイブされません — 破損しないコピーには sqlite3 <db> \".backup <dest>\" または VACUUM INTO を使用してください",
     'cli.unknown_command' => "candy-codetime: 不明なコマンド: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} は非推奨です。代わりに CANDY_CODETIME_DIR を設定してください。",
     'cli.migration_notice' => "candy-codetime: {notice}",

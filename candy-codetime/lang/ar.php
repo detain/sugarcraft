@@ -30,6 +30,7 @@ return [
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: تمت أرشفة {count} ملفات",
     'cli.backup_none' => "backup: لا جديد للأرشفة",
+    'cli.backup_sqlite_notice' => "backup: قاعدة بيانات SQLite {db} لا يتم أرشفتها بواسطة هذا الأمر — استخدم sqlite3 <db> \".backup <dest>\" أو VACUUM INTO للحصول على نسخة آمنة",
     'cli.unknown_command' => "candy-codetime: أمر غير معروف: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: المتغير {variable} مهمل؛ استخدم CANDY_CODETIME_DIR بدلاً منه.",
     'cli.migration_notice' => "candy-codetime: {notice}",

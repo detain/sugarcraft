@@ -30,6 +30,7 @@ return [
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} souborů archivováno",
     'cli.backup_none' => "backup: nic nového k archivaci",
+    'cli.backup_sqlite_notice' => "backup: databáze SQLite {db} tímto příkazem NE archivuje se — pro bezpečnou kopici použijte sqlite3 <db> \".backup <dest>\" nebo VACUUM INTO",
     'cli.unknown_command' => "candy-codetime: neznámý příkaz: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} je zastaralé; nastavte místo toho CANDY_CODETIME_DIR.",
     'cli.migration_notice' => "candy-codetime: {notice}",

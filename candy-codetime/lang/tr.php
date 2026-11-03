@@ -30,6 +30,7 @@ return [
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: {count} dosya arşivlendi",
     'cli.backup_none' => "backup: arşivlenecek yeni bir şey yok",
+    'cli.backup_sqlite_notice' => "backup: SQLite veritabanı {db} bu komutla arşivLENMEZ — güvenli bir kopya için sqlite3 <db> \".backup <dest>\" veya VACUUM INTO kullanın",
     'cli.unknown_command' => "candy-codetime: bilinmeyen komut: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} kullanımdan kaldırıldı; yerine CANDY_CODETIME_DIR ayarlayın.",
     'cli.migration_notice' => "candy-codetime: {notice}",

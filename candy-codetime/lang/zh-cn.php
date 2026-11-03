@@ -30,6 +30,7 @@ return [
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: 已归档 {count} 个文件",
     'cli.backup_none' => "backup: 没有可归档的新文件",
+    'cli.backup_sqlite_notice' => "backup：SQLite 数据库 {db} 不会由此命令归档 — 请使用 sqlite3 <db> \".backup <dest>\" 或 VACUUM INTO 以获得可崩溃安全的副本",
     'cli.unknown_command' => "candy-codetime: 未知命令: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} 已弃用；请改为设置 CANDY_CODETIME_DIR。",
     'cli.migration_notice' => "candy-codetime: {notice}",

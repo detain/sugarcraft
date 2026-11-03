@@ -30,6 +30,7 @@ return [
     'cli.gaps_entry' => "  {start} – {end}  ({seconds}s untracked)",
     'cli.backup_done' => "backup: 파일 {count} 개를 보관했습니다",
     'cli.backup_none' => "backup: 새로 보관할 항목이 없습니다",
+    'cli.backup_sqlite_notice' => "backup: SQLite 데이터베이스 {db}는 이 명령으로 보관되지 않습니다 — 안전한 사본은 sqlite3 <db> \".backup <dest>\" 또는 VACUUM INTO를 사용하십시오",
     'cli.unknown_command' => "candy-codetime: 알 수 없는 명령: {command}",
     'cli.legacy_env_deprecated' => "candy-codetime: {variable} 은(는) 지원이 중단되었습니다. 대신 CANDY_CODETIME_DIR 을 설정하세요.",
     'cli.migration_notice' => "candy-codetime: {notice}",

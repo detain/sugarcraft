@@ -104,12 +104,49 @@ final class AutoBackupTest extends TestCase
         $this->assertStringContainsString('2024-02-01', $backups[0]);
     }
 
-    public function testRotateCreatesBackupDir(): void
+    public function testRotateCreatesBackupDirOnlyWhenItArchives(): void
     {
+        // Nothing to archive must leave nothing behind: the pre-fix shape
+        // mkdir'ed the sibling unconditionally (at 0755) on every cron tick.
         $backup = new AutoBackup($this->backupDir, []);
         $this->assertFalse(is_dir($this->backupDir));
-        $backup->rotate();
+        $this->assertSame(0, $backup->rotate());
+        $this->assertFalse(is_dir($this->backupDir), 'an empty archive run must not create the backup directory');
+
+        // …and the same call with real work does create it.
+        $file = $this->dataDir . '/2024-03-01.jsonl';
+        file_put_contents($file, '{"time":1}');
+        touch($file, time() - (40 * 86400));
+        $this->assertSame(1, (new AutoBackup($this->backupDir, [$this->dataDir]))->rotate());
         $this->assertTrue(is_dir($this->backupDir));
+    }
+
+    /**
+     * C2/SEC privacy: an archived day file is a byte-for-byte copy of the
+     * privacy-sensitive payload, so it must never land at the umask default.
+     * Both halves are pinned: the directory is 0700 and each copy is 0600.
+     */
+    public function testArchivedCopiesAreOwnerPrivateNotWorldReadable(): void
+    {
+        $file = $this->dataDir . '/2024-04-01.jsonl';
+        file_put_contents($file, '{"time":1}');
+        chmod($file, 0o600);
+        touch($file, time() - (40 * 86400));
+
+        $backup = new AutoBackup($this->backupDir, [$this->dataDir]);
+        // Deliberately loose ambient umask: the copy must be tightened after
+        // creation, so a wide umask cannot leak the archive.
+        $previous = umask(0o022);
+        try {
+            $this->assertSame(1, $backup->rotate(30));
+        } finally {
+            umask($previous);
+        }
+
+        $this->assertSame(0o700, fileperms($this->backupDir) & 0o777, 'backup dir must be owner-private 0700');
+        $copied = $backup->listBackups();
+        $this->assertCount(1, $copied);
+        $this->assertSame(0o600, fileperms($copied[0]) & 0o777, 'archived copy must be owner-private 0600');
     }
 
     public function testRotateSkipsNonExistentSourceDir(): void
@@ -123,11 +160,16 @@ final class AutoBackupTest extends TestCase
      * SEC/data-loss: a backup dir that cannot be created must throw, not
      * silently return 0. Regression guard for the `@mkdir(...) ... return 0`
      * swallow. Uses a regular file as the parent so mkdir fails even as root.
+     * The aged day file is required: creation is now lazy, so a run with
+     * nothing to archive would legitimately never touch the path.
      */
     public function testRotateThrowsWhenBackupDirCannotBeCreated(): void
     {
         $blocker = $this->dataDir . '/blocker-file';
         file_put_contents($blocker, 'x');
+        $aged = $this->dataDir . '/2024-05-01.jsonl';
+        file_put_contents($aged, '{"time":1}');
+        touch($aged, time() - (40 * 86400));
         // Nesting under a regular file makes mkdir(recursive) fail regardless of uid.
         $backup = new AutoBackup($blocker . '/nested/backup', [$this->dataDir]);
 

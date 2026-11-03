@@ -30,6 +30,7 @@ return [
     'cli.gaps_entry' => '  {start} – {end}  ({seconds}s untracked)',
     'cli.backup_done' => 'backup: archived {count} files',
     'cli.backup_none' => 'backup: nothing new to archive',
+    'cli.backup_sqlite_notice' => "backup: the SQLite database {db} is NOT archived by this command — use sqlite3 <db> \".backup <dest>\" or VACUUM INTO for a crash-safe copy",
     'cli.unknown_command' => 'candy-codetime: unknown command: {command}',
     'cli.legacy_env_deprecated' => 'candy-codetime: {variable} is deprecated; set CANDY_CODETIME_DIR instead.',
     'cli.migration_notice' => 'candy-codetime: {notice}',
