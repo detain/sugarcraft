@@ -149,7 +149,7 @@ by sshd `ForceCommand`. Configuration is entirely through the PHP API:
 ```php
 Server::new()
     ->withTransport(new InProcessTransport())        // or HostSshdTransport
-    ->withKeepalive(30)                                // SSH-level keepalive interval
+    ->withKeepalive(30)                                // idle NUL into the child's stdin, not an SSH keepalive
     ->use(new Logger('/var/log/sshd-hub.jsonl'))
     ->use(new Auth(['alice', 'bob']))
     ->use(new RateLimit('/var/lib/sshd-hub/buckets.json', burst: 5, ratePerSec: 0.5))

@@ -446,6 +446,35 @@ final class DocSurfaceTruthTest extends TestCase
         );
     }
 
+    public function testTheIdleByteIsNamedAsWhatItIs(): void
+    {
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+
+        $readme = (string) \preg_replace('/\s+/', ' ', $readme);
+        $flat = (string) \preg_replace('/\s+/', ' ', (string) \file_get_contents(\dirname(__DIR__) . '/src/Middleware/Keepalive.php'));
+
+        self::assertStringContainsString('Installed by `Server::withKeepalive($seconds)`', $readme);
+        self::assertStringContainsString("child's stdin", $readme);
+        self::assertStringContainsString('is *not* an SSH-level keepalive', $readme);
+        self::assertStringNotContainsString('reaches the wire only where the tty echoes', $readme);
+        // The class says the same thing the table row now says.
+        self::assertStringContainsString("child's input side", $flat);
+        self::assertStringContainsString('raw-mode TUIs suppress echo', $flat);
+        self::assertStringNotContainsString('Interval between keepalive messages', $flat);
+
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
+        }
+
+        $guide = (string) \preg_replace('/\s+/', ' ', $guide);
+        self::assertStringContainsString("idle NUL into the child's stdin", $guide);
+        self::assertStringNotContainsString('SSH-level keepalive interval', $guide);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

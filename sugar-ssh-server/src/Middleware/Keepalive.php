@@ -39,7 +39,7 @@ use SugarCraft\SshServer\TransportAware;
 final class Keepalive implements Middleware, TransportAware
 {
     /**
-     * @param int $intervalSeconds Interval between keepalive messages (minimum 1)
+     * @param int $intervalSeconds Seconds of pump idle between keepalive bytes (minimum 1)
      */
     public function __construct(
         private readonly int $intervalSeconds = 60,
