@@ -1,10 +1,10 @@
 # sugar-pty
 
-> Formerly published as `sugarcraft/candy-pty` (renamed 2026-10). <!-- @rename-keep -->
-
 [![Tests](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-pty)](https://codecov.io/gh/detain/sugarcraft)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+> Formerly published as `sugarcraft/candy-pty` (renamed 2026-10). <!-- @rename-keep -->
 
 sugar-pty — pseudo-terminal primitives for PHP 8.3+, the building blocks for
 driving child processes inside terminal UIs. Open a master/slave PTY pair, spawn a child with
@@ -78,6 +78,8 @@ If a child might hold the slave open forever (never producing EOF),
 bound the drain with a deadline and break on `$child->exited()` with
 one final tail read — that is the shape
 [`examples/spawn-bash.php`](examples/spawn-bash.php) demonstrates.
+Production code should wrap the drain and reap in `try/finally` so
+`$master->close()` runs even when a throw escapes the loop.
 
 ### Legacy facade (deprecated)
 
@@ -88,21 +90,29 @@ go away at v2.0. New code should use `PtySystemFactory` as above.
 
 ## API at a glance
 
+Names below: `$system` is a `Contract\PtySystem` from
+`PtySystemFactory::new()`, `$pair` is what `$system->open()` returns,
+`$master`/`$child` are its `master()`/spawn results, and `$pty` is the
+deprecated facade object from `Pty::open()` — its rows are marked
+*(facade)*. Contract users go through `$pair->slave()->spawn(...)`
+and `$pair->master()`, not `$pty`.
+
 | Call | What it does |
 |---|---|
-| `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet on -1; on Linux `posix_openpt + grantpt + unlockpt + ptsname_r`. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open. Returns a `PtyPair` exposing `master()` (readonly fd + slavePath) and `slave()`. The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
-| `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24, bool $controllingTerminal=false): Child` | `proc_open` with slave-path descriptors. `$env` follows proc_open semantics: `null` inherits the full parent environment, a non-null array REPLACES it entirely (merge explicitly — see Quickstart). TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
+| `$system->open(int $cols=80, int $rows=24): PtyPair` (`PtySystemFactory::new()`) | The canonical path: on Darwin `openpty()` first (single call), falling back to the quartet on -1; on Linux `posix_openpt + grantpt + unlockpt + ptsname_r`. The master fd is `FD_CLOEXEC` (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open. Returns a `PtyPair` exposing `master()` (readonly fd + slavePath) and `slave()`. A `0 x 0` request is kernel-legal and yields an actual 0x0 geometry until something resizes it — children that query the size then see zeros, so pass real dimensions (or `resize()` once known). The deprecated `Pty::open($cols, $rows)` facade delegates here, so both paths share exactly this implementation. |
+| `$pty->spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child` *(facade)* | `proc_open` with slave-path descriptors, same geometry rule as `$pair->slave()->spawn(...)` — omit `$cols`/`$rows` to keep the current winsize (the facade no longer stomps it with 80×24 defaults). `$env` follows proc_open semantics: `null` inherits the full parent environment, a non-null array REPLACES it entirely (merge explicitly — see Quickstart; on Windows an EMPTY array reverts to full inheritance, see Known limitations). TIOCSWINSZ is applied before the spawn (throws, no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
 | `$pair->slave()->spawn(array $cmd, ?array $env, ?int $cols=null, ?int $rows=null, bool $controllingTerminal=false): Child` | Same `$env` replace-vs-null semantics. Window size is a property of the pty, not of the controlling-terminal relationship, so an explicit `$cols`/`$rows` is applied on every spawn (before it, throwing with no child on failure, then re-asserted best-effort after it for macOS) — like `creack/pty.StartWithSize()`. Omit both to keep the size the pair was opened or last resized with (`creack/pty.Start()`, portable-pty `spawn_command()`); pass one to keep the other half. The parent's slave handle is opened `O_CLOEXEC`, so the child holds the slave only at fds 0-2. |
-| `$pty->read(int $len=8192, ?float $timeout=null): ?string` | `null` on timeout, `''` on EOF, bytes otherwise. EINTR-safe. |
+| `$pty->read(int $len=8192, ?float $timeout=0.05): ?string` | `null` on timeout (idle), `''` on confirmed EOF, bytes otherwise. EINTR-safe. The default is finite on purpose — pass `null` explicitly for a mode-governed blocking read that parks until data or EOF arrives. |
 | `$pty->write(string $bytes): int` | Returns bytes written. |
-| `$pty->setBlocking(bool $blocking): void` | Toggles non-blocking mode on the master fd. |
+| `$pty->setBlocking(bool $blocking): void` *(facade)* | Toggles non-blocking mode on the master fd. Contract users hold the same lever through the sanctioned `stream_set_blocking($master->stream(), $blocking)` toggle — `MasterPty::stream()` exposes the cached `php://fd/` resource. The pumps save and restore this mode around their own temporary flips, so your setting stands outside a `PosixPump`/`ReactPump` run. |
 | `$pty->resize(int $cols, int $rows): void` | TIOCSWINSZ on the master fd. |
-| `$pty->size(): array{cols,rows,xpix,ypix}` | TIOCGWINSZ readback. |
+| `$pty->size(): array{rows,cols,xpix,ypix}` | TIOCGWINSZ readback. |
 | `$pty->stream(): resource` | Cached `php://fd/` wrapper around the master fd for direct PHP-stream use. |
 | `$pty->close(): void` | Idempotent. `fclose`s the `stream()` wrapper if one was materialised, then always `close(2)`s the original master fd via FFI. Throws `PtyException` if that `close(2)` fails (on either path) or if the `fclose` failed — in the latter case only after the master fd itself was released. |
 | `$child->pid(): int` | OS process id. Contract-typed children (`Contract\Child`) declare the *method* only. The `public readonly int $pid` *property* exists on the concrete `PosixChild`/`Child` classes (inherited from the `Child` alias's promoted constructor), but do not rely on it behind a contract type — calling `$child->pid` on a `Contract\Child` fatals. |
 | `$child->wait(): int` | Waits via `waitpid` FFI (sub-ms) first, falls back to 10ms `proc_get_status` poll. Returns exit code (signal death = 128+signal). Idempotent. |
 | `$child->exited(): bool` | Non-blocking probe. |
+| `$child->kill(int $signal): void` | `Libc::kill()` (posix_kill when ext-posix is loaded, FFI `kill(2)` otherwise). A no-op once the child is reaped; throws `PtyException` when signalling a live child fails. |
 | `ControllingTerminal::claim(int $fd): void` | Calls `setsid()` + `ioctl(TIOCSCTTY)` to claim `$fd` as the session's controlling terminal. Used internally by the `controllingTerminal: true` shim path; callable directly from FFI-heavy contexts that want the same effect without the PHP shim. Throws `PtyException` on failure. |
 
 > The winsize and cloexec cells above are deliberate mini-essays —
@@ -139,9 +149,10 @@ matching `*Bytes()` accessor returns `''`.
 use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Core\Util\Tty;
 
+$hostTty = new Tty(STDIN);                // instance — size() is NOT static
 SignalForwarder::attachSigwinch(
     $pty,
-    fn () => Tty::size(),                 // returns ['cols' => N, 'rows' => N]
+    fn () => $hostTty->size(),            // returns ['cols' => N, 'rows' => N]
 );
 // Now every host SIGWINCH triggers $pty->resize($cols, $rows).
 ```
@@ -153,10 +164,11 @@ For callers that hold a raw `/dev/tty` fd (no `MasterPty` object),
 use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Pty\Libc;
 
-$ttyFd = Libc::lib()->open('/dev/tty', 0x0002);   // O_RDWR
+$ttyFd    = Libc::lib()->open('/dev/tty', 0x0002); // O_RDWR
+$hostTty  = new Tty($ttyFd);
 SignalForwarder::attachSigwinchToFd(
     $ttyFd,
-    fn () => Tty::size(),
+    fn () => $hostTty->size(),
     fn (int $cols, int $rows) => null,     // optional post-resize callback
 );
 ```
@@ -172,6 +184,32 @@ nothing in the lib ever closes it — `Libc::lib()->close($ttyFd)`
 yourself when you detach. Signal handlers are process-global: a
 second `attachSigwinchToFd()`/`attachSigwinch()` silently replaces
 the first, so attach once per process.
+
+## Wire rules (child output is not what the child wrote)
+
+The master stream you read is the **cooked slave line discipline's
+output**, not the child's raw `write(2)` bytes. Four rules fall out of
+that, and each one has cost someone an afternoon:
+
+- **Echo comes back.** In cooked mode the slave echoes every keystroke
+  you write into the master — so a `write("ls\n")` shows up in the
+  read stream as `ls` again before the command output. Anything that
+  diffs or counts master reads must expect the echo.
+- **ONLCR maps `\n` to `\r\n` on output.** Cooked mode translates
+  every newline the child emits. Match `\r` (or prompt text) in
+  expect needles — a needle containing a bare `\n` never matches
+  child output on a cooked slave. `cfmakeraw()` clears `OPOST`, and
+  then bare `\n` flows through verbatim: switching to raw mode
+  changes the wire format.
+- **Enter is `\r`.** Terminals send `\r` for Enter and cooked mode
+  may translate it on input (ICRNL); send `\r` to mean Enter.
+- **Line buffering.** Cooked output is flushed per line (or when the
+  child flushes); a child printing without a trailing newline can
+  hold those bytes in its stdio buffer indefinitely.
+
+Accessibility note: assistive tooling consuming PTY output sees this
+cooked stream — echo on, CRLFs present. Decide and document which
+side performs the raw-mode switch; there is no single right answer.
 
 ## Session automation and pools
 
@@ -204,7 +242,8 @@ bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
 `new(?PtySystem = null, int $maxSize = 50)`; `acquire($cols = 80, $rows = 24): PtyPair`
 opens a *fresh* pair (PTY pairs are 1:1 with their slave path and
 cannot be reused once a child has been spawned against the slave —
-and `open()` measures 0.05 ms anyway), throwing
+and `open()` costs tens of microseconds anyway once the FFI bindings
+are warm in the process — a cold factory build is dearer), throwing
 `PoolExhaustedException` past the cap; `release(PtyPair)` closes the
 master and frees the slot; `inFlight()` / `available()` /
 `totalAcquired()` report; `drain()` closes every outstanding pair.
@@ -212,7 +251,8 @@ master and frees the slot; `inFlight()` / `available()` /
 ### `PtyInputDecoder` — key/mouse events straight off the master
 
 Feeds master reads through sugar-input's `EscapeDecoder`:
-`new(MasterPty $master, EscapeDecoder $decoder = new, int $readChunk = 8192)`,
+`new(MasterPty $master, ?EscapeDecoder $decoder = null, int $readChunk = 8192)`
+(a `null` decoder gets a fresh `EscapeDecoder`),
 `readEvents(float $timeout = 0.05): list<Event>` returns after one
 packet or one timeout (partial escape sequences buffer across calls),
 `readEventsBlocking(?float $timeout = null)` keeps reading until it
@@ -226,10 +266,14 @@ request paths. `remainder()` exposes un-decoded trailing bytes,
 (return value is still safe to forward to a real terminal) while a
 sugar-ansi-parser `Parser` tracks the SGR state those bytes imply.
 `readChunk(float $timeout = 0.05): string` gives the bytes;
+OSC sequences pass through the reader but never touch the state: the
+`SgrHandler` OSC arm is a deliberate no-op (colors and attributes are
+SGR-only; hyperlinks are not tracked here).
 `readChunkWithTransitions()` additionally returns the
 `[from, to]` `SgrState` pairs crossed; `state()` exposes the current
 `SgrState` (`COLOR_BLACK`–`COLOR_WHITE` = 0–7, `COLOR_BRIGHT_*` = 8–15,
-`COLOR_DEFAULT` = −4, `COLOR_256` = −1, `COLOR_RGB` = −2); `reset()`
+`COLOR_DEFAULT` = −4, `COLOR_256` = −1, `COLOR_RGB` = −2,
+`COLOR_DEFAULT_256` = −3); `reset()`
 clears parser, state and transition log. The underlying `SgrHandler`
 caps its undrained transition ring at `MAX_EVENTS` = 1024 and drops
 the OLDEST transition when full — slow consumers lose history head,
@@ -392,7 +436,10 @@ grace is "this long with no progress", not a cut-off mid-delivery.
 
 `PumpOptions` exposes four optional callbacks covering the pump loop
 lifecycle, plus a `sshDefault()` named constructor for SSH-session-tuned
-behaviour:
+behaviour and a `withPumpDeadlineUs(?int)` wall-clock bound — the pump
+raises NO blanket I/O timeout; on expiry the run resolves with the
+still-running code (`-1` for `ReactPump`/`PosixPump` semantics),
+leaving the child and PTY for the caller to reap:
 
 | Callback | Fires when | Use for |
 |---|---|---|
@@ -435,6 +482,15 @@ $opts = (new PumpOptions())
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::new()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
 - [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping.
 - [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream.
+
+## Internationalization
+
+User-facing exception strings (`spawn.*`, `libc.*`, `pty.*` keys) route
+through `Lang::t()` (`src/Lang.php`, catalog `lang/en.php`). Lookup is
+exact key → base language → `en` → the raw key, so an untranslated
+string still renders English rather than throwing. Contributing a
+locale means adding `lang/<code>.php` with the same key tree — no code
+changes elsewhere.
 
 ## Library lookup
 
@@ -505,7 +561,7 @@ required for interactive shells (`bash -i`), editors (`vim`,
 ```php
 $child = $pty->spawn(
     ['/bin/bash', '-i'],
-    env: [...],
+    env: [...(array) getenv(), 'TERM' => 'xterm-256color'],  // merge — non-null replaces
     controllingTerminal: true,    // claim slave as the child's ctty
 );
 $pty->write("\x03");              // Ctrl+C → SIGINT to the child
@@ -516,9 +572,10 @@ Routes the spawn through `bin/pty-shim.php`, which does
 `proc_open` and the actual cmd. The `setsid()` + `ioctl(TIOCSCTTY)` logic
 is also available directly as `ControllingTerminal::claim(int $fd)` —
 usable from FFI-heavy contexts that want the same effect without the
-shim overhead. Requires `ext-pcntl`. Costs ~5-50 ms of shim startup per
-spawn — opt-in because non-interactive spawns (`echo`, `tput`, `bash -c '…'`)
-don't benefit.
+shim overhead. Requires `ext-pcntl`. Costs a fork-exec of the shim per spawn (an
+unmeasured single-digit-to-low-double-digit millisecond estimate — not
+a benchmarked figure) — opt-in because non-interactive spawns (`echo`,
+`tput`, `bash -c '…'`) don't benefit.
 
 ## Architecture
 
@@ -538,8 +595,29 @@ environment variable to select which PTY backend to use:
 Unrecognised values throw `\InvalidArgumentException` naming the
 valid options.
 
- The termios backend follows the same pattern via `SUGARCRAFT_TERMIOS`
- (`posix-ffi` / `stty`).
+ The termios backend follows a similar pattern via `SUGARCRAFT_TERMIOS`
+ — see [Termios backends](#termios-backends).
+
+### Termios backends
+
+`TermiosFactory` picks between two implementations of the
+`Contract\Termios` interface for a given fd:
+
+- **`PosixTermios`** — FFI `tcgetattr`/`tcsetattr`/`cfmakeraw` against
+  libc. Full-fidelity attribute snapshots; `makeRaw()` builds from the
+  real current attributes (fetching them first if the instance has not
+  seen a `current()` yet).
+- **`SttyTermios`** — the `stty(1)` shell-out fallback. Mode strings,
+  not structs: it reads the current setting string, derives the raw
+  string from it, and `restore()` puts the captured string back —
+  which is why `restore()` throws when nothing was captured, rather
+  than silently doing nothing.
+
+Selection order: `SUGARCRAFT_TERMIOS=stty` forces the subprocess
+backend outright (a choice, not a fallback); otherwise `PosixTermios`
+is attempted and any `Throwable` is logged with its ordinal and reason
+before falling back to `SttyTermios`. `TermiosFactory::fallbackCount()`
+reports how many times FFI was refused in the process.
 
 ### Platform behaviour — `openpty` vs quartet
 
@@ -559,7 +637,13 @@ action — `$system->open()` abstracts it away completely.
 
 ### Library layout
 
-The library is organised in two layers:
+The library is organised by family: `src/Contract/` (pure interfaces),
+`src/Posix/` (Linux/macOS implementation), `src/Windows/` (ConPTY
+implementation), `src/Input/` (`PtyInputDecoder`), `src/Output/`
+(`AnsiOutputParser` / `SgrHandler`), `src/Concerns/` (`LibcAccess`),
+`src/Exception/`, plus the top-level factory, facade, pump-options and
+support classes. The contract/implementation split is the organising
+principle:
 
 ### Contract interfaces (`src/Contract/`) — pure signatures, no logic
 
@@ -590,7 +674,9 @@ reason (not just the first one per process), and
 
 sugar-pty builds on two sibling libraries for input/output escape-sequence handling:
 
-- **[sugar-input](https://github.com/detain/sugarcraft/tree/master/sugar-input)** — `EscapeDecoder` consumes raw bytes from the PTY master and emits keyboard/mouse/osc events. The pty-read loop feeds `Pty::read()` chunks directly into `EscapeDecoder`; no private arrow-key or Ctrl-key buffering.
+- **[sugar-input](https://github.com/detain/sugarcraft/tree/master/sugar-input)** — `EscapeDecoder` consumes raw bytes from the PTY master and emits keyboard/mouse/osc events. The pty-read loop feeds `MasterPty::read()` chunks through this
+lib's `PtyInputDecoder`, which drives `EscapeDecoder`; there is no
+private arrow-key or Ctrl-key buffering.
 - **[sugar-ansi-parser](https://github.com/detain/sugarcraft/tree/master/sugar-ansi-parser)** — `Parser` handles ANSI escape sequences in PTY output when inspection is needed (cursor-position reports, SGR state, OSC strings). PTY output that only needs pass-through to the terminal skips this layer entirely.
 
 ## Security and trust boundaries
@@ -622,7 +708,14 @@ sugar-pty builds on two sibling libraries for input/output escape-sequence handl
   not a PTY: `capabilities()` reports `controllingTerminal`, `signals` and
   `fd` as false, `Child::kill()` collapses every signal into one
   `TerminateJobObject` (exit surfaces as `128 + signal` by convention),
-  `MasterPty::stream()` and `fd()` throw — so `PosixPump`, `ReactPump` and
+  `MasterPty::stream()` and `fd()` throw; and an **empty** `$env` array
+inverts the replace semantics — ConPTY builds an environment block only
+for a non-empty map, so `spawn($cmd, [])` passes a NULL
+`lpEnvironment` and the child inherits the FULL parent environment
+(on POSIX an empty array means an empty environment). Pass a
+non-empty explicit map when you mean a restricted environment on
+Windows.
+So `PosixPump`, `ReactPump` and
   `MultiPump` stay POSIX-only and ConPTY masters are pumped by polling
   `read($len, $timeout)` — and `size()` answers the cached geometry with
   `xpix`/`ypix` always 0 (there is no pixel query to bind). The Windows CI
@@ -680,8 +773,10 @@ sugar-pty builds on two sibling libraries for input/output escape-sequence handl
   resolve to nothing inside `stty(1)`; reads are **never cached** — every
   `size()` re-queries, so a read-after-resize is ground truth (pixel
   fields report 0 via the fallback — ioctl carries them, `stty -a` output
-  is rows/cols only); and identical resizes within a 20 ms window are
-  rate-limited so SIGWINCH bursts don't fork a process each. Expect resize
+  is rows/cols only); and every SET runs `stty` on call — earlier builds
+  rate-limited identical resizes within a 20 ms window, but that
+  pre-execution cache laundered a FAILED resize into a silent success,
+  so it was removed for correctness. Expect resize
   and size reads on Darwin arm64 to cost milliseconds, not microseconds.
   Both fallbacks retire once macOS ships POSIX 2024 `tcsetwinsize` /
   `tcgetwinsize` (macOS 15's libSystem exports neither).

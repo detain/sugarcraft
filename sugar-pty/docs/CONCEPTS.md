@@ -167,9 +167,10 @@ You have to forward.
 sugar-pty ships `SignalForwarder::attachSigwinch()`:
 
 ```php
+$hostTty = new SugarCraft\Core\Util\Tty(STDIN);   // instance, size() is NOT static
 SignalForwarder::attachSigwinch(
     $master,
-    fn () => SugarCraft\Core\Util\Tty::size(),    // ['cols'=>N, 'rows'=>M]
+    fn () => $hostTty->size(),                    // ['cols'=>N, 'rows'=>M]
 );
 ```
 
@@ -231,10 +232,13 @@ policy without the pump holding it hostage.
 ```php
 $child->pid();         // OS pid
 $child->exited();      // non-blocking probe via proc_get_status()
-$child->wait();        // 10ms-poll loop, blocks until exit
+$child->wait();        // FFI waitpid(WNOHANG) fast path between
+                       // 10ms proc_get_status probes; blocks until exit
 $child->exitCode();    // null until exit, cached after
 $child->kill($sig);    // Libc::kill(): posix_kill() when ext-posix
-                       // is loaded, FFI kill(2) otherwise. No-throw.
+                       // is loaded, FFI kill(2) otherwise. A no-op once
+                       // reaped; throws PtyException when signalling a
+                       // live child fails.
 ```
 
 Gotchas the trait hides:
@@ -279,11 +283,11 @@ Two reasons:
    inject a stub `PtySystem` that returns scripted in-memory streams
    without touching libc. Production code resolves the real one via
    `PtySystemFactory::new()`.
-2. **Windows ConPTY v2.** When a Windows sidecar lands, a
-   `WinConPtySystem` will implement the
-   same contract. Application code that calls
-   `PtySystemFactory::new()->open()` doesn't change; only the
-   factory's `match` on `PHP_OS_FAMILY` grows a new arm.
+2. **Windows ConPTY.** `Windows\ConPtySystem` implements the same
+   contract and ships today: `PtySystemFactory::new()` resolves it on
+   Windows (and on an explicit `conpty` selection), while application
+   code calling `PtySystemFactory::new()->open()` doesn't change - the
+   factory's `match` on `PHP_OS_FAMILY` already carries that arm.
 
 The contracts are intentionally narrow — read, write, resize, size,
 spawn, wait, kill — so a new backend doesn't have to implement
@@ -306,11 +310,13 @@ load-bearing for every spawn path, and not removal-scheduled.
 ## Backend selection via `SUGARCRAFT_PTY_BACKEND`
 
 `PtySystemFactory::new()` reads the `SUGARCRAFT_PTY_BACKEND`
-environment variable before picking a backend. On POSIX this defaults
-to `posix-ffi`. Setting it to `sidecar` or `pecl` causes an immediate
+environment variable before picking a backend. On the POSIX families
+this defaults to `posix-ffi`; on Windows the auto path resolves
+`conpty`. Setting it to `sidecar` or `pecl` causes an immediate
 `UnsupportedPlatformException` noting the backend is not
 implemented in v1. Unrecognised values throw `\InvalidArgumentException` listing
-the four valid options (`posix-ffi`, `sidecar`, `pecl`, `auto`).
+the five valid options (`posix-ffi`, `conpty`, `sidecar`, `pecl`,
+`auto`).
 
 This design keeps the door open for future backends without any
 call-site changes: application code always calls
