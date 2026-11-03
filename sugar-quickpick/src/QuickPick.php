@@ -168,6 +168,9 @@ final class QuickPick
     public function setPrompt(string $prompt): self
     {
         $clone = clone $this;
+        // The prompt feeds computeWidth(); a stale cache would keep the old
+        // header-sized frame after a longer prompt arrives (M10).
+        $clone->cachedComputedWidth = null;
         $clone->prompt = $prompt;
         return $clone;
     }
@@ -179,10 +182,19 @@ final class QuickPick
         return $clone;
     }
 
+    /**
+     * Set the overlay window height in ROWS of the frame — header and
+     * separator included, so the visible item count is $h - 2.
+     *
+     * Clamped to a minimum of 2: below that no item row can ever exist
+     * (the frame would be nothing but chrome). helpBar/statusBar rows
+     * are appended BELOW this height — the composited frame may exceed
+     * $h when they are visible.
+     */
     public function setWindowHeight(int $h): self
     {
         $clone = clone $this;
-        $clone->windowHeight = $h;
+        $clone->windowHeight = \max(2, $h);
         return $clone;
     }
 
@@ -193,11 +205,18 @@ final class QuickPick
         return $clone;
     }
 
+    /**
+     * Position the overlay at (x, y) cells into the background. Pure
+     * placement: it does NOT show or hide the overlay (M4).
+     *
+     * Negative offsets would index the background from the wrong side and
+     * silently smear the composite; they clamp to 0 (mm8).
+     */
     public function setOffset(int $x, int $y): self
     {
         $clone = clone $this;
-        $clone->xOffset = $x;
-        $clone->yOffset = $y;
+        $clone->xOffset = \max(0, $x);
+        $clone->yOffset = \max(0, $y);
         return $clone;
     }
 
@@ -211,6 +230,9 @@ final class QuickPick
     public function setItemFormatter(\Closure $fn): self
     {
         $clone = clone $this;
+        // Item widths feed computeWidth() through the formatter; the cache
+        // must not survive a formatter swap (M10).
+        $clone->cachedComputedWidth = null;
         $clone->itemFormatter = $fn;
         return $clone;
     }
@@ -352,6 +374,12 @@ final class QuickPick
             self::STDIN_DESCRIPTOR,
             static fn(): array => $hermit->ttySize(),
             static function (int $cols, int $rows) use ($hermit): void {
+                // mm3: an auto-width frame sized against the OLD geometry is
+                // stale the moment the terminal changes shape. Invalidate the
+                // cache on the instance this handler was attached to; clones
+                // made later never bound a handler (documented caveat — the
+                // README warns attachSigwinch() binds the attach-time object).
+                $hermit->invalidateAutoWidth();
                 $cb = $hermit->onResize;
                 if ($cb !== null) {
                     $cb($cols, $rows);
@@ -594,7 +622,7 @@ final class QuickPick
         } else {
             // Auto width sizes the CONTENT; the border is added on top so
             // item text never loses two cells to the frame.
-            $innerWidth = $this->cachedComputedWidth ??= $this->computeWidth();
+            $innerWidth = $this->cachedComputedWidth ??= $this->autoWidth();
             $outerWidth = $border !== null ? $innerWidth + 2 : $innerWidth;
         }
 
@@ -674,11 +702,20 @@ final class QuickPick
         $lines[] = $sep;
 
         $items = $this->filteredItems;
+        $count = \count($items);
         $visibleRows = \max(0, $this->windowHeight - 2);
-        $maxShow = \min(\count($items), $visibleRows);
+        // M13: when the corpus overflows the window the list used to slide
+        // silently — the user could not tell where in a 10k-item history they
+        // were. Reserve one row for a position marker; the frame keeps its
+        // exact height (the marker rides inside the pad budget).
+        $markerNeeded = $count > $visibleRows;
+        if ($markerNeeded && $visibleRows > 1) {
+            $visibleRows--;
+        }
+        $maxShow = \min($count, $visibleRows);
         $top = $this->cursor < $visibleRows
             ? 0
-            : \min($this->cursor - $visibleRows + 1, \count($items) - $visibleRows);
+            : \min($this->cursor - $visibleRows + 1, $count - $visibleRows);
         $top = \max(0, $top);
 
         for ($i = 0; $i < $maxShow; $i++) {
@@ -699,6 +736,17 @@ final class QuickPick
             $itemStr = \str_replace(["\r\n", "\r", "\n"], ' ', $itemStr);
             $itemStr = Width::padRight(Width::truncateAnsi($itemStr, $winWidth), $winWidth);
             $lines[] = $itemStr;
+        }
+
+        if ($markerNeeded) {
+            $lines[] = Width::padRight(
+                \sprintf('  ↕ showing %d-%d of %d', $top + 1, $top + $maxShow, $count),
+                $winWidth
+            );
+        } elseif ($count === 0 && $filter !== '') {
+            // M12: an empty result set used to render as blank rows —
+            // indistinguishable from a frozen UI. Say so instead.
+            $lines[] = Width::padRight('  no matches', $winWidth);
         }
 
         while (\count($lines) < $this->windowHeight) {
@@ -872,6 +920,33 @@ final class QuickPick
             if ($itemLen > $itemMax) $itemMax = $itemLen;
         }
         return \max($promptLen + $filterLen + self::WIDTH_PAD_HEADER, $itemMax + self::WIDTH_PAD_ITEM);
+    }
+
+    /**
+     * Natural auto width of the frame, clamped to the terminal.
+     *
+     * M11: computeWidth() used to grow with the longest item without
+     * bound — a single 300-character history entry produced a 300-cell
+     * frame that wrapped the terminal and smeared the composite. The
+     * clamp keeps the frame inside the live column count (falling back
+     * to the 80-column default geometry); a floor of 20 keeps the header
+     * legible on absurdly narrow terminals, where Width::truncateAnsi()
+     * already guards the rows.
+     */
+    private function autoWidth(): int
+    {
+        $cols = $this->ttySize()['cols'];
+
+        return \min($this->computeWidth(), \max(20, $cols));
+    }
+
+    /**
+     * Drop the memoised auto-width so the next view() re-measures against
+     * the current terminal and item set. Called by the SIGWINCH handler.
+     */
+    private function invalidateAutoWidth(): void
+    {
+        $this->cachedComputedWidth = null;
     }
 
     /**
