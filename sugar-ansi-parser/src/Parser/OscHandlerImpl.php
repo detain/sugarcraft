@@ -26,8 +26,8 @@ final class OscHandlerImpl implements OscHandler
 
     public function hyperlink(string $uri, string $id): void
     {
-        // C3 (lane A3a): an empty URI closes the hyperlink and BOTH fields
-        // reset — as the doc above always promised. A close sequence may
+        // An empty URI closes the hyperlink and BOTH fields reset. A close
+        // sequence may
         // still carry params ('ESC]8;id=x;ST' parses to hyperlink('', 'x')),
         // so the id argument is deliberately dropped on the close path
         // instead of being stored as a stale lineage marker.

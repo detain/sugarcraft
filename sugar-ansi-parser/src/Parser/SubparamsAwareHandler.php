@@ -15,10 +15,9 @@ namespace SugarCraft\AnsiParser\Parser;
  * live on the parser, and before this interface existed the only way a handler
  * could get them was to *pull*: the front-end that owns the Parser handed the
  * handler a way back to it, and the handler read {@see Parser::subparams()}
- * from inside its own dispatch. The two injection helpers that bridged this on
- * the sugar-vterm/candy-codeshot paths (a closure via `attachSubparamsProvider()`, a
- * Parser object via `bindParser()`) are gone now — those paths take the push
- * instead. The pull itself is NOT a dead route: a handler that owns its Parser
+ * from inside its own dispatch. The bridging injection helpers a couple of
+ * consumers used for that are retired — those paths take the push now. The
+ * pull itself is NOT a dead route: a handler that owns its Parser
  * (candy-ansi-inspect's `AnsiHandler` does `new Parser($this)` and reads
  * {@see Parser::subparams()} mid-dispatch) still pulls, and remains free to.
  *
@@ -55,50 +54,28 @@ namespace SugarCraft\AnsiParser\Parser;
  * the parameter list carries its own continuation flags instead of requiring
  * callers to consult the parser.
  *
- * ## Two live routes: push (new) and pull (still used)
+ * ## Two live routes: push (opt-in) and pull (parser owners)
  *
- * This interface shipped one wave ahead of its consumers so neither side needed a
- * big-bang cutover, then wave-6 "vt-B" (#1447) migrated the sugar-vterm and
- * candy-codeshot paths to the push and DELETED the pull-bridging injection
- * helpers those paths used (a closure-injection helper on two classes, a
- * Parser-injection helper on a third) —
- * `SugarCraft\Vterm\Handler\ScreenHandler::attachSubparamsProvider()`,
- * `SugarCraft\Vterm\Parser\CsiHandlerImpl::attachSubparamsProvider()`, and
- * `SugarCraft\CodeShot\SgrStateHandler::bindParser()`. Those helpers live in
- * consuming libraries (never in sugar-ansi-parser), which is why no `@deprecated` tag
- * ever accompanied this interface.
+ * Push is this interface: the parser calls {@see SubparamsAwareHandler::setSubparams()}
+ * on the handler it was given, immediately before the dispatch. Pull is the raw
+ * {@see Parser::subparams()} accessor: a front-end that owns its Parser —
+ * `candy-ansi-inspect`'s `AnsiHandler` does `new Parser($this)` — reads the flags
+ * back mid-`csiDispatch()` without implementing this interface. Both routes stay
+ * live by design: push where a handler opts in, pull where the handler owns the
+ * parser it was passed to.
  *
- * The raw pull via {@see Parser::subparams()} is a separate matter and is NOT
- * retired: `candy-ansi-inspect`'s `AnsiHandler` owns its Parser (`new Parser($this)`)
- * and reads the flags back mid-`csiDispatch()` without implementing this
- * interface. So both routes remain live — push where a handler opts in, pull
- * where a handler owns the parser it was passed to.
+ * ### Which object the push actually reaches
  *
- * ### Which objects the push actually reaches (re-derived from current wiring)
- *
- * The parser consults exactly one object: the {@see Handler} passed to
- * {@see Parser::__construct()}. A capable handler *nested behind* a plain wrapper
- * receives nothing, so the *sink* must be the capable one. The sinks that opt in:
- *
- *  - `SugarCraft\Vterm\Handler\ScreenHandler` — the emulator's sink, handed straight
- *    to `new Parser(...)` by `sugar-vterm/src/Terminal/Terminal.php`; implements this
- *    interface.
- *  - `SugarCraft\Vterm\Parser\RendererHandler` — the renderer's sink, handed to
- *    `new Parser(...)` by `sugar-vterm/src/Terminal.php` (a different class from the
- *    `Terminal/Terminal.php` emulator above); implements this interface and
- *    FORWARDS the flags down to the wrapped `CsiHandlerImpl` whose `sgr()` needs
- *    them. The plain {@see HandlerAdapter} sits *inside* that decorator and is no
- *    longer passed to the parser directly, which is why its own `escDispatch()`
- *    can stay a no-op: `RendererHandler` takes over just that one event.
- *  - `SugarCraft\CodeShot\SgrStateHandler` — candy-codeshot's sink
- *    (`candy-codeshot/src/AnsiParser.php`); implements this interface.
- *
- * Sinks that do NOT opt in need nothing pushed and are dispatched unchanged —
- * e.g. candy-vcr's `MouseModeTracker` and sugar-pty's `AnsiOutputParser` pass a
- * plain {@see Handler}, and candy-ansi-inspect's `AnsiHandler` pulls instead (above).
- *
- * Re-derive this map from the wiring before trusting it: the only object that
- * matters is the one passed to `new Parser(...)`, and wrappers move between waves.
+ * Exactly one: the {@see Handler} instance passed to {@see Parser::__construct()}.
+ * A capable handler nested *behind* a plain wrapper receives nothing, so the SINK
+ * must be the capable one — a decorator that needs the flags forwarded to an
+ * inner handler implements this interface itself and calls through (sugar-vterm's
+ * renderer decorator does exactly this). Which classes in consuming libraries
+ * sit at the sink is that wiring's business and moves as wrappers are added or
+ * removed; re-derive it from the `new Parser(...)` call site before trusting any
+ * roster. Sinks that do not opt in need nothing pushed and are dispatched with
+ * zero behaviour change — sugar-pty's ANSI reader and candy-vcr's mouse tracker
+ * are plain-Handler examples.
  *
  * {@see Parser::subparams()} stays public and byte-compatible — for pull handlers
  * like candy-ansi-inspect's and for any driver reading the last sequence after `feed()`.
