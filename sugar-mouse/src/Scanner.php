@@ -133,9 +133,17 @@ final class Scanner
 
     /**
      * Bucket coordinate for a 1-based terminal column/row.
+     *
+     * Off-grid coordinates (col/row < 1, reachable from hostile input fed to
+     * hit()) map to bucket -1, which no zone can ever occupy: zones register
+     * at columns and rows >= 1.  The guard also keeps `$coord - 1` an int —
+     * PHP_INT_MIN - 1 would overflow to float and TypeError inside intdiv().
      */
     private static function bucket(int $coord): int
     {
+        if ($coord < 1) {
+            return -1;
+        }
         return intdiv($coord - 1, self::GRID_BUCKET);
     }
 

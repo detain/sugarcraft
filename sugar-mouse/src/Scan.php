@@ -259,6 +259,25 @@ final class Scan
                 continue;
             }
 
+            // DCS / SOS / PM / APC strings — pass through with no width, the
+            // same posture as OSC.  All four are ESC-introduced strings ended
+            // by ST (ESC \); an unterminated one runs to end of render, since
+            // the ST is their only resync point.  Without this branch their
+            // bytes were measured as text and every zone below them started
+            // columns too far right (sixel/kitty graphics hosts emit these).
+            if ($b === "\x1b" && (($rendered[$i + 1] ?? '') === 'P' || ($rendered[$i + 1] ?? '') === 'X' || ($rendered[$i + 1] ?? '') === '^' || ($rendered[$i + 1] ?? '') === '_')) {
+                $j = $i + 2;
+                while ($j < $len) {
+                    if ($j + 1 < $len && $rendered[$j] === "\x1b" && $rendered[$j + 1] === '\\') {
+                        $j += 2;
+                        break;
+                    }
+                    $j++;
+                }
+                $i = $j;
+                continue;
+            }
+
             // Carriage return.  Handled byte-wise BEFORE the grapheme path:
             // grapheme_extract() returns "\r\n" as ONE zero-width cluster, so
             // without this branch a CRLF advanced neither row nor column and
@@ -573,7 +592,15 @@ final class Scan
      */
     private static function nextGrapheme(string $s, int $i): string
     {
-        if (function_exists('grapheme_extract') === true) {
+        // Function-local memo of the extension probe: availability is fixed
+        // for the process, so pay function_exists() once instead of once per
+        // cluster.  Deliberately NOT a class property — Scan carries no
+        // static scan state (reentrancy, pinned by ScanMalformedMarkupTest),
+        // and this flag cannot affect any parse result.
+        static $hasGraphemeExtract = null;
+        $hasGraphemeExtract ??= function_exists('grapheme_extract');
+
+        if ($hasGraphemeExtract === true) {
             $next = 0;
             $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
             if (is_string($cluster) === true && $cluster !== '') {

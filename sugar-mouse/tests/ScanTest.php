@@ -77,6 +77,57 @@ final class ScanTest extends TestCase
         self::assertSame('o', $zones['o']->id);
     }
 
+    /**
+     * DCS/SOS/PM/APC are ESC-introduced strings like OSC (sixel, kitty
+     * passthrough, terminator control strings). Their payload bytes paint no
+     * cells: if they were measured as text, every zone registered below them
+     * would start columns too far right.
+     */
+    public function testParseEscStringSequencesCarryNoWidth(): void
+    {
+        $mark = new Mark();
+        foreach (['P', 'X', '^', '_'] as $introducer) {
+            $rendered = "\x1b" . $introducer . 'q>0;1;2;3' . "\x1b\\" . $mark->wrap('z', 'AB');
+
+            $zones = (new Scan())->parse($rendered);
+
+            self::assertArrayHasKey('z', $zones, "sequence with introducer {$introducer}");
+            self::assertSame(1, $zones['z']->startCol, "introducer {$introducer} inflated the column");
+            self::assertSame(2, $zones['z']->endCol, "introducer {$introducer} shifted the zone");
+        }
+    }
+
+    public function testParseUnterminatedEscStringRunsToEndOfRender(): void
+    {
+        $mark = new Mark();
+        // ST never arrives: the DCS swallows the rest of the render (same
+        // posture as an unterminated OSC), and only the earlier zone survives.
+        $rendered = $mark->wrap('a', 'A') . "\x1b_Pq#5";
+
+        $zones = (new Scan())->parse($rendered);
+
+        self::assertSame(['a'], array_keys($zones));
+        self::assertSame(1, $zones['a']->endCol);
+    }
+
+    /**
+     * parse() and strip() deliberately diverge on a well-formed tag hidden
+     * inside an OSC payload: the grid walker consumes the OSC bytes wholesale
+     * (no zone is recorded), while the byte-wise stripper removes the tag
+     * pair wherever its sentinels appear. This is the caveat documented on
+     * Scan::strip(); the consumer sweep duty stands either way.
+     */
+    public function testParseIgnoresTagsInsideOscWhileStripRemovesTheirBytes(): void
+    {
+        $open = "\xEE\x80\x80";
+        $close = "\xEE\x80\x81";
+        $tag = $open . 'in' . $close;
+        $rendered = "\x1b]2;" . $tag . 'XY' . $open . '/in' . $close . "\x07tail";
+
+        self::assertSame([], (new Scan())->parse($rendered));
+        self::assertSame("\x1b]2;XY\x07tail", Scan::strip($rendered));
+    }
+
     public function testParseUnterminatedSentinelIsSkipped(): void
     {
         $mark = new Mark();

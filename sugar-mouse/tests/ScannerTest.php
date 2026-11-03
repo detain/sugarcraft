@@ -127,6 +127,24 @@ final class ScannerTest extends TestCase
         self::assertNull($scanner->hit(1, 1));
     }
 
+    /**
+     * Off-grid coordinates are reachable from hostile input routed straight
+     * into hit().  They must miss, never crash: bucket() maps everything < 1
+     * to -1, which no zone occupies (zones register at >= 1) — and the
+     * mapping keeps `$coord - 1` an int, because PHP_INT_MIN - 1 overflows to
+     * float and intdiv() would TypeError.
+     */
+    public function testHitWithOffGridCoordinatesMissesInsteadOfCrashing(): void
+    {
+        $mark = new Mark();
+        $scanner = Scanner::new()->scan($mark->wrap('btn', 'HELLO'));
+
+        foreach ([0, -1, -32, -33, PHP_INT_MIN] as $hostile) {
+            self::assertNull($scanner->hit($hostile, 1), "column {$hostile}");
+            self::assertNull($scanner->hit(1, $hostile), "row {$hostile}");
+        }
+    }
+
     public function testHitPrefersFirstZoneWhenOverlapping(): void
     {
         $mark = new Mark();
