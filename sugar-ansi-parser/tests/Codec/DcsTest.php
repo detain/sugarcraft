@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\AnsiParser\Codec\Dcs;
 
 /**
- * F-16: Dcs codec classification + labels.
+ * Dcs codec classification + labels.
  */
 final class DcsTest extends TestCase
 {
@@ -89,5 +89,36 @@ final class DcsTest extends TestCase
         self::assertStringEndsWith('…', $label);
         // 'DCS p' prefix + 80 clipped bytes + the 3-byte ellipsis.
         self::assertSame(\strlen('DCS p') + 80 + 3, \strlen($label));
+    }
+
+    public function testDecrpssReplyWithoutParamsSaysSoInsteadOfLeakingTheSentinel(): void
+    {
+        $dcs = Dcs::parse(\ord('r'), [], 0, \ord('$'), '0p1;2$r');
+
+        self::assertSame(Dcs::KIND_DECRPSS, $dcs->kind());
+        self::assertSame('DECRPSS reply (no parameter)$r0p1;2$r', $dcs->describe());
+
+        // A present param still prints its number; a wire -1 default prints -1.
+        self::assertSame(
+            'DECRPSS reply 1$r0$p',
+            Dcs::parse(\ord('r'), [1], 0, \ord('$'), '0$p')->describe(),
+        );
+        self::assertSame(
+            'DECRPSS reply -1$r',
+            Dcs::parse(\ord('r'), [-1], 0, \ord('$'), '')->describe(),
+        );
+    }
+
+    public function testForgedFinalByteCannotInjectRawControlBytesIntoTheLabel(): void
+    {
+        // parse() is public and takes an arbitrary int; a final outside the
+        // legal 0x40-0x7E band must be escaped, never copied verbatim.
+        $dcs = Dcs::parse(0x1B, [], 0, 0, 'x');
+
+        self::assertSame('DCS \x1Bx', $dcs->describe());
+        self::assertStringNotContainsString("\x1b", $dcs->describe());
+
+        $high = Dcs::parse(0x80, [], 0, 0, '');
+        self::assertSame('DCS \x80', $high->describe());
     }
 }

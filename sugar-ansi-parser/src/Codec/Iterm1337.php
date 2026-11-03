@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\AnsiParser\Codec;
 
 /**
- * F-16: iTerm2 / WezTerm OSC 1337 inline-image decoder.
+ * iTerm2 / WezTerm OSC 1337 inline-image decoder.
  *
  * The parser already delivers OSC payloads to
  * {@see \SugarCraft\AnsiParser\Parser\Handler::oscDispatch()}; this codec is
@@ -24,8 +24,9 @@ namespace SugarCraft\AnsiParser\Codec;
  * with final `t` and data starting `mux;`. Unwrapping is deterministic —
  * un-double ESC, find the inner `ESC ] 1337;`, take the body up to BEL/ST.
  *
- * Malformed input never throws: a missing `:` separator or a parameter
- * without `=` is recorded in {@see malformed()} and the fields that DID parse
+ * Malformed input never throws: a missing `:` separator, a parameter without
+ * `=`, a negative `size=`, or a payload that stops short of its declared size
+ * is recorded in {@see malformed()} and the fields that DID parse
  * are still exposed (APC/OSC payloads are attacker-controlled on untrusted
  * streams; a codec must not be a crash surface).
  */
@@ -37,7 +38,8 @@ final class Iterm1337
     private const LABEL_BYTES = 80;
 
     /**
-     * @param array<string, string> $args URL-decoded `key=value` parameters (File only).
+     * @param array<string, string> $args Percent-decoded `key=value` parameters
+     *                                    (`+` kept verbatim; File only).
      */
     private function __construct(
         private readonly string $command,
@@ -130,7 +132,26 @@ final class Iterm1337
                 $malformed ??= 'parameter without "="';
                 continue;
             }
-            $args[substr($pair, 0, $separator)] = urldecode(substr($pair, $separator + 1));
+            $args[substr($pair, 0, $separator)] = rawurldecode(substr($pair, $separator + 1));
+        }
+
+        // `urldecode()` would fold `+` into a space and synthesise control
+        // bytes from %XX pairs into filename data; the protocol percent-
+        // encodes only, so rawurldecode keeps `+` verbatim (%XX still decodes,
+        // and describe() escapes whatever the decoded value contains).
+        $size = $args['size'] ?? null;
+        if (\is_string($size) && preg_match('/^-\d+$/', $size) === 1) {
+            $malformed ??= 'negative size';
+        }
+        if ($colon !== false
+            && \is_string($size)
+            && preg_match('/^\d+$/', $size) === 1
+            && self::estimateBytes($payload) < (int) $size
+        ) {
+            // The parser stops collecting at its 64 KiB cap (and a stream can
+            // end early), leaving decoders blind to the dropped excess. A
+            // payload that stops short of its declared size says so here.
+            $malformed ??= 'payload truncated';
         }
 
         return new self($command, $args, $payload, $malformed);
@@ -152,7 +173,7 @@ final class Iterm1337
         return $this->command === 'Pop';
     }
 
-    /** @return array<string, string> URL-decoded File parameters, in wire order. */
+    /** @return array<string, string> Percent-decoded File parameters (`+` kept verbatim), in wire order. */
     public function args(): array
     {
         return $this->args;
@@ -163,17 +184,17 @@ final class Iterm1337
         return $this->args[$key] ?? null;
     }
 
-    /** Original file name (`name=`), URL-decoded; null when absent. */
+    /** Original file name (`name=`), percent-decoded (`+` kept verbatim); null when absent. */
     public function name(): ?string
     {
         return $this->args['name'] ?? null;
     }
 
-    /** Declared file size in bytes (`size=`); null when absent/non-numeric. */
+    /** Declared file size in bytes (`size=`); null when absent or not a non-negative decimal. */
     public function declaredSize(): ?int
     {
         $raw = $this->args['size'] ?? null;
-        if ($raw === null || $raw === '' || preg_match('/^-?\d+$/', $raw) !== 1) {
+        if ($raw === null || $raw === '' || preg_match('/^\d+$/', $raw) !== 1) {
             return null;
         }
 
@@ -229,11 +250,16 @@ final class Iterm1337
     /** Decoded payload size without decoding it (base64 arithmetic). */
     public function estimatedBytes(): int
     {
-        $length = \strlen($this->payload);
+        return self::estimateBytes($this->payload);
+    }
+
+    private static function estimateBytes(string $payload): int
+    {
+        $length = \strlen($payload);
         if ($length === 0) {
             return 0;
         }
-        $padding = substr_count(substr($this->payload, -2), '=');
+        $padding = substr_count(substr($payload, -2), '=');
 
         return intdiv($length * 3, 4) - $padding;
     }
@@ -245,16 +271,16 @@ final class Iterm1337
     }
 
     /**
-     * One-line, control-byte-safe summary. The name is URL-decoded on the way
-     * in, so it is escaped here before reaching a terminal label.
+     * One-line, control-byte-safe summary. The name is percent-decoded on the
+     * way in, so it is escaped here before reaching a terminal label.
      */
     public function describe(): string
     {
         if (!$this->isFile()) {
-            // m3 (rev-w10-4): via fromDcs the DCS body admits 0x00-0x17 Put
+            // Via fromDcs the DCS body admits 0x00-0x17 Put
             // bytes (the OSC path is protected — Transitions drops them in
             // OscString), so the command verb needs the same escape as the
-            // URL-decoded name before reaching a log label.
+            // percent-decoded name before reaching a log label.
             return 'iTerm2 ' . ($this->command === '' ? '(empty)' : self::safe($this->command));
         }
 
@@ -278,17 +304,6 @@ final class Iterm1337
 
     private static function safe(string $bytes): string
     {
-        $clip = \strlen($bytes) > self::LABEL_BYTES;
-        if ($clip) {
-            $bytes = substr($bytes, 0, self::LABEL_BYTES);
-        }
-        $out = '';
-        $len = \strlen($bytes);
-        for ($i = 0; $i < $len; $i++) {
-            $byte = \ord($bytes[$i]);
-            $out .= ($byte < 0x20 || $byte > 0x7E) ? \sprintf('\\x%02X', $byte) : $bytes[$i];
-        }
-
-        return $clip ? $out . '…' : $out;
+        return LabelSanitizer::clip($bytes, self::LABEL_BYTES);
     }
 }

@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\AnsiParser\Codec;
 
 /**
- * F-16: structured DCS decoder — the shared codec home for the sequence
+ * Structured DCS decoder — the shared codec home for the sequence
  * semantics a byte-stream inspector needs. The migration is landed:
  * candy-ansi-inspect's `Inspector::describeDcsParts()` classifies through
  * {@see kind()} and layers inspector-styled labels on top, while
  * `Inspector::describeDcs()` survives only as a payload-string compatibility
- * shim. Committed direction: new DCS sequence semantics belong here, consumed
+ * shim. Standing direction: new DCS sequence semantics belong here, consumed
  * by the inspector — never hand-rolled a second time inside it.
  *
  * It takes the exact five fields {@see \SugarCraft\AnsiParser\Parser\Handler::dcsDispatch()}
@@ -161,25 +161,18 @@ final class Dcs
             self::KIND_SIXEL => 'sixel image (' . \strlen($this->data) . ' bytes)',
             self::KIND_XTVERSION => 'terminal version (XTVERSION reply): ' . $this->safe($this->data),
             self::KIND_DECRQSS => 'DECRQSS request ' . $this->safe($this->data),
-            self::KIND_DECRPSS => 'DECRPSS reply ' . ($this->params[0] ?? -1) . '$r' . $this->safe($this->data),
+            self::KIND_DECRPSS => 'DECRPSS reply ' . (isset($this->params[0]) ? (string) $this->params[0] : '(no parameter)')
+                . '$r' . $this->safe($this->data),
             self::KIND_TMUX => 'tmux passthrough (' . \strlen($this->data) . ' bytes)',
-            default => 'DCS ' . \chr($this->final) . $this->safe($this->data),
+            // The final byte arrives from parse() as an arbitrary int; run it
+            // through the same escape as the data so a forged out-of-band
+            // value cannot inject a raw control byte into the label.
+            default => 'DCS ' . $this->safe(\chr($this->final)) . $this->safe($this->data),
         };
     }
 
     private function safe(string $bytes): string
     {
-        $clip = \strlen($bytes) > self::LABEL_BYTES;
-        if ($clip) {
-            $bytes = substr($bytes, 0, self::LABEL_BYTES);
-        }
-        $out = '';
-        $len = \strlen($bytes);
-        for ($i = 0; $i < $len; $i++) {
-            $byte = \ord($bytes[$i]);
-            $out .= ($byte < 0x20 || $byte > 0x7E) ? \sprintf('\\x%02X', $byte) : $bytes[$i];
-        }
-
-        return $clip ? $out . '…' : $out;
+        return LabelSanitizer::clip($bytes, self::LABEL_BYTES);
     }
 }

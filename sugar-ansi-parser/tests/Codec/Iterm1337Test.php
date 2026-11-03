@@ -22,20 +22,20 @@ final class Iterm1337Test extends TestCase
 
     public function testFileTransferHeaderIsDecoded(): void
     {
-        $seq = Iterm1337::parse('1337;File=name=hello%20world.png;size=1234;inline=1:QUJD');
+        $seq = Iterm1337::parse('1337;File=name=hello%20world.png;size=3;inline=1:QUJD');
 
         self::assertNotNull($seq);
         self::assertTrue($seq->isFile());
         self::assertSame('File', $seq->command());
         self::assertSame('hello world.png', $seq->name());
-        self::assertSame(1234, $seq->declaredSize());
+        self::assertSame(3, $seq->declaredSize());
         self::assertTrue($seq->inline());
         self::assertSame('QUJD', $seq->payloadBase64());
         self::assertSame(4, $seq->payloadLength());
         self::assertSame(3, $seq->estimatedBytes());
         self::assertNull($seq->malformed());
         self::assertSame(
-            'iTerm2 inline image "hello world.png" size=1234 inline=1 3 bytes',
+            'iTerm2 inline image "hello world.png" size=3 inline=1 3 bytes',
             $seq->describe(),
         );
     }
@@ -98,11 +98,75 @@ final class Iterm1337Test extends TestCase
 
     public function testInlineDefaultsToFalseWhenAbsent(): void
     {
-        $seq = Iterm1337::parse('1337;File=name=a.png;size=9:QUJD');
+        $seq = Iterm1337::parse('1337;File=name=a.png;size=3:QUJD');
 
         self::assertNotNull($seq);
         self::assertFalse($seq->inline());
-        self::assertSame('iTerm2 inline image "a.png" size=9 3 bytes', $seq->describe());
+        self::assertSame('iTerm2 inline image "a.png" size=3 3 bytes', $seq->describe());
+    }
+
+    public function testPlusInNameIsKeptVerbatim(): void
+    {
+        // urldecode() would have folded the plus into a space; the protocol
+        // percent-encodes, so a literal '+' survives raw decoding.
+        $seq = Iterm1337::parse('1337;File=name=a+b.png;size=3:QUJD');
+
+        self::assertNotNull($seq);
+        self::assertSame('a+b.png', $seq->name());
+        self::assertNull($seq->malformed());
+        self::assertSame('iTerm2 inline image "a+b.png" size=3 3 bytes', $seq->describe());
+    }
+
+    public function testPercentEscapesStillDecode(): void
+    {
+        $seq = Iterm1337::parse('1337;File=name=%2Bx%20y.png;size=3:QUJD');
+
+        self::assertNotNull($seq);
+        self::assertSame('+x y.png', $seq->name());
+    }
+
+    public function testNegativeSizeIsRecordedNotDeclared(): void
+    {
+        $seq = Iterm1337::parse('1337;File=size=-5:QUJD');
+
+        self::assertNotNull($seq);
+        self::assertNull($seq->declaredSize());
+        self::assertSame('negative size', $seq->malformed());
+        self::assertStringContainsString('(malformed: negative size)', $seq->describe());
+    }
+
+    public function testPayloadShortOfDeclaredSizeIsFlaggedTruncated(): void
+    {
+        // QUJD decodes to 3 bytes; the header claims 100 (the stand-in for a
+        // transfer the parser's cap or an early stream end cut short).
+        $seq = Iterm1337::parse('1337;File=name=a.png;size=100:QUJD');
+
+        self::assertNotNull($seq);
+        self::assertSame(100, $seq->declaredSize());
+        self::assertSame(3, $seq->estimatedBytes());
+        self::assertSame('payload truncated', $seq->malformed());
+        self::assertStringContainsString('(malformed: payload truncated)', $seq->describe());
+    }
+
+    public function testExactDeclaredSizeIsNotFlagged(): void
+    {
+        $seq = Iterm1337::parse('1337;File=size=3:QUJD');
+
+        self::assertNotNull($seq);
+        self::assertNull($seq->malformed());
+    }
+
+    public function testPaddingAwareTruncationEdge(): void
+    {
+        // 'QQ==' decodes to 1 byte; size=2 is short by one, size=1 is exact.
+        $short = Iterm1337::parse('1337;File=size=2:QQ==');
+        $exact = Iterm1337::parse('1337;File=size=1:QQ==');
+
+        self::assertNotNull($short);
+        self::assertNotNull($exact);
+        self::assertSame(1, $short->estimatedBytes());
+        self::assertSame('payload truncated', $short->malformed());
+        self::assertNull($exact->malformed());
     }
 
     public function testDecodedNameControlBytesAreEscapedInTheLabel(): void

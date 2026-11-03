@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\AnsiParser\Codec;
 
 /**
- * F-16: Kitty graphics APC decoder.
+ * Kitty graphics APC decoder.
  *
  * Wire form (APC `ESC _` … `ESC \`), payload handed over by
  * {@see \SugarCraft\AnsiParser\Parser\Handler::sosPmApcDispatch()} with
@@ -33,7 +33,7 @@ namespace SugarCraft\AnsiParser\Codec;
  * deliberately lenient (unknown keys are kept in {@see control()}, malformed
  * tokens are skipped) because APC payloads are attacker-controlled.
  *
- * Delimiters are literal (m1, rev-w10-4): the protocol defines NO backslash
+ * Delimiters are literal: the protocol defines NO backslash
  * escape grammar — kitty's own generated control-block parser
  * (`kitty/parse-graphics-command.h`) is a flat state machine in which every
  * value is a single-character flag or an integer followed by exactly one `,`
@@ -199,7 +199,7 @@ final class KittyApc
         return $this->payload;
     }
 
-    /** Payload byte count — the label the old inspector printed alone. */
+    /** Payload byte count — the label the inspector prints alone today. */
     public function payloadSize(): int
     {
         return \strlen($this->payload);
@@ -253,24 +253,13 @@ final class KittyApc
     }
 
     /**
-     * Escape+clip excerpt (m2, rev-w10-4): APC string states Put bytes
+     * Escape+clip excerpt: APC string states Put bytes
      * 0x00-0x17 (Transitions), so a flag value can carry LF/BEL line
-     * injection; same discipline as {@see Dcs::safe()}. ESC itself cannot
-     * appear (it terminates the string).
+     * injection; same shared rule as {@see LabelSanitizer::clip()}. ESC itself
+     * cannot appear (it terminates the string).
      */
     private function safe(string $bytes): string
     {
-        $clip = \strlen($bytes) > self::LABEL_BYTES;
-        if ($clip) {
-            $bytes = substr($bytes, 0, self::LABEL_BYTES);
-        }
-        $out = '';
-        $len = \strlen($bytes);
-        for ($i = 0; $i < $len; $i++) {
-            $byte = \ord($bytes[$i]);
-            $out .= ($byte < 0x20 || $byte > 0x7E) ? \sprintf('\\x%02X', $byte) : $bytes[$i];
-        }
-
-        return $clip ? $out . '…' : $out;
+        return LabelSanitizer::clip($bytes, self::LABEL_BYTES);
     }
 }
