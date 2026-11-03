@@ -243,7 +243,17 @@ final class Server
         // existence rules) across repos. A known identity that lacks the
         // right gets 403. Read advertisement rides canRead, push
         // advertisement rides canWrite and always requires an identity.
+        // The access matrix is consulted through AccessControl. The
+        // listener's OWN posture comes from the parsed config (armed by
+        // serve --http at startup); the process-global lever is respected
+        // when a component explicitly raises it (fixture worlds and any
+        // future runtime arm surface), but this method never LOWERS it —
+        // reading via max() keeps the listener honest while leaving the
+        // daemon and SSH transports in charge of their own snapshots.
         $ac = AccessControl::getInstance();
+        if ($this->config->allowAnonymousRead) {
+            $ac->setAllowAnonymousRead(true);
+        }
         $user = $this->getUserFromHeaders($headers);
         if ($service === 'git-upload-pack') {
             if (!$ac->canRead($user, $repo)) {
@@ -763,6 +773,18 @@ final class Server
      *
      * @param array<string, string> $headers
      */
+    /**
+     * Registry lookup fallback: the shared AccessControl instance may hold
+     * users registered through it (the daemon and SSH transports share that
+     * registry); the per-server registry above always wins.
+     */
+    private function lookupGlobalUser(string $username): ?User
+    {
+        $ac = AccessControl::getInstance();
+
+        return method_exists($ac, 'getUser') ? $ac->getUser($username) : null;
+    }
+
     private function resolveTrustedUser(array $headers, ?string $peerIp): ?User
     {
         $headers = \array_change_key_case($headers, \CASE_LOWER);
@@ -782,7 +804,11 @@ final class Server
             return null;
         }
 
-        $user = $this->users[$username] ?? null;
+        // Instance registry first (the registered accounts of THIS
+        // server), with the process-global registry as fallback — mirrors
+        // how repos resolve. The old headless singleton-only read could
+        // never see accounts registered on the server instance.
+        $user = $this->users[$username] ?? $this->lookupGlobalUser($username);
 
         return $user !== null && $user->isActive ? $user : null;
     }
