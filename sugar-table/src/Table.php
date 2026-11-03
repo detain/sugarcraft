@@ -1415,7 +1415,10 @@ final class Table
 
     public function View(): string
     {
-        if ($this->columns === []) {
+        if ($this->columns === [] || $this->getVisibleColumnIndices() === []) {
+            // Nothing to render: no columns defined, or every column is
+            // hidden. Hiding the whole table is a legitimate state and must
+            // not ask Buffer for zero width (audit sugar-table CR1 family).
             return '';
         }
 
@@ -1493,7 +1496,15 @@ final class Table
         // back to the pinned width so no line can exceed the frame.
         $visibleWidth = $this->contentSpanWidth($this->computedColumnWidths);
 
-        $bufferHeight = $topBorderRows + $headerRows + $totalRowHeight + $footerRows + $bottomBorderRows;
+        // The empty state owns ONE row of its own, and it is budgeted whether
+        // or not the header is shown. Previously the no-data line rendered only
+        // when the header was hidden AND its row never entered bufferHeight, so
+        // the one empty-state path that worked crashed (bordered wrote past a
+        // too-short buffer; borderless asked Buffer for height 0) while an
+        // empty table with a header rendered a blank box.
+        $emptyRows = $rowCount === 0 ? 1 : 0;
+
+        $bufferHeight = $topBorderRows + $headerRows + $totalRowHeight + $emptyRows + $footerRows + $bottomBorderRows;
         // Borderless drops the +2 left/right border columns, so the buffer is
         // exactly the content width (every line == $visibleWidth cells).
         $bufferWidth = $visibleWidth + ($this->borderless ? 0 : 2);
@@ -1519,8 +1530,10 @@ final class Table
         // walks one page, so the highlight compares against the same domain
         // by offsetting the slot by the page start (audit #5).
         $pageOffset = $this->pageSize > 0 ? $this->page * $this->pageSize : 0;
-        if ($rows === [] && !$this->showHeader) {
-            // Render no_data message centered in the content area
+        if ($rows === []) {
+            // Render no_data message centered in the content area (header, when
+            // shown, sits above it — the message is the one empty-state row the
+            // height budget reserved).
             $buffer = $this->fillNoDataRow($buffer, $bufferRow, $visibleWidth);
             $bufferRow++;
         } else {
