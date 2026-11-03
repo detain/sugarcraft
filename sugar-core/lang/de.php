@@ -22,4 +22,20 @@ return [
 
     // Program.php
     'program.proc_open_failed'    => 'proc_open fehlgeschlagen für: {cmd}',
+    'color.parse_empty' => 'leerer Farbname kann nicht geparst werden',
+    'color.parse_unknown' => 'unbekannter Farbname: {name}',
+    'ansi.invalid_scs_slot' => 'ungültiger SCS-Slot: {slot} (erwartet 0-3 für G0-G3)',
+    'ansi.invalid_scs_designator' => 'ungültiger SCS-Bezeichner: {designator} (ein Byte in 0x30-0x7E erwartet)',
+    'ansi.invalid_sixel_repeat' => 'Sixel-Wiederholungszahl darf nicht negativ sein: {count}',
+    'semaphore.limit_invalid' => 'Semaphore-Grenze muss mindestens 1 sein, erhalten: {limit}',
+    'semaphore.limit_busy' => 'Semaphore belegt: {held} laufend, {waiting} wartend',
+    'semaphore.shutdown' => 'Semaphore wurde geschlossen, bevor eine Genehmigung erteilt werden konnte',
+    'semaphore.closed' => 'Semaphore ist geschlossen und kann keine weitere Genehmigung erteilen',
+    'semaphore.derive_closed' => 'Aus einem geschlossenen Semaphore kann kein neuer Pool abgeleitet werden',
+    'lru_map.capacity_invalid' => 'LRU-Kapazität muss mindestens 1 sein, erhalten: {capacity}',
+    'lru_map.capacity_too_large' => 'LRU-Kapazität {capacity} überschreitet die Wachstumsgrenze {max}',
+    'lru_map.evict_from_empty' => 'Aus einer leeren LRU-Zuordnung kann nichts entfernt werden',
+    'errors.negative_not_allowed' => 'negativer Wert für {name} nicht erlaubt',
+    'errors.value_must_be_positive' => '{name} muss positiv sein, erhalten: {value}',
+    'errors.value_out_of_range' => '{name} muss zwischen {min} und {max} liegen, erhalten: {value}',
 ];

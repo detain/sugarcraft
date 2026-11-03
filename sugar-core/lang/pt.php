@@ -22,4 +22,20 @@ return [
 
     // Program.php
     'program.proc_open_failed'    => 'proc_open falhou para: {cmd}',
+    'color.parse_empty' => 'não é possível analisar um nome de cor vazio',
+    'color.parse_unknown' => 'nome de cor desconhecido: {name}',
+    'ansi.invalid_scs_slot' => 'slot SCS inválido: {slot} (esperado 0-3 para G0-G3)',
+    'ansi.invalid_scs_designator' => 'designador SCS inválido: {designator} (esperado um byte em 0x30-0x7E)',
+    'ansi.invalid_sixel_repeat' => 'a contagem de repetição sixel não deve ser negativa: {count}',
+    'semaphore.limit_invalid' => 'o limite do semáforo deve ser pelo menos 1, obtido {limit}',
+    'semaphore.limit_busy' => 'semáforo ocupado: {held} em execução, {waiting} aguardando',
+    'semaphore.shutdown' => 'o semáforo foi fechado antes de conceder uma permissão',
+    'semaphore.closed' => 'o semáforo está fechado e não pode conceder outra permissão',
+    'semaphore.derive_closed' => 'não é possível derivar um novo pool de um semáforo fechado',
+    'lru_map.capacity_invalid' => 'a capacidade LRU deve ser pelo menos 1, obtida {capacity}',
+    'lru_map.capacity_too_large' => 'a capacidade LRU {capacity} excede o limite de crescimento {max}',
+    'lru_map.evict_from_empty' => 'não é possível remover de um mapa LRU vazio',
+    'errors.negative_not_allowed' => 'valor negativo não permitido para {name}',
+    'errors.value_must_be_positive' => '{name} deve ser positivo, obtido {value}',
+    'errors.value_out_of_range' => '{name} deve estar entre {min} e {max}, obtido {value}',
 ];
