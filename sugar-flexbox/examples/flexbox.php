@@ -12,7 +12,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Flexbox\Flex\{Align, Direction, FlexBox, FlexItem};
 
-// Row layout: 3 panels in ratio 1:2:1
+// Row layout: 3 panels in ratio 1:3:2
 $row = FlexBox::row(
     FlexItem::new("LEFT\npanel\ncontent")->withRatio(1)->withStyle('34'),  // blue
     FlexItem::new("CENTER\nwide\npanel")->withRatio(2)->withStyle('32'),   // green
