@@ -10,6 +10,16 @@
  *   Match User wishuser
  *       ForceCommand /usr/bin/php /path/to/this/file.php
  *       PermitTTY yes
+ *
+ * WHAT THIS EXAMPLE DELIBERATELY OMITS. There is no `Auth` and no
+ * `RateLimit` in this stack, so *any* user sshd lets through reaches it, and
+ * nothing throttles a script hammering the endpoint. That is the open-default
+ * posture the library README tabulates under 'Defaults that are open until
+ * you close them' - fine for a smoke test, not a deployment. The fields it
+ * prints (`$s->user`, `$s->clientHost`, `$s->term`, the geometry) are read
+ * from the environment, and any of them an `AcceptEnv` line allows is
+ * something the connecting peer asserted, not something sshd proved; treat
+ * them as display input, never as an authorization key or a log you trust.
  */
 
 declare(strict_types=1);

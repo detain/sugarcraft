@@ -728,6 +728,32 @@ final class DocSurfaceTruthTest extends TestCase
         return str_replace([' * ', "\u{2014}"], [' ', '-'], $text);
     }
 
+    public function testTheHealthProbeAndTheConcurrencyTruthAreWrittenDown(): void
+    {
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
+        }
+        $guide = $this->prose($guide);
+
+        // The old recipe promised a command that ForceCommand never runs.
+        self::assertStringNotContainsString('# Probe the hub endpoint', $guide);
+        self::assertStringContainsString('Do **not** write the probe as', $guide);
+        self::assertStringContainsString(
+            'the `echo ok` never runs, the entry script does',
+            $guide,
+        );
+        self::assertStringContainsString('A liveness check that must not depend on credentials', $guide);
+
+        // Nothing here bounds concurrency; the guide says whose job that is.
+        self::assertStringContainsString('### Concurrency and back-pressure', $guide);
+        self::assertStringContainsString('Nothing in this library bounds the number of concurrent sessions', $guide);
+
+        $example = (string) \file_get_contents(\dirname(__DIR__) . '/examples/hello-server.php');
+        self::assertStringContainsString('There is no `Auth` and no', $this->prose($example));
+        self::assertStringContainsString('something the connecting peer asserted, not something sshd proved', $this->prose($example));
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

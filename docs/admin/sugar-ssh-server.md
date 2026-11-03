@@ -480,9 +480,41 @@ trail of denials is a seam you have to write yourself.
 ### Healthcheck
 
 ```bash
-# Probe the hub endpoint (assuming a banner/ping middleware is registered)
-ssh -o BatchMode=yes hubuser@host echo ok
+ssh -o BatchMode=yes hubuser@host; echo "status=$?"
 ```
+
+Do **not** write the probe as `ssh hubuser@host echo ok` and read the output.
+`ForceCommand` replaces the command line: the `echo ok` never runs, the entry
+script does, and whatever it prints is the entry script's own banner (see
+**The exec contract** under [What the process does](#what-the-process-does)).
+If you want a command-shaped health probe, you have to implement the reading
+yourself - decode `SSH_ORIGINAL_COMMAND` in your own stack and answer it
+before anything spawns a shell.
+
+What the exit status actually tells you is worth the column:
+
+| Status | Meaning |
+|--------|---------|
+| `0` | The chain ran to its terminal. With no middleware that spawns, that means *nothing was served* - see [Exit status](#exit-status). |
+| `129` | A gate refused (`Server::EXIT_DENIED`): auth denied, throttle tripped, or the context was already dead. |
+| `255` | PHP fatal before `serve()` returned - a missing file, a bad path, an unprovisioned sink. Check the provisioning step above. |
+| other | The child's own exit code, if a child ran. |
+
+A liveness check that must not depend on credentials at all should be a
+different mechanism (a `sshd`-level port probe, or a `systemd` watchdog on the
+service); anything routed through `ForceCommand` is exercising your real
+policy, including the throttle.
+
+### Concurrency and back-pressure
+
+Nothing in this library bounds the number of concurrent sessions. Each
+connection is a `sshd` child running one PHP process, which is the design
+(see **One session per process** in the library README), so the limits that
+work are `sshd`'s: `MaxStartups` for unauthenticated pile-ups,
+`MaxSessions` per connection, and the usual `User tasksmax` / cgroup caps if a
+deployed stack can spawn expensive children. There is no internal queue, no
+idle timeout, and no connection counter to poll - a monitoring system that
+wants "sessions now" should count the `sshd` children of the forced program.
 
 ---
 
