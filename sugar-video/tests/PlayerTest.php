@@ -2452,7 +2452,9 @@ final class PlayerTest extends TestCase
         }
 
         // Last line is the status text.
-        $this->assertSame('loading...  space play  q quit', $lines[$cellsH]);
+        // In-step flip: the start screen now carries the active mode label (M22).
+        $this->assertStringStartsWith('[', $lines[$cellsH]);
+        $this->assertStringContainsString('] loading...  space play  q quit', $lines[$cellsH]);
     }
     /**
      * @testdox M11: a budgeted forward seek yields to the frame budget and records the landed playhead
@@ -2518,6 +2520,91 @@ final class PlayerTest extends TestCase
         $this->assertEqualsWithDelta(100 / 30.0, $backward->position(), 1e-9, 'an unbudgeted backward rebuild lands on the requested index');
     }
 
+
+    /**
+     * @testdox M22: the paused start screen announces the active render mode
+     */
+    public function testTheModeLabelIsAnnouncedOnTheStartScreen(): void
+    {
+        $player = Player::fromDecoder(
+            decoder: new FakeDecoder([new RgbFrame(str_repeat("\x20\x40\x60", 8), 4, 2)]),
+            cellsW: 40,
+            cellsH: 3,
+            fps: 10.0,
+        );
+        $rows = preg_split("/\r\n|\n/", $player->view()) ?: [];
+        $this->assertSame(
+            '[Unicode half-block (▀)] loading...  space play  q quit',
+            end($rows),
+            'the start screen names the mode the viewer is actually seeing',
+        );
+    }
+
+    /**
+     * @testdox M24: withAudio(false) mutes the companion and carries through derived states
+     */
+    public function testTheMuteCarriesThroughDerivedStates(): void
+    {
+        $spy = new SpyAudioPlayer('/fake.mp4');
+        $player = Player::fromDecoder(
+            decoder: new FakeDecoder([new RgbFrame(str_repeat("\x30\x60\x90", 8), 4, 2)]),
+            cellsW: 4,
+            cellsH: 2,
+            fps: 10.0,
+            mode: Mode::Ascii,
+            audioPlayer: $spy,
+            paused: false,
+        );
+
+        $muted = $player->withAudio(false);
+        $this->assertTrue($muted->audioMuted);
+        $this->assertTrue($spy->isMuted(), 'the live companion is silenced too');
+        $this->assertTrue($muted->pause()->audioMuted, 'mute rides every derived state');
+
+        $unmuted = $muted->withAudio(true);
+        $this->assertFalse($unmuted->audioMuted);
+        $this->assertFalse($spy->isMuted(), 'unmute re-arms the companion');
+    }
+
+    /**
+     * @testdox M23: Player::open decodes a poster frame instead of promising 'loading...'
+     */
+    public function testThePosterFrameGreetsThePausedViewer(): void
+    {
+        if (Probe::ffmpeg() === null) {
+            $this->markTestSkipped('needs a live ffmpeg for the poster decode');
+        }
+        $dir = sys_get_temp_dir() . '/sv-poster-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        $clip = $dir . '/clip.mp4';
+        $gen = proc_open(
+            [Probe::ffmpeg(), '-y', '-loglevel', 'error', '-f', 'lavfi',
+             '-i', 'testsrc=duration=1:size=64x48:rate=10', '-pix_fmt', 'yuv420p', $clip],
+            [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $gpipes,
+        );
+        $ok = is_resource($gen) && proc_close($gen) === 0 && is_file($clip);
+        if (!$ok) {
+            @rmdir($dir);
+            $this->markTestSkipped('could not generate a test clip');
+        }
+
+        try {
+            $player = Player::open($clip, 8, 6, mode: Mode::Ascii);
+            $rows = preg_split("/\r\n|\n/", $player->view()) ?: [];
+            $body = array_slice($rows, 0, 6);
+            $this->assertNotSame(
+                array_fill(0, count($body), ''),
+                array_values(array_filter($body, static fn (string $r): bool => trim($r) !== '')),
+                'the paused screen shows real frame content, not the placeholder',
+            );
+            $this->assertStringNotContainsString('loading...', $player->view());
+            $player->stop();
+        } finally {
+            @unlink($clip);
+            @rmdir($dir);
+        }
+    }
 }
 
 /**

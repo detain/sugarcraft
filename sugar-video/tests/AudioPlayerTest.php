@@ -845,4 +845,38 @@ final class AudioPlayerTest extends TestCase
         $handle->setAccessible(true);
         $this->assertNull($handle->getValue($player));
     }
+
+    /**
+     * @testdox M24: a muted companion refuses to spawn until unmuted
+     */
+    public function testMuteBlocksStartUntilUnmute(): void
+    {
+        $a = new FakeAudioPlayer('/tmp/video.mp4');
+        $a->setFakeCommand(['sleep', '2']);
+
+        $a->mute();
+        $a->start();
+        $this->assertFalse($a->isPlaying(), 'mute never spawns');
+        $this->assertFalse($a->hasStarted(), 'mute does not even latch started');
+
+        $a->unmute();
+        $a->start();
+        $this->assertTrue($a->isPlaying(), 'unmute re-arms the next start');
+        $a->stop();
+    }
+
+    /**
+     * @testdox M24: muting a live companion stops it immediately
+     */
+    public function testMutingALiveCompanionStopsIt(): void
+    {
+        $a = new FakeAudioPlayer('/tmp/video.mp4');
+        $a->setFakeCommand(['sleep', '2']);
+        $a->start();
+        $this->assertTrue($a->isPlaying());
+
+        $a->mute();
+        $this->assertFalse($a->isPlaying(), 'mute kills the running child');
+        $this->assertTrue($a->isMuted());
+    }
 }

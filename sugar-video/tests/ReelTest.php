@@ -471,4 +471,26 @@ final class ReelTest extends TestCase
         $this->assertStringNotContainsString('truncated', $log2);
     }
 
+
+    /**
+     * @testdox M24: withAudio(false) sticks through every fluent builder
+     */
+    public function testTheAudioOptOutSurvivesEverySetter(): void
+    {
+        $read = static fn (Reel $r): bool => (new \ReflectionProperty(Reel::class, 'audioEnabled'))->getValue($r);
+
+        $this->assertTrue($read(Reel::open('/tmp/clip.mp4')), 'audio is on by default');
+
+        $off = Reel::open('/tmp/clip.mp4')->withAudio(false);
+        $this->assertFalse($read($off));
+        $this->assertFalse(
+            $read($off->withLoop(true)->withFps(30.0)->withRamp('dense')),
+            'a later setter must not resurrect the audio companion',
+        );
+        $this->assertTrue($read($off->withAudio(true)));
+
+        $src = (string) file_get_contents(\dirname(__DIR__) . '/src/Reel.php');
+        $this->assertGreaterThanOrEqual(2, substr_count($src, '$player->withAudio(false)'),
+            'both build paths (toPlayer and play) apply the opt-out');
+    }
 }

@@ -57,6 +57,7 @@ class AudioPlayer
         private readonly ?int $startMs = null,
         private readonly ?\Closure $clock = null,
         array $headers = [],
+        private bool $muted = false,
     ) {
         $this->seekMs = $startMs ?? 0;
 
@@ -109,6 +110,11 @@ class AudioPlayer
      */
     public function start(): void
     {
+        // M24: mute is the user's explicit no — do not latch started, do not spawn.
+        if ($this->muted) {
+            return;
+        }
+
         // Mark as started even when no binary is available, so callers can
         // distinguish "playback has begun" from "never played" and avoid
         // re-spawning on resume.
@@ -313,6 +319,29 @@ class AudioPlayer
      * - The process exited immediately (no audio track).
      * - The process was stopped via stop().
      */
+    /**
+     * M24: silence the companion — kills a live child and refuses future
+     * start()/resume() until unmute(). The video clock is unaffected.
+     */
+    public function mute(): void
+    {
+        $this->muted = true;
+
+        if ($this->isPlaying()) {
+            $this->stop();
+        }
+    }
+
+    public function unmute(): void
+    {
+        $this->muted = false;
+    }
+
+    public function isMuted(): bool
+    {
+        return $this->muted;
+    }
+
     public function isPlaying(): bool
     {
         if (!is_resource($this->processHandle)) {

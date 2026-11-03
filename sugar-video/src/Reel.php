@@ -88,6 +88,7 @@ final class Reel
         private readonly ?int $cellPxW = null,
         private readonly ?int $cellPxH = null,
         private readonly bool $cellPxSet = false,
+        private readonly bool $audioEnabled = true,
     ) {
     }
 
@@ -370,6 +371,14 @@ final class Reel
     }
 
     /**
+     * M24: opt out of the audio companion for this Reel ('m' stays the mode key).
+     */
+    public function withAudio(bool $on): self
+    {
+        return $this->with(audioEnabled: $on);
+    }
+
+    /**
      * Ceiling for a subtitle file read through {@see withSubtitles()} (M25).
      *
      * Real caption tracks are tens of kilobytes; anything megabyte-sized is a
@@ -558,7 +567,7 @@ final class Reel
             self::assertHostAllowed($this->path, $this->allowedHosts);
         }
 
-        return Player::open(
+        $player = Player::open(
             $this->path,
             $this->cols,
             $this->rows,
@@ -571,6 +580,9 @@ final class Reel
             $subtitles,
             $this->headers,
         );
+
+        // M24: the audio opt-out applies at build time.
+        return $this->audioEnabled ? $player : $player->withAudio(false);
     }
 
     /**
@@ -629,6 +641,9 @@ final class Reel
             $this->headers,
         );
 
+        // M24: the opt-out is applied to the built player.
+        $player = $this->audioEnabled ? $player : $player->withAudio(false);
+
         $options = new ProgramOptions(
             useAltScreen: true,
             hideCursor: true,
@@ -679,6 +694,7 @@ final class Reel
         // m1: null is a LEGAL value for fps (auto-detect), so presence cannot
         // ride the value itself — this flag marks "the caller handed fps".
         bool $fpsSet = false,
+        ?bool $audioEnabled = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -697,6 +713,7 @@ final class Reel
             $cellPxW ?? $this->cellPxW,
             $cellPxH ?? $this->cellPxH,
             $cellPxSet ?? $this->cellPxSet,
+            $audioEnabled ?? $this->audioEnabled,
         );
     }
 

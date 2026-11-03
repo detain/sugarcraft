@@ -130,6 +130,7 @@ final class Player implements Model
         private readonly float $frameBudgetMs = 0.0,
         private readonly ?WindowSizeMsg $pendingResize = null,
         public readonly ?string $failure = null,
+        public readonly bool $audioMuted = false,
     ) {
     }
 
@@ -231,6 +232,28 @@ final class Player implements Model
         // The renderer is rebuilt on mode change or resize via mutate(['renderer' => ...]).
         $renderer = RendererFactory::new($mode, $ramp, $cellPxW, $cellPxH);
 
+        // M23: pull one frame at open so the paused start screen shows real
+        // content instead of the 'loading...' claim. Nothing auto-plays, which is
+        // also how a REDUCE_MOTION host is honoured — the screen waits for an
+        // explicit command. A source whose child already died fails HERE, loudly.
+        $poster = null;
+        $posterFailure = null;
+        try {
+            $poster = $decoder->next();
+        } catch (FfmpegDecodeFailure $failure) {
+            $poster = null;
+            $posterFailure = Sanitize::untrusted($failure->getMessage());
+        }
+
+        // Rewind after the poster so playback still starts at frame 0.
+        // In-place decoders (injected, ffmpeg-class with a seek budget) just
+        // reopen; byte-based decoders (GIF/WebP — reopensInPlace() false means
+        // "rebuild via the factory", their reopen re-reads bytes in place,
+        // equally cheap here) reopen off the same path argument.
+        if ($poster !== null) {
+            $decoder->reopen($videoPath, $cellsW, $cellsH, $fps, $mode, 0.0, $headers);
+        }
+
         // Player starts paused; the first tick is scheduled when playback begins.
         return new self(
             decoder: $decoder,
@@ -239,7 +262,7 @@ final class Player implements Model
             paused: true,
             videoTime: 0.0,
             frameIndex: 0,
-            currentFrame: null,
+            currentFrame: $poster,
             lastTickTime: microtime(true),
             fps: $fps,
             totalFrames: $totalFrames,
@@ -247,7 +270,7 @@ final class Player implements Model
             cellsH: $cellsH,
             videoPath: $videoPath,
             audioPlayer: $audioPlayer,
-            ended: false,
+            ended: $posterFailure !== null,
             loop: $loop,
             ramp: $ramp,
             audioFactory: $audioFactory,
@@ -257,6 +280,7 @@ final class Player implements Model
             renderer: $renderer,
             headers: $headers,
             frameBudgetMs: $frameBudgetMs,
+            failure: $posterFailure,
         );
     }
 
@@ -1295,6 +1319,26 @@ final class Player implements Model
     /**
      * Render a placeholder when no frame is available yet.
      */
+    /**
+     * M24: opt audio in or out (the 'm' key stays the mode cycle by design).
+     *
+     * The companion object itself refuses to spawn while muted, so the opt-out
+     * survives every respawn the seek/loop/resize paths perform.
+     */
+    public function withAudio(bool $on): self
+    {
+        if ($on) {
+            $this->audioPlayer?->unmute();
+            if (!$this->paused) {
+                $this->audioPlayer?->start();
+            }
+        } else {
+            $this->audioPlayer?->mute();
+        }
+
+        return $this->mutate(['audioMuted' => !$on]);
+    }
+
     private function renderPlaceholder(): string
     {
         $lines = [];
@@ -1302,7 +1346,8 @@ final class Player implements Model
             $lines[] = str_repeat(' ', $this->cellsW);
         }
         $body = implode("\r\n", $lines);
-        $status = "loading...  space play  q quit";
+        // M22: the start screen announces the active render mode by its human label.
+        $status = "[" . $this->mode->label() . "] loading...  space play  q quit";
         return $body . "\r\n" . $status;
     }
 
@@ -1696,6 +1741,11 @@ final class Player implements Model
         // every seek/loop/mode rebuild used to drop them, so audio worked only
         // on an unauthenticated URL.
         $newAudio = $factory($this->videoPath, $startMs, $this->headers);
+        // M24: a muted session stays muted across every respawn.
+        if ($this->audioMuted) {
+            $newAudio->mute();
+        }
+
         if (!$this->paused) {
             $newAudio->start();
         }
@@ -1785,6 +1835,7 @@ final class Player implements Model
             // the debounce window must not silently swallow the deferred rebuild, or
             // the player keeps decoding at the superseded geometry forever.
             pendingResize: array_key_exists('pendingResize', $changes) ? $changes['pendingResize'] : $this->pendingResize,
+            audioMuted: array_key_exists('audioMuted', $changes) ? $changes['audioMuted'] : $this->audioMuted,
         );
         // Teardown is not a value the model is built with, so it cannot ride the
         // named-argument list — copy the latch forward instead. Every derived
@@ -1797,6 +1848,9 @@ final class Player implements Model
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
+        // M27: deliberate. Pacing already rides the update()-returned
+        // Cmd::tick chain; a wall-clock subscription here would double-tick
+        // the pump. Input and resize arrive through sugar-core's own wiring.
         return null;
     }
 }
