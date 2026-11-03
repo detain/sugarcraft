@@ -14,10 +14,10 @@
 ![demo](.vhs/view.gif)
 
 Terminal GIF viewer for PHP 8.3+ — the command-line front end built on
-[`sugarcraft/sugar-animation`](../sugar-animation/). Point it at a `.gif` on
+[`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). Point it at a `.gif` on
 disk and it decodes via `ext-gd`, sizes the frame grid to your terminal, and
 plays the animation in the alternate screen as 24-bit background-coloured
-blocks or an ASCII luminance ramp.
+blocks or an ASCII luminance ramp. GIF is the only input format it reads.
 
 ```bash
 composer require sugarcraft/candy-gifview
@@ -26,6 +26,13 @@ candy-gifview my-animation.gif density # ASCII luminance ramp
 ```
 
 With a project-local install, invoke the binary as `./vendor/bin/candy-gifview`.
+A rolling development phar is published on GitHub Releases under
+`candy-gifview/dev` as `candy-gifview.phar`.
+
+The viewer paints with pure SGR background blocks rather than a terminal
+graphics protocol (kitty/sixel/iTerm2), so it runs anywhere 24-bit colour
+works — inline-protocol rendering is a different route, offered by
+`sugar-image`/`candy-mosaic`.
 
 ## Options
 
@@ -35,14 +42,18 @@ With a project-local install, invoke the binary as `./vendor/bin/candy-gifview`.
 | `--speed=N`           | N × the GIF's nominal rate.                                       |
 | `--speed=Nfps`        | An absolute rate of N frames/second.                              |
 | `--speed=max`         | Burn frames as fast as the scheduler's floors allow.              |
-| `--duration=SECONDS`  | Stop after SECONDS of playback (a schedule deadline in the model — no wall-clock kill). |
+| `--duration=SECONDS`  | Stop after SECONDS of playback (a schedule deadline in the model — no wall-clock kill). Needs at least two frames: a single-frame file combined with `--duration` is refused. |
 | `--watch`             | Reload automatically when the source file changes, via a 10 ms event-loop poll. Bare flag — it takes no value. |
+| `--paused`            | Start paused on the first frame (step with the arrow keys, `Space` resumes). Bare flag — it takes no value. |
 | `--help` / `-h`       | Print the usage line (localized) and exit 0.                      |
+| `--version` / `-v`    | Print the version stamp and exit 0.                               |
 
 Flags may appear before or after the positional `<gif>` and preset token.
-When both `--fps` and `--speed` are given, the last one wins. An unknown
-preset token (a typo like `densiy`) silently falls back to `solid`; a third
-positional argument is refused.
+`--fps` and `--speed` compose: `--fps` sets the uniform base rate and
+`--speed` multiplies it (`--fps=10 --speed=2` plays at 20 fps), so the order
+of the two flags does not matter. An unknown preset token (a typo like
+`densiy`) is refused with an explicit message — the two valid tokens are
+`solid` and `density`; a third positional argument is likewise refused.
 
 A GIF's authored NETSCAPE loop count is honoured by default: `raw N`
 means N extra repeats after the first play (so N+1 total passes) and `raw 0`
@@ -59,12 +70,19 @@ libnsgif's single-play default — plays forever.
 | `d`                    | Toggle solid ↔ density preset  |
 | `q` / `Esc` / `Ctrl+C` | Quit                           |
 
+The key table is fixed in the player model; keys are not rebindable.
+
 ## Requirements
 
-- **ext-gd** decodes the GIF (declared as a `suggest`; without it the
-  decoder exits non-zero with a clear message).
+- **ext-gd** decodes the GIF (declared as a `suggest`). The CLI checks for it
+  before touching the file and exits non-zero with a clear message.
 - Both presets emit 24-bit truecolor SGR (`38;2`/`48;2`). There is no
-  256-color fallback ladder and no `NO_COLOR` / monochrome mode.
+  256-color fallback ladder and no `NO_COLOR` / monochrome mode. On a
+  terminal without truecolor the blocks degrade (often to default or
+  nearby-index colour); the `density` preset's character ramp stays
+  legible there and is the better choice. On `TERM=dumb` or otherwise
+  capability-poor terminals, expect raw escape sequences rather than a
+  usable frame.
 - Alternate screen plus an ioctl size query on descriptor 1; off a tty the
   viewport falls back to a deterministic 60×24 cell grid (piped output, CI).
 - GIF transparency is composited against the terminal's own background —
@@ -72,38 +90,60 @@ libnsgif's single-play default — plays forever.
 
 ## Limits
 
-- The whole animation is materialised in RAM while playing, so intake is
-  capped at 4096 frames (`Cli::MAX_FRAMES`): over-cap files are refused
-  loudly at launch, and under `--watch` a reload over the cap keeps the
-  stale frames.
+- The engine decodes at most 256 frames per animation
+  (`Decoder::MAX_FRAMES`); longer files are truncated to the first 256 at
+  intake and an explicit notice is printed on stderr. `Cli::MAX_FRAMES`
+  (4096) is only the outer belt.
+- Intake is also bounded by file size (`Cli::MAX_INPUT_BYTES`, 64 MiB —
+  larger files are refused before being buffered) and by a resident-cell
+  budget (`Cli::MAX_RESIDENT_CELLS`, 6 million frame cells for the current
+  viewport). The engine separately caps a single frame at 100 000 cells and
+  the whole canvas at 2 million pixels.
 - `--watch` reloads decode synchronously inside the poll tick — a large
-  replacement file can stall one tick.
+  replacement file can stall one tick — and a reload that trips any cap
+  above keeps the stale frames rather than blanking the screen.
 - Frames are decoded at the launch size: growing the window reveals no
   extra detail until the next file-change reload, while shrinking
   re-clamps and hides.
-- Startup decodes before the first frame is painted; large files block
-  with no "loading…" affordance. Quitting after the loop count completes
-  keeps the last frame on screen.
+- Startup decodes before the first frame is painted; a line announcing the
+  decode is written to stderr first, so a long wait is at least not silent.
+  Quitting restores the terminal's prior contents — the last frame does not
+  stay on screen (the viewer runs in the alternate screen).
 
 ## Exit codes
 
 | Code | Meaning                                                                |
 |------|------------------------------------------------------------------------|
-| 0    | `--help` printed, or playback ended normally.                          |
+| 0    | `--help`/`--version` printed, or playback ended normally.              |
 | 1    | Flag/argument refusal or a decode failure — the message lands on stderr. |
+| 128+N | The loop was stopped by signal N (e.g. 143 for SIGTERM).              |
+
+## Accessibility
+
+- The `density` preset encodes luminance as character ramp density, not
+  only as colour, so it survives colour-blindness and poor-colour
+  terminals better than `solid`.
+- Playback can start paused (`--paused`) and is fully steppable by key
+  (`←`/`→`) — motion is never mandatory to see content.
+- The player caps frame rate at its own scheduler floors; `--speed=max` is
+  opt-in, never the default.
+- All CLI messages are localized via environment locale
+  (`LC_ALL`/`LC_MESSAGES`/`LANG`) across 16 languages; in-app playback
+  chrome (the status line) is currently English-only.
 
 ## Architecture
 
 The whole animation engine — `Decoder`, `Frame`, `Renderer`, `Player`, and
 the separate `.ansi` art surface (`AnsiArt` / `ArtLibrary` / `ArtLoop`,
 which this viewer does not expose) — lives in
-[`sugarcraft/sugar-animation`](../sugar-animation/). This package is only the viewer app:
+[`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). This package is only the viewer app:
 
 | File              | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
-| `bin/candy-gifview` | Autoload probe + `Cli::main()` shim — deliberately two lines of logic. |
-| `src/Cli.php`     | Argv parsing (`--help`, preset token, `--fps`/`--speed`/`--duration`/`--watch`), viewport sizing (`viewportCells()` — descriptor 1 behind a core `stream_isatty` gate), the 4096-frame intake cap, decode-failure exits (rescue catches take any `\Throwable` so a raw engine `\Error` still exits 1 loudly), Player wiring, Program launch. `$play`, `$watchStat` and `$decode` closure seams keep every branch testable without entering the blocking loop. |
-| `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.bad_flag`, `cli.bad_value`, `cli.too_many`, `cli.unexpected_value` — all shipping in 16 locales). `cli.no_autoload` mirrors, for parity, the string the bin shim prints before autoload exists, where translation cannot run. |
+| `bin/candy-gifview` | Autoload probe, locale wiring (`T::setLocale(T::detect())` before the first message), and a `Cli::main()` hand-off — deliberately a thin shim. |
+| `src/Cli.php`     | Argv parsing (`--help`/`--version`, preset token with loud refusal, `--fps`/`--speed`/`--duration`/`--watch`/`--paused`, single-dash refusals), gd preflight, viewport sizing (`viewportCells()` — descriptor 1 behind a core `stream_isatty` gate, two rows reserved for the status line), intake caps (frame belt, 64 MiB file gate, resident-cell budget), decode-failure exits (rescue catches take any `\Throwable` so a raw engine `\Error` still exits 1 loudly, wrapped in one localized `could not play` line with control characters neutralised), Player wiring, Program launch, and signal re-encoding (`stopSignal()` → 128+N). `$play`, `$watchStat` and `$decode` closure seams keep every branch testable without entering the blocking loop. |
+| `src/Support/Version.php` | Resolves the version stamp: the phar's embedded `metadata['version']` when running from a phar (release `x.y.z` or an honest `dev-<sha>`/`dev-build` stamp), falling back to the compiled `CURRENT` constant. |
+| `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.bad_flag`, `cli.bad_value`, `cli.too_many`, `cli.unexpected_value`, `cli.bad_preset`, `cli.no_frames`, `cli.cannot_play`, `cli.reason_frames_over`, `cli.reason_bytes_over`, `cli.reason_cells_over`, `cli.duration_static`, `cli.need_gd`, `cli.decoding`, `cli.truncated` — all shipping in 16 locales). `cli.no_autoload` mirrors, for parity, the string the bin shim prints before autoload exists, where translation cannot run. |
 
 ## Test
 
@@ -114,4 +154,4 @@ vendor/bin/phpunit
 
 ## Credits & inspiration
 
-Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm). The decode/render/playback layer it mirrors is developed here as [`sugarcraft/sugar-animation`](../sugar-animation/); SugarCraft is a native PHP project on the Charm-inspired TEA stack.
+Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm). The decode/render/playback layer it mirrors is developed here as [`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation); SugarCraft is a native PHP project on the Charm-inspired TEA stack.
