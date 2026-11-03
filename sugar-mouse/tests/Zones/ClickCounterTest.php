@@ -7,6 +7,7 @@ namespace SugarCraft\Mouse\Tests\Zones;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Mouse\Zones\ClickCounter;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
@@ -23,6 +24,16 @@ final class ClickCounterTest extends TestCase
     private function move(int $x, int $y): MouseMsg
     {
         return new MouseMsg($x, $y, MouseButton::None, MouseAction::Motion);
+    }
+
+    /**
+     * A wheel report shaped exactly as sugar-core's InputReader currently
+     * decodes it: a MouseWheelMsg with action Press hardcoded. The tracker
+     * must gate it by TYPE (a scroll across a zone is not a click).
+     */
+    private function wheel(int $x, int $y): MouseMsg
+    {
+        return new MouseWheelMsg($x, $y, MouseButton::WheelUp, MouseAction::Press);
     }
 
     /**
@@ -250,5 +261,50 @@ final class ClickCounterTest extends TestCase
 
         $this->assertNull($msg);
         $this->assertSame(1, $counter->clickCount());
+    }
+
+    /**
+     * C1 regression: a wheel report stamped action Press (the core wire shape
+     * today) must not advance the streak. Two real presses bracketing wheel
+     * ticks are a DOUBLE click, not a triple — the wheels contribute nothing.
+     */
+    public function testWheelReportsDoNotAdvanceTheStreak(): void
+    {
+        $m = $this->buildManager();
+        $counter = new ClickCounter($m);
+
+        [$counter, $msg] = $counter->update($this->press(2, 1));
+        $this->assertNull($msg);
+        $this->assertSame(1, $counter->clickCount());
+
+        [$counter, $msg] = $counter->update($this->wheel(2, 1));
+        $this->assertNull($msg);
+        $this->assertSame(1, $counter->clickCount());
+
+        [$counter, $msg] = $counter->update($this->wheel(6, 1));
+        $this->assertNull($msg);
+        $this->assertSame(1, $counter->clickCount());
+
+        [$counter, $msg] = $counter->update($this->press(2, 1));
+        $this->assertInstanceOf(DoubleClickMsg::class, $msg);
+        $this->assertSame('a', $msg->zone->id);
+        $this->assertSame(2, $counter->clickCount());
+    }
+
+    /**
+     * C1 regression: wheeling must not reset a streak either — inside or
+     * outside a zone, the state before and after a wheel tick is identical.
+     */
+    public function testWheelDoesNotResetStreakInsideOrOutside(): void
+    {
+        $m = $this->buildManager();
+        $counter = new ClickCounter($m);
+
+        [$counter] = $counter->update($this->press(2, 1));
+        [$counter] = $counter->update($this->wheel(50, 1)); // wheel over no zone
+        [$counter, $msg] = $counter->update($this->press(2, 1));
+
+        $this->assertInstanceOf(DoubleClickMsg::class, $msg);
+        $this->assertSame(2, $counter->clickCount());
     }
 }

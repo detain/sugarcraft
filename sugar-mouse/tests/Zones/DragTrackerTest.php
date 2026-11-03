@@ -7,6 +7,7 @@ namespace SugarCraft\Mouse\Tests\Zones;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Mouse\Zones\DragTracker;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\Msg\ZoneDragEndMsg;
@@ -29,6 +30,16 @@ final class DragTrackerTest extends TestCase
     private function release(int $x, int $y): MouseMsg
     {
         return new MouseMsg($x, $y, MouseButton::Left, MouseAction::Release);
+    }
+
+    /**
+     * A wheel report shaped as sugar-core's InputReader currently decodes it:
+     * MouseWheelMsg with action Press hardcoded. A scroll must never start,
+     * move, or end a drag.
+     */
+    private function wheel(int $x, int $y): MouseMsg
+    {
+        return new MouseWheelMsg($x, $y, MouseButton::WheelUp, MouseAction::Press);
     }
 
     /**
@@ -323,5 +334,49 @@ final class DragTrackerTest extends TestCase
         $this->assertNull($msg);
         $this->assertNull($next->currentZoneId());
         $this->assertSame('a', $next->originZoneId());
+    }
+
+    /**
+     * C1 regression: a wheel report (action Press on the core wire) must not
+     * start a drag.
+     */
+    public function testWheelDoesNotStartDrag(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        [$next, $msg] = $tracker->update($this->wheel(2, 1));
+
+        $this->assertNull($msg);
+        $this->assertNull($next->originZoneId());
+        $this->assertNull($next->currentZoneId());
+    }
+
+    /**
+     * C1 regression: wheeling during a drag neither moves nor ends it — the
+     * drag survives intact until a real Release.
+     */
+    public function testWheelDuringDragIsFullyInert(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        [$tracker] = $tracker->update($this->press(2, 1));
+
+        // Wheel across the boundary into zone B — must not emit, must not move current.
+        [$tracker, $msg] = $tracker->update($this->wheel(6, 1));
+        $this->assertNull($msg);
+        $this->assertSame('a', $tracker->originZoneId());
+        $this->assertSame('a', $tracker->currentZoneId());
+
+        // Wheel outside any zone — must not clear current, must not end the drag.
+        [$tracker, $msg] = $tracker->update($this->wheel(50, 1));
+        $this->assertNull($msg);
+        $this->assertSame('a', $tracker->currentZoneId());
+
+        // A real release still ends the drag.
+        [$tracker, $msg] = $tracker->update($this->release(2, 1));
+        $this->assertInstanceOf(ZoneDragEndMsg::class, $msg);
+        $this->assertNull($tracker->originZoneId());
     }
 }

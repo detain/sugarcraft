@@ -7,6 +7,7 @@ namespace SugarCraft\Mouse\Tests\Zones;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\Msg\ZoneEnterMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneExitMsg;
@@ -24,6 +25,16 @@ final class ZoneHoverTrackerTest extends TestCase
     private function press(int $x, int $y): MouseMsg
     {
         return new MouseMsg($x, $y, MouseButton::Left, MouseAction::Press);
+    }
+
+    /**
+     * A wheel report shaped as sugar-core's InputReader currently decodes it:
+     * MouseWheelMsg with action Press hardcoded. Scrolling is not a cursor
+     * move and must never enter or exit a hover zone.
+     */
+    private function wheel(int $x, int $y): MouseMsg
+    {
+        return new MouseWheelMsg($x, $y, MouseButton::WheelDown, MouseAction::Press);
     }
 
     /**
@@ -251,5 +262,38 @@ final class ZoneHoverTrackerTest extends TestCase
         $this->assertSame(1, $msg->zone->startRow);
         $this->assertSame(3, $msg->zone->endCol);
         $this->assertSame(1, $msg->zone->endRow);
+    }
+
+    /**
+     * C1 regression: a wheel report over a zone (action Press on the core
+     * wire) must not emit an enter — scrolling is not hovering.
+     */
+    public function testWheelOverZoneDoesNotEnter(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new ZoneHoverTracker($m);
+
+        [$next, $msg] = $tracker->update($this->wheel(2, 1));
+
+        $this->assertNull($msg);
+        $this->assertNull($next->currentZoneId());
+    }
+
+    /**
+     * C1 regression: wheeling away from a hovered zone must not emit an exit
+     * either — the hover survives the scroll until a real move.
+     */
+    public function testWheelAwayFromHoveredZoneDoesNotExit(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new ZoneHoverTracker($m);
+
+        [$tracker] = $tracker->update($this->move(2, 1));
+        $this->assertSame('a', $tracker->currentZoneId());
+
+        [$next, $msg] = $tracker->update($this->wheel(50, 1));
+
+        $this->assertNull($msg);
+        $this->assertSame('a', $next->currentZoneId());
     }
 }

@@ -6,6 +6,7 @@ namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneDragEndMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneDragMoveMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneDragStartMsg;
@@ -104,6 +105,13 @@ final class DragTracker
      */
     public function update(MouseMsg $msg): array
     {
+        // Wheel reports never participate in drags — they neither start,
+        // move, nor end one. (Type gate: core currently delivers wheel
+        // reports with action Press.)
+        if ($msg instanceof MouseWheelMsg) {
+            return [$this, null];
+        }
+
         $hit = $this->manager->anyInBounds($msg);
 
         // --- Release: end any in-progress drag ---

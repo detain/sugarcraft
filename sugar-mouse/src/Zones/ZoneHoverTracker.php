@@ -6,6 +6,7 @@ namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneEnterMsg;
 use SugarCraft\Mouse\Zones\Msg\ZoneExitMsg;
 
@@ -71,10 +72,19 @@ final class ZoneHoverTracker
      * Moving directly from zone A to zone B emits the exit for A first;
      * call update() again to receive the enter for B.
      *
+     * Wheel reports never move the hover: scrolling is not a cursor move
+     * (the cursor does not teleport to the wheel coordinate), and core
+     * currently stamps wheel events with action Press, so the exclusion is
+     * by {@see MouseWheelMsg} type, not by action.
+     *
      * @return array{0: self, 1: ?Msg} [updated tracker, optional hover msg]
      */
     public function update(MouseMsg $msg): array
     {
+        if ($msg instanceof MouseWheelMsg) {
+            return [$this, null];
+        }
+
         $hit = $this->manager->anyInBounds($msg);
 
         if ($hit === null) {

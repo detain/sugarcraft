@@ -6,6 +6,7 @@ namespace SugarCraft\Mouse\Zones;
 
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Mouse\Zones\Msg\DoubleClickMsg;
 use SugarCraft\Mouse\Zones\Msg\TripleClickMsg;
 
@@ -66,6 +67,12 @@ final class ClickCounter
      * Process a mouse press event and detect double/triple click streaks.
      *
      * Only press events advance the streak; other mouse actions are no-ops.
+     * Wheel events are excluded by TYPE, not by action: sugar-core's
+     * InputReader currently stamps wheel reports with
+     * {@see \SugarCraft\Core\MouseAction::Press}, so an action-only check
+     * would let every wheel tick advance the streak (a scroll across a zone
+     * would "double-click" it). The {@see MouseWheelMsg} gate is this layer's
+     * defence; the root cause is the core seam (InputReader hardcodes Press).
      * When two presses occur in the same zone within the click interval,
      * a {@see DoubleClickMsg} is emitted on the second press, and a
      * {@see TripleClickMsg} is emitted on the third press. The streak
@@ -76,6 +83,13 @@ final class ClickCounter
      */
     public function update(MouseMsg $msg): array
     {
+        // Wheel reports are scrolls, not clicks — never advance the streak.
+        // (Type gate, not action gate: core currently delivers wheel with
+        // action Press — see the method docblock.)
+        if ($msg instanceof MouseWheelMsg) {
+            return [$this, null];
+        }
+
         // Only presses advance the streak.
         if ($msg->action !== \SugarCraft\Core\MouseAction::Press) {
             return [$this, null];
