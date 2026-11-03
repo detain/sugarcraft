@@ -450,4 +450,177 @@ final class StyleTest extends TestCase
         $this->assertNull($data['bg']);
         $this->assertSame(0, $data['attrs']);
     }
+
+    // ─── Palette-slot identity (review M12) ───
+
+    public function testPaletteSlotsOutsideZeroTo255AreRefused(): void
+    {
+        $this->expectExceptionMessage('Style palette slot foreground must be 0-255 or null, got 256');
+        new Style(null, null, 0, 256);
+    }
+
+    public function testBackgroundSlotBoundsAreRefused(): void
+    {
+        $this->expectExceptionMessage('Style palette slot background must be 0-255 or null, got -1');
+        new Style(null, null, 0, null, -1);
+    }
+
+    public function testUnderlineSlotBoundsAreRefused(): void
+    {
+        $this->expectExceptionMessage('Style palette slot underline-slot must be 0-255 or null, got 999');
+        new Style(null, null, 0, null, null, null, 999);
+    }
+
+    public function testSlotEdgesZeroAndTwoHundredFiftyFiveAreAccepted(): void
+    {
+        $style = new Style(null, null, 0, 0, 255);
+
+        $this->assertSame(0, $style->fgSlot());
+        $this->assertSame(255, $style->bgSlot());
+    }
+
+    public function testSettingRgbForegroundDiscardsSlotIdentity(): void
+    {
+        $style = Style::new()->withFgSlot(3)->withFg(0xff0000);
+
+        $this->assertSame(0xff0000, $style->fg());
+        $this->assertNull($style->fgSlot());
+    }
+
+    public function testSettingSlotClearsTheRgbTwin(): void
+    {
+        $style = Style::new(0x0a141e)->withFgSlot(9);
+
+        $this->assertSame(9, $style->fgSlot());
+        $this->assertNull($style->fg());
+    }
+
+    public function testClearingTheSlotFormResetsTheChannelToDefault(): void
+    {
+        $style = Style::new(0x0a141e)->withFgSlot(null);
+
+        $this->assertNull($style->fgSlot());
+        $this->assertNull($style->fg());
+    }
+
+    public function testEqualitySeesASlotOnlyDifference(): void
+    {
+        $rgb = Style::new(0xff0000);
+        $slot = new Style(0xff0000, null, 0, 1);
+
+        $this->assertFalse($rgb->equals($slot));
+        $this->assertFalse(Style::valuesEqual($rgb, $slot));
+    }
+
+    public function testSerializationRoundTripCarriesSlotsAndUnderline(): void
+    {
+        $style = new Style(null, null, Style::ATTR_UNDERLINE, 7, 12, 0x010203, 58);
+        $restored = unserialize(serialize($style));
+
+        $this->assertSame($style->__serialize(), $restored->__serialize());
+        $this->assertTrue($style->equals($restored));
+    }
+
+    public function testAnOldThreeKeyPayloadRestoresWithNullSlots(): void
+    {
+        $style = (new \ReflectionClass(Style::class))->newInstanceWithoutConstructor();
+        $style->__unserialize(['fg' => 1, 'bg' => 2, 'attrs' => 3]);
+
+        $this->assertSame(1, $style->fg());
+        $this->assertNull($style->fgSlot());
+        $this->assertNull($style->bgSlot());
+        $this->assertNull($style->ul());
+        $this->assertNull($style->ulSlot());
+    }
+
+    public function testUnserializationRefusesAForgedSlotBound(): void
+    {
+        $style = (new \ReflectionClass(Style::class))->newInstanceWithoutConstructor();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Style palette slot background must be 0-255 or null, got 300');
+        $style->__unserialize(['fg' => null, 'bg' => null, 'attrs' => 0, 'bgSlot' => 300]);
+    }
+
+    // ─── Public SGR parser (review M15) ───
+
+    public function testFromSgrRecordsPaletteSlotIdentityWithHexBelt(): void
+    {
+        $this->assertSame(1, Style::fromSgr('31')?->fgSlot());
+        $this->assertSame(0xff0000, Style::fromSgr('31')?->fg());
+        $this->assertSame(9, Style::fromSgr('91')?->fgSlot());
+        $this->assertSame(1, Style::fromSgr('41')?->bgSlot());
+        $this->assertSame(9, Style::fromSgr('101')?->bgSlot());
+        $this->assertSame(170, Style::fromSgr('38;5;170')?->fgSlot());
+        $this->assertSame(0xd75fd7, Style::fromSgr('38;5;170')?->fg());
+    }
+
+    public function testFromSgrTruecolorFormsClearSlotIdentity(): void
+    {
+        $style = Style::fromSgr('38;2;10;20;30');
+
+        $this->assertSame(0x0a141e, $style?->fg());
+        $this->assertNull($style?->fgSlot());
+    }
+
+    public function testFromSgrParsesUnderlineColourForms(): void
+    {
+        $slot = Style::fromSgr('58;5;3');
+        $this->assertSame(3, $slot?->ulSlot());
+        $this->assertSame(0xffff00, $slot?->ul());
+
+        $rgb = Style::fromSgr('58;2;1;2;3');
+        $this->assertSame(0x010203, $rgb?->ul());
+        $this->assertNull($rgb?->ulSlot());
+
+        $cleared = Style::fromSgr('58;5;3;59');
+        $this->assertNull($cleared?->ul());
+        $this->assertNull($cleared?->ulSlot());
+    }
+
+    public function testFromSgrClearsChannelDefaultsForBothSpellings(): void
+    {
+        $style = Style::fromSgr('31;39');
+
+        $this->assertNull($style?->fg());
+        $this->assertNull($style?->fgSlot());
+    }
+
+    public function testFromSgrAppliesOverlineAndOffCodes(): void
+    {
+        $this->assertTrue(Style::fromSgr('53')?->hasOverline());
+        $this->assertNull(Style::fromSgr('1;22'));
+        $this->assertTrue(Style::fromSgr('2;22') === null);
+        $this->assertFalse(Style::fromSgr('4;24')?->hasUnderline() ?? false);
+        $this->assertTrue(Style::fromSgr('4;24') === null);
+        $this->assertTrue(Style::fromSgr('7;27') === null);
+        $this->assertTrue(Style::fromSgr('9;29') === null);
+        $this->assertTrue(Style::fromSgr('3;23') === null);
+        $this->assertTrue(Style::fromSgr('5;25') === null);
+        $this->assertTrue(Style::fromSgr('8;28') === null);
+    }
+
+    public function testFromSgrCarriesThePriorPenThrough(): void
+    {
+        $carry = Style::fromSgr('31;1');
+        $next = Style::fromSgr('22', $carry);
+
+        $this->assertSame(1, $next?->fgSlot());
+        $this->assertSame(0, $next?->attrs());
+    }
+
+    public function testFromSgrStopsAtATruncatedExtendedColour(): void
+    {
+        $style = Style::fromSgr('5;38;5');
+
+        $this->assertSame(Style::ATTR_BLINK, $style?->attrs());
+        $this->assertNull($style?->fg());
+    }
+
+    public function testFromSgrRefusesANonParameterRun(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SGR parameters must be semicolon-separated integers');
+        Style::fromSgr('blink');
+    }
 }

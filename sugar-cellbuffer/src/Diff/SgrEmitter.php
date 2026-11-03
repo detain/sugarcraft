@@ -40,7 +40,15 @@ final class SgrEmitter
 
         $codes = ['0'];
 
-        if ($style->fg() !== null) {
+        // Palette-slot identity wins over the RGB fallback when present:
+        // a slot-emitted pen survives theme re-mapping on the host. With
+        // no slot set the bytes are the historic RGB spelling, unchanged.
+        if ($style->fgSlot() !== null) {
+            $slot = $style->fgSlot();
+            $codes[] = $slot < 8 ? (string) (30 + $slot)
+                : ($slot < 16 ? (string) (82 + $slot)
+                    : Ansi::fg256Params($slot));
+        } elseif ($style->fg() !== null) {
             $rgb = $style->fg();
             $r = ($rgb >> 16) & 0xFF;
             $g = ($rgb >> 8) & 0xFF;
@@ -48,7 +56,12 @@ final class SgrEmitter
             $codes[] = Ansi::fgRgbParams($r, $g, $b);
         }
 
-        if ($style->bg() !== null) {
+        if ($style->bgSlot() !== null) {
+            $slot = $style->bgSlot();
+            $codes[] = $slot < 8 ? (string) (40 + $slot)
+                : ($slot < 16 ? (string) (92 + $slot)
+                    : Ansi::bg256Params($slot));
+        } elseif ($style->bg() !== null) {
             $rgb = $style->bg();
             $r = ($rgb >> 16) & 0xFF;
             $g = ($rgb >> 8) & 0xFF;
@@ -67,6 +80,23 @@ final class SgrEmitter
             if ($attrs & Style::ATTR_INVISIBLE) { $codes[] = '8'; }
             if ($attrs & Style::ATTR_STRIKE)   { $codes[] = '9'; }
             if ($attrs & Style::ATTR_OVERLINE) { $codes[] = '53'; }
+        }
+
+        // Underline colour (SGR 58) rides after the attribute run, only
+        // when an underline pen was recorded by Style::fromSgr().
+        if (($attrs & Style::ATTR_UNDERLINE) !== 0) {
+            if ($style->ulSlot() !== null) {
+                $codes[] = '58';
+                $codes[] = '5';
+                $codes[] = (string) $style->ulSlot();
+            } elseif ($style->ul() !== null) {
+                $ul = $style->ul();
+                $codes[] = '58';
+                $codes[] = '2';
+                $codes[] = (string) (($ul >> 16) & 0xFF);
+                $codes[] = (string) (($ul >> 8) & 0xFF);
+                $codes[] = (string) ($ul & 0xFF);
+            }
         }
 
         return "\x1b[" . implode(';', $codes) . "m";

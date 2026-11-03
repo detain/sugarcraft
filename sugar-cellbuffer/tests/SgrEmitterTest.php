@@ -63,4 +63,41 @@ final class SgrEmitterTest extends TestCase
         // Both SGR sequences must be byte-identical
         $this->assertSame($bufSgr, $diffSgr);
     }
+
+    public function testPaletteSlotForegroundsEmitTheCanonicalSlotCodes(): void
+    {
+        $this->assertSame("\x1b[0;31m", SgrEmitter::emit(new Style(null, null, 0, 1)));
+        $this->assertSame("\x1b[0;91m", SgrEmitter::emit(new Style(null, null, 0, 9)));
+        $this->assertSame("\x1b[0;38;5;170m", SgrEmitter::emit(new Style(null, null, 0, 170)));
+    }
+
+    public function testPaletteSlotBackgroundsEmitTheCanonicalSlotCodes(): void
+    {
+        $this->assertSame("\x1b[0;44m", SgrEmitter::emit(new Style(null, null, 0, null, 4)));
+        $this->assertSame("\x1b[0;104m", SgrEmitter::emit(new Style(null, null, 0, null, 12)));
+        $this->assertSame("\x1b[0;48;5;200m", SgrEmitter::emit(new Style(null, null, 0, null, 200)));
+    }
+
+    public function testUnderlineColourFollowsTheAttrCodesInBothForms(): void
+    {
+        $slot = new Style(null, null, Style::ATTR_UNDERLINE, null, null, null, 3);
+        $this->assertSame("\x1b[0;4;58;5;3m", SgrEmitter::emit($slot));
+
+        $rgb = new Style(null, null, Style::ATTR_UNDERLINE, null, null, 0x010203);
+        $this->assertSame("\x1b[0;4;58;2;1;2;3m", SgrEmitter::emit($rgb));
+    }
+
+    public function testTheSlotFormWinsWhenBothRepresentationsAreSet(): void
+    {
+        $both = new Style(0x00ff00, null, 0, 1);
+
+        $this->assertSame("\x1b[0;31m", SgrEmitter::emit($both));
+    }
+
+    public function testTheRgbOnlyPathStaysByteIdentical(): void
+    {
+        $style = Style::new(0xff0000, 0x0000ff, Style::ATTR_BOLD);
+
+        $this->assertSame("\x1b[0;38;2;255;0;0;48;2;0;0;255;1m", SgrEmitter::emit($style));
+    }
 }

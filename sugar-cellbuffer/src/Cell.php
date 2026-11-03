@@ -153,7 +153,15 @@ final class Cell implements \JsonSerializable
         }
 
         $this->rune = $data['rune'];
-        $this->style = $data['style'] !== null ? new Style($data['style']['fg'], $data['style']['bg'], $data['style']['attrs']) : null;
+        $this->style = $data['style'] !== null ? new Style(
+            $data['style']['fg'],
+            $data['style']['bg'],
+            $data['style']['attrs'],
+            $data['style']['fgSlot'] ?? null,
+            $data['style']['bgSlot'] ?? null,
+            $data['style']['ul'] ?? null,
+            $data['style']['ulSlot'] ?? null,
+        ) : null;
         $this->link = $data['link'] !== null ? new Hyperlink($data['link']['url'], $data['link']['id']) : null;
         $this->width = $width;
     }

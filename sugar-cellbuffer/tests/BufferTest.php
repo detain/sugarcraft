@@ -1930,4 +1930,52 @@ final class BufferTest extends TestCase
         $this->expectExceptionMessage('Cell width must not be negative: -1');
         new Cell('a', null, null, -1);
     }
+
+    public function testTextOfABlankBufferIsRowsOfSpaces(): void
+    {
+        $this->assertSame("   \n   ", Buffer::new(3, 2)->text());
+    }
+
+    public function testTextEmitsAWideLeadOnceAndSkipsItsContinuation(): void
+    {
+        $buffer = Buffer::new(4, 1)
+            ->withCellAt(0, 0, Cell::new('中', null, null, 2))
+            ->withCellAt(3, 0, Cell::new('!'));
+
+        $this->assertSame('中 !', $buffer->text());
+    }
+
+    public function testTextClipsToAGivenRegionAndSkipsForeignRows(): void
+    {
+        $buffer = Buffer::new(4, 1);
+        foreach (['a', 'b', 'c', 'd'] as $i => $rune) {
+            $buffer = $buffer->withCellAt($i, 0, Cell::new($rune));
+        }
+
+        $this->assertSame('bc', $buffer->text(new Region(new Position(1, 0), 2, 1)));
+        $this->assertSame('', $buffer->text(new Region(new Position(0, 5), 4, 1)));
+    }
+
+    public function testASlotOnlyStyleChangeReEmitsThroughTheDiff(): void
+    {
+        $previous = Buffer::new(1, 1)->withCellAt(0, 0, Cell::new('x', Style::new(0xff0000)));
+        $current = Buffer::new(1, 1)->withCellAt(0, 0, Cell::new('x', new Style(0xff0000, null, 0, 1)));
+
+        $ops = $current->diff($previous);
+        $hasStyleOp = false;
+        foreach ($ops as $op) {
+            $hasStyleOp = $hasStyleOp || $op instanceof \SugarCraft\CellBuffer\Diff\SetStyleOp;
+        }
+
+        $this->assertTrue($hasStyleOp, 'slot identity is part of the pen; the diff must re-emit it');
+    }
+
+    public function testSerializationRoundTripCarriesSlotsThroughTheBuffer(): void
+    {
+        $buffer = Buffer::new(1, 1)->withCellAt(0, 0, Cell::new('x', new Style(null, null, 0, 7, 12)));
+        $restored = unserialize(serialize($buffer));
+
+        $this->assertSame(7, $restored->cellAt(0, 0)->style()?->fgSlot());
+        $this->assertSame(12, $restored->cellAt(0, 0)->style()?->bgSlot());
+    }
 }

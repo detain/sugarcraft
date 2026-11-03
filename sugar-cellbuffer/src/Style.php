@@ -6,13 +6,27 @@ namespace SugarCraft\CellBuffer;
 
 /**
  * Minimal per-cell style record — foreground colour, background colour,
- * and a raw attribute bitmask.
+ * palette-slot identity, underline colour, and a raw attribute bitmask.
  *
  * This is intentionally a stripped-down cousin of
  * {@see \SugarCraft\Style\Style}. The rich styling API (border,
  * padding, underline, transform, etc.) lives in sugar-style and
  * builds on top of these primitives. Buffer/Cell carry only what the
  * terminal needs to emit SGR sequences.
+ *
+ * Foreground, background and underline may each carry EITHER an RGB
+ * value (0xRRGGBB) OR a palette-slot identity (an index in 0-255, the
+ * xterm colour-slot space the {@see \SugarCraft\Core\Util\Ansi}
+ * family spells as 3x/9x/38;5/n). Slot identity lets theme-following
+ * colours round-trip through diff frames without baking in a hex
+ * value; {@see SgrEmitter} prefers the slot when one is set. The
+ * with*() builders keep the two representations mutually exclusive.
+ *
+ * The attribute bit layout below is this package's own. It
+ * deliberately does NOT line up with sugar-vterm's independent
+ * attribute constants (there INVERSE=8 / STRIKETHROUGH=16; here
+ * STRIKE=8 / FAINT=16 / REVERSE=64); bridging consumers map between
+ * the two. A shared cross-package enum was considered and not taken.
  *
  * @readonly
  */
@@ -29,11 +43,40 @@ final class Style implements \JsonSerializable
     public const ATTR_OVERLINE  = 1 << 7;
     public const ATTR_INVISIBLE= 1 << 8;
 
+    /**
+     * @param int|null $fg     Foreground RGB 0xRRGGBB (mutually exclusive with $fgSlot by with*() law)
+     * @param int|null $bg     Background RGB 0xRRGGBB
+     * @param int      $attrs  Bitmask of ATTR_* constants
+     * @param int|null $fgSlot Foreground palette slot 0-255
+     * @param int|null $bgSlot Background palette slot 0-255
+     * @param int|null $ul     Underline RGB 0xRRGGBB
+     * @param int|null $ulSlot Underline palette slot 0-255
+     *
+     * @throws \InvalidArgumentException if any palette slot is outside 0-255
+     */
     public function __construct(
         public readonly ?int $fg = null,       // 0xRRGGBB or null = default
         public readonly ?int $bg = null,       // 0xRRGGBB or null = default
         public readonly int $attrs = 0,       // bitmask of ATTR_* constants
-    ) {}
+        public readonly ?int $fgSlot = null,  // 0-255 palette identity, or null
+        public readonly ?int $bgSlot = null,  // 0-255 palette identity, or null
+        public readonly ?int $ul = null,       // underline 0xRRGGBB or null
+        public readonly ?int $ulSlot = null,  // 0-255 palette identity, or null
+    ) {
+        self::checkSlot($fgSlot, 'foreground');
+        self::checkSlot($bgSlot, 'background');
+        self::checkSlot($ulSlot, 'underline-slot');
+    }
+
+    /**
+     * Fail-fast palette-slot bound: a slot is an xterm colour index.
+     */
+    private static function checkSlot(?int $slot, string $name): void
+    {
+        if ($slot !== null && ($slot < 0 || $slot > 255)) {
+            throw new \InvalidArgumentException("Style palette slot {$name} must be 0-255 or null, got {$slot}");
+        }
+    }
 
     /**
      * Default factory.
@@ -58,6 +101,10 @@ final class Style implements \JsonSerializable
     public function fg(): ?int      { return $this->fg; }
     public function bg(): ?int      { return $this->bg; }
     public function attrs(): int    { return $this->attrs; }
+    public function fgSlot(): ?int  { return $this->fgSlot; }
+    public function bgSlot(): ?int  { return $this->bgSlot; }
+    public function ul(): ?int      { return $this->ul; }
+    public function ulSlot(): ?int  { return $this->ulSlot; }
 
     public function hasBold(): bool      { return (bool)($this->attrs & self::ATTR_BOLD); }
     public function hasItalic(): bool    { return (bool)($this->attrs & self::ATTR_ITALIC); }
@@ -77,21 +124,59 @@ final class Style implements \JsonSerializable
     private function mutate(array $changes): static
     {
         return new static(...array_merge(
-            ['fg' => $this->fg, 'bg' => $this->bg, 'attrs' => $this->attrs],
+            [
+                'fg' => $this->fg,
+                'bg' => $this->bg,
+                'attrs' => $this->attrs,
+                'fgSlot' => $this->fgSlot,
+                'bgSlot' => $this->bgSlot,
+                'ul' => $this->ul,
+                'ulSlot' => $this->ulSlot,
+            ],
             $changes,
         ));
     }
 
-    /** Return a new Style with the given foreground colour. */
+    /**
+     * Sets the RGB foreground and discards palette-slot identity (the two
+     * representations are mutually exclusive by this class's with*() law).
+     */
     public function withFg(?int $fg): self
     {
-        return $this->mutate(['fg' => $fg]);
+        return $this->mutate(['fg' => $fg, 'fgSlot' => null]);
     }
 
-    /** Return a new Style with the given background colour. */
+    /** Sets the RGB background and discards its palette-slot identity. */
     public function withBg(?int $bg): self
     {
-        return $this->mutate(['bg' => $bg]);
+        return $this->mutate(['bg' => $bg, 'bgSlot' => null]);
+    }
+
+    /**
+     * Sets the foreground palette slot (0-255, or null to clear it) and
+     * discards the RGB foreground so a stale hex can never shadow the slot.
+     */
+    public function withFgSlot(?int $fgSlot): self
+    {
+        return $this->mutate(['fgSlot' => $fgSlot, 'fg' => null]);
+    }
+
+    /** Sets the background palette slot (0-255 or null) and discards its RGB twin. */
+    public function withBgSlot(?int $bgSlot): self
+    {
+        return $this->mutate(['bgSlot' => $bgSlot, 'bg' => null]);
+    }
+
+    /** Sets the underline RGB and discards its palette-slot identity. */
+    public function withUl(?int $ul): self
+    {
+        return $this->mutate(['ul' => $ul, 'ulSlot' => null]);
+    }
+
+    /** Sets the underline palette slot (0-255 or null) and discards its RGB twin. */
+    public function withUlSlot(?int $ulSlot): self
+    {
+        return $this->mutate(['ulSlot' => $ulSlot, 'ul' => null]);
     }
 
     /** Return a new Style with the given attribute bitmask (replaces). */
@@ -164,7 +249,7 @@ final class Style implements \JsonSerializable
             : ($this->attrs & ~self::ATTR_OVERLINE)]);
     }
 
-    /** Return a new Style with invisible toggled on or off. */
+    /** Return a new Style with invisible (conceal) toggled on or off. */
     public function withInvisible(bool $on = true): self
     {
         return $this->mutate(['attrs' => $on === true
@@ -173,23 +258,27 @@ final class Style implements \JsonSerializable
     }
 
     /**
-     * Value equality: two styles are equal iff their fg, bg, and attrs
-     * values are identical.
+     * Value equality: two styles are equal iff their fg, bg, attrs,
+     * palette slots, and underline colour values are all identical.
      */
     public function equals(self $other): bool
     {
         return $this->fg === $other->fg
             && $this->bg === $other->bg
-            && $this->attrs === $other->attrs;
+            && $this->attrs === $other->attrs
+            && $this->fgSlot === $other->fgSlot
+            && $this->bgSlot === $other->bgSlot
+            && $this->ul === $other->ul
+            && $this->ulSlot === $other->ulSlot;
     }
 
     /**
      * Null-safe value equality: two optional styles are the same render
      * state iff both are null, or both are non-null and value-equal.
      *
-     * Canonicalizer for every style-transition decision in the encode and
-     * diff paths, so output bytes never depend on whether two equal styles
-     * happen to share a PHP instance (MAJOR: value equality, not identity).
+     * Canonicaliser for every style-transition decision in the encode and
+     * diff paths, so output bytes never depend on whether two equal
+     * styles happen to share a PHP instance (value equality, not identity).
      */
     public static function valuesEqual(?self $a, ?self $b): bool
     {
@@ -197,31 +286,296 @@ final class Style implements \JsonSerializable
     }
 
     /**
+     * Parse one SGR parameter run (the digits between "\x1b[" and 'm')
+     * into a Style, carried on top of $carry.
+     *
+     * Vocabulary: 0 resets everything; 30-37/90-97 and 40-47/100-107 set
+     * the palette ANSI colours WITH slot identity (and an approximate hex
+     * belt, see {@see ansiColorToHex()}); 38;2;r;g;b / 48;2 set truecolor
+     * and clear the slot, 38;5;n / 48;5;n set the slot with a hex belt;
+     * 39/49 clear foreground/background (both spellings); 58;2 / 58;5 /
+     * 59 do the same for the underline colour; 1 bold, 2 faint, 3 italic,
+     * 4 underline, 5 blink, 7 reverse, 8 invisible, 9 strike, 53 overline
+     * are the attribute ON codes; 22 clears bold AND faint, 23 italic,
+     * 24 underline, 25 blink, 27 reverse, 28 invisible, 29 strike are the
+     * OFF codes. An extended-colour arm that is truncated or malformed
+     * ends the parse rather than letting its operands be misread as
+     * attribute codes.
+     *
+     * This parser is public so consumers that mirror SGR decoding (the
+     * sugar-overlay pen reader being the historical second copy) can route
+     * here instead of forking it a third time.
+     *
+     * @param string $params Semicolon-separated SGR parameter numbers
+     *                       (colon separators are accepted and normalised)
+     * @param Style|null $carry Style in effect before this sequence
+     *
+     * @throws \InvalidArgumentException if $params is not a parameter run
+     */
+    public static function fromSgr(string $params, ?self $carry = null): ?self
+    {
+        $normalised = str_replace(':', ';', $params);
+        if (preg_match('/^\d+(?:;\d+)*$/', $normalised) !== 1) {
+            throw new \InvalidArgumentException("SGR parameters must be semicolon-separated integers, got '{$params}'");
+        }
+        $codes = array_map('intval', explode(';', $normalised));
+
+        $fg = $carry?->fg();
+        $bg = $carry?->bg();
+        $attrs = $carry?->attrs() ?? 0;
+        $fgSlot = $carry?->fgSlot();
+        $bgSlot = $carry?->bgSlot();
+        $ul = $carry?->ul();
+        $ulSlot = $carry?->ulSlot();
+
+        $count = count($codes);
+        for ($i = 0; $i < $count; $i++) {
+            $p = $codes[$i];
+            if ($p === 0) {
+                $fg = null;
+                $bg = null;
+                $attrs = 0;
+                $fgSlot = null;
+                $bgSlot = null;
+                $ul = null;
+                $ulSlot = null;
+            } elseif ($p >= 30 && $p <= 37) {
+                $fgSlot = $p - 30;
+                $fg = self::ansiColorToHex($p - 30);
+            } elseif ($p >= 40 && $p <= 47) {
+                $bgSlot = $p - 40;
+                $bg = self::ansiColorToHex($p - 40);
+            } elseif ($p >= 90 && $p <= 97) {
+                $fgSlot = 8 + ($p - 90);
+                $fg = self::ansiColorToHex($p - 90, true);
+            } elseif ($p >= 100 && $p <= 107) {
+                $bgSlot = 8 + ($p - 100);
+                $bg = self::ansiColorToHex($p - 100, true);
+            } elseif ($p === 39) {
+                $fg = null;
+                $fgSlot = null;
+            } elseif ($p === 49) {
+                $bg = null;
+                $bgSlot = null;
+            } elseif ($p === 59) {
+                $ul = null;
+                $ulSlot = null;
+            } elseif ($p === 38 || $p === 48) {
+                if ($i + 4 < $count && $codes[$i + 1] === 2) {
+                    $rgb = (self::channel($codes[$i + 2]) << 16)
+                        | (self::channel($codes[$i + 3]) << 8)
+                        | self::channel($codes[$i + 4]);
+                    if ($p === 38) {
+                        $fg = $rgb;
+                        $fgSlot = null;
+                    } else {
+                        $bg = $rgb;
+                        $bgSlot = null;
+                    }
+                    $i += 4; // consumed 2;r;g;b
+                } elseif ($i + 2 < $count && $codes[$i + 1] === 5) {
+                    $slot = self::channel($codes[$i + 2]);
+                    if ($p === 38) {
+                        $fg = self::xterm256ToHex($slot);
+                        $fgSlot = $slot;
+                    } else {
+                        $bg = self::xterm256ToHex($slot);
+                        $bgSlot = $slot;
+                    }
+                    $i += 2; // consumed 5;n
+                } else {
+                    // Malformed / truncated extended colour: its trailing
+                    // parameters are colour operands, not SGR codes — a bare
+                    // `38;5` must not set blink, nor `38;2` faint. Stop and
+                    // keep the pen built so far.
+                    break;
+                }
+            } elseif ($p === 58) {
+                if ($i + 4 < $count && $codes[$i + 1] === 2) {
+                    $ul = (self::channel($codes[$i + 2]) << 16)
+                        | (self::channel($codes[$i + 3]) << 8)
+                        | self::channel($codes[$i + 4]);
+                    $ulSlot = null;
+                    $i += 4; // consumed 2;r;g;b
+                } elseif ($i + 2 < $count && $codes[$i + 1] === 5) {
+                    $slot = self::channel($codes[$i + 2]);
+                    $ul = self::xterm256ToHex($slot);
+                    $ulSlot = $slot;
+                    $i += 2; // consumed 5;n
+                } else {
+                    break; // same fail-stop law as 38/48
+                }
+            } elseif ($p === 1) {
+                $attrs |= self::ATTR_BOLD;
+            } elseif ($p === 2) {
+                $attrs |= self::ATTR_FAINT;
+            } elseif ($p === 3) {
+                $attrs |= self::ATTR_ITALIC;
+            } elseif ($p === 4) {
+                $attrs |= self::ATTR_UNDERLINE;
+            } elseif ($p === 5) {
+                $attrs |= self::ATTR_BLINK;
+            } elseif ($p === 7) {
+                $attrs |= self::ATTR_REVERSE;
+            } elseif ($p === 8) {
+                $attrs |= self::ATTR_INVISIBLE;
+            } elseif ($p === 9) {
+                $attrs |= self::ATTR_STRIKE;
+            } elseif ($p === 53) {
+                $attrs |= self::ATTR_OVERLINE;
+            } elseif ($p === 22) {
+                $attrs &= ~(self::ATTR_BOLD | self::ATTR_FAINT);
+            } elseif ($p === 23) {
+                $attrs &= ~self::ATTR_ITALIC;
+            } elseif ($p === 24) {
+                $attrs &= ~self::ATTR_UNDERLINE;
+            } elseif ($p === 25) {
+                $attrs &= ~self::ATTR_BLINK;
+            } elseif ($p === 27) {
+                $attrs &= ~self::ATTR_REVERSE;
+            } elseif ($p === 28) {
+                $attrs &= ~self::ATTR_INVISIBLE;
+            } elseif ($p === 29) {
+                $attrs &= ~self::ATTR_STRIKE;
+            }
+        }
+
+        return $fg !== null || $bg !== null || $attrs !== 0
+            || $fgSlot !== null || $bgSlot !== null || $ul !== null || $ulSlot !== null
+            ? new self($fg, $bg, $attrs, $fgSlot, $bgSlot, $ul, $ulSlot)
+            : null;
+    }
+
+    /**
+     * Clamp one 38;2 / 48;2 colour component into 0-255, the way terminals
+     * saturate an out-of-range value — `300` paints as 255, never as the
+     * `300 & 0xFF = 44` a bit-mask would produce.
+     */
+    private static function channel(int $component): int
+    {
+        return max(0, min(255, $component));
+    }
+
+    /**
+     * Standard xterm 256-colour palette index → 0xRRGGBB: 0-7 and 8-15 map
+     * through ansiColorToHex() (so `38;5;1` and `31` agree), 16-231 the 6×6×6
+     * cube, 232-255 the grayscale ramp. The index is clamped into 0-255 first,
+     * the same saturation channel() applies to truecolor components, so an
+     * out-of-range index can never produce a value outside 0xRRGGBB.
+     */
+    private static function xterm256ToHex(int $n): int
+    {
+        $n = self::channel($n);
+        if ($n < 8) {
+            return self::ansiColorToHex($n);
+        }
+        if ($n < 16) {
+            return self::ansiColorToHex($n - 8, true);
+        }
+        if ($n >= 232) {
+            $gray = 8 + ($n - 232) * 10;
+            return ($gray << 16) | ($gray << 8) | $gray;
+        }
+        $cube = $n - 16;
+        $step = static fn(int $v): int => $v === 0 ? 0 : 55 + $v * 40;
+        return ($step(intdiv($cube, 36)) << 16)
+            | ($step(intdiv($cube % 36, 6)) << 8)
+            | $step($cube % 6);
+    }
+
+    /**
+     * Standard ANSI 8-colour palette (and bright variants) to 0xRRGGBB.
+     *
+     * The bright-1..7 values are an approximation: each channel is
+     * lightened by ~40%, which diverges from xterm (where, say, bright
+     * red often equals red in the active palette); bright-black is the
+     * one hand-tuned case (0x7F7F7F, xterm colour 8 / sugar-colorprofile's
+     * StandardColors::$brightBlack) because lightening #000000 would keep
+     * it invisible on dark terminals. This map exists only for fixture
+     * parsing and hex belts — real theme-following goes through the
+     * palette-slot fields, which never consult this approximation.
+     */
+    private static function ansiColorToHex(int $idx, bool $bright = false): int
+    {
+        $palette = [
+            // Standard colours
+            0x000000, // 0 black
+            0xff0000, // 1 red
+            0x00ff00, // 2 green
+            0xffff00, // 3 yellow
+            0x0000ff, // 4 blue
+            0xff00ff, // 5 magenta
+            0x00ffff, // 6 cyan
+            0xffffff, // 7 white
+        ];
+        $base = $palette[$idx] ?? 0xffffff;
+        if ($bright) {
+            if ($idx === 0) {
+                return 0x7f7f7f;
+            }
+            // Bright: lighten the colour
+            $r = ($base >> 16) & 0xff;
+            $g = ($base >> 8) & 0xff;
+            $b = $base & 0xff;
+            $r = min(255, (int) ($r + ($r * 0.4)));
+            $g = min(255, (int) ($g + ($g * 0.4)));
+            $b = min(255, (int) ($b + ($b * 0.4)));
+            return ($r << 16) | ($g << 8) | $b;
+        }
+        return $base;
+    }
+
+    /**
      * Serialization hook for caching/IPC use cases.
      *
-     * @return array{fg: ?int, bg: ?int, attrs: int}
+     * Older payloads (three keys, pre-palette-slot) restore cleanly:
+     * every slot/underline field falls back to null.
+     *
+     * @return array{fg: ?int, bg: ?int, attrs: int, fgSlot: ?int, bgSlot: ?int, ul: ?int, ulSlot: ?int}
      */
     public function __serialize(): array
     {
-        return ['fg' => $this->fg, 'bg' => $this->bg, 'attrs' => $this->attrs];
+        return [
+            'fg' => $this->fg,
+            'bg' => $this->bg,
+            'attrs' => $this->attrs,
+            'fgSlot' => $this->fgSlot,
+            'bgSlot' => $this->bgSlot,
+            'ul' => $this->ul,
+            'ulSlot' => $this->ulSlot,
+        ];
     }
 
     /**
      * Unserialization hook for caching/IPC use cases.
      *
-     * @param array{fg: ?int, bg: ?int, attrs: int} $data
+     * Fail-closed: palette-slot bounds are re-checked here, so a forged
+     * payload cannot mint a style carrying an out-of-range slot.
+     *
+     * @param array{fg: ?int, bg: ?int, attrs: int, fgSlot?: ?int, bgSlot?: ?int, ul?: ?int, ulSlot?: ?int} $data
      */
     public function __unserialize(array $data): void
     {
+        $fgSlot = $data['fgSlot'] ?? null;
+        $bgSlot = $data['bgSlot'] ?? null;
+        $ulSlot = $data['ulSlot'] ?? null;
+        self::checkSlot($fgSlot, 'foreground');
+        self::checkSlot($bgSlot, 'background');
+        self::checkSlot($ulSlot, 'underline-slot');
+
         $this->fg = $data['fg'];
         $this->bg = $data['bg'];
         $this->attrs = $data['attrs'];
+        $this->fgSlot = $fgSlot;
+        $this->bgSlot = $bgSlot;
+        $this->ul = $data['ul'] ?? null;
+        $this->ulSlot = $ulSlot;
     }
 
     /**
      * JSON serialization support.
      *
-     * @return array{fg: ?int, bg: ?int, attrs: int}
+     * @return array{fg: ?int, bg: ?int, attrs: int, fgSlot: ?int, bgSlot: ?int, ul: ?int, ulSlot: ?int}
      */
     public function jsonSerialize(): array
     {

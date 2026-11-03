@@ -201,148 +201,7 @@ final class Buffer implements \JsonSerializable
      */
     private static function styleFromSgr(string $params, ?Style $carry = null): ?Style
     {
-        $codes = array_map('intval', explode(';', $params));
-
-        $fg = $carry?->fg();
-        $bg = $carry?->bg();
-        $attrs = $carry?->attrs() ?? 0;
-
-        $count = count($codes);
-        for ($i = 0; $i < $count; $i++) {
-            $p = $codes[$i];
-            if ($p === 0) {
-                $fg = null;
-                $bg = null;
-                $attrs = 0;
-            } elseif ($p >= 30 && $p <= 37) {
-                $fg = self::ansiColorToHex($p - 30);
-            } elseif ($p >= 40 && $p <= 47) {
-                $bg = self::ansiColorToHex($p - 40);
-            } elseif ($p >= 90 && $p <= 97) {
-                $fg = self::ansiColorToHex($p - 90, true);
-            } elseif ($p >= 100 && $p <= 107) {
-                $bg = self::ansiColorToHex($p - 100, true);
-            } elseif ($p === 39) {
-                $fg = null;
-            } elseif ($p === 49) {
-                $bg = null;
-            } elseif ($p === 38 || $p === 48) {
-                if ($i + 4 < $count && $codes[$i + 1] === 2) {
-                    $rgb = (self::channel($codes[$i + 2]) << 16)
-                        | (self::channel($codes[$i + 3]) << 8)
-                        | self::channel($codes[$i + 4]);
-                    $i += 4; // consumed 2;r;g;b
-                } elseif ($i + 2 < $count && $codes[$i + 1] === 5) {
-                    $rgb = self::xterm256ToHex($codes[$i + 2]);
-                    $i += 2; // consumed 5;n
-                } else {
-                    // Malformed / truncated extended colour: its trailing
-                    // parameters are colour operands, not SGR codes — a bare
-                    // `38;5` must not set blink, nor `38;2` faint. Stop and
-                    // keep the pen built so far.
-                    break;
-                }
-                if ($p === 38) {
-                    $fg = $rgb;
-                } else {
-                    $bg = $rgb;
-                }
-            } elseif ($p === 1) {
-                $attrs |= Style::ATTR_BOLD;
-            } elseif ($p === 2) {
-                $attrs |= Style::ATTR_FAINT;
-            } elseif ($p === 3) {
-                $attrs |= Style::ATTR_ITALIC;
-            } elseif ($p === 4) {
-                $attrs |= Style::ATTR_UNDERLINE;
-            } elseif ($p === 5) {
-                $attrs |= Style::ATTR_BLINK;
-            } elseif ($p === 7) {
-                $attrs |= Style::ATTR_REVERSE;
-            } elseif ($p === 8) {
-                $attrs |= Style::ATTR_INVISIBLE;
-            } elseif ($p === 9) {
-                $attrs |= Style::ATTR_STRIKE;
-            }
-            // Additional SGR params can be extended here
-        }
-
-        return $fg !== null || $bg !== null || $attrs !== 0
-            ? new Style($fg, $bg, $attrs)
-            : null;
-    }
-
-    /**
-     * Clamp one 38;2 / 48;2 colour component into 0-255, the way terminals
-     * saturate an out-of-range value — `300` paints as 255, never as the
-     * `300 & 0xFF = 44` a bit-mask would produce.
-     */
-    private static function channel(int $component): int
-    {
-        return max(0, min(255, $component));
-    }
-
-    /**
-     * Standard xterm 256-colour palette index → 0xRRGGBB: 0-7 and 8-15 map
-     * through ansiColorToHex() (so `38;5;1` and `31` agree), 16-231 the 6×6×6
-     * cube, 232-255 the grayscale ramp. The index is clamped into 0-255 first,
-     * the same saturation channel() applies to truecolor components, so an
-     * out-of-range index can never produce a value outside 0xRRGGBB.
-     */
-    private static function xterm256ToHex(int $n): int
-    {
-        $n = self::channel($n);
-        if ($n < 8) {
-            return self::ansiColorToHex($n);
-        }
-        if ($n < 16) {
-            return self::ansiColorToHex($n - 8, true);
-        }
-        if ($n >= 232) {
-            $gray = 8 + ($n - 232) * 10;
-            return ($gray << 16) | ($gray << 8) | $gray;
-        }
-        $cube = $n - 16;
-        $step = static fn(int $v): int => $v === 0 ? 0 : 55 + $v * 40;
-        return ($step(intdiv($cube, 36)) << 16)
-            | ($step(intdiv($cube % 36, 6)) << 8)
-            | $step($cube % 6);
-    }
-
-    private static function ansiColorToHex(int $idx, bool $bright = false): int
-    {
-        $palette = [
-            // Standard colors
-            0x000000, // 0 black
-            0xff0000, // 1 red
-            0x00ff00, // 2 green
-            0xffff00, // 3 yellow
-            0x0000ff, // 4 blue
-            0xff00ff, // 5 magenta
-            0x00ffff, // 6 cyan
-            0xffffff, // 7 white
-        ];
-        $base = $palette[$idx] ?? 0xffffff;
-        if ($bright) {
-            if ($idx === 0) {
-                // Bright black has nothing to lighten from #000000 — the
-                // +40% model below would keep it pure black, painting
-                // invisible black-on-black text on dark terminals. The
-                // canonical bright-palette value (xterm colour 8, and
-                // sugar-colorprofile's StandardColors::$brightBlack) is mid
-                // grey 0x7F7F7F, so SGR 90 / `38;5;8` resolve there.
-                return 0x7f7f7f;
-            }
-            // Bright: lighten the color
-            $r = ($base >> 16) & 0xff;
-            $g = ($base >> 8) & 0xff;
-            $b = $base & 0xff;
-            $r = min(255, (int) ($r + ($r * 0.4)));
-            $g = min(255, (int) ($g + ($g * 0.4)));
-            $b = min(255, (int) ($b + ($b * 0.4)));
-            return ($r << 16) | ($g << 8) | $b;
-        }
-        return $base;
+        return Style::fromSgr($params, $carry);
     }
 
     /**
@@ -387,6 +246,42 @@ final class Buffer implements \JsonSerializable
     public function region(): Region
     {
         return new Region(Position::new(0, 0), $this->width, $this->height);
+    }
+
+    /**
+     * Extract plain text, row by row, joined with "\n".
+     *
+     * Width-0 continuation cells contribute nothing (their lead already
+     * carries the rune); cells with no rune fall back to a single space so
+     * blank columns stay visible to search/clipboard layers. When a region
+     * is given, extraction is clipped to the region ∩ buffer intersection
+     * (negative origins simply read from the region's start cell).
+     */
+    public function text(?Region $region = null): string
+    {
+        $region ??= $this->region();
+        $rows = [];
+        for ($dy = 0; $dy < $region->height; $dy++) {
+            $row = $region->origin->row + $dy;
+            if ($row < 0 || $row >= $this->height) {
+                continue;
+            }
+            $line = '';
+            for ($dx = 0; $dx < $region->width; $dx++) {
+                $col = $region->origin->col + $dx;
+                if ($col < 0 || $col >= $this->width) {
+                    continue;
+                }
+                $cell = $this->grid[$row * $this->width + $col];
+                if ($cell->width() === 0) {
+                    continue; // Continuation: the lead already emitted this glyph.
+                }
+                $line .= $cell->rune() === '' ? ' ' : $cell->rune();
+            }
+            $rows[] = $line;
+        }
+
+        return implode("\n", $rows);
     }
 
     /**
@@ -1041,7 +936,15 @@ final class Buffer implements \JsonSerializable
         $this->height = $height;
         $this->grid = array_map(function (array $cellData): Cell {
             $style = $cellData['style'] !== null
-                ? new Style($cellData['style']['fg'], $cellData['style']['bg'], $cellData['style']['attrs'])
+                ? new Style(
+                    $cellData['style']['fg'],
+                    $cellData['style']['bg'],
+                    $cellData['style']['attrs'],
+                    $cellData['style']['fgSlot'] ?? null,
+                    $cellData['style']['bgSlot'] ?? null,
+                    $cellData['style']['ul'] ?? null,
+                    $cellData['style']['ulSlot'] ?? null,
+                )
                 : null;
             $link = $cellData['link'] !== null
                 ? new Hyperlink($cellData['link']['url'], $cellData['link']['id'])
