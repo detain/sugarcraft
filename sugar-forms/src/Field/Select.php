@@ -80,7 +80,7 @@ final class Select implements \SugarCraft\Forms\Field
         public readonly string $title,
         public readonly string $description,
         array $fuzzyCandidates = [],
-        callable $asyncSuggestionsFetcher = null,
+        ?callable $asyncSuggestionsFetcher = null,
         int $asyncSuggestionsDebounceMs = 150,
         int $pendingAsyncSeq = 0,
         ?CancellationSource $pendingAsyncCancellation = null,
@@ -165,7 +165,7 @@ final class Select implements \SugarCraft\Forms\Field
      * notes (single-resolve fetch, quiet supersession via null-resolution
      * 6.6, opt-in $fetchTimeoutSeconds 6.5, acceptable debounce timers 6.4).
      */
-    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
+    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, ?WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
         return $this->carryNonCtorState(new self(
             key:                       $this->key,
@@ -189,7 +189,7 @@ final class Select implements \SugarCraft\Forms\Field
     /**
      * Short-form alias for withAsyncSuggestions.
      */
-    public function async(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
+    public function async(callable $fetcher, int $debounceMs = 150, ?WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
         return $this->withAsyncSuggestions($fetcher, $debounceMs, $workerPool, $fetchTimeoutSeconds);
     }

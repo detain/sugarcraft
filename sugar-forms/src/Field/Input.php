@@ -97,11 +97,11 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
         array $validators = [],
         ?\Closure $suggestionsFunc = null,
         array $fuzzyCandidates = [],
-        callable $asyncSuggestionsFetcher = null,
+        ?callable $asyncSuggestionsFetcher = null,
         int $asyncSuggestionsDebounceMs = 150,
         int $pendingAsyncSeq = 0,
         ?CancellationSource $pendingAsyncCancellation = null,
-        WorkerPool $workerPool = null,
+        ?WorkerPool $workerPool = null,
         ValidateOn $validateOn = ValidateOn::None,
         ?float $asyncSuggestionsFetchTimeoutSeconds = null,
     ) {
@@ -361,7 +361,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
      *   awaits the fetcher promise with NO added timeout — byte-identical to
      *   pre-E736 behaviour.
      */
-    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
+    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, ?WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
         return $this->carryNonCtorState(new self(
             key:                       $this->key,
@@ -385,7 +385,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /**
      * Short-form alias for withAsyncSuggestions.
      */
-    public function async(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
+    public function async(callable $fetcher, int $debounceMs = 150, ?WorkerPool $workerPool = null, ?float $fetchTimeoutSeconds = null): self
     {
         return $this->withAsyncSuggestions($fetcher, $debounceMs, $workerPool, $fetchTimeoutSeconds);
     }

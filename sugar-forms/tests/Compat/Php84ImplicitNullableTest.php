@@ -27,34 +27,25 @@ use RecursiveIteratorIterator;
 final class Php84ImplicitNullableTest extends TestCase
 {
     /**
-     * PENDING REMOVALS — sites this guard intentionally tolerates because
-     * lane u2 (same wave) deletes the whole dead async-suggestions
-     * machinery (fetcher + WorkerPool parameters). Roster rows are exact
-     * `method:param` pairs, so tolerating these can never mask an
+     * PENDING REMOVALS — sites this guard intentionally tolerates while a
+     * later lane is known to delete or fix them. Roster rows are exact
+     * `method:param` pairs, so tolerating one site can never mask an
      * unrelated implicit-nullable parameter in the same method.
      *
-     * Weld-safe by construction: a one-way allowlist. When the removal
-     * lands the entries merely stop matching (permissive direction —
-     * never red); a NEW implicit-nullable site can never slip in silently
-     * because it cannot already be listed. Staleness of this roster is
-     * policed by the wave closeout, not by a red test in the other lane.
+     * One-way allowlist by construction: a NEW implicit-nullable site can
+     * never slip in silently because it cannot already be listed.
+     *
+     * EMPTY as of the 2026-11-03 follow-up: the async-suggestions fetcher
+     * and RESERVED WorkerPool parameters survived E736 DOCUMENT-RESERVED
+     * (public API — removal is a v2.0 decision), so the seven tolerated
+     * `Type $x = null` sites in src/Field/{Input,Select}.php were made
+     * explicitly `?Type $x = null` instead. The spelling is a no-op on the
+     * targeted PHP 8.3 (a null default already widened the type) and it
+     * moots the PHP 8.4 implicit-nullable deprecation at those sites.
      *
      * @var array<string, list<string>>
      */
-    private const PENDING_REMOVALS = [
-        'src/Field/Input.php'  => [
-            '__construct:asyncSuggestionsFetcher',
-            '__construct:workerPool',
-            'withAsyncSuggestions:workerPool',
-            'async:workerPool',
-        ],
-        'src/Field/Select.php' => [
-            '__construct:asyncSuggestionsFetcher',
-            '__construct:workerPool',
-            'withAsyncSuggestions:workerPool',
-            'async:workerPool',
-        ],
-    ];
+    private const PENDING_REMOVALS = [];
 
     public function testNoImplicitNullableParametersOutsidePendingRemovals(): void
     {
