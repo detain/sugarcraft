@@ -38,6 +38,48 @@ final class Application extends SymfonyApplication
     private const ENV_PREFIX = 'CANDY_SCRIPTUI_';
 
     /**
+     * Option names permitted to be sourced from `CANDY_SCRIPTUI_<NAME>`
+     * environment variables. This is an ALLOW-LIST, deliberately narrow.
+     *
+     * Why: the previous universal option↔env mapping defeated every
+     * fail-closed decision in the CLI. `CANDY_SCRIPTUI_ALLOW_ENV='*'` made
+     * `format --type template` exfiltrate the whole environment with zero
+     * warning; `CANDY_SCRIPTUI_DEFAULT=yes` turned `confirm` gates into
+     * silent yes; `CANDY_SCRIPTUI_FILE` / `--value` / `--selected` retargeted
+     * sinks and pre-filled answers from a variable no help text mentioned.
+     * Because names are unscoped, one variable also collided across
+     * commands (CANDY_SCRIPTUI_FILE hit log, format, and table at once).
+     *
+     * Admitted here: presentation-only knobs (colour, weight, geometry,
+     * deadline) whose worst-case env effect is cosmetic. Everything that
+     * answers for the user, grants capability, or redirects data stays
+     * CLI-only by construction.
+     *
+     * @var list<string>
+     */
+    public const ENV_FALLBACK_OPTIONS = [
+        'align',
+        'background',
+        'bold',
+        'border',
+        'border-foreground',
+        'cursor-prefix',
+        'faint',
+        'foreground',
+        'height',
+        'italic',
+        'prefix',
+        'reverse',
+        'separator',
+        'strikethrough',
+        'timeout',
+        'underline',
+        'unselected-prefix',
+        'verbose',
+        'width',
+    ];
+
+    /**
      * Sentinel stamp written by tools/build-phar.php when `git describe` found
      * no reachable scriptui tag. versionString() refuses it as a version —
      * working-tree noise must not masquerade as a release identity.
@@ -328,6 +370,11 @@ final class Application extends SymfonyApplication
                 continue;
             }
             if ($option->isNegatable()) {
+                continue;
+            }
+            // Fail-closed: only presentation knobs may come from the
+            // environment (see ENV_FALLBACK_OPTIONS for why).
+            if (!\in_array($option->getName(), self::ENV_FALLBACK_OPTIONS, true)) {
                 continue;
             }
             if (!$option->acceptValue()) {

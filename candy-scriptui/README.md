@@ -195,14 +195,29 @@ redirected output as always; set `CLICOLOR=0` for pipe-aware muting.
 
 ### `CANDY_SCRIPTUI_*` env var fallbacks
 
-Any command option can be given via an environment variable using the
-`CANDY_SCRIPTUI_` prefix followed by the option name in uppercase with
-non-alphanumeric characters replaced by `_`. The pre-rename `CANDYSHELL_*` prefix still works as a deprecated fallback (it prints a notice and the new name wins if both are set). <!-- @rename-keep --> For example:
+Only presentation options may be given via an environment variable, keyed
+by the `CANDY_SCRIPTUI_` prefix followed by the option name in uppercase
+with non-alphanumeric characters replaced by `_`. The permitted names are
+`align`, `background`, `bold`, `border`, `border-foreground`,
+`cursor-prefix`, `faint`, `foreground`, `height`, `italic`, `prefix`,
+`reverse`, `separator`, `strikethrough`, `timeout`, `underline`,
+`unselected-prefix`, `verbose`, `width`. For example:
 
 ```sh
 # Equivalent to: candy-scriptui style --foreground=#ff0000 --bold "Hello"
 CANDY_SCRIPTUI_FOREGROUND=#ff0000 CANDY_SCRIPTUI_BOLD=1 candy-scriptui style "Hello"
 ```
+
+Everything else is CLI-only **by construction**: options that answer for
+the user (`--default`, `--selected`, `--value`), grant capability
+(`format --allow-env`), or redirect data (`--file`, `--out`) are never
+read from the environment — a stray `CANDY_SCRIPTUI_*` in a shared CI
+image cannot silently weaken a fail-closed flag. Names outside the list
+are ignored with no notice.
+
+The pre-rename `CANDYSHELL_<NAME>` spellings still work for the same
+allow-listed names: the launcher mirrors them onto `CANDY_SCRIPTUI_<NAME>`
+with a deprecation notice, and the new name wins if both are set.
 
 The fallback is applied when no explicit CLI option is provided. An
 explicit flag on the command line always takes precedence over the env var.

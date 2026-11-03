@@ -180,4 +180,73 @@ final class EnvVarFallbackTest extends TestCase
             putenv('CANDY_SCRIPTUI_BOLD');
         }
     }
+
+    /**
+     * M11 (cluster 11): the env fallback is an ALLOW-LIST. The universal
+     * mapping used to let CANDY_SCRIPTUI_ALLOW_ENV='*' arm `format
+     * --type template` with whole-environment exfiltration — measured
+     * `secret=hunter2` landing on stdout with zero warning.
+     */
+    public function testAllowEnvIsNotSourcedFromTheEnvironment(): void
+    {
+        $canary = 'B8-EXFIL-CANARY-' . bin2hex(random_bytes(4));
+        $secret = 'hunter2-' . bin2hex(random_bytes(4));
+        $template = tempnam(sys_get_temp_dir(), 'sui-b8-');
+        self::assertIsString($template);
+        file_put_contents($template, 'V={{' . $canary . '}}END');
+        putenv("CANDY_SCRIPTUI_ALLOW_ENV=*");
+        putenv("{$canary}={$secret}");
+        try {
+            $out = new BufferedOutput();
+            $status = (new Application())->run(
+                new ArgvInput(['candy-scriptui', 'format', $template, '--type=template']),
+                $out,
+            );
+            $display = $out->fetch();
+            $this->assertSame(0, $status);
+            $this->assertStringNotContainsString($secret, $display, 'env-supplied allow-env must not expand anything');
+            $this->assertStringContainsString('V=', $display);
+        } finally {
+            putenv('CANDY_SCRIPTUI_ALLOW_ENV');
+            putenv($canary);
+            @unlink($template);
+        }
+    }
+
+    /**
+     * M11: CANDY_SCRIPTUI_FILE used to retarget sinks across commands —
+     * one unscoped variable hit log --file, format's input file argument,
+     * and anything else named --file. The allow-list keeps it CLI-only.
+     */
+    public function testFileSinkIsNotSourcedFromTheEnvironment(): void
+    {
+        $sink = sys_get_temp_dir() . '/sui-b8-sink-' . bin2hex(random_bytes(4)) . '.log';
+        putenv('CANDY_SCRIPTUI_FILE=' . $sink);
+        try {
+            $out = new BufferedOutput();
+            $status = (new Application())->run(new ArgvInput(['candy-scriptui', 'log', 'hello-b8']), $out);
+            $this->assertSame(0, $status);
+            $this->assertStringContainsString('hello-b8', $out->fetch(), 'message must ride stdout when env tries to redirect it');
+            $this->assertFileDoesNotExist($sink, 'CANDY_SCRIPTUI_FILE must not retarget the log sink');
+        } finally {
+            putenv('CANDY_SCRIPTUI_FILE');
+            @unlink($sink);
+        }
+    }
+
+    /**
+     * M11 roster pin: the capability/answer/sink names must stay OFF the
+     * allow-list (the two behavioural tests above cover their commands;
+     * this pins the whole roster against future widening-by-accident).
+     */
+    public function testAllowListExcludesEverySecurityRelevantName(): void
+    {
+        foreach (['allow-env', 'default', 'file', 'value', 'selected', 'out', 'type', 'shell', 'password'] as $forbidden) {
+            $this->assertNotContains(
+                $forbidden,
+                Application::ENV_FALLBACK_OPTIONS,
+                "'{$forbidden}' must never be env-sourceable",
+            );
+        }
+    }
 }
