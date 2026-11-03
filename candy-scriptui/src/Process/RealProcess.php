@@ -61,14 +61,22 @@ final class RealProcess implements Process
     public function stdoutBytes(): string         { return $this->inner->stdoutBytes(); }
     public function stderrBytes(): string         { return $this->inner->stderrBytes(); }
 
+    /** Seconds a SIGTERM'd child is given to exit before {@see close()} escalates to SIGKILL. */
+    public const TERM_GRACE_SECONDS = 2.0;
+
     /**
      * Signal the child with SIGTERM. Lifecycle split: terminate() only
-     * *signals*; close() is the sole *reaping* path (it wait()s, which
-     * collects the SIGTERM'd child, so close-after-terminate neither
-     * double-kills nor hangs). Idempotence guards: skip when the handle
+     * *signals*; close() is the sole *reaping* path and it bounds the
+     * wait (grace + SIGKILL escalation), so close-after-terminate neither
+     * double-kills nor hangs. Idempotence guards: skip when the handle
      * was already reaped ($closed), when a SIGTERM was already sent
      * ($terminated), or when the child already exited on its own —
      * signalling a dead PID risks hitting an unrelated recycled process.
+     *
+     * No ext-posix availability gate here: the inner handle's kill()
+     * dispatches through sugar-pty's FFI `Libc::kill`, NOT the posix_kill()
+     * function, so the previous existence-check gate disabled the signal
+     * (and hung close()) on FFI-only hosts for no reason.
      */
     public function terminate(): void
     {
@@ -76,15 +84,30 @@ final class RealProcess implements Process
             return;
         }
         $this->terminated = true;
-        if (\function_exists('posix_kill')) {
-            $this->inner->kill(\defined('SIGTERM') ? \SIGTERM : 15);
-        }
+        $this->inner->kill(\defined('SIGTERM') ? \SIGTERM : 15);
     }
 
+    /**
+     * Reap the child, bounded. If terminate() asked the child to stop and
+     * it is still running, give it {@see TERM_GRACE_SECONDS} to honour
+     * SIGTERM, then escalate to SIGKILL — the fleet-standard TERM→grace→
+     * KILL ladder. Without this, a TERM-ignoring child hangs the inner
+     * wait()'s unbounded poll loop forever (measured: `trap "" TERM`
+     * children never returned).
+     */
     public function close(): int
     {
         if ($this->closed) {
             return $this->cachedExit ?? 0;
+        }
+        if ($this->terminated && !$this->inner->exited()) {
+            $deadline = \microtime(true) + self::TERM_GRACE_SECONDS;
+            while (!$this->inner->exited() && \microtime(true) < $deadline) {
+                \usleep(10_000);
+            }
+            if (!$this->inner->exited()) {
+                $this->inner->kill(\defined('SIGKILL') ? \SIGKILL : 9);
+            }
         }
         $code = $this->inner->wait();
         $this->closed = true;

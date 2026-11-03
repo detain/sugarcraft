@@ -126,8 +126,50 @@ final class RealProcessTest extends TestCase
         // Process should be running at this point
         $this->assertNull($proc->exitCode());
         $proc->terminate();
-        // terminate() should not crash and should allow close
-        $proc->close();
+        // M28: the old test asserted nothing about the child actually dying.
+        // close() must reap it (signal death surfaces as 128+SIGTERM, or as
+        // -1 when PHP's own proc_get_status wins the reap race — both prove
+        // the child is gone; either way exited() is true once reaped).
+        $code = $proc->close();
+        $this->assertTrue($proc->exited(), 'child must be reaped after terminate+close');
+        $this->assertContains($code, [-1, 143], 'SIGTERM death must yield 143 or the -1 reaped-by-fallback convention');
+    }
+
+    /**
+     * Cluster 5: a child that traps and ignores SIGTERM used to hang close()
+     * forever (the inner wait() polls `while (true)`). close() now bounds the
+     * grace window and escalates to SIGKILL.
+     */
+    public function testCloseEscalatesToKillAfterGraceWhenTermIgnored(): void
+    {
+        $proc = RealProcess::spawn(['/bin/sh', '-c', 'trap "" TERM; sleep 60; exit 0']);
+        \usleep(200_000); // let the shell arm its TERM trap before we signal
+        $proc->terminate();
+
+        $started = \microtime(true);
+        $code = $proc->close();
+        $elapsed = \microtime(true) - $started;
+
+        $this->assertLessThan(
+            RealProcess::TERM_GRACE_SECONDS + 3.0,
+            $elapsed,
+            'close() must escalate to SIGKILL within the grace window, not hang',
+        );
+        $this->assertTrue($proc->exited());
+        $this->assertContains($code, [-1, 128 + 9], 'SIGKILL death must yield 137 or the -1 reaped-by-fallback convention');
+    }
+
+    /**
+     * terminate() signals through sugar-pty's FFI Libc::kill, so the old
+     * `function_exists('posix_kill')` gate silently disabled the signal on
+     * FFI-only hosts (and left close() to hang). The gate must stay gone.
+     */
+    public function testTerminateIsNotGatedOnThePosixKillExtension(): void
+    {
+        $source = \file_get_contents(__DIR__ . '/../../src/Process/RealProcess.php');
+        $this->assertIsString($source);
+        $this->assertStringNotContainsString("function_exists('posix_kill')", $source);
+        $this->assertStringContainsString('SIGKILL', $source, 'close() must carry the escalation rung');
     }
 
     public function testTerminateIsIdempotentWhileRunning(): void

@@ -17,6 +17,27 @@ final class FakeProcess implements Process
     public string $bufferedStdout = '';
     public string $bufferedStderr = '';
 
+    /** Last signal passed to {@see kill()} — lets pins assert WHICH signal was sent, not just that terminate() ran. */
+    public ?int $lastSignal = null;
+
+    /** Spawn arguments recorded by {@see recordSpawn()} — pins the command line SpinCommand actually built. */
+    public array $spawnArgv = [];
+    public bool $spawnCaptureStdout = false;
+    public bool $spawnCaptureStderr = false;
+
+    /**
+     * Test harnesses register this from their processFactory so a command
+     * building the WRONG argv (or dropping the capture flags) goes red —
+     * the factory previously discarded its arguments, which made every
+     * spawn-shape assertion vacuous.
+     */
+    public function recordSpawn(array $argv, bool $captureStdout, bool $captureStderr): void
+    {
+        $this->spawnArgv = $argv;
+        $this->spawnCaptureStdout = $captureStdout;
+        $this->spawnCaptureStderr = $captureStderr;
+    }
+
     /**
      * Record whether the captured streams were consumed. {@see \SugarCraft\ScriptUi\Command\SpinCommand}
      * only reads stdout()/stderr() inside its `--show-output`/`--show-error`
@@ -30,9 +51,14 @@ final class FakeProcess implements Process
     public function pid(): int          { return 12345; }
     public function exited(): bool      { return $this->exitCode !== null; }
     public function wait(): int         { $this->closed = true; return $this->exitCode ?? 0; }
-    public function kill(int $signal): void { $this->terminated = true; }
+    public function kill(int $signal): void
+    {
+        $this->lastSignal = $signal;
+        $this->terminated = true;
+    }
     public function exitCode(): ?int    { return $this->exitCode; }
-    public function terminate(): void  { $this->terminated = true; }
+    /** Mirrors RealProcess: terminate() == SIGTERM to the child, recorded. */
+    public function terminate(): void  { $this->kill(\defined('SIGTERM') ? \SIGTERM : 15); }
     public function close(): int      { $this->closed = true; return $this->exitCode ?? 0; }
     public function stdout(): string    { $this->stdoutRead = true; return $this->bufferedStdout; }
     public function stderr(): string    { $this->stderrRead = true; return $this->bufferedStderr; }

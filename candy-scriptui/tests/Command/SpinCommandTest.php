@@ -72,6 +72,14 @@ final class SpinCommandTest extends TestCase
         $this->assertSame(124, $status);
         $this->assertTrue($fake->terminated, 'child must be signalled on timeout');
         $this->assertTrue($fake->closed, 'child handle must be reaped on timeout');
+        // M28: terminate() must have sent SIGTERM specifically (the old
+        // double-deny — ext-posix-less hosts sent NO signal at all — and a
+        // bare boolean flag could not see that), and the spawn line must
+        // match argv verbatim (the harness factory used to discard it).
+        $this->assertSame(\defined('SIGTERM') ? \SIGTERM : 15, $fake->lastSignal);
+        $this->assertSame(['sleep', '9999'], $fake->spawnArgv);
+        $this->assertFalse($fake->spawnCaptureStdout);
+        $this->assertFalse($fake->spawnCaptureStderr);
     }
 
     /**
@@ -220,6 +228,7 @@ final class SpinCommandTest extends TestCase
 
         $this->assertSame(0, $status);
         $this->assertTrue($fake->stdoutRead, '--show-output must read the child stdout');
+        $this->assertTrue($fake->spawnCaptureStdout, '--show-output must be threaded into the spawn capture flags');
         $this->assertStringContainsString('BUILD-STDOUT-MARKER', $tester->getDisplay());
     }
 
@@ -272,6 +281,8 @@ final class SpinCommandTest extends TestCase
         $this->assertSame(0, $status);
         $this->assertTrue($fake->stderrRead, '--show-error must read the child stderr');
         $this->assertFalse($fake->stdoutRead, 'stdout must not be read when only --show-error is set');
+        $this->assertTrue($fake->spawnCaptureStderr, '--show-error must be threaded into the spawn capture flags');
+        $this->assertFalse($fake->spawnCaptureStdout, 'stdout capture must follow --show-output only');
     }
 
     /**
@@ -338,7 +349,10 @@ final class SpinCommandTest extends TestCase
         }
 
         return new SpinCommand(
-            processFactory: static fn (array $argv, bool $so, bool $se): Process => $fake,
+            processFactory: static function (array $argv, bool $so, bool $se) use ($fake): Process {
+                $fake->recordSpawn($argv, $so, $se);
+                return $fake;
+            },
             programFactory: function (Model $model, LoopInterface $loop): Program {
                 $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
                 \assert($pair !== false);
