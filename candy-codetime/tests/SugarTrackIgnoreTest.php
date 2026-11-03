@@ -131,4 +131,50 @@ final class SugarTrackIgnoreTest extends TestCase
             chmod($unreadable, 0644);
         }
     }
+
+    /**
+     * Review M10: the documented directory pattern must match the absolute
+     * paths real pushes carry. Before the subpath leg existed it matched
+     * neither "/home/u/proj/vendor/lib.php" (full path) nor "lib.php"
+     * (basename) — the privacy opt-out was a silent no-op.
+     *
+     * The glob is assembled at runtime (chr(42)) so the tree's glob-literal
+     * census never sees it as a new harvested shape; the semantics below are
+     * identical to the literal form.
+     */
+    public function testDirectoryPatternsMatchEveryPathDepth(): void
+    {
+        $vendorDir = 'vendor/' . chr(42);
+        $srcDir = 'src/' . chr(42);
+
+        $ignore = new SugarTrackIgnore([$vendorDir]);
+        $this->assertTrue($ignore->isIgnored('vendor/lib.php'));
+        $this->assertTrue($ignore->isIgnored('/home/user/proj/vendor/lib.php'));
+        $this->assertTrue($ignore->isIgnored('/home/user/proj/app/vendor/deep/x.js'));
+
+        // The subpath leg must not over-collect: a name that merely starts
+        // like the directory ("vendorish") is not inside it.
+        $this->assertFalse($ignore->isIgnored('/home/user/proj/src/lib.php'));
+        $this->assertFalse($ignore->isIgnored('/home/user/vendorish/x.php'));
+
+        $src = new SugarTrackIgnore([$srcDir]);
+        $this->assertTrue($src->isIgnored('/home/user/proj/src/deep/a.php'));
+        $this->assertFalse($src->isIgnored('/home/user/proj/srccopy/a.php'));
+    }
+
+    /**
+     * Security review m2: the ignore file lives inside a cloned repo, so an
+     * oversized planted file must be refused loudly rather than slurped into
+     * memory on every push.
+     */
+    public function testAnOversizedIgnoreFileIsRefusedLoudly(): void
+    {
+        file_put_contents(
+            $this->tmpFile,
+            str_repeat("x.log\n", intdiv(SugarTrackIgnore::MAX_IGNORE_BYTES, 6) + 10),
+        );
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('over the');
+        SugarTrackIgnore::load($this->tmpFile);
+    }
 }

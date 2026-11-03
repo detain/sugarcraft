@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeTime\Tests;
 
 use SugarCraft\CodeTime\Heartbeat;
+use SugarCraft\CodeTime\Stats;
 use PHPUnit\Framework\TestCase;
 
 final class HeartbeatTest extends TestCase
@@ -196,5 +197,41 @@ final class HeartbeatTest extends TestCase
             'tags' => 'not-an-array',  // scalar should be treated as invalid
         ]);
         $this->assertSame([], $hb->tags);
+    }
+
+    /**
+     * Read-path clamp (review M12): a hand-echoed or tampered row carrying a
+     * near-PHP_INT_MAX duration used to sail past the write-side clamp and
+     * poison every downstream reader — Stats sums overflow to float and
+     * formatHours(int) TypeErrors under strict_types, and date() calls on a
+     * far-future stamp blow up the window maths. fromArray is where stored
+     * data becomes live objects, so it re-applies exactly the window the
+     * writer enforced (the write clamp must not be silently widened).
+     */
+    public function testPoisonedStoredRowsAreReclampedToTheWriteWindow(): void
+    {
+        $poisoned = Heartbeat::fromArray([
+            'time'     => PHP_INT_MAX,
+            'duration' => PHP_INT_MAX,
+            'project'  => 'p',
+            'language' => 'l',
+            'file'     => 'f',
+        ]);
+        $this->assertSame(Heartbeat::MAX_DURATION_SECONDS, $poisoned->duration);
+        $this->assertSame(Heartbeat::MAX_TIME_SECONDS, $poisoned->time);
+
+        $negative = Heartbeat::fromArray(['time' => 1000, 'duration' => -5]);
+        $this->assertSame(0, $negative->duration);
+
+        // The clamped beat must be inert for the dashboard's arithmetic:
+        // per-day sums stay integers (pre-clamp the += overflowed to float).
+        $stats = new Stats(
+            [$poisoned, $negative],
+            [new \DateTimeImmutable('@' . (string) Heartbeat::MAX_TIME_SECONDS)],
+        );
+        $timeline = $stats->timeline();
+        $this->assertIsInt($timeline[0]);
+        $this->assertSame(Heartbeat::MAX_DURATION_SECONDS, $timeline[0]);
+        $this->assertStringContainsString('h', Stats::formatHours($stats->totalSeconds()));
     }
 }

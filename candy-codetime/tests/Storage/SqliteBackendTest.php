@@ -140,4 +140,56 @@ final class SqliteBackendTest extends TestCase
         $this->assertSame(0o600, fileperms($this->dbPath) & 0o777);
         $this->assertInstanceOf(HeartbeatReader::class, $this->backend);
     }
+
+    /**
+     * Concurrent-writer review (senior m2): several connections legitimately
+     * share this file (editor plugin + CLI + cron). SQLite's default busy
+     * timeout is zero, so before busyTimeout(5000) was armed in the ctor a
+     * writer overlapping another transaction failed instantly with
+     * "database is locked" instead of waiting the lock out.
+     */
+    public function testAWriterWaitsOutAConcurrentTransactionInsteadOfFailing(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl_fork is required to hold a lock concurrently');
+        }
+
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            $this->fail('pcntl_fork failed');
+        }
+        if ($pid === 0) {
+            // Child: take an exclusive lock, hold it ~0.4s, commit, exit.
+            // A forked child must never run PHPUnit's shutdown path.
+            try {
+                $holder = new \SQLite3($this->dbPath);
+                $holder->exec('BEGIN EXCLUSIVE');
+                $holder->exec("INSERT INTO heartbeats (time, project, language, file, duration, tags) VALUES (1718900002, 'holder', 'php', 'h.php', 60, '[]')");
+                usleep(400000);
+                $holder->exec('COMMIT');
+            } catch (\Throwable) {
+                exit(2);
+            }
+            exit(0);
+        }
+
+        usleep(100000); // let the child settle onto its lock
+        $status = 0;
+        try {
+            $this->backend->insert(new Heartbeat(1718900001, 'waiter', 'php', 'w.php', 60));
+        } catch (\Throwable $e) {
+            pcntl_waitpid($pid, $status);
+            $this->fail('a concurrent writer must wait out the lock, got: ' . $e->getMessage());
+        }
+
+        pcntl_waitpid($pid, $status);
+        $this->assertSame(0, $status, 'the lock-holder child must exit cleanly');
+
+        $projects = array_map(
+            static fn(Heartbeat $b): string => $b->project,
+            $this->backend->query(1718900000, 1718900010),
+        );
+        sort($projects);
+        $this->assertSame(['holder', 'waiter'], $projects);
+    }
 }

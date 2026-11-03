@@ -443,4 +443,83 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         $this->assertStringContainsString('CAUGHT', $joined, 'a failed append must throw, never return silently');
         $this->assertStringContainsString('failed to append heartbeat', $joined);
     }
+
+    /**
+     * Racer regression (review M11): the create step used to be check-then-
+     * create, so two appenders reaching the same brand-new day file raced
+     * between is_file() and fopen() — the loser threw "cannot create" and its
+     * heartbeat was gone. With several writers hitting many fresh days
+     * concurrently that window is impossible to dodge reliably; attempt-first
+     * with an existence re-check only on failure closes it entirely.
+     */
+    public function testTheFirstAppendOfADaySurvivesAConcurrentAppender(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl_fork is required to race appenders');
+        }
+
+        $dir = $this->tmp . '/race-store';
+        $lostDir = $this->tmp . '/race-lost';
+        mkdir($dir);
+        mkdir($lostDir);
+
+        $base = strtotime('2024-05-01 12:00:00 UTC');
+        $days = 40;
+        $writers = 3;
+        $pids = [];
+        for ($w = 0; $w < $writers; $w++) {
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                $this->fail('pcntl_fork failed');
+            }
+            if ($pid === 0) {
+                // Child: one beat per fresh day file. A lost append drops a
+                // sentinel and dies non-zero — assertions stay in the parent,
+                // a fork must never run PHPUnit's shutdown path.
+                $store = new Store($dir);
+                try {
+                    for ($i = 0; $i < $days; $i++) {
+                        $store->append(new Heartbeat(
+                            $base + $i * 86400,
+                            'writer-' . $w,
+                            'php',
+                            'a.php',
+                            60,
+                        ));
+                    }
+                } catch (\RuntimeException $e) {
+                    file_put_contents($lostDir . '/writer-' . $w . '.lost', $e->getMessage());
+                    exit(1);
+                }
+                exit(0);
+            }
+            $pids[] = $pid;
+        }
+
+        foreach ($pids as $pid) {
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+        }
+
+        $lost = array_values(array_filter(
+            scandir($lostDir) ?: [],
+            static fn(string $f): bool => str_ends_with($f, '.lost'),
+        ));
+        $this->assertSame(
+            [],
+            $lost,
+            'a racing appender lost its first write of a day: ' . implode(' | ', array_map(
+                static fn(string $f): string => (string) file_get_contents($lostDir . '/' . $f),
+                $lost,
+            )),
+        );
+
+        $lines = 0;
+        for ($i = 0; $i < $days; $i++) {
+            $file = $dir . '/' . gmdate('Y-m-d', $base + $i * 86400) . '.jsonl';
+            $this->assertFileExists($file);
+            $lines += count(file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []);
+        }
+        $this->assertSame($days * $writers, $lines, 'every raced heartbeat must be on disk exactly once');
+    }
 }

@@ -15,11 +15,24 @@ use SugarCraft\CodeTime\Milestone;
  */
 final class SqliteBackend implements HeartbeatReader
 {
+    /**
+     * Milliseconds a writer waits for another connection's lock before
+     * failing. SQLite's default is 0, and the file's stated model is several
+     * concurrent appenders (editor plugin + CLI + cron) sharing one db — with
+     * no timeout every overlap surfaces as "database is locked".
+     */
+    private const BUSY_TIMEOUT_MS = 5000;
+
     private \SQLite3 $db;
 
     public function __construct(string $dbPath)
     {
         $this->db = new \SQLite3($dbPath);
+        if (!$this->db->busyTimeout(self::BUSY_TIMEOUT_MS)) {
+            throw new \RuntimeException(
+                "candy-codetime: cannot set the busy timeout on database file {$dbPath}",
+            );
+        }
         $this->db->exec('CREATE TABLE IF NOT EXISTS heartbeats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             time INTEGER NOT NULL,

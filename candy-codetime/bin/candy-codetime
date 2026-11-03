@@ -192,7 +192,7 @@ if ($cmd === 'push') {
         exit(1);
     }
     $duration = (int)($durationRaw ?? 60);
-    $duration = max(0, min($duration, 31_536_000));  // clamp to [0, 1 year]
+    $duration = max(0, min($duration, Heartbeat::MAX_DURATION_SECONDS));  // clamp to [0, 1 year]
     $hb = new Heartbeat(time(), $project, $language, $file, $duration);
     try {
         if ($backend === 'sqlite') {

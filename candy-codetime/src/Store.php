@@ -234,18 +234,23 @@ final class Store implements HeartbeatReader
             );
         }
 
-        if (!is_file($file)) {
-            // Exclusive create so a racing appender is never clobbered, then the
-            // mode is tightened BEFORE any content exists — no loose-data window.
-            $seed = @fopen($file, 'xb');
-            if ($seed === false) {
-                $last = error_get_last();
-                throw new \RuntimeException(
-                    'candy-codetime: cannot create ' . $file
-                    . (isset($last['message']) ? ': ' . $last['message'] : ''),
-                );
-            }
+        // Exclusive create so a racing appender is never clobbered; the mode is
+        // then tightened before any content exists — no loose-data window. The
+        // attempt comes FIRST and existence is re-read only on failure: the
+        // previous check-then-create order let two pushers (plugin + CLI hit
+        // the same brand-new day) race between is_file() and fopen(), so the
+        // loser saw EEXIST and its heartbeat died as a "cannot create"
+        // exception. A racer having just created the file is exactly the state
+        // this branch wants, not an error.
+        $seed = @fopen($file, 'xb');
+        if ($seed !== false) {
             fclose($seed);
+        } elseif (!is_file($file)) {
+            $last = error_get_last();
+            throw new \RuntimeException(
+                'candy-codetime: cannot create ' . $file
+                . (isset($last['message']) ? ': ' . $last['message'] : ''),
+            );
         }
         self::makePrivate($file, 0o077, 0o600, 'heartbeat file');
 
