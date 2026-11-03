@@ -436,13 +436,22 @@ final class AnimatedWebpDecoder implements Decoder
             $payload = substr($bytes, $i + 8, $size);
 
             if ($fourcc === 'VP8X') {
+                if (strlen($payload) < 10) {
+                    throw new \RuntimeException(sprintf('malformed animated WebP: short VP8X chunk (%d bytes)', strlen($payload)));
+                }
                 // flags(1) reserved(3) canvasW-1(3) canvasH-1(3)
                 $canvasW = self::le24($payload, 4) + 1;
                 $canvasH = self::le24($payload, 7) + 1;
             } elseif ($fourcc === 'ANIM') {
+                if (strlen($payload) < 6) {
+                    throw new \RuntimeException(sprintf('malformed animated WebP: short ANIM chunk (%d bytes)', strlen($payload)));
+                }
                 // reserved/background(4) loop_count(2)
                 $loop = unpack('v', substr($payload, 4, 2))[1];
             } elseif ($fourcc === 'ANMF') {
+                if (strlen($payload) < self::ANMF_HEADER_BYTES) {
+                    throw new \RuntimeException(sprintf('malformed animated WebP: short ANMF chunk (frame %d, %d bytes)', count($frames) + 1, strlen($payload)));
+                }
                 // x/y are stored in half-units per the container spec (stored*2).
                 // Width/height fields are NOT trusted: the spec's half-unit
                 // encoding is lossy for even dimensions (an exact 32 cannot be
@@ -497,12 +506,15 @@ final class AnimatedWebpDecoder implements Decoder
 
         $alphSize = unpack('V', substr($chunks, 4, 4))[1];
         $rest = substr($chunks, 8 + $alphSize + ($alphSize & 1));
-        if (!str_starts_with($rest, 'VP8 ')) {
-            return $wrap($chunks); // ALPH not followed by a lossy bitstream (VP8L never carries one): verbatim, GD says no loudly.
+        if (!str_starts_with($rest, 'VP8 ') || strlen($rest) < 18) {
+            // ALPH not followed by a lossy bitstream with a readable header
+            // (VP8L never carries one): verbatim, GD says no loudly. The
+            // length floor is what keeps the dimension parse below from
+            // reading past a chopped chunk.
+            return $wrap($chunks);
         }
 
-        $vp8Size = unpack('V', substr($rest, 4, 4))[1];
-        $dims = self::lossyDimensions(substr($rest, 8, min(10, strlen($rest))));
+        $dims = self::lossyDimensions(substr($rest, 8, 10));
         if ($dims === null) {
             return $wrap($chunks);
         }

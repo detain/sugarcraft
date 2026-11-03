@@ -418,4 +418,56 @@ final class AnimatedWebpDecoderTest extends TestCase
         self::assertGreaterThan($declared, $decode, 'declared-dimension refusal must precede the decode');
         self::assertStringContainsString('decodes to a ', $compBody, 'the post-decode gate must police lying headers too');
     }
+
+    // -------------------------------------------------------------------------
+    // M14 — short chunk headers raise typed refusals
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox A truncated VP8X payload raises the typed short-chunk refusal
+     */
+    public function testShortVp8XChunkIsRefused(): void
+    {
+        $bytes = AnimatedWebpBytes::container([
+            ['fourcc' => 'VP8X', 'payload' => "\x00\x00\x00\x00\x00\x00"],
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('short VP8X chunk (6 bytes)');
+
+        (new AnimatedWebpDecoder())->open($this->file($bytes, 'short-vp8x.webp'), 4, 4, 10.0);
+    }
+
+    /**
+     * @testdox A truncated ANIM payload raises the typed short-chunk refusal
+     */
+    public function testShortAnimChunkIsRefused(): void
+    {
+        $bytes = AnimatedWebpBytes::container([
+            ['fourcc' => 'VP8X', 'payload' => "\x00\x00\x00\x00\x03\x00\x00\x03\x00\x00"],
+            ['fourcc' => 'ANIM', 'payload' => "\x00\x00\x00\x00"],
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('short ANIM chunk (4 bytes)');
+
+        (new AnimatedWebpDecoder())->open($this->file($bytes, 'short-anim.webp'), 4, 4, 10.0);
+    }
+
+    /**
+     * @testdox A truncated ANMF header raises the typed refusal naming the frame
+     */
+    public function testShortAnmfChunkIsRefused(): void
+    {
+        $bytes = AnimatedWebpBytes::container([
+            ['fourcc' => 'VP8X', 'payload' => "\x00\x00\x00\x00\x03\x00\x00\x03\x00\x00"],
+            ['fourcc' => 'ANIM', 'payload' => "\x00\x00\x00\x00\x10\x27"],
+            ['fourcc' => 'ANMF', 'payload' => str_repeat("\x00", 15)],
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('short ANMF chunk (frame 1, 15 bytes)');
+
+        (new AnimatedWebpDecoder())->open($this->file($bytes, 'short-anmf.webp'), 4, 4, 10.0);
+    }
 }
