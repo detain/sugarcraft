@@ -72,4 +72,16 @@ final class UndoActionTypeTest extends TestCase
         $this->assertSame([], $action->payload);
         $this->assertSame(UndoActionType::Custom, $action->type);
     }
+
+    /** M37 (lib-reviews-1102): the README taught ::new(); it now exists. */
+    public function testUndoActionNewFactoryMirrorsTheConstructor(): void
+    {
+        $action = UndoAction::new(UndoActionType::Delete, ['path' => '/tmp/foo'], 'delete foo');
+
+        $this->assertInstanceOf(UndoAction::class, $action);
+        $this->assertSame(UndoActionType::Delete, $action->type);
+        $this->assertSame('delete', $action->type->value);
+        $this->assertSame(['path' => '/tmp/foo'], $action->payload);
+        $this->assertSame('delete foo', $action->label);
+    }
 }

@@ -71,6 +71,31 @@ final class ColorProfileTest extends TestCase
         );
     }
 
+    /**
+     * M34 (lib-reviews-1102): CLICOLOR=0 is the BSD colour opt-out.
+     * sugar-pty already honoured it; the fleet's colour authority did
+     * not, so the same env answered two tiers. It must yield to an
+     * explicit force (unlike NO_COLOR, which outranks force).
+     */
+    public function testClicolorZeroDisablesColour(): void
+    {
+        $this->assertSame(
+            ColorProfile::Ascii,
+            ColorProfile::detect(['CLICOLOR' => '0', 'TERM' => 'xterm-256color', 'COLORTERM' => 'truecolor']),
+            'CLICOLOR=0 downgrades even a truecolor hint',
+        );
+        $this->assertSame(
+            ColorProfile::TrueColor,
+            ColorProfile::detect(['CLICOLOR' => '0', 'FORCE_COLOR' => '1', 'TERM' => 'xterm']),
+            'an explicit force beats CLICOLOR=0',
+        );
+        $this->assertSame(
+            ColorProfile::Ansi256,
+            ColorProfile::detect(['CLICOLOR' => '1', 'TERM' => 'xterm-256color']),
+            'CLICOLOR=1 (enabled) changes nothing',
+        );
+    }
+
     public function testColorTermTruecolor(): void
     {
         $this->assertSame(

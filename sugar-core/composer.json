@@ -32,6 +32,7 @@
     "require": {
         "php": "^8.3",
         "ext-intl": "*",
+        "ext-mbstring": "*",
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
         "sugarcraft/sugar-pty": "dev-master"
