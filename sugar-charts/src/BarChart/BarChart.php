@@ -265,16 +265,28 @@ final class BarChart
      * prints integral values bare and trims trailing zeros of a
      * 2-decimal rendering (12 → "12", 2.5 → "2.5", 2.25 → "2.25").
      */
-    public function withDataLabelFormatter(\Closure $formatter): self
+    public function withDataLabelFormatter(?\Closure $formatter = null): self
     {
-        return $this->copy(dataLabelFormatter: $formatter);
+        return $this->copy(dataLabelFormatter: $formatter, dataLabelFormatterSet: true);
     }
 
     // ─── Legend & Label Configuration ──────────────────────────────────
 
     /** Enable or disable the legend. */
+    /**
+     * Toggle the legend. When switched on with no explicit items, one entry
+     * per bar is derived (bar label + palette colour by index) so the
+     * switch is never a silent no-op.
+     */
     public function withLegend(bool $show = true): self
     {
+        if ($show && $this->legendItems === [] && $this->bars !== []) {
+            $items = [];
+            foreach (array_values($this->bars) as $i => $bar) {
+                $items[] = ['label' => $bar->label, 'color' => self::LEGEND_COLORS[$i % count(self::LEGEND_COLORS)]];
+            }
+            return $this->copy(showLegend: $show, legendItems: UntrustedText::guardItems($items));
+        }
         return $this->copy(showLegend: $show);
     }
 
@@ -287,13 +299,13 @@ final class BarChart
     /** Customize legend indicator character. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar));
+        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar), legendIndicatorCharSet: true);
     }
 
     /** Set the chart title. */
-    public function withTitle(string $title, Position $position = Position::Top): self
+    public function withTitle(?string $title = null, Position $position = Position::Top): self
     {
-        return $this->copy(title: UntrustedText::guard($title), titlePosition: $position);
+        return $this->copy(title: $title === null ? null : UntrustedText::guard($title), titleSet: true, titlePosition: $position);
     }
 
     /** Set the title position separately. */
@@ -303,15 +315,15 @@ final class BarChart
     }
 
     /** Set the X-axis label (rendered at bottom). */
-    public function withXLabel(string $label): self
+    public function withXLabel(?string $label = null): self
     {
-        return $this->copy(xLabel: UntrustedText::guard($label));
+        return $this->copy(xLabel: $label === null ? null : UntrustedText::guard($label), xLabelSet: true);
     }
 
     /** Set the Y-axis label (prepended to each line). */
-    public function withYLabel(string $label): self
+    public function withYLabel(?string $label = null): self
     {
-        return $this->copy(yLabel: UntrustedText::guard($label));
+        return $this->copy(yLabel: $label === null ? null : UntrustedText::guard($label), yLabelSet: true);
     }
 
     /**
@@ -338,7 +350,7 @@ final class BarChart
     public function fractional(bool $on = true): self { return $this->withFractionalHeights($on); }
     public function barWidth(?int $width): self       { return $this->withBarWidth($width); }
     public function dataLabels(bool $on = true): self { return $this->withDataLabels($on); }
-    public function dataLabelFormat(\Closure $fn): self { return $this->withDataLabelFormatter($fn); }
+    public function dataLabelFormat(?\Closure $fn = null): self { return $this->withDataLabelFormatter($fn); }
     public function barGap(?int $gap): self           { return $this->withBarGap($gap); }
     /** Short-form alias for {@see withNoAutoBarWidth()}. */
     public function noAutoBarWidth(bool $on = true): self { return $this->withNoAutoBarWidth($on); }
@@ -347,11 +359,11 @@ final class BarChart
     public function legend(bool $on = true): self     { return $this->withLegend($on); }
     public function legendPos(Position $pos): self    { return $this->withLegendPosition($pos); }
     public function legendStyle(?string $char): self  { return $this->withLegendStyle($char); }
-    public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
+    public function title(?string $t = null, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
     /** Short-form alias for {@see withTitlePosition()} — Position-suffix deviates to `Pos`, mirroring `legendPos`. */
     public function titlePos(Position $pos): self     { return $this->withTitlePosition($pos); }
-    public function xLabel(string $label): self       { return $this->withXLabel($label); }
-    public function yLabel(string $label): self       { return $this->withYLabel($label); }
+    public function xLabel(?string $label = null): self  { return $this->withXLabel($label); }
+    public function yLabel(?string $label = null): self  { return $this->withYLabel($label); }
     /** @param list<array{label: string, color: string}> $items */
     public function legendItems(array $items): self   { return $this->withLegendItems($items); }
 
@@ -712,6 +724,13 @@ final class BarChart
      * @param list<Bar>                        $bars
      * @param list<array{label: string, color: string}> $legendItems
      */
+    /**
+     * Palette for legend entries derived from bars. Colour-blind-safe
+     * order, mirroring LineChart's dataset palette; the bars themselves are
+     * coloured by withBarColor(), so this rotation is legend-only.
+     */
+    private const LEGEND_COLORS = ['blue', 'orange', 'green', 'red', 'purple', 'cyan'];
+
     private function copy(
         ?array $bars = null,
         ?int $width = null,
@@ -731,16 +750,21 @@ final class BarChart
         ?bool $showLegend = null,
         ?Position $legendPosition = null,
         ?string $legendIndicatorChar = null,
+        bool $legendIndicatorCharSet = false,
         ?string $title = null,
+        bool $titleSet = false,
         ?Position $titlePosition = null,
         ?string $xLabel = null,
+        bool $xLabelSet = false,
         ?string $yLabel = null,
+        bool $yLabelSet = false,
         ?array $legendItems = null,
         ?\Closure $barColorFn = null,
         bool $barColorFnSet = false,
         ?bool $autoBarWidth = null,
         ?bool $showDataLabels = null,
         ?\Closure $dataLabelFormatter = null,
+        bool $dataLabelFormatterSet = false,
     ): self {
         return new self(
             bars:               $bars               ?? $this->bars,
@@ -756,16 +780,16 @@ final class BarChart
             barGap:             $barGapSet ? $barGap : ($barGap ?? $this->barGap),
             showLegend:         $showLegend         ?? $this->showLegend,
             legendPosition:     $legendPosition     ?? $this->legendPosition,
-            legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,
-            title:              $title              ?? $this->title,
+            legendIndicatorChar: ($legendIndicatorCharSet || $legendIndicatorChar !== null) ? $legendIndicatorChar : $this->legendIndicatorChar,
+            title:              ($titleSet || $title !== null) ? $title : $this->title,
             titlePosition:      $titlePosition      ?? $this->titlePosition,
-            xLabel:             $xLabel             ?? $this->xLabel,
-            yLabel:             $yLabel             ?? $this->yLabel,
+            xLabel:             ($xLabelSet || $xLabel !== null) ? $xLabel : $this->xLabel,
+            yLabel:             ($yLabelSet || $yLabel !== null) ? $yLabel : $this->yLabel,
             legendItems:        $legendItems        ?? $this->legendItems,
             barColorFn:         $barColorFnSet ? $barColorFn : $this->barColorFn,
             autoBarWidth:       $autoBarWidth       ?? $this->autoBarWidth,
             showDataLabels:     $showDataLabels     ?? $this->showDataLabels,
-            dataLabelFormatter: $dataLabelFormatter ?? $this->dataLabelFormatter,
+            dataLabelFormatter: ($dataLabelFormatterSet || $dataLabelFormatter !== null) ? $dataLabelFormatter : $this->dataLabelFormatter,
         );
     }
 }

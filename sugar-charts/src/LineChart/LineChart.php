@@ -16,7 +16,6 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Charts\Canvas\BrailleGrid;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
-use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Style\Style;
 use SugarCraft\Style\Theme;
 
@@ -108,7 +107,7 @@ final class LineChart extends Chart
         public readonly ?array $lineStyle = null,
         public readonly array $markLines = [],
         public readonly bool $unicodeConnectors = false,
-        ?BrailleCanvas $brailleCanvas = null,
+        ?object $brailleCanvas = null,
         ?Theme $theme = null,
         public readonly ?\Closure $seriesColorFn = null,
     ) {
@@ -451,19 +450,22 @@ final class LineChart extends Chart
     /** Customize legend styling. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->lineChartCopy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar));
+        return $this->lineChartCopy(
+            legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar),
+            legendIndicatorCharSet: true,
+        );
     }
 
     /** Set the X-axis label (rendered at bottom). */
-    public function withXLabel(string $label): self
+    public function withXLabel(?string $label = null): self
     {
-        return $this->lineChartCopy(xLabel: UntrustedText::guard($label));
+        return $this->lineChartCopy(xLabel: $label === null ? null : UntrustedText::guard($label), xLabelSet: true);
     }
 
     /** Set the Y-axis label (rendered at left). */
-    public function withYLabel(string $label): self
+    public function withYLabel(?string $label = null): self
     {
-        return $this->lineChartCopy(yLabel: UntrustedText::guard($label));
+        return $this->lineChartCopy(yLabel: $label === null ? null : UntrustedText::guard($label), yLabelSet: true);
     }
 
     /**
@@ -481,9 +483,9 @@ final class LineChart extends Chart
      * Set a custom formatter for data point labels. Storage-only on
      * LineChart — see {@see withDataLabels()}.
      */
-    public function withDataLabelFormatter(\Closure $formatter): self
+    public function withDataLabelFormatter(?\Closure $formatter = null): self
     {
-        return $this->lineChartCopy(dataLabelFormatter: $formatter);
+        return $this->lineChartCopy(dataLabelFormatter: $formatter, dataLabelFormatterSet: true);
     }
 
     /**
@@ -495,9 +497,9 @@ final class LineChart extends Chart
      *                           title gutter, so the title is silently
      *                           dropped for those values.
      */
-    public function withTitle(string $title, Position $position = Position::Top): self
+    public function withTitle(?string $title = null, Position $position = Position::Top): self
     {
-        return $this->lineChartCopy(title: UntrustedText::guard($title), titlePosition: $position);
+        return $this->lineChartCopy(title: $title === null ? null : UntrustedText::guard($title), titleSet: true, titlePosition: $position);
     }
 
     /**
@@ -506,9 +508,9 @@ final class LineChart extends Chart
      * mutated — LineChart rasterizes into its own grid on every render and
      * the instance merely selects braille mode (its dimensions are ignored).
      */
-    public function withCanvas(BrailleCanvas $canvas): self
+    public function withCanvas(?object $canvas = null): self
     {
-        return $this->lineChartCopy(brailleCanvas: $canvas);
+        return $this->lineChartCopy(brailleCanvas: $canvas, brailleCanvasSet: true);
     }
 
     /**
@@ -518,9 +520,9 @@ final class LineChart extends Chart
      * order. Unthemed rendering is byte-identical to the historical
      * default (legend CSS colors in braille mode, unstyled in cell mode).
      */
-    public function withTheme(Theme $theme): self
+    public function withTheme(?Theme $theme = null): self
     {
-        return $this->lineChartCopy(theme: $theme);
+        return $this->lineChartCopy(theme: $theme, themeSet: true);
     }
 
     /**
@@ -702,13 +704,17 @@ final class LineChart extends Chart
                 $points  = count($values) > $plotW ? array_slice($values, -$plotW) : $values;
                 $count   = count($points);
                 // Unthemed cell mode carries no colour bytes, so extra
-                // series separate by glyph: explicit per-series runes win,
+                // series separate by glyph (themed runs already carry a
+                // distinct colour, so they keep the shared point rune): explicit
+                // per-series runes win,
                 // otherwise rotate the default table by dataset position
                 // (the primary keeps its configured `point` rune).
                 $rune    = $name === self::PRIMARY_SERIES
                     ? $this->point
                     : ($this->datasetPoints[$name]
-                        ?? self::DATASET_RUNES[($seriesIndex - 1) % count(self::DATASET_RUNES)]);
+                        ?? ($paletteSize === 0
+                            ? self::DATASET_RUNES[($seriesIndex - 1) % count(self::DATASET_RUNES)]
+                            : $this->point));
 
                 // Compute max point index based on animation progress
                 // Clamp to [0, count] to ensure we don't try to access beyond array bounds
@@ -1113,12 +1119,17 @@ final class LineChart extends Chart
         ?bool $showLegend = null,
         ?Position $legendPosition = null,
         ?string $legendIndicatorChar = null,
+        bool $legendIndicatorCharSet = false,
         ?string $title = null,
+        bool $titleSet = false,
         ?Position $titlePosition = null,
         ?string $xLabel = null,
+        bool $xLabelSet = false,
         ?string $yLabel = null,
+        bool $yLabelSet = false,
         ?bool $showDataLabels = null,
         ?\Closure $dataLabelFormatter = null,
+        bool $dataLabelFormatterSet = false,
         ?array $legendItems = null,
         ?float $animationProgress = null,
         ?int $animationDuration = null,
@@ -1127,8 +1138,10 @@ final class LineChart extends Chart
         bool $lineStyleSet = false,
         ?array $markLines = null,
         ?bool $unicodeConnectors = null,
-        ?BrailleCanvas $brailleCanvas = null,
+        ?object $brailleCanvas = null,
+        bool $brailleCanvasSet = false,
         ?Theme $theme = null,
+        bool $themeSet = false,
         ?\Closure $seriesColorFn = null,
         bool $seriesColorFnSet = false,
     ): self {
@@ -1152,13 +1165,13 @@ final class LineChart extends Chart
             yLabelTicks:        $yLabelTicks        ?? $this->yLabelTicks,
             showLegend:         $showLegend         ?? $this->showLegend,
             legendPosition:     $legendPosition     ?? $this->legendPosition,
-            legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,
-            title:              $title              ?? $this->title,
+            legendIndicatorChar: ($legendIndicatorCharSet || $legendIndicatorChar !== null) ? $legendIndicatorChar : $this->legendIndicatorChar,
+            title:              ($titleSet || $title !== null) ? $title : $this->title,
             titlePosition:      $titlePosition      ?? $this->titlePosition,
-            xLabel:             $xLabel             ?? $this->xLabel,
-            yLabel:             $yLabel             ?? $this->yLabel,
+            xLabel:             ($xLabelSet || $xLabel !== null) ? $xLabel : $this->xLabel,
+            yLabel:             ($yLabelSet || $yLabel !== null) ? $yLabel : $this->yLabel,
             showDataLabels:     $showDataLabels     ?? $this->showDataLabels,
-            dataLabelFormatter: $dataLabelFormatter ?? $this->dataLabelFormatter,
+            dataLabelFormatter: ($dataLabelFormatterSet || $dataLabelFormatter !== null) ? $dataLabelFormatter : $this->dataLabelFormatter,
             legendItems:        $legendItems        ?? $this->legendItems,
             animationProgress:  $animationProgress  ?? $this->getAnimationProgress(),
             animationDuration:  $animationDuration  ?? $this->getAnimationDuration(),
@@ -1166,8 +1179,8 @@ final class LineChart extends Chart
             lineStyle:         $lineStyleSet ? $lineStyle : $this->lineStyle,
             markLines:         $markLines        ?? $this->markLines,
             unicodeConnectors: $unicodeConnectors ?? $this->unicodeConnectors,
-            brailleCanvas:     $brailleCanvas     ?? $this->brailleCanvas,
-            theme:             $theme             ?? $this->theme,
+            brailleCanvas:     ($brailleCanvasSet || $brailleCanvas !== null) ? $brailleCanvas : $this->brailleCanvas,
+            theme:             ($themeSet || $theme !== null) ? $theme : $this->theme,
             seriesColorFn:     $seriesColorFnSet ? $seriesColorFn : $this->seriesColorFn,
         );
     }

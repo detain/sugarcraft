@@ -65,9 +65,10 @@ final class LineChartSeriesColorFnTest extends TestCase
         $this->assertSame(1, preg_match('/[\x{2800}-\x{28FF}]/u', $out));
         $this->assertStringContainsString(self::RED, $out, 'high samples paint red');
         $this->assertStringContainsString(self::BLUE, $out, 'low samples paint blue');
-        // The series' own legend color (red cycle slot → #cd0000) is fully
-        // overridden because the resolver never returns null.
-        $this->assertStringNotContainsString("\x1b[38;2;205;0;0m", $out);
+        // The series' own legend color (lead cycle slot — blue since the
+        // lib-reviews-1103 colour-blind-safe reorder) is fully overridden
+        // because the resolver never returns null.
+        $this->assertStringNotContainsString("\x1b[38;2;0;0;238m", $out);
     }
 
     public function testBrailleModeNullFallsThroughToSeriesLegendColor(): void
@@ -80,7 +81,10 @@ final class LineChartSeriesColorFnTest extends TestCase
         $out = $base->withSeriesColorFn($highOnly)->view();
 
         $this->assertStringContainsString(self::RED, $out);
-        $this->assertStringContainsString("\x1b[38;2;205;0;0m", $out, 'null keeps the legend color');
+        // lib-reviews-1103 M13: the lead legend cycle slot is 'blue'
+        // (0;0;238) — was 'red' (205;0;0) before the colour-blind-safe
+        // palette reorder. Null from the resolver keeps that slot colour.
+        $this->assertStringContainsString("\x1b[38;2;0;0;238m", $out, 'null keeps the legend color');
     }
 
     public function testAlwaysNullResolverIsByteIdenticalToDefault(): void

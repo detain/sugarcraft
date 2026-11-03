@@ -124,6 +124,13 @@ final class Sparkline
      * `Sparkline::Push(value)`. The window slide in {@see view()}
      * keeps only the last `width` points, so callers can append
      * indefinitely without trimming.
+     *
+     * WHY THIS COSTS O(n): the instance is immutable and `data` is a
+     * public property holding the FULL recorded history (pinned by
+     * SparklineTest), so every push materialises a fresh history copy.
+     * Stream long sequences with {@see pushAll()} instead — one batched
+     * append costs a single copy regardless of batch length — or keep a
+     * plain PHP buffer and call withData() at render time.
      */
     public function push(int|float $value): self
     {

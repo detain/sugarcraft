@@ -97,9 +97,11 @@ final class BrailleChartTest extends TestCase
 
     /**
      * Audit F11: per-dataset colors must reach the strokes. The first
-     * named dataset cycles to 'red' — rendered as the xterm-256 derived
-     * truecolor SGR (38;2;205;0;0 = #cd0000); an unnamed primary series
-     * stays unstyled exactly like ASCII mode.
+     * named dataset cycles to the lead palette colour — 'blue' since the
+     * lib-reviews-1103 colour-blind-safe reorder (M13; the old lead pair
+     * red/green collided for deutan vision) — rendered as its truecolor
+     * SGR (38;2;0;0;238); an unnamed primary series stays unstyled exactly
+     * like ASCII mode.
      */
     public function testBrailleModeHonoursPerDatasetColors(): void
     {
@@ -108,7 +110,7 @@ final class BrailleChartTest extends TestCase
             ->withCanvas(BrailleCanvas::new(80, 24));
         $out = $chart->view();
         $this->assertSame(1, preg_match('/[\x{2800}-\x{28FF}]/u', $out));
-        $this->assertStringContainsString("\x1b[38;2;205;0;0m", $out, 'red SGR expected on the first dataset stroke');
+        $this->assertStringContainsString("\x1b[38;2;0;0;238m", $out, 'blue SGR expected on the first dataset stroke');
     }
 
     /**

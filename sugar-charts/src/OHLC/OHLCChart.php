@@ -146,25 +146,25 @@ final class OHLCChart
     /** Customize legend indicator character. */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar));
+        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar), legendIndicatorCharSet: true);
     }
 
     /** Set the chart title. */
-    public function withTitle(string $title, Position $position = Position::Top): self
+    public function withTitle(?string $title = null, Position $position = Position::Top): self
     {
-        return $this->copy(title: UntrustedText::guard($title), titlePosition: $position);
+        return $this->copy(title: $title === null ? null : UntrustedText::guard($title), titleSet: true, titlePosition: $position);
     }
 
     /** Set the X-axis label (rendered at bottom). */
-    public function withXLabel(string $label): self
+    public function withXLabel(?string $label = null): self
     {
-        return $this->copy(xLabel: UntrustedText::guard($label));
+        return $this->copy(xLabel: $label === null ? null : UntrustedText::guard($label), xLabelSet: true);
     }
 
     /** Set the Y-axis label (prepended to each line). */
-    public function withYLabel(string $label): self
+    public function withYLabel(?string $label = null): self
     {
-        return $this->copy(yLabel: UntrustedText::guard($label));
+        return $this->copy(yLabel: $label === null ? null : UntrustedText::guard($label), yLabelSet: true);
     }
 
     /**
@@ -190,9 +190,9 @@ final class OHLCChart
     public function legend(bool $on = true): self              { return $this->withLegend($on); }
     public function legendPos(Position $pos): self             { return $this->withLegendPosition($pos); }
     public function legendStyle(?string $char): self           { return $this->withLegendStyle($char); }
-    public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
-    public function xLabel(string $label): self                { return $this->withXLabel($label); }
-    public function yLabel(string $label): self                { return $this->withYLabel($label); }
+    public function title(?string $t = null, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
+    public function xLabel(?string $label = null): self                { return $this->withXLabel($label); }
+    public function yLabel(?string $label = null): self                { return $this->withYLabel($label); }
     /** @param list<array{label: string, color: string}> $items */
     public function legendItems(array $items): self            { return $this->withLegendItems($items); }
 
@@ -310,10 +310,14 @@ final class OHLCChart
         ?bool $showLegend = null,
         ?Position $legendPosition = null,
         ?string $legendIndicatorChar = null,
+        bool $legendIndicatorCharSet = false,
         ?string $title = null,
+        bool $titleSet = false,
         ?Position $titlePosition = null,
         ?string $xLabel = null,
+        bool $xLabelSet = false,
         ?string $yLabel = null,
+        bool $yLabelSet = false,
         ?array $legendItems = null,
     ): self {
         return new self(
@@ -329,11 +333,11 @@ final class OHLCChart
             bearishColor:       $bearishColorSet ? $bearishColor : $this->bearishColor,
             showLegend:         $showLegend         ?? $this->showLegend,
             legendPosition:     $legendPosition     ?? $this->legendPosition,
-            legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,
-            title:              $title              ?? $this->title,
+            legendIndicatorChar: ($legendIndicatorCharSet || $legendIndicatorChar !== null) ? $legendIndicatorChar : $this->legendIndicatorChar,
+            title:              ($titleSet || $title !== null) ? $title : $this->title,
             titlePosition:      $titlePosition      ?? $this->titlePosition,
-            xLabel:             $xLabel             ?? $this->xLabel,
-            yLabel:             $yLabel             ?? $this->yLabel,
+            xLabel:             ($xLabelSet || $xLabel !== null) ? $xLabel : $this->xLabel,
+            yLabel:             ($yLabelSet || $yLabel !== null) ? $yLabel : $this->yLabel,
             legendItems:        $legendItems        ?? $this->legendItems,
         );
     }

@@ -8,7 +8,6 @@ use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Style\Theme;
 
 /**
@@ -40,7 +39,7 @@ abstract class Chart
         private float $animationProgress = 1.0,
         /** @var int Animation duration in milliseconds (0 = instant) */
         private int $animationDuration = 0,
-        ?BrailleCanvas $brailleCanvas = null,
+        ?object $brailleCanvas = null,
         ?Theme $theme = null,
     ) {
         if ($width < 0 || $height < 0) {
@@ -50,8 +49,8 @@ abstract class Chart
         $this->theme = $theme;
     }
 
-    /** @var BrailleCanvas|null Alternative braille-rendered canvas */
-    public readonly ?BrailleCanvas $brailleCanvas;
+    /** @var object|null Alternative braille-rendered canvas (a sugar-dashboard BrailleCanvas in practice) */
+    public readonly ?object $brailleCanvas;
 
     /** @var Theme|null Named color theme for rendering */
     public readonly ?Theme $theme;
@@ -267,22 +266,32 @@ abstract class Chart
         return $this->copy(legendPosition: $position);
     }
 
-    /** Customize legend styling. */
+    /**
+     * Customize the legend indicator glyph. Passing null clears it back to
+     * the default bullet.
+     */
     public function withLegendStyle(?string $indicatorChar = null): self
     {
-        return $this->copy(legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar));
+        return $this->copy(
+            legendIndicatorChar: $indicatorChar === null ? null : UntrustedText::guard($indicatorChar),
+            legendIndicatorCharSet: true,
+        );
     }
 
-    /** Set the X-axis label (rendered at bottom). */
-    public function withXLabel(string $label): self
+    /**
+     * Set the X-axis label (rendered at bottom). Null clears it.
+     */
+    public function withXLabel(?string $label = null): self
     {
-        return $this->copy(xLabel: UntrustedText::guard($label));
+        return $this->copy(xLabel: $label === null ? null : UntrustedText::guard($label), xLabelSet: true);
     }
 
-    /** Set the Y-axis label (rendered at left). */
-    public function withYLabel(string $label): self
+    /**
+     * Set the Y-axis label (rendered at left). Null clears it.
+     */
+    public function withYLabel(?string $label = null): self
     {
-        return $this->copy(yLabel: UntrustedText::guard($label));
+        return $this->copy(yLabel: $label === null ? null : UntrustedText::guard($label), yLabelSet: true);
     }
 
     /**
@@ -306,9 +315,9 @@ abstract class Chart
      * (BarChart's own `withDataLabelFormatter()` is the consuming API:
      * `fn(Bar $bar, int $index): string`.)
      */
-    public function withDataLabelFormatter(\Closure $formatter): self
+    public function withDataLabelFormatter(?\Closure $formatter = null): self
     {
-        return $this->copy(dataLabelFormatter: $formatter);
+        return $this->copy(dataLabelFormatter: $formatter, dataLabelFormatterSet: true);
     }
 
     /**
@@ -320,24 +329,32 @@ abstract class Chart
      *                           title gutter, so the title is silently
      *                           dropped for those values.
      */
-    public function withTitle(string $title, Position $position = Position::Top): self
+    public function withTitle(?string $title = null, Position $position = Position::Top): self
     {
-        return $this->copy(title: UntrustedText::guard($title), titlePosition: $position);
+        return $this->copy(
+            title: $title === null ? null : UntrustedText::guard($title),
+            titlePosition: $position,
+            titleSet: true,
+        );
     }
 
     /**
      * Select braille dot-matrix rendering (2x horizontal, 4x vertical
      * resolution) instead of standard character cells.
      *
-     * Honored by LineChart only; other chart classes ignore it. The
-     * canvas object is not mutated — the chart rasterizes into its own
-     * internal grid on every render and the instance merely selects the
-     * braille mode (its dimensions are not consulted). Mirrors sugar-dashboard
-     * Plot/Braille canvas mode.
+     * Honored by LineChart, the only class extending this base; the
+     * ChartExtras renderers (BarChart, Scatter, OHLCChart, Waveline,
+     * Sparkline) carry no canvas surface at all. Null clears the mode
+     * back to cell rendering. The canvas object is not mutated — the
+     * chart rasterizes into its own internal grid on every render and the
+     * instance merely selects the braille mode (its dimensions are not
+     * consulted). Typed as object because the null-check is the whole
+     * contract; a sugar-dashboard Plot/Braille canvas is what callers
+     * pass in practice.
      */
-    public function withCanvas(BrailleCanvas $canvas): self
+    public function withCanvas(?object $canvas = null): self
     {
-        return $this->copy(brailleCanvas: $canvas);
+        return $this->copy(brailleCanvas: $canvas, brailleCanvasSet: true);
     }
 
     /**
@@ -353,9 +370,9 @@ abstract class Chart
      * `Theme::dracula()`, `Theme::oneDark()`, etc. Mirrors sugar-style
      * `Theme` palette roles.
      */
-    public function withTheme(Theme $theme): self
+    public function withTheme(?Theme $theme = null): self
     {
-        return $this->copy(theme: $theme);
+        return $this->copy(theme: $theme, themeSet: true);
     }
 
     // ─── Short-form Aliases ──────────────────────────────────────────────
@@ -372,7 +389,7 @@ abstract class Chart
     /** Short-form alias for {@see withTitle()}. */
     public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
     /** Short-form alias for {@see withCanvas()}. */
-    public function canvas(BrailleCanvas $canvas): self { return $this->withCanvas($canvas); }
+    public function canvas(?object $canvas = null): self { return $this->withCanvas($canvas); }
     /** Short-form alias for {@see withTheme()}. */
     public function theme(Theme $theme): self { return $this->withTheme($theme); }
 
@@ -450,26 +467,33 @@ abstract class Chart
         ?array $legendItems = null,
         ?float $animationProgress = null,
         ?int $animationDuration = null,
-        ?BrailleCanvas $brailleCanvas = null,
+        ?object $brailleCanvas = null,
         ?Theme $theme = null,
+        bool $legendIndicatorCharSet = false,
+        bool $titleSet = false,
+        bool $xLabelSet = false,
+        bool $yLabelSet = false,
+        bool $dataLabelFormatterSet = false,
+        bool $brailleCanvasSet = false,
+        bool $themeSet = false,
     ): self {
         return new static(
             width:              $width              ?? $this->width,
             height:             $height             ?? $this->height,
             showLegend:         $showLegend         ?? $this->showLegend,
             legendPosition:     $legendPosition     ?? $this->legendPosition,
-            legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,
-            title:              $title              ?? $this->title,
+            legendIndicatorChar:($legendIndicatorCharSet || $legendIndicatorChar !== null) ? $legendIndicatorChar : $this->legendIndicatorChar,
+            title:              ($titleSet || $title !== null)           ?              $title : $this->title,
             titlePosition:      $titlePosition      ?? $this->titlePosition,
-            xLabel:             $xLabel             ?? $this->xLabel,
-            yLabel:             $yLabel             ?? $this->yLabel,
+            xLabel:             ($xLabelSet || $xLabel !== null)          ?             $xLabel : $this->xLabel,
+            yLabel:             ($yLabelSet || $yLabel !== null)          ?             $yLabel : $this->yLabel,
             showDataLabels:     $showDataLabels     ?? $this->showDataLabels,
-            dataLabelFormatter: $dataLabelFormatter ?? $this->dataLabelFormatter,
+            dataLabelFormatter: ($dataLabelFormatterSet || $dataLabelFormatter !== null) ? $dataLabelFormatter : $this->dataLabelFormatter,
             legendItems:        $legendItems        ?? $this->legendItems,
             animationProgress:  $animationProgress  ?? $this->animationProgress,
             animationDuration:  $animationDuration  ?? $this->animationDuration,
-            brailleCanvas:      $brailleCanvas      ?? $this->brailleCanvas,
-            theme:              $theme              ?? $this->theme,
+            brailleCanvas:      ($brailleCanvasSet || $brailleCanvas !== null)   ?      $brailleCanvas : $this->brailleCanvas,
+            theme:              ($themeSet || $theme !== null)           ?              $theme : $this->theme,
         );
     }
 }

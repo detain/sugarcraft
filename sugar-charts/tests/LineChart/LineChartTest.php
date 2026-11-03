@@ -540,7 +540,9 @@ final class LineChartTest extends TestCase
         /** @var list<array{label: string, color: string}> $items */
         $items = $legend->getValue($chart);
         self::assertSame(['Series A', 'Series B'], array_column($items, 'label'));
-        self::assertSame(['red', 'green'], array_column($items, 'color'));
+        // lib-reviews-1103 M13: colour-blind-safe palette reorder — the
+        // cycle now leads blue/orange where it led red/green.
+        self::assertSame(['blue', 'orange'], array_column($items, 'color'));
     }
 
     public function testWithDatasetAppendStillWalksColorCycle(): void
@@ -553,6 +555,8 @@ final class LineChartTest extends TestCase
         $legend = (new \ReflectionProperty(\SugarCraft\Charts\Chart\Chart::class, 'legendItems'));
         $legend->setAccessible(true);
         $items = $legend->getValue($chart);
-        self::assertSame(['red', 'green'], array_column($items, 'color'));
+        // lib-reviews-1103 M13: lead pair flipped from red/green to
+        // blue/orange (deutan-safe).
+        self::assertSame(['blue', 'orange'], array_column($items, 'color'));
     }
 }
