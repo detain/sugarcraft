@@ -480,6 +480,12 @@ output stream contains only the SGR sequences the renderer itself emits:
   unmarked frames stay byte-identical). The deliberate cost is cosmetic: box
   chrome shows holes where a marker was restored. The sweep duty above still
   applies to attacker-authored *toast text*, never to the host's own markers.
+- **Host OSC-8 hyperlinks survive compositing**: background rows are parsed,
+  not echoed — an `\e]8;;url\e\\…\e]8;;\e\\` link run is re-attached to the
+  grid as a real hyperlink and re-emitted intact on the rows the toast does
+  not cover (and it round-trips through delta hosts that feed `view()`'s own
+  output back as the next background). Rows the box covers are replaced
+  whole; nothing ever returns as printable `]8;;…` garbage.
 
 The full fleet-wide contract lives in
 [`docs/TRUST-BOUNDARY.md`](../docs/TRUST-BOUNDARY.md)

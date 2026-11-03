@@ -6,6 +6,7 @@ namespace SugarCraft\Toast;
 
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
+use SugarCraft\CellBuffer\Hyperlink;
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\CellBuffer\Region;
 use SugarCraft\CellBuffer\Position as BufferPosition;
@@ -843,13 +844,71 @@ final class Toast
     }
 
     /**
+     * Consume an OSC/DCS-class string sequence starting at an ESC byte:
+     * payload runs to BEL, ST (ESC \), or end-of-input. Unterminated
+     * sequences swallow the remainder — fail-closed: framing never survives
+     * as printable garbage, at the cost of trailing text on a truncated
+     * malformed row (documented, matches the Action label ingress law).
+     *
+     * @return array{0:string,1:int} payload bytes (without introducer or
+     *         terminator) and the new walker offset
+     */
+    private function consumeStringSequence(string $s, int $start, int $len): array
+    {
+        $j = $start + 2;
+        while ($j < $len) {
+            if ($s[$j] === "\x07") {
+                return [\substr($s, $start + 2, $j - $start - 2), $j + 1];
+            }
+            if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') {
+                return [\substr($s, $start + 2, $j - $start - 2), $j + 2];
+            }
+            $j++;
+        }
+        return [\substr($s, $start + 2), $len];
+    }
+
+    /**
+     * Map an OSC payload to the running hyperlink state (host-frame
+     * ingestion only). '8;<params>;<url>' opens a link (empty url closes
+     * the current one, per spec); every other OSC leaves the state
+     * unchanged. URLs carrying control bytes cannot build a Hyperlink
+     * (cellbuffer refuses them) — the link is discarded, the text stays.
+     */
+    private function hyperlinkFromOscPayload(string $payload, ?Hyperlink $current): ?Hyperlink
+    {
+        if (!\str_starts_with($payload, '8;')) {
+            return $current;
+        }
+        $parts = \explode(';', $payload, 3);
+        // Standard frames are '8;<params>;<url>'; sugar-cellbuffer's own
+        // toAnsi() emits the params-less short form '8;<url>', which must
+        // round-trip — a host feeding its previous composed frame back in
+        // keeps its links, not silently closing them.
+        $url = \end($parts);
+        $url = $url === false ? '' : $url;
+        if ($url === '') {
+            return null;
+        }
+        $id = '';
+        if (\count($parts) === 3 && $parts[1] !== '' && \preg_match('/^id=([\x20-\x7e]*)$/', $parts[1], $m) === 1) {
+            $id = $m[1];
+        }
+        try {
+            return Hyperlink::new($url, $id);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
      * Fill a viewport Buffer with content from an array of strings.
      * Each line is placed with ANSI parsing for styles.
      */
     private function fillViewportFromString(Buffer $buf, array $lines): Buffer
     {
         for ($row = 0; $row < \count($lines) && $row < $buf->height(); $row++) {
-            $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row]);
+            $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row], hostFrame: true);
         }
         return $buf;
     }
@@ -1031,14 +1090,46 @@ final class Toast
      * Place an ANSI-encoded string into the buffer at (col, row), parsing
      * SGR sequences and applying corresponding Buffer Style objects.
      */
-    private function placeAnsiStringAt(Buffer $buf, int $col, int $row, string $s): Buffer
+    private function placeAnsiStringAt(Buffer $buf, int $col, int $row, string $s, bool $hostFrame = false): Buffer
     {
         $len = \strlen($s);
         $i = 0;
         $currentStyle = null;
+        $currentLink = null;
 
         while ($i < $len) {
             $b = $s[$i];
+
+            // OSC / DCS / other string sequences and 2-char escapes are
+            // consumed HERE, never printed (lib-reviews-1102 M1: the walker
+            // recognised only CSI, so a host frame carrying an OSC-8 link
+            // came back as printable "]8;;url \\ CLICKY" garbage — the ESCs
+            // dropped by the width guard while the framing survived). On the
+            // background path an OSC-8 also re-attaches a real Hyperlink to
+            // the covered cells so toAnsi() re-emits the frame (the host's
+            // link survives the toast); on the alert-box path (content) the
+            // framing is dropped without honouring it — hostile text can
+            // neither forge a clickable link nor spray escape bytes.
+            if ($b === "\x1b" && ($s[$i + 1] ?? '') === ']') {
+                [$payload, $i] = $this->consumeStringSequence($s, $i, $len);
+                $currentLink = $hostFrame ? $this->hyperlinkFromOscPayload($payload, $currentLink) : null;
+                continue;
+            }
+
+            if ($b === "\x1b" && \str_contains('PX^_', $s[$i + 1] ?? '')) {
+                // DCS / SOS / PM / APC — terminated payloads, discarded.
+                [, $i] = $this->consumeStringSequence($s, $i, $len);
+                continue;
+            }
+
+            if ($b === "\x1b" && ($s[$i + 1] ?? '') !== '[') {
+                // Fe/Fp two-character escapes (ESC M, ESC 7, ESC c, …) and
+                // stray ESC ESC: consume both bytes, act on none — the grid
+                // is a compositing surface, not a terminal emulator. A bare
+                // trailing ESC is consumed on its own.
+                $i += isset($s[$i + 1]) && $s[$i + 1] !== "\x1b" ? 2 : 1;
+                continue;
+            }
 
             if ($b === "\x1b" && ($s[$i + 1] ?? '') === '[') {
                 $j = $i + 2;
@@ -1071,7 +1162,7 @@ final class Toast
                 break;
             }
 
-            $buf = $buf->withCellAt($col, $row, new Cell($cluster, $currentStyle, null, $gw));
+            $buf = $buf->withCellAt($col, $row, new Cell($cluster, $currentStyle, $currentLink, $gw));
             if ($gw === 2 && $col + 1 < $buf->width()) {
                 $buf = $buf->withCellAt($col + 1, $row, Cell::continuation());
             }
