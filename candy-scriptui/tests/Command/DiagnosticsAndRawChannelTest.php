@@ -96,4 +96,24 @@ final class DiagnosticsAndRawChannelTest extends TestCase
         self::assertSame('', $stdout, 'the refusal must not touch the DATA stream');
         self::assertStringContainsString('Allowed: blink|static|hidden', $stderr);
     }
+
+    public function testFormatTypeRefusalNamesEveryAllowedType(): void
+    {
+        [$status, $stdout, $stderr] = $this->runBinChild(['format', 'x', '--type=bogus']);
+        self::assertSame(1, $status);
+        self::assertSame('', $stdout);
+        self::assertStringContainsString('Allowed: markdown|code|template|emoji', $stderr);
+    }
+
+    public function testTemplateVanishedPlaceholderIsAnnouncedOnStderr(): void
+    {
+        [$status, $stdout, $stderr] = $this->runBinChild(
+            ['format', '--type=template'],
+            'value=[{{SC_B11_MISSING}}]',
+        );
+        self::assertSame(0, $status, 'the announcement is a note, not a failure');
+        self::assertStringContainsString('value=[]', $stdout);
+        self::assertStringContainsString('SC_B11_MISSING', $stderr,
+            'a placeholder that expanded to nothing must be named, never vanish silently');
+    }
 }

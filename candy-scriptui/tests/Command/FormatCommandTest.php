@@ -163,4 +163,54 @@ final class FormatCommandTest extends TestCase
             @unlink($tmp);
         }
     }
+
+    public function testUnknownTypeIsRefusedOnStderrBeforeAnyRead(): void
+    {
+        $cmd = (new \SugarCraft\ScriptUi\Application())->find('format');
+        $tester = new \Symfony\Component\Console\Tester\CommandTester($cmd);
+        $status = $tester->execute(['file' => '# hi', '--type' => 'bogus']);
+        $this->assertSame(1, $status);
+        // The refusal is a diagnostic: the data stream must stay completely clean.
+        $this->assertSame('', $tester->getDisplay());
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/FormatCommand.php');
+        $this->assertStringContainsString("in_array(\$type, self::TYPES, true)", $src);
+        $this->assertStringContainsString("Lang::t('runtime.unknown_choice'", $src);
+    }
+
+    public function testUnknownThemeIsRefusedOnStderr(): void
+    {
+        $cmd = (new \SugarCraft\ScriptUi\Application())->find('format');
+        $tester = new \Symfony\Component\Console\Tester\CommandTester($cmd);
+        $status = $tester->execute(['file' => '# hi', '--theme' => 'nightmare']);
+        $this->assertSame(1, $status);
+        $this->assertSame('', $tester->getDisplay());
+    }
+
+    public function testPositionalTextIsFormattedWhenNotAnExistingFile(): void
+    {
+        $cmd = (new \SugarCraft\ScriptUi\Application())->find('format');
+        $tester = new \Symfony\Component\Console\Tester\CommandTester($cmd);
+        $tester->execute(['file' => '# hi', '--theme' => 'plain']);
+        $tester->assertCommandIsSuccessful();
+        $this->assertStringContainsString('hi', $tester->getDisplay());
+    }
+
+    public function testZeroValuedEnvVarSurvivesTemplateExpansion(): void
+    {
+        putenv('SC_FMT_ZERO=0');
+        try {
+            $out = self::runTemplate('{{SC_FMT_ZERO}}|', 'SC_FMT_ZERO');
+        } finally {
+            putenv('SC_FMT_ZERO');
+        }
+        $this->assertStringContainsString('0|', $out,
+            'a literal "0" is data, not an unset variable');
+    }
+
+    public function testUnresolvedPlaceholdersAreAnnouncedNotSwallowed(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/FormatCommand.php');
+        $this->assertStringContainsString('format.template_unresolved', $src);
+        $this->assertStringContainsString('&$unresolved', $src);
+    }
 }

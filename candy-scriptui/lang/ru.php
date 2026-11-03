@@ -36,4 +36,5 @@ return [
     'hints.choose' => '↑/↓ перемещение · enter выбор · esc отмена',
     'hints.filter' => 'печатайте для фильтра · ↑/↓ перемещение · enter выбор · esc отмена',
     'hints.pager' => 'space/PgDn вниз · PgUp/b вверх · g начало · G конец · q выход',
+    'format.template_unresolved' => 'шаблон: {count} подстановочных знаков раскрылись в пустоту: {names} — переменная должна быть задана и разрешена через --allow-env.',
 ];

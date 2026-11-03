@@ -36,4 +36,5 @@ return [
     'hints.choose' => '↑/↓ przejdź · enter wybierz · esc anuluj',
     'hints.filter' => 'wpisuj aby filtrować · ↑/↓ przejdź · enter wybierz · esc anuluj',
     'hints.pager' => 'space/PgDn w dół · PgUp/b do góry · g początek · G koniec · q wyjdź',
+    'format.template_unresolved' => 'szablon: {count} symboli zastępczych rozwinięto do pustych: {names} — zmienna musi być ustawiona i dozwolona przez --allow-env.',
 ];

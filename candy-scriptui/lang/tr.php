@@ -36,4 +36,5 @@ return [
     'hints.choose' => '↑/↓ taşı · enter seç · esc iptal',
     'hints.filter' => 'filtrelemek için yaz · ↑/↓ taşı · enter seç · esc iptal',
     'hints.pager' => 'space/PgDn aşağı · PgUp/b yukarı · g baş · G son · q çık',
+    'format.template_unresolved' => 'şablon: {count} yer tutucu boş olarak genişletildi: {names} — bir değişken ayarlanmalı ve --allow-env ile izin verilmelidir.',
 ];

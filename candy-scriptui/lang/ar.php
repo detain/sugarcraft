@@ -36,4 +36,5 @@ return [
     'hints.choose' => '↑/↓ تحرّك · enter اختيار · esc إلغاء',
     'hints.filter' => 'اكتب للتصفية · ↑/↓ تحرّك · enter اختيار · esc إلغاء',
     'hints.pager' => 'space/PgDn نزول · PgUp/b صعود · g بداية · G نهاية · q خروج',
+    'format.template_unresolved' => 'القالب: {count} عنصر نائب توسّع إلى فراغ: {names} — يجب ضبط المتغير والسماح به عبر --allow-env.',
 ];

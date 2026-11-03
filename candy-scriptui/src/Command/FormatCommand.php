@@ -25,28 +25,69 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'format', description: 'Render Markdown as styled ANSI text.')]
 final class FormatCommand extends Command
 {
+    /** @var list<string> selectable --type values */
+    private const TYPES = ['markdown', 'code', 'template', 'emoji'];
+
+    /** @var list<string> theme names Theme::byName() resolves */
+    private const THEMES = ['ansi', 'plain', 'dark', 'light', 'dracula', 'tokyo-night', 'pink', 'notty', 'ascii'];
+
     protected function configure(): void
     {
         $this
-            ->addArgument('file',  InputArgument::OPTIONAL, 'Input file. Default: stdin.')
+            ->addArgument('file',  InputArgument::OPTIONAL, 'A file to read, or — when not an existing file — the text itself. Default: stdin.')
             ->addOption('theme', null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | dracula | tokyo-night | pink | notty | ascii', 'ansi')
             ->addOption('type',  't',  InputOption::VALUE_REQUIRED, 'Render type: markdown | code | template | emoji. Default markdown.', 'markdown')
             ->addOption('language', 'l', InputOption::VALUE_REQUIRED, 'Source language for `--type code`.', '')
             ->addOption('allow-env', null, InputOption::VALUE_REQUIRED, 'Comma-separated allowlist of env var names permitted for {{VAR}} expansion in --type template. Empty = expand none; "*" = expand all (opt-in, unsafe with untrusted input).', '')
             ->addOption('strip-ansi', null, InputOption::VALUE_NONE, 'Strip ANSI escapes from the rendered output.')
             ->addOption('show-help',  null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
-            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none, no-op for non-interactive format).', 0);
+            ->addOption('timeout',    null, InputOption::VALUE_REQUIRED, 'Accepted for flag parity; a non-zero value is refused loudly because format is non-interactive.', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        // Selection flags are validated BEFORE any input is touched: a bad
+        // --type must never shadow a file read (and never surface as an
+        // exception box). Refusals are plain sentences on STDERR; the data
+        // stream stays byte-clean for pipelines.
+        $type = strtolower((string) $input->getOption('type'));
+        if ($type !== '' && !in_array($type, self::TYPES, true)) {
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option' => '--type',
+                'value' => $type,
+                'allowed' => implode('|', self::TYPES),
+            ]) . "\n");
+            return Command::FAILURE;
+        }
+        $themeName = (string) $input->getOption('theme');
+        if (Theme::byName($themeName) === null) {
+            fwrite(STDERR, Lang::t('runtime.unknown_choice', [
+                'option' => '--theme',
+                'value' => $themeName,
+                'allowed' => implode('|', self::THEMES),
+            ]) . "\n");
+            return Command::FAILURE;
+        }
+        // `format` is a pure pipe command: --timeout is structurally inert
+        // here, so a caller asking for a deadline is told so loudly instead
+        // of being silently ignored.
+        $timeoutRaw = $input->getOption('timeout');
+        if ($timeoutRaw !== null && $timeoutRaw !== '' && (float) $timeoutRaw > 0.0) {
+            fwrite(STDERR, "candy-scriptui: --timeout has no effect on 'format' (non-interactive).\n");
+            return Command::FAILURE;
+        }
+
         $file = $input->getArgument('file');
-        if (is_string($file) && $file !== '') {
+        if (is_string($file) && $file !== '' && is_file($file)) {
             $raw = @file_get_contents($file);
             if ($raw === false) {
                 fwrite(STDERR, Lang::t('io.read_failed', ['path' => $file]) . "\n");
                 return Command::FAILURE;
             }
+        } elseif (is_string($file) && $file !== '') {
+            // gum muscle memory: `format "# hi"` is the TEXT, not a path.
+            // Anything that is not an existing file renders as content.
+            $raw = $file;
         } else {
             $raw = self::readStdin();
         }
@@ -56,14 +97,23 @@ final class FormatCommand extends Command
             static fn (string $s): bool => $s !== '',
         ));
 
-        $type = strtolower((string) $input->getOption('type'));
+        $unresolved = [];
         $rendered = match ($type) {
-            'markdown', '' => (new Renderer(self::pickTheme((string) $input->getOption('theme'))))->render($raw),
-            'code'         => self::renderCode($raw, (string) $input->getOption('language'), (string) $input->getOption('theme')),
-            'template'     => self::renderTemplate($raw, $allowEnv),
+            'markdown', '' => (new Renderer(FormatCommand::pickTheme($themeName)))->render($raw),
+            'code'         => self::renderCode($raw, (string) $input->getOption('language'), $themeName),
+            'template'     => self::renderTemplate($raw, $allowEnv, $unresolved),
             'emoji'        => self::renderEmoji($raw),
             default        => throw new \InvalidArgumentException(Lang::t('format.unknown_type', ['type' => $type])),
         };
+
+        if ($unresolved !== []) {
+            // A placeholder that vanished is the bug class, not the value:
+            // announce every name that expanded to empty.
+            fwrite(STDERR, Lang::t('format.template_unresolved', [
+                'count' => (string) count($unresolved),
+                'names' => implode(', ', array_slice(array_keys($unresolved), 0, 10)),
+            ]) . "\n");
+        }
 
         if ($input->getOption('strip-ansi')) {
             $rendered = \SugarCraft\Core\Util\Ansi::strip($rendered);
@@ -114,18 +164,32 @@ final class FormatCommand extends Command
      *                                expansion; `['*']` opts every var in
      *                                (explicit, unsafe with untrusted
      *                                input); `[]` expands none.
+     * @param array<string,true> $unresolved  Out-param: distinct placeholder
+     *                                names that expanded to empty (not
+     *                                allowlisted, or unset), first-seen
+     *                                order — callers announce them so a
+     *                                vanishing {{VAR}} is never silent.
      */
-    private static function renderTemplate(string $raw, array $allowlist): string
+    private static function renderTemplate(string $raw, array $allowlist, array &$unresolved): string
     {
         $allowAll = in_array('*', $allowlist, true);
         $set = array_flip($allowlist);
+        $unresolved = [];
         return (string) preg_replace_callback(
             '/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/',
-            static function (array $m) use ($allowAll, $set): string {
+            static function (array $m) use ($allowAll, $set, &$unresolved): string {
                 $name = $m[1];
                 if ($allowAll || isset($set[$name])) {
-                    return (string) (getenv($name) ?: '');
+                    // getenv() returns '0' for a set-but-zero variable:
+                    // truthiness would erase it. Only unset (false) is empty.
+                    $value = getenv($name);
+                    if ($value === false || $value === '') {
+                        $unresolved[$name] = true;
+                        return '';
+                    }
+                    return $value;
                 }
+                $unresolved[$name] = true;
                 return '';
             },
             $raw,

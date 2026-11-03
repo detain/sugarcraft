@@ -36,4 +36,5 @@ return [
     'hints.choose' => '↑/↓ 移动 · enter 选择 · esc 取消',
     'hints.filter' => '输入以筛选 · ↑/↓ 移动 · enter 选择 · esc 取消',
     'hints.pager' => 'space/PgDn 下翻 · PgUp/b 上翻 · g 开头 · G 结尾 · q 退出',
+    'format.template_unresolved' => '模板：{count} 个占位符已展开为空：{names} — 必须设置变量并通过 --allow-env 允许。',
 ];

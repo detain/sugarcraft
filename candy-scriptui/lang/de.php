@@ -49,4 +49,5 @@ return [
     'hints.choose' => '↑/↓ bewegen · Enter auswählen · Esc abbrechen',
     'hints.filter' => 'tippen zum Filtern · ↑/↓ bewegen · Enter auswählen · Esc abbrechen',
     'hints.pager' => 'Space/PgDn abwärts · PgUp/b aufwärts · g Anfang · G Ende · q beenden',
+    'format.template_unresolved' => 'Vorlage: {count} Platzhalter wurde(n) als leer expandiert: {names} — eine Variable muss gesetzt und über --allow-env erlaubt sein.',
 ];

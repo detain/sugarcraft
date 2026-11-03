@@ -36,4 +36,5 @@ return [
     'hints.choose' => '↑/↓ sposta · invio seleziona · esc annulla',
     'hints.filter' => 'digita per filtrare · ↑/↓ sposta · invio seleziona · esc annulla',
     'hints.pager' => 'space/PgDn giù · PgUp/b su · g inizio · G fine · q esci',
+    'format.template_unresolved' => 'template: {count} segnaposto espansi a vuoto: {names} — una variabile deve essere impostata e consentita tramite --allow-env.',
 ];

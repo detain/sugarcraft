@@ -51,4 +51,5 @@ return [
     'hints.choose' => '↑/↓ move · enter select · esc cancel',
     'hints.filter' => 'type to filter · ↑/↓ move · enter select · esc cancel',
     'hints.pager' => 'space/PgDn down · PgUp/b up · g top · G end · q quit',
+    'format.template_unresolved' => 'template: {count} placeholder(s) expanded to empty: {names} — a variable must be set and permitted via --allow-env.',
 ];
