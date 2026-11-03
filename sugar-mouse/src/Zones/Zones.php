@@ -68,10 +68,10 @@ final class Zones
         return self::defaultManager()->mark($id, $content);
     }
 
-    /** Mirrors `Scan`. */
-    public static function scan(string $rendered): string
+    /** Mirrors `Scan`. `$width` clamps zone columns into [1, $width]. */
+    public static function scan(string $rendered, ?int $width = null): string
     {
-        return self::defaultManager()->scan($rendered);
+        return self::defaultManager()->scan($rendered, $width);
     }
 
     /** Mirrors `Get`. */

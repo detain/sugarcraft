@@ -9,18 +9,18 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scan;
-use SugarCraft\Mouse\Sentinel;
 
 /**
- * Mouse-zone manager. Wraps content with invisible zone markers identifying
- * a logical "zone"; {@see scan()} later finds those markers, records each
- * zone's bounding box in terminal cells, and returns the cleaned-up frame.
+ * Mouse-zone manager. Wraps content with sentinel-tagged zone markers
+ * identifying a logical "zone"; {@see scan()} later finds those markers,
+ * records each zone's bounding box in terminal cells, and returns the
+ * cleaned-up frame.
  *
  * Marker + bounding-box computation are delegated to this package's
  * primitive layer — {@see \SugarCraft\Mouse\Mark} and
  * {@see \SugarCraft\Mouse\Scan} (single source of truth for the wire format
  * across the SugarCraft tree). Markers are the private-use-area sentinel
- * triples emitted by {@see \SugarCraft\Mouse\Mark::zone()} (encoding in
+ * tag pairs emitted by {@see \SugarCraft\Mouse\Mark::zone()} (encoding in
  * {@see \SugarCraft\Mouse\Mark::wrap()}):
  *
  *   open:  U+E000 <id> U+E001
@@ -38,7 +38,12 @@ use SugarCraft\Mouse\Sentinel;
  * `prefix() . $id` is what gets validated.
  *
  * Zones discovered during the most recent {@see scan()} replace any
- * previously known zones for the same id (other ids persist).
+ * previously known zones for the same id (other ids persist). A recorded
+ * zone stays queryable until a later scan replaces its id, {@see clear()}
+ * drops it, or {@see close()} empties the registry — zones from an
+ * off-screen frame are NOT forgotten on their own, so a consumer whose
+ * layout reuses ids must re-scan every frame it renders (or clear) before
+ * trusting {@see get()} / {@see anyInBounds()} results.
  */
 final class Manager
 {
@@ -49,9 +54,25 @@ final class Manager
     /** Class-level counter that gives every prefix-bearing manager a unique tag. */
     private static int $prefixCounter = 0;
 
+    /**
+     * Build a fresh un-prefixed manager, independent of every other
+     * instance. Distinct from the {@see Zones} facade's shared default
+     * manager ({@see Zones::defaultManager()}) — use that one only when
+     * the whole program agrees on a single zone namespace.
+     */
     public static function newGlobal(): self
     {
         return new self();
+    }
+
+    /**
+     * Reset the auto-prefix counter. Test seam only — production code
+     * must not rely on particular generated prefixes; they are unique
+     * per process, not stable.
+     */
+    public static function resetPrefixCounterForTesting(): void
+    {
+        self::$prefixCounter = 0;
     }
 
     /**
@@ -77,7 +98,9 @@ final class Manager
 
     /**
      * Toggle marker emission and scanning. When `$enabled = false`,
-     * `mark()` returns `$content` verbatim (no markers wrapped) and
+     * `mark()` returns `$content` verbatim (no markers wrapped — but the
+     * id is STILL validated, so flipping the manager off must not become
+     * a way to smuggle an illegal id through the emit path) and
      * `scan()` is a no-op pass-through. Useful for non-interactive
      * output (CI logs, file dumps) where the markers add nothing.
      *
@@ -123,10 +146,12 @@ final class Manager
     /**
      * Wrap $content with start/end markers for `prefix() . $id`.
      *
-     * Delegates the marker encoding to {@see \SugarCraft\Mouse\Mark::zone()}
-     * (which validates through {@see \SugarCraft\Mouse\Mark::wrap()})
-     * so the wire format lives in exactly one place. No-op (returns
-     * $content verbatim) when the manager is disabled.
+     * Delegates the marker encoding to {@see \SugarCraft\Mouse\Mark}
+     * (validation inside {@see \SugarCraft\Mouse\Mark::wrap()}) so the
+     * wire format lives in exactly one place. When the manager is
+     * disabled the content is returned verbatim — but the id is still
+     * validated, so disabling the manager cannot smuggle an illegal id
+     * through the emit path.
      *
      * @throws \InvalidArgumentException When `prefix() . $id` contains a byte
      *         outside the primitive's `\A[A-Za-z0-9._:-]+\z` charset (validated by
@@ -135,10 +160,10 @@ final class Manager
      */
     public function mark(string $id, string $content): string
     {
-        if (!$this->enabled) {
-            return $content;
-        }
-        return Mark::zone($this->idPrefix . $id, $content);
+        // Mark::wrap validates unconditionally and emits only when enabled —
+        // routing the disabled case through it as well keeps the validation
+        // contract identical in both modes.
+        return (new Mark($this->enabled))->wrap($this->idPrefix . $id, $content);
     }
 
     /**
@@ -149,28 +174,49 @@ final class Manager
      * (CJK-width aware via sugar-core's Width), then the discovered zones are
      * upserted into this manager's registry as {@see Zone} adapters — same id,
      * same bounds. The registry merges rather than replaces: ids seen this
-     * scan overwrite prior entries; other ids persist.
+     * scan overwrite prior entries; other ids persist. Stripping goes
+     * through {@see \SugarCraft\Mouse\Scan::strip()}, the same rule parse
+     * decodes, so bounds and bytes stay in lock-step.
+     *
+     * A prefixed manager only absorbs tags whose id carries its own prefix —
+     * markers from a sibling component's namespace in the same frame are
+     * stripped from the returned bytes but never enter this registry.
      *
      * No-op when {@see setEnabled()} has flipped the manager off — the input
      * passes through unchanged and no zones are recorded.
+     *
+     * @param int|null $width Viewport width; when given, zone columns are
+     *                        clamped into [1, $width] (see
+     *                        {@see \SugarCraft\Mouse\Scan::parse()}).
      */
-    public function scan(string $rendered): string
+    public function scan(string $rendered, ?int $width = null): string
     {
         if (!$this->enabled) {
             return $rendered;
         }
 
         // The primitive layer (Scan) is the single source of truth for parsing + bounds.
-        foreach ((new Scan())->parse($rendered) as $id => $mouseZone) {
+        foreach ((new Scan())->parse($rendered, $width) as $id => $mouseZone) {
+            if ($this->idPrefix !== '' && !str_starts_with($id, $this->idPrefix)) {
+                continue; // foreign namespace in the same frame — strip it, don't own it
+            }
             $this->zones[$id] = Zone::fromMouseZone($mouseZone);
         }
 
-        return self::stripMarkers($rendered);
+        return Scan::strip($rendered);
     }
 
+    /**
+     * Look up a recorded zone.
+     *
+     * Accepts the SHORT id passed to {@see mark()} (this manager's prefix is
+     * tried first) as well as the WIRE id stored in a hit result
+     * (`$zone->id`, already prefixed) — the trackers hand back wire ids, so
+     * both spellings must round-trip on a prefixed manager.
+     */
     public function get(string $id): ?Zone
     {
-        return $this->zones[$this->idPrefix . $id] ?? null;
+        return $this->zones[$this->idPrefix . $id] ?? $this->zones[$id] ?? null;
     }
 
     /** @return array<string, Zone> */
@@ -183,7 +229,8 @@ final class Manager
      * Forget zone state. With no argument, drops every recorded zone
      * (the original `clear()` shape, kept for back-compat). Pass an
      * `$id` to drop a single zone — equivalent to the upstream
-     * `Manager::Clear(id string)` overload.
+     * `Manager::Clear(id string)` overload. Like {@see get()}, the `$id`
+     * may be the short or the wire spelling.
      */
     public function clear(?string $id = null): void
     {
@@ -191,7 +238,7 @@ final class Manager
             $this->zones = [];
             return;
         }
-        unset($this->zones[$this->idPrefix . $id]);
+        unset($this->zones[$this->idPrefix . $id], $this->zones[$id]);
     }
 
     /**
@@ -211,9 +258,11 @@ final class Manager
     /**
      * Walk the recorded zones and return the innermost (smallest-area) one
      * whose bounds contain `$mouse`. When zones nest, the smallest one wins;
-     * on equal area the last-inserted zone takes priority. Returns null if
-     * no zone matches (or if the Msg isn't a {@see MouseMsg} to begin with —
-     * handy when models blanket-route every Msg through this helper).
+     * on equal area the FIRST recorded zone wins (matching the primitive
+     * {@see \SugarCraft\Mouse\Scanner} earliest-registered rule). Returns
+     * null if no zone matches (or if the Msg isn't a {@see MouseMsg} to
+     * begin with — handy when models blanket-route every Msg through this
+     * helper).
      *
      * Mirrors bubblezone's `Manager::AnyInBounds()`.
      */
@@ -226,6 +275,55 @@ final class Manager
         $smallestArea = PHP_INT_MAX;
         foreach ($this->zones as $zone) {
             if ($zone->inBounds($mouse) === true) {
+                $area = $zone->width() * $zone->height();
+                if ($area < $smallestArea) {
+                    $smallestArea = $area;
+                    $hit = $zone;
+                }
+            }
+        }
+        return $hit;
+    }
+
+    /**
+     * Every zone whose bounds contain `$mouse`, ordered innermost first
+     * (ascending area; equal areas keep registration order, matching
+     * {@see anyInBounds()}). Lets a consumer route a click to ALL owners
+     * of a cell — e.g. a container and the button inside it — instead of
+     * only the smallest.
+     *
+     * @return list<Zone>
+     */
+    public function allInBounds(Msg $mouse): array
+    {
+        if (!$mouse instanceof MouseMsg) {
+            return [];
+        }
+        $hits = [];
+        foreach ($this->zones as $zone) {
+            if ($zone->inBounds($mouse) === true) {
+                $hits[] = $zone;
+            }
+        }
+        usort($hits, static fn (Zone $a, Zone $b): int
+            => ($a->width() * $a->height()) <=> ($b->width() * $b->height()));
+        return $hits;
+    }
+
+    /**
+     * Pure-geometry lookup without a Msg: the innermost zone covering cell
+     * ($col, $row), 1-based — same area/tie rule as {@see anyInBounds()}.
+     * Lets consumers resolve what is under the wheel, the caret, or an
+     * arbitrary position without fabricating a MouseMsg.
+     */
+    public function zoneAt(int $col, int $row): ?Zone
+    {
+        $hit = null;
+        $smallestArea = PHP_INT_MAX;
+        foreach ($this->zones as $zone) {
+            if ($zone->startCol <= $col && $col <= $zone->endCol
+                && $zone->startRow <= $row && $row <= $zone->endRow
+            ) {
                 $area = $zone->width() * $zone->height();
                 if ($area < $smallestArea) {
                     $smallestArea = $area;
@@ -253,109 +351,13 @@ final class Manager
     public function anyInBoundsAndUpdate(Model $model, Msg $mouse): array
     {
         $zone = $this->anyInBounds($mouse);
+        // The instanceof is TYPE NARROWING, not a behavior guard:
+        // anyInBounds() already returns null for non-MouseMsg traffic, so a
+        // non-null $zone proves the type — restated here so static analysis
+        // accepts the MsgZoneInBounds construction.
         if ($zone !== null && $mouse instanceof MouseMsg) {
             return $model->update(new MsgZoneInBounds($zone, $mouse));
         }
         return $model->update($mouse);
-    }
-
-    /**
-     * Remove this package's PUA sentinel tags from a rendered frame, leaving
-     * the visible content byte-for-byte intact.
-     *
-     * Applies exactly the tag rule {@see \SugarCraft\Mouse\Scan::parse()}
-     * decodes (commit 15a7f0c9f), so the cleaned display string
-     * and the scanned bounds stay in lock-step:
-     *
-     * - A *tag* is `U+E000 [/] <id> U+E001`, where `<id>` runs to the FIRST
-     *   U+E001 after the sentinel and passes
-     *   {@see \SugarCraft\Mouse\Mark::isValidId()} — the same predicate Mark
-     *   enforces when encoding. The whole tag is removed; the content BETWEEN
-     *   an open and its close is preserved.
-     * - An empty id (`U+E000 U+E001`, `U+E000 / U+E001`) is consumed whole too:
-     *   Scan treats it as zero-width foreign markup, so it must not reach the
-     *   terminal either.
-     * - Any other U+E000 — no U+E001 ahead, or an id with a space, newline,
-     *   CR, escape, non-ASCII byte, or more than
-     *   {@see \SugarCraft\Mouse\Mark::MAX_ID_BYTES} bytes — is a *lone
-     *   sentinel*: only its own 3 bytes are dropped, and the text after it is
-     *   kept, because Scan measures that text as visible cells. Swallowing it
-     *   (the old "everything up to the next U+E001" rule) shifted every zone
-     *   to its right or below it off the cells it actually painted.
-     * - A bare U+E001 is likewise a lone sentinel (3 bytes dropped).
-     *
-     * Orphan closes and unclosed opens with a VALID id are still whole tags
-     * and are removed whole, matching Scan's lenient rows for viewport-clipped
-     * zones.
-     */
-    private static function stripMarkers(string $rendered): string
-    {
-        // Fast path — no sentinels present means nothing to strip.
-        if (!str_contains($rendered, Sentinel::OPEN) && !str_contains($rendered, Sentinel::CLOSE)) {
-            return $rendered;
-        }
-
-        $out       = '';
-        $len       = strlen($rendered);
-        $i         = 0;
-        $runStart  = 0;
-        // Cached offset of the next U+E001 at or after the current id start.
-        // Offsets only grow during the walk, so the cache is refreshed only
-        // once it falls behind — O(n) overall even for a frame full of
-        // unmatched U+E000s (a fresh strpos per sentinel would be O(n^2) on
-        // attacker-influenced text).
-        $nextClose = -1;
-        while ($i < $len) {
-            if ($rendered[$i] === "\xEE" && $i + 2 < $len && $rendered[$i + 1] === "\x80") {
-                $third = $rendered[$i + 2];
-
-                // Bare U+E001 (EE 80 81) not consumed as a tag terminator.
-                if ($third === "\x81") {
-                    $out .= substr($rendered, $runStart, $i - $runStart);
-                    $i += 3;
-                    $runStart = $i;
-                    continue;
-                }
-
-                // U+E000 (EE 80 80) — a tag only if a valid id runs from here
-                // to the next U+E001.
-                if ($third === "\x80") {
-                    $out    .= substr($rendered, $runStart, $i - $runStart);
-                    $idStart = ($rendered[$i + 3] ?? '') === '/' ? $i + 4 : $i + 3;
-                    if ($nextClose !== false && $nextClose < $idStart) {
-                        $nextClose = strpos($rendered, Sentinel::CLOSE, $idStart);
-                    }
-                    $i = ($nextClose !== false && self::isTagId($rendered, $idStart, $nextClose))
-                        ? $nextClose + 3   // whole tag
-                        : $i + 3;          // lone sentinel — its own bytes only
-                    $runStart = $i;
-                    continue;
-                }
-            }
-            $i++;
-        }
-        $out .= substr($rendered, $runStart);
-        return $out;
-    }
-
-    /**
-     * Whether the id field [$idStart, $idEnd) makes the preceding U+E000 a
-     * tag: empty (inert foreign markup, consumed whole) or a valid zone id.
-     *
-     * Mirrors the primitive's `Scan::tagId()` (private there) through the public
-     * {@see Mark::isValidId()} predicate. The length is checked before any
-     * substr so an attacker-sized span between a stray U+E000 and a distant
-     * U+E001 costs O(1) to reject.
-     */
-    private static function isTagId(string $rendered, int $idStart, int $idEnd): bool
-    {
-        $idLen = $idEnd - $idStart;
-        if ($idLen === 0) {
-            return true;
-        }
-        if ($idLen > Mark::MAX_ID_BYTES) {
-            return false;
-        }
-        return Mark::isValidId(substr($rendered, $idStart, $idLen));
     }
 }

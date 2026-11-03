@@ -510,4 +510,31 @@ final class ScanTest extends TestCase
         self::assertArrayHasKey('flag', $zones);
         self::assertGreaterThanOrEqual(1, $zones['flag']->width());
     }
+
+    /**
+     * strip() is the public byte-side twin of parse()'s tag rule: well-formed
+     * tags (open, close, orphan, unclosed, empty-id) go whole; lone
+     * sentinels cost only their own 3 bytes.
+     */
+    public function testStripRemovesWellFormedTagsAndKeepsLoneSentinelText(): void
+    {
+        $mark = new Mark();
+        $frame = $mark->wrap('btn', 'OK') . ' tail';
+        self::assertSame('OK tail', Scan::strip($frame));
+
+        // Orphan close + unclosed-but-TERMINATED open: whole tags → removed.
+        self::assertSame('ab', Scan::strip(
+            Sentinel::OPEN . '/gone' . Sentinel::CLOSE . 'a' . Sentinel::OPEN . 'ghost' . Sentinel::CLOSE . 'b'
+        ));
+
+        // Empty-id pairs are inert foreign markup → consumed whole.
+        self::assertSame('xy', Scan::strip('x' . Sentinel::OPEN . Sentinel::CLOSE . 'y'));
+
+        // Lone sentinel (invalid id: space): each sentinel's own 3 bytes go,
+        // the text between them survives (exactly what parse measures).
+        self::assertSame('bad idlater', Scan::strip(Sentinel::OPEN . 'bad id' . Sentinel::CLOSE . 'later'));
+
+        // Fast path: no sentinels → byte-identical passthrough.
+        self::assertSame("plain \x1b[31mred\x1b[0m", Scan::strip("plain \x1b[31mred\x1b[0m"));
+    }
 }

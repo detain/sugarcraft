@@ -182,7 +182,7 @@ final class ManagerTest extends TestCase
     {
         $m = Manager::newGlobal();
         // A close tag (U+E000 /ghost U+E001) with no matching open — Scan
-        // records nothing, and stripMarkers still removes the dangling tag.
+        // records nothing, and Scan::strip still removes the dangling tag.
         $clean = $m->scan(Sentinel::OPEN . '/ghost' . Sentinel::CLOSE . 'hi');
         $this->assertSame('hi', $clean);
         $this->assertNull($m->get('ghost'));
@@ -359,29 +359,157 @@ final class ManagerTest extends TestCase
     }
 
     /**
-     * When two zones of equal area both contain the mouse, the last-inserted
-     * (top-most) zone wins.
+     * When two zones of equal area both contain the mouse, the FIRST
+     * recorded zone wins — matching the primitive Scanner's
+     * earliest-registered rule.
      *
-     * Note: with the mark() API zones are always parent/child (nested), so
-     * a true equal-area tie only occurs when a zone is wrapped by a same-size
-     * outer zone — the outer zone is necessarily larger by having the same
-     * inner plus padding. A pure equal-area horizontal overlap is not
-     * constructible via mark() since it always produces top-outer, bottom-inner
-     * nesting. The innermost-wins rule handles all realistic cases.
+     * Constructible via two scan frames: mark() emits one zone per call,
+     * but scan() MERGES, so scanning the same column range under a second
+     * id leaves both zones registered over the identical rectangle. The
+     * strict `<` comparison in anyInBounds then keeps the first entry.
      */
-    public function testAnyInBoundsTieBreaksToLastInserted(): void
+    public function testAnyInBoundsTieBreaksToFirstInserted(): void
     {
-        // Two zones with equal area 1 (both just 'X'), but the second is
-        // inserted last so it sits "on top" of the first.
         $m = Manager::newGlobal();
-        $m->scan($m->mark('first', 'X') . $m->mark('second', 'X'));
+        $m->scan($m->mark('first', 'AAA'));   // cols 1-3, row 1 — recorded first
+        $m->scan($m->mark('second', 'AAA'));  // same rect, equal area — merges alongside
 
-        // 'first' spans col 1, 'second' spans col 2 — no overlap at col 1, so
-        // only 'first' is hit. This test documents that even with equal area
-        // non-overlapping zones the last-inserted (second) would win IF they
-        // overlapped, because of the < comparison in anyInBounds.
+        $this->assertCount(2, $m->all());
+        // Both zones cover every cell; the tie resolves to the earlier one.
         $this->assertSame('first', $m->anyInBounds($this->click(1, 1))->id);
-        $this->assertSame('second', $m->anyInBounds($this->click(2, 1))->id);
+        $this->assertSame('first', $m->anyInBounds($this->click(2, 1))->id);
+        $this->assertSame('first', $m->anyInBounds($this->click(3, 1))->id);
+    }
+
+    /**
+     * Trackers store WIRE ids (`$zone->id`, already prefixed). Passing one
+     * back into get() on a prefixed manager must resolve — the old
+     * unconditional prefix prepend looked up `prefix.prefix.id` and
+     * returned null for exactly the ids hit-tests hand out.
+     */
+    public function testGetAcceptsWireIdOnPrefixedManager(): void
+    {
+        $m = Manager::newPrefix('list-');
+        $m->scan($m->mark('row-1', 'hi'));
+        $hit = $m->anyInBounds($this->click(1, 1));
+        $this->assertNotNull($hit);
+        $this->assertSame('list-row-1', $hit->id);
+        // Round-trip the wire id straight back in.
+        $this->assertNotNull($m->get($hit->id));
+        $this->assertSame($hit, $m->get($hit->id));
+        // Short spelling keeps working.
+        $this->assertSame($hit, $m->get('row-1'));
+    }
+
+    /**
+     * clear() accepts the wire spelling as well as the short one.
+     */
+    public function testClearAcceptsWireIdOnPrefixedManager(): void
+    {
+        $m = Manager::newPrefix('p-');
+        $m->scan($m->mark('btn', 'OK'));
+        $m->clear('p-btn');
+        $this->assertNull($m->get('btn'));
+        $this->assertSame([], $m->all());
+    }
+
+    /**
+     * A prefixed manager must not absorb sibling components' zones that
+     * happen to be rendered into the same frame — the markers are still
+     * stripped from the output, but the registry keeps its own namespace.
+     */
+    public function testPrefixedScanIgnoresForeignNamespace(): void
+    {
+        $a = Manager::newPrefix('a-');
+        $b = Manager::newPrefix('b-');
+        $aMarked = $a->mark('item-0', 'A');
+
+        $cleaned = $b->scan($aMarked);
+        $this->assertSame('A', $cleaned);          // bytes stripped…
+        $this->assertSame([], $b->all());          // …but not owned
+
+        $b->scan($b->mark('item-0', 'B'));
+        $this->assertSame(['b-item-0'], array_keys($b->all()));
+    }
+
+    /**
+     * An unprefixed (global/default) manager has no namespace to filter by,
+     * so it absorbs every tag in the frame — including prefixed ones —
+     * exactly as before.
+     */
+    public function testUnprefixedScanAbsorbsAllIds(): void
+    {
+        $a = Manager::newPrefix('a-');
+        $g = Manager::newGlobal();
+        $g->scan($a->mark('item-0', 'A'));
+        $this->assertArrayHasKey('a-item-0', $g->all());
+        $this->assertNotNull($g->get('a-item-0')); // wire spelling direct
+    }
+
+    /**
+     * scan() forwards the viewport width to the primitive: zone columns
+     * clamp into [1, $width] instead of running past the visible area.
+     */
+    public function testScanWidthClampsZoneColumns(): void
+    {
+        $m = Manager::newGlobal();
+        $marked = $m->mark('wide', 'ABCDEFGHIJ'); // natural cols 1-10
+        $m->scan($marked, 4);
+        $z = $m->get('wide');
+        $this->assertSame(1, $z->startCol);
+        $this->assertSame(4, $z->endCol);
+
+        // Without the clamp the same frame spans all ten columns.
+        $m2 = Manager::newGlobal();
+        $m2->scan($marked);
+        $this->assertSame(10, $m2->get('wide')->endCol);
+    }
+
+    /**
+     * Disabling the manager skips MARKER EMISSION, not ID VALIDATION —
+     * an illegal id throws whether or not the manager is enabled.
+     */
+    public function testMarkValidatesIdsEvenWhenDisabled(): void
+    {
+        $m = Manager::newGlobal();
+        $m->setEnabled(false);
+        $this->assertSame('hi', $m->mark('legal-id', 'hi')); // pass-through…
+        $this->expectException(\InvalidArgumentException::class);
+        $m->mark('bad id', 'hi');                             // …but still validated
+    }
+
+    /**
+     * allInBounds() reports every covering zone, innermost first — the
+     * container-and-button routing case anyInBounds() only sees half of.
+     */
+    public function testAllInBoundsReturnsEveryCoveringZoneSmallestFirst(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('outer', 'A' . $m->mark('inner', 'BB') . 'C'));
+
+        $inside = $m->allInBounds($this->click(2, 1));
+        $this->assertCount(2, $inside);
+        $this->assertSame(['inner', 'outer'], array_map(static fn (Zone $z): string => $z->id, $inside));
+
+        $edge = $m->allInBounds($this->click(1, 1));
+        $this->assertCount(1, $edge);
+        $this->assertSame('outer', $edge[0]->id);
+
+        $this->assertSame([], $m->allInBounds($this->click(50, 50)));
+        $this->assertSame([], $m->allInBounds(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'a')));
+    }
+
+    /**
+     * zoneAt() resolves a cell without a MouseMsg (scroll-to-zone, caret
+     * anchoring), with the same innermost/tie rules.
+     */
+    public function testZoneAtResolvesCellGeometrically(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('outer', 'A' . $m->mark('inner', 'BB') . 'C'));
+        $this->assertSame('inner', $m->zoneAt(2, 1)->id);
+        $this->assertSame('outer', $m->zoneAt(1, 1)->id);
+        $this->assertNull($m->zoneAt(9, 9));
     }
 
     /**

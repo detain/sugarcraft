@@ -84,6 +84,12 @@ use SugarCraft\Core\Util\Width;
  * the port reports the cells the zone actually painted instead (the same
  * rule as the leading lone `\r`).
  *
+ * ## Stripping
+ *
+ * {@see strip()} removes the tags from a frame without computing bounds —
+ * it applies exactly the tag rule {@see parse()} decodes, so the cleaned
+ * display string and the scanned bounds stay in lock-step.
+ *
  * Design note — streaming/chunked parsing: for large terminals or
  * streaming renderers, a ScanIterator (implementing IteratorAggregate)
  * could yield zones incrementally as each chunk is scanned, avoiding
@@ -443,6 +449,115 @@ final class Scan
             }
         }
         return $lo < count($positions) ? $positions[$lo] : -1;
+    }
+
+    /**
+     * Remove this package's PUA sentinel tags from a rendered frame, leaving
+     * the visible content byte-for-byte intact.
+     *
+     * Applies exactly the tag rule {@see parse()} decodes, so the cleaned
+     * display string and the scanned bounds stay in lock-step:
+     *
+     * - A *tag* is `U+E000 [/] <id> U+E001`, where `<id>` runs to the FIRST
+     *   U+E001 after the sentinel and passes
+     *   {@see Mark::isValidId()} — the same predicate Mark
+     *   enforces when encoding. The whole tag is removed; the content BETWEEN
+     *   an open and its close is preserved.
+     * - An empty id (`U+E000 U+E001`, `U+E000 / U+E001`) is consumed whole too:
+     *   parse treats it as zero-width foreign markup, so it must not reach the
+     *   terminal either.
+     * - Any other U+E000 — no U+E001 ahead, or an id with a space, newline,
+     *   CR, escape, non-ASCII byte, or more than
+     *   {@see Mark::MAX_ID_BYTES} bytes — is a *lone
+     *   sentinel*: only its own 3 bytes are dropped, and the text after it is
+     *   kept, because parse measures that text as visible cells. Swallowing it
+     *   (the old "everything up to the next U+E001" rule) shifted every zone
+     *   to its right or below it off the cells it actually painted.
+     * - A bare U+E001 is likewise a lone sentinel (3 bytes dropped).
+     *
+     * Orphan closes and unclosed opens with a VALID id are still whole tags
+     * and are removed whole, matching parse's lenient rows for viewport-clipped
+     * zones.
+     *
+     * Lock-step caveat: the tag rule here is byte-wise, while parse walks the
+     * cell grid and passes ANSI sequences through zero-width. The two
+     * diverge only when a WELL-FORMED tag hides inside an OSC/CSI payload
+     * (id charsets forbid ESC and control bytes, so an escape byte always
+     * breaks the tag shape) — hostile input that {@see strip()} removes while
+     * parse never saw it as a tag. Removing bytes parse considered invisible
+     * markup cannot shift any zone the consumer will act on; sweeping
+     * untrusted content before it reaches either side stays the consumer's
+     * duty (see {@see Sentinel}).
+     */
+    public static function strip(string $rendered): string
+    {
+        // Fast path — no sentinels present means nothing to strip.
+        if (!str_contains($rendered, Sentinel::OPEN) && !str_contains($rendered, Sentinel::CLOSE)) {
+            return $rendered;
+        }
+
+        $out       = '';
+        $len       = strlen($rendered);
+        $i         = 0;
+        $runStart  = 0;
+        // Cached offset of the next U+E001 at or after the current id start.
+        // Offsets only grow during the walk, so the cache is refreshed only
+        // once it falls behind — O(n) overall even for a frame full of
+        // unmatched U+E000s (a fresh strpos per sentinel would be O(n^2) on
+        // attacker-influenced text).
+        $nextClose = -1;
+        while ($i < $len) {
+            if ($rendered[$i] === "\xEE" && $i + 2 < $len && $rendered[$i + 1] === "\x80") {
+                $third = $rendered[$i + 2];
+
+                // Bare U+E001 (EE 80 81) not consumed as a tag terminator.
+                if ($third === "\x81") {
+                    $out .= substr($rendered, $runStart, $i - $runStart);
+                    $i += 3;
+                    $runStart = $i;
+                    continue;
+                }
+
+                // U+E000 (EE 80 80) — a tag only if a valid id runs from here
+                // to the next U+E001.
+                if ($third === "\x80") {
+                    $out    .= substr($rendered, $runStart, $i - $runStart);
+                    $idStart = ($rendered[$i + 3] ?? '') === '/' ? $i + 4 : $i + 3;
+                    if ($nextClose !== false && $nextClose < $idStart) {
+                        $nextClose = strpos($rendered, Sentinel::CLOSE, $idStart);
+                    }
+                    $i = ($nextClose !== false && self::isTagIdField($rendered, $idStart, $nextClose))
+                        ? $nextClose + 3   // whole tag
+                        : $i + 3;          // lone sentinel — its own bytes only
+                    $runStart = $i;
+                    continue;
+                }
+            }
+            $i++;
+        }
+        $out .= substr($rendered, $runStart);
+        return $out;
+    }
+
+    /**
+     * Whether the id field [$idStart, $idEnd) makes the preceding U+E000 a
+     * tag: empty (inert foreign markup, consumed whole) or a valid zone id.
+     *
+     * Mirrors {@see tagId()} through the public
+     * {@see Mark::isValidId()} predicate. The length is checked before any
+     * substr so an attacker-sized span between a stray U+E000 and a distant
+     * U+E001 costs O(1) to reject.
+     */
+    private static function isTagIdField(string $rendered, int $idStart, int $idEnd): bool
+    {
+        $idLen = $idEnd - $idStart;
+        if ($idLen === 0) {
+            return true;
+        }
+        if ($idLen > Mark::MAX_ID_BYTES) {
+            return false;
+        }
+        return Mark::isValidId(substr($rendered, $idStart, $idLen));
     }
 
     /**
