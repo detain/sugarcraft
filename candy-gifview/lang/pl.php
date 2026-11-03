@@ -9,7 +9,7 @@
 declare(strict_types=1);
 
 return [
-    'cli.usage'       => 'Użycie: candy-gifview <gif> [solid|density] [--fps=N] [--speed=N|Nfps|max] [--duration=SECONDS] [--watch] [--help|-h] [--version|-v]',
+    'cli.usage'       => 'Użycie: candy-gifview <gif> [solid|density] [--fps=N] [--speed=N|Nfps|max] [--duration=SECONDS] [--watch] [--paused] [--help|-h] [--version|-v]',
     'cli.no_autoload' => 'candy-gifview: nie można znaleźć composer autoload.php',
     'cli.bad_flag'    => 'candy-gifview: nieznana opcja --{flag}',
     'cli.bad_value'   => 'candy-gifview: nieprawidłowa wartość \'{value}\' dla {flag} (oczekiwano liczby dodatniej; --speed akceptuje też Nfps lub max)',

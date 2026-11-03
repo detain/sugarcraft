@@ -9,8 +9,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Locale parity guard for the "16 locales" promise: all 15 non-en locales
- * once shipped only `cli.usage` + `cli.no_autoload` while the four refusal
- * keys silently fell back to English — and their usage lines predated the
+ * once shipped only `cli.usage` + `cli.no_autoload` while the refusal keys
+ * silently fell back to English — and their usage lines predated the
  * --watch / --help flags the CLI actually accepts. en.php is the source of
  * truth: every locale must carry exactly its key set, with name-based
  * placeholder parity (SOV languages may reorder {flag}/{value} inside a
@@ -78,7 +78,7 @@ final class LocaleParityTest extends TestCase
     public function testEveryUsageLineNamesEveryAcceptedFlag(string $code, string $path): void
     {
         $locale = require $path;
-        foreach (['--fps=', '--speed=', '--duration=', '--watch', '--help', '--version'] as $flag) {
+        foreach (['--fps=', '--speed=', '--duration=', '--watch', '--paused', '--help', '--version'] as $flag) {
             $this->assertStringContainsString(
                 $flag,
                 $locale['cli.usage'],

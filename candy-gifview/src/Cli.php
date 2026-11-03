@@ -15,9 +15,9 @@ use SugarCraft\Pty\SizeIoctl;
  * Command-line entry point: parse argv, size the decode grid to the viewport,
  * hand the frames to sugar-animation's Player, and run the SugarCraft Program.
  *
- * Mirrors charmbracelet-style gifterm front-end behaviour; extracted verbatim
- * from sugar-animation's `bin/sugar-animation` when the viewer CLI split out into this
- * app package (rename campaign step 1.3). The bin is a two-line shim over
+ * Front-end design antecedent: namzug16/gifterm (Go); the CLI itself was
+ * extracted from sugar-animation's `bin/sugar-animation` when the viewer
+ * split out into this app package. The bin stays a thin shim over
  * {@see main()} so every branch here is testable in-process.
  *
  * Playback controls: --fps=N (uniform cadence via Player::withFixedFps),
@@ -41,23 +41,43 @@ final class Cli
     public const FALLBACK_CELLS_H = 24;
 
     /**
-     * Hard ceiling on the frames the viewer materialises at once: the whole
+     * Outer belt on the frames the viewer materialises at once: the whole
      * animation lives in RAM while playing (sugar-animation exposes no
-     * streaming playback seam), so an unbounded frame count would be an
-     * unbounded-RAM open-and-quit path. Over-cap files are refused loudly;
-     * see the README "Limits" section.
+     * streaming playback seam). The engine window truncates long animations
+     * to its first Decoder::MAX_FRAMES frames before this belt can ever
+     * fire, and the truncation is announced on stderr — this ceiling is
+     * defence in depth for a future engine that stops capping. The live
+     * memory gate is {@see MAX_RESIDENT_CELLS}. See README "Limits".
      */
     public const MAX_FRAMES = 4_096;
+
+    /**
+     * Refuse files larger than this before reading them: the intake is a
+     * single file_get_contents, so an open-and-quit on a huge file must not
+     * buffer it (a 64 MiB GIF is far beyond anything a terminal can play).
+     */
+    public const MAX_INPUT_BYTES = 64 * 1024 * 1024;
+
+    /**
+     * Frame-count × viewport-cells budget for the resident frame list,
+     * checked while draining the decoder. At the engine's 256-frame window
+     * this allows a full 60000-cell (1000×60-style) animation before
+     * refusing; it exists so a wide-terminal decode of a 256-frame file
+     * stays bounded well before the engine's own per-frame grid ceilings
+     * (Decoder::MAX_CELLS / MAX_TOTAL_PIXELS) become the only defence.
+     */
+    public const MAX_RESIDENT_CELLS = 6_000_000;
 
     /** chicle's own ceiling (CHICLE_ANIM_FPS_MAX, chicle-options.h:60) = "--speed max". */
     private const SPEED_MAX = 'max';
 
     /**
      * The version this run reports: the phar archive's build stamp when
-     * executing inside one (DST-1 — InstalledVersions lies under the frozen
-     * vendor/), else the compiled-in Support\Version::CURRENT. The archive is
-     * identified by \Phar::running(false), which is exactly the real path the
-     * \Phar constructor wants here (this class only ever runs required from
+     * executing inside one (InstalledVersions lies under the frozen phar
+     * vendor/, so the stamp is the only truth), else the compiled-in
+     * Support\Version::CURRENT. The archive is identified by
+     * \Phar::running(false), which is exactly the real path the \Phar
+     * constructor wants here (this class only ever runs required from
      * inside the archive, never as the stub).
      */
     public static function runningVersion(): string
@@ -97,6 +117,7 @@ final class Cli
         $speedMax = false;
         $duration = null;
         $watch = false;
+        $paused = false;
 
         foreach (array_slice($argv, 1) as $token) {
             if ($token === '--help' || $token === '-h') {
@@ -119,22 +140,26 @@ final class Cli
                     $flag = substr($flag, 0, $eq);
                 }
 
-                if (!in_array($flag, ['fps', 'speed', 'duration', 'watch'], true)) {
+                if (!in_array($flag, ['fps', 'speed', 'duration', 'watch', 'paused'], true)) {
                     \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => $flag]) . "\n");
                     \fwrite($stderr, Lang::t('cli.usage') . "\n");
 
                     return 1;
                 }
 
-                // --watch is the only bare (value-less) flag; the
-                // value-taking flags above keep their bad_value refusal.
-                if ($flag === 'watch') {
+                // --watch and --paused are the only bare (value-less) flags;
+                // the value-taking flags below keep their bad_value refusal.
+                if ($flag === 'watch' || $flag === 'paused') {
                     if ($raw !== null && $raw !== '') {
-                        \fwrite($stderr, Lang::t('cli.unexpected_value', ['flag' => 'watch']) . "\n");
+                        \fwrite($stderr, Lang::t('cli.unexpected_value', ['flag' => $flag]) . "\n");
 
                         return 1;
                     }
-                    $watch = true;
+                    if ($flag === 'watch') {
+                        $watch = true;
+                    } else {
+                        $paused = true;
+                    }
                     continue;
                 }
 
@@ -187,11 +212,31 @@ final class Cli
                 continue;
             }
 
+            // Any other dash-prefixed token (-fps=10, -x) is not a short form
+            // this front end speaks: refuse it as an unknown option rather
+            // than silently feeding it to the positional ladder as a path.
+            if (\str_starts_with($token, '-') && $token !== '-') {
+                $body = substr($token, 1);
+                $name = rtrim(($eq = strpos($body, '=')) === false ? $body : substr($body, 0, $eq), '-');
+                \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => $name]) . "\n");
+                \fwrite($stderr, Lang::t('cli.usage') . "\n");
+
+                return 1;
+            }
+
             if ($path === null) {
                 $path = $token;
                 continue;
             }
             if ($presetToken === null) {
+                // The preset slot accepts exactly the two documented presets;
+                // anything else is a refusal, not a silent fall back to solid.
+                if (!in_array($token, [Renderer::PRESET_SOLID, Renderer::PRESET_DENSITY], true)) {
+                    \fwrite($stderr, Lang::t('cli.bad_preset', ['preset' => $token]) . "\n");
+                    \fwrite($stderr, Lang::t('cli.usage') . "\n");
+
+                    return 1;
+                }
                 $presetToken = $token;
                 continue;
             }
@@ -207,11 +252,23 @@ final class Cli
             return 1;
         }
 
-        $preset = ($presetToken ?? '') === Renderer::PRESET_DENSITY
-            ? Renderer::PRESET_DENSITY
-            : Renderer::PRESET_SOLID;
+        // Fail before the viewport probe and the intake: every byte of this
+        // app needs GD to walk a GIF at all.
+        if (!\extension_loaded('gd')) {
+            \fwrite($stderr, Lang::t('cli.need_gd') . "\n");
+
+            return 1;
+        }
+
+        $preset = $presetToken ?? Renderer::PRESET_SOLID;
 
         [$cellsW, $cellsH] = self::viewportCells();
+
+        if ($play === null) {
+            // The real launch path is silent between exec and the first
+            // frame; say what the pause is for. Seam-driven tests skip it.
+            \fwrite($stderr, Lang::t('cli.decoding', ['path' => self::printablePath($path)]) . "\n");
+        }
 
         try {
             // Read once, then decode and audit the SAME bytes — the authored
@@ -222,14 +279,41 @@ final class Cli
             // \Throwable, not just the Decoder's documented RuntimeExceptions:
             // the GIF walk is hand-rolled, and a latent \Error (ValueError/
             // TypeError) from hostile bytes must exit 1 loudly here rather
-            // than fatal mid-launch.
-            \fwrite($stderr, $e->getMessage() . "\n");
+            // than fatal mid-launch. Wrap the reason in the app's own brand
+            // so a terminal never sees a bare library string as the CLI's
+            // final word (the engine message stays verbatim inside it).
+            $reason = preg_replace('/^sugar-animation: /', '', $e->getMessage()) ?? $e->getMessage();
+            \fwrite($stderr, Lang::t('cli.cannot_play', [
+                'path' => self::printablePath($path),
+                'reason' => $reason,
+            ]) . "\n");
+
+            return 1;
+        }
+
+        if ($frames === []) {
+            \fwrite($stderr, Lang::t('cli.no_frames', ['path' => self::printablePath($path)]) . "\n");
+
+            return 1;
+        }
+
+        if (count($frames) >= Decoder::MAX_FRAMES) {
+            // Honest disclosure of the engine window: what plays is the
+            // first Decoder::MAX_FRAMES frames, whatever the file holds.
+            \fwrite($stderr, Lang::t('cli.truncated', ['max' => (string) Decoder::MAX_FRAMES]) . "\n");
+        }
+
+        if ($duration !== null && count($frames) < 2) {
+            // The Player re-anchors its deadline on every early-fire tick,
+            // so --duration can never elapse on a single-frame animation —
+            // refuse loudly instead of hanging (sugar-animation engine seam).
+            \fwrite($stderr, Lang::t('cli.duration_static', ['count' => (string) count($frames)]) . "\n");
 
             return 1;
         }
 
         $renderer = Renderer::withConstraints($cellsH, $cellsW);
-        $player = new Player($frames, preset: $preset, renderer: $renderer);
+        $player = new Player($frames, paused: $paused, preset: $preset, renderer: $renderer);
 
         // Honour the file: null (unauthored or raw 0) keeps the Player's
         // infinite default; N >= 2 stops the schedule after N complete
@@ -263,9 +347,15 @@ final class Cli
             return $play($player);
         }
 
-        (new Program($player, new ProgramOptions(useAltScreen: true)))->run();
+        $program = new Program($player, new ProgramOptions(useAltScreen: true));
+        $program->run();
 
-        return 0;
+        // A signal-stopped loop exits 0 by the Program contract; re-encode
+        // the signal as the shell idiom 128+N so scripts can tell a kill
+        // from a clean quit (stopSignal() stays null on every clean path).
+        $signal = $program->stopSignal();
+
+        return $signal !== null ? 128 + $signal : 0;
     }
 
     /**
@@ -286,41 +376,68 @@ final class Cli
     }
 
     /**
-     * Default intake: read the file once and materialise its frames for the
-     * given grid, bounded by {@see MAX_FRAMES} (fail-loud: the cap stops the
-     * walk one frame past the ceiling instead of buffering the whole stream).
+     * Default intake: refuse oversized files before reading, then read the
+     * file once and materialise its frames for the given grid, bounded by
+     * {@see MAX_FRAMES} and {@see MAX_RESIDENT_CELLS} (fail-loud: the drain
+     * stops one item past each cap instead of buffering the whole stream).
      *
      * @return array{string, list<\SugarCraft\Animation\Frame>} [bytes, frames]
      */
     private static function decodeFrames(string $path, int $cellsW, int $cellsH): array
     {
+        $size = @filesize($path);
+        if (is_int($size) && $size > self::MAX_INPUT_BYTES) {
+            throw new \RuntimeException(Lang::t('cli.reason_bytes_over', [
+                'max' => (string) intdiv(self::MAX_INPUT_BYTES, 1_048_576),
+            ]));
+        }
+
         $bytes = Decoder::readFile($path);
 
-        return [$bytes, self::collectFrames(Decoder::decodeBytes($bytes, $cellsW, $cellsH), self::MAX_FRAMES)];
+        return [$bytes, self::collectFrames(
+            Decoder::decodeBytes($bytes, $cellsW, $cellsH),
+            self::MAX_FRAMES,
+            $cellsW * $cellsH,
+        )];
     }
 
     /**
      * Drain a decoder generator into a list, refusing anything longer than
-     * $max frames. Throws a RuntimeException (not an Error) so both rescue
-     * catches report it through the normal exit-1 / keep-stale channels.
+     * $max frames or whose $cells-tall footprint passes MAX_RESIDENT_CELLS.
+     * Throws RuntimeExceptions (not Errors) so both rescue catches report
+     * them through the normal exit-1 / keep-stale channels.
      *
      * @param \Traversable<\SugarCraft\Animation\Frame> $frames
      *
      * @return list<\SugarCraft\Animation\Frame>
      */
-    private static function collectFrames(\Traversable $frames, int $max): array
+    private static function collectFrames(\Traversable $frames, int $max, int $cells): array
     {
         $out = [];
         foreach ($frames as $frame) {
             $out[] = $frame;
-            if (count($out) > $max) {
-                throw new \RuntimeException(
-                    'candy-gifview: animation exceeds the ' . $max . '-frame limit; refusing to load'
-                );
+            $count = count($out);
+            if ($count > $max) {
+                throw new \RuntimeException(Lang::t('cli.reason_frames_over', ['max' => (string) $max]));
+            }
+            if ($cells > 0 && $count * $cells > self::MAX_RESIDENT_CELLS) {
+                throw new \RuntimeException(Lang::t('cli.reason_cells_over', [
+                    'max' => (string) self::MAX_RESIDENT_CELLS,
+                ]));
             }
         }
 
         return $out;
+    }
+
+    /**
+     * A path echoed into a terminal must not smuggle control bytes (a
+     * filename can carry C0 characters and OSC introducers from `ls`
+     * completions of hostile names); replacement keeps the echo readable.
+     */
+    private static function printablePath(string $path): string
+    {
+        return preg_replace('/[\x00-\x1F\x7F]/', '?', $path) ?? $path;
     }
 
     /**
@@ -413,9 +530,12 @@ final class Cli
     }
 
     /**
-     * Size the decode grid to the terminal viewport (cols, rows-1 for the
-     * status line). Falls back to 60x24 when STDOUT is not a tty
-     * (e.g. piped/CI).
+     * Size the decode grid to the terminal viewport: rows-2, one row for the
+     * Player's status line and one for the trailing newline its view()
+     * emits — an over-tall final line scrolls the alt screen by one. Falls
+     * back to 60x24 when STDOUT is not a tty (e.g. piped/CI). On resize the
+     * engine re-clamps to rows-1 itself (sugar-animation Player; engine
+     * seam), so the reserve is exact for the initial paint.
      *
      * Descriptor 1 is spelled as the literal: `(int) STDOUT` is the RESOURCE
      * ID 2, which names STDERR — the same defect fixed in
@@ -429,7 +549,7 @@ final class Cli
         if (\is_resource(\STDOUT) && stream_isatty(STDOUT)) {
             $size = SizeIoctl::query(1);
 
-            return [$size['cols'], max(1, $size['rows'] - 1)];
+            return [$size['cols'], max(1, $size['rows'] - 2)];
         }
 
         return [self::FALLBACK_CELLS_W, self::FALLBACK_CELLS_H];
