@@ -862,7 +862,8 @@ final class StdioMcpServer implements McpServer
      * frame) can tell "a tool is working" from "the turn is hung" without
      * this library guessing a deadline for somebody else's work. It may be
      * called far more often than that; throttling is the caller's business.
-     * An exception it throws propagates out of callTool().
+     * An exception it throws ends the call through the error rails (payload,
+     * never an escaped throw — the same posture as every other failure).
      *
      * A failed call answers as an error payload, never a throw: unencodable
      * arguments, a blown deadline, and this client's refusals of a
@@ -915,7 +916,12 @@ final class StdioMcpServer implements McpServer
         $this->lastFailureCause = null;
 
         try {
-            $response = $this->requestAs($id, 'tools/call', [
+            // Encode HERE, apart from the wait: the InvalidArgumentException
+            // that reports argument-encoding trouble may only come from this
+            // line — nothing has been written yet. A handler's malformed
+            // answer throws from the wait side below and gets its true class
+            // named there.
+            $encoded = McpMessage::request($id, 'tools/call', [
                 'name' => $name,
                 // An argument-less call arrives as PHP `[]`, which would encode as a
                 // JSON array; `arguments` is a JSON object in the schema and the SDK
@@ -924,12 +930,16 @@ final class StdioMcpServer implements McpServer
                 // `['filter' => []]`, the nested-object wire audit) is undone
                 // against the tool's own inputSchema — see ArgumentShape.
                 'arguments' => $arguments === [] ? new \stdClass() : ArgumentShape::conform($arguments, $this->inputSchemaOf($name)),
-            ], $deadline);
+            ])->toJson();
         } catch (\InvalidArgumentException $unencodable) {
             // Arguments JSON cannot carry (a model's `1e999` decodes to INF):
             // nothing was written, and the McpServer contract reports a failed
             // call as a payload the transcript can show, never as a throw.
             return ['error' => 'Tool call failed: ' . $unencodable->getMessage()];
+        }
+
+        try {
+            $response = $this->requestEncoded($id, $encoded, $deadline);
         } catch (\RuntimeException $frameRefusal) {
             // The RuntimeExceptions reachable from requestAs are this
             // client's refusals of a non-conforming stream — the frame-cap
@@ -948,6 +958,15 @@ final class StdioMcpServer implements McpServer
             // contradict the payload-refusal posture this catch exists to
             // honour.
             return ['error' => 'Tool call failed: ' . $frameRefusal->getMessage()];
+        } catch (\Throwable $handlerFault) {
+            // The last rail (review M10): everything else the wait can throw
+            // — a server-request handler's TypeError, its LogicException, a
+            // malformed-answer InvalidArgumentException — belongs in an
+            // error payload, not in the caller's tool loop: the McpServer
+            // contract promises failed calls come back as payloads, never as
+            // throws escaping callTool. The fault's own class name is kept
+            // so it can never be mistaken for argument-encoding trouble.
+            return ['error' => 'Tool call failed: ' . get_class($handlerFault) . ': ' . self::printableDiagnostic($handlerFault->getMessage())];
         }
 
         if ($response === null && $deadline !== null && $this->lastFailureCause === null && self::nowSeconds() >= $deadline) {
@@ -1098,8 +1117,18 @@ final class StdioMcpServer implements McpServer
      */
     private function requestAs(string $id, string $method, ?array $params, ?float $deadline): ?McpMessage
     {
-        $json = McpMessage::request($id, $method, $params)->toJson();
+        return $this->requestEncoded($id, McpMessage::request($id, $method, $params)->toJson(), $deadline);
+    }
 
+    /**
+     * Run an ALREADY-ENCODED request under the exchange lock and await its
+     * matching reply. Encoding is split out so a caller can tell "the
+     * arguments could not be encoded" (nothing was written) apart from "the
+     * wait died" (a refused frame, a handler fault) — the honest-cause
+     * rails review M10 asked for.
+     */
+    private function requestEncoded(string $id, string $json, ?float $deadline): ?McpMessage
+    {
         return $this->exchange($deadline, true, function (string $prefix) use ($json, $id, $deadline): ?McpMessage {
             if (!$this->writeLine($prefix . $json, $deadline)) {
                 $this->lastFailureCause = 'the request could not be written to the server';
