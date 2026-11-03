@@ -116,7 +116,6 @@ final class FlexBox
 
         $measured = $this->allocateMainAxis($measured, $totalWidth, $gap);
 
-        $resultLines = [];
         $heights = \array_column($measured, 'height');
         // Fit contract: a row never emits more lines than totalHeight. The
         // tallest-item cross-axis size is a CEILING, not an exemption — a
@@ -129,33 +128,42 @@ final class FlexBox
             $totalHeight,
         );
 
-        for ($line = 0; $line < $maxHeight; $line++) {
-            $lineStr = '';
-            for ($i = 0; $i < \count($measured); $i++) {
-                $m  = $measured[$i];
-                $aw = $m['allocated'];
-                $itemContent = $m['item']->content;
-                $itemLines = \explode("\n", $itemContent);
-                while (\count($itemLines) < $maxHeight) {
-                    $itemLines[] = '';
-                }
-                $raw = $itemLines[$line] ?? '';
+        // Row assembly is quadratic in the OLD shape: every output line
+        // re-exploded, re-extended and re-indexed every item's full
+        // content, and repeated the gap str_repeat once per cell. Build
+        // each item's finished column of cells exactly once (measure ->
+        // sanitize -> align -> style), then join per line — byte-identical
+        // output at O(lines + cells) instead of O(lines * cells) of work
+        // (a 50-item row was measured over one 60fps frame budget on the
+        // quadratic shape).
+        $gapStr = $gap > 0 ? \str_repeat(' ', $gap) : '';
 
+        $cells = [];
+        foreach ($measured as $i => $m) {
+            $aw        = $m['allocated'];
+            $itemLines = \explode("\n", $m['item']->content);
+            $style     = $m['item']->style;
+            $column    = [];
+            for ($line = 0; $line < $maxHeight; $line++) {
                 // Sanitize data-origin content before rendering.
-                $raw = $this->sanitize($raw);
-
+                $raw = $this->sanitize($itemLines[$line] ?? '');
                 // Align within allocated width
                 $cellStr = $this->alignCell($raw, $aw, $this->align);
-
-                if ($m['item']->style !== '') {
-                    $cellStr = $this->applyStyle($cellStr, $m['item']->style);
+                if ($style !== '') {
+                    $cellStr = $this->applyStyle($cellStr, $style);
                 }
-
-                $lineStr .= $cellStr;
-                if ($i < \count($measured) - 1) {
-                    $lineStr .= \str_repeat(' ', $gap);
-                }
+                $column[] = $cellStr;
             }
+            $cells[$i] = $column;
+        }
+
+        $resultLines = [];
+        for ($line = 0; $line < $maxHeight; $line++) {
+            $parts = [];
+            foreach ($cells as $column) {
+                $parts[] = $column[$line];
+            }
+            $lineStr     = $gapStr === '' ? \implode('', $parts) : \implode($gapStr, $parts);
             $resultLines[] = \SugarCraft\Core\Util\Width::truncateAnsi($lineStr, $totalWidth);
         }
 

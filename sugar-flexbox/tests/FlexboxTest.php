@@ -871,4 +871,21 @@ final class FlexboxTest extends TestCase
             $this->assertLessThanOrEqual(10, \SugarCraft\Core\Util\Width::string($line));
         }
     }
+
+    public function testRowFrameAssemblyIsCellGapCellByteExact(): void
+    {
+        // Locks the assembly order (cell, gap, cell, ...; gap never after
+        // the last item) that the M7 per-item precompute refactor must
+        // reproduce byte-for-byte; the 138-case old/new render-dump md5
+        // equality is the lane evidence, this pin is the standing guard.
+        $box = FlexBox::row(
+            FlexItem::new("aa\nbb\ncc")->withBasis(3),
+            FlexItem::new("xx\nyy\nzz")->withBasis(3),
+        )->withGap(1)->withAlign(Align::Start);
+
+        $this->assertSame(
+            ["aa  xx ", "bb  yy ", "cc  zz "],
+            \explode("\n", $box->render(12, 3)),
+        );
+    }
 }
