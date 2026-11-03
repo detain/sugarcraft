@@ -9,7 +9,8 @@ namespace SugarCraft\Git;
  * interactive hunk cursor.
  *
  * @param list<string> $lines       Raw output of `git diff --no-color -- <path>`
- * @param int          $hunkCursor Index of the currently selected hunk (for Space to stage)
+ * @param int          $hunkCursor Line index where the selected hunk starts
+ *                                 (always one of $hunkStarts; Space stages it)
  * @param string       $path       The file path this diff belongs to
  *
  * Mirrors jesseduffield/lazygit pkg/gui/patches — hunk cursor with per-hunk stage over unified diff. */

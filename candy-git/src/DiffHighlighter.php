@@ -9,19 +9,15 @@ use SugarCraft\Core\Syntax\TokenKind;
 use SugarCraft\Core\Syntax\TokenSpan;
 
 /**
- * Parse-side of the diff-view syntax highlighting (leftover-rollout step 10.06
- * Phase 4, "syntax highlighting in diff view").
+ * Parse-side of the diff-view syntax highlighting: answers which language a
+ * file is and which tokens a diff line contains.
  *
- * The 780920291 Phase-4 commit shipped the four rebase/stash/cherry-pick/
- * worktree surfaces with inline whole-line ANSI and explicitly deferred the
- * syntax pass ("candy-mdview integration deferred"). Step 10.24 has since
- * landed the highlighting pipeline; its reusable surface is sugar-core's
- * pure {@see RegexHighlighter} lexer — the same primitive candy-mdview /
- * sugar-markdown render through (via Markdown\SyntaxHighlighter's Theme slots) and
- * candy-codeshot consumes directly (CodeShot\CodeHighlighter). candy-mdview itself
- * exposes no embeddable highlight surface (it is the markdown pager CLI), so
- * candy-git follows the candy-codeshot precedent: consume the shared lexer,
- * keep presentation in {@see Renderer}.
+ * The reusable primitive is sugar-core's pure {@see RegexHighlighter} lexer -
+ * the same one sugar-markdown renders through (via its SyntaxHighlighter
+ * theme slots) and candy-codeshot consumes directly (CodeShot\CodeHighlighter).
+ * candy-mdview itself exposes no embeddable highlight surface (it is the
+ * markdown pager CLI), so candy-git follows the candy-codeshot precedent:
+ * consume the shared lexer, keep presentation in {@see Renderer}.
  *
  * This class carries NO colour/ANSI knowledge — it answers "which language
  * is this file" and "what tokens does this diff line contain". It never

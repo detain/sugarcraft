@@ -133,5 +133,28 @@ final class RendererSanitizeTest extends TestCase
         $budget = $a->logSubjectWidth();
         $this->assertLessThanOrEqual($budget, Width::of($m[1]), "rendered subject exceeds the {$budget}-cell budget");
     }
+
+    /**
+     * Audit A8: the error lane renders git stderr verbatim; ESC payloads
+     * from a hostile repo's command output must die at the render border.
+     */
+    public function testErrorLaneStripsForgedEscapes(): void
+    {
+        $a   = new App(new FixtureGit([], [], []), error: "ab\x1b[31mcd", width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringNotContainsString("\x1b[31m", $out);
+        $this->assertStringContainsString('error: abcd', $out);
+    }
+
+    public function testSuccessLaneStripsForgedOscAndBell(): void
+    {
+        $a   = new App(new FixtureGit([], [], []), successMessage: "ok\x1b]0;pwned\x07done", width: 80, height: 24);
+        $out = Renderer::render($a);
+
+        $this->assertStringNotContainsString("\x1b]0;", $out);
+        $this->assertStringNotContainsString("\x07", $out);
+        $this->assertStringContainsString('okdone', $out);
+    }
 }
 

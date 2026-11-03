@@ -9,9 +9,11 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Clamp;
+use SugarCraft\Style\Style;
 
 /**
  * Three-pane git TUI: status (left), branches (top right), log (bottom
@@ -103,6 +105,18 @@ final class App implements Model
         }
         if ($msg instanceof PasteMsg) {
             return $this->applyPaste($msg);
+        }
+        // Audit A28: the program probes the terminal's colour capability once
+        // at launch (NO_COLOR / TERM / COLORTERM via ColorProfile::detect)
+        // and hands the answer to the model. The profile is process render
+        // state, not model state - sugar-style's Style::new() reads the
+        // default profile, so adopting it here downgrades every hex colour in
+        // the tree (and strips colour entirely under NO_COLOR) without the
+        // App itself changing. Returning [$this, null] keeps the model pure.
+        if ($msg instanceof ColorProfileMsg) {
+            Style::setDefaultProfile($msg->profile);
+
+            return [$this, null];
         }
         if ($msg instanceof KeyMsg === FALSE) {
             return [$this, null];

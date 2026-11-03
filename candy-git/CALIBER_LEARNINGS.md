@@ -71,10 +71,14 @@ and sugar-toast:
    translations.
 
 5. **`sugar-core` dep** — the `T` class lives in `sugar-core`, so every
-   i18n lib needs `sugarcraft/sugar-core: dev-master` in `require` plus a
-   path-repo entry in `repositories`.
+   i18n lib needs `sugarcraft/sugar-core: @dev` in `require` ONLY. Never
+   add a `repositories[]` path-repo to a lib manifest: a published lib
+   with a `../sugar-core` entry is a hard fatal for anyone who clones the
+   split repo. CI injects the path-repo closure before each install
+   (`tools/check-path-repos.php --fix --strict-closure`); the committed
+   tree is guarded by `--no-lib-path-repos`.
 
-     6. **Keys in candy-git** — `git.spawn_failed`, `git.error`,
+6. **Keys in candy-git** — `git.spawn_failed`, `git.error`,
       `cli.not_a_repo`, `ui.error_prefix`, `status.clean`, `branches.empty`,
       `log.empty`, `help.keyhints`, `help.context_general`, `help.quit`,
       `help.refresh`, `help.switch_pane`, `help.move_cursor`, `help.close_help`,

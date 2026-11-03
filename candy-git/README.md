@@ -63,7 +63,7 @@ own git config.
 | `D` (branches pane)      | Delete the selected branch (press twice)                 |
 | `M`                      | Merge selected branch into current                     |
 | `r`                      | Open rebase menu (continue / abort / skip / cancel)   |
-| `S`                      | Open stash manager (list / apply / drop)                |
+| `S`                      | Open stash manager (list / apply / drop; drop asks twice)   |
 | `V`                      | Cherry-pick — type a commit ref and press Enter       |
 | `w` (branches pane)     | Open worktrees manager (list / add / remove)            |
 | `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
@@ -111,7 +111,7 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 | `StashManager`     | Immutable stash list state — `stashes`, `cursor`, `withCursor()`, `withStashes()`, `current()`, `count()`.                        |
 | `CherryPick`       | Immutable cherry-pick state — `collecting` flag + `commitRef` accumulator + `withChar()`/`cancel()`.                              |
 | `WorktreeEntry`    | Immutable worktree entry — `path`, `branch`, `isBare`, `HEAD`.                                                                     |
-| `Worktrees`        | Immutable worktree manager state — `worktrees`, `cursor`, `adding`/`removing` modes + path/branch collection.                      |
+| `Worktrees`        | Immutable worktree manager state — `worktrees`, `cursor`, `adding`/`removing` modes + path collection (new worktrees branch from HEAD).                     |
 | `RebaseAction`      | Enum — `Pick`, `Reword`, `Edit`, `Squash`, `Drop`.                                                                               |
 | `RebaseCommit`      | Immutable rebase todo entry — `sha`, `subject`, `action` + `withAction()` / `displayLine()`.                                      |
 | `InteractiveRebase` | Immutable interactive-rebase state — `commits` todo list, `cursor`, `selectingN`/`countInput`, `cycleAction()`, `dropCurrent()`.    |

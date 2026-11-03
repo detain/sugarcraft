@@ -59,13 +59,13 @@ final class Renderer
         $err = '';
         if ($a->error !== null) {
             $err = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                ->render(self::truncate(Lang::t('ui.error_prefix') . $a->error, $a->barWidth()));
+                ->render(self::truncate(Lang::t('ui.error_prefix') . self::sanitize($a->error), $a->barWidth()));
         }
 
         $success = '';
         if ($a->successMessage !== null) {
             $success = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
-                ->render(self::truncate($a->successMessage, $a->barWidth()));
+                ->render(self::truncate(self::sanitize($a->successMessage), $a->barWidth()));
         }
 
         $commitBar = '';
@@ -420,7 +420,14 @@ final class Renderer
 
             $st = Style::new();
             $line = self::truncate(self::sanitize($line), $inner);
-            if (str_starts_with($line, '+') === TRUE) {
+            // Audit M-render: extended-header lines ('--- a/f', '+++ b/f',
+            // 'diff ', 'index ') start with the same bytes as content
+            // markers and were painted green/red as if they were changes.
+            // They are metadata - keep them neutral like context lines.
+            $isHeaderLine = preg_match('/^(diff |index |--- |\+\+\+ |new file|deleted file|similarity |rename )/', $line) === 1;
+            if ($isHeaderLine) {
+                $st = $st->foreground(Color::hex('#c5b6dd'));
+            } elseif (str_starts_with($line, '+') === TRUE) {
                 $st = $st->foreground(Color::hex('#6ee7b7'));
             } elseif (str_starts_with($line, '-') === TRUE) {
                 $st = $st->foreground(Color::hex('#ff5f87'));
