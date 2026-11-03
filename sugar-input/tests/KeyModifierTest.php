@@ -177,6 +177,18 @@ final class KeyModifierTest extends TestCase
         $this->assertTrue($modifier->includes(KeyModifier::HYPER));
     }
 
+    public function testFromKittyIntParsesLockStateBits(): void
+    {
+        // m4: spec bits 6 (CapsLock) and 7 (NumLock) reach the constants.
+        $caps = KeyModifier::fromKittyInt(64);
+        $this->assertTrue($caps->includes(KeyModifier::CAPS_LOCK));
+        $this->assertFalse($caps->includes(KeyModifier::NUM_LOCK));
+
+        $num = KeyModifier::fromKittyInt(128);
+        $this->assertTrue($num->includes(KeyModifier::NUM_LOCK));
+        $this->assertFalse($num->includes(KeyModifier::CAPS_LOCK));
+    }
+
     // --- fromSgrMouse() tests ---
 
     public function testFromSgrMouseParsesShiftBit(): void

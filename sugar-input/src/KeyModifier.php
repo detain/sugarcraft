@@ -94,19 +94,24 @@ final class KeyModifier
      * Build a modifier mask from a raw kitty modifier bitmask (bits already
      * de-based by the caller: the wire field is 1 + mask). Bit layout per the
      * kitty keyboard protocol: bit 0=Shift, bit 1=Alt, bit 2=Control,
-     * bit 3=Super, bit 4=Hyper, bit 5=Meta.
+     * bit 3=Super, bit 4=Hyper, bit 5=Meta, bit 6=CapsLock, bit 7=NumLock.
+     *
+     * The lock-state bits arrive only on the explicit-event-type form (legacy
+     * event flags mask the field to 0x1f before this method sees it).
      *
      * @see https://sw.kovidgoyal.net/kitty/keyboard-protocol/ - modifier keys
      */
     public static function fromKittyInt(int $raw): self
     {
         $mask = 0;
-        if ($raw & 1)  { $mask |= self::SHIFT; }
-        if ($raw & 2)  { $mask |= self::ALT; }
-        if ($raw & 4)  { $mask |= self::CTRL; }
-        if ($raw & 8)  { $mask |= self::SUPER; }
-        if ($raw & 16) { $mask |= self::HYPER; }
-        if ($raw & 32) { $mask |= self::META; }
+        if ($raw & 1)   { $mask |= self::SHIFT; }
+        if ($raw & 2)   { $mask |= self::ALT; }
+        if ($raw & 4)   { $mask |= self::CTRL; }
+        if ($raw & 8)   { $mask |= self::SUPER; }
+        if ($raw & 16)  { $mask |= self::HYPER; }
+        if ($raw & 32)  { $mask |= self::META; }
+        if ($raw & 64)  { $mask |= self::CAPS_LOCK; }
+        if ($raw & 128) { $mask |= self::NUM_LOCK; }
 
         return new self($mask);
     }

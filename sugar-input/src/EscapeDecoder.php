@@ -782,9 +782,10 @@ final class EscapeDecoder
      * in the spec encoding (event-type sub-parameter 3; 1=press, 2=repeat).
      * Alternate key codes after the first colon in the code field are ignored —
      * the primary code identifies the key. Event type 2 (auto-repeat) is
-     * deliberately surfaced as an ordinary press: a repeat IS a keystroke for
-     * every TUI consumer of this decoder, and inventing a "Repeat"-prefixed key
-     * name would widen the event vocabulary for no gain.
+     * surfaced as an ordinary press carrying {@see KeyEvent::$isRepeat}: a
+     * repeat IS a keystroke for every TUI consumer of this decoder, and
+     * inventing a "Repeat"-prefixed key name would widen the event vocabulary
+     * for no gain — the annotation does not change the key name.
      *
      * @param string $seq  Complete CSI body ending in "u" (e.g. "97;5u", "97:65;2:3u")
      * @param string $rest Genuine suffix after the sequence
@@ -833,11 +834,11 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => $rest];
         }
 
-        $fullKey = $isRelease ? 'Release' . ucfirst($keyName) : $keyName;
+        $fullKey = $isRelease ? KeyEvent::RELEASE_PREFIX . ucfirst($keyName) : $keyName;
         $raw = "\x1b[" . $seq;
 
         return [
-            'events' => [new KeyEvent($fullKey, $modifiers, $raw)],
+            'events' => [new KeyEvent($fullKey, $modifiers, $raw, $eventType === 2)],
             'remaining' => $rest,
         ];
     }
@@ -1001,10 +1002,10 @@ final class EscapeDecoder
         // by more bytes in the SAME chunk ("\x1b[Iabc") no longer loses the
         // event to an exact-string comparison against the whole tail.
         if ($this->options->enableFocus && $seq === 'I') {
-            return ['events' => [new FocusEvent(true)], 'remaining' => $rest];
+            return ['events' => [new FocusEvent(true, "\x1b[" . $seq)], 'remaining' => $rest];
         }
         if ($this->options->enableFocus && $seq === 'O') {
-            return ['events' => [new FocusEvent(false)], 'remaining' => $rest];
+            return ['events' => [new FocusEvent(false, "\x1b[" . $seq)], 'remaining' => $rest];
         }
 
         // Modified keys: CSI 1;<mod><final> (xterm format)

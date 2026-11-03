@@ -19,5 +19,7 @@ final readonly class FocusEvent implements Event
 {
     public function __construct(
         public bool $gained,
+        /** Exact bytes that produced this event ("\x1b[I" / "\x1b[O"); null when synthesized. */
+        public ?string $raw = null,
     ) {}
 }

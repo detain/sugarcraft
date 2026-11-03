@@ -546,6 +546,7 @@ final class EscapeDecoderTest extends TestCase
         $this->assertCount(1, $events);
         $this->assertInstanceOf(FocusEvent::class, $events[0]);
         $this->assertTrue($events[0]->gained);
+        $this->assertSame("\x1b[I", $events[0]->raw);
     }
 
     public function testFocusLost(): void
@@ -554,6 +555,7 @@ final class EscapeDecoderTest extends TestCase
         $this->assertCount(1, $events);
         $this->assertInstanceOf(FocusEvent::class, $events[0]);
         $this->assertFalse($events[0]->gained);
+        $this->assertSame("\x1b[O", $events[0]->raw);
     }
 
     /**
@@ -846,16 +848,44 @@ final class EscapeDecoderTest extends TestCase
         $events = $this->decoder->decode("\x1b[97;33u"); // 33 = 1 + 0x20 (legacy release bit)
         $this->assertCount(1, $events);
         $this->assertSame('ReleaseA', $events[0]->key);
+        $this->assertTrue($events[0]->isRelease());
     }
 
     public function testKittyRepeatDecodesAsPress(): void
     {
-        // Event type 2 (auto-repeat) is deliberately surfaced as an ordinary
-        // press — documented divergence; a repeat IS a keystroke downstream.
+        // Event type 2 (auto-repeat) is surfaced as an ordinary press annotated
+        // with isRepeat (m7) — documented divergence; a repeat IS a keystroke.
         $events = $this->decoder->decode("\x1b[97;2:2u");
         $this->assertCount(1, $events);
         $this->assertSame('a', $events[0]->key);
+        $this->assertTrue($events[0]->isRepeat);
+        $this->assertFalse($events[0]->isRelease());
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+    }
+
+    public function testPlainPressCarriesNoReleaseOrRepeatFlags(): void
+    {
+        $events = $this->decoder->decode("\x1b[97;2u"); // shift+a press
+        $this->assertCount(1, $events);
+        $this->assertFalse($events[0]->isRelease());
+        $this->assertFalse($events[0]->isRepeat);
+    }
+
+    public function testKittyLockStateBitsRideTheExplicitEventTypeForm(): void
+    {
+        // m4: kitty modifier bits 6=CapsLock(64) and 7=NumLock(128) map to the
+        // CAPS_LOCK/NUM_LOCK constants on the explicit-event-type form.
+        $caps = $this->decoder->decode("\x1b[97;65:1u");  // 1 + 64
+        $this->assertTrue($caps[0]->modifiers->includes(KeyModifier::CAPS_LOCK));
+
+        $num = $this->decoder->decode("\x1b[97;129:1u");  // 1 + 128
+        $this->assertTrue($num[0]->modifiers->includes(KeyModifier::NUM_LOCK));
+
+        // The legacy event-flag form masks the field to 0x1f before mapping,
+        // so lock bits cannot ride it — and must not leak in as press flags.
+        $legacy = $this->decoder->decode("\x1b[97;65u");
+        $this->assertSame('a', $legacy[0]->key);
+        $this->assertFalse($legacy[0]->modifiers->includes(KeyModifier::CAPS_LOCK));
     }
 
     // ─── Pathological inputs ────────────────────────────────────────────────
