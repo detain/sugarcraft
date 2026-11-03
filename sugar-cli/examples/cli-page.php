@@ -26,7 +26,7 @@ $theme = Theme::dracula()->withColorProfile(ColorProfile::detect(null, STDOUT));
 
 echo Banner::title('myapp', 'A demo CLI built with SugarCli', $theme) . "\n\n";
 
-echo Section::header('Setup', $theme, leftPad: 2, width: 60) . "\n";
+echo Section::header('Setup', $theme, leftPad: 2) . "\n";
 echo Stage::step(1, 4, 'Reading config',  $theme) . "\n";
 echo Stage::step(2, 4, 'Validating env',  $theme) . "\n";
 echo Stage::subStep('checking PATH',           $theme, isLast: false) . "\n";
@@ -34,7 +34,7 @@ echo Stage::subStep('checking composer cache', $theme, isLast: true)  . "\n";
 echo Stage::step(3, 4, 'Installing deps',  $theme) . "\n";
 echo Stage::step(4, 4, 'Done',             $theme) . "\n\n";
 
-echo Section::header('Status', $theme, width: 60) . "\n";
+echo Section::header('Status', $theme) . "\n";
 echo StatusLine::success('All packages installed', $theme) . "\n";
 echo StatusLine::warn('1 minor version available', $theme) . "\n";
 echo StatusLine::info('Cache size: 12 MB',         $theme) . "\n";
