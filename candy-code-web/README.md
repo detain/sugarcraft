@@ -38,18 +38,32 @@ required: Packagist offers only `dev-master`, which a default
 `candy-code` lists this package under `suggest`, not `require`, so headless
 installs stay lean.
 
+**Where the `require` runs:** in the PHP project that hosts `candy-code` —
+the same vendor tree `candy-code serve` resolves at startup. A project-local
+install or `composer global require` both qualify; what matters is that the
+two packages land in ONE autoloader. The candy-code **phar channel cannot
+host this UI**: a packaged phar freezes the archive's own vendor as its only
+autoload root and this package is a `suggest`, so a phar install never finds
+the web package "beside it". The browser UI is a Composer-channel feature.
+
 ## PHP API
 
 ```php
 use SugarCraft\CodeWeb\Assets;
 
-Assets::distPath();  // absolute, realpath()-resolved dist/ directory
-Assets::manifest();  // decoded Vite manifest: entry => {file, css, …}
-Assets::version();   // bundle version, stamped into dist/build-info.json
+Assets::distPath();     // absolute, realpath()-resolved dist/ — throws RuntimeException
+                        // when dist/index.html is missing (a broken install)
+Assets::tryDistPath();  // soft probe: null instead of throwing, for callers that
+                        // degrade (a UI-less serve keeps the API + WebSocket up)
+Assets::manifest();     // decoded Vite manifest: entry => {file, css, …}
+Assets::version();      // bundle version, stamped into dist/build-info.json
+Assets::diagnose();     // structured {dist, manifest, version, error} verdict for
+                        // doctor-style surfaces, never an exception
 ```
 
-`distPath()` throws `RuntimeException` when `dist/index.html` is missing: a
-broken install, never something the server should paper over.
+Users need none of this: run `candy-code serve` and open the sign-in URL it
+prints. The class exists so the server can locate the bundle and so a
+distributor can verify a build's identity.
 
 ## What it does
 
@@ -61,14 +75,14 @@ documents the protocol and the UI).
 
 - **Sessions sidebar**: newest first, filter, status, and a badge for every
   question a session is waiting on (also in the tab title, and as an opt-in
-  desktop notification). Rows for another project root carry a "Close
+  desktop notification). Rows for another workspace carry a "Close
   `<root>/` host" menu item: it asks first, retries with force when the
   server refuses because a turn is running, and reloads the list after. On a
   write-scoped connection each row also carries "Share page…" — it publishes a
   share snapshot and shows the full link with its expiry and a copy button —
   and a revoke item per live link the server lists, so any browser can revoke
   a share it never made; the token is kept in memory only, never in storage.
-- **New session in any project** (servers started with `serve
+- **New session in any directory** (servers started with `serve
   --allow-dir-browse`): New session opens a folder picker over the server's
   browse root — breadcrumb, Up, child directories with a project badge, show
   hidden, a path box — and starts the session in the directory chosen (a
@@ -91,9 +105,12 @@ documents the protocol and the UI).
 - **Device push** (opt-in): a "Notify me on this device" toggle in Settings
   subscribes this browser through a service worker served at `/sw.js`, so a
   question or a finished turn still raises a notification when the page is
-  closed. Payloads carry only generic catalogue text — never a session title
-  or transcript line — and the toggle needs a secure context (HTTPS or
-  localhost); switching it off unsubscribes both the browser and the server.
+  closed. Default payloads are generic catalogue text plus the session id:
+  the protocol lets any *other* client subscribe with `name: true` to receive
+  the session title in payloads (candy-code SERVER.md), but this UI never
+  requests it, and a transcript line never rides a payload. The toggle needs
+  a secure context (HTTPS or localhost); switching it off unsubscribes both
+  the browser and the server.
 - **Client-hosted tools** (when the server opens `server.clientTools`): after
   following a session this tab announces its local tools — the sample
   `browser_context` (language, time zone, viewport, pixel ratio, colour
@@ -105,24 +122,42 @@ documents the protocol and the UI).
   are untrusted), fenced code coloured by a small highlighter loaded on first
   use; reasoning folds; a tool card per call with its arguments,
   output (the full text on request when the event was capped) and diff.
+  Reaching history above the subscribe window: scrolling to the top edge
+  pulls the older page (`session.get` `beforeIndex` paging; a *load more*
+  button does the same on click), the viewport keeps its place as rows
+  prepend, and a failed pull says so inline — in the server's own words, not
+  translated — instead of retrying silently. Diffs render each row through
+  one highlight pass and paint at most 500 of them until *show more*, so a
+  whole-workspace diff stays operable.
   Two toolbar switches are remembered per browser: *Show thinking* opens
   every settled fold, *Expand tool cards* opens every card until a card is
   toggled by hand; a failure or refusal always opens.
-- **Permission cards**: once / always (this session) / reject / reject & stop,
-  `y` `a` `n` on a focused card. The first answer from any client wins.
+- **Permission cards**: once / always (this session) / always (save) /
+  reject / reject & stop, `y` `a` `n` on a focused card. *Always (save)* is
+  the only answer that persists a durable config grant, so it is two-step:
+  the first click spells out what it saves, the second commits. A card whose
+  answer never settles re-arms its buttons after ten seconds — a dead card
+  is never the retry story. The first answer from any client wins — which
+  means every signed-in browser of one serve is the SAME operator (see
+  [Trust model](#trust-model)).
 - **Composer**: Enter sends; while a turn runs, steer, queue or interrupt —
   offered first is the server's `queueMode` (`server.hello`'s
   `defaults.delivery`; `steer` unless set, as the TUI's Enter does mid-turn);
-  Stop or Esc Esc cancels; `/` completes server-runnable commands. Pasting or
-  dragging images files them as chips that ride the send; Ctrl+↑ walks the
-  prompt history and Ctrl+G searches it (TUI semantics: Enter fills the
-  draft, Esc restores yours); a paste over the TUI's collapse thresholds
-  lands as a `[Pasted #n +X lines]` chip that expands at submit, so the wire
-  carries the whole text while the draft stays short (C-WEB-4.a).
+  Stop or Esc Esc cancels; `/` completes server-runnable commands, `@`
+  completes mentions — files and `@mcp:` resource mentions of connected
+  servers — and a leading `#` is the TUI's todo quick-add. Pasting or
+  dragging images files them as chips that ride the send, and PDFs/documents
+  ride the same surface within the server's per-message document budget.
+  Ctrl+↑ walks the prompt history and Ctrl+G searches it (TUI semantics:
+  Enter fills the draft, Esc restores yours); a paste over the TUI's
+  collapse thresholds lands as a `[Pasted #n +X lines]` chip that expands at
+  submit, so the wire carries the whole text while the draft stays short.
+  The mic button on it is dictation — see [Voice input](#voice-input).
 - **Status bar**: activity and step — with a live elapsed turn timer while a
   turn runs (`working · 0:42 · step 3/20`; hidden on a mid-turn reload, where
   no start was ever observed) — context used, spend, model, and the
-  permission mode (changeable).
+  permission mode (changeable); plus the branch chip, whose PR dot and CI
+  status come from the server's workspace facts.
 - **Reconnects** after 0.5 s doubling to 15 s (±30 % jitter) with a fresh
   ticket, resuming every followed session from its gap-free `seq` cursor. Six
   tries make up the ladder; when it runs out the tab stops retrying and says
@@ -159,9 +194,34 @@ documents the protocol and the UI).
   request is built from, as structure rather
   than `/context`'s text, plus the directory-trust prompt; **Generate** —
   the media-generation form and live job surface (shown only when the
-  server says it can generate).
+  server says it can generate); **Usage** — the session's spend ledger (the
+  `/usage` twin), where every dollar figure carries the ≥ law: an unknown
+  rate is a lower bound, never a bare "$".
 - **Command palette** (Ctrl+K / ⌘K): sessions, slash commands, panels, new
   session, theme.
+- <a id="voice-input"></a>**Voice input**: the composer's mic dictates
+  through one of two engines, and the button's title says which is live.
+  The *browser* engine hands audio to the browser vendor's speech service
+  (Chrome routes through Google, Safari through Apple) and contacts nothing
+  on the candy-code side; the *server* engine — chosen whenever the server
+  advertises `transcribe` — records locally and sends the audio to the
+  server, from where it goes to your own configured voice endpoint. Firefox
+  has no browser engine at all, and a plain-http serve on a LAN host is not
+  a secure context, so there the button rides the server engine or hides:
+  the browser refuses both APIs in an insecure page.
+- **Canvas artifacts**: a tool can answer with self-contained HTML, rendered
+  as a CanvasCard in a sandboxed frame served from `POST /api/canvas` (the
+  containment story is documented in candy-code SERVER.md); generated media
+  shows through the matching cards.
+- **Keyboard**: `?` opens the help overlay listing the live chords, and the
+  keymap is rebindable and persisted per browser (`src-web/lib/keymap.ts`).
+  Chords quoted elsewhere in this README are defaults, not law.
+- **Installable, localized**: a PWA manifest plus a service worker
+  (`public/manifest.webmanifest`, `/sw.js` — the same worker carries push),
+  and the UI's strings arrive from the server at runtime (`server.strings`,
+  `src-web/stores/locale.ts`), so the bundle follows the server's language
+  configuration; the top bar reflows for phone-width viewports (pinned by
+  the e2e suite).
 - **Settings** (the *settings* link in the top bar): a form generated from
   `settings.schema` — your tier or a trusted project's local or committed
   shared file, each value's
@@ -171,26 +231,86 @@ documents the protocol and the UI).
 - **Security notes**: every untrusted string — model and tool text, server
   paths and reasons — renders as data, never markup (raw HTML off in
   `markdown-it`, then DOMPurify with the html profile only; server-supplied
-  panels interpolate with `{{ }}`). One disclosure a reader should know:
-  sign-in stores the **login secret in `localStorage`** (key
+  panels interpolate with `{{ }}`). Three disclosures a reader should know.
+  **One:** sign-in keeps the session secret in `localStorage` (key
   `candy-code-web:login-secret`, origin-scoped, shared across tabs) so
   reloads and new tabs re-mint tickets without another sign-in; anything
   that can execute script on this origin — or a shared browser profile —
-  can read it for as long as it sits there — the exposure is at-rest
-  persistence while signed in. Sign-out clears it (`logout()` deletes the
+  can read it for as long as it sits there: the exposure is at-rest
+  persistence while signed in. Signing out clears it (`logout()` deletes the
   key, and any 401 from the server clears it the same way), so until then
   keep the host page's script surface clean and treat browser storage as
-  holding a credential. A second, gentler disclosure: the composer keeps
-  your typed prompts in a local ring (`localStorage` key
-  `candy-code-web:promptHistory`, capped at 50, this origin only, never
-  sent anywhere beyond the server that answered those very prompts) —
+  holding a credential. **Two:** the composer keeps sent prompts in a local
+  ring (`candy-code-web:promptHistory`, capped at 50, this origin only,
+  never sent anywhere beyond the server that answered those very prompts) —
   sign-out clears that key in every open tab of this browser (each tab's
   in-memory copy drops with it, so nothing resurrects on the next send),
   and the command palette's “Clear prompt history” action (the `Actions`
   group, after a confirm) clears it any time without signing out —
-  `clearPromptHistory()` in `src-web/stores/promptHistory.ts`.
+  `clearPromptHistory()` in `src-web/stores/promptHistory.ts`. **Three:**
+  UNSent composer drafts persist too (`candy-code-web:drafts`) — this is
+  user-typed text, which routinely holds file paths, pasted credentials and
+  proprietary code. Writes are debounced, each entry is clamped to 16 KiB
+  (longer text lives in memory for the session, not storage), at most 50
+  sessions are kept, and a page-hide flushes before unload; sign-out clears
+  the key in every open tab, a session leaving the list drops its own row,
+  and a quota refusal sets a visible "storage degraded" state instead of
+  diverging silently. Signing out is the whole-browser clear; the 50-session
+  window bounds what an endless sign-in could accumulate.
+
+### Browser storage
+
+Everything this UI keeps client-side lives in `localStorage` under the
+`candy-code-web:` prefix. Default retention is indefinite — state survives
+server restarts; only the first three keys are credential- or content-
+sensitive enough to be cleared on sign-out.
+
+| Key | Contents | Bound | Cleared by |
+| --- | --- | --- | --- |
+| `login-secret` | sign-in secret (a credential) | one | sign-out; any server 401 |
+| `promptHistory` | recent SENT prompts, newest first | 50 | sign-out (all tabs); palette "Clear prompt history" |
+| `drafts` | unsent composer text per session | 50 sessions × 16 KiB | sign-out (all tabs); session leaving the index; FIFO eviction |
+| `tabs` / `mode` / `focused` / `lastSession` | open tab ids / list vs grid / focused session / last opened id | tabs: 12 | sign-out keeps them (device convenience); a vanished session prunes its own rows |
+| `theme` / `notify` / `diffStyle` | UI preferences | enum values | kept |
+| `push` | device-notification consent | boolean | its own Settings toggle |
+| `panels.open` / `panels.active` | side-panel drawer state | enum values | kept |
+| `transcriptView.showThinking` / `transcriptView.expandTools` | transcript toolbar toggles | booleans | kept |
+| `keymap` (+ legacy `tab-chord`) | rebinding overrides per browser | per-chord map | kept |
+
+The table is machine-checked: `src-web/__tests__/storageInventory.spec.ts`
+derives every persisted key name from the sources and fails if a key ships
+without a row here (or a row outlives its key).
+
+## Trust model
+
+This is a **single-operator surface by design**. Whoever authenticates to
+`candy-code serve` gets everything that server can do — the candy-code
+server's own words: "Anything that can send a prompt can run code as you"
+(SERVER.md). The mechanism this UI exposes is "the first answer from any
+client wins": every signed-in browser tab of one serve is the SAME operator
+— any of them answers a permission card, any of them can revoke or publish
+a share, even one that never created it. Treat extra browsers, coworkers'
+tabs and old laptop sessions as the same pair of hands. The server binds
+`127.0.0.1` by default and refuses a non-loopback host without
+`--allow-remote`; deciding to expose it is governed by SERVER.md's "Remote
+access" and "Behind a reverse proxy (TLS)" chapters (`--tls-cert`/`--tls-key`
+terminate TLS in the server directly, `--allowed-ips` bounds who may
+connect). The share page is the ONLY read-only second-audience door: a
+tokenised snapshot link with an expiry, never a driver's seat.
 
 ### Deployment hardening
+
+Decide exposure **before** headers: the UI is as public as the server behind
+it (loopback default, `--allow-remote`, TLS and IP bounds — see [Trust
+model](#trust-model) and candy-code SERVER.md; the Dockerfile's shipped
+`serve --host 0.0.0.0 --allow-remote` posture makes that decision for you).
+To run a custom build of this bundle, start the server with `--web-root` (or
+`CANDY_CODE_SERVER_WEB_ROOT`, candy-code ENVIRONMENT.md) — the only
+documented way to serve your own `dist/`. And the server ships `dist/assets`
+**uncompressed** (~650 KB cold, no `.gz`/`.br` siblings): compression is the
+front proxy's job, so turn gzip/brotli on for `/assets/` — the file names
+are content-hashed and served immutable, so proxy-compressed copies stay
+valid across deploys.
 
 `candy-code serve` already ships a **Content-Security-Policy** (alongside
 `nosniff`, `Referrer-Policy: no-referrer`, frame denial, and same-origin
@@ -232,7 +352,8 @@ npm run typecheck     # vue-tsc
 npm run lint          # eslint
 npm test              # vitest (happy-dom): protocol client, reducer, stores, components
 npm run build         # writes dist/
-npm run gen:protocol  # regenerate src-web/protocol/generated.ts
+npm run gen:protocol  # regenerate src-web/protocol/generated.ts from the wire schema
+npm run gen:strings   # regenerate src-web/lib/strings.en.generated.ts from the mirror JSON
 npm run e2e           # Playwright (Chromium) against a real `candy-code serve`
 ```
 
@@ -240,27 +361,31 @@ For `npm run dev`, start the server with
 `candy-code serve --allowed-origin http://localhost:5173`, so it accepts the
 dev page's origin.
 
+The `src-web/` tree, one line per directory (a file-by-file map here rotted
+once and would again — the tree IS the inventory):
+
 ```text
 src-web/
-  protocol/   generated.ts (from the schema), client.ts (JSON-RPC over WS,
-              hello + resume, watchdog, reconnect), reconnect.ts (backoff),
-              cursor.ts (gap-free seq cursor), auth.ts (login, tickets)
-  stores/     connection, sessions, session (one per session id, the
-              reducer in reducer.ts), approvals, layout, settings (theme,
-              notifications), settings/ (the settings form: fields,
-              serverSettings), agents/ (agent tree, todos, background,
-              workflows, memory, the twelve-panel drawer state)
-  components/ SessionSidebar, Transcript (virtualised), TranscriptItem,
-              MessageMarkdown, ReasoningFold, ToolCard, DiffView,
-              PermissionCard, Composer, QueueStrip, StatusBar,
-              ConnectionBanner; grid/ (tabs, tiles), approvals/ (drawer),
-              settings/ (SettingsView, fields, preview), agents/ (tree,
-              agent view), panels/ (the side-panel drawer — todo, background,
-              workflows, memory, rules, changes, files, context, generate,
-              usage — and the command palette; the Agents and Catalog views
-              live under agents/)
-  lib/        markdown, diff, format, highlight (lazy for markdown,
-              eager for DiffView)
+  protocol/   generated schema mirror, the JSON-RPC-over-WS client (hello,
+              resume, watchdog, reconnect ladder), the gap-free seq cursor,
+              and sign-in/ticket auth (incl. logout's storage sweeping)
+  stores/     Pinia state: connection, the session index, per-session
+              transcript state (the reducer), approvals, layout (tabs,
+              drafts, grid mode), settings (+ the schema-driven form),
+              push, prompt history, locale, transcript toolbar view,
+              keymap-facing stores, agents/ (delegation tree, todos,
+              background, workflows, memory, the twelve-panel drawer)
+  components/ transcript and its cards (item, markdown, reasoning fold,
+              tool card, diff view, file viewer), composer and queue strip,
+              permission cards and the approvals drawer, session sidebar,
+              status bar, connection banner, grid/ (tabs, tiles), panels/
+              (the twelve side panels and the command palette), dialogs
+              (history search, help overlay, about modal, canvas and media
+              cards, directory picker)
+  lib/        markdown + sanitising pipeline, lazy highlighter, diff model,
+              format (incl. the spend ≥ law), dictation + recorder, paste,
+              media, questions, tab chord, i18n runtime, line diff, ANSI,
+              serialization, slow-pending verbs, storage helpers
   views/      DashboardView, SessionView, LoginView
 ```
 
@@ -279,6 +404,39 @@ timestamps), so a clean rebuild of unchanged source is byte-identical.
 `../candy-code/docs/protocol/candy-code.v1.schema.json` (itself generated from the PHP
 protocol classes). `web.yml` regenerates it and fails on a diff, so a server
 protocol change the client was not updated for is caught in CI.
+
+### Adding a user-facing string
+
+Every UI sentence is an i18n string, and this package does not own its
+English copy: `src-web/lib/strings.en.generated.ts` is a committed MIRROR.
+The chain is one direction:
+
+1. add the key in the sibling's catalogue — `candy-code/lang/en.php` **and
+   its eleven locale twins** (all-or-none);
+2. the sibling regenerates `candy-code/docs/protocol/web-strings.en.json`
+   (`gen-web-strings.php`);
+3. here, `npm run gen:strings` rewrites the mirror from that JSON, and the
+   mirror is committed with the change. The protocol mirror (below) has a CI
+   drift leg; this one does not yet, so the regeneration is part of the
+   commit ritual, not something CI will forgive you for skipping.
+
+Then call sites use `t('web.<area>.<name>')`. Two laws bite: keys must carry
+the `web.` prefix (`setWebStrings()` in `src-web/lib/i18n.ts` refuses any
+other prefix from the server too), and minting a key only in this package is
+impossible — `i18nCoverage.spec.ts` here reddens on an unknown key and the
+sibling's `WebStringsDriftTest` reddens on a one-sided catalogue. At runtime
+the server sends its own strings (`server.strings`), so the committed mirror
+is the offline fallback — which is why it must never be hand-edited.
+
+### Citation grammar
+
+Comments in `src-web/` carry internal work-record handles — `WEB-1a`,
+`C-WEB-4.a`, `C-SEC-5.b`, `ISS-052`, `Appendix O`, bare lane names. They
+refer to the monorepo's development archive (plans and reports under the
+repository's `docs/`), which does not ship inside this package and is not
+linked from here. They are archaeology tags for humans with repo access,
+not documentation references: the sentence around one is the comment; read
+it and ignore the handle. Shipped USER-facing prose never carries them.
 
 ### End-to-end tests
 
