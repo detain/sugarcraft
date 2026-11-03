@@ -17,6 +17,8 @@ return [
     'cli.push_invalid_duration' => "push: la duración debe ser un entero no negativo de segundos, se recibió \"{value}\"",
     'cli.backend_invalid' => "backend no válido (use file o sqlite)",
     'cli.backend_unavailable' => "backend sqlite no disponible: la extensión sqlite3 de PHP no está cargada",
+    'cli.storage_error' => "candy-codetime: error de almacenamiento: {message}",
+    'cli.dashboard_needs_tty' => "candy-codetime: el panel necesita una terminal interactiva (stdin y stdout no son TTY). Para salida sin terminal: candy-codetime export <csv|json|ics>",
     'cli.milestone_usage' => "Uso: candy-codetime milestone <add|list> [name] [description]",
     'cli.milestone_missing_args' => "milestone add: falta un argumento obligatorio (name)",
     'cli.milestone_added' => "hito añadido: {name}",

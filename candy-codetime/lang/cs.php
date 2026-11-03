@@ -17,6 +17,8 @@ return [
     'cli.push_invalid_duration' => "push: doba trvání musí být nezáporné celé číslo v sekundách, obdrženo \"{value}\"",
     'cli.backend_invalid' => "neplatný backend (použijte file nebo sqlite)",
     'cli.backend_unavailable' => "backend sqlite není dostupný: rozšíření PHP sqlite3 není načteno",
+    'cli.storage_error' => "candy-codetime: chyba úložiště: {message}",
+    'cli.dashboard_needs_tty' => "candy-codetime: dashboard potřebuje interaktivní terminál (stdin a stdout nejsou TTY). Pro výstup bez terminálu: candy-codetime export <csv|json|ics>",
     'cli.milestone_usage' => "Použití: candy-codetime milestone <add|list> [name] [description]",
     'cli.milestone_missing_args' => "milestone add: chybí povinný argument (name)",
     'cli.milestone_added' => "milník přidán: {name}",

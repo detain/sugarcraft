@@ -17,6 +17,8 @@ return [
     'cli.push_invalid_duration' => "push: длительность — целое неотрицательное число секунд, получено \"{value}\"",
     'cli.backend_invalid' => "недопустимый backend (используйте file или sqlite)",
     'cli.backend_unavailable' => "backend sqlite недоступен: расширение PHP sqlite3 не загружено",
+    'cli.storage_error' => "candy-codetime: ошибка хранилища: {message}",
+    'cli.dashboard_needs_tty' => "candy-codetime: дашборду нужен интерактивный терминал (stdin и stdout не являются TTY). Для вывода без терминала: candy-codetime export <csv|json|ics>",
     'cli.milestone_usage' => "Использование: candy-codetime milestone <add|list> [name] [description]",
     'cli.milestone_missing_args' => "milestone add: отсутствует обязательный аргумент (name)",
     'cli.milestone_added' => "веха добавлена: {name}",

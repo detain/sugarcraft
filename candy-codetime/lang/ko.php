@@ -17,6 +17,8 @@ return [
     'cli.push_invalid_duration' => "push: 지속 시간은 초 단위의 음이 아닌 정수여야 합니다. 입력값: \"{value}\"",
     'cli.backend_invalid' => "잘못된 백엔드 (file 또는 sqlite 사용)",
     'cli.backend_unavailable' => "sqlite 백엔드를 사용할 수 없습니다: PHP 확장 sqlite3 이 로드되지 않았습니다",
+    'cli.storage_error' => "candy-codetime: 저장소 오류: {message}",
+    'cli.dashboard_needs_tty' => "candy-codetime: 대시보드에는 대화형 터미널이 필요합니다 (stdin과 stdout이 TTY가 아닙니다). 터미널 없이 출력하려면 candy-codetime export <csv|json|ics>를 사용하세요",
     'cli.milestone_usage' => "사용법: candy-codetime milestone <add|list> [name] [description]",
     'cli.milestone_missing_args' => "milestone add: 필수 인자가 없습니다 (name)",
     'cli.milestone_added' => "마일스톤이 추가되었습니다: {name}",

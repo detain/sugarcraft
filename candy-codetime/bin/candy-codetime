@@ -36,8 +36,10 @@ declare(strict_types=1);
     exit(1);
 })();
 
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\TtyDetect;
 use SugarCraft\Core\Util\LegacyEnv;
 use SugarCraft\Core\Util\LegacyPaths;
 use SugarCraft\CodeTime\Backup\AutoBackup;
@@ -80,6 +82,12 @@ function displayVersion(): string
     return Version::resolve(runningArchivePath(), Version::CURRENT);
 }
 
+// Arm the translation registry from the environment BEFORE the first
+// translated line is produced: the lang/ catalogues shipped but nothing ever
+// selected a locale, so every CLI message was English-only (dormant i18n).
+// detect() reads LC_ALL -> LC_MESSAGES -> LANG and falls back to 'en'.
+T::setLocale(T::detect());
+
 // Pre-rename compatibility (plan_rename.md R4.4/R4.5, sugar-tick -> // @rename-keep
 // candy-codetime): import any old-prefix env exports under the new name first
 // (new name always wins), then move a pre-existing default data directory.
@@ -108,16 +116,34 @@ if (getenv('CANDY_CODETIME_DIR') === false) {
 
 $argv = $argv ?? [];
 
-// Pull the global `--backend=<file|sqlite>` option out of argv so it can appear
-// anywhere on the command line; everything else stays positional.
+// Pull the global `--backend <file|sqlite>` option (equals or space form) out
+// of argv so it can appear anywhere on the command line; everything else stays
+// positional. The space form shipped documented nowhere but expected by habit:
+// `--backend sqlite` used to silently send 'sqlite' to the positional bag and
+// run the file backend.
 $backend = 'file';
+$backendNext = false;
 $positional = [];
 foreach (array_slice($argv, 1) as $arg) {
+    if ($backendNext) {
+        $backend = $arg;
+        $backendNext = false;
+        continue;
+    }
+    if ($arg === '--backend') {
+        $backendNext = true;
+        continue;
+    }
     if (str_starts_with($arg, '--backend=')) {
         $backend = substr($arg, strlen('--backend='));
         continue;
     }
     $positional[] = $arg;
+}
+if ($backendNext) {
+    // `--backend` as the final argument: the value never arrived.
+    fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
+    exit(1);
 }
 if (!in_array($backend, ['file', 'sqlite'], true)) {
     fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
@@ -145,6 +171,15 @@ $sqlite = static function () use ($store, $dbPath): SqliteBackend {
     }
     Store::ensurePrivateDir($store->dir);
     return new SqliteBackend($dbPath);
+};
+
+// One convention for storage failure at EVERY read/write site. SQLite3's own
+// exceptions do not extend RuntimeException, so the old narrower catches let
+// a locked or corrupt database surface as an uncaught fatal with exit 255;
+// \Throwable is the honest net here.
+$storageError = static function (\Throwable $e): never {
+    fwrite(STDERR, Lang::t('cli.storage_error', ['message' => $e->getMessage()]) . "\n");
+    exit(1);
 };
 
 // Show usage for help flags or unknown commands
@@ -200,11 +235,10 @@ if ($cmd === 'push') {
         } else {
             $store->append($hb);
         }
-    } catch (\RuntimeException $e) {
+    } catch (\Throwable $e) {
         // Storage threw rather than losing the row silently (Store::append /
         // SqliteBackend::insert fail loud) — surface it and exit non-zero.
-        fwrite(STDERR, $e->getMessage() . "\n");
-        exit(1);
+        $storageError($e);
     }
     fwrite(STDOUT, Lang::t('cli.entry_pushed', [
         'project'  => $project,
@@ -227,13 +261,21 @@ if ($cmd === 'milestone') {
             exit(1);
         }
         $description = (string)($positional[3] ?? '');
-        $sqlite()->insertMilestone($name, time(), $description);
+        try {
+            $sqlite()->insertMilestone($name, time(), $description);
+        } catch (\Throwable $e) {
+            $storageError($e);
+        }
         fwrite(STDOUT, Lang::t('cli.milestone_added', ['name' => $name]) . "\n");
         exit(0);
     }
 
     if ($sub === 'list') {
-        $milestones = $sqlite()->milestones();
+        try {
+            $milestones = $sqlite()->milestones();
+        } catch (\Throwable $e) {
+            $storageError($e);
+        }
         if ($milestones === []) {
             fwrite(STDOUT, Lang::t('cli.milestone_list_empty') . "\n");
             exit(0);
@@ -266,12 +308,16 @@ if ($cmd === 'export') {
 
     $endDay = new \DateTimeImmutable('today');
     $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
-    $beats = $backend === 'sqlite'
-        ? $sqlite()->query(
-            (int) $fromDay->setTime(0, 0)->getTimestamp(),
-            (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
-        )
-        : $store->loadRange($fromDay, $endDay);
+    try {
+        $beats = $backend === 'sqlite'
+            ? $sqlite()->query(
+                (int) $fromDay->setTime(0, 0)->getTimestamp(),
+                (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
+            )
+            : $store->loadRange($fromDay, $endDay);
+    } catch (\Throwable $e) {
+        $storageError($e);
+    }
 
     $exporter = match ($format) {
         'csv' => new CsvExporter(),
@@ -288,12 +334,16 @@ if ($cmd === 'gaps') {
 
     $endDay = new \DateTimeImmutable('today');
     $fromDay = $endDay->modify('-' . ($days - 1) . ' days');
-    $beats = $backend === 'sqlite'
-        ? $sqlite()->query(
-            (int) $fromDay->setTime(0, 0)->getTimestamp(),
-            (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
-        )
-        : $store->loadRange($fromDay, $endDay);
+    try {
+        $beats = $backend === 'sqlite'
+            ? $sqlite()->query(
+                (int) $fromDay->setTime(0, 0)->getTimestamp(),
+                (int) $endDay->setTime(23, 59, 59)->getTimestamp(),
+            )
+            : $store->loadRange($fromDay, $endDay);
+    } catch (\Throwable $e) {
+        $storageError($e);
+    }
 
     $report = new GapsReport($beats);
     $gaps = $report->gaps();
@@ -305,8 +355,14 @@ if ($cmd === 'gaps') {
 
     fwrite(STDOUT, Lang::t('cli.gaps_header') . "\n");
     foreach ($gaps as $gap) {
-        $start = date('M j H:i', $gap['start']);
-        $end = date('H:i', $gap['end']);
+        $startTs = (int) $gap['start'];
+        $endTs = (int) $gap['end'];
+        $start = date('M j H:i', $startTs);
+        // A gap that ends the following day printed 'H:i' only — the entry
+        // read as time running backwards. Same-day gaps keep the short clock.
+        $end = date('Y-m-d', $startTs) === date('Y-m-d', $endTs)
+            ? date('H:i', $endTs)
+            : date('M j H:i', $endTs);
         fwrite(STDOUT, Lang::t('cli.gaps_entry', [
             'start' => $start,
             'end' => $end,
@@ -350,5 +406,18 @@ if ($cmd !== 'dashboard') {
 
 // The dashboard reads the SAME backend the other subcommands were routed to;
 // pre-fix it always opened the JSONL store, so sqlite users saw an empty TUI.
-$reader = $backend === 'sqlite' ? $sqlite() : $store;
-(new Program(Dashboard::start($reader), new ProgramOptions(useAltScreen: true)))->run();
+// The TUI pumps escape sequences and waits on keypresses forever. With neither
+// stream a terminal that just meant an alt-screen dump into a cron log and a
+// process that never exits (bare `dashboard` on a pipe hung). Refuse loudly
+// and point at the machine-readable door instead.
+if (!TtyDetect::isAtty(STDIN) || !TtyDetect::isAtty(STDOUT)) {
+    fwrite(STDERR, Lang::t('cli.dashboard_needs_tty') . "\n");
+    exit(1);
+}
+try {
+    $reader = $backend === 'sqlite' ? $sqlite() : $store;
+    $dashboard = Dashboard::start($reader);
+} catch (\Throwable $e) {
+    $storageError($e);
+}
+(new Program($dashboard, new ProgramOptions(useAltScreen: true)))->run();

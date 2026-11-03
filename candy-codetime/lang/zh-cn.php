@@ -17,6 +17,8 @@ return [
     'cli.push_invalid_duration' => "push: 时长必须为非负整数秒，收到 \"{value}\"",
     'cli.backend_invalid' => "无效的后端 (请使用 file 或 sqlite)",
     'cli.backend_unavailable' => "sqlite 后端不可用: 未加载 PHP 扩展 sqlite3",
+    'cli.storage_error' => "candy-codetime: 存储错误：{message}",
+    'cli.dashboard_needs_tty' => "candy-codetime：仪表板需要交互式终端（stdin 与 stdout 不是 TTY）。无终端输出请使用：candy-codetime export <csv|json|ics>",
     'cli.milestone_usage' => "用法: candy-codetime milestone <add|list> [name] [description]",
     'cli.milestone_missing_args' => "milestone add: 缺少必需参数 (name)",
     'cli.milestone_added' => "里程碑已添加: {name}",

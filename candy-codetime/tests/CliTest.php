@@ -261,4 +261,89 @@ final class CliTest extends TestCase
         );
         $this->assertStringContainsString('Dashboard::start($reader', $bin);
     }
+
+    // --- Locale detection (dormant i18n fix) ---------------------------------
+
+    public function testTheEnvironmentLocaleDrivesCliMessages(): void
+    {
+        $german = $this->runCli(['--help'], null, ['LC_ALL' => 'de_DE.UTF-8']);
+        $this->assertSame(0, $german['exit'], $german['stderr']);
+        $this->assertStringContainsString('Verwendung:', $german['stdout'],
+            'a German environment must produce the German usage text');
+
+        $plain = $this->runCli(['--help']);
+        $this->assertStringContainsString('Usage:', $plain['stdout']);
+    }
+
+    // --- Non-TTY dashboard refusal -------------------------------------------
+
+    public function testDashboardRefusesAWorldWithoutATerminal(): void
+    {
+        // Piped stdin/stdout used to mean an alt-screen dump and a process
+        // waiting on keypresses that never arrive (cron hung forever).
+        $res = $this->runCli(['dashboard']);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringContainsString('interactive terminal', $res['stderr']);
+        $this->assertStringContainsString('export', $res['stderr'],
+            'the refusal must point at the headless output door');
+        $this->assertSame('', $res['stdout'], 'no escape sequences may leak to stdout');
+    }
+
+    // --- --backend space form -------------------------------------------------
+
+    public function testBackendOptionAcceptsTheSpaceForm(): void
+    {
+        if (!extension_loaded('sqlite3')) {
+            $this->markTestSkipped('sqlite3 extension not loaded');
+        }
+
+        $push = $this->runCli(['--backend', 'sqlite', 'push', 'spaced', 'php', 'a.php', '30']);
+        $this->assertSame(0, $push['exit'], $push['stderr']);
+
+        $back = $this->runCli(['--backend', 'sqlite', 'export', 'json', '1']);
+        $this->assertSame(0, $back['exit'], $back['stderr']);
+        $rows = json_decode($back['stdout'], true);
+        $this->assertIsArray($rows);
+        $this->assertContains('spaced', array_column($rows, 'project'),
+            'the space form must select the same backend as --backend=sqlite');
+
+        // The file backend must NOT have received the row: it never lands in JSONL.
+        $file = $this->runCli(['export', 'json', '1']);
+        $this->assertSame(0, $file['exit'], $file['stderr']);
+        $this->assertSame([], json_decode($file['stdout'], true));
+
+        $dangling = $this->runCli(['push', 'proj', 'php', 'b.php', '--backend']);
+        $this->assertSame(1, $dangling['exit']);
+        $this->assertStringContainsString('invalid backend', $dangling['stderr']);
+    }
+
+    // --- Gaps across midnight --------------------------------------------------
+
+    public function testAGapEndingTheNextDayCarriesItsDate(): void
+    {
+        $beats = [
+            strtotime('-3 days 10:00'),
+            strtotime('-3 days 14:00'),
+            strtotime('-2 days 22:00'),
+            strtotime('-1 day 02:00'),
+        ];
+        $byDay = [];
+        foreach ($beats as $ts) {
+            $byDay[date('Y-m-d', $ts)][] = json_encode([
+                'time' => $ts, 'project' => 'p', 'language' => 'php',
+                'file' => 'a.php', 'duration' => 60, 'tags' => [],
+            ]);
+        }
+        foreach ($byDay as $day => $rows) {
+            file_put_contents($this->dataDir . '/' . $day . '.jsonl', implode("\n", $rows) . "\n");
+        }
+
+        $res = $this->runCli(['gaps', '5']);
+        $this->assertSame(0, $res['exit'], $res['stderr']);
+
+        // Same-day gap keeps the short clock form…
+        $this->assertMatchesRegularExpression('/\x{2013} 14:00  \(\d+s untracked\)/u', $res['stdout']);
+        // …a next-day gap must print its own month+day, or the range reads backwards.
+        $this->assertStringContainsString(date('M j', strtotime('-1 day 02:00')) . ' 02:00', $res['stdout']);
+    }
 }

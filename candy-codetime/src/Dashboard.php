@@ -9,8 +9,10 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * Read-only dashboard Model. Loads the last `$days` days of
@@ -29,6 +31,7 @@ final class Dashboard implements Model
         public readonly int $days = 7,
         public readonly Stats $stats = new Stats([], []),
         public readonly ?int $width = null,
+        public readonly ?ColorProfile $colorProfile = null,
     ) {}
 
     public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7): self
@@ -51,6 +54,20 @@ final class Dashboard implements Model
                 $this->days,
                 $this->stats,
                 $msg->cols,
+                $this->colorProfile,
+            ), null];
+        }
+        if ($msg instanceof ColorProfileMsg) {
+            // The profile Program detected is the authority on what the
+            // terminal can render; swallowed pre-fix, the view re-derived a
+            // partial answer from NO_COLOR alone.
+            return [new self(
+                $this->source,
+                $this->endDay,
+                $this->days,
+                $this->stats,
+                $this->width,
+                $msg->profile,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -94,6 +111,7 @@ final class Dashboard implements Model
             $this->days,
             Stats::compute($beats, $from, $this->endDay),
             $this->width,
+            $this->colorProfile,
         );
     }
 
@@ -107,7 +125,7 @@ final class Dashboard implements Model
         // The width has to ride the shift: without it the next frame is laid
         // out for an unknown terminal and the rows we sized to the window
         // (panes, timeline) silently stop being clipped.
-        return (new self($this->source, $next, $this->days, $this->stats, $this->width))->recompute();
+        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile))->recompute();
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

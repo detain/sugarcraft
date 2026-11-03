@@ -160,4 +160,21 @@ final class RendererTest extends TestCase
             putenv($previous === false ? 'NO_COLOR' : "NO_COLOR={$previous}");
         }
     }
+    public function testTheDetectedProfileDecidesWhetherTintsArePainted(): void
+    {
+        $end = new \DateTimeImmutable('2024-06-07');
+        $store = new Store(sys_get_temp_dir());
+        $stats = new Stats([], []);
+
+        $rich = new Dashboard($store, $end, 7, $stats, null, \SugarCraft\Core\Util\ColorProfile::TrueColor);
+        $this->assertMatchesRegularExpression('/\x1b\[38/', Renderer::render($rich),
+            'a truecolour terminal gets its hex tints');
+
+        $plain = new Dashboard($store, $end, 7, $stats, null, \SugarCraft\Core\Util\ColorProfile::Ascii);
+        $this->assertDoesNotMatchRegularExpression('/\x1b\[38/', Renderer::render($plain),
+            'the Ascii tier (NO_COLOR, CLICOLOR=0, TERM=dumb all land here) gets no tints');
+
+        $pipe = new Dashboard($store, $end, 7, $stats, null, \SugarCraft\Core\Util\ColorProfile::NoTty);
+        $this->assertDoesNotMatchRegularExpression('/\x1b\[38/', Renderer::render($pipe));
+    }
 }

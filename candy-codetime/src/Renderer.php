@@ -7,6 +7,7 @@ namespace SugarCraft\CodeTime;
 use SugarCraft\Charts\Sparkline\Sparkline;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
@@ -16,15 +17,17 @@ use SugarCraft\Style\Style;
 /**
  * Pure view function. Three sections stacked vertically: header,
  * project + language ranking side-by-side, and the daily-activity
- * sparkline timeline. Under ~56 columns the two ranking panes stack
- * vertically instead of side-by-side.
+ * sparkline timeline. Under the width derived from PANE_TEXT/FRAME_CHROME
+ * the two ranking panes stack vertically instead of side-by-side.
  *
- * Honours NO_COLOR (any value that is not empty/`0`/`false`): the frame
- * keeps its bold/structure but every hex tint is dropped — same truthy
- * rule sugar-colorprofile applies to the variable, so a host that sets
- * it gets a plain-text dashboard rather than a second theme knob (the
- * removed Theme class never reached this code path; there is nothing to
- * re-skin here).
+ * Colour policy: the TUI paints under the {@see ColorProfile} Program
+ * detected and handed to the Dashboard via ColorProfileMsg — hex tints
+ * are emitted only at Ansi256/TrueColor tiers, so NO_COLOR, CLICOLOR=0,
+ * TERM=dumb and the rest of the detection ladder all land on the same
+ * authority instead of a hand-rolled NO_COLOR reading. When the Model
+ * carries no profile (library use without Program) the historical
+ * fallback applies: any truthy NO_COLOR suppresses tints, otherwise the
+ * frame paints as before.
  */
 final class Renderer
 {
@@ -46,8 +49,8 @@ final class Renderer
         $stats = $d->stats;
 
         $header = self::clip(self::header($d), $d->width);
-        $projects = self::ranking('Top projects', $stats->perProject(), '#fde68a', $d->width);
-        $languages = self::ranking('By language', $stats->perLanguage(), '#7dd3fc', $d->width);
+        $projects = self::ranking('Top projects', $stats->perProject(), '#fde68a', $d->width, $d->colorProfile);
+        $languages = self::ranking('By language', $stats->perLanguage(), '#7dd3fc', $d->width, $d->colorProfile);
 
         // Side by side only once two frames plus the gutter actually fit. The
         // threshold is derived from the numbers above, because the old literal
@@ -62,7 +65,7 @@ final class Renderer
 
         $timeline = self::timeline($d);
 
-        $help = self::clip(self::tint(Style::new(), '#7d6e98')
+        $help = self::clip(self::tint(Style::new(), '#7d6e98', $d->colorProfile)
             ->render('  ←  prev day  ·  →  next day  ·  r  reload  ·  q  quit'), $d->width);
 
         return self::clipRows($header . "\n" . $top . "\n" . $timeline . "\n" . $help, $d->width) . "\n";
@@ -99,17 +102,23 @@ final class Renderer
     /**
      * Apply a hex tint unless the host asked for no colour.
      */
-    private static function tint(Style $style, string $hex): Style
+    private static function tint(Style $style, string $hex, ?ColorProfile $profile): Style
     {
-        return self::colorSuppressed() ? $style : $style->foreground(Color::hex($hex));
+        return self::colorSuppressed($profile) ? $style : $style->foreground(Color::hex($hex));
     }
 
     /**
-     * NO_COLOR truthiness — mirrors the rule sugar-colorprofile uses for the
-     * variable (set-and-not-one-of 0/false/empty disables colour).
+     * With a detected profile, ANSI-16 and below cannot carry a hex tint at
+     * all, so every tier under Ansi256 paints uncoloured (Ascii is
+     * no-color.org's "text decoration kept, colour off" — the frame's bold
+     * stays). Without one (rendered outside a Program) the historical rule
+     * applies: NO_COLOR truthiness — set-and-not-one-of 0/false/empty.
      */
-    private static function colorSuppressed(): bool
+    private static function colorSuppressed(?ColorProfile $profile): bool
     {
+        if ($profile !== null) {
+            return !in_array($profile, [ColorProfile::Ansi256, ColorProfile::TrueColor], true);
+        }
         $value = getenv('NO_COLOR');
         if ($value === false) {
             return false;
@@ -122,11 +131,11 @@ final class Renderer
         $end = $d->endDay->format('M j');
         $start = $d->endDay->modify('-' . ($d->days - 1) . ' days')->format('M j');
         $total = Stats::formatHours($d->stats->totalSeconds());
-        $title = self::tint(Style::new()->bold(), '#ff5f87')
+        $title = self::tint(Style::new()->bold(), '#ff5f87', $d->colorProfile)
             ->render(' CandyCodetime ');
-        $range = self::tint(Style::new(), '#a78bfa')
+        $range = self::tint(Style::new(), '#a78bfa', $d->colorProfile)
             ->render("[{$start} – {$end}]");
-        $tot = self::tint(Style::new()->bold(), '#6ee7b7')
+        $tot = self::tint(Style::new()->bold(), '#6ee7b7', $d->colorProfile)
             ->render($total);
         return $title . '  ' . $range . '   total: ' . $tot;
     }
@@ -143,7 +152,7 @@ final class Renderer
      *
      * @param array<string,int> $rows
      */
-    private static function ranking(string $title, array $rows, string $colour, ?int $terminal): string
+    private static function ranking(string $title, array $rows, string $colour, ?int $terminal, ?ColorProfile $profile): string
     {
         // The frame is 4 cells wider than the text box, so shrinking the text
         // is what keeps a narrow terminal inside itself.
@@ -162,7 +171,7 @@ final class Renderer
 
         $lines = [Width::truncate($title, $text)];
         if ($shown === []) {
-            $lines[] = self::tint(Style::new(), '#7d6e98')->render(Width::truncate('  (no activity)', $text));
+            $lines[] = self::tint(Style::new(), '#7d6e98', $profile)->render(Width::truncate('  (no activity)', $text));
         } else {
             $durationWidth = 4;
             foreach ($shown as [, $duration]) {
@@ -173,7 +182,7 @@ final class Renderer
             foreach ($shown as [$name, $duration]) {
                 $lines[] = sprintf(
                     '  %s  %s',
-                    self::tint(Style::new(), $colour)->render(
+                    self::tint(Style::new(), $colour, $profile)->render(
                         Width::padRight(Width::truncate($name, $nameWidth), $nameWidth),
                     ),
                     Style::new()->bold()->render(Width::padLeft($duration, $durationWidth)),
@@ -181,7 +190,7 @@ final class Renderer
             }
             if (count($rows) > 6) {
                 // The hard cap used to hide projects silently; say how many are missing.
-                $lines[] = self::tint(Style::new(), '#7d6e98')
+                $lines[] = self::tint(Style::new(), '#7d6e98', $profile)
                     ->render(Width::truncate('  +' . (count($rows) - 6) . ' more', $text));
             }
         }
@@ -251,7 +260,7 @@ final class Renderer
             static fn(\DateTimeImmutable $day): string => $day->format('D'),
             $labels,
         );
-        $marks = self::marks($weekdays, $slotWidths);
+        $marks = self::marks($weekdays, $slotWidths, $d->colorProfile);
 
         return Style::new()
             ->border(Border::rounded())
@@ -330,7 +339,7 @@ final class Renderer
      * @param list<string> $weekdays
      * @param list<int> $slots
      */
-    private static function marks(array $weekdays, array $slots): string
+    private static function marks(array $weekdays, array $slots, ?ColorProfile $profile): string
     {
         $narrow = $slots !== [] && min($slots) < 4;
         $line = '';
@@ -341,6 +350,6 @@ final class Renderer
                 $width,
             );
         }
-        return self::tint(Style::new(), '#7d6e98')->render($line);
+        return self::tint(Style::new(), '#7d6e98', $profile)->render($line);
     }
 }

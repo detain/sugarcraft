@@ -88,8 +88,8 @@ dashboard without any colour tints.
 
 | Key            | Action                       |
 |----------------|------------------------------|
-| `←`            | Shift the 7-day window back  |
-| `→`            | Shift forward (to today)     |
+| `←`            | Move the window back one day |
+| `→`            | Move it forward one day      |
 | `r`            | Reload from disk             |
 | `q` / `Esc`    | Quit                         |
 | `Ctrl+C`       | Quit                         |

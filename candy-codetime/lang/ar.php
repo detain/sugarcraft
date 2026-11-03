@@ -17,6 +17,8 @@ return [
     'cli.push_invalid_duration' => "push: يجب أن تكون المدة عددًا صحيحًا غير سالب بالثواني، الوارد: \"{value}\"",
     'cli.backend_invalid' => "واجهة تخزين غير صالحة (استخدم file أو sqlite)",
     'cli.backend_unavailable' => "واجهة تخزين sqlite غير متاحة: امتداد sqlite3 لـ PHP غير محمّل",
+    'cli.storage_error' => "candy-codetime: خطأ التخزين: {message}",
+    'cli.dashboard_needs_tty' => "candy-codetime: لوحة المتابعة تحتاج إلى طرفية تفاعلية (stdin وstdout ليستا TTY). للإخراج بدون طرفية: candy-codetime export <csv|json|ics>",
     'cli.milestone_usage' => "الاستخدام: candy-codetime milestone <add|list> [name] [description]",
     'cli.milestone_missing_args' => "milestone add: الوسيط المطلوب مفقود (name)",
     'cli.milestone_added' => "تمت إضافة الإنجاز: {name}",
