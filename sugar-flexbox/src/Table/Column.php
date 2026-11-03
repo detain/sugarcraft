@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox\Table;
 
+use SugarCraft\Flexbox\Support\Sgr;
+
 /**
  * Column definition for a Table.
  *
@@ -112,28 +114,10 @@ final class Column
      */
     public function withStyle(string $ansiStyle): self
     {
-        self::assertSgrParams($ansiStyle);
+        Sgr::assertParameterString($ansiStyle, 'Column style');
         return self::fromState($this->title, $this->width, $this->align, $ansiStyle, $this->formatter, $this->sortDir, $this->sortPriority);
     }
 
-    /**
-     * Reject any style that is not a bare SGR parameter string.
-     *
-     * ansiStyle is an ANSI style intended to be interpolated raw into a
-     * `CSI <style> m` sequence, so a caller-supplied value containing an ESC,
-     * an OSC/DCS introducer, or arbitrary letters could terminate the SGR early
-     * and inject attacker-controlled terminal control sequences. Constrain the
-     * input to digits and ';' at the setter (empty string = "no style" is
-     * still permitted).
-     */
-    private static function assertSgrParams(string $style): void
-    {
-        if (\preg_match('/^[0-9;]*$/', $style) !== 1) {
-            throw new \InvalidArgumentException(
-                'Style must be a bare SGR parameter string matching /^[0-9;]*$/ (digits and ";" only).'
-            );
-        }
-    }
 
     public function withFormatter(callable $fn): self
     {

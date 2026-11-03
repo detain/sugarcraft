@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox\Flex;
 
+use SugarCraft\Flexbox\Support\Sgr;
+
 /**
  * A single item inside a FlexBox.
  *
@@ -84,7 +86,7 @@ final class FlexItem
 
     public function withStyle(string $ansiStyle): self
     {
-        self::assertSgrParams($ansiStyle);
+        Sgr::assertParameterString($ansiStyle, 'FlexItem style');
         return new self($this->content, $this->ratio, $this->basis, $ansiStyle);
     }
 
@@ -96,24 +98,5 @@ final class FlexItem
     public function withWidth(int $width): self
     {
         return $this->withBasis($width);
-    }
-
-    /**
-     * Reject any style that is not a bare SGR parameter string.
-     *
-     * $style is interpolated raw into a `CSI <style> m` sequence by
-     * FlexBox::applyStyle(), so a caller-supplied value containing an ESC, an
-     * OSC/DCS introducer, or arbitrary letters could terminate the SGR early
-     * and inject attacker-controlled terminal control sequences. Constrain the
-     * input to digits and ';' at the setter (empty string = "no style" is
-     * still permitted).
-     */
-    private static function assertSgrParams(string $style): void
-    {
-        if (\preg_match('/^[0-9;]*$/', $style) !== 1) {
-            throw new \InvalidArgumentException(
-                'Style must be a bare SGR parameter string matching /^[0-9;]*$/ (digits and ";" only).'
-            );
-        }
     }
 }
