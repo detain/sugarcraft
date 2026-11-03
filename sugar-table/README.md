@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-table)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-table)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-table?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-table)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # SugarTable
@@ -13,7 +13,7 @@
 
 
 
-sugar-table — a customizable interactive table component for terminal UIs, for PHP 8.3+.
+sugar-table — a customizable data table component for terminal UIs for PHP 8.3+: programmatic row cursor, keyboard-driven scrolling, and per-cell styling. It does not handle mouse input itself — wire events from sugar-input/sugar-mouse to the cursor + scroll API.
 
 ## Features
 
@@ -21,7 +21,7 @@ sugar-table — a customizable interactive table component for terminal UIs, for
 - **Row data**: key-value map (`RowData`), arbitrary values rendered via `fmt.Sprintf("%v")`
 - **Styled cells**: `StyledCell` wraps value + ANSI style, overrides row/column/base styles
 - **Row styles**: zebra striping, bold rows, per-row ANSI styling
-- **Selection**: single-row cursor, up/down navigation
+- **Selection**: single-row cursor via `SelectNext()`/`SelectPrevious()`/`withSelectedIndex()`; row 0 carries the highlight on first render (use `withSelectable(false)` for a cursorless table); `handleKey()` scrolls
 - **Pagination**: page size, page navigation, auto footer
 - **Sorting**: asc/desc, multi-column sort, numeric + string sort
 - **Filtering**: filter by column text
@@ -30,8 +30,9 @@ sugar-table — a customizable interactive table component for terminal UIs, for
 - **Missing data indicator**: configurable placeholder for absent cells
 - **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Style\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
 - **Borderless mode**: `withBorderless()` — render NO outer box (no top/bottom border rows, no left/right border columns; a single space separates columns) so the table composes inside another bordered shell (e.g. a sugar-panels content box) without a double border. A selected row's reverse-video highlight stays continuous across the column gaps
-- **Width-exact rendering**: `withWidth(int $cols)` — pin the total render width; `ColumnWidth::Flex` columns fill exactly the room left after Fixed/Percent columns so every line is exactly `$cols` cells (deterministic for composition). Default `cellPadding` is 0 (flush)
+- **Width control**: `withWidth(int $cols)` pins the total render width and `ColumnWidth::Flex` columns split the leftover room by weight. Lines are clamped at the frame edge, never padded past it: an over-subscribed layout truncates content and can render narrower than `$cols` (borderless + Flex lays out exactly). Default `cellPadding` is 0 (flush)
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
+- **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content, Flex
 - **Cell text wrapping**: `WrapMode` enum — None, WordWrap, Character
 - **Multi-line row rendering**: `withMultilineMode(bool $multiline)` — when enabled, rows expand to the maximum height of any cell; when disabled (default), cells are clamped to one line (backward compatible)
@@ -73,12 +74,12 @@ echo $t->View();
 
 ```php
 Column::new($key, $title, $width)       // key, display title, fixed width
-    ->withFlexibleWidth($flex)           // flexible width share
+    ->withFlexibleWidth($share)          // weight when ColumnWidth::Flex splits leftover
     ->withMaxWidth($max)                // horizontal scroll cap
     ->withStyle('1;34')                  // ANSI SGR style
-    ->withFilterable()                   // enable built-in filter
+    ->withFilterable()                   // opt into search/Filter scanning (see Global Search)
     ->withAlignLeft()                    // left-align (default is right)
-    ->withColumnWidth($mode, $value)    // ColumnWidth::Fixed|Percent|Dynamic|Content
+    ->withColumnWidth($mode, $value)    // ColumnWidth::Fixed|Percent|Dynamic|Content|Flex
     ->withWrapMode(WrapMode::None)       // WrapMode::None|WordWrap|Character
 ```
 
@@ -95,6 +96,7 @@ them consistently throughout rendering (header, data cells, separators).
 |-------------|----------------------------------------------------------|
 | `Fixed`     | Fixed character count (uses `Column.width`)                |
 | `Percent`   | Percentage of total table width (uses `Column.percentValue`, 0–100) |
+| `Flex`      | Weighted share of the leftover room (weight = `withFlexibleWidth`, default 1) |
 | `Dynamic`   | Min-width from content, flex share of remaining space     |
 | `Content`   | Exactly fit content (min 1 char)                           |
 
@@ -179,7 +181,8 @@ $t = $t->SortBy('name', ascending: true);
 $t = $t->Filter('name', 'alice');       // filter column by text
 $t = $t->SelectNext();                  // move cursor down
 $t = $t->SelectPrevious();              // move cursor up
-$t = $t->CurrentRow();                  // get selected RowData
+$t->CurrentRow();                   // selected Row or null (not RowData!)
+$t->CurrentRowData();                // selected RowData or null
 ```
 
 ## Keyboard Navigation
@@ -267,7 +270,7 @@ $t = $t->handleKey(Table::KEY_PAGE_DOWN);
 
 - **Key mapping**: `scrollYForKey()` uses a `match` expression to map key names to scroll deltas
 - **Bounds clamping**: Scroll values are clamped to `0` at the top and `maxScrollY()` at the bottom
-- **maxScrollY()**: Returns `max(0, totalFilteredRows - viewportHeight)` when viewport is active; `0` otherwise
+- **maxScrollY()**: public; returns `max(0, rows on the current page - viewportHeight)` when a viewport is set, else `0` — page-aware, so End can never strand the viewport
 - **No-op for unknown keys**: Unrecognized keys return the current `scrollY` unchanged
 - **Requires viewport**: Keyboard scrolling only works when `withViewportHeight()` is set
 
@@ -285,7 +288,7 @@ $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
 
 
 
-Search across all columns simultaneously with `search()`:
+Search the filterable columns simultaneously with `search()`:
 
 ```php
 $t = Table::fromColumns([
@@ -308,6 +311,7 @@ $t = $t->ClearSearch();     // alias for search('')
 
 - **Case-insensitive**: `search('ALICE')` matches `"alice"`, `"Alice"`, `"ALICE"`
 - **OR logic**: A row matches if **any** column contains the search text
+- **Filterable gate**: once **any** column opts in with `withFilterable()`, `search()` and `Filter()` scan **only** the marked columns; with none marked, every column is scanned
 - **Combines with filters**: Global search is ANDed with column filters — a row must match both
 - **Resets selection**: `search()` automatically resets `selectedIndex` to 0
 
@@ -315,7 +319,7 @@ $t = $t->ClearSearch();     // alias for search('')
 
 
 ```php
-// Combined: Filter by name column AND search all columns for "ny"
+// Combined: Filter by name column AND search the scanned columns for "ny"
 $t = $t->Filter('name', 'alice')  // name must contain "alice"
         ->search('ny');           // some column must contain "ny"
 
@@ -332,7 +336,7 @@ $t = $t->Filter('name', 'alice')  // name must contain "alice"
 | Method     | Scope        | Logic   |
 |------------|--------------|---------|
 | `Filter()` | Single column | AND (row must match ALL column filters) |
-| `search()` | All columns  | OR (row matches if ANY column contains text) |
+| `search()` | Filterable columns (all when none marked) | OR (row matches if ANY scanned column contains text) |
 
 Both can be active simultaneously:
 
@@ -352,8 +356,8 @@ $t = $t->Filter('city', 'ny')     // city must contain "ny"
 
 ```php
 $t = $t->withPageSize(25)               // 25 rows per page
-    ->withPage(2);                      // show page 2
-echo $t->PageFooter();                  // 'Page 2 of 4' (i18n-aware)
+    ->withPage(2);                      // 0-based: jumps to the THIRD page
+echo $t->PageFooter();                  // 'Page 3 of 4' (i18n-aware)
 ```
 
 ### Footer Types
@@ -369,7 +373,7 @@ use SugarCraft\Table\{Table, FooterType};
 $t = Table::fromColumns([...])
     ->withRows([...])
     ->withPageSize(25)
-    ->withFooterType(FooterType::Page);  // Default: "Page 2 of 4"
+    ->withFooterType(FooterType::Page);  // Default: "Page 1 of 4"
 ```
 
 | Case   | Footer Display                          | Method                   |
@@ -384,7 +388,8 @@ $t = $t->withFooterType(FooterType::Rows);
 echo $t->View();  // Footer: "Showing 1 to 25 of 100 rows"
 
 // Show both page and row count
-$t = $t->withFooterType(FooterType::Both);
+$t = $t->withFooterType(FooterType::Both)
+    ->withPage(1);   // page index 1 (0-based)
 echo $t->View();  // Footer: "Page 2 of 4  |  Showing 26 to 50 of 100 rows"
 ```
 
@@ -473,11 +478,11 @@ A column is visible when:
 
 
 ```php
-// Given: frozenCols = [0, 2], scrollX = 1
+// Given: frozenCols = [0, 1], scrollX = 1
 // Non-frozen columns start at index: 2 + 1 = 3
 // Column 0 (frozen):  visible
-// Column 1 (index 1): NOT visible (1 < 3)
-// Column 2 (frozen):  visible
+// Column 1 (frozen):  visible
+// Column 2 (index 2): NOT visible (2 < 3)
 // Column 3 (index 3): visible (3 >= 3)
 // Column 4 (index 4): visible (4 >= 3)
 ```
@@ -576,9 +581,9 @@ $t = $t->withHiddenCols([2, 3]);         // hide columns at indices 2 and 3
 // Show all columns (empty array)
 $t = $t->withHiddenCols([]);             // no columns hidden
 
-// Combine with frozen columns - hide a frozen column
+// Frozen and hidden must be DISJOINT: withFrozenCols([0])->withHiddenCols([0]) throws
 $t = $t->withFrozenCols([0])
-        ->withHiddenCols([0]);           // freeze and hide are independent
+        ->withHiddenCols([2]);           // hide a non-frozen column
 ```
 
 ### Interaction with Frozen Columns and Scroll
@@ -615,9 +620,11 @@ foreach ($t->Columns() as $i => $col) {
 Uses multi-pass computation:
 
 1. **Pass 1**: Collect Fixed/Percent widths, count Dynamic/Content columns
-2. **Pass 2**: Distribute remaining space among Dynamic/Content columns
-3. **Dynamic**: `max(contentWidth, flexShare)`
-4. **Content**: exact content width (min 1)
+2. **Pass 2**: Distribute the remaining space across the flex slots
+3. **Flex**: weighted share (weight = `withFlexibleWidth`); with `withWidth()` set the last Flex
+   column absorbs the rounding slack so the sum is exact
+4. **Dynamic**: `max(contentWidth, one-share baseline)`
+5. **Content**: exact content width (min 1)
 
 
 
@@ -696,8 +703,8 @@ $t = Table::fromColumns([
     // ->withCellPadding(0);            // no padding (flush with borders)
 
 echo $t->View();
-// With padding 1: "│  1  │  Alice              │  NYC   │"
-// Without padding:  "│ 1 │ Alice │ NYC │"
+// With padding 1 (right-aligned default): "│  1  │             Alice  │          NYC  │"
+// Without padding:              "│    1│               Alice│            NYC│"
 ```
 
 ### How It Works
@@ -741,7 +748,7 @@ $t = Table::fromColumns([
         Row::new(RowData::from([
             'id'   => '2',
             'name' => 'Bob Smith with a very long name',
-            'city' => 'Los\nAngeles',  // embedded newline
+            "city: "Los\nAngeles",  // embedded newline
         ])),
     ])
     ->withMultilineMode(true);          // rows expand to max cell height
@@ -772,7 +779,7 @@ When disabled (the default), cells are clamped to one line for backward compatib
 
 
 
-Multiline mode requires `WrapMode::WordWrap` or `WrapMode::Character` on columns to produce multiple lines. Without wrapping enabled, cells remain single-line even in multiline mode.
+A literal newline in a value splits the cell into multiple lines even under `WrapMode::None` (each segment is still clipped to the column width). `WrapMode` controls *flowing* of content that exceeds one line: `WordWrap` breaks at spaces, `Character` at cell boundaries. `withMultilineMode(true)` grows rows to the tallest cell; disabled (default) clips to the first line.
 
 ```php
 // Word wrap example — breaks at word boundaries within 8 characters
@@ -852,7 +859,9 @@ $t->isExpanded(1);   // false — row 1 is not expanded
 
 
 
-  not by index — this is stable across page navigation
+  not by index. `withRows()` prunes identities that leave the new data set (no stale-
+  object retention); note an equal-valued refresh builds new `Row` objects, so re-wrapping
+  identical data collapses an active expansion.
 
 - **Pagination**: All expansion methods (`withExpandedRows`, `toggleExpanded`,
 
@@ -923,9 +932,10 @@ if this list and the roster in that test drift apart.
 
 
 
-sugar-table adopts `sugar-cellbuffer` for all buffer-based rendering. The table's internal
-`Buffer` instance is constructed once per `View()` call and passed through all
-layout methods.
+sugar-table adopts `sugar-cellbuffer` for all buffer-based rendering. Layout fills a flat mutable
+`RenderCanvas` grid in a single pass; it is frozen into an immutable `Buffer` exactly once per
+`View()` call. `View()` writes only internal render memos (width solve, filter/sort cache, style
+parse) — never visible state.
 
 ### styleFunc signature
 
@@ -939,14 +949,15 @@ function(int $row, int $col, string $value): Style|string
 ```
 
 - **Returns `Style`** — new preferred style (PHP 8.3+ typed return, immutable)
-- **Returns `string`** — legacy ANSI SGR string, automatically wrapped via
+- **Returns `string`** — legacy ANSI SGR string, passed through verbatim (there is
 
 
 
-  `Style::fromAnsiString()` for backward compatibility
+  no `Style::fromAnsiString()` in this lib or sugar-style; SGR strings are the internal
+  currency `Table::normalizeStyleResult()` works with)
 
-Implementations should return `Style` when possible; the wrapper path is identical
-to the old behavior but adds one allocation.
+Anything else returned (e.g. a `SugarCraft\Style\Style` object) falls back to the inherited
+cell style. Prefer `SugarCraft\CellBuffer\Style`.
 
 ## Snapshot tests
 
