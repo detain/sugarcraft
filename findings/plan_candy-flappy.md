@@ -1,10 +1,16 @@
 ---
-status: not-started
-phase: 1
-updated: 2026-06-30
+status: complete-superseded
+phase: done
+updated: 2026-11-03
 ---
 
 # Implementation Plan: candy-flappy Audit Fixes
+
+> **2026-11-03:** executed by the lib-reviews-1102 fix lane, but NOT as
+> written here — the H1 prescription was re-verified as a misread (scoring
+> already clears post-collision) and left unchanged; every other row shipped
+> via the persona-campaign chain (150a1c9e0..34f3adeeb). See the dated FIX
+> LEDGER at the end of `candy-flappy.md` for the row-by-row map.
 
 ## Goal
 

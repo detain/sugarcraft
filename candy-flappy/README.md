@@ -157,6 +157,16 @@ defaults could not produce.
   force colour on where detection would demure; a non-TTY stdout or
   `TERM=dumb` gets the plain refusal screen.
 
+## Dependencies
+
+Runtime: PHP `^8.3`, [`sugarcraft/sugar-core`](https://packagist.org/packages/sugarcraft/sugar-core)
+(program loop, messages, `Subscriptions`, `AtomicJsonFile`),
+[`sugarcraft/sugar-style`](https://packagist.org/packages/sugarcraft/sugar-style)
+(the styled-cell renderer), and [`sugarcraft/sugar-spring`](https://packagist.org/packages/sugarcraft/sugar-spring)
+(spring physics: the bird's flap impulse and gravity ride `Projectile`).
+Development only: PHPUnit `^10` and [`sugarcraft/sugar-testing`](https://packagist.org/packages/sugarcraft/sugar-testing)
+(`assertGoldenAnsi`).
+
 ## Credits & inspiration
 
 Design antecedent: [kbrgl/flapioca](https://github.com/kbrgl/flapioca); SugarCraft is developed as a native PHP project.

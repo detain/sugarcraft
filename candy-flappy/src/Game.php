@@ -94,7 +94,7 @@ final class Game implements Model
      */
     public const SCORE_CEILING = 100000;
 
-    /** @var \Closure(int): int */
+    /** @var \Closure(int $maxInclusive): int */
     private \Closure $rand;
 
     private string $highScoreFilePath;
@@ -135,7 +135,8 @@ final class Game implements Model
      *  (m32: start() no longer mints a throwaway Game just to learn it). */
     private static function scoreFilePath(?string $configDir): string
     {
-        return ($configDir ?? self::getDefaultConfigDir()) . '/' . self::HIGH_SCORE_FILE;
+        // rtrim: a caller-supplied trailing slash must not mint '//' segments (L6).
+        return rtrim($configDir ?? self::getDefaultConfigDir(), '/') . '/' . self::HIGH_SCORE_FILE;
     }
 
     private static function getDefaultConfigDir(): string

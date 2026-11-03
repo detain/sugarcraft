@@ -170,6 +170,45 @@ final class GameTest extends TestCase
         $this->assertTrue($g3->newRecord);
     }
 
+    public function testConfigDirWithTrailingSlashMintsNoDoubleSlashSegments(): void
+    {
+        $method = new \ReflectionMethod(Game::class, 'scoreFilePath');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            '/tmp/hermetic-flappy-slash/.candy-flappy/scores.json',
+            $method->invoke(null, '/tmp/hermetic-flappy-slash/'),
+        );
+    }
+
+    public function testAnUnresolvableConfigDirectoryFailsLoud(): void
+    {
+        $snapHome = getenv('HOME');
+        $snapXdg = getenv('XDG_CONFIG_HOME');
+        $serverHome = $_SERVER['HOME'] ?? null;
+        $method = new \ReflectionMethod(Game::class, 'getDefaultConfigDir');
+        $method->setAccessible(true);
+
+        try {
+            putenv('XDG_CONFIG_HOME');
+            putenv('HOME');
+            unset($_SERVER['HOME']);
+
+            $this->expectException(\RuntimeException::class);
+            $method->invoke(null);
+        } finally {
+            if ($snapXdg !== false) {
+                putenv('XDG_CONFIG_HOME=' . $snapXdg);
+            }
+            if ($snapHome !== false) {
+                putenv('HOME=' . $snapHome);
+            }
+            if ($serverHome !== null) {
+                $_SERVER['HOME'] = $serverHome;
+            }
+        }
+    }
+
     public function testRandAccessorReturnsInjectedClosure(): void
     {
         $sentinel = static fn(int $max): int => 42;

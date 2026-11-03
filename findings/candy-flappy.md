@@ -181,3 +181,52 @@ If injected `$rand` closure throws, game crashes with no recovery.
 | Security | Robustness | Rand closure exception not caught | Game.php:262 |
 
 **Total: 12 findings**
+
+
+---
+
+## FIX LEDGER — 2026-11-03 (lib-reviews-1102 persona campaign, this lane)
+
+The 2026-06-30 findings above were superseded/re-verified during the full
+17-persona review (worklist `_COMBINED.md`, 1 CRIT / 27 MAJOR / 34 minor /
+19 nit) and its fix pass. All fix commits are on master; SHAs disk-verified.
+
+### June-era rows, status at tip 34f3adeeb
+
+| # | Finding | Status |
+|---|---------|--------|
+| H1 | scoring/collision off-by-one | NOT A DEFECT (re-verified: score fires at x=7, one frame AFTER the x=8 collision window passes — clearing, not pre-collision; misread in the original audit) |
+| H2 | `\Closure` hint too broad | FIXED — `@var \Closure(int $maxInclusive): int` on the property + `makePipe` docblock contract (34f3adeeb + closeout commit) |
+| M3 | Style allocation in render loop | FIXED — memoised cells + per-x wall precompute, goldens byte-identical (59fbe374e) |
+| M4 | non-atomic high-score write | FIXED — `AtomicJsonFile` 0600 flock+temp+rename (c5018b217) |
+| M5 | `tickN()` bypasses crash gate | DOCUMENTED + PINNED — public test helper by design; world stepping goes through `update(TickMsg)` which is gated (crash, ready, too-small, NoTty) |
+| L6 | trailing-slash double slash | FIXED — `scoreFilePath` joins `rtrim`'d dir (closeout probe: current `self::scoreFilePath()` builds `dir.'/.candy-flappy/scores.json'` from a configDir param; no caller appends slashes) |
+| L7 | `rand()` exposes closure | KEPT — in-process test seam, no secret; type contract now documented |
+| L8 | `json_decode` unchecked | FIXED — quarantine-on-corrupt launch path, size cap, clamp (c5018b217) |
+| L9 | first-class callables | N/A (closures passed as data) |
+| L10 | readonly classes | FIXED — Game props promoted readonly since the posture pass (efdd83108/546eebba3) |
+| L11 | sync persist on tick path | KEPT — bounded single write on crash/quit only, `m6` decline reason applies |
+| L12 | rand closure exception uncaught | FIXED-ENVELOPE — default rand is `rand()`-backed; injection contract documented; app never wraps user closures in catch (by design, fail loud) |
+
+### 1102 campaign dispositions (headline ids)
+
+FIXED: C1 (150a1c9e0 tick→subscriptions), M1 (0ecfbec60 phantom API table +
+real golden recipe docs), M2 (83abebf7a gap parity, FEEL-CHANGE disclosed),
+M3/M4 (c5018b217), M5 (83abebf7a hermetic), M6/M7/M8/M26/m30 (efdd83108
+terminal posture), M9 lib-half (REDUCE_MOTION honour → SEAM sugar-spring),
+M10/M18/M20/M24/m28/m29 (546eebba3), M11/M31 (150a1c9e0), M12→DECLINED
+(extension registry = whole-app architecture ask, SEAM), M13/M14/M15/M16/m5
+(0ecfbec60 bin+install docs), M17→DECLINED (local single-player scores,
+forge-clamp already landed), M19/M20-keys (546eebba3), M21→DECLINED (30 Hz
+cadence is the spec; caps sacred), M22→DECLINED feel change (lethal ceiling
+documented = spec), M23 (59fbe374e), M25 i18n→DECLINED in-lane (16-locale
+wiring is its own lane; minesweeper `Lang` pattern cited), M27/m25 (83abebf7a),
+M28-M32 minors (spread across 546eebba3/0ecfbec60/34f3adeeb), m1-m32 sweep
+(34f3adeeb + commits above). NOT-REPRODUCED: golden contamination under
+polluted HOME (proven hermetic x2, poison-HOME run), `.vhs/play.gif` stale
+nit (file absent — CI regenerates), Renderer dead code leg (rewritten).
+DECLINED w/ SEAM: mouse flap, pause/focus (m34), gapY-delta clamp (m33,
+caps), `?` help overlay + key-surface unification (m2), alt-gate on keys
+(m3b, InputReader C0-rune ambiguity), persist-fail stderr trace (m6,
+alt-screen scribble), colour/glyph taste nits.
+
