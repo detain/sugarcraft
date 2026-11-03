@@ -364,6 +364,17 @@ final class InProcessTransport implements Transport, ChildSpawner
                 if ($sigwinchAttached && \defined('SIGWINCH')) {
                     SignalForwarder::reset(\SIGWINCH);
                 }
+                // Give the caller's stream back the way we found it
+                // (audit MINOR 3). We flipped STDIN non-blocking because the
+                // pump selects on it; a host that keeps using that handle
+                // after serve() - a shell script, a later `read()` in the
+                // entry point - would otherwise be reading a descriptor it
+                // never asked to have put into non-blocking mode. `$stdout`
+                // is deliberately NOT touched here: it was never flipped,
+                // and the blocking-stdout contract above is what keeps
+                // output intact. Memory streams ignore this call, which is
+                // why the pin that guards it is structural.
+                @\stream_set_blocking($stdin, true);
             }
         } finally {
             // If the child is still running (pump exited because of

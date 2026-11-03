@@ -661,6 +661,35 @@ final class DocSurfaceTruthTest extends TestCase
         }
     }
 
+    public function testTheChildEnvironmentContractIsWrittenWhereItIsUsed(): void
+    {
+        $handler = (string) \preg_replace(
+            '/\s+/',
+            ' ',
+            (string) \file_get_contents(\dirname(__DIR__) . '/src/Channel/DefaultChannelHandler.php'),
+        );
+        foreach (['LD_AUDIT', 'DYLD_INSERT_LIBRARIES', 'GCONV_PATH', 'PROMPT_COMMAND', 'HOSTALIASES', 'POSIXLY_CORRECT'] as $name) {
+            $this->assertStringContainsString($name, $handler, $name . ' is not in the deny-list');
+        }
+
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+        $readme = (string) \preg_replace('/\s+/', ' ', $readme);
+        $this->assertStringContainsString('applied even to names an operator put in `$acceptEnv`', $readme);
+        $this->assertStringContainsString('Two exceptions are honest ones', $readme);
+
+        // The pump borrows the caller's STDIN non-blocking and hands it back;
+        // STDOUT was never flipped and stays blocking (the K9 contract).
+        $transport = (string) \file_get_contents(\dirname(__DIR__) . '/src/Transport/InProcessTransport.php');
+        $this->assertStringContainsString('@\stream_set_blocking($stdin, true);', $transport);
+        // The asymmetry is deliberate and written down: the stdout flip is
+        // the one call this file forbids a reader from adding.
+        $this->assertStringContainsString('do not "fix" the missing', $transport);
+        $this->assertStringContainsString('it was never flipped', $transport);
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

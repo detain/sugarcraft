@@ -736,6 +736,20 @@ Shell requests are deliberately *not* gated, because they name no program: the
 interpreter is the configured `$shell`, then the server-side `SHELL`, then
 `FALLBACK_SHELL`, and a client-supplied `SHELL` is stripped as a dangerous var.
 
+The deny-list that makes that sentence true is `DANGEROUS_VARS`, and it is
+applied even to names an operator put in `$acceptEnv`: the loader hooks
+(`LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`, and macOS's `DYLD_*`), the
+locale-conversion path (`GCONV_PATH`), the files shells source before running
+anything (`BASH_ENV`, `ENV`) and the code bash runs at each prompt
+(`PROMPT_COMMAND`), plus `IFS`, `PATH`, `SHELL`, `HOSTALIASES` and
+`POSIXLY_CORRECT`. The rule for the list is that a value must not be able to
+decide what code the child runs, which library it loads, or where it looks for
+one -- that is the server configuring its own child, not the peer describing
+its terminal. Two exceptions are honest ones: the child's `PATH` comes from
+the daemon (a search-less child cannot find `/bin/sh`), and `HOME` is derived
+as `/home/<user>` rather than read from the passwd database, so a deployment
+whose homes differ passes `HOME` itself.
+
 Replacing the handler replaces the policy. `ChannelHandler` is an interface, so
 a custom implementation of `handleExec()` is bound by nothing here: if you
 substitute one, the default-closed question - may this peer run this program? -

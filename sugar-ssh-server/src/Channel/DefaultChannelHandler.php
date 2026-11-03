@@ -86,19 +86,49 @@ final class DefaultChannelHandler implements ChannelHandler
     private $stderr;
 
     /**
-     * Known-dangerous env vars that are always excluded, even if
-     * a client lists them in `$acceptEnv`.
+     * Names the child never learns from the peer, even when an operator
+     * lists them in `$acceptEnv` (audit MINOR 5).
+     *
+     * This is a deny-list, not a threat model, and it is deliberately
+     * boring: every entry is a variable whose VALUE changes what code runs,
+     * which library gets loaded, or where a program looks for one - so a
+     * client that could set it would be configuring the server's child
+     * rather than describing its own terminal.
+     *
+     * - `LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT` (glibc),
+     *   `DYLD_INSERT_LIBRARIES`, `DYLD_LIBRARY_PATH` (macOS dyld): loader
+     *   hooks and search paths. `LD_AUDIT` is the one people forget, and it
+     *   is the strongest of the three: an audited library receives
+     *   callbacks before the program's own entry point.
+     * - `GCONV_PATH`: where glibc finds locale conversion modules, i.e. a
+     *   code path to arbitrary `.so` files.
+     * - `BASH_ENV`, `ENV`: files bash and sh source before running
+     *   anything. `PROMPT_COMMAND`: shell code executed on the interactive
+     *   side, which is exactly what a shell request hands the peer.
+     * - `IFS`: word-splitting semantics for every later expansion.
+     * - `PATH`, `SHELL`: the interpreter and the search path themselves.
+     * - `HOSTALIASES`: a name-lookup table, so a hostname need not resolve
+     *   the way the operator configured.
+     * - `POSIXLY_CORRECT`: silently flips behaviour across the coreutils a
+     *   session then runs.
      *
      * @var list<string>
      */
     private const DANGEROUS_VARS = [
         'LD_PRELOAD',
         'LD_LIBRARY_PATH',
+        'LD_AUDIT',
+        'DYLD_INSERT_LIBRARIES',
+        'DYLD_LIBRARY_PATH',
+        'GCONV_PATH',
         'BASH_ENV',
         'ENV',
+        'PROMPT_COMMAND',
         'IFS',
         'PATH',
         'SHELL',
+        'HOSTALIASES',
+        'POSIXLY_CORRECT',
     ];
 
     /**
@@ -408,7 +438,19 @@ final class DefaultChannelHandler implements ChannelHandler
      */
     private function buildEnv(Session $session): array
     {
-        // Start from the safe floor — never inherit the supervisor's env.
+        // Build the child's environment from a floor of our own naming.
+        //
+        // Two entries are honest exceptions to that sentence, and both are
+        // deliberate (audit MINOR 14). `PATH` is taken from the daemon on
+        // purpose: a child with no search path cannot find /bin/sh, so the
+        // alternative to inheriting it is a hardcoded default that breaks
+        // any deployment that installs elsewhere - the value is the
+        // supervisor's, which under ForceCommand is root's environment, not
+        // the peer's. `HOME` is DERIVED (`/home/<user>`), not looked up,
+        // because reading the passwd entry here would mean a second source
+        // of truth this class cannot validate; a deployment whose homes
+        // differ passes `HOME` explicitly. Everything else the peer can
+        // name arrives only through `$acceptEnv` ∩ this file's deny-list.
         $env = [
             'TERM'  => $session->term ?: 'xterm-256color',
             'USER'  => $session->user,
