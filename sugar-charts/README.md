@@ -5,7 +5,6 @@
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-charts)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-charts)
-[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-charts?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-charts)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
@@ -27,7 +26,7 @@ use SugarCraft\Charts\BarChart\BarChart;
 use SugarCraft\Charts\LineChart\LineChart;
 
 echo Sparkline::new([1, 3, 2, 8, 5, 4, 7, 6], 8)->view() . PHP_EOL;
-// " ▂▁█▅▃▇▆"  (the minimum value maps to the blank GLYPHS[0] cell)
+// " ▂▁█▅▃▇▆"  (the minimum value maps to the blank leading cell)
 
 echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)->view() . PHP_EOL;
 //               ██████
@@ -75,12 +74,12 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 | `Charts\Canvas\Graph` | Drawing primitives over a `Canvas`. | `drawHLine` / `drawVLine` / `drawXYAxis` / `drawXYAxisLabel` / `drawString` / `drawLine` / `drawLinePoints` / `fillRect` / `drawColumn` / `drawColumns` / `drawRows` / `drawCandlestick` / `drawBrailleRune` / `drawBraillePatterns` / `drawVerticalLineUp` / `drawVerticalLineDown` / `drawHorizontalLineLeft` / `drawHorizontalLineRight` / `circlePoints` / `circlePointsWithLimit` / `fullCirclePoints` / `fullCirclePointsWithLimit` / `linePointsWithLimit` (`get*` spellings kept as ntcharts-mirror compat aliases) |
 | `Charts\Sparkline\Sparkline` | Single-row series renderer using the 8 Unicode bar glyphs. | `push` / `pushAll` / `clear` / `withMin` / `withMax` / `withStyle(?Style)` / `withNoAutoMaxValue(bool)` / `withWidth` |
 | `Charts\BarChart\BarChart` | Labeled bars — vertical or horizontal (`withHorizontal()`, a second render mode); auto-scales to a configurable min / max. | `withBarWidth` / `withBarGap` / `withNoAutoBarWidth` / `withFractionalHeights` (eighth-block caps) / `withBarColor(?Closure)` (per-bar `fn(Bar, int): ?Color`) / `withHorizontal(bool)` / `withShowAxis(bool)` / `withMin(?float)` / `withMax(?float)` / `withDataLabels(bool)` (values as a row, see Value labels) / `withDataLabelFormatter(?Closure)` / `push(Bar\|array)` / `pushAll(iterable)` / `clear` |
-| `Charts\LineChart\LineChart` | Multi-series ASCII or braille plot drawn onto a Canvas with configurable axes — `withDataset()` adds named series (legend auto-enables; colors cycle a six-name palette, or follow the `withTheme()` palette). | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` / `withSeriesColorFn(?Closure)` (per-point `fn(string, int, float): ?Color`) |
+| `Charts\LineChart\LineChart` | Multi-series ASCII or braille plot drawn onto a Canvas with configurable axes — `withDataset()` adds named series (legend auto-enables; colors cycle a six-name color-blind-safe palette (blue, orange, green, red, purple, cyan), or follow the `withTheme()` palette). | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` / `withSeriesColorFn(?Closure)` (per-point `fn(string, int, float): ?Color`) |
 | `Charts\LineChart\TimeSeries` | LineChart variant accepting `[\DateTimeImmutable, value]` tuples. | `push` / `withPoints` / `withTimeFormat` / `withXLabelCount` / `withTimeRange(?start, ?end)` / `getTimeRange()` |
-| `Charts\LineChart\Streamline` | Single-row streaming line — auto-windowed to width. | `push` / `pushAll` / `clear` / `isEmpty` / `count` / `withSize` / `withMin` / `withMax` / `withYRange` / `withPoint` |
+| `Charts\LineChart\Streamline` | Streaming line windowed to width — renders through a LineChart of configurable height (default 8 rows). | `push` / `pushAll` / `clear` / `isEmpty` / `count` / `withSize` / `withMin` / `withMax` / `withYRange` / `withPoint` |
 | `Charts\LineChart\Waveline` | XY scatter / wave plot driven by `(x, y)` pairs. | `push` / `pushAll` / `clear` / `withSize` / `withXRange` / `withYRange` / `withXYRange` / `withPoint` |
-| `Charts\Heatmap\Heatmap` | 2D grid coloured by value with optional palette / legend. | `withSize` / `withMin` / `withMax` / `withPalette` / `withLegend` / `withColors(cold, hot)` / `withRune` / `withColorProfile` / `withCellStyle(?Style)` / `withAutoValueRange(bool)` / `pushPoint(HeatPoint)` / `pushAll` |
-| `Charts\OHLC\OHLCChart` | Candlestick chart for `(high, open, close, low)` rows. | `withBars` / `push` / `withSize` / `withBodyRunes(bull,bear)` / `withWickRune(rune)` / `withMin` / `withMax` / `withColors` / `withTitle` / `withLegend` / `withLegendPosition` |
+| `Charts\Heatmap\Heatmap` | 2D grid colored by value with optional palette / legend. | `withSize` / `withMin` / `withMax` / `withPalette` / `withLegend` / `withColors(cold, hot)` / `withRune` / `withColorProfile` / `withCellStyle(?Style)` / `withAutoValueRange(bool)` / `pushPoint(HeatPoint)` / `pushAll` |
+| `Charts\OHLC\OHLCChart` | Candlestick chart for `(open, high, low, close)` rows. | `withBars` / `push` / `withSize` / `withBodyRunes(bull,bear)` / `withWickRune(rune)` / `withMin` / `withMax` / `withColors` / `withTitle` / `withLegend` / `withLegendPosition` |
 | `Charts\Scatter\Scatter` | XY scatter plot. | `withPoints` / `withSize` / `withXRange` / `withYRange` / `withRune` / `withTitle` / `withLegend` / `withLegendPosition` / `withLegendItems` |
 | `Charts\Aggregation\BucketByTime` | Groups timestamped values into time buckets with configurable aggregation. | `sum` / `mean` / `min` / `max` / `first` / `last` factory methods + `add` / `addMany` / `compute` |
 | `Charts\Aggregation\MovingAverage` | Sliding-window aggregator — SMA and EMA. | `simple` / `centered` / `ema` static factories + `add` / `addMany` / `computeSimple` / `values` / `clear` |
@@ -156,7 +155,7 @@ in turn, cycling), and the legend indicators are recolored to the same
 slots. A `withSeriesColorFn()` color still wins per point; `null` from
 the resolver falls back to the theme slot. Charts built **without** a
 theme render byte-identically to unthemed output, and `withTheme()`
-works in both the ASCII and the braille (`withCanvas()`) pass. All nine
+works in both the ASCII and the braille (`withCanvas()`) pass. All ten
 `Theme::` factory methods are supported:
 
 ```php
@@ -171,7 +170,7 @@ echo $chart->view();   // truecolor 38;2;… runs follow the dracula slots
 
 Available themes: `Theme::ansi()` / `Theme::dark()` / `Theme::light()` /
 `Theme::dracula()` / `Theme::tokyoNight()` / `Theme::oneDark()` /
-`Theme::githubDark()` / `Theme::solarizedDark()` / `Theme::solarizedLight()`.
+`Theme::githubDark()` / `Theme::solarizedDark()` / `Theme::solarizedLight()` / `Theme::adaptive()` (profile-adaptive).
 
 Theme consumption is scoped to `LineChart` today. The other renderers do
 not read a theme (`BarChart` / `Scatter` / `OHLCChart` never had
@@ -218,7 +217,7 @@ the progress yourself, e.g. `examples/animated_line.php`.
 
 One color per series is too coarse for value-heat graphs — btop tints every
 graph point and meter by its value through the theme gradient
-(`Theme::g(...).at(value)` in `btop_draw.cpp`). Two optional resolvers bring
+(btop's C++ drawing code roughly samples a theme color at the point value). Two optional resolvers bring
 that to SugarCharts:
 
 - `LineChart::withSeriesColorFn(?Closure)` — `fn(string $dataset, int $x, float $value): ?Color`.
@@ -280,10 +279,14 @@ $chart = LineChart::new([3, 1, 4, 1, 5, 9, 2, 6], 40, 8)
 echo $chart->view();
 ```
 
-- `MarkLine::at(float $value, ?string $label = null, string $style = MarkLine::STYLE_SOLID)`
+- `MarkLine::at(float $value, string $label = '', string $style = MarkLine::STYLE_DASHED)`
   is the factory (the constructor is private). `STYLE_SOLID` /
   `STYLE_DASHED` / `STYLE_DOTTED` pick the run glyph; the line is drawn
-  across the plot at the value's row.
+  across the plot at the value's row. Labels pass the untrusted-text guard
+  at construction; non-finite values and unknown styles throw at once.
+  Data-derived marks: `MarkLine::min($data)`, `MarkLine::max($data)`,
+  `MarkLine::average($data)` (each `(array $data, string $style = STYLE_DASHED)`),
+  or `MarkLine::fromDataset($data, $type)` with `$type` one of min/max/average.
 - `Legend` is the composed strip — `withItems(list<array{label, color}>)`,
   `withPosition(Position)`, `withIndicatorChar(string)`,
   `withShowBorder(bool)`; short aliases `items()` / `position()`. Charts
@@ -302,6 +305,29 @@ color with the structural channels that survive it: `withDataLabels()`
 runes (`withRune()` / `withBodyRunes()`). Braille-dot plots lose
 per-series identity entirely when printed without their legend, so keep
 `withLegend()` on for shared or logged output.
+Default glyphs are pure ASCII; the opt-in unicode-connector and braille
+canvas modes introduce runes whose width is ambiguous in some terminals —
+ASCII mode is the portable fallback.
+
+## Localization
+
+`lang/` ships sixteen locales. Every user-facing constraint message goes
+through `Lang::t()`: chart dimension and non-finite value refusals are
+localized, while developer-fault throws (reserved dataset name, unknown
+`MarkLine` style, bad resolver return type) stay bare English by design.
+`tests/LangTest.php` pins locale key parity against `lang/en.php`, so a
+new message must be added to every locale to land.
+
+Terminology: a *tick* is a numeric value at an axis position, a *label*
+is the text drawn for one of the evenly-spaced *slots* along an axis
+(five slots on X, four on Y by default; `withXLabelFormatter` /
+`withYLabelFormatter` accept both).
+
+## Performance
+
+Render cost is linear in width × height. Both canvases are sparse —
+empty cells store nothing — so mostly-blank charts render cheaply, and
+per-sample style lookups are memoized.
 
 ## Shared foundations
 
@@ -337,16 +363,21 @@ $grid->paint($canvas, 1, 0);
 echo $canvas->view();
 ```
 
-### Palette / colour profile
+### Palette / color profile
 
 `Heatmap::withPalette([Color, …])` interpolates between an arbitrary
 number of stops (≥ 2). `withColors(Color $cold, Color $hot)` is the
-two-stop shortcut. `withColorProfile(ColorProfile)` overrides the
-auto-detected output profile when piping to non-tty / Sixel-capable
-sinks. `Heatmap::withCellStyle(Style)` overlays additional attributes
+two-stop shortcut. `withColorProfile(ColorProfile)` sets the color space
+the gradient is emitted in — there is no output autodetection; the default
+is TrueColor. `Heatmap::withCellStyle(Style)` overlays additional attributes
 (bold / background / etc.) on top of every cell's foreground gradient.
 
 ## Demos
+
+Every renderer has a runnable demo: `php examples/<name>.php` from the
+`sugar-charts/` directory (see [examples/README.md](examples/README.md)).
+The eight CI-recorded GIFs cover eight renderers; `line.php` drives
+`Streamline`, and Waveline shares it.
 
 ### Bar chart
 
@@ -385,12 +416,12 @@ sinks. `Heatmap::withCellStyle(Style)` overlays additional attributes
 
 | Component | State |
 |---|---|
-| Canvas, BrailleGrid, Graph primitives | 🟢 v1 |
-| Sparkline | 🟢 v1 |
+| Canvas, BrailleGrid, Graph primitives | 🟢 v1 — shipped, nothing pending. |
+| Sparkline | 🟢 v1 — shipped, nothing pending. |
 | BarChart | 🟢 v1 (data labels + horizontal mode ship; multi-bar grouped datasets pending) |
 | LineChart | 🟢 v1 (multi-dataset + per-point colors + theming ship; zoom/pan pending) |
 | TimeSeries | 🟢 v1 (multi-dataset + update-handler variants pending) |
-| Streamline, Waveline | 🟢 v1 |
+| Streamline, Waveline | 🟢 v1 — shipped, nothing pending. |
 | Heatmap | 🟢 v1 (auto value-range toggle ships: `withAutoValueRange()` / `getAutoValueRange()`) |
 | OHLC | 🟡 candlestick rendering only — volume sub-pane + multi-series pending |
 | Scatter | 🟡 single-dataset only — per-point rune/style sets pending |

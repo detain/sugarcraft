@@ -1,19 +1,18 @@
 # SugarCharts examples
 
 Each script is self-contained — `php examples/<name>.php` from the
-`sugar-charts/` directory renders the chart to stdout. Pair with
-`tput reset` before running an alt-screen example.
+`sugar-charts/` directory renders the chart to stdout.
 
 | Script | What it shows |
 |---|---|
-| `bar.php` | `BarChart::new` with labelled bars, auto-scaled to the data range. |
+| `bar.php` | `BarChart::new` with labeled bars, auto-scaled to the data range. |
 | `heatmap.php` | `Heatmap::new` with a perlin-style 2D grid + the cold→hot palette + `withLegend(true)`. |
-| `line.php` | `LineChart::new` over a data series with the default axes. |
+| `line.php` | `Streamline` rolling-window rendering over a generated series (the demo drives `Streamline::new(width: 60, height: 12)`). |
 | `animated_line.php` | Progressive `LineChart` frames via `withAnimationProgress()` — the caller-driven animation story. |
 | `ohlc.php` | `OHLCChart::new` candlestick rendering with body / wick styling. |
-| `picture.php` | `Picture::fromGrid` / `Picture::detect` encoding demo (Sixel / Kitty / iTerm2) — prints labelled hex dumps where the terminal can't paint images, so no Sixel capability is required. |
+| `picture.php` | `Picture::fromGrid` / `Picture::detect` encoding demo (Sixel / Kitty / iTerm2) — prints labeled hex dumps where the terminal can't paint images, so no Sixel capability is required. |
 | `scatter.php` | XY scatter plot with auto-ranged axes. |
-| `sparkline.php` | Single-row `Sparkline::new` over a synthesised series, plus `withStyle` to colour the glyphs. |
+| `sparkline.php` | Single-row `Sparkline::new` over a synthesized series, plus `withStyle` to color the glyphs. |
 | `timeseries.php` | `TimeSeries::new` with `[\DateTimeImmutable, value]` tuples + `withTimeFormat('H:i')`. |
 
 ## Running an example
@@ -53,6 +52,8 @@ use SugarCraft\Charts\LineChart\TimeSeries;
 $start = new \DateTimeImmutable('2026-01-01 09:00:00');
 $end   = new \DateTimeImmutable('2026-01-01 17:00:00');
 
+$points = [[$start, 41.5], [new \DateTimeImmutable('2026-01-01 13:00:00'), 43.0], [$end, 42.25]];
+
 echo TimeSeries::new($points, 60, 12)
     ->withTimeFormat('H:i')
     ->withTimeRange($start, $end)
@@ -83,6 +84,7 @@ use SugarCraft\Charts\Canvas\{Canvas, BrailleGrid, Graph};
 
 $canvas = new Canvas(40, 8);
 $grid   = new BrailleGrid(40, 8);
+$points = [[2, 5], [3, 7], [8, 2], [12, 9], [16, 4]];
 foreach ($points as [$x, $y]) {
     $grid->set($x, $y);
 }

@@ -236,8 +236,8 @@ final class LineChart extends Chart
     /**
      * Closure invoked per X tick to format axis labels: `fn(float $v): string`.
      * Used only when {@see withXLabels()} hasn't been called explicitly.
-     * `$ticks` controls the count of label slots — defaults to a sensible
-     * value based on plot width.
+     * `$ticks` controls the count of label slots — 0 (the default) means the
+     * built-in count: five. Used only while axes are shown.
      */
     public function withXLabelFormatter(\Closure $fn, int $ticks = 0): self
     {
@@ -247,6 +247,8 @@ final class LineChart extends Chart
     /**
      * Closure invoked per Y tick to format axis labels: `fn(float $v): string`.
      * Used only when {@see withYLabels()} hasn't been called explicitly.
+     * `$ticks` controls the count of label slots — 0 (the default) means the
+     * built-in count: four. Used only while axes are shown.
      */
     public function withYLabelFormatter(\Closure $fn, int $ticks = 0): self
     {
