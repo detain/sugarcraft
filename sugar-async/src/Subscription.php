@@ -15,7 +15,7 @@ namespace SugarCraft\Async;
 interface Subscription
 {
     /**
-     * Dispose of the subscription. Idempotent \u2014 calling multiple times is a no-op.
+     * Dispose of the subscription. Idempotent — calling multiple times is a no-op.
      */
     public function unsubscribe(): void;
 
