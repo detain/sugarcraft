@@ -747,7 +747,7 @@ Environment variables:
                           Any value other than empty or 0 switches off the
                           provider prompt-cache breakpoints.
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
-                          Any value other than empty or 0 stops the grayed
+                          Any value other than empty or 0 stops the greyed
                           next-message suggestion (→ takes it) after each turn.
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           Any value other than empty or 0 stops auto-memory
@@ -1979,7 +1979,7 @@ TXT,
     'keys.agentview.prev' => 'Open the previous agent of the same batch',
     'keys.agentview.send' => 'Send the draft to the agent on screen',
     'keys.agentview.stop-all' => 'Stop every running agent',
-    'keys.chat.accept-suggestion' => 'Take the grayed suggestion (empty input box)',
+    'keys.chat.accept-suggestion' => 'Take the greyed suggestion (empty input box)',
     'keys.chat.agent-cycle' => 'Cycle the primary agent this session runs as (between turns)',
     'keys.chat.agents' => 'List the active agents (runs /agents)',
     'keys.chat.agents-strip' => 'Focus the live agents strip',
@@ -4110,7 +4110,7 @@ TXT,
     'settings.resumeCostWarnUsd.help' => 'After a stale resume the first prompt is held once when re-sending the history is estimated to cost at least this many dollars uncached; press Enter again to send anyway, or /compact first. 0 disables the hold.',
     'settings.sandboxAllowedDomains.help' => 'The hosts the `allowlist` jail may reach: plain names (`example.com`), `*.example.com` wildcards and `host:port` spellings (default: nothing). Used only when `bashSandbox` is `allowlist` on Linux; with an EMPTY list `allowlist` behaves EXACTLY like `no-network`. The egress proxy grants HTTP(S) and nothing else — every host not listed is answered 403, and non-HTTP traffic (ssh, database ports) fails. A malformed entry is IGNORED at enforcement: a typo can only shrink the grant, never widen it. User tier only: a checked-out repository must not open a hole in the jail it arrived inside. macOS enforces `allowlist` as `no-network` — the loopback-port arm is a tracked follow-up.',
     'settings.sandboxScope.help' => 'Which commands outside the tool path join the `bashSandbox` jail: `hooks`, `lint`, `format`, `test`, `lsp`, `mcp` (default: none). Live only while `bashSandbox` is not `off` — the list says who shares the jail, never whether one exists. An unrecognised entry reads as EVERY scope (strictest, like an unrecognised `bashSandbox` value), and the settings audit names it. A jail that cannot start refuses the work rather than running it free: script hooks deny, lint, format and test skip with the reason, and a jailed LSP or MCP stdio server is not started. `lsp` entries and user-tier MCP entries carry a per-server `"sandbox": false` opt-out; project-tier MCP opt-outs are ignored.',
-    'settings.screenReader.help' => 'Presentation for screen-reader users. On, the app sheds decoration a reader cannot narrate — the agent spinner pins to one static frame, and box-drawing frames, reverse-video-only menu selection and the like give way to plain text and an audible cue as each surface honors the switch. Off is the painted terminal as usual. Your own accessibility setting, like the draft box vim mode: a checked-out project cannot change it. Applies on the next read after saving — live, no reload.',
+    'settings.screenReader.help' => 'Presentation for screen-reader users. On, the app sheds decoration a reader cannot narrate — the agent spinner pins to one static frame, and box-drawing frames, reverse-video-only menu selection and the like give way to plain text and an audible cue as each surface honours the switch. Off is the painted terminal as usual. Your own accessibility setting, like the draft box vim mode: a checked-out project cannot change it. Applies on the next read after saving — live, no reload.',
     'settings.rules.standingMaxBytes.help' => 'Byte budget, framed and escaped, for the rule files spliced whole into every prompt; a rule past it is named by one pointer line instead.',
     'settings.scrollWheelLines.help' => 'Transcript lines one wheel tick scrolls.',
     'settings.sd.apiKey.help' => 'Bearer key sent to the Stable Diffusion server, if it demands one; prefer the `${VAR}` placeholder form over a literal.',

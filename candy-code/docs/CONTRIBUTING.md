@@ -118,8 +118,10 @@ and say so in the commit message.
 
 The prose style the guards are calibrated to: sentence-case headings, no
 Oxford comma, table cells that are one sentence, numerals spelled out or
-digits exactly as the relevant `DocFigure` arm matches them. Docs describe
-current behavior only: audit-era identifiers (`E###`, `ISS-###`, wave
+digits exactly as the relevant `DocFigure` arm matches them. House spelling is
+British English — colour, behaviour, honour, normalise — while identifiers and
+protocol vocabulary keep their upstream spelling (`Color::`, `NO_COLOR`). Docs
+describe current behaviour only: audit-era identifiers (`E###`, `ISS-###`, wave
 labels) and dated remediation narratives do not belong in prose — code
 comments carry them instead (see [GLOSSARY.md](GLOSSARY.md)). Generated
 surfaces regenerate through their real generators, never by hand:

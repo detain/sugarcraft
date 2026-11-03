@@ -460,7 +460,7 @@ chain goes to a detached process (a `Support\Daemonize` daemon) that outlives th
 runs to the deadlines its own hooks were configured with: what goes away is the
 waiting, never the hook. It writes to the TUI log rather than your terminal, and
 the two places it cannot be handed off — no log to write to, or a build that
-cannot daemonize — keep the foreground behavior of a `-p` run instead of dropping
+cannot daemonize — keep the foreground behaviour of a `-p` run instead of dropping
 the hook. This is why `keepWarm` daemons and `/bg` sessions are unaffected: they
 were never waited on either.
 

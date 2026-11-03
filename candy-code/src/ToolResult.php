@@ -471,8 +471,8 @@ final class ToolResult
      * Set the render mode {@see probeMosaic()} derives from (W2.2). Called
      * once per launch by {@see \SugarCraft\Code\Cli\Bootstrap::applyMediaRenderMode()}
      * with the resolved `ui.imageRenderMode` value; empty or whitespace-only
-     * input normalizes to `'auto'`, asking the terminal. The word is stored
-     * normalized (trimmed, lower-cased) because mosaic's own vocabulary
+     * input normalises to `'auto'`, asking the terminal. The word is stored
+     * normalised (trimmed, lower-cased) because mosaic's own vocabulary
      * comparator is, and the memo key must not fork on spelling noise.
      */
     public static function setRenderMode(string $mode): void

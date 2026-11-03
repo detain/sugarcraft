@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Author a SKILL.md skill file. Every frontmatter key with its honored meaning, the tier and gating rules, and the draft path to accept. Use when creating, narrowing, or reviewing a skill.
+description: Author a SKILL.md skill file. Every frontmatter key with its honoured meaning, the tier and gating rules, and the draft path to accept. Use when creating, narrowing, or reviewing a skill.
 user-invocable: true
 disable-model-invocation: false
 allowed-tools: "Read, Grep"

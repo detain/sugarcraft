@@ -873,7 +873,7 @@ precedence order (`InstructionFileLoader::FILENAMES`):
 
 - **your personal files** — `~/.candy-code/AGENTS.md`, always, at session start,
   in every project, and behind it the two persona files `SOUL.md` (your voice
-  and standing behavior) and `USER.md` (facts about you), each read only when
+  and standing behaviour) and `USER.md` (facts about you), each read only when
   present and each priced under the same instruction budget and framed in your
   own voice (the `<user-rules>` fence and preamble your
   `~/.candy-code/rules` use — the `~/.claude/rules` and

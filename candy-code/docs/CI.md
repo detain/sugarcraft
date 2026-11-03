@@ -82,7 +82,7 @@ environment variables on the step, from your repo secrets:
 ```
 
 `CANDY_CODE_PROVIDER`, `CANDY_CODE_MODEL`, `CANDY_CODE_PERMISSION_MODE` and
-`CANDY_CODE_MAX_COST` are honored exactly as documented in
+`CANDY_CODE_MAX_COST` are honoured exactly as documented in
 [ENVIRONMENT.md](ENVIRONMENT.md); the explicit `with:` values above them win because the action
 passes them as flags.
 

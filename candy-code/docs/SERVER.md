@@ -1607,7 +1607,7 @@ recorded ref is the `sugarcraft/candy-code-web` package's (a sibling of
 the same split-synced stream), so a package-side-only lag stays outside
 what the row proves). It
 runs unprivileged as `candy` with `HOME=/data` — the serve preflight's refusal
-to run as root is honored, not bypassed (`--allow-root` is never passed) — so
+to run as root is honoured, not bypassed (`--allow-root` is never passed) — so
 all server state (sessions, token, discovery record, control socket) lives on
 the `/data` volume under `~/.candy-code/server`. The default command is
 `serve --host 0.0.0.0 --allow-remote` and a `HEALTHCHECK` probes

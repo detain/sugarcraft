@@ -66,7 +66,7 @@ current) would stay invisible in the row.
   that drops one fails the build instead of the container.
 - **Unprivileged.** The image installs a `candy` user and switches to it. The
   serve preflight refuses to run as root unless `--allow-root` is passed, and
-  this image deliberately never passes it: the container honors the refusal
+  this image deliberately never passes it: the container honours the refusal
   rather than arguing with it. Do not override the `USER`.
 - **State lives in `$HOME=/data`.** The default state directory is
   `~/.candy-code/server`, so everything the server writes — sessions, the

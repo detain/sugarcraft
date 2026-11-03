@@ -15,7 +15,7 @@ listed where first-time readers hit them; each entry names where to read more.
 | **OSC 52** | An escape sequence (Operating System Command 52) that asks the terminal to copy text into the *system* clipboard, even over ssh. How selecting with the mouse in CandyCode reaches your paste buffer. |
 | **PTY** | Pseudo-TTY — a kernel terminal pair: a master the parent program reads/writes and a slave that behaves like a real terminal for a child process. How `Bash interactive:true`, `PtyRun`, and tmux-style embedding work. |
 | **sdapi** | The Stable Diffusion web UI API family — the HTTP interfaces of A1111/SD.Next-style servers (`/sdapi/v1/txt2img` and friends). The media tools speak it, plus the SGLang-Diffusion variant ([MEDIA.md](MEDIA.md)). |
-| **sixel** | A bitmap terminal graphics protocol (DEC) that paints pixels directly as escaped color runs. Middle rung of the render ladder; broader terminal support than kitty. |
+| **sixel** | A bitmap terminal graphics protocol (DEC) that paints pixels directly as escaped colour runs. Middle rung of the render ladder; broader terminal support than kitty. |
 | **SGR** | Select Graphic Rendition — the `ESC[ … m` sequences that set text color, weight, and underline. "Colored output" is SGR output. |
 | **SSRF** | Server-Side Request Forgery — tricking a program into making requests to an address the attacker cannot reach directly (e.g. cloud metadata, localhost services). Why outbound fetches are jail-checked. |
 | **TUI** | Terminal User Interface — an interactive full-screen program drawn with text (panes, menus, keybindings), as opposed to a line-by-line CLI. CandyCode's main mode is a TUI; `-p` is the non-TUI one-shot path. |
@@ -30,7 +30,7 @@ looks the way it does ("the brake the spend cap cannot be", "refuses while
 it stands"). Two rules govern them:
 
 - **Comments and changelogs carry them; user-facing prose does not.** The
-  docs in this directory state the current behavior without citing the
+  docs in this directory state the current behaviour without citing the
   ticket that produced it. If you find a bare ID token in a docs page, it
   is drift — strip it and keep the sentence.
 - **They are not resolvable outside the repo.** There is no issue tracker

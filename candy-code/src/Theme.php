@@ -13,13 +13,13 @@ use SugarCraft\Markdown\Theme as MarkdownTheme;
 use SugarCraft\Style\Theme as StyleTheme;
 
 /**
- * A named color theme for {@see Renderer}'s chrome (borders, user/assistant/
+ * A named colour theme for {@see Renderer}'s chrome (borders, user/assistant/
  * system labels), the whole `src/Tui/` shell (menu bar and its dropdown, pane
  * boxes, sidebars, status colours) and SugarMarkdown's markdown rendering,
  * resolved from the two theme classes that already exist elsewhere in the
- * monorepo rather than inventing a third color system:
+ * monorepo rather than inventing a third colour system:
  *
- *   - {@see StyleTheme} supplies the chrome colors (border/labels/`shell*`).
+ *   - {@see StyleTheme} supplies the chrome colours (border/labels/`shell*`).
  *   - {@see MarkdownTheme} supplies the markdown-rendering theme.
  *
  * The `shell*` tokens exist because `src/Tui/` used to be theme-blind: 14 files
@@ -42,7 +42,7 @@ use SugarCraft\Style\Theme as StyleTheme;
  * (`dark`/`light`/`dracula`/`tokyoNight`/`ansi`) - StyleTheme also has
  * `oneDark`/`githubDark`/`solarizedDark`/`solarizedLight` and MarkdownTheme also
  * has `pink`/`plain`/`notty`/`ascii`, but offering a name only one side
- * recognizes would silently mismatch chrome and markdown colors, so those
+ * recognizes would silently mismatch chrome and markdown colours, so those
  * extras are left out of the picker for now. On top of those built-ins the
  * list carries the custom themes discovered under
  * `~/.candy-code/themes/` ({@see ThemeFile}); the intersection rule is what

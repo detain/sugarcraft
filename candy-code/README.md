@@ -108,7 +108,7 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |
 | [`docs/GLOSSARY.md`](docs/GLOSSARY.md) | Terminal acronyms and project vocabulary, glossed where they first appear, and the identifier labels you meet in code comments |
 | [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) | Working on this package: linked vs published vendor modes, the sharded suite, the drift guards, and the docs cadence |
-| [`docs/ADDING_A_PROVIDER.md`](docs/ADDING_A_PROVIDER.md) | The provider contract end to end: capabilities, the response fields the engine consumes, registration, and the behavior laws |
+| [`docs/ADDING_A_PROVIDER.md`](docs/ADDING_A_PROVIDER.md) | The provider contract end to end: capabilities, the response fields the engine consumes, registration, and the behaviour laws |
 | [`candy-code-web`](https://github.com/sugarcraft/candy-code-web) | The browser UI that `candy-code serve` hosts |
 
 ## Install
@@ -365,7 +365,7 @@ all one component tree — not two parallel UIs.
 | `Ctrl+W` / `Alt+Backspace` | Delete the previous word |
 | `Up` (empty input) | Recall the last prompt you sent — press again to walk further back, into earlier sessions too (a fresh launch's first `Up` is the previous session's last prompt). History lives in `~/.candy-code/prompt_history.jsonl`; editing a recalled prompt ends the walk |
 | `Down` (while recalling) | Step forward through recalled prompts; past the newest one, the draft you were typing comes back |
-| `Right` (empty input) | Take the grayed suggestion — after each turn the empty box shows a guess at your next message (`CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=1` turns it off) |
+| `Right` (empty input) | Take the greyed suggestion — after each turn the empty box shows a guess at your next message (`CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=1` turns it off) |
 | `Page Up` / `Page Down` | Scroll the transcript a screenful |
 | `Tab` | Cycle focus over the **docked** panes — or complete a command, path or skill mention while chat holds focus — see the fine print below. |
 | `Shift+Tab` | Cycle pane focus backwards (same docked list) |
@@ -2034,7 +2034,7 @@ It belongs to the strict flag family: an empty value is a usage error, and a
 value that is not a positive whole number refuses the launch with exit 2
 rather than silently deferring to the setting — a hand-edited `maxToolSteps`
 typo only costs that knob and is reported at launch, but a typed flag is an
-explicit act and is honored or the run does not start. The flag applies to
+explicit act and is honoured or the run does not start. The flag applies to
 the TUI and to `-p`/`run` alike; a sub-agent run whose ceiling TaskTool
 raises for its own turn keeps that raise.
 
