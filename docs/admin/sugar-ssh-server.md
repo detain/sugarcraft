@@ -234,15 +234,23 @@ membership uses `hash_equals()` across every entry rather than an
 `in_array()` early-out, so list position is not measurable.
 
 **`PasswordAuth` / `SSH_PASSWORD` caveat.** `PasswordAuth` reads the
-password from `SSH_PASSWORD` via `$_SERVER`/`getenv`
-(`src/Middleware/Auth/PasswordAuth.php` :52-54). sshd **never sets
+password from `SSH_PASSWORD` via `$_SERVER`/`getenv`. sshd **never sets
 this variable** — OpenSSH does not hand passwords to forced commands.
 To use this middleware you must inject the secret yourself (for
 example from a wrapper or PAM exec), which means the password is
 visible in that process's `/proc/<pid>/environ`, is inherited by any
 child spawned afterwards, and can land in crash dumps. The library
-clears it immediately after reading (`:59`); the exposure window
-before that is yours to minimize. The fleet trust model for this class
+clears the variable immediately after reading it, which stops later
+reads in this process and stops a later child from inheriting it - and
+is worth stating precisely, because it does **not** rewrite the
+kernel's copy of this process's initial environment: a ptrace or a core
+dump taken during the walk can still show the bytes (audit MINOR 2). If
+that is inside your threat model, do not use the environment: have the
+wrapper hand the secret over a pipe and pass it in as a constructor
+argument. Presence is checked separately from value - a session whose
+environment carried no `SSH_PASSWORD` at all is refused without
+consulting the validator, while an explicitly empty one still reaches
+it, because only the second is your code's to judge (audit MINOR 6). The fleet trust model for this class
 of config/credential-as-code surface is documented in
 [docs/TRUST-BOUNDARY.md](../TRUST-BOUNDARY.md).
 

@@ -68,9 +68,10 @@ final class Session
      */
     public static function fromEnvironment(): self
     {
-        // Cache getenv result to avoid calling it multiple times per key.
-        // getenv() queries the system environment which may involve
-        // syscall overhead on each invocation.
+        // These reads are NOT cached. The comment that used to sit here
+        // claimed a memo per key that this closure never had - and a snapshot
+        // would be wrong anyway, because a gate later in the walk scrubs
+        // credentials out of the same environment. (audit NIT 9)
         $env = static function(string $k): ?string {
             if (isset($_SERVER[$k]) && $_SERVER[$k] !== '') {
                 return (string) $_SERVER[$k];
@@ -80,11 +81,26 @@ final class Session
         };
 
         $conn = $env('SSH_CONNECTION') ?? $env('SSH_CLIENT') ?? '';
-        $parts = preg_split('/\s+/', $conn) ?: [];
+        $parts = $conn === '' ? [] : (preg_split('/\s+/', $conn) ?: []);
         $clientHost = $parts[0] ?? '';
         $clientPort = isset($parts[1]) ? (int) $parts[1] : 0;
-        $serverHost = $parts[2] ?? '';
-        $serverPort = isset($parts[3]) ? (int) $parts[3] : 0;
+
+        // The two shapes this library accepts are different lengths:
+        // SSH_CONNECTION is `client-ip client-port server-ip server-port`,
+        // SSH_CLIENT is `client-ip client-port server-port` - it has no
+        // server-address field at all. Taking index 2 as a host unconditionally
+        // stored the server's PORT in `serverHost` on every SSH_CLIENT-only
+        // deployment and left `serverPort` at zero, so the audit fields were
+        // wrong in exactly the two cases where they were populated at all.
+        // (audit MINOR 15)
+        $serverHost = '';
+        $serverPort = 0;
+        if (count($parts) >= 4) {
+            $serverHost = $parts[2];
+            $serverPort = (int) $parts[3];
+        } elseif (count($parts) === 3) {
+            $serverPort = (int) $parts[2];
+        }
 
         return new self(
             user:       $env('USER')   ?? $env('LOGNAME') ?? '',
@@ -92,13 +108,36 @@ final class Session
             clientPort: $clientPort,
             serverHost: $serverHost,
             serverPort: $serverPort,
+            // A PTY needs a TERM, and nothing guarantees the peer sent one:
+            // TERM reaches a ForceCommand child only through sshd's AcceptEnv,
+            // which makes it asserted rather than observed. This value is
+            // therefore an assumption about the client, not a fact about it.
             term:       $env('TERM')    ?? 'xterm-256color',
-            cols:       (int) ($env('COLUMNS') ?? '80'),
-            rows:       (int) ($env('LINES')   ?? '24'),
+            cols:       self::declaredSize($env('COLUMNS'), 80),
+            rows:       self::declaredSize($env('LINES'),   24),
             tty:        $env('SSH_TTY'),
             command:    $env('SSH_ORIGINAL_COMMAND'),
             lang:       $env('LANG')    ?? 'C.UTF-8',
         );
+    }
+
+    /**
+     * Geometry as the peer declared it, or the default - never zero.
+     *
+     * `COLUMNS=0`, and `COLUMNS=eighty` (which casts to 0), used to be handed
+     * straight through to `Pty::spawn()`, where a zero-width PTY confuses
+     * every client that asks its own terminal how big it is. A value that is
+     * not a positive integer is treated as undeclared. (audit MINOR 11, MINOR 16)
+     */
+    private static function declaredSize(?string $value, int $default): int
+    {
+        if ($value === null || ! ctype_digit($value)) {
+            return $default;
+        }
+
+        $size = (int) $value;
+
+        return $size >= 1 ? $size : $default;
     }
 
     public function isInteractive(): bool

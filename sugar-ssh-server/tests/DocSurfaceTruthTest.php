@@ -616,6 +616,51 @@ final class DocSurfaceTruthTest extends TestCase
         self::assertGreaterThan(20, $seen, 'the sweep should have read most of src/ plus both docs');
     }
 
+    public function testTheCredentialReadingTruthIsOnTheSurfacesThatTeachIt(): void
+    {
+        $readme = $this->readme();
+        if ($readme === null) {
+            $this::fail('the library README is missing');
+        }
+
+        $readme = (string) \preg_replace('/\s+/', ' ', $readme);
+        self::assertStringContainsString(
+            'refused before the validator is consulted',
+            $readme,
+        );
+        self::assertStringContainsString('counts the fields', $readme);
+
+        $guide = $this->adminGuide();
+        if ($guide === null) {
+            $this->markTestSkipped('no admin guide in a standalone checkout');
+        }
+
+        $guide = (string) \preg_replace('/\s+/', ' ', $guide);
+        self::assertStringContainsString(
+            'does **not** rewrite the',
+            $guide,
+            'the /proc mitigation must not be oversold (audit MINOR 2)',
+        );
+        self::assertStringContainsString(
+            'Presence is checked separately from value',
+            $guide,
+        );
+        self::assertStringNotContainsString(
+            'PasswordAuth.php` :52-54',
+            $guide,
+            'line-number cites drift; name the file, not the offset',
+        );
+
+        $body = $this->siteBody();
+        if ($body !== null) {
+            $body = (string) \preg_replace('/\s+/', ' ', $body);
+            self::assertStringContainsString(
+                'refused before the callback runs',
+                $body,
+            );
+        }
+    }
+
     private function adminGuide(): ?string
     {
         return $this->monorepoFile('docs/admin/sugar-ssh-server.md');

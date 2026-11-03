@@ -43,6 +43,37 @@ final class SessionTest extends TestCase
         }
     }
 
+    public function testTheThreeFieldSshClientShapeKeepsItsFieldsApart(): void
+    {
+        // SSH_CLIENT has no server-address slot: its third field is the port.
+        // Reading index 2 as a host stored '22' in `serverHost` and left
+        // `serverPort` at zero - the two audit fields were wrong in exactly the
+        // cases where they were populated. (audit MINOR 15)
+        $_SERVER['SSH_CLIENT'] = '203.0.113.7 54321 22';
+        $_SERVER['USER']       = 'alice';
+
+        $s = Session::fromEnvironment();
+
+        $this->assertSame('203.0.113.7', $s->clientHost);
+        $this->assertSame(54321,         $s->clientPort);
+        $this->assertSame('',            $s->serverHost);
+        $this->assertSame(22,            $s->serverPort);
+    }
+
+    public function testAGeometryThatIsNotAPositiveIntegerIsTreatedAsUndeclared(): void
+    {
+        // A PTY spawned at width 0 confuses every client that asks its own
+        // terminal how big it is. (audit MINOR 11, MINOR 16)
+        $_SERVER['USER']    = 'alice';
+        $_SERVER['COLUMNS'] = '0';
+        $_SERVER['LINES']   = 'eighty';
+
+        $s = Session::fromEnvironment();
+
+        $this->assertSame(80, $s->cols);
+        $this->assertSame(24, $s->rows);
+    }
+
     public function testFromEnvironmentParsesSshConnection(): void
     {
         $_SERVER['SSH_CONNECTION'] = '203.0.113.7 54321 198.51.100.4 22';

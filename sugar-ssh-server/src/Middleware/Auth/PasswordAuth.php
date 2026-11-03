@@ -19,15 +19,27 @@ use SugarCraft\SshServer\StreamHelper;
  * reject.
  *
  * **Password environment exposure.** The password is read from the
- * `SSH_PASSWORD` environment variable (via `$_SERVER` or `getenv`).
- * This makes it visible via `/proc/<pid>/environ`, inherited by child
- * processes, and potentially appearing in crash dumps. This middleware
- * mitigates this by unsetting `SSH_PASSWORD` from both `$_SERVER` and
- * the process environment immediately after reading it, before the
- * validation result is returned.
+ * `SSH_PASSWORD` environment variable (via `$_SERVER` or `getenv`), which
+ * makes it visible in `/proc/<pid>/environ`, inheritable by children, and
+ * possible to find in a crash dump. This gate unsets the variable from both
+ * sources the moment it has read it, which stops later reads in this process
+ * and stops a child spawned afterwards from inheriting it. It is a partial
+ * mitigation and says so: `putenv()` does not rewrite the kernel's copy of
+ * this process's initial environment, so a ptrace or core dump taken during
+ * the walk can still show the bytes. If that threat model matters to you,
+ * do not put the secret in the environment at all - have the wrapper hand it
+ * to the entry script over a pipe and inject it as a constructor argument.
+ * (audit MINOR 2)
  *
- * On rejection writes a one-line message to stderr and returns
- * without invoking `$next`.
+ * **Presence is not emptiness.** A session whose environment carries no
+ * `SSH_PASSWORD` at all is refused without consulting the validator. An
+ * empty string that was actually delivered still reaches it, because
+ * "nobody sent a password" and "the password sent is empty" are different
+ * facts and only the second is the caller's to judge. (audit MINOR 6)
+ *
+ * On rejection writes a one-line message to stderr, marks the session
+ * refused for the exit code (audit MAJOR 9), and returns without invoking
+ * `$next`.
  */
 final class PasswordAuth implements Middleware
 {
@@ -49,15 +61,15 @@ final class PasswordAuth implements Middleware
 
     public function handle(Context $ctx, Session $session, callable $next)
     {
-        $password = isset($_SERVER['SSH_PASSWORD']) && $_SERVER['SSH_PASSWORD'] !== ''
-            ? $_SERVER['SSH_PASSWORD']
-            : (getenv('SSH_PASSWORD') ?: '');
+        $password = self::readDeliveredCredential();
 
-        // Clear the plaintext password from the environment immediately
-        // after reading so it stops appearing in /proc/<pid>/environ
-        // and is not inherited by child processes.
-        unset($_SERVER['SSH_PASSWORD']);
-        putenv('SSH_PASSWORD');
+        if ($password === null) {
+            // Nothing arrived: this is not a wrong guess, it is a missing
+            // factor, and the validator has no opinion worth recording.
+            $session->markRefused();
+            fwrite($this->stderr, Lang::t('passwordauth.permission_denied') . "\n");
+            return;
+        }
 
         if (!($this->validate)($session->user, $password)) {
             $session->markRefused();
@@ -66,5 +78,29 @@ final class PasswordAuth implements Middleware
         }
 
         $next($ctx, $session);
+    }
+
+    /**
+     * Read `SSH_PASSWORD` once and scrub it, distinguishing "absent" from
+     * "delivered, and empty".
+     *
+     * @return string|null null when neither source carried the variable
+     */
+    private static function readDeliveredCredential(): ?string
+    {
+        if (array_key_exists('SSH_PASSWORD', $_SERVER)) {
+            $password = (string) $_SERVER['SSH_PASSWORD'];
+        } else {
+            $fromEnv = getenv('SSH_PASSWORD');
+            if ($fromEnv === false) {
+                return null;
+            }
+            $password = $fromEnv;
+        }
+
+        unset($_SERVER['SSH_PASSWORD']);
+        putenv('SSH_PASSWORD');
+
+        return $password;
     }
 }

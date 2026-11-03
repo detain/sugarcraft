@@ -101,16 +101,46 @@ final class PasswordAuthTest extends TestCase
         }
     }
 
-    public function testHandlesEmptyPassword(): void
+    public function testAnAbsentCredentialIsRefusedWithoutConsultingTheValidator(): void
     {
-        [$err] = $this->stderr();
+        // This pin used to assert the opposite: with nothing delivered, the
+        // validator was handed '' and a callback written `fn ($u, $p) => $p === ''`
+        // authenticated the session. Presence is now its own check.
+        // (audit MINOR 6; flip disclosed in the commit message)
+        [$err, $read] = $this->stderr();
         unset($_SERVER['SSH_PASSWORD']);
         putenv('SSH_PASSWORD');
-        $a = new PasswordAuth(fn($u, $p) => $p === '', $err);
+        $asked = [];
+        $a = new PasswordAuth(function ($u, $p) use (&$asked): bool {
+            $asked[] = $p;
+            return true;
+        }, $err);
+        $session = $this->session('alice');
+        $reached = false;
+        $a->handle(Context::background(), $session, function () use (&$reached): void {
+            $reached = true;
+        });
+        $this->assertFalse($reached);
+        $this->assertSame([], $asked, 'the validator must not judge a credential that never arrived');
+        $this->assertTrue($session->refused());
+        $this->assertStringContainsString('Permission denied', $read());
+    }
+
+    public function testAnExplicitlyEmptyCredentialStillReachesTheValidator(): void
+    {
+        [$err, $read] = $this->stderr();
+        $_SERVER['SSH_PASSWORD'] = '';
+        putenv('SSH_PASSWORD');
+        $seen = null;
+        $a = new PasswordAuth(function ($u, $p) use (&$seen): bool {
+            $seen = $p;
+            return $p === '';
+        }, $err);
         $reached = false;
         $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
             $reached = true;
         });
+        $this->assertSame('', $seen);
         $this->assertTrue($reached);
     }
 
