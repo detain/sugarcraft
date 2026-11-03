@@ -1389,15 +1389,15 @@ final class RendererTest extends TestCase
 
         $out = Renderer::render($chat);
 
-        $added = Style::new()->foreground(Color::ansi(2))->render('+here');
-        $removed = Style::new()->foreground(Color::ansi(1))->render('-gone');
+        $added = Style::new()->foreground($theme->shellSuccess)->render('+here');
+        $removed = Style::new()->foreground($theme->shellError)->render('-gone');
         $header = Style::new()->foreground($theme->systemLabel)->bold()->render('--- a/src/App.php');
 
         $this->assertStringContainsString($added, $out);
         $this->assertStringContainsString($removed, $out);
         $this->assertStringContainsString($header, $out);
         $this->assertStringNotContainsString(
-            Style::new()->foreground(Color::ansi(1))->render('--- a/src/App.php'),
+            Style::new()->foreground($theme->shellError)->render('--- a/src/App.php'),
             $out,
         );
     }
@@ -1443,7 +1443,7 @@ final class RendererTest extends TestCase
 
         $gutterStyle = Style::new()->foreground($theme->systemLabel);
         $this->assertStringContainsString(
-            $gutterStyle->render('  1│ ') . Style::new()->foreground(Color::ansi(2))->render('+here'),
+            $gutterStyle->render('  1│ ') . Style::new()->foreground($theme->shellSuccess)->render('+here'),
             $out,
         );
     }
@@ -1588,7 +1588,7 @@ final class RendererTest extends TestCase
         // C-TUI-2.c tints the deleted body through the file's language, so the
         // red survives on the marker column while `table` rides the theme's
         // keyword slot; the grammar's remaining spans stay removal-red.
-        $body = Style::new()->foreground(Color::ansi(1))->render('-');
+        $body = Style::new()->foreground($theme->shellError)->render('-');
         $keyword = $chat->theme()->markdown->keyword;
         $this->assertNotNull($keyword);
         $row = array_values(array_filter(
@@ -1598,9 +1598,9 @@ final class RendererTest extends TestCase
         $this->assertNotCount(0, $row, 'the deleted comment row is still painted');
         $this->assertStringContainsString(
             $body
-            . Style::new()->foreground(Color::ansi(1))->render('-- users ')
+            . Style::new()->foreground($theme->shellError)->render('-- users ')
             . $keyword->render('table')
-            . Style::new()->foreground(Color::ansi(1))->render(', legacy'),
+            . Style::new()->foreground($theme->shellError)->render(', legacy'),
             $row[0],
         );
         $this->assertStringNotContainsString(

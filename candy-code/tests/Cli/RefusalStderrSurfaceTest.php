@@ -268,13 +268,13 @@ final class RefusalStderrSurfaceTest extends TestCase
             [
                 'terminal' => [
                     'promptBytes' => 189, 'promptLines' => 7,
-                    'observerBytes' => 87, 'observerLines' => 1,
-                    'totalBytes' => 276, 'totalLines' => 8,
+                    'observerBytes' => 89, 'observerLines' => 1,
+                    'totalBytes' => 278, 'totalLines' => 8,
                 ],
                 'no-tty' => [
                     'promptBytes' => 676, 'promptLines' => 9,
-                    'observerBytes' => 87, 'observerLines' => 1,
-                    'totalBytes' => 763, 'totalLines' => 10,
+                    'observerBytes' => 89, 'observerLines' => 1,
+                    'totalBytes' => 765, 'totalLines' => 10,
                 ],
             ],
             $measured,

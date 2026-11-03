@@ -57,7 +57,10 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — forty-seven sites (C-TOOL-6.j 2026-10-31: +9 in
+ *  1. `fwrite(STDERR, …)` — forty-eight sites (2026-11-03: +1 in
+ *     `Attach::runTui()`'s abnormal-exit restore announcement, stderr-alone
+ *     by the same detached-terminal decision as the subcommand writers below;
+ *     C-TOOL-6.j 2026-10-31: +9 in
  *     the forked `PtyRelay` pump — the relay's own refusal and degrade lines,
  *     stderr-alone by the same detached-process decision as the bridge below:
  *     the relay is the child the spawner launches, its stderr is captured to
@@ -360,7 +363,12 @@ final class StderrEmitterCensusTest extends TestCase
         // O-8a: `attach`'s fail(), the one line saying why it could not reach
         // a server. Stderr alone: it is written before any TUI or session
         // exists, and the verb then exits 1.
-        'src/Cli/Attach.php' => 1,
+        // +1 in the 2026-11 attach guard: the abnormal-exit restore
+        // announcement, written by the same shutdown hook that pops the
+        // terminal back. Stderr alone: the alt-screen is already being left,
+        // so the frame is gone whatever the line said, and a fatal mid-attach
+        // would otherwise strand the user in a raw terminal with no word.
+        'src/Cli/Attach.php' => 2,
         // +1 in ISS-026: the cross-project --continue notice. Stderr alone,
         // the same decision as the retention detail line beside it: the launch
         // succeeded, there is nothing the session can no longer DO, and the

@@ -153,9 +153,9 @@ final class DiffSplitRenderTest extends TestCase
         self::assertTrue(self::tokenPainted($theme, 'keyword', self::rawRow($painted, 'function greet')), 'the php keyword tints inside the split half');
         self::assertTrue(self::tokenPainted($theme, 'string', self::rawRow($painted, '"hello"')));
 
-        $greenMarker = Style::new()->foreground(Color::ansi(2))->render('+');
+        $greenMarker = Style::new()->foreground($theme->shellSuccess)->render('+');
         self::assertStringContainsString($greenMarker, self::rawRow($painted, '$name ='), 'the marker column keeps its colour');
-        $redMarker = Style::new()->foreground(Color::ansi(1))->render('-');
+        $redMarker = Style::new()->foreground($theme->shellError)->render('-');
         self::assertStringContainsString($redMarker, self::rawRow($painted, '$old ='));
     }
 

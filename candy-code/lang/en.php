@@ -243,7 +243,6 @@ return [
     'cli.doctor.config_invalid' => '{path}: invalid JSON ({error})',
     'cli.doctor.config_unreadable' => '{path} is not readable',
     'cli.doctor.curl_missing' => 'missing — the HTTP providers (openai, anthropic, sglang, custom) will fail',
-    'cli.doctor.sodium_missing' => 'missing — self-update and tools/install.sh cannot verify release signatures',
     'cli.doctor.failed.many' => '{count} checks failed.',
     'cli.doctor.failed.one' => '{count} check failed.',
     'cli.doctor.fts5_missing' => 'full-text search unavailable ({error}) — session body search degrades to the name/preview prefilter',
@@ -282,6 +281,7 @@ return [
     'cli.doctor.server_refuses' => '`serve` will refuse to start: {problems}',
     'cli.doctor.sessions' => '{count} session(s) stored',
     'cli.doctor.settings_clean' => 'every settings file carries only keys candy-code reads',
+    'cli.doctor.sodium_missing' => 'missing — self-update and tools/install.sh cannot verify release signatures',
     'cli.doctor.unknown' => 'unknown',
     'cli.headless.permission_hint' => '  hint: a `-p` run with no named mode starts in the asking `default` mode; unattended asks have nobody to answer, so they fail closed. Scripted runs can name --permission-mode bypass-permissions (or accept-edits) to keep going.',
     'cli.help.screen' => <<<'TXT'
