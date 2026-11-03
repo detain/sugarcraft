@@ -1155,11 +1155,22 @@ final class Player implements Model
             // Ascii / Ansi256 / TrueColor: one pixel per cell.
             for ($cy = 0; $cy < $bufH; $cy++) {
                 for ($cx = 0; $cx < $bufW; $cx++) {
-                    $px = $cx * $cellW;
-                    $py = $cy * $cellH;
-
-                    $rgb = self::pixelRgb($bytes, $w, $byteLen, $px, $py);
-                    [$r, $g, $b] = $rgb;
+                    // M21: a cell covers the full source box mapped to the
+                    // buffer grid, not just its top-left pixel. On the exact
+                    // frame geometry ffmpeg/GIF decoders emit (one source
+                    // pixel per cell) every box degenerates to one pixel and
+                    // this is pixel-identical to the old point read; an
+                    // oversized frame now averages its cell region instead of
+                    // aliasing it.
+                    [$r, $g, $b] = self::areaAverageRgb(
+                        $bytes,
+                        $w,
+                        $byteLen,
+                        intdiv($cx * $w, max(1, $bufW)),
+                        intdiv($cy * $h, max(1, $bufH)),
+                        intdiv(($cx + 1) * $w - 1, max(1, $bufW)),
+                        intdiv(($cy + 1) * $h - 1, max(1, $bufH)),
+                    );
 
                     $luma = (($r * 77) + ($g * 150) + ($b * 29)) >> 8;
                     $ch = LumaRamp::char((float)$luma, $this->ramp);
@@ -1254,6 +1265,53 @@ final class Player implements Model
      * Get RGB values for a pixel at (px, py) from raw rgb24 bytes.
      *
      * @return array{int, int, int} [r, g, b]
+     */
+    /**
+     * Inclusive-box channel mean over the raw rgb24 grid (M21).
+     *
+     * Indices clamp to the frame and to the audited byte length; a box that
+     * reads no pixels yields black, exactly like {@see pixelRgb()}'s
+     * out-of-bounds guard, so no new failure mode rides the filter.
+     *
+     * @return array{0:int,1:int,2:int}
+     */
+    public static function areaAverageRgb(string $bytes, int $w, int $byteLen, int $x0, int $y0, int $x1, int $y1): array
+    {
+        $x0 = max(0, min($x0, $w - 1));
+        $x1 = max(0, min($x1, $w - 1));
+        $y0 = max(0, min($y0, intdiv(max(0, $byteLen - 2), max(1, $w * 3))));
+        $y1 = max(0, min($y1, intdiv(max(0, $byteLen - 2), max(1, $w * 3))));
+
+        $rSum = 0;
+        $gSum = 0;
+        $bSum = 0;
+        $n = 0;
+        for ($y = $y0; $y <= $y1; ++$y) {
+            for ($x = $x0; $x <= $x1; ++$x) {
+                $idx = ($y * $w + $x) * 3;
+                if ($idx + 2 >= $byteLen) {
+                    continue;
+                }
+                $rSum += ord($bytes[$idx]);
+                $gSum += ord($bytes[$idx + 1]);
+                $bSum += ord($bytes[$idx + 2]);
+                ++$n;
+            }
+        }
+
+        if ($n === 0) {
+            return [0, 0, 0];
+        }
+
+        return [intdiv($rSum, $n), intdiv($gSum, $n), intdiv($bSum, $n)];
+    }
+
+    /**
+     * One raw rgb24 pixel, black when the index falls outside the audited
+     * byte length. The text Buffer path reaches it through
+     * {@see areaAverageRgb()} only for degenerate single-pixel boxes.
+     *
+     * @return array{0:int,1:int,2:int}
      */
     private static function pixelRgb(string $bytes, int $w, int $byteLen, int $px, int $py): array
     {

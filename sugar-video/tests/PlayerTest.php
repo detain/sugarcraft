@@ -2605,6 +2605,36 @@ final class PlayerTest extends TestCase
             @rmdir($dir);
         }
     }
+
+    /**
+     * @testdox M21: cell sampling averages the mapped source box, clamps safely, and is pixel-exact on 1:1 geometry
+     */
+    public function testTheAreaAverageIsExactOnFlatBoxesAndClampsBeyondTheFrame(): void
+    {
+        $white = "\xff\xff\xff";
+        $black = "\x00\x00\x00";
+        $checker = $white . $black . $black . $white;
+        $this->assertSame([127, 127, 127], Player::areaAverageRgb($checker, 2, 12, 0, 0, 1, 1), 'a 2x2 checkerboard cell means to mid-grey');
+        $this->assertSame([255, 255, 255], Player::areaAverageRgb($white . $white . $white . $white, 2, 12, 0, 0, 1, 1), 'a flat box keeps its level');
+        $this->assertSame([127, 127, 127], Player::areaAverageRgb($white . $black, 2, 6, 0, 0, 1, 0), 'a 1-row box is a mean, not a point');
+
+        $row = $white . $black;
+        foreach ([0, 1, 2, 3] as $i) {
+            $point = substr($row . $row, $i * 3, 3) === $white ? [255, 255, 255] : [0, 0, 0];
+            $this->assertSame(
+                $point,
+                Player::areaAverageRgb($row . $row, 2, 12, $i % 2, intdiv($i, 2), $i % 2, intdiv($i, 2)),
+                'degenerate 1x1 boxes stay pixel-identical to the old point read',
+            );
+        }
+
+        $this->assertSame([255, 255, 255], Player::areaAverageRgb($white, 1, 3, 5, 5, 9, 9), 'a fully-outside box clamps to the last real pixel, the grid clamping law');
+        $this->assertSame([0, 0, 0], Player::areaAverageRgb('', 2, 0, 0, 0, 1, 1), 'an empty buffer is black, never a crash');
+
+        $src = (string) file_get_contents(dirname(__DIR__) . '/src/Player.php');
+        $arm = substr($src, strpos($src, '// M21: a cell covers'), strpos($src, 'self::areaAverageRgb(', strpos($src, '// M21: a cell covers')));
+        $this->assertStringContainsString('intdiv($cx * $w, max(1, $bufW))', $arm, 'the cell box maps through the buffer grid');
+    }
 }
 
 /**
