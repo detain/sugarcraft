@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => 'lege kleur',
-    'style.unrecognised_color' => 'niet-herkende kleur: {value}',
+    'style.unrecognised_color' => 'niet-herkende kleur: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "hexkleur moet 3 of 6 hexadecimale cijfers hebben (bijv. '#f80' of '#ff8800'); verkregen '{value}'",
     'style.padding_token_int' => "padding/margin-token moet een integer zijn; gekregen: '{token}'",
     'style.padding_count'     => 'padding/margin vereist 1, 2 of 4 integers; gekregen: {count}',

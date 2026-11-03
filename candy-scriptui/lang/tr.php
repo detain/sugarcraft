@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => 'boş renk',
-    'style.unrecognised_color' => 'tanınmayan renk: {value}',
+    'style.unrecognised_color' => 'tanınmayan renk: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "hex rengi 3 veya 6 haneli olmalıdır (örn. '#f80' veya '#ff8800'); alınan: '{value}'",
     'style.padding_token_int' => "padding/margin belirteci integer olmalıdır; alınan: '{token}'",
     'style.padding_count'     => 'padding/margin 1, 2 veya 4 integer gerektirir; alınan: {count}',

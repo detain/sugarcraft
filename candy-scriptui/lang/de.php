@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     // Style/StyleBuilder.php
     'style.empty_color'       => 'leere Farbe',
-    'style.unrecognised_color' => 'nicht erkannte Farbe: {value}',
+    'style.unrecognised_color' => 'nicht erkannte Farbe: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "Hex-Farbe muss 3 oder 6 Hex-Ziffern haben (z. B. '#f80' oder '#ff8800'); erhalten: '{value}'",
     'style.padding_token_int' => "Padding/Margin-Token muss eine Ganzzahl sein; erhalten: '{token}'",
     'style.padding_count'     => 'Padding/Margin benötigt 1, 2 oder 4 Ganzzahlen; erhalten: {count}',

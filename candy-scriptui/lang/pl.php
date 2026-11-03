@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => 'pusty kolor',
-    'style.unrecognised_color' => 'nierozpoznany kolor: {value}',
+    'style.unrecognised_color' => 'nierozpoznany kolor: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "kolor szesnastkowy musi mieć 3 lub 6 cyfr szesnastkowych (np. '#f80' lub '#ff8800'); otrzymano '{value}'",
     'style.padding_token_int' => "token padding/margin musi być liczbą całkowitą; otrzymano: '{token}'",
     'style.padding_count'     => 'padding/margin wymaga 1, 2 lub 4 liczb całkowitych; otrzymano: {count}',

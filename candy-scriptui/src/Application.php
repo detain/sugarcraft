@@ -22,6 +22,7 @@ use SugarCraft\ScriptUi\Attribute\Example;
 use SugarCraft\ScriptUi\Discovery\CommandScanner;
 use SugarCraft\ScriptUi\Help\HelpFormatter;
 use SugarCraft\ScriptUi\Help\TypoSuggester;
+use SugarCraft\ScriptUi\Runtime\ColourGate;
 use Symfony\Component\Console\Application as SymfonyApplication;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
@@ -451,6 +452,12 @@ final class Application extends SymfonyApplication
      */
     protected function doRunCommand(Command $command, InputInterface $input, OutputInterface $output): int
     {
+        // Resolve NO_COLOR / FORCE_COLOR / CLICOLOR / TERM=dumb and the
+        // global --ansi/--no-ansi flags once per command and pin the
+        // ambient sugar-style profile, so every Style minted downstream
+        // (flag styles, log badges, markdown themes) renders inside it.
+        ColourGate::install($input);
+
         $constraints = $this->enumConstraints[$command->getName()] ?? [];
         if ($constraints !== []) {
             // Symfony binds INSIDE parent::doRunCommand, so nothing has

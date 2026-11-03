@@ -7,6 +7,7 @@ namespace SugarCraft\ScriptUi\Style;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\ScriptUi\Lang;
+use SugarCraft\ScriptUi\Runtime\ColourGate;
 use SugarCraft\Style\Style;
 
 /**
@@ -41,6 +42,10 @@ final class StyleBuilder
             }
             $s = $f === 'foreground' ? $s->foreground($color) : $s->background($color);
         }
+        // Never re-widen past the ambient capability pinned by
+        // ColourGate (a parsed palette index claiming Ansi must not
+        // leak colour back under NO_COLOR's Ascii).
+        $minProfile = ColourGate::clamp($minProfile);
         if ($minProfile !== ColorProfile::TrueColor) {
             $s = $s->colorProfile($minProfile);
         }
@@ -130,8 +135,41 @@ final class StyleBuilder
     }
 
     /**
-     * Accept hex (`#ff8000` / `#f80`), 0-15 ANSI palette indices, or
-     * 0-255 256-colour palette indices.
+     * The 16 canonical ANSI palette names (gum accepts these for
+     * `--foreground`/`--background`), case-insensitive. No name is a
+     * valid 3- or 6-digit bare hex token, so this lookup can sit
+     * before the hex branches without shadowing any colour literal.
+     *
+     * @var array<string,int>
+     */
+    private const NAMED_COLOURS = [
+        'black'          => 0,
+        'red'            => 1,
+        'green'          => 2,
+        'yellow'         => 3,
+        'blue'           => 4,
+        'magenta'        => 5,
+        'cyan'           => 6,
+        'white'          => 7,
+        'bright-black'   => 8,
+        'bright-red'     => 9,
+        'bright-green'   => 10,
+        'bright-yellow'  => 11,
+        'bright-blue'    => 12,
+        'bright-magenta' => 13,
+        'bright-cyan'    => 14,
+        'bright-white'   => 15,
+    ];
+
+    /** Human-readable accepted-input summary appended to colour refusals. */
+    public const COLOUR_ALLOWED_HINT =
+        'black, red, green, yellow, blue, magenta, cyan, white (each also bright-*), '
+        . '#rgb / #rrggbb (bare hex too), or a palette index 0-255';
+
+    /**
+     * Accept hex (`#ff8000` / `#f80`), 0-15 ANSI palette indices,
+     * 0-255 256-colour palette indices, or the 16 canonical palette
+     * names (`red`, `bright-blue`, …).
      */
     public static function parseColor(string $v): Color
     {
@@ -143,7 +181,7 @@ final class StyleBuilder
      * {@see ColorProfile} the input requires:
      *   - hex / 6-digit / 3-digit  → TrueColor
      *   - palette index 16-255      → Ansi256
-     *   - palette index 0-15        → Ansi
+     *   - palette index 0-15 or a name → Ansi
      *
      * @return array{0:Color, 1:ColorProfile}
      */
@@ -152,6 +190,10 @@ final class StyleBuilder
         $v = trim($v);
         if ($v === '') {
             throw new \InvalidArgumentException(Lang::t('style.empty_color'));
+        }
+        $named = strtolower($v);
+        if (isset(self::NAMED_COLOURS[$named])) {
+            return [Color::ansi(self::NAMED_COLOURS[$named]), ColorProfile::Ansi];
         }
         if ($v[0] === '#') {
             return [self::parseHexColor($v), ColorProfile::TrueColor];
@@ -168,7 +210,10 @@ final class StyleBuilder
         if (ctype_xdigit($v)) {
             return [self::parseHexColor('#' . $v), ColorProfile::TrueColor];
         }
-        throw new \InvalidArgumentException(Lang::t('style.unrecognised_color', ['value' => $v]));
+        throw new \InvalidArgumentException(Lang::t('style.unrecognised_color', [
+            'value'   => $v,
+            'allowed' => self::COLOUR_ALLOWED_HINT,
+        ]));
     }
 
     /**

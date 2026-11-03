@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => 'colore vuoto',
-    'style.unrecognised_color' => 'colore non riconosciuto: {value}',
+    'style.unrecognised_color' => 'colore non riconosciuto: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "il colore esadecimale deve avere 3 o 6 cifre esadecimali (ad es. '#f80' o '#ff8800'); ottenuto '{value}'",
     'style.padding_token_int' => "il token padding/margin deve essere un intero; ottenuto: '{token}'",
     'style.padding_count'     => 'padding/margin richiede 1, 2 o 4 interi; ottenuto: {count}',

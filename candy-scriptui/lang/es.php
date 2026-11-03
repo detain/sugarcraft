@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     // Style/StyleBuilder.php
     'style.empty_color'       => 'color vacío',
-    'style.unrecognised_color' => 'color no reconocido: {value}',
+    'style.unrecognised_color' => 'color no reconocido: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "el color hexadecimal debe tener 3 o 6 dígitos hexadecimales (p. ej. '#f80' o '#ff8800'); se obtuvo '{value}'",
     'style.padding_token_int' => "el token de padding/margin debe ser un entero; obtenido: '{token}'",
     'style.padding_count'     => 'padding/margin necesita 1, 2 o 4 enteros; obtenido: {count}',

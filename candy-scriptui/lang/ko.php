@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => '빈 색상',
-    'style.unrecognised_color' => '인식할 수 없는 색상: {value}',
+    'style.unrecognised_color' => '인식할 수 없는 색상: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "16진수 색상은 3자 또는 6자의 16진 숫자여야 합니다(예: '#f80' 또는 '#ff8800'); 입력: '{value}'",
     'style.padding_token_int' => "padding/margin 토큰은 정수여야 합니다; 받음: '{token}'",
     'style.padding_count'     => 'padding/margin은 1, 2 또는 4개의 정수가 필요합니다; 받음: {count}',

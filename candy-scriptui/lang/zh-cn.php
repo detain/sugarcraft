@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => '颜色为空',
-    'style.unrecognised_color' => '无法识别的颜色：{value}',
+    'style.unrecognised_color' => '无法识别的颜色：{value} — allowed: {allowed}',
     'style.hex_digit_count' => "十六进制颜色必须有 3 或 6 位十六进制数字（例如 '#f80' 或 '#ff8800'）；获得：'{value}'",
     'style.padding_token_int' => "padding/margin 标记必须是整数；实际：'{token}'",
     'style.padding_count'     => 'padding/margin 需要 1、2 或 4 个整数；实际：{count}',

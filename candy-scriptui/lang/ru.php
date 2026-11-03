@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => 'пустой цвет',
-    'style.unrecognised_color' => 'нераспознанный цвет: {value}',
+    'style.unrecognised_color' => 'нераспознанный цвет: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "hex-цвет должен содержать 3 или 6 шестнадцатеричных цифр (например, '#f80' или '#ff8800'); получено '{value}'",
     'style.padding_token_int' => "токен padding/margin должен быть целым числом; получено: '{token}'",
     'style.padding_count'     => 'padding/margin требует 1, 2 или 4 целых чисел; получено: {count}',

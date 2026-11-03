@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => 'prázdná barva',
-    'style.unrecognised_color' => 'nerozpoznaná barva: {value}',
+    'style.unrecognised_color' => 'nerozpoznaná barva: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "hex barva musí mít 3 nebo 6 hexadecimálních číslic (např. '#f80' nebo '#ff8800'); získáno '{value}'",
     'style.padding_token_int' => "padding/margin token musí být integer; obdrženo: '{token}'",
     'style.padding_count'     => 'padding/margin vyžaduje 1, 2 nebo 4 integery; obdrženo: {count}',

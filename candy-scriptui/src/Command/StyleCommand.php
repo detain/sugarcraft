@@ -27,8 +27,8 @@ final class StyleCommand extends Command
     {
         $this
             ->addArgument('text', InputArgument::IS_ARRAY, 'Text to style. Empty = read from stdin.')
-            ->addOption('foreground',         null, InputOption::VALUE_REQUIRED, 'Foreground colour (hex / 0-15 / 0-255).')
-            ->addOption('background',         null, InputOption::VALUE_REQUIRED, 'Background colour.')
+            ->addOption('foreground',         null, InputOption::VALUE_REQUIRED, 'Foreground colour (name / hex / 0-255).')
+            ->addOption('background',         null, InputOption::VALUE_REQUIRED, 'Background colour (name / hex / 0-255).')
             ->addOption('bold',               null, InputOption::VALUE_NONE,     'Bold.')
             ->addOption('italic',             null, InputOption::VALUE_NONE,     'Italic.')
             ->addOption('underline',          null, InputOption::VALUE_NONE,     'Underline.')

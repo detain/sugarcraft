@@ -163,21 +163,35 @@ flags across commands:
   `--formatter` names are refused (exit `1`).
 - `--border` / `--border-foreground "#ff0"` / `--height N` / `--trim`
   on `style`.
+- Colours on `--foreground` / `--background` / `--border-foreground`
+  accept the 16 palette names (`red`, `bright-blue`, …), `#rgb` /
+  `#rrggbb` (bare hex too), or a palette index `0-255`.
 
 ## Environment
 
-CandyScriptui respects standard CLI colour conventions. They are not
-re-implemented here: the decision lives in sugar-core's ColorProfile
-detection and is applied by sugar-style when any `Style` renders, so
-every styled command inherits it uniformly.
+CandyScriptui respects the standard CLI colour conventions. Resolution
+lives in `Runtime/ColourGate.php`, which pins sugar-style's ambient
+colour profile before each command runs, so every styled byte stream —
+flag-built `style` output, `log` badges, and the `format` markdown
+theme — renders inside the resolved capability. The tiers are
+sugar-core's ColorProfile semantics: `Ascii` drops colour but keeps
+decoration, `NoTty` emits no escapes at all, and `Ansi`/`Ansi256`
+re-quantise colours to that depth.
 
-- **`NO_COLOR=1`** disables every SGR escape — output is plain ASCII.
+- **`--no-ansi`** (global flag) emits plain bytes — every SGR escape
+  dropped, decoration included. `--ansi` overrides.
+- **`NO_COLOR`** (any truthy value) disables colour; decoration (bold,
+  underline, …) and layout survive.
 - **`CLICOLOR=0`** disables colour when stdout is not a TTY (otherwise
   defaults to colour).
-- **`CLICOLOR_FORCE=1`** keeps colour even when stdout is piped or
-  redirected.
+- **`CLICOLOR_FORCE=1`** keeps full colour even when stdout is piped or
+  redirected, winning over `NO_COLOR`.
 - **`FORCE_COLOR=1|2|3`** forces a specific tier (16 / 256 /
-  TrueColor).
+  TrueColor) and wins over every other env rule.
+- **`TERM=dumb`** emits plain bytes, like `--no-ansi`.
+
+Being a pipe does not by itself strip colour — styled bytes flow to
+redirected output as always; set `CLICOLOR=0` for pipe-aware muting.
 
 ### `CANDY_SCRIPTUI_*` env var fallbacks
 

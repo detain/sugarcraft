@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => 'لون فارغ',
-    'style.unrecognised_color' => 'لون غير معروف: {value}',
+    'style.unrecognised_color' => 'لون غير معروف: {value} — allowed: {allowed}',
     'style.hex_digit_count' => "يجب أن يحتوي اللون السداسي على 3 أو 6 أرقام سداسية عشرية (مثال: '#f80' أو '#ff8800')؛ تم الحصول على '{value}'",
     'style.padding_token_int' => "رمز padding/margin يجب أن يكون صحيحًا; تم الحصول على: '{token}'",
     'style.padding_count'     => 'padding/margin يتطلب 1 أو 2 أو 4 أعداد صحيحة; تم الحصول على: {count}',

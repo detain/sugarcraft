@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'style.empty_color'       => '色が空です',
-    'style.unrecognised_color' => '認識できない色：{value}',
+    'style.unrecognised_color' => '認識できない色：{value} — allowed: {allowed}',
     'style.hex_digit_count' => "16進色の桁数は3または6である必要があります（例: '#f80' または '#ff8800'）。取得: '{value}'",
     'style.padding_token_int' => "padding/margin トークンは整数である必要があります；取得：'{token}'",
     'style.padding_count'     => 'padding/margin は 1、2、または 4 つの整数が必要です；取得：{count}',
