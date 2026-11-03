@@ -16,4 +16,8 @@ return [
     'distance.euclidean_needs_rgb' => 'the Euclidean metric compares RGB bytes — use between() instead of betweenLab()',
     'colormath.invalid_xyz' => 'XYZ component {key} is missing or not a finite number',
     'nearest.empty_palette' => 'cannot match a color against an empty palette',
+    'probe.unknown_capability' => 'unknown capability key(s): {keys}',
+    'nearest.error_shape' => 'withError() expects a 3-element list [r, g, b]; got {count} element(s)',
+    'nearest.error_channel' => 'withError() accumulator channels must be int or float; got {type}',
+    'palette_index.metric' => 'PaletteIndex requires a distance-preserving metric (Euclidean or Cie76); {metric} has no fixed PCA basis - use NearestColor::closest() instead',
 ];

@@ -16,4 +16,8 @@ return [
     'deltae.non_finite_lab' => 'Pole Lab {label} má složku "{key}", která není konečné číslo',
     'distance.euclidean_needs_rgb' => 'evklidovská metrika porovnává bajty RGB — použijte between() místo betweenLab()',
     'nearest.empty_palette' => 'barvu nelze přiřadit k prázdné paletě',
+    'probe.unknown_capability' => 'neznámé klíče schopností: {keys}',
+    'nearest.error_shape' => 'withError() očekává seznam 3 prvků [r, g, b]; obdrženo {count} prvek(prvků)',
+    'nearest.error_channel' => 'kanály akumulátoru withError() musí být int nebo float; obdržen typ {type}',
+    'palette_index.metric' => 'PaletteIndex vyžaduje metriku zachovávající vzdálenost (Euclidean nebo Cie76); {metric} nemá pevnou PCA bázi - místo toho použijte NearestColor::closest()',
 ];

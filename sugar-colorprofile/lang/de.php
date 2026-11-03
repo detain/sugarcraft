@@ -16,4 +16,8 @@ return [
     'deltae.non_finite_lab' => 'Das Lab-Feld {label} hat eine nicht endliche Komponente "{key}"',
     'distance.euclidean_needs_rgb' => 'Die euklidische Metrik vergleicht RGB-Bytes — verwenden Sie between() statt betweenLab()',
     'nearest.empty_palette' => 'Eine Farbe kann nicht mit einer leeren Palette abgeglichen werden',
+    'probe.unknown_capability' => 'unbekannte Capability-Schlüssel: {keys}',
+    'nearest.error_shape' => 'withError() erwartet eine 3-Elemente-Liste [r, g, b]; {count} Element(e) erhalten',
+    'nearest.error_channel' => 'withError()-Akkumulatorkanäle müssen int oder float sein; erhalten: {type}',
+    'palette_index.metric' => 'PaletteIndex benötigt eine distanzerhaltende Metrik (Euclidean oder Cie76); {metric} hat keine feste PCA-Basis - verwenden Sie stattdessen NearestColor::closest()',
 ];

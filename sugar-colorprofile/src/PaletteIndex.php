@@ -218,10 +218,7 @@ final class PaletteIndex
     private static function build(array $list, ColorDistance $metric): self
     {
         if ($metric !== ColorDistance::Euclidean && $metric !== ColorDistance::Cie76) {
-            throw new \InvalidArgumentException(
-                'PaletteIndex requires a distance-preserving metric (Euclidean or Cie76); '
-                . $metric->value . ' has no fixed PCA basis - use NearestColor::closest() instead',
-            );
+            throw new \InvalidArgumentException(Lang::t('palette_index.metric', ['metric' => $metric->value]));
         }
 
         // One metric-space vector per entry; the Cie76 triples come straight

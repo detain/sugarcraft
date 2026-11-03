@@ -16,4 +16,8 @@ return [
     'deltae.non_finite_lab' => 'De Lab-matrix {label} heeft een niet-eindige component "{key}"',
     'distance.euclidean_needs_rgb' => 'de Euclidische metriek vergelijkt RGB-bytes — gebruik between() in plaats van betweenLab()',
     'nearest.empty_palette' => 'kan een kleur niet laten overeenkomen met een lege palet',
+    'probe.unknown_capability' => 'onbekende capability-sleutels: {keys}',
+    'nearest.error_shape' => 'withError() verwacht een lijst van 3 elementen [r, g, b]; {count} element(en) ontvangen',
+    'nearest.error_channel' => 'withError()-accumulatorkanalen moeten int of float zijn; ontvangen: {type}',
+    'palette_index.metric' => 'PaletteIndex vereist een afstandsbehoudende metriek (Euclidean of Cie76); {metric} heeft geen vaste PCA-basis - gebruik in plaats daarvan NearestColor::closest()',
 ];

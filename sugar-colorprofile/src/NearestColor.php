@@ -164,13 +164,13 @@ final class NearestColor
 
         if (!array_is_list($err) || count($err) !== 3) {
             throw new \InvalidArgumentException(
-                'withError() expects a 3-element list [r, g, b]; got ' . count($err) . ' element(s)',
+                Lang::t('nearest.error_shape', ['count' => count($err)]),
             );
         }
         foreach ($err as $channel) {
             if (!is_int($channel) && !is_float($channel)) {
                 throw new \InvalidArgumentException(
-                    'withError() accumulator channels must be int or float; got ' . get_debug_type($channel),
+                    Lang::t('nearest.error_channel', ['type' => get_debug_type($channel)]),
                 );
             }
         }

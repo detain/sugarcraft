@@ -16,4 +16,8 @@ return [
     'deltae.non_finite_lab' => 'مصفوفة Lab {label} تحتوي على مكون "{key}" غير منتهٍ',
     'distance.euclidean_needs_rgb' => 'المقياس الإقليدي يقارن بايتات RGB — استخدم between() بدلاً من betweenLab()',
     'nearest.empty_palette' => 'لا يمكن مطابقة لون مع لوحة ألوان فارغة',
+    'probe.unknown_capability' => 'مفاتيح القدرات غير المعروفة: {keys}',
+    'nearest.error_shape' => 'withError() يتوقع قائمة من 3 عناصر [r, g, b]; تم استلام {count} عنصر(عناصر)',
+    'nearest.error_channel' => 'يجب أن تكون قنوات مجموعة withError() من النوع int أو float; المستلم: {type}',
+    'palette_index.metric' => 'يطلب PaletteIndex مقياسًا يحافظ على المسافة (Euclidean أو Cie76); لا يحتوي {metric} على أساس PCA ثابت - استخدم NearestColor::closest() بدلاً من ذلك',
 ];

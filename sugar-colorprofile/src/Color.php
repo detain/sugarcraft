@@ -340,7 +340,7 @@ final class Color
     public static function ansi16Sgr(int $idx, bool $background): int
     {
         if ($idx < 0 || $idx > 15) {
-            throw new \OutOfBoundsException("ANSI 16 index out of range: {$idx} (expected 0-15)");
+            throw new \OutOfBoundsException(Lang::t('standard.ansi16_out_of_range', ['index' => $idx]));
         }
         $base = $background ? 40 : 30;
         if ($idx < 8) {
@@ -450,14 +450,29 @@ final class Color
         return $dr * $dr + $dg * $dg + $db * $db;
     }
 
-    /** Perceived brightness (0-255). */
-    private function perceivedBrightness(): float
+    /**
+     * Perceived brightness (0-255) — the BT.601-weighted root-mean-square
+     * this library uses to pick black/white in {@see self::toAscii()} and
+     * the classic xterm "is this dark?" heuristic. Public so callers can
+     * choose a light or dark text variant of a background themselves instead
+     * of re-deriving the formula.
+     */
+    public function perceivedBrightness(): float
     {
         return \sqrt(
             0.299 * ($this->r ** 2) +
             0.587 * ($this->g ** 2) +
             0.114 * ($this->b ** 2)
         );
+    }
+
+    /**
+     * True when the color is darker than the mid-gray point of
+     * {@see self::perceivedBrightness()} — i.e. white text reads better on it.
+     */
+    public function isDark(): bool
+    {
+        return $this->perceivedBrightness() < 127.5;
     }
 
     /**

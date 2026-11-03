@@ -16,4 +16,8 @@ return [
     'deltae.non_finite_lab' => 'La matrice Lab {label} ha una componente "{key}" non finita',
     'distance.euclidean_needs_rgb' => 'la metrica euclidea confronta byte RGB — usa between() invece di betweenLab()',
     'nearest.empty_palette' => 'impossibile abbinare un colore a una tavolozza vuota',
+    'probe.unknown_capability' => 'chiave/i di capacità sconosciuta/e: {keys}',
+    'nearest.error_shape' => 'withError() prevede una lista di 3 elementi [r, g, b]; ricevuti {count} elemento/i',
+    'nearest.error_channel' => 'i canali dell\'accumulatore di withError() devono essere int o float; ricevuto {type}',
+    'palette_index.metric' => 'PaletteIndex richiede una metrica che preservi le distanze (Euclidean o Cie76); {metric} non ha una base PCA fissa - usare NearestColor::closest() in alternativa',
 ];

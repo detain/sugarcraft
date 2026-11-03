@@ -16,4 +16,8 @@ return [
     'deltae.non_finite_lab' => 'В массиве Lab {label} компонент "{key}" не конечен',
     'distance.euclidean_needs_rgb' => 'евклидова метрика сравнивает байты RGB — используйте between() вместо betweenLab()',
     'nearest.empty_palette' => 'невозможно сопоставить цвет с пустой палитрой',
+    'probe.unknown_capability' => 'неизвестные ключи возможностей: {keys}',
+    'nearest.error_shape' => 'withError() ожидает список из 3 элементов [r, g, b]; получено {count} элемент(ов)',
+    'nearest.error_channel' => 'каналы накопителя withError() должны быть int или float; получено {type}',
+    'palette_index.metric' => 'PaletteIndex требует метрику, сохраняющую расстояния (Euclidean или Cie76); у {metric} нет фиксированного базиса PCA - используйте вместо этого NearestColor::closest()',
 ];

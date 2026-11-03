@@ -16,4 +16,8 @@ return [
     'deltae.non_finite_lab' => 'Tablica Lab {label} ma nieskończoną składową "{key}"',
     'distance.euclidean_needs_rgb' => 'metryka euklidesowa porównuje bajty RGB — użyj between() zamiast betweenLab()',
     'nearest.empty_palette' => 'nie można dopasować koloru do pustej palety',
+    'probe.unknown_capability' => 'nieznane klucze zdolności: {keys}',
+    'nearest.error_shape' => 'withError() oczekuje listy 3-elementowej [r, g, b]; otrzymano {count} element(y/ów)',
+    'nearest.error_channel' => 'kanały akumulatora withError() muszą być typu int lub float; otrzymano {type}',
+    'palette_index.metric' => 'PaletteIndex wymaga metryki zachowującej odległości (Euclidean lub Cie76); {metric} nie ma stałej bazy PCA - użyj zamiast tego NearestColor::closest()',
 ];

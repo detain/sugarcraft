@@ -10,12 +10,13 @@ use SugarCraft\ColorProfile\Lang;
  * Standard 16-color ANSI palette as named {@see Color} objects.
  *
  * Mirrors the standard ANSI 16-color palette from the Go colorprofile
- * package. Use these as readable shortcuts in place of `Color::ansi(N)`.
+ * package. Use these as readable shortcuts in place of
+ * `new Color(0xcd, 0x00, 0x00)`.
  *
  * CAUTION: these are public MUTABLE statics — an assignment anywhere in the
  * process rewrites the value for every reader, and nothing pins them against
- * reassignment. Prefer the pure factories (Color::ansi(3), Color::true(0xff, 0, 0))
- * in new code.
+ * reassignment. Prefer the pure factories (`new Color(0xff, 0, 0)`,
+ * `Color::fromHex(0xff0000)`, `Color::fromAnsi256Index(9)`) in new code.
  *
  * DEPRECATION WINDOW (opened 2026-10-24, owner ruling 2b): every writable
  * public static property below is @deprecated. They keep working
@@ -25,7 +26,8 @@ use SugarCraft\ColorProfile\Lang;
  * already here and is NOT deprecated: all() (indexed 0–15),
  * fromIndex(int) (bounds-checked, throws OutOfBoundsException), and
  * catalog() (the ordered name list). New code that needs a named standard
- * color as a value constructs it from those (or from Color::ansi(N)); code
+ * color as a value reads it from those (or builds its own with
+ * `new Color()` / `Color::fromAnsi256Index()`); code
  * that needs a private, non-global palette table builds its own array from
  * all() — the values are immutable Color objects, so a local array gives
  * isolation without a second shared class.
@@ -77,39 +79,36 @@ final class StandardColors
     /** @deprecated Mutable process-global static; read fromIndex(15)/all()[15] instead. REMOVED-IN: 2.0.0 */
     public static Color $brightWhite;
 
-    /** @var array<int, Color>|null Cached return value of all() */
-    private static ?array $cachedAll = null;
-
     /**
      * All 16 colors as an indexed array.
      *
-     * Returns the same array instance on repeated calls (static caching).
+     * Reads the current value of the static slots on every call — the class
+     * CAUTION above is only true if all() observes the live slots, so there
+     * is deliberately no caching here (a memoized array froze the palette and
+     * contradicted the documented mutability).
      *
      * @return array<int, Color>
      */
     public static function all(): array
     {
-        if (self::$cachedAll === null) {
-            self::$cachedAll = [
-                self::$black,
-                self::$red,
-                self::$green,
-                self::$yellow,
-                self::$blue,
-                self::$magenta,
-                self::$cyan,
-                self::$white,
-                self::$brightBlack,
-                self::$brightRed,
-                self::$brightGreen,
-                self::$brightYellow,
-                self::$brightBlue,
-                self::$brightMagenta,
-                self::$brightCyan,
-                self::$brightWhite,
-            ];
-        }
-        return self::$cachedAll;
+        return [
+            self::$black,
+            self::$red,
+            self::$green,
+            self::$yellow,
+            self::$blue,
+            self::$magenta,
+            self::$cyan,
+            self::$white,
+            self::$brightBlack,
+            self::$brightRed,
+            self::$brightGreen,
+            self::$brightYellow,
+            self::$brightBlue,
+            self::$brightMagenta,
+            self::$brightCyan,
+            self::$brightWhite,
+        ];
     }
 
     /**

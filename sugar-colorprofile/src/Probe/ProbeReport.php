@@ -6,6 +6,7 @@ namespace SugarCraft\ColorProfile\Probe;
 
 use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Env;
+use SugarCraft\ColorProfile\Lang;
 
 /**
  * Readonly value object holding the result of a terminal capability probe.
@@ -48,9 +49,7 @@ final readonly class ProbeReport
             }
         }
         if ($unknown !== []) {
-            throw new \InvalidArgumentException(
-                'unknown capability key(s): ' . implode(', ', $unknown),
-            );
+            throw new \InvalidArgumentException(Lang::t('probe.unknown_capability', ['keys' => implode(', ', $unknown)]));
         }
 
         // Belt sanitization (DM19): the detection chain already cleans its own
