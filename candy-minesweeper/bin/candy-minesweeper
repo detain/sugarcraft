@@ -36,11 +36,13 @@ declare(strict_types=1);
 use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Minesweeper\Difficulty;
 use SugarCraft\Minesweeper\Game;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
 use SugarCraft\Minesweeper\Support\Version;
 use SugarCraft\Minesweeper\Ui\CustomDifficulty;
+use SugarCraft\Style\Style;
 
 // Activate the locale detected from LANG/LC_ALL/LC_MESSAGES before any string
 // is translated (house pattern, cf. candy-mail): in-game text routes through
@@ -56,6 +58,19 @@ foreach (\SugarCraft\Core\Util\LegacyEnv::import([
     'CANDY_MINES_' => 'CANDY_MINESWEEPER_', // @rename-keep
 ]) as $legacyVar) {
     fwrite(STDERR, "candy-minesweeper: {$legacyVar} is deprecated; set CANDY_MINESWEEPER_STATS instead.\n"); // @rename-keep
+}
+
+// Honour NO_COLOR / CLICOLOR=0 / TERM=dumb through the fleet colour authority
+// (house pattern, cf. candy-git and candy-sql boots): sugar-style's default
+// profile is process-global, so every Style minted afterwards — including the
+// board's frame, banner and footer decorations — renders within the detected
+// capability. Only the downgrades (Ascii / NoTty) are applied; the default
+// profile stays untouched so a plain TrueColor terminal keeps the colours the
+// style layer already renders. The deeper in-session renegotiation via
+// ColorProfileMsg is a separate seam (the Model discards that message today).
+$profile = ColorProfile::detect();
+if ($profile === ColorProfile::Ascii || $profile === ColorProfile::NoTty) {
+    Style::setDefaultProfile($profile);
 }
 
 /**

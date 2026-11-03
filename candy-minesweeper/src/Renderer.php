@@ -7,6 +7,7 @@ namespace SugarCraft\Minesweeper;
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Style\Border;
@@ -58,6 +59,28 @@ final class Renderer
     }
 
     /**
+     * Test/host seam pinning whether the minefield may paint colour,
+     * independent of the ambient environment (M12 hermeticity): null consults
+     * the fleet authority {@see ColorProfile}, true/false forces the answer.
+     * The suite arms TRUE from tests/bootstrap.php so the goldens and every
+     * colour-substring pin see the same bytes on any runner, while
+     * {@see NoColorTest} flips the knob to prove the strip. Production code
+     * never calls this; the binary routes capability through
+     * {@see ColorProfile::detect()} at boot.
+     */
+    private static ?bool $boardColourOverride = null;
+
+    public static function setBoardColourOverride(?bool $on): void
+    {
+        self::$boardColourOverride = $on;
+    }
+
+    private static function colourBoards(): bool
+    {
+        return self::$boardColourOverride ?? ColorProfile::detect()->supportsAnsi();
+    }
+
+    /**
      * Build the minefield ANSI string.
      *
      * When $mark is true each glyph is wrapped in a {@see Mark::zone()}
@@ -73,9 +96,17 @@ final class Renderer
         $b = $g->board;
         $boardBuf = Buffer::new($b->width, $b->height);
 
+        // M12: the board's colours ride CellBuffer styles, which know nothing
+        // about capability — gate them here on the fleet authority's answer
+        // (or the test seam). NO_COLOR/CLICOLOR=0/TERM=dumb strip the fg/bg
+        // (no-color.org asks for colour OFF, decorations may stay); a capable
+        // terminal renders the full 24-bit chain byte-identically to the
+        // pre-fix frames.
+        $canColor = self::colourBoards();
+
         for ($y = 0; $y < $b->height; $y++) {
             for ($x = 0; $x < $b->width; $x++) {
-                $boardBuf = $boardBuf->withCellAt($x, $y, self::cellBufferCell($b, $x, $y, $g->cursorX, $g->cursorY, $mark));
+                $boardBuf = $boardBuf->withCellAt($x, $y, self::cellBufferCell($b, $x, $y, $g->cursorX, $g->cursorY, $mark, $canColor));
             }
         }
 
@@ -124,8 +155,12 @@ final class Renderer
      * When $mark is true the glyph is zone-tagged with
      * Mark::zone("cell:$row:$col", $glyph) so Scanner::hit() can map
      * mouse coordinates back to a cell.
+     *
+     * $canColor=false (M12: NO_COLOR / CLICOLOR=0 / TERM=dumb) drops the
+     * fg/bg to the buffer default while keeping the ATTR_* decorations —
+     * bold/reverse are not colour.
      */
-    private static function cellBufferCell(Board $b, int $col, int $row, int $cx, int $cy, bool $mark = false): \SugarCraft\CellBuffer\Cell
+    private static function cellBufferCell(Board $b, int $col, int $row, int $cx, int $cy, bool $mark = false, bool $canColor = true): \SugarCraft\CellBuffer\Cell
     {
         $cell = $b->cell($col, $row);
         if ($cell === null) {
@@ -133,6 +168,10 @@ final class Renderer
         }
 
         [$glyph, $fg, $bg, $attrs] = self::cellStyleData($cell, $b, $col, $row, $cx, $cy);
+        if (!$canColor) {
+            $fg = null;
+            $bg = null;
+        }
 
         $content = $mark ? Mark::zone("cell:{$row}:{$col}", $glyph) : $glyph;
         $style = Style::new($fg, $bg, $attrs);
