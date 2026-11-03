@@ -7,18 +7,24 @@ return [
     'input.invalid_arrow' => 'Invalid arrow direction: {dir}',
 
     // Golden file operations
-    'golden.write_failed' => 'Failed to write golden file: {path}',
+    'golden.write_failed' => 'Failed to write golden file {path}: {reason}',
+    'golden.read_failed' => 'Failed to read golden file {path}: {reason}',
+    'golden.exists' => 'Golden file already exists at {path}; use GoldenFile::update() to re-baseline deliberately',
+    'golden.untrusted_link' => 'Golden path {path} is a symbolic link; refusing to read or write through it',
     'golden.path_traversal' => 'Golden path escapes the fixtures directory: {path}',
 
     // Tape recorder operations
-    'tape.write_failed' => 'Failed to write tape file: {path}',
+    'tape.write_failed' => 'Failed to write tape file {path}: {reason}',
 
     // ProgramSimulator errors
     'simulator.cmd_loop_overflow' => 'Cmd message loop exceeded {max} cycles',
+    'simulator.exec_unsupported' => 'The simulator cannot dispatch an ExecRequest: exec suspends the process onto a real terminal, and the simulator has none',
+    'simulator.batch_member_not_closure' => '{class} carries a non-closure member ({type}); production scheduleCmd() requires callables',
 
     // Graphics decoders (SugarCraft\Testing\Graphics)
-    'graphics.detect.unknown_protocol' => 'Stream does not introduce a recognised graphics protocol (Sixel/Kitty/iTerm2)',
-    'graphics.gd.unavailable' => 'The GD extension is required to materialise this image',
+    'graphics.detect.unknown_protocol' => 'Stream does not introduce a recognized graphics protocol (Sixel/Kitty/iTerm2)',
+    'graphics.gd.unavailable' => 'The GD extension is required to materialize this image',
+    'graphics.image_too_large' => 'Image declares {width}x{height} pixels, exceeding the {max}-pixel decode budget',
     'graphics.payload_not_image' => 'The decoded payload is not a readable image',
     'graphics.grid.ragged_rows' => 'Pixel grid row {row} has {got} cells but the first row declared {expected}',
     'graphics.iterm2.non_numeric_parameter' => 'iTerm2 argument "{key}" must be a non-negative integer, got "{value}"',
@@ -38,6 +44,8 @@ return [
     'graphics.sixel.color_not_selected' => 'Sixel data appeared before a color register was selected',
     'graphics.sixel.rle_oversize' => 'Sixel run exceeds the declared raster width of {width}',
     'graphics.sixel.raster_overflow' => 'Sixel band overruns the declared raster height of {height}',
+    'graphics.sixel.raster_too_large' => 'Sixel declares a {width}x{height} raster, exceeding the {max}-cell decode budget',
+    'graphics.sixel.number_overflow' => 'Sixel numeric literal "{value}" is longer than {max} digits',
     'graphics.sixel.color_component_out_of_range' => 'Sixel color component {value} exceeds the 0..100 percent range',
 
     'graphics.kitty.missing_begin' => 'Kitty stream has no graphics transmit (ESC P q or ESC _ G)',
@@ -46,6 +54,7 @@ return [
     'graphics.kitty.bad_chunk' => 'Kitty data chunk is malformed (expected m=<0|1>,<base64>)',
     'graphics.kitty.invalid_base64' => 'Kitty payload is not valid base64',
     'graphics.kitty.decompress_failed' => 'Kitty zlib payload failed to inflate',
+    'graphics.kitty.decompress_too_large' => 'Kitty o=z payload inflates beyond the {max}-byte decode budget',
     'graphics.kitty.no_payload' => 'Kitty image {id} carries no payload data',
     'graphics.kitty.payload_not_image' => 'Kitty payload does not decode to a readable image',
     'graphics.kitty.unterminated_apc' => 'Kitty APC transmit is not closed by ST or BEL',

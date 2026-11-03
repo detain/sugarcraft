@@ -13,7 +13,20 @@ use SugarCraft\Testing\Lang;
  * They use the `.golden` extension convention and live under
  * a `tests/fixtures/` directory relative to the test file.
  *
- * First-party harness — no 1:1 Go counterpart (see docs/MATCHUPS.md).
+ * Write semantics are split deliberately:
+ *  - {@see create()} is the first-baseline path: atomic and no-clobber,
+ *    so concurrent runs cannot tear a baseline or overwrite each other's;
+ *  - {@see update()} is the deliberate re-baseline path: atomic and
+ *    replacing;
+ *  - {@see save()} keeps its historical "write this fixture now" meaning
+ *    (tests seeding their own temporaries) but is atomic underneath.
+ *
+ * Reads and writes refuse symbolic links at the final component: a
+ * planted `evil.golden` must not become a channel for reading or
+ * rewriting a victim file outside the fixtures tree.
+ *
+ * Upstream-antecedented (charmbracelet/x/exp/golden) but first-party
+ * hardened — see docs/MATCHUPS.md.
  */
 final class GoldenFile
 {
@@ -21,21 +34,39 @@ final class GoldenFile
      * Load a golden file's contents.
      *
      * @param string $path Absolute or relative path to the golden file
-     * @return string|null The file contents, or null if the file does not exist
+     * @return string|null The file contents, or null ONLY when the file
+     *                     genuinely does not exist
+     *
+     * @throws \RuntimeException when the path is a symlink, or the file
+     *                           exists but cannot be read (an unreadable
+     *                           golden must not masquerade as "missing" —
+     *                           that hole let UPDATE_GOLDENS overwrite the
+     *                           baseline nobody could read)
      */
     public static function load(string $path): ?string
     {
+        if (is_link($path)) {
+            throw new \RuntimeException(Lang::t('golden.untrusted_link', ['path' => $path]));
+        }
+
         if (!is_file($path)) {
             return null;
         }
 
-        $contents = \file_get_contents($path);
+        $contents = @\file_get_contents($path);
 
-        return $contents === false ? null : $contents;
+        if ($contents === false) {
+            throw new \RuntimeException(Lang::t('golden.read_failed', [
+                'path'   => $path,
+                'reason' => self::lastErrorReason(),
+            ]));
+        }
+
+        return $contents;
     }
 
     /**
-     * Save content to a golden file.
+     * Write content to a golden file (atomic; replaces an existing file).
      *
      * Creates parent directories if they don't exist. Empty content is a
      * legal golden (a renderer that outputs nothing must be able to pin
@@ -43,24 +74,44 @@ final class GoldenFile
      * bytes, so a 0-byte payload passes and a short write to a failing
      * device still throws.
      *
+     * The payload lands via temp-file + rename, so a reader (or a
+     * crashed writer) can never observe a half-written baseline.
+     *
      * @param string $path    Absolute or relative path to the golden file
      * @param string $content The bytes to write
      * @return void
      */
     public static function save(string $path, string $content): void
     {
-        $dir = \dirname($path);
-        if (!\is_dir($dir)) {
-            \mkdir($dir, 0755, true);
-        }
+        self::guardLink($path);
+        self::writeAtomic($path, $content, clobber: true);
+    }
 
-        // '@' fronts the checked-false shape: a failed write raises an E_WARNING
-        // (which failOnWarning would trip) before we can raise the typed error.
-        $result = @\file_put_contents($path, $content);
+    /**
+     * Create a golden file only if it does not already exist (atomic).
+     *
+     * @throws GoldenFileExistsException when the target exists at write
+     *         time — including a target that appeared between the caller's
+     *         missing-check and this call (the no-clobber is enforced by
+     *         link semantics, not a check-then-act race)
+     */
+    public static function create(string $path, string $content): void
+    {
+        self::guardLink($path);
+        self::writeAtomic($path, $content, clobber: false);
+    }
 
-        if ($result !== \strlen($content)) {
-            throw new \RuntimeException(Lang::t('golden.write_failed', ['path' => $path]));
-        }
+    /**
+     * Deliberately replace a golden file (the re-baseline path).
+     *
+     * Identical mechanics to {@see save()}; a distinct name so test code
+     * can state intent — "this run is re-pinning the baseline" — instead
+     * of relying on an un-flagged overwrite.
+     */
+    public static function update(string $path, string $content): void
+    {
+        self::guardLink($path);
+        self::writeAtomic($path, $content, clobber: true);
     }
 
     /**
@@ -72,6 +123,10 @@ final class GoldenFile
      * must live under the base dir, so a test (or a poisoned relative path)
      * cannot read or overwrite files elsewhere on disk.
      *
+     * When the fixtures dir already exists, containment is also verified on
+     * the REAL path: a planted directory symlink inside fixtures (e.g.
+     * `fixtures/sub -> /etc`) is caught here instead of at write time.
+     *
      * @param string $baseDir  Directory the test file lives in
      * @param string $relative Relative path within fixtures/
      * @return string Resolved absolute path
@@ -82,9 +137,10 @@ final class GoldenFile
         $base = \rtrim($baseDir, '/') . '/fixtures';
         $full = $base . '/' . \ltrim($relative, '/');
 
-        // realpath() can't be used here: golden files may not exist yet (they
-        // are resolved for both reads and first-time writes), so normalize the
-        // '..'/'.' segments lexically and confirm the result stays under base.
+        // realpath() can't be used unconditionally here: golden files may not
+        // exist yet (they are resolved for both reads and first-time writes),
+        // so normalize the '..'/'.' segments lexically and confirm the result
+        // stays under base.
         $normBase = self::normalizePath($base);
         $normFull = self::normalizePath($full);
 
@@ -92,24 +148,128 @@ final class GoldenFile
             throw new \RuntimeException(Lang::t('golden.path_traversal', ['path' => $relative]));
         }
 
+        // Real-path leg once the base exists: guards against a symlinked
+        // directory inside the walk (the lexical check cannot see those).
+        $realBase = \realpath($base);
+        if ($realBase !== false) {
+            $parentReal = \realpath(\dirname($full));
+            if ($parentReal !== false && $parentReal !== $realBase && !\str_starts_with($parentReal, $realBase . '/')) {
+                throw new \RuntimeException(Lang::t('golden.path_traversal', ['path' => $relative]));
+            }
+        }
+
         return $full;
+    }
+
+    /**
+     * Refuse to touch a final component that is a symbolic link.
+     */
+    private static function guardLink(string $path): void
+    {
+        if (is_link($path)) {
+            throw new \RuntimeException(Lang::t('golden.untrusted_link', ['path' => $path]));
+        }
+    }
+
+    /**
+     * tmp-file + (link | rename) write, shared by save/create/update.
+     *
+     * @param bool $clobber when false, an existing target raises
+     *                      {@see GoldenFileExistsException} instead of being replaced
+     */
+    private static function writeAtomic(string $path, string $content, bool $clobber): void
+    {
+        $dir = \dirname($path);
+        if (!\is_dir($dir)) {
+            // '@' + is_dir re-check: concurrent first-baseline runs race here,
+            // and an unchecked mkdir EWARNING would trip failOnWarning.
+            @\mkdir($dir, 0755, true);
+            if (!\is_dir($dir)) {
+                throw new \RuntimeException(Lang::t('golden.write_failed', [
+                    'path'   => $path,
+                    'reason' => 'could not create parent directory ' . $dir,
+                ]));
+            }
+        }
+
+        $tmp = $dir . '/.golden-tmp-' . \bin2hex(\random_bytes(6)) . '-' . \getmypid();
+
+        // '@' fronts the checked-false shape: a failed write would raise an
+        // E_WARNING (which failOnWarning would trip) before we can raise the
+        // typed error; the reason is recovered from error_get_last().
+        $written = @\file_put_contents($tmp, $content);
+
+        if ($written !== \strlen($content)) {
+            @\unlink($tmp);
+
+            throw new \RuntimeException(Lang::t('golden.write_failed', [
+                'path'   => $path,
+                'reason' => \is_string($written)
+                    ? 'short write (' . $written . ' of ' . \strlen($content) . ' bytes)'
+                    : self::lastErrorReason(),
+            ]));
+        }
+
+        if (!$clobber) {
+            // link() fails with EEXIST if the target exists at all: the
+            // no-clobber guarantee is enforced by the filesystem, not by a
+            // check-then-act window.
+            if (@\link($tmp, $path)) {
+                @\unlink($tmp);
+
+                return;
+            }
+
+            @\unlink($tmp);
+
+            if (\file_exists($path) || is_link($path)) {
+                throw new GoldenFileExistsException(Lang::t('golden.exists', ['path' => $path]));
+            }
+
+            throw new \RuntimeException(Lang::t('golden.write_failed', [
+                'path'   => $path,
+                'reason' => self::lastErrorReason(),
+            ]));
+        }
+
+        if (!@\rename($tmp, $path)) {
+            @\unlink($tmp);
+
+            throw new \RuntimeException(Lang::t('golden.write_failed', [
+                'path'   => $path,
+                'reason' => self::lastErrorReason(),
+            ]));
+        }
+    }
+
+    /**
+     * Message for the most recent failed filesystem call, if any.
+     */
+    private static function lastErrorReason(): string
+    {
+        $error = \error_get_last();
+
+        return $error === null ? 'unknown error' : $error['message'];
     }
 
     /**
      * Lexically collapse `.`/`..`/empty segments in a path.
      *
-     * Absolute inputs stay anchored at `/` and a `..` at the root is dropped
-     * (you cannot climb above `/`). Purely lexical — the path need not exist.
+     * Absolute inputs stay anchored at `/` (Windows drive-letter roots are
+     * recognized too) and a `..` at the root is dropped (you cannot climb
+     * above it). Both `/` and `\` act as separators so a Windows-style
+     * relative path cannot smuggle `..` past the lexical jail. Purely
+     * lexical — the path need not exist.
      *
      * @param string $path
      * @return string
      */
     private static function normalizePath(string $path): string
     {
-        $isAbsolute = \str_starts_with($path, '/');
+        $isAbsolute = \str_starts_with($path, '/') || \preg_match('#^[A-Za-z]:[\\\\/]#', $path) === 1;
         $out = [];
 
-        foreach (\explode('/', $path) as $segment) {
+        foreach (\preg_split('#[/\\\\]+#', $path) ?: [] as $segment) {
             if ($segment === '' || $segment === '.') {
                 continue;
             }
