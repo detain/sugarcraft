@@ -37,6 +37,11 @@ final class BashCompletion
 // to be eval'd — fall back to the shipped default instead of
 // silently emitting a malformed/empty completion function name.
         $appName = CompletionEscaper::safeName($appNameRaw) ?? self::DEFAULT_APP_NAME;
+        // The bash handler binds as `complete -F <fn> <word>`: the function
+        // name must follow the application too, so a renamed binary gets its
+        // own handler instead of one nobody sources. Default name keeps the
+        // historic '_candy_scriptui_main' bytes.
+        $fnName = '_' . str_replace(['-', '.'], '_', $appName) . '_main';
         $commands = $application->all();
 
         $commandNames = [];
@@ -74,7 +79,7 @@ final class BashCompletion
         $caseBlockStr = implode("\n", $caseBlocks);
 
         $script = <<<BASH
-_candy_scriptui_main() {
+{$fnName}() {
     local cur="\${1:-}"
     local word="\${COMP_WORDS[1]:-}"
 
@@ -86,7 +91,7 @@ _candy_scriptui_main() {
     esac
 }
 
-complete -F _candy_scriptui_main {$appName}
+complete -F {$fnName} {$appName}
 BASH;
 
         return $script;
