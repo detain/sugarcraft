@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Panels;
 
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Align;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
@@ -31,7 +33,7 @@ final class Node
     public readonly int $maxWidth;
     public readonly int $minHeight;
     public readonly int $maxHeight;
-    /** Flex/grow weight: 0 = fixed (sized by min*+border), >0 = fills leftover space by weight. */
+    /** Flex/grow weight: 0 = fixed (sized by its natural content, floored by min*, plus padding+border), >0 = fills leftover space by weight. */
     public readonly int $flex;
     public readonly int $padding;
     public readonly bool $border;
@@ -272,9 +274,15 @@ final class Node
         $marginW = $this->margin[3] + $this->margin[1]; // left + right
 
         if ($this->kind === self::LEAF) {
-            $inner = $this->minWidth;
-            if ($this->border === true) $inner += 2;
+            // A leaf's natural size IS its content: the widest visible line, with
+            // the SGR runs that ride the text stripped first because they cost no
+            // columns. min* is a FLOOR on that measure, never a substitute for it
+            // — a fixed ('0' flex) sibling sized only by min* claimed one column
+            // and starved its own text, which rendered the README's own dashboard
+            // pattern blank.
+            $inner = \max($this->minWidth, $this->naturalContentWidth());
             if ($this->padding > 0) $inner += $this->padding * 2;
+            if ($this->border === true) $inner += 2;
             return $inner + $marginW;
         }
 
@@ -294,9 +302,13 @@ final class Node
         // the width is the widest child — inter-child spacing does not inflate
         // it. Adding (n-1)*spacing here reserved phantom columns for vertical
         // gaps and let an inflated flex basis starve horizontal siblings.
-        $maxChild = \count($this->children) > 0
-            ? \max(...\array_map(fn(Node $c) => $c->totalWidth(), $this->children))
-            : 0;
+        //
+        // The measures are collected into an array and max()'d as ONE argument:
+        // `max(...$oneChild)` would pass a bare int, and PHP only accepts a
+        // single value when it is an array — so a one-child stack (which is what
+        // noBorder() builds) crashed the basis instead of claiming its width.
+        $childWidths = \array_map(fn(Node $c) => $c->totalWidth(), $this->children);
+        $maxChild = $childWidths === [] ? 0 : \max($childWidths);
         $extra = $this->border === true ? 2 : 0;
         return $maxChild + $extra + $marginW;
     }
@@ -309,9 +321,12 @@ final class Node
         $marginH = $this->margin[0] + $this->margin[2]; // top + bottom
 
         if ($this->kind === self::LEAF) {
-            $inner = $this->minHeight;
-            if ($this->border === true) $inner += 2;
+            // See totalWidth(): a leaf's natural height is the number of lines its
+            // content carries (unwrapped — the renderer word-wraps only what the
+            // region it was given cannot hold), with min* as a floor.
+            $inner = \max($this->minHeight, $this->naturalContentLines());
             if ($this->padding > 0) $inner += $this->padding * 2;
+            if ($this->border === true) $inner += 2;
             return $inner + $marginH;
         }
 
@@ -322,10 +337,10 @@ final class Node
             return $childHeights + $gaps + $extra + $marginH;
         }
 
-        // HORIZONTAL: use max child height
-        $maxChild = \count($this->children) > 0
-            ? \max(...\array_map(fn(Node $c) => $c->totalHeight(), $this->children))
-            : 0;
+        // HORIZONTAL: use max child height (collected as an array for the same
+        // one-child reason as totalWidth()).
+        $childHeights = \array_map(fn(Node $c) => $c->totalHeight(), $this->children);
+        $maxChild = $childHeights === [] ? 0 : \max($childHeights);
         $extra = $this->border === true ? 2 : 0;
         return $maxChild + $extra + $marginH;
     }
@@ -333,6 +348,29 @@ final class Node
     // -------------------------------------------------------------------------
     // Private
     // -------------------------------------------------------------------------
+
+    /** Widest visible line of a leaf's content; 0 for an empty leaf. */
+    private function naturalContentWidth(): int
+    {
+        if ($this->content === '') return 0;
+
+        $widest = 0;
+        foreach (\explode("\n", $this->content) as $line) {
+            // Ansi::strip removes every escape sequence, so the styling that rides
+            // a glyph costs no columns; Width::string then counts grapheme cells
+            // (an East Asian glyph charges 2, exactly as the painter lays it).
+            $width = Width::string(Ansi::strip($line));
+            if ($width > $widest) $widest = $width;
+        }
+
+        return $widest;
+    }
+
+    /** Line count of a leaf's content, before any renderer word-wrap; 0 when empty. */
+    private function naturalContentLines(): int
+    {
+        return $this->content === '' ? 0 : \count(\explode("\n", $this->content));
+    }
 
     /**
      * Rebuild with the given overrides.

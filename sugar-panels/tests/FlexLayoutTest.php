@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Panels\Tests;
 
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Panels\{Node, SugarPanels};
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -212,5 +214,83 @@ final class FlexLayoutTest extends TestCase
         // Body fills exactly the leftover after the header's TRUE footprint → 4 lines.
         $body = count(array_filter($rows, static fn (string $r): bool => preg_match('/^b\d$/', $r) === 1));
         $this->assertSame(4, $body);
+    }
+
+    // -------------------------------------------------------------------------
+    // Natural size: a fixed child's basis IS its content (C3)
+    // -------------------------------------------------------------------------
+
+    public function testTheSidebarPatternRendersItsOwnText(): void
+    {
+        // The README's headline pattern, verbatim in shape: a fixed sidebar beside
+        // a filling main panel. Before C3 the sidebar's basis was minWidth (1
+        // column by default), so it was allotted a single cell and every word of it
+        // vanished — the documented example rendered blank.
+        $layout = $this->panels->horizontal(
+            $this->panels->leaf("NAV\n---\nhome\nabout\nhelp")->withBorder(false),
+            $this->panels->leaf('main')->withBorder(false)->withFlex(1),
+        )->withBorder(false)->withSpacing(1);
+
+        $rows = $this->rows($layout, 20, 5);
+
+        // 'about' is the widest line, so the fixed sidebar claims 5 columns and the
+        // flex sibling begins past them — under the old basis the sidebar was
+        // allotted one column and its text was squeezed out entirely. (spacing(1)
+        // because a spacing-0 separator would eat the sidebar's last column; that
+        // is pinned separately.)
+        $this->assertStringStartsWith('NAV', $rows[0]);
+        $this->assertSame(6, \strpos($rows[0], 'main'));
+        $this->assertStringStartsWith('home', $rows[2]);
+        $this->assertStringStartsWith('about', $rows[3]);
+    }
+
+    public function testAFixedSiblingClaimsItsWidestLineNotItsMinWidth(): void
+    {
+        $sidebar = $this->panels->leaf("HEADER LINE\nitem one\nx");
+
+        // 'HEADER LINE' is 11 cells; the leaf is bordered so its footprint is 13.
+        $this->assertSame(13, $sidebar->totalWidth());
+        // Three lines of content plus two border rows.
+        $this->assertSame(5, $sidebar->totalHeight());
+    }
+
+    public function testMinWidthStillFloorsTheContentMeasure(): void
+    {
+        $narrow = $this->panels->leaf('ab')->withBorder(false)->withMinWidth(20);
+
+        $this->assertSame(20, $narrow->totalWidth(), 'a min* larger than the content still wins');
+
+        $wide = $this->panels->leaf('abcdefghij')->withBorder(false)->withMinWidth(3);
+
+        $this->assertSame(10, $wide->totalWidth(), 'content larger than min* wins');
+    }
+
+    public function testAnEmptyLeafClaimsNoContent(): void
+    {
+        // A leaf with no text must not claim a row or column of its own: the
+        // natural measure of '' is 0, so the box is exactly min*+frame as before.
+        $empty = $this->panels->leaf();
+
+        $this->assertSame(2, $empty->totalWidth());
+        $this->assertSame(2, $empty->totalHeight());
+    }
+
+    public function testStylingRunsCostNoColumnsInTheBasis(): void
+    {
+        $plain = $this->panels->leaf('red text')->withBorder(false);
+        $styled = $plain->withStyle(Style::new()->fg(Color::ansi(1)));
+
+        $this->assertSame(
+            $plain->totalWidth(),
+            $styled->totalWidth(),
+            'the SGR that rides the glyphs is invisible to the terminal and to the basis',
+        );
+    }
+
+    public function testDoubleWidthGlyphsChargeTwoCellsInTheBasis(): void
+    {
+        // The painter lays 漢字 across four cells; a fixed sibling must reserve the
+        // same four or its own first row is clipped.
+        $this->assertSame(4, $this->panels->leaf('漢字')->withBorder(false)->totalWidth());
     }
 }

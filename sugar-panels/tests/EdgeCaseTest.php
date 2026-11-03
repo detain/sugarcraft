@@ -1083,4 +1083,23 @@ final class EdgeCaseTest extends TestCase
         // No terminal emits it; the colon form above is the one that matters.
         $this->assertFalse($m->invoke($this->panels, "\x1b[38;2;1;255;0;0m", false));
     }
+
+    public function testAOneChildStackHasAWidth(): void
+    {
+        // A single-child container is what noBorder() builds, and the stacking
+        // basis used to spread the child measures into max(): with one child that
+        // passes a bare int, which PHP rejects ('max(): Argument #1 ($value) must
+        // be of type array'). The basis therefore crashed for exactly the wrappers
+        // the docs show, while every multi-child case passed.
+        $stack = $this->panels->vertical($this->panels->leaf('solo-content'));
+        $row = $this->panels->horizontal($this->panels->leaf('only'));
+
+        // Borders default ON, so each wrapper adds its own frame to the child's.
+        $this->assertSame(16, $stack->totalWidth());
+        $this->assertSame(5, $stack->totalHeight());
+        $this->assertSame(8, $row->totalWidth());
+        $this->assertSame(5, $row->totalHeight());
+
+        $this->assertStringContainsString('solo-content', $this->panels->render($stack, 20, 5));
+    }
 }

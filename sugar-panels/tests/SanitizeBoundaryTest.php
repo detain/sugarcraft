@@ -223,9 +223,11 @@ final class SanitizeBoundaryTest extends TestCase
         // through the constructor, reddens here.
         $source = (string) \file_get_contents(\dirname(__DIR__) . '/src/Node.php');
 
-        \preg_match_all('/\$this->(content|title)\s*=[^\n]*/', $source, $writes);
+        // Single '=' only: the boundary is the WRITE site, and a comparison such
+        // as `$this->content === ''` is a read that must not be policed here.
+        \preg_match_all('/\$this->(content|title)\s*(?<!=)=(?!=)[^\n]*/', $source, $writes);
 
-        $this->assertNotSame([], $writes[0], 'the pin must find the assignments it polices');
+        $this->assertGreaterThanOrEqual(2, \count($writes[0]), 'the pin must find both text writes it polices');
         foreach ($writes[0] as $write) {
             $this->assertStringContainsString('Sanitize::painted', $write, 'node text enters only through the boundary: ' . $write);
         }
