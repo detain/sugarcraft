@@ -80,7 +80,7 @@ final class Renderer
      * and telephones; :heart:/:warning: carry the emoji presentation
      * selector U+FE0F). Every key MUST match EMOJI_SHORTCODE_PATTERN's
      * capture class — a key with stray whitespace is dead code (the
-     * leading-space ` headphones` defect of earlier rounds proved it;
+     * leading-space ` headphones` slip that once shipped proved it;
      * EmojiParityTest censuses the shape so it cannot return).
      */
     private const HOUSE_EMOJI = [
@@ -158,6 +158,9 @@ final class Renderer
     /** Cascading stylesheet for per-depth block styling. */
     private ?StyleSheet $styleSheet = null;
 
+    /** Caller cascade supplied by {@see withStyleSheet()}; null = fresh base per render. */
+    private readonly ?StyleSheet $styleSheetOverride;
+
     public function __construct(
         ?Theme $theme = null,
         ?int $wrapWidth = null,
@@ -170,6 +173,7 @@ final class Renderer
         bool $expandEmoji = false,
         bool $sanitize = true,
         bool $fenceColumnBudget = false,
+        ?StyleSheet $styleSheetOverride = null,
     ) {
         $this->theme = $theme ?? Theme::ansi();
         $this->wrapWidth = ($wrapWidth !== null && $wrapWidth > 0) ? $wrapWidth : null;
@@ -182,6 +186,7 @@ final class Renderer
         $this->expandEmoji = $expandEmoji;
         $this->sanitize = $sanitize;
         $this->fenceColumnBudget = $fenceColumnBudget;
+        $this->styleSheetOverride = $styleSheetOverride;
         $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
     }
 
@@ -230,6 +235,7 @@ final class Renderer
 
     public static function ansi(): self  { return new self(Theme::ansi());  }
     public static function plain(): self { return new self(Theme::plain()); }
+    public static function ascii(): self { return new self(Theme::ascii()); }
 
     /**
      * Top-level convenience: render Markdown with a one-shot
@@ -244,7 +250,6 @@ final class Renderer
     {
         return (new self($theme ?? Theme::ansi()))->render($markdown);
     }
-    public static function ascii(): self { return new self(Theme::ascii()); }
 
     /**
      * Render Markdown and write the ANSI output straight to a stream
@@ -455,7 +460,7 @@ final class Renderer
     {
         $sub = $this->copy();
         $sub->blockStack = new BlockStack();
-        $sub->styleSheet = StyleSheet::base();
+        $sub->styleSheet = $this->styleSheetOverride ?? StyleSheet::base();
         $sub->blockStack->push(new BlockContext(
             BlockKind::Document,
             depth: 0,
@@ -597,6 +602,17 @@ final class Renderer
     }
 
     /**
+     * Use a caller-supplied block cascade instead of {@see StyleSheet::base()}
+     * (M7). The sheet styles whole block kinds per nesting depth; the renderer
+     * seeds it fresh at each channel entry, so the default (null) keeps every
+     * existing byte. Mirrors glamour's cascade option (element style maps).
+     */
+    public function withStyleSheet(StyleSheet $sheet): self
+    {
+        return $this->copy(styleSheetOverride: $sheet);
+    }
+
+    /**
      * Preserve consecutive blank lines in source markdown. By default
      * CommonMark collapses runs of blank lines; with this on, every run of
      * blank lines between two blocks survives into {@see render()}'s output
@@ -621,7 +637,10 @@ final class Renderer
     {
         $theme = Theme::byName($name);
         if ($theme === null) {
-            throw new \InvalidArgumentException(Lang::t('renderer.unknown_style', ['name' => $name]));
+            throw new \InvalidArgumentException(Lang::t('renderer.unknown_style', [
+                'name'   => $name,
+                'styles' => 'ansi, plain, notty, ascii, dark, light, dracula, tokyonight, pink',
+            ]));
         }
         return $this->copy(theme: $theme);
     }
@@ -692,6 +711,7 @@ final class Renderer
         ?bool $expandEmoji = null,
         ?bool $sanitize = null,
         ?bool $fenceColumnBudget = null,
+        ?StyleSheet $styleSheetOverride = null,
     ): self {
         return new self(
             $theme            ?? $this->theme,
@@ -705,6 +725,7 @@ final class Renderer
             $expandEmoji      ?? $this->expandEmoji,
             $sanitize         ?? $this->sanitize,
             $fenceColumnBudget ?? $this->fenceColumnBudget,
+            $styleSheetOverride ?? $this->styleSheetOverride,
         );
     }
 
@@ -721,7 +742,7 @@ final class Renderer
         // previous document's root context (one leaked per call otherwise,
         // inflating every depth-keyed StyleSheet lookup).
         $this->blockStack = new BlockStack();
-        $this->styleSheet = StyleSheet::base();
+        $this->styleSheet = $this->styleSheetOverride ?? StyleSheet::base();
 
         $document = $this->parser()->parse($markdown);
         $this->blockStack->push(new BlockContext(

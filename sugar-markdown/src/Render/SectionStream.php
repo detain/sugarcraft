@@ -42,11 +42,14 @@ use SugarCraft\Markdown\Renderer;
  *    before it in the same block can never become a link and holds nothing.
  *    The first definition of a label wins, as in CommonMark.
  *
- * A held section is still rendered once, when it is confirmed, against the
- * definitions known then; the body is reused until a later definition
- * arrives. So a stream whose early section holds a stray `[1]` costs a
- * {@see finish()} preview no more than one without it: only the open tail
- * is parsed and rendered per frame, never the held sections behind it.
+ * A confirmed section that still carries an unresolved pair is rendered
+ * against the definitions known when it was confirmed, then RE-RENDERED on
+ * every later definition event while it stays held: its label may finally be
+ * defined, and the released body must carry what the finished document would
+ * show. That work is bounded by the number of definitions in the document,
+ * not by the number of chunks; the open tail alone is parsed afresh per
+ * frame. A preview built with `(clone $stream)->finish()` therefore replays
+ * the held sections exactly as the full stream would (M4).
  *
  * Cloning is cheap and gives an independent copy, so a caller can render a
  * preview of the open tail with `(clone $stream)->finish()` and keep

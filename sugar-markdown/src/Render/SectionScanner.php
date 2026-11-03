@@ -44,6 +44,14 @@ namespace SugarCraft\Markdown\Render;
 final class SectionScanner
 {
     private string $buffer = '';
+
+    /**
+     * Bytes at the head of {@see $buffer} already split into lines. Scanning
+     * resumes here instead of re-slicing the buffer on every line, so one
+     * large push costs linear — not quadratic — in its size (M3).
+     */
+    private int $consumed = 0;
+
     private string $section = '';
     private ?string $fenceChar = null;
     private int $fenceLen = 0;
@@ -66,13 +74,24 @@ final class SectionScanner
     {
         $this->buffer .= $chunk;
         $closed = [];
-        while (($nl = strpos($this->buffer, "\n")) !== false) {
-            $line           = substr($this->buffer, 0, $nl);
-            $this->buffer   = substr($this->buffer, $nl + 1);
+        while (($nl = strpos($this->buffer, "\n", $this->consumed)) !== false) {
+            $line           = substr($this->buffer, $this->consumed, $nl - $this->consumed);
+            $this->consumed = $nl + 1;
             $done           = $this->scanLine($line);
             if ($done !== null && trim($done) !== '') {
                 $closed[] = $done;
             }
+        }
+
+        $length = strlen($this->buffer);
+        if ($this->consumed >= $length) {
+            $this->buffer   = '';
+            $this->consumed = 0;
+        } elseif ($this->consumed >= 8192 && $this->consumed * 2 >= $length) {
+            // Drop the read head once it outweighs the live tail: the buffer
+            // then stays proportional to unconsumed input.
+            $this->buffer   = substr($this->buffer, $this->consumed);
+            $this->consumed = 0;
         }
 
         return $closed;
@@ -101,10 +120,11 @@ final class SectionScanner
     public function finish(): ?string
     {
         $closed = null;
-        if ($this->buffer !== '') {
-            $closed       = $this->scanLine($this->buffer);
-            $this->buffer = '';
+        if ($this->consumed < strlen($this->buffer)) {
+            $closed = $this->scanLine(substr($this->buffer, $this->consumed));
         }
+        $this->buffer   = '';
+        $this->consumed = 0;
         $rest = ($closed ?? '') . $this->section;
         $this->section = '';
 
