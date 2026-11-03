@@ -35,7 +35,7 @@ use SugarCraft\Input\Event;
  *
  * @see xterm control sequences — Device Attributes, CSI 6 n, CSI ... t:
  *      https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
- * @see Kitty keyboard protocol — flag query/review `CSI ? flags u`:
+ * @see Kitty keyboard protocol — flag query/reply `CSI ? flags u`:
  *      https://sw.kovidgoyal.net/kitty/keyboard-protocol/
  * @readonly
  */
@@ -70,6 +70,19 @@ final readonly class TerminalReplyEvent implements Event
     ];
 
     /**
+     * Hard ceiling on carried CSI parameters (m11). A hostile or buggy
+     * terminal can pack a reply with hundreds of semicolon-separated ints;
+     * the first MAX_PARAMS ride on the event and the excess is counted,
+     * never unbounded memory keyed off attacker bytes.
+     */
+    public const MAX_PARAMS = 32;
+
+    public readonly array $params;
+
+    /** How many parameters the wire carried beyond {@see MAX_PARAMS}. */
+    public readonly int $paramsDropped;
+
+    /**
      * @param string        $family One of the FAMILY_* constants above.
      * @param list<int>     $params Numeric CSI parameters, in wire order (private-mode
      *                              prefixes and intermediate bytes are not params).
@@ -83,11 +96,16 @@ final readonly class TerminalReplyEvent implements Event
      */
     public function __construct(
         public string $family,
-        public array $params = [],
+        array $params = [],
         public string $raw = '',
         public string $body = '',
         public bool $truncated = false,
-    ) {}
+    ) {
+        $this->paramsDropped = max(0, count($params) - self::MAX_PARAMS);
+        $this->params = $this->paramsDropped > 0
+            ? array_slice($params, 0, self::MAX_PARAMS)
+            : $params;
+    }
 
     public function is(string $family): bool
     {

@@ -353,14 +353,7 @@ final class EscapeDecoder
             // Decode the WHOLE codepoint as a single event — never split a
             // multibyte char into per-byte KeyEvents (that corrupts it for every
             // downstream consumer that treats key/raw as a UTF-8 string).
-            $seqLen = match (true) {
-                $ord >= 0xc2 && $ord <= 0xdf => 2,
-                $ord >= 0xe0 && $ord <= 0xef => 3,
-                $ord >= 0xf0 && $ord <= 0xf4 => 4,
-                // 0x80-0xBF (lone continuation) or 0xC0-0xC1/0xF5-0xFF (overlong
-                // or out-of-range lead): not a valid lead byte.
-                default => 0,
-            };
+            $seqLen = $this->utf8SeqLength($stream, $i);
 
             if ($seqLen === 0) {
                 // Invalid lead — emit it alone and resync on the next byte so a
@@ -416,6 +409,35 @@ final class EscapeDecoder
         }
 
         return true;
+    }
+
+    /**
+     * UTF-8 expected-sequence-length classifier shared by both multibyte
+     * walkers (decodeClean and the ESC+lead leg). Returns 2/3/4 for a valid
+     * lead byte, 0 for anything that cannot start a well-formed codepoint:
+     * 0x80-0xBF lone continuations, 0xC0-0xC1/0xF5-0xFF overlong/out-of-range
+     * leads — and ED A0-BF, the surrogate-encoded range: U+D800-DFFF cannot
+     * exist in well-formed UTF-8 (mbstring/json/MySQL reject it), so a stream
+     * carrying it must resync byte-by-byte instead of producing a key that
+     * every downstream codec chokes on (m12).
+     */
+    private function utf8SeqLength(string $stream, int $leadPos): int
+    {
+        $ord = ord($stream[$leadPos]);
+        $seqLen = match (true) {
+            $ord >= 0xc2 && $ord <= 0xdf => 2,
+            $ord >= 0xe0 && $ord <= 0xef => 3,
+            $ord >= 0xf0 && $ord <= 0xf4 => 4,
+            default => 0,
+        };
+
+        if ($seqLen === 3 && $ord === 0xed && $leadPos + 1 < strlen($stream)) {
+            if ((ord($stream[$leadPos + 1]) & 0xE0) === 0xA0) {
+                return 0;
+            }
+        }
+
+        return $seqLen;
     }
 
     /**
@@ -535,14 +557,9 @@ final class EscapeDecoder
         // decodeClean then reports as stray lone-byte keys (Alt+é arriving as
         // Alt+0xc3 + "\xa9").
         if ($nextOrd >= 0x80) {
-            $seqLen = match (true) {
-                $nextOrd >= 0xc2 && $nextOrd <= 0xdf => 2,
-                $nextOrd >= 0xe0 && $nextOrd <= 0xef => 3,
-                $nextOrd >= 0xf0 && $nextOrd <= 0xf4 => 4,
-                // 0x80-0xBF lone continuation, 0xC0-0xC1/0xF5-0xFF invalid
-                // lead: not a codepoint start — keep the single-byte Alt+byte.
-                default => 0,
-            };
+            // Shared classifier: rejects surrogate-encoded ED A0-BF leads too,
+            // so Alt+lead falls through to byte-wise resync like decodeClean.
+            $seqLen = $this->utf8SeqLength($stream, 1);
 
             if ($seqLen !== 0) {
                 if (strlen($stream) - 1 >= $seqLen) {

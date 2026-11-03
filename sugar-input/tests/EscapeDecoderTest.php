@@ -1537,6 +1537,56 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('', $this->decoder->remainder());
     }
 
+    public function testSurrogateEncodedLeadResyncsByteWise(): void
+    {
+        // ED A0 80 encodes U+D800 — a surrogate half, which cannot legally
+        // exist in well-formed UTF-8 (mbstring, json and MySQL all reject it).
+        // The walker must resync byte-by-byte instead of minting a codepoint
+        // every downstream codec would choke on (m12).
+        $events = $this->decoder->decode("\xed\xa0\x80");
+        $this->assertCount(3, $events);
+        $this->assertSame("\xed", $events[0]->key);
+        $this->assertSame("\xa0", $events[1]->key);
+        $this->assertSame("\x80", $events[2]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testEdLeadBelowTheSurrogatesStillFormsOneCodepoint(): void
+    {
+        // ED 9F BF is U+D7FF, the last legal codepoint below the surrogate
+        // range: the classifier must not over-refuse the whole ED block.
+        $events = $this->decoder->decode("\xed\x9f\xbf");
+        $this->assertCount(1, $events);
+        $this->assertSame("\xed\x9f\xbf", $events[0]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
+    public function testEscapeWithSurrogateEncodedLeadKeepsAltOnTheLeadAlone(): void
+    {
+        // ESC + ED A0 80: Alt applies to the (invalid) lead byte alone and the
+        // continuation strays resync separately — never a forged Alt+rune
+        // whose payload no consumer can re-encode.
+        $events = $this->decoder->decode("\x1b\xed\xa0\x80");
+        $this->assertCount(3, $events);
+        $this->assertSame("\x1b\xed", $events[0]->raw);
+        $this->assertSame("\xa0", $events[1]->key);
+        $this->assertSame("\x80", $events[2]->key);
+    }
+
+    public function testSurrogateSplitAcrossChunksStillResyncs(): void
+    {
+        // A bare 0xED at a chunk end is buffered as a plausible lead; when the
+        // next chunk reveals A0, the re-walk re-classifies and the sequence
+        // resyncs byte-by-byte — chunk-invariant with the one-read case above.
+        $this->assertCount(0, $this->decoder->decode("\xed"));
+        $events = $this->decoder->decode("\xa0\x80");
+        $this->assertCount(3, $events);
+        $this->assertSame("\xed", $events[0]->key);
+        $this->assertSame("\xa0", $events[1]->key);
+        $this->assertSame("\x80", $events[2]->key);
+        $this->assertSame('', $this->decoder->remainder());
+    }
+
     // ─── MAX_SEQUENCE_LENGTH cap on $remainder ────────────────────────────────
 
     public function testOversizedIncompleteCsiIsDiscarded(): void
