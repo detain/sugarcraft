@@ -32,11 +32,15 @@ echo "Type 'quit' to exit.\n\n";
 // note the format is implementation-specific (GNU single tokens like -icanon,
 // BSD/macOS space-separated words), so this save/restore pair stays on one
 // machine within one run.
+// -isig is REQUIRED for the Ctrl+C story: with signals left on, Ctrl+C
+// raises SIGINT and kills this process BEFORE the shutdown restore runs,
+// leaving the shell with echo off. With -isig, Ctrl+C arrives as an ordinary
+// byte that the prompt aborts on.
 $isTty = stream_isatty(STDIN);
 $savedMode = '';
 if ($isTty) {
     $savedMode = trim((string) shell_exec('stty -g'));
-    shell_exec('stty -icanon -echo min 1 time 0');
+    shell_exec('stty -icanon -echo -isig min 1 time 0');
     register_shutdown_function(static function () use ($isTty, $savedMode): void {
         if ($isTty && $savedMode !== '') {
             shell_exec('stty ' . escapeshellarg($savedMode));

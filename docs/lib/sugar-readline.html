@@ -107,14 +107,17 @@ $prompt-&gt;isSubmitted();                          // false on Esc / Ctrl+C / E
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>TextPrompt</td><td>static new(label) / withDefault() / withHidden() / withCompletions() / withValidator() / withCharLimit() / withHistory()</td><td>Single-line input</td></tr>
-<tr><td>TextPrompt</td><td>handleChar(char) / handleKey(key) / submit() / abort() / value() / isSubmitted()</td><td>Drive the prompt and read the result</td></tr>
-<tr><td>ConfirmationPrompt</td><td>static new(label, defaultValue = false) / withConfirmLabel() / withCancelLabel()</td><td>Yes / no prompt</td></tr>
-<tr><td>SelectionPrompt</td><td>static new(label, choices) / withPageSize() / withFilter() / handleChar() / handleKey() / selectedValue()</td><td>Single choice with type-to-filter and pagination</td></tr>
+<tr><td>TextPrompt</td><td>static new(label) / withDefault() / withHidden() / withCompletions() / withValidator() / withCharLimit() / withHistory() / withAutoSuggest() / withUndoManager() / withDisplayWidth() / withMode()</td><td>Single-line input</td></tr>
+<tr><td>TextPrompt</td><td>handleChar(char) / handleKey(key) / insertPastedText(text) / submit() / abort() / value() / isSubmitted() / mode()</td><td>Drive the prompt and read the result</td></tr>
+<tr><td>ConfirmationPrompt</td><td>static new(label, defaultValue = false) / withConfirmLabel() / withCancelLabel() / withHint()</td><td>Yes / no prompt (Tab or Space toggles, Enter submits)</td></tr>
+<tr><td>SelectionPrompt</td><td>static new(label, choices) / withPageSize() / withFilter() / handleChar() / handleKey() / selectedValue()</td><td>Single choice with type-to-filter and pagination (PageUp/PageDown jump pages)</td></tr>
 <tr><td>MultiSelectPrompt</td><td>static new(label, choices) / withMinSelections(n) / withMaxSelections(n) / handleChar() / handleKey() / selectedValues() / canSubmit()</td><td>Several choices with min/max enforcement</td></tr>
-<tr><td>TextareaPrompt</td><td>static new(label) / withDefault() / withMaxLines() / handleChar() / handleKey() / value()</td><td>Multi-line editor</td></tr>
-<tr><td>Readline</td><td>fromStdin() / new StreamInputDriver($stream) / onKey(name, handler) / run(prompt, output)</td><td>TTY loop: feeds key events into any prompt and repaints it</td></tr>
-<tr><td>History\FileHistory</td><td>new(path) / push() / all() / flush() / clear() / withDeferredWrites()</td><td>Cross-process history: 0600 file, sidecar-locked writes, duplicate entries skipped</td></tr>
+<tr><td>TextareaPrompt</td><td>static new(label) / withDefault() / withMaxLines() / handleChar() / handleKey() / insertPastedText() / value() / lines()</td><td>Multi-line editor: Enter submits, Shift+Enter/Ctrl+J break lines</td></tr>
+<tr><td>Readline</td><td>fromStdin() / new StreamInputDriver($stream) / onKey(name, handler) / onMouse() / onFocus() / onPaste() / stop() / run(prompt, output)</td><td>TTY loop: feeds key events into any prompt and repaints it</td></tr>
+<tr><td>Mode\EmacsMode · Mode\ViMode</td><td>attach via TextPrompt::withMode()</td><td>Editing modes; vi normal drives history (j/k), edits (x/D), the unnamed register (yy/dd/diw → p) and undo (u)</td></tr>
+<tr><td>History\InMemoryHistory</td><td>new(maxHistory = 0) / push() / previous() / next() / search(query, fromIndex, direction) / reset() / clear()</td><td>Per-process store; collapses adjacent duplicates</td></tr>
+<tr><td>History\FileHistory</td><td>new(path, maxHistory = 0, tempDir = '', deferWrites = false) / push() / flush() / clear() / search()</td><td>Cross-process history: 0600 file, escaped one-line entries, sidecar-locked bounded writes, symlinked paths refused</td></tr>
+<tr><td>UndoManager</td><td>push(state) / undo() / redo() / canUndo() / canRedo()</td><td>Immutable bounded (512) snapshot stack; attach via withUndoManager()</td></tr>
 <tr><td>Key</td><td>Up, Down, Enter, Space, Escape, CtrlC, …</td><td>Canonical key names for handleKey() — raw control bytes normalize to the same language</td></tr>
 </table>
   </div>
@@ -124,7 +127,7 @@ $prompt-&gt;isSubmitted();                          // false on Esc / Ctrl+C / E
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs from the shipped demos. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-readline/.vhs/basic.gif" alt="Text prompt" onerror="this.parentElement.style.display='none'">

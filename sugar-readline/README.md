@@ -14,13 +14,14 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs, 
 
 ## Features
 
-- **TextPrompt** — single-line input with validation, auto-completion, hidden/password mode, char limit, default value
+- **TextPrompt** — single-line input with validation, auto-completion, hidden/password mode, char limit, default value, history navigation, and an optional display-width viewport
 - **SelectionPrompt** — filtered list with type-to-filter, cursor navigation and pagination
 - **MultiSelectPrompt** — filtered multi-choice with min/max enforcement and FIFO rollover at the cap
 - **ConfirmationPrompt** — yes/no with customizable labels, decoupled select-vs-submit
-- **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap
-- **Pure renderer** — every method returns a new immutable instance; `view()` returns ANSI strings, `value()` returns the data
-- **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold) handled by the shared `sugar-forms` `VimKeyHandler` — the same handler backing `sugar-forms` and `sugar-widgets`; new bindings in `VimAction` enum benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends
+- **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits, Shift+Enter and Ctrl+J break lines
+- **Immutable state** — every handling method returns a new instance; `view()` returns the ANSI string and `value()` the data, while the `Readline` pump owns all terminal writes
+- **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold) handled by the shared `sugar-forms` `VimKeyHandler` — the same handler backing `sugar-forms` and `sugar-widgets`; new bindings in `VimAction` enum benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
+- **NO_COLOR respected** — when the `NO_COLOR` environment variable is set to a non-empty value, every decoration (colour and style alike) falls away and prompts print as plain text
 
 ## Install
 
@@ -72,6 +73,16 @@ $prompt = Readline::fromStdin()->run(
 // 'Alice' after typing + Tab + Enter
 ```
 
+The remaining prompt surface (all fluent, all returning new instances):
+`withValidator(callable)` gates `submit()` on a rule, `withCharLimit(int)`
+caps the buffer, `withHidden()` masks input (secrets) and disables history
+pushes and completion echoes, `withAutoSuggest()` proposes the most recent
+matching history entry as a dim row under the prompt, and `withUndoManager()`
+attaches an `UndoManager` — an immutable bounded (512-state) snapshot stack
+fed automatically as you type and edit, driven by Ctrl+Z/Ctrl+Y (or vi `u`
+in normal mode). `ConfirmationPrompt::withHint(string)` paints a hint row
+(e.g. "Press Enter to confirm") under the Yes/No choice.
+
 ### Selection Prompt
 
 Type to filter the list as you go; Backspace edits the filter, Ctrl+U clears
@@ -109,12 +120,18 @@ use SugarCraft\Readline\Readline;
 use SugarCraft\Readline\TextareaPrompt;
 
 $result = Readline::fromStdin()->run(
-    TextareaPrompt::new('Describe:', ['First', 'Second', 'Third'])
-        ->withMaxLines(5),
+    TextareaPrompt::new('Describe:')->withMaxLines(5),
     STDOUT
 );
 print_r($result->lines());  // edited multi-line text
 ```
+
+`TextareaPrompt::new()` takes only the label — a textarea has no choices.
+Keyboard contract: **Enter submits**, **Shift+Enter** and **Ctrl+J** insert a
+new line, **Ctrl+U** kills the text before the cursor on the current line
+only, Up/Down move between lines, Escape/Ctrl+C abort. When a `maxLines`
+cap is reached, further line breaks are refused and text accumulates on
+the last allowed line.
 
 ### Confirmation Prompt
 
@@ -147,6 +164,29 @@ $result = Readline::fromStdin()
 echo $result->value();
 ```
 
+`onMouse()`, `onFocus()` and `onPaste()` register the same way for mouse
+reporting, focus in/out, and bracketed paste. The bracketed-paste enable is
+gated on the **output** stream being a tty, so a program with piped stdin
+behind a tty stdout may still receive pastes as raw bytes. Whatever the
+delivery, pasted content is inserted as **literal text**: `TextPrompt` and
+`TextareaPrompt` expose `insertPastedText(string)`, which strips control
+bytes (the textarea honours embedded newlines as line breaks) before
+inserting, so a pasted payload can never forge a submit or replay editor
+commands.
+
+### Long lines and repaint
+
+`view()` returns one logical row; painting that row wider than the terminal
+makes it wrap and the cursor-up repaint maths desyncs (the classic
+staircase). `TextPrompt::withDisplayWidth($cells)` bounds the editable
+region to a window around the cursor (clipped ends marked `…`, cell-width
+aware, `0` = unbounded). When `Readline::run()` prepares a prompt it has not
+been given an explicit width for, it auto-applies the `COLUMNS` value, so a
+normal terminal session stays bounded without extra wiring; set
+`withDisplayWidth()` yourself to override (including `0` to opt out).
+Multi-line textarea output and wrapped labels can still exceed the window —
+long **prompts** (labels) are the host's layout responsibility either way.
+
 ## Terminal mode (raw vs cooked)
 
 `run()` never touches termios — the library deliberately leaves terminal
@@ -157,13 +197,18 @@ the terminal in non-canonical mode around the loop and restore it afterwards:
 
 ```php
 $saved = trim((string) shell_exec('stty -g'));
-shell_exec('stty -icanon -echo min 1 time 0');
+shell_exec('stty -icanon -echo -isig min 1 time 0');
 try {
     $prompt = Readline::fromStdin()->run(TextPrompt::new('> '), STDOUT);
 } finally {
     shell_exec('stty ' . escapeshellarg($saved));
 }
 ```
+
+`-isig` matters: with signals left enabled, Ctrl+C raises SIGINT, which
+kills the process **before** the `finally` restore runs — the shell is then
+left with echo and canonical mode off. With `-isig`, Ctrl+C arrives as an
+ordinary byte the prompt aborts on, and the restore always executes.
 
 The captured `-g` string is implementation-specific — GNU `stty` prints it as
 dense single tokens (`-icanon`) while BSD/macOS `stty` uses space-separated
@@ -186,7 +231,7 @@ arrive as written, which is exactly how the test-suite drives chords.
 $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
 fwrite($pair[1], "hello\x0d");   // \x0d = Enter
 fclose($pair[1]);
-$readline = new Readline(new SugarCraft\Input\StreamInputDriver($pair[0]));
+$readline = new Readline(new SugarCraft\Input\Driver\StreamInputDriver($pair[0]));
 $result = $readline->run(TextPrompt::new('> '));
 // $result->value() === 'hello'
 ```
@@ -204,15 +249,18 @@ normalized to one canonical language at the choke point. The `Key` class
 lists the primary bindings; it is not an exhaustive enumeration of every
 sequence a terminal can send.
 
-- `Key::Left` / `Key::Right` — move cursor (text input); also Ctrl+B / Ctrl+F
+- `Key::Left` / `Key::Right` — move cursor (text input); also Ctrl+B / Ctrl+F, and Ctrl+H erases before the cursor (ASCII rubout behaviour)
 - `Key::Up` / `Key::Down` — navigate selection list / history / textarea line; also Ctrl+P / Ctrl+N
 - `Key::Home` / `Key::End` — jump within the current line / list; also Ctrl+A / Ctrl+E
-- `Key::Enter` — submit text or select current choice
-- `Key::Space` — select/submits in SelectionPrompt; toggles mark in multi-select
-- `Key::Tab` — auto-complete or toggle confirmation value
+- `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter and Ctrl+J break a line instead)
+- `Key::Space` — selects in SelectionPrompt; toggles the mark in multi-select; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
+- `Key::Tab` — auto-complete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)
 - `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line; Ctrl+W deletes the previous word
 - `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search
+- Ctrl+Z / Ctrl+Y — undo / redo the last edit run (a run of consecutive typing collapses into one undo step)
+- Ctrl+L — `Readline` clears the screen and repaints the prompt
+- `Key::PageUp` / `Key::PageDown` — jump the selection list by one page
 - `Key::Escape` / `Key::CtrlC` — abort. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there.
 
 Ctrl+[ is an ESC on every terminal and behaves as `esc`, not as Ctrl+C.
@@ -244,12 +292,17 @@ its own state survives the prompt's immutable cloning.
   start/end), Ctrl+B/F (char motion), Alt+B/F/D (word motion/delete, via the
   Escape prefix or a Kitty-style `alt_b`), Ctrl+W (delete word before),
   Ctrl+T (transpose), Ctrl+P/N (history), Ctrl+R/Ctrl+S (incremental
-  search), Ctrl+K/U/L. Escape arms the meta prefix; a second Escape cancels
-  it. The mode never aborts the prompt — leave it detached if Escape-quit is
-  what you want.
+  search), Ctrl+K/U (kill to end/start). Ctrl+L reaches the mode as a
+  no-op: screen clearing is the `Readline` pump's job. Escape arms the meta
+  prefix; a second Escape cancels it. The mode never aborts the prompt —
+  leave it detached if Escape-quit is what you want.
 - **`ViMode`** is a modal state machine (starts in insert; Escape → normal;
   `v` → a visual mode that tracks motion only — selection is not yet rendered
-  or operated on). Pending motions like `dd`/`yy`/`cc` are supported. It does
+  or operated on). Pending motions like `dd`/`yy`/`cc` are supported. In
+  normal mode `j`/`k` walk history, `x` cuts the char under the cursor, `p`
+  puts the unnamed register, `u` undoes the last edit, `Enter` submits the
+  line, space moves right, and Ctrl+R/Ctrl+S start incremental search just
+  like in insert mode. It does
   not hardcode vi bindings: normal/visual keys are mapped through sugar-forms'
   `VimKeyHandler`, which returns a `VimAction` enum case that ViMode then
   executes as TextPrompt operations. New vi bindings therefore belong in
@@ -262,19 +315,30 @@ its own state survives the prompt's immutable cloning.
   target — quotes (`"` `'` `` ` ``), brackets (`(` `)` `b`, `[` `]`,
   `{` `}` `B`, `<` `>`), or `w` for the word under the cursor. So `ci"`
   retypes a quoted string, `da{` deletes braces and contents, `diw`/`daw`
-  delete a word (aw takes the trailing space), `yi(` moves the cursor to
-  the start of the parenthesized text. Resolution lives in sugar-forms
+  delete a word (aw takes the trailing space), `yi(` copies the parenthesized
+  text into the unnamed register and moves the cursor to its start.
+  Resolution lives in sugar-forms
   (`TextObject::resolve()` via `VimKeyHandler::handleTextObject()`):
   innermost bracket pair wins, cursor-on-delimiter counts as inside,
   quotes pair up left-to-right (a cursor before a quoted region jumps
-  forward to it), and unmatched/absent delimiters no-op like vim's beep.
+  forward to it), and unmatched/absent delimiters are a silent no-op
+  (where vim would beep).
   Escape cancels a half-typed sequence. Simplifications vs vim: `a"` does
-  not absorb trailing whitespace, escaped quotes are not special, and no
-  yank register is populated yet (matching `yy`).
+  not absorb trailing whitespace, escaped quotes are not special, and the
+  unnamed register is a single slot (no named registers, no
+  linewise/charwise distinction on put). `dd`, `cc` and `yy` store the
+  affected line in the register before acting; `p` pastes register contents
+  as literal text after the cursor — pasted control characters never
+  replay as commands.
 
 With no mode attached, `TextPrompt` still carries the default GNU-readline
-movement chords (Ctrl+A/E/B/F/P/N) plus arrows, Home/End, Ctrl+U/K/W/D/R/S,
-Tab completion, Escape/Ctrl+C abort, and undo/redo.
+movement chords (Ctrl+A/E/B/F/P/N) plus arrows, Home/End, space,
+Ctrl+U/K/W/D/H/R/S, Ctrl+Z/Ctrl+Y undo/redo, Ctrl+L screen clear (via
+`Readline`), Tab completion with match cycling, and Escape/Ctrl+C abort.
+Attached modes read the current submode with `$prompt->mode()`; the mode
+state itself is not painted into `view()` — the prompt renders identically
+across vi submodes, so a host that needs a visible `--NORMAL--` marker must
+read `mode()` and paint it itself.
 
 ### Incremental history search
 
@@ -288,20 +352,37 @@ reverse-i-search)` when nothing matches (including empty history).
 
 ## History
 
-`InMemoryHistory` is the default store. `FileHistory` persists entries across
-processes: pass a path, and the file is created (or tightened, if it exists)
-at mode `0600`, loaded on construction, and flushed at the latest on
-destruction — `withDeferredWrites()` queues appends until `flush()`.
+Prompts start with **no** history attached: navigation and Ctrl+R do nothing
+until you pass a store via `withHistory()`. `InMemoryHistory` keeps entries
+for the process lifetime; `FileHistory` persists them across processes —
+`new FileHistory($path, $maxHistory, $tempDir, $deferWrites)`: the file is
+created (or tightened, if it exists) at mode `0600`, loaded on construction,
+and flushed at the latest on destruction. With `$deferWrites = true`, pushes
+queue in memory until `flush()` batch-writes them. Pass a `$maxHistory` and
+the cap bounds the **file** too: bounded stores rewrite the whole file on
+each push, merging anything another process appended in between.
 
-Dedup is stricter than the base `HistoryInterface` minimum: a line equal to
-**any** entry already retained (including ones loaded from disk) is skipped,
-zsh `HIST_IGNORE_DUPS` style. All writers serialize on a sidecar
-`<file>.lock` (`flock` exclusive, held across read-write-rename), so two
-processes pushing at once never lose an entry; a write that cannot happen
-loudly throws rather than dropping the line.
+Entries are stored one per line with backslash escapes (`\\`, `\n`, `\r`)
+applied at the write choke and undone on load — a value that somehow
+contains a raw newline survives a save/reload round-trip as **one** entry
+instead of splitting into two. A history path that is a **symlink** is
+refused loudly at construction and again under the write lock: without the
+check, an attacker-planted link turns every append (and the `0600` chmod)
+against, say, `~/.bashrc`.
+
+Dedup is stricter than the base `HistoryInterface` minimum: `FileHistory`
+skips a line equal to **any** entry already retained (including ones loaded
+from disk) — zsh `HIST_IGNORE_ALL_DUPS` style — while plain
+`InMemoryHistory` collapses only **adjacent** duplicates (`HIST_IGNORE_DUPS`).
+All writers serialize on a sidecar `<file>.lock` (`flock` exclusive, held
+across read-write-rename), so two processes pushing at once never lose an
+entry; a write that cannot happen loudly throws rather than dropping the
+line. The rename makes torn reads impossible, but there is no `fsync` — a
+kernel crash can still lose the most recent writes.
 
 Hidden prompts (`withHidden()`) never push their value: a secret stays out of
-both in-memory and on-disk history.
+both in-memory and on-disk history, and it never enters an attached
+`UndoManager` chain either.
 
 ## Submit / Abort Semantics
 
@@ -310,11 +391,12 @@ Each prompt is a state machine with three states: pending, submitted, aborted.
 - `submit()` finalises the prompt; for `MultiSelectPrompt` it only succeeds when `canSubmit()` is true.
 - `abort()` (or feeding `Key::Escape` / `Key::CtrlC` on the default bindings; inside an attached `EmacsMode`, Ctrl+C) discards the prompt; `value()` / `selectedValues()` then return empty.
 - `isSubmitted()` / `isAborted()` report status; `currentValue()` (Confirmation) and `selectedValue()` (Selection) reflect the current cursor regardless of submission state.
-- True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns the prompt in its current state — neither submitted nor aborted. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
+- True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns the prompt in its current state — neither submitted nor aborted. The pump is per-`Readline`-instance, **not** per-`run()`: calling `run()` again feeds the next prompt from wherever the stream stands, so `printf 'a\nb\n' | php app.php` drives two successive prompts with `a` and `b`; once EOF is seen it stays seen. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
+- `stop()` requests the loop exit; it lands within one idle poll interval (capped at 20 ms) **when the driver's read is non-blocking** (`min 1 time 0`, or an injected driver that returns `null` promptly). A driver blocking in `read()` is not interrupted — the stop takes effect on the first pass after it wakes.
 
 ## Accessor deprecation (2026-10-24)
 
-Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, the history navigation pair `getPrevious()`/`getNext()` was renamed to its bare twins `previous()`/`next()`, with the whole family moved together with the interface: `HistoryInterface` now declares only the bare pair (PHP forbids interface method bodies, so the legacy spellings could not ride the contract as default forwarders). `InMemoryHistory` — and `FileHistory` by inheritance — keep the old names as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-readline v2.0.0.
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*)*), the history navigation pair `getPrevious()`/`getNext()` was renamed to its bare twins `previous()`/`next()`, with the whole family moved together with the interface: `HistoryInterface` now declares only the bare pair (PHP forbids interface method bodies, so the legacy spellings could not ride the contract as default forwarders). `InMemoryHistory` — and `FileHistory` by inheritance — keep the old names as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-readline v2.0.0.
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
