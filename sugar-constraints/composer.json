@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-constraints",
-    "description": "Constraint-based layout solver (Cassowary simplex + greedy fallback)",
+    "description": "Constraint-based greedy layout solver for terminal grids (deprecated Cassowary shim retained for compatibility)",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -21,8 +21,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-constraints/issues",
-        "source": "https://github.com/sugarcraft/sugar-constraints/tree/master",
-        "docs": "https://github.com/sugarcraft/sugar-constraints/blob/master/README.md"
+        "source": "https://github.com/sugarcraft/sugar-constraints",
+        "docs": "https://sugarcraft.github.io/lib/sugar-constraints.html"
     },
     "require": {
         "php": "^8.3"

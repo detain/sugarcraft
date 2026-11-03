@@ -4,6 +4,12 @@
 
 ### 2026-05-28 — Cassowary + Greedy co-existence
 Pattern: Extracted Cassowary + Greedy layout solvers into sugar-constraints in step-03. GreedySolver is golden-parity with sugar-style. Cassowary is simplified prototype — full simplex with Big-M method.
+> **ERRATUM 2026-11-03:** Historical. The "full simplex with Big-M method"
+> prototype was deleted 2026-07-10 (row below) — `CassowarySolver` is a
+> delegating shim today, and the package's headline is greedy-first.
+> Golden-parity pins now live in this lib's suite against **sugar-panels**'s
+> own golden tests (compat mode); sugar-style consumes via `SolverFactory`
+> rather than serving as the parity source.
 Anti-pattern: None identified yet.
 Source: step-03 ai/sugar-constraints-new
 
@@ -28,6 +34,11 @@ Also: GreedySolver `applyMaxClamp()` divided by zero when every reclaim
 recipient was `Fill(0)` (weight-sum 0) — guarded with an equal-shares fallback.
 Region now rejects negative x/y/w/h (matches the constraint value-objects).
 Source: ai/sugar-constraints-solver-deprecate
+> **ERRATUM 2026-11-03:** "constructs but never calls solve(), so the
+> deprecation is inert downstream" was FALSE as of the fix-lane audit:
+> sugar-style's `Layout\Solver` calls `solve()` on every split when
+> `SUGARCRAFT_LAYOUT_SOLVER=cassowary` selects it via `SolverFactory`, so the
+> `E_USER_DEPRECATED` warning DOES fire downstream. The rest of the row stands.
 
 ## 2026-09-22 — Dock layout primitive (src/Dock/*)
 
@@ -47,6 +58,10 @@ Source: ai/sugar-constraints-solver-deprecate
   invariant, because new()-thirds (1/3+1/3 = 2/3 > 1/2) and verbatim
   fromArray() restore must both persist so toArray/fromArray round-trip
   identity holds. resolve() absorbs over-grown manifests via the ladder.
+  > **ERRATUM 2026-11-03:** "(clamps, never throws)" is incomplete —
+  > `withColumnShare()` THROWS `InvalidArgumentException` when the numerator
+  > or denominator is below 1; only well-formed rationals get clamped down by
+  > the pair-rule magnitude ceiling. `resolve()` itself stays throw-free.
 - **Degradation ladder (deterministic):** raise short side to sideMinCols only
   while center keeps centerMinCols (Left first) → else drop side with fewer
   slots (ties drop Left) → drop remaining side → center-only whole frame;
