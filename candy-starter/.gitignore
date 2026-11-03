@@ -1,3 +1,9 @@
+# Vendor lives in the app you ship — never commit it.
+/vendor/
+# For a downstream APP (the flavour this template forks into), Composer
+# doctrine is the opposite: delete the composer.lock line below and
+# commit the lock for reproducible, auditable builds. The line stays for
+# the template repo itself, which follows the monorepo per-lib law.
 composer.lock
 *.gif
 !.vhs/start.gif

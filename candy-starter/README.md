@@ -50,7 +50,11 @@ my-app/
     └── start.gif         # the rendered demo (force-tracked; CI regenerates)
 ```
 
-`bin/start` is just three meaningful lines: load the autoloader, instantiate your `Model`, hand it to `Program::run()`. The Program harness owns the event loop, render tick, signal handling, raw-mode setup, and alt-screen lifecycle — you only write Models. Inside the monorepo the same script runs as `cd candy-starter && bin/start`; it resolves the autoloader relative to its own file, not the working directory.
+`bin/start` is a handful of meaningful lines: load the autoloader, instantiate your `Model`, hand it to `Program::run()`, then answer `stopSignal()` so a signal-stopped run exits `128+N` (130 after SIGINT, 143 after `kill`) while cooperative quits keep their 0. The Program harness owns the event loop, render tick, signal installation, raw-mode setup, and alt-screen lifecycle — you only write Models. Inside the monorepo the same script runs as `cd candy-starter && bin/start` once the package-local vendor exists (per-lib `composer install`, or `php ../scripts/refresh-deps.php --mode=linked` from the repo root); it resolves the autoloader relative to its own file — the one `<package>/vendor/autoload.php` candidate — not the working directory.
+
+## Requirements
+
+PHP 8.3+ with `ext-intl` and `ext-ffi` (both arrive transitively via `sugar-core` → `sugar-pty`; the skeleton declares no `ext-*` of its own, and `composer create-project` fails loudly with a platform error if one is missing — enable it with your distro's `php-intl` / `php-ffi` packages or `pecl install ffi`). A TTY-capable, colour terminal is assumed for interactive use — see the `openTty` note under "Forking checklist" for piped-stream setups.
 
 ## Anatomy of a SugarCraft Model
 
@@ -92,13 +96,14 @@ Add the dep, import its classes, return them from `view()`. They're all pure ren
 
 ## Forking checklist
 
-The five things you actually have to change after `create-project`:
+The six things you actually have to change after `create-project`:
 
 1. `composer.json` — rename `name` (and `description`) to your app.
 2. `bin/start` — swap the `use App\Counter;` import for your own Model.
 3. `src/` and `tests/` — replace the demo Model and its matrix; keep the `App\` / `App\Tests\` namespaces or update the PSR-4 prefixes in `composer.json` to match.
-4. Before shipping a real product, pin your sibling deps to a released constraint — the skeleton rides `dev-master` (`sugarcraft/sugar-core`, `sugarcraft/sugar-style`), which is deliberately bleeding-edge so the template never goes stale.
-5. Re-run `vendor/bin/phpunit`.
+4. `composer.lock` — the shipped `.gitignore` ignores it, which is right for this template repo but wrong for the app you fork it into: apps ship a lockfile for reproducible, auditable builds. Delete the ignore line and commit the lock.
+5. Before shipping a real product, pin your sibling deps to a released constraint — the skeleton rides `dev-master` (`sugarcraft/sugar-core`, `sugarcraft/sugar-style`), which is deliberately bleeding-edge so the template never goes stale.
+6. Re-run `vendor/bin/phpunit` (or `composer test` — the skeleton ships that script alias).
 
 The template reads no environment variables — configuration is in code, via `ProgramOptions` (framerate, alt-screen takeover, mouse tracking, raw-mode details; see `sugar-core`). `./bin/start | cat` won't get raw mode because it has no tty; pass `new ProgramOptions(openTty: true)` to make the program grab `/dev/tty` so it still sees keys on piped streams.
 
