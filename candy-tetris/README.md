@@ -100,6 +100,11 @@ computer wins: the player's field is checked first.
 | r         | New game (after game over only) |
 | q         | Quit              |
 
+These are the bindings. There is no configuration file, environment variable,
+or in-game screen that remaps them — the keys are decided where the input
+handler matches on them, so a layout you dislike is a layout you work around
+for now.
+
 ### Game over
 
 The game ends when the next piece has no room to spawn, the stack reaches the
@@ -107,6 +112,11 @@ ceiling, or garbage crushes a piece into the board — the banner painted across
 the playfield names the reason and the final score. Press **r** to
 start a completely new game — the score does not carry over (it embeds the
 level, so a restarted board falls at level-0 gravity again). **q** quits.
+
+Nothing survives the exit. There is no high-score table and no saved state:
+the game writes no file, so a finished run's score exists only in the frame
+that showed it, and the next launch starts with an empty record — scoring is
+scoped to one session.
 
 ### Hold
 
