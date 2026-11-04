@@ -90,6 +90,11 @@ function setup(sessionId: string) {
 
   /** Follow the session: a snapshot the first time (or when $fresh), a replay from the cursor after. */
   async function subscribe(fresh = false): Promise<void> {
+    // CW-7: one request in flight per store, period. Retry paths, a resumed
+    // error, a retain during load and the resync alarm can all pile calls
+    // onto the same unfollowed session; each duplicate answer re-applies a
+    // snapshot and re-announces the client tools.
+    if (phase.value === 'subscribing') return
     unfollow ??= connection.follow(sessionId, {
       cursor: () => (phase.value === 'live' ? cursor.value : null),
       event: handle,
