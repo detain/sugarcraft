@@ -23,6 +23,7 @@ use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\ToolCall;
+use SugarCraft\Code\Tools\ToolResult;
 
 /**
  * C-MCP-3.d — a long MCP call hands the TURN over at the threshold while the
@@ -513,6 +514,56 @@ final class McpBackgroundCallTest extends TestCase
     }
 
     // =========================================================================
+    // The reader's class roster (CC-SEC-1)
+    // =========================================================================
+
+    public function testAPlantedPayloadCannotWakeAClassOutsideTheFrameRoster(): void
+    {
+        // The registry is 0600-in-0700, but "we trust this corner" is a
+        // placement argument, not a decode policy: every sibling frame reader
+        // in the tree instantiates with an explicit allow-list, and this one
+        // was the last bare `@unserialize`. A gadget that announces itself in
+        // __wakeup is the ground truth — with the roster it never even
+        // instantiates (PHP hands back __PHP_Incomplete_Class and does not
+        // call __wakeup), so the file dies at the shape check silent.
+        $registry = $this->sandboxHome . '/.candy-code/' . McpBackgroundCalls::RELATIVE_DIR;
+        self::assertTrue(mkdir($registry, 0700, true) || is_dir($registry), 'fixture: the registry corner exists to be planted into');
+        G4BFrameGadget::$awoken = false;
+        $planted = serialize([
+            'job' => 'g4b-gadget',
+            'server' => 's',
+            'tool' => 't',
+            'callId' => 'c',
+            'result' => new G4BFrameGadget(),
+        ]);
+        self::assertGreaterThan(0, file_put_contents($registry . '/g4b-gadget.payload', $planted), 'fixture: the planted frame is on disk');
+
+        $frames = McpBackgroundCalls::takeFinished();
+
+        self::assertSame([], $frames, 'a frame whose result is not a ToolResult is refused');
+        self::assertFalse(G4BFrameGadget::$awoken, 'the gadget must never be instantiated — not even before the shape check refuses it');
+    }
+
+    public function testTheReaderDecodesWithTheRosterAndTheRosterIsExactlyTheFrameClosure(): void
+    {
+        // Structural legs: the behavior pin above cannot tell a roster from
+        // a differently-placed trust check, and the roster must be the
+        // transitive closure of what publish() serializes — ToolResult and
+        // the two objects its fields can carry. Anything wider reopens the
+        // hole; anything narrower drops honest deliveries (pinned by the
+        // forked-child tests above, which ride the roster end to end).
+        $body = self::sliceFunctionBody('McpBackgroundCalls.php', 'private static function readFrame(');
+        self::assertStringContainsString("unserialize(\$bytes, ['allowed_classes' => self::FRAME_CLASSES])", $body);
+
+        $roster = (new \ReflectionClass(McpBackgroundCalls::class))->getReflectionConstant('FRAME_CLASSES');
+        self::assertNotFalse($roster, 'fixture: the roster constant is declared');
+        self::assertSame(
+            [ToolResult::class, \SugarCraft\Code\Usage::class, \SugarCraft\Code\Permissions\DenialKind::class],
+            $roster->getValue(),
+        );
+    }
+
+    // =========================================================================
     // Harness
     // =========================================================================
 
@@ -776,5 +827,20 @@ final class McpBackgroundCallTest extends TestCase
         }
         $status = 0;
         @pcntl_waitpid($pid, $status);
+    }
+}
+
+/**
+ * CC-SEC-1 witness: instantiating it is already the finding, so it
+ * announces itself in {@see __wakeup} — the same way a real gadget would.
+ * Lives outside the test class on purpose: only unserialize touches it.
+ */
+final class G4BFrameGadget
+{
+    public static bool $awoken = false;
+
+    public function __wakeup(): void
+    {
+        self::$awoken = true;
     }
 }

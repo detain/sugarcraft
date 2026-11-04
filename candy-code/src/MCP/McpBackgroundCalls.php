@@ -54,6 +54,23 @@ final class McpBackgroundCalls
     /** The registry lives under the launch's own home corner, like every other cross-process state. */
     public const RELATIVE_DIR = 'mcp-background';
 
+    /**
+     * CC-SEC-1: the classes a registry frame legitimately holds — the exact
+     * transitive closure of what publish() serializes (a ToolResult and the
+     * two objects its own fields can carry). Like every sibling frame reader
+     * in the tree, the decode instantiates from an explicit allow-list, not
+     * from ambient trust: the 0600-in-0700 placement keeps honest children
+     * out of other people's reach, but a file that IS hostile (a
+     * repair-released `.taken`, a raced write, anything that ever stops
+     * being true of this corner) then instantiates ONLY these three — and
+     * the shape check in readFrame() still refuses everything they are not.
+     */
+    private const FRAME_CLASSES = [
+        ToolResult::class,
+        \SugarCraft\Code\Usage::class,
+        \SugarCraft\Code\Permissions\DenialKind::class,
+    ];
+
     /** How long a `.taken` marker may sit before the next scan decides its claimer died holding it. */
     private const CLAIM_STALE_SECONDS = 30;
 
@@ -394,11 +411,12 @@ final class McpBackgroundCalls
             return null;
         }
 
-        // The same trust level as the turn channel's frames — bytes this
-        // user's own 0700 registry corner received from this harness's own
-        // child — so no class allow-list; the shape check below is what
-        // refuses a tampered or truncated file.
-        $frame = @unserialize($bytes);
+        // CC-SEC-1: the house law for reading a frame off disk — instantiate
+        // from an explicit allow-list ({@see FRAME_CLASSES}: exactly what
+        // publish() writes), never ambiently. The shape check below still
+        // refuses a tampered or truncated file; the roster is what refuses a
+        // WELLDRESSED hostile one before any class of its choosing exists.
+        $frame = @unserialize($bytes, ['allowed_classes' => self::FRAME_CLASSES]);
 
         return is_array($frame)
             && ($frame['result'] ?? null) instanceof ToolResult
