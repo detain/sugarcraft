@@ -1343,8 +1343,13 @@ Open the sign-in URL and the page signs in, connects and shows:
   capped) and an edit's diff with line numbers. A refused call is marked with
   its reason.
 - **Permission questions** as cards with *Allow once*, *Always (this
-  session)*, *Reject* and *Reject & stop* (`y` / `a` / `n` on a focused card),
-  and a note field: its text goes with a rejection as feedback the agent
+  session)*, *Always (save)*, *Reject* and *Reject & stop* — `y` / `a` / `n`
+  on a focused card answer once, always-for-this-session and reject; *Always
+  (save)*, the one answer that writes a durable grant into your config, is
+  deliberately two-step, and it earns no one-key shortcut: the first press
+  arms an inline
+  confirmation naming exactly what will be saved, the second answers.
+  And a note field: its text goes with a rejection as feedback the agent
   reads, and — on a question the agent asked itself (`AskUser`, `PlanExit`) —
   with *Allow once* too, as your answer in your own words. Every tab and client following the session shows the same question; the
   first answer wins and closes it everywhere.
