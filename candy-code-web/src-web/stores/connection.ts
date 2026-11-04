@@ -235,7 +235,16 @@ export const useConnectionStore = defineStore('connection', () => {
   }
 
   function follow(sessionId: string, follower: SessionFollower): () => void {
+    // CW-8: the map holds one follower per session; overwriting it used to
+    // orphan the previous holder — delivery vanished with no signal. The
+    // superseded one now learns through the same resumed({ error }) channel
+    // a lost follow already speaks, so it can stop or re-follow by its own
+    // law; re-following with the SAME object is not a supersession.
+    const previous = followers.get(sessionId)
     followers.set(sessionId, follower)
+    if (previous !== undefined && previous !== follower) {
+      previous.resumed({ error: 'superseded by a newer follow' })
+    }
     return () => {
       if (followers.get(sessionId) === follower) followers.delete(sessionId)
     }
