@@ -12,6 +12,16 @@ cassette.
 > `.tape` files the way you treat a Makefile or an npm `preinstall`
 > script. See the README's exec-mode section.
 
+> Two more things follow from the same design. A cassette is
+> **faithful**: `input` events store the raw keystrokes you typed, so
+> anything secret you typed during a recording is in the file even
+> without `--env`/`--env-all` — redact before shipping (a recording hook
+> can rewrite `input` payloads; `SanitizingHook` is provided as a
+> starting point). And replay is **verbatim**: recorded output bytes
+> are written to the replay terminal unsanitized, so a hostile
+> cassette can smuggle OSC 8 / OSC 52 / window-title sequences into your
+> emulator. Trust the author of any cassette you play.
+
 ---
 
 ## Header (line 1)
@@ -28,7 +38,7 @@ cassette.
 | `rows` | `int` | Initial terminal rows. Overridden by the first `resize` event if present. |
 | `runtime` | `string` | Identifier of the recording runtime — e.g. `sugarcraft/candy-vcr@record`. |
 | `timestampMode` | `string` | Optional. `absolute` (default) or `relative` (interval-since-previous-event, asciinema v3 style). |
-| `env` | `object` | Optional. Captured host environment, filtered through the secret regex (`/(SECRET\|TOKEN\|KEY\|PASSWORD\|API\|CRED\|AUTH\|PRIV)/i` by default). `record --env-all` captures the full host environment unfiltered — cassette files are written `0600` for precisely this reason. |
+| `env` | `object` | Optional. Captured host environment, filtered through the secret regex (`/(SECRET\|TOKEN\|KEY\|PASSWORD\|API\|CRED\|AUTH\|PRIV)/i` by default). `record --env-all` captures the full host environment unfiltered — cassette files are written `0600` (owner only) for precisely this reason, by every writer including `migrate`. |
 | `typingSpeed` | `number` | Optional. Milliseconds between typed keystrokes, carried from a `.tape`'s `Set TypingSpeed`. Absent on cassettes recorded from a live PTY. |
 | `theme` | `string` | Optional. VHS theme name carried from a `.tape`'s `Set Theme`. Absent on cassettes recorded from a live PTY. |
 
@@ -106,10 +116,14 @@ Msg object — in place of raw `b` bytes:
 | `cols` | `int` | New column count. |
 | `rows` | `int` | New row count. |
 
-### `windowSize` — alias for `resize`
+### `windowSize` — not supported
 
-`windowSize` is a legacy alias for `resize` used by some other recorder
-implementations. candy-vcr emits and replays `resize`.
+Some other recorder implementations write a `windowSize` event where candy-vcr
+writes `resize`. candy-vcr never emits `windowSize`, and its decoders
+do **not** accept it as an alias: `k: "windowSize"` fails with an unknown-kind
+error rather than being silently re-typed. Convert such a file by rewriting
+event kinds to `resize` (a `migrate` migrator is the intended home for
+that).
 
 ### `quit` — session end
 
@@ -142,8 +156,11 @@ implementations. candy-vcr emits and replays `resize`.
 ```
 
 Kind discriminants `hide` and `show` carry no payload. They mirror the
-`.tape` `Hide`/`Show` directives: during GIF rendering, output produced
-between a `hide` and its `show` is skipped from the frame sequence.
+`.tape` `Hide`/`Show` directives: during GIF rendering they toggle **cursor
+_capture_** — frames emitted between a `hide` and its `show` are rendered
+without the cursor block, then cursor rendering resumes. Output bytes are
+still applied to the terminal in that window; nothing is dropped from the
+frame sequence.
 
 ---
 

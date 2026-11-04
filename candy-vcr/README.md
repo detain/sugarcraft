@@ -34,8 +34,8 @@ frame rendering, rasterization and GIF encoding all ship in the library.
 
 ## Use cases
 
-- **Bug repro** — user runs `--record bug.cas`, ships the cassette,
-  maintainer replays locally.
+- **Bug repro** — user runs `candy-vcr record --output bug.cas -- <cmd>`,
+  ships the cassette, maintainer replays locally with `candy-vcr replay bug.cas`.
 - **Regression tests** — record a known-good session, replay in CI, diff
   against expected screen state.
 - **Demo capture** — alternative to VHS for headless / scriptable
@@ -189,7 +189,7 @@ The core types in `SugarCraft\Vcr\`:
 
 | Class | Role |
 |-------|------|
-| `Cassette` | Immutable container: `header: CassetteHeader`, `events: list<Event>`. Accessors `eventCount()`, `header()`, `duration()`. |
+| `Cassette` | Immutable container: readonly `header: CassetteHeader` and `events: list<Event>` properties. Methods `eventCount()`, `duration()`. (`header()` still exists but is `@deprecated` — read `$header`.) |
 | `CassetteHeader` | Schema metadata — `$version`, `$createdAt`, `$cols`, `$rows`, `$runtime`, `$theme`, `$typingSpeed`, `$env`, `$timestampMode`, `$playbackSpeed`, `$fontSize`, `$fontFamily`, `$widthPx`, `$heightPx`. Constants `CURRENT_VERSION`, `TIMESTAMP_MODE_ABSOLUTE`, `TIMESTAMP_MODE_RELATIVE`. (The wire key is `created`; the DTO property is `$createdAt`.) |
 | `Event` | One recorded line. Fields: `t: float`, `kind: EventKind`, payload `array`. |
 | `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`, `Snapshot`, `Hide`, `Show`. |
@@ -197,7 +197,7 @@ The core types in `SugarCraft\Vcr\`:
 | `Player` | Replay-side. Factories: `Player::open($path)` (content-sniffs the second line — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`; the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
 | `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`, `AsciinemaFormat` (read-only). |
 | `Format\CassetteLoader` | `load($path): Cassette` — auto-detects cassette vs tape source. `isTape($path): bool` — exposes the sniff. |
-| `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `$diff: ?string`, `$eventCount`, `$inputCount`, `$resizeCount`, `$outputCount`, `$quitCount`, `$programQuitCleanly: bool`; helper `diffSummary(): string`. |
+| `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `$diff: string` (empty when `ok`; the assertion diff otherwise), `$eventCount`, `$inputCount`, `$resizeCount`, `$outputCount`, `$quitCount`, `$programQuitCleanly: bool`; helper `diffSummary(): string`. |
 
 ## Quickstart
 
@@ -253,7 +253,7 @@ vendor/bin/candy-vcr record --idle-trim 1.0 -- bash demo.sh         # compress i
 vendor/bin/candy-vcr replay  --no-trim session.cas --speed=realtime # restore real cadence on a trimmed cassette
 ```
 
-Comparable to `asciinema rec`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. `--idle-trim` and the host-termios safety net (`register_shutdown_function` + signal handlers) are covered under their own headings below.
+Comparable to `asciinema rec`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. `--cols`/`--rows` set the child PTY size when the recording starts (80×24 when omitted) and are written into the header; the recorder does not track `SIGWINCH`, so resizing your own terminal mid-recording leaves the program laid out for the size you started with — pick the geometry up front. `--idle-trim` and the host-termios safety net (`register_shutdown_function` + signal handlers) are covered under their own headings below.
 
 #### `--shell`
 
@@ -511,12 +511,18 @@ candy-vcr inspect demo.tape --frames --fps 60
 
 #### `render-batch` options
 
-Same as `render-tape` plus:
+`render-batch <dir>` takes its own option set — the render flags below, but **no** `--shell`, `--exec` or `--dry-run` (those are single-tape only: a batch never spawns a shell, and dry-run has no meaning across a directory).
 
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--output-dir` | `-o` | Output directory for .gif files (default: same as source dir) |
+| `--font` | `-f` | TTF font family name (default: JetBrainsMono) |
+| `--theme` | `-t` | Theme name (default: TokyoNight) |
+| `--backend` | `-b` | Rasterizer backend `gd|imagick` (default: gd) |
+| `--encoder` | `-e` | GIF encoder `ffmpeg|php` (default: ffmpeg) |
+| `--fps` | | Frames per second (default: 30) |
 | `--recursive` | `-r` | Search recursively for .tape files |
+| `--strict` | | Error on unknown directives instead of skipping |
 
 #### GIF encoding pipeline
 
@@ -628,7 +634,7 @@ typed as `EventKind::Input` with raw bytes (`['b' => string]`) payloads.
 inter-event timing is preserved for the Player.
 
 **Corpus coverage:** Every `.tape` file in the monorepo parses without
-error and compile to valid Cassettes (verified by `TapeCorpusTest`).
+error and compiles to a valid Cassette (verified by `TapeCorpusTest`, which walks the tree for `.tape` files rather than a pinned count).
 
 ### Decompiler — Cassette → tape source
 
@@ -744,17 +750,17 @@ use SugarCraft\Vcr\Raster\FontLoader;
 
 $rasterizer = new GdRasterizer(fontSize: 14, fontFamily: 'DejaVuSansMono');
 
-$image = $rasterizer->rasterize($snapshot, cellW: 8, cellH: 16); // \GdImage
+$image = $rasterizer->rasterize($snapshot, cellW: 8, cellH: 28); // \GdImage
 
 imagepng($image, 'frame.png');
 imagedestroy($image);
 ```
 
-**Cell metrics (FontSize 14, JetBrainsMono / DejaVuSansMono):**
+**Cell metrics.** `Compiler::cellMetrics()` derives the cell box from the font size: `cellW = floor(fontSize * 0.6)`, `cellH = fontSize * 2` (both clamped to ≥ 1).
 ```
-  cellW = 8px, cellH = 16px
-  80×24 terminal → 640×384 px
-  120×40 terminal → 960×640 px
+  FontSize 14 → cellW = 8px, cellH = 28px
+  80×24 terminal → 640×672 px
+  120×40 terminal → 960×1120 px
 ```
 
 **Architecture:**
@@ -793,7 +799,7 @@ order: bundled `candy-vcr/fonts/` → `$fontDirs` overrides →
 `/usr/share/fonts/{truetype,opentype}` → `~/.fonts/` →
 `~/.local/share/fonts/`.
 
-**Glyphs API.** `new Glyphs($cellW, $cellH, $theme, $fontFamily = Glyphs::DEFAULT_FONT_FAMILY, $fontSize = 14)` builds a per-(char, fg, bg, attrs) tile cache. Accessors: `cellWidth()`, `cellHeight()`, `fontFamily()`, `fontSize()`, `theme()`, `cacheStats(): array{hits: int, misses: int}`, `tile($char, $fg, $bg, $bold, $italic, $underline): GdImage`, `tileWide(...)` (2× width for CJK / fullwidth), `measure($char): array{cellW, cellH}`. The instance is hoisted onto the rasterizer as a property (Section A) so the cache survives across every snapshot in one tape render — a `(cellW, cellH, theme, fontFamily, fontSize)` fingerprint invalidates and rebuilds when any of those change.
+**Glyphs API.** `new Glyphs($cellW, $cellH, $fonts, $fontFamily = 'JetBrainsMono', $fontSize = 14, $theme = null)` (`$fonts` is a `FontLoader`) builds a per-(char, fg, bg, attrs) tile cache. Accessors: `cellWidth()`, `cellHeight()`, `fontFamily()`, `fontSize()`, `theme()`, `cacheStats(): array{hits: int, misses: int, evictions: int}`, `tile($char, $fg, $bg, $bold, $italic, $underline): GdImage`, `tileWide(...)` (2× width for CJK / fullwidth), `measure($char): array{cellW, cellH}`. The instance is hoisted onto the rasterizer as a property so the cache survives across every snapshot in one tape render — a `(cellW, cellH, fontFamily, fontSize, theme)` fingerprint invalidates and rebuilds when any of those change. There is no public `DEFAULT_FONT_FAMILY` constant: `JetBrainsMono` is the constructor default on both `Glyphs` and `GdRasterizer` (whose `DEFAULT_FONT_FAMILY` is private).
 
 ## GIF encoder
 
@@ -887,6 +893,10 @@ if (!$result->ok) {
 ```
 
 `Player::play` walks the cassette and feeds each event into the program: resize → `WindowSizeMsg`, input bytes → re-parsed via `InputReader` and dispatched, input msg envelope → decoded via the serializer registry, quit → `program->quit()`. Output events accumulate into the expected byte buffer; the program's actual output stream is captured and compared via the supplied assertion.
+
+**Replay is verbatim, not sanitized.** A cassette never executes a program, but the bytes it carries are written to the replay terminal as recorded — OSC 8 hyperlinks, OSC 52 clipboard writes, window-title sequences and the private-use image markers all reach your emulator. Replaying a third-party cassette is therefore like opening a third-party web page: harmless-looking data whose *display* you are trusting. Cassettes are also faithful: an `input` event stores the raw keystrokes you typed, so secrets entered during a recording are in the file whether or not `--env` captured them.
+
+**Replay is environment-blind.** Playback honours the header's `cols`/`rows` and its own theme, not your terminal: it does not read `NO_COLOR`, does not degrade for `TERM=dumb`, and does not follow a window resize mid-replay. Byte assertions against a captured output stream are unaffected; watching a replay on a differently sized terminal is cosmetic drift, not corruption.
 
 **Idle time trimming:** In `SPEED_REALTIME` mode, long pauses between events can slow down CI tests. Set `idleThresholdSeconds: 0.5` (or `withIdleTrim(0.5)` on the `Player`) to clamp pauses longer than 500 ms to 500 ms, making tests run faster while still honoring shorter pauses. The fluent `withIdleTrim()` form is useful when the threshold is configured once at the call site:
 
@@ -1023,7 +1033,7 @@ Invalid PCRE patterns throw `\InvalidArgumentException` at construction.
 | `ScreenAssertion` | Cell-grid equality through sugar-vterm; collapses ANSI re-orderings. Default for round-trip tests. |
 | `ContainsAssertion` | Substring check; expected must appear anywhere in actual. |
 | `RegexAssertion` | PCRE regex match; supports `multiline` / `caseInsensitive` / `dotAll`. |
-| `Assertion` (interface) | `compare(string $expected, string $actual): array{0: bool, 1: string}` — implement for custom assertions. |
+| `Assertion` (interface) | `compare(string $expected, string $actual): array{ok: bool, diff: string}` — implement for custom assertions. |
 
 ### Msg serializers
 
@@ -1087,7 +1097,7 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
 
 ### Fonts
 
-`candy-vcr/fonts/` ships [JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) (Regular, Bold, Italic, BoldItalic) as the default rasterizer font family. JetBrainsMono is distributed under the [SIL Open Font License, version 1.1](fonts/LICENSE) — the full license text is bundled alongside the TTFs. `Glyphs::DEFAULT_FONT_FAMILY` resolves to `JetBrainsMono`, with `DejaVuSansMono` (also bundled) retained as a fallback when JetBrainsMono is unavailable. To use a different family pass it to the `Glyphs` constructor (or set `font_family` on the rasterizer); `FontLoader` searches the bundled `fonts/` dir first, then `/usr/share/fonts/{truetype,opentype}`, `~/.fonts/`, and `~/.local/share/fonts/`.
+`candy-vcr/fonts/` ships [JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) (Regular, Bold, Italic, BoldItalic) as the default rasterizer font family. JetBrainsMono is distributed under the [SIL Open Font License, version 1.1](fonts/LICENSE) — the full license text is bundled alongside the TTFs. The default family is `JetBrainsMono` (the `fontFamily:` constructor default on both `Glyphs` and `GdRasterizer`), with `DejaVuSansMono` (also bundled) retained as a fallback when JetBrainsMono is unavailable. To use a different family pass it to the `Glyphs` constructor or call `GdRasterizer::withFont($family, $fontSize)` (the rasterizer has no `font_family` property); `FontLoader` searches the bundled `fonts/` dir first, then `/usr/share/fonts/{truetype,opentype}`, `~/.fonts/`, and `~/.local/share/fonts/`.
 
 ## CI integration
 
@@ -1097,13 +1107,15 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
 php candy-vcr/bin/candy-vcr render-batch <lib>/.vhs/ --encoder ffmpeg
 ```
 
-The `vhs-candy-vcr` job in `.github/workflows/vhs.yml` renders its seed libs with
-this command (the matrix currently holds `sugar-core`; it widens after the soak
-window), smoke-checks that every produced GIF is non-empty, and uploads them
-as `vhs-candy-vcr-<lib>` workflow artifacts with 7-day retention. The job is
-currently advisory (`continue-on-error: true`); the legacy `render` job remains
-the blocking renderer, and reverting the `vhs-candy-vcr` job stanza is the
-rollback.
+The `vhs-candy-vcr` job in `.github/workflows/vhs.yml` renders the libs in its
+`all=(...)` matrix with this command — the soak window has closed and the matrix now
+covers essentially every library in the monorepo (hundreds of `.tape` files), including
+`candy-vcr` itself, smoke-checks that every produced GIF is non-empty, and uploads
+them as `vhs-candy-vcr-<lib>` workflow artifacts with 7-day retention. The job is
+advisory (`continue-on-error: true`); the legacy `render` job remains the blocking
+renderer, and reverting the `vhs-candy-vcr` job stanza is the rollback. `candy-vcr` ships
+one smoke tape (`.vhs/smoke.tape`); the rendered GIF is a CI artifact, not a
+committed file.
 
 The job runs on `ubuntu-latest` with PHP 8.3 via `shivammathur/setup-php`
 (`ext-gd`, `ext-curl`, `ext-ssh2` among others) and ffmpeg from apt. A matching
@@ -1118,10 +1130,22 @@ changes) — is published for local renders and a future containerised CI job.
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record fixtures after intentional output changes:
+
+`assertGoldenAnsi()` is **create-only**: a missing golden is written and the
+assertion passes; an existing golden is only ever compared. There is no
+in-place re-record switch — after an intentional output change, delete the
+stale golden and re-run the test, then review the regenerated file:
 
 ```sh
-UPDATE_GOLDENS=1 vendor/bin/phpunit
+rm tests/fixtures/session.roundtrip.golden
+vendor/bin/phpunit --filter session.roundtrip
+git diff tests/fixtures/session.roundtrip.golden
+```
+
+For the tape corpus the same rule applies in bulk, with a drift guard:
+
+```sh
+php candy-vcr/scripts/refresh-goldens.php   # safe — warns + exits 2 if >3 tapes drift
 ```
 
 ## License
