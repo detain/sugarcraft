@@ -639,6 +639,22 @@ final class Renderer
     private const PERMISSION_MODAL_CHROME_COLS = 6;
 
     /**
+     * Rows {@see renderPermissionPrompt()}'s own box spends on itself:
+     * `border()` 1 each of top and bottom plus `padding(1, ...)` 1 each = 4.
+     * Taken off the viewport row budget before the modal's content is allowed
+     * to grow (CC-UXD-01, owner ruling OD-4: the box's total height must stay
+     * within `rows() - 2`).
+     */
+    private const PERMISSION_MODAL_CHROME_ROWS = 4;
+
+    /**
+     * Rows the permission modal always leaves outside its own box — the 2 the
+     * OD-4 shrink-to-fit law takes off the terminal height, so the user keeps
+     * a visible grip on the transcript above and the input row below.
+     */
+    private const PERMISSION_MODAL_VIEWPORT_ROWS = 2;
+
+    /**
      * Rows of the hook's question {@see renderPermissionPrompt()} paints
      * before it clips. A hook is free to hand back an arbitrarily long
      * message (it can quote the whole command it objected to); an unbounded
@@ -7702,6 +7718,11 @@ final class Renderer
 
         $options = self::permissionOptions($stage, $question, $request->pendingAsk?->choices() ?? [], $alwaysScope, $chat->permissionEditableScope() !== null, $chat->permissionPersistScope());
 
+        // CC-UXD-01: the seam between the shrinkable head (title, subject,
+        // prompt, notes) and the must-stay-visible tail (spacer, option rows,
+        // `v` row, mode hint), recorded for {@see shrinkPermissionModal()}.
+        $optionsStart = \count($lines);
+
         $lines[] = '';
         // C-TUI-6.j: the option rows carry their position under screen-reader
         // mode ('1/3'), so a reader can say which option the list is on; the
@@ -7754,6 +7775,24 @@ final class Renderer
             $lines[] = Style::new()->foreground($theme->systemLabel)->faint()->render(self::clipWithEllipsis($hint, $inner));
         }
 
+        // CC-UXD-01 (owner ruling OD-4): the modal SHRINKS TO FIT — total box
+        // height is capped at rows() - 2, not just width at the terminal. A
+        // hostile request (a long prompt body, an unbounded PtyRun step block)
+        // could otherwise build more rows than the viewport had, and the Veil's
+        // blind bottom-clip dropped the answer keys off-screen. The content is
+        // counted in RENDERED rows, not builder elements — one element
+        // legitimately carries several wrapped rows. The trim runs only when
+        // the rendered height exceeds the row budget, so a normal modal is
+        // byte-identical, and its arithmetic is explode()/implode()/
+        // array_slice() alone — nothing here can throw onto the view() path,
+        // which Program.php calls without a try/catch.
+        $rowBudget = max(1, $chat->rows() - self::PERMISSION_MODAL_VIEWPORT_ROWS - self::PERMISSION_MODAL_CHROME_ROWS);
+        $renderedRows = explode("\n", implode("\n", $lines));
+        if (\count($renderedRows) > $rowBudget) {
+            $headRows = \count(explode("\n", implode("\n", \array_slice($lines, 0, $optionsStart))));
+            $lines = self::shrinkPermissionModal($renderedRows, $rowBudget, $headRows, $theme, $inner);
+        }
+
         return Style::new()
             ->border(ScreenReaderMode::border(Border::rounded()->withTitle(match ($question) {
                 \SugarCraft\Code\Tools\BuiltIn\AskUserTool::NAME => ' ' . Lang::t('tui.permission.title_ask') . ' ',
@@ -7764,6 +7803,51 @@ final class Renderer
             ->padding(1, 2)
             ->width($inner)
             ->render(implode("\n", $lines));
+    }
+
+    /**
+     * Trim the permission modal's assembled lines to fit
+     * {@see PERMISSION_MODAL_CHROME_ROWS}-aware budget (CC-UXD-01, owner
+     * ruling OD-4: box height = min(needed, rows - 2)).
+     *
+     * The TAIL — the blank spacer, every option row, the `v` row, the mode
+     * hint — is what the user needs to answer, so it is kept whole whenever
+     * it fits alongside the marker and at least the title: the head keeps its
+     * first rows and an ellipsis line names how many were elided. When even
+     * the tail alone overruns the budget (pathological: a wide option list on
+     * a tiny terminal) the tail's leading rows are all that survives — a
+     * clipped option list still beats a title-only box, and the overlay's own
+     * scroll affordance becomes unreachable by construction, because this
+     * window replaces the blind bottom-clip that shipped before the ruling.
+     * When nothing actually needs eliding (the head still fits beside the
+     * marker and tail) the lines are returned unchanged. Every shape returns
+     * at most $rowBudget lines; array_slice() and integer arithmetic only, so
+     * nothing here can throw.
+     *
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private static function shrinkPermissionModal(array $lines, int $rowBudget, int $optionsStart, Theme $theme, int $inner): array
+    {
+        $head = \array_slice($lines, 0, $optionsStart);
+        $tail = \array_slice($lines, $optionsStart);
+        if (\count($tail) + 2 > $rowBudget) {
+            return \array_slice($tail, 0, $rowBudget);
+        }
+
+        $keptHead = $rowBudget - 1 - \count($tail);
+        if ($keptHead >= \count($head)) {
+            return $lines;
+        }
+
+        $marker = Style::new()->foreground($theme->systemLabel)->faint()
+            ->render(Width::truncate(Lang::t('tui.tool.more_lines', ['count' => \count($head) - $keptHead]), $inner));
+
+        return [
+            ...\array_slice($head, 0, $keptHead),
+            $marker,
+            ...$tail,
+        ];
     }
 
     /**
