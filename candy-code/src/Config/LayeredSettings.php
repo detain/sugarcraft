@@ -1373,8 +1373,8 @@ final class LayeredSettings
 
     /**
      * The audit sentences for the files a launch's settings cascade can see:
-     * the user tier's `config.json` and `settings.json`, and — when `$root`
-     * is given — the two project-tier files too.
+     * the user tier's `config.json` and `settings.json`, the managed machine
+     * file, and — when `$root` is given — the two project-tier files too.
      *
      * The project files ARE read for the diagnosis even when their root is
      * untrusted. Reading is not applying: whether those files contribute
@@ -1437,6 +1437,30 @@ final class LayeredSettings
         $explicit = Bootstrap::userConfigPath();
         if ($explicit !== '' && $explicit !== $configPath) {
             $rows = [...$rows, ...self::auditTopLevelKeys($explicit, self::decodedFile($explicit), SettingsSchema::keys())];
+        }
+
+        // G1-L7 (CCOPS-6): the managed tier gets the same pair of halves the
+        // project tier earned at v1 F-4 — silence on the apply path (a
+        // missing, unreadable or nonsense machine file is the ABSENCE of a
+        // layer), and a named row here. A corrupt managed file is the worst
+        // silent failure in the cascade: it is the one file a machine's
+        // operator expects to be obeyed, and readFile()'s tolerance would
+        // otherwise un-apply their pin for every user on the box without a
+        // word. The allowed alphabet is the layered keys, NOT the schema:
+        // systemLayer() cannot answer an unlayered key, so naming one here
+        // earns the wrong-tier row that tells the operator their machine
+        // policy will never apply through this door.
+        $managedPath = Bootstrap::systemConfigPath();
+        $managedDecoded = self::decodedFile($managedPath);
+        $rows = [...$rows, ...self::auditTopLevelKeys($managedPath, $managedDecoded, self::LAYERED_KEYS)];
+        if ($managedDecoded === []) {
+            $reason = self::unusableSettingsFileReason($managedPath);
+            if ($reason !== null) {
+                $rows[] = Lang::t('cli.settings.corrupt_file', [
+                    'file' => $managedPath,
+                    'error' => $reason,
+                ]);
+            }
         }
 
         return $rows;
