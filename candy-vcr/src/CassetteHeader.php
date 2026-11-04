@@ -15,6 +15,14 @@ final readonly class CassetteHeader
 {
     public const CURRENT_VERSION = 1;
 
+    /**
+     * Highest format version this build's readers understand. The recorder
+     * still stamps CURRENT_VERSION (v1); v2 exists as the migration target
+     * only. A cassette above this ceiling is refused at construction rather
+     * than half-parsed — a future reader, not this one, owns its semantics.
+     */
+    public const MAX_READABLE_VERSION = 2;
+
     public const TIMESTAMP_MODE_ABSOLUTE = 'absolute';
     public const TIMESTAMP_MODE_RELATIVE = 'relative';
 
@@ -65,6 +73,9 @@ final readonly class CassetteHeader
     ) {
         if ($version < 1) {
             throw new \InvalidArgumentException("CassetteHeader version must be >= 1, got {$version}");
+        }
+        if ($version > self::MAX_READABLE_VERSION) {
+            throw new \InvalidArgumentException("cassette version {$version} is newer than this build can read (max v" . self::MAX_READABLE_VERSION . ') — upgrade candy-vcr');
         }
         if ($cols <= 0 || $rows <= 0) {
             throw new \InvalidArgumentException("CassetteHeader dimensions must be positive, got {$cols}x{$rows}");
@@ -137,5 +148,31 @@ final readonly class CassetteHeader
             $data['heightPx'] = $this->heightPx;
         }
         return $data;
+    }
+
+    /**
+     * Derivation changing ONLY the version stamp; every other field
+     * (timestampMode, env, theme, typing speed, font and pixel geometry
+     * included) rides through untouched. Migration must not forget where a
+     * recording came from.
+     */
+    public function withVersion(int $version): self
+    {
+        return new self(
+            version: $version,
+            createdAt: $this->createdAt,
+            cols: $this->cols,
+            rows: $this->rows,
+            runtime: $this->runtime,
+            timestampMode: $this->timestampMode,
+            env: $this->env,
+            typingSpeed: $this->typingSpeed,
+            theme: $this->theme,
+            playbackSpeed: $this->playbackSpeed,
+            fontSize: $this->fontSize,
+            fontFamily: $this->fontFamily,
+            widthPx: $this->widthPx,
+            heightPx: $this->heightPx,
+        );
     }
 }

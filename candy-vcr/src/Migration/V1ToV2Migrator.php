@@ -13,7 +13,10 @@ use SugarCraft\Vcr\EventKind;
  * Migrates cassette format v1 → v2.
  *
  * v1 format:
- *   Header: `{"v":1,"created":"...","cols":N,"rows":N,"runtime":"..."}`
+ *   Header: `{"v":1,"created":"...","cols":N,"rows":N,"runtime":"..."}` plus the
+ *           optional fields CassetteHeader::toWireArray() emits (timestampMode,
+ *           env, typingSpeed, theme, playbackSpeed, fontSize, fontFamily,
+ *           widthPx, heightPx) — all of them survive migration
  *   Events: `{"t":0.0,"k":"resize","cols":N,"rows":N}` or `{"t":0.0,"k":"output","b":"..."}`
  *           or `{"t":0.0,"k":"input","msg":{...}}` or `{"t":0.0,"k":"input","b":"..."}`
  *           or `{"t":0.0,"k":"quit"}`
@@ -24,8 +27,11 @@ use SugarCraft\Vcr\EventKind;
  *     references across migrations
  *   - Output events gain `_enc` (encoding) field set to "utf-8" for explicit encoding
  *
- * Since v2 does not yet exist in the codebase this migrator future-proofs the
- * infrastructure. It is a no-op when the cassette is already v2+.
+ * No header field is dropped in translation: v2 is v1 plus the version stamp
+ * and the two payload keys above. The recorder still writes v1
+ * (CassetteHeader::CURRENT_VERSION); v2 is readable today
+ * (CassetteHeader::MAX_READABLE_VERSION) but nothing emits it until a future
+ * release changes the writer. It is a no-op when the cassette is already v2+.
  */
 final class V1ToV2Migrator implements CassetteMigrator
 {
@@ -50,11 +56,9 @@ final class V1ToV2Migrator implements CassetteMigrator
 
         $migratedHeader = $this->migrateHeader($cassette->header);
 
-        if (!$dryRun) {
-            // In a real implementation with a backing store, we would persist the
-            // original as .bak here. The caller is responsible for backup.
-        }
-
+        // $dryRun is caller-side policy (MigrateCommand skips the write); this
+        // method is a pure Cassette→Cassette derivation either way, and the
+        // backup that a real migration earns is created by the caller.
         return new Cassette($migratedHeader, $migratedEvents);
     }
 
@@ -76,16 +80,13 @@ final class V1ToV2Migrator implements CassetteMigrator
 
     private function migrateHeader(CassetteHeader $header): CassetteHeader
     {
-        // Build v2 header: the numeric `v` is bumped. CassetteHeader has no
-        // `formatVersion` string field and no `migrationMeta` slot — the
-        // upgrade path is described by describe().
-        return new CassetteHeader(
-            version: self::TARGET_VERSION,
-            createdAt: $header->createdAt,
-            cols: $header->cols,
-            rows: $header->rows,
-            runtime: $header->runtime,
-        );
+        // v2 changes the version stamp and nothing else. The pre-fix rebuild
+        // named only 5 fields, silently DESTROYING timestampMode, env, theme,
+        // typingSpeed, playbackSpeed and the font/pixel geometry on every
+        // migration — and `diff` (which now compares all of them) would then
+        // report false drift between the original backup and its migration.
+        // withVersion() guarantees future header fields ride through too.
+        return $header->withVersion(self::TARGET_VERSION);
     }
 
     private function migrateEvent(Event $event, int $eventId): Event

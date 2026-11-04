@@ -82,6 +82,52 @@ final class V1ToV2MigratorTest extends TestCase
         $this->assertSame('sugarcraft/candy-vcr@dev', $migrated->header->runtime);
     }
 
+    /**
+     * M1: the pre-fix migrateHeader rebuilt the header from those 5 fields
+     * only, silently deleting everything else on every migration. This pins
+     * the full fourteen-field header — including relative mode and the whole
+     * provenance/geometry set — through byte-level wire equality.
+     */
+    public function testMigratePreservesEveryOptionalHeaderField(): void
+    {
+        $header = new CassetteHeader(
+            version: 1,
+            createdAt: '2026-05-09T03:55:02Z',
+            cols: 80,
+            rows: 24,
+            runtime: 'sugarcraft/candy-vcr@dev',
+            timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+            env: ['TERM' => 'xterm-256color'],
+            typingSpeed: 3.5,
+            theme: 'tokyo-night',
+            playbackSpeed: 2.0,
+            fontSize: 12,
+            fontFamily: 'JetBrainsMono Nerd Font',
+            widthPx: 960,
+            heightPx: 480,
+        );
+        $migrated = $this->migrator->migrate(new Cassette($header, []));
+        $h = $migrated->header;
+
+        $this->assertSame(2, $h->version);
+        $this->assertSame(CassetteHeader::TIMESTAMP_MODE_RELATIVE, $h->timestampMode);
+        $this->assertSame(['TERM' => 'xterm-256color'], $h->env);
+        $this->assertSame(3.5, $h->typingSpeed);
+        $this->assertSame('tokyo-night', $h->theme);
+        $this->assertSame(2.0, $h->playbackSpeed);
+        $this->assertSame(12, $h->fontSize);
+        $this->assertSame('JetBrainsMono Nerd Font', $h->fontFamily);
+        $this->assertSame(960, $h->widthPx);
+        $this->assertSame(480, $h->heightPx);
+
+        $before = $header->toWireArray();
+        $after = $h->toWireArray();
+        $this->assertSame(1, $before['v']);
+        $this->assertSame(2, $after['v']);
+        $after['v'] = 1;
+        $this->assertSame($before, $after, 'migration must change nothing but the version stamp');
+    }
+
     public function testMigratePreservesEventCount(): void
     {
         $cassette = $this->buildV1Cassette();

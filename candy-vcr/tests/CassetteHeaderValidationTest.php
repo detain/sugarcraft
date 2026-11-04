@@ -6,6 +6,8 @@ namespace SugarCraft\Vcr\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\CassetteHeader;
+use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Migration\V1ToV2Migrator;
 use SugarCraft\Vcr\Tests\Support\Stream;
 
 /**
@@ -316,5 +318,56 @@ final class CassetteHeaderValidationTest extends TestCase
         // int/float class is environment-dependent — the pinned contract is
         // the constant's value.
         $this->assertEquals(1.0, $default['playbackSpeed']);
+    }
+
+    /**
+     * M2: readers used to accept ANY version stamp — a v99 cassette from a
+     * future build parsed "successfully" with unknown semantics. The ceiling
+     * refuses it at construction with a message that names the upgrade path.
+     */
+    public function testRefusesVersionsNewerThanThisBuildCanRead(): void
+    {
+        foreach ([3, 99] as $version) {
+            try {
+                new CassetteHeader(
+                    version: $version,
+                    createdAt: '2026-05-09T03:55:02Z',
+                    cols: 80,
+                    rows: 24,
+                    runtime: 'test',
+                );
+                $this->fail("CassetteHeader v{$version} must not construct");
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('newer than this build', $e->getMessage());
+                $this->assertStringContainsString((string) $version, $e->getMessage());
+            }
+        }
+    }
+
+    public function testVersionCeilingIsExactlyTheMigrationTarget(): void
+    {
+        // The ceiling and the migrator chain must agree: v2 is readable
+        // today, and the recorder still writes v1. Raising either side
+        // without the other is caught here.
+        $this->assertSame(2, CassetteHeader::MAX_READABLE_VERSION);
+        $this->assertSame(1, CassetteHeader::CURRENT_VERSION);
+        $this->assertLessThanOrEqual(
+            CassetteHeader::MAX_READABLE_VERSION,
+            V1ToV2Migrator::TARGET_VERSION,
+            'a migrator must not target a version this build cannot read',
+        );
+    }
+
+    public function testFileReaderRefusesAFutureVersionHeader(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('newer than this build');
+        (new JsonlFormat())->decode(json_encode([
+            'v' => 99,
+            'created' => '2026-05-09T03:55:02Z',
+            'cols' => 80,
+            'rows' => 24,
+            'runtime' => 'test',
+        ], \JSON_THROW_ON_ERROR) . "\n");
     }
 }
