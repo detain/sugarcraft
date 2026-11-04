@@ -96,7 +96,7 @@ final class CassetteLoader
         $this->compiledTape = false;
 
         if (!is_file($path)) {
-            throw new \InvalidArgumentException("candy-vcr: cassette/tape not found: {$path}");
+            throw new \InvalidArgumentException("cassette/tape not found: {$path}");
         }
 
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
@@ -132,7 +132,7 @@ final class CassetteLoader
     {
         $source = @file_get_contents($path);
         if ($source === false) {
-            throw new \RuntimeException("candy-vcr: cannot read tape file: {$path}");
+            throw new \RuntimeException("cannot read tape file: {$path}");
         }
         $tokens = (new Lexer())->tokenize($source);
         $ast = (new Parser())->parse($tokens);
@@ -172,7 +172,7 @@ final class CassetteLoader
             return $this->loadJsonl($path);
         }
         throw new \InvalidArgumentException(
-            "candy-vcr: cannot detect cassette format from extension or content: {$path}",
+            "cannot detect cassette format from extension or content: {$path}",
         );
     }
 

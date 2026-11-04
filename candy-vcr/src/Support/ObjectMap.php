@@ -31,7 +31,7 @@ final class ObjectMap
         $out = [];
         foreach ($data as $key => $value) {
             if (!is_string($key)) {
-                throw new \InvalidArgumentException("candy-vcr: {$where} must be a string-keyed object, integer key {$key} given");
+                throw new \InvalidArgumentException("{$where} must be a string-keyed object, integer key {$key} given");
             }
             $out[$key] = $value;
         }

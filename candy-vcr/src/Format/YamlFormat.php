@@ -57,7 +57,7 @@ final class YamlFormat implements Format
     {
         $yaml = $this->encode($cassette);
         if (@file_put_contents($path, $yaml) === false) {
-            throw new \RuntimeException("candy-vcr: cannot write cassette to {$path}");
+            throw new \RuntimeException("cannot write cassette to {$path}");
         }
         self::restrictToOwner($path);
     }
@@ -66,7 +66,7 @@ final class YamlFormat implements Format
     {
         $raw = @file_get_contents($path);
         if ($raw === false) {
-            throw new \RuntimeException("candy-vcr: cannot read cassette from {$path}");
+            throw new \RuntimeException("cannot read cassette from {$path}");
         }
         return $this->decode($raw);
     }
@@ -96,23 +96,23 @@ final class YamlFormat implements Format
         try {
             $tree = Yaml::parse($contents);
         } catch (ParseException $e) {
-            throw new \RuntimeException('candy-vcr: invalid YAML — ' . $e->getMessage(), 0, $e);
+            throw new \RuntimeException('invalid YAML — ' . $e->getMessage(), 0, $e);
         }
 
         if (!is_array($tree) || !isset($tree['header']) || !is_array($tree['header'])) {
-            throw new \RuntimeException("candy-vcr: YAML cassette is missing 'header'");
+            throw new \RuntimeException("YAML cassette is missing 'header'");
         }
         $header = $this->decodeHeader($tree['header']);
 
         $eventsRaw = $tree['events'] ?? [];
         if (!is_array($eventsRaw)) {
-            throw new \RuntimeException("candy-vcr: YAML cassette 'events' must be a list");
+            throw new \RuntimeException("YAML cassette 'events' must be a list");
         }
         $events = [];
         foreach ($eventsRaw as $i => $row) {
             if (!is_array($row)) {
                 $line = $i + 1;
-                throw new \RuntimeException("candy-vcr: YAML cassette event #{$line} is not a map");
+                throw new \RuntimeException("YAML cassette event #{$line} is not a map");
             }
             $events[] = $this->decodeEvent($row, $i + 1);
         }
@@ -124,21 +124,21 @@ final class YamlFormat implements Format
     private function decodeHeader(array $data): CassetteHeader
     {
         if (!isset($data['v'])) {
-            throw new \RuntimeException("candy-vcr: YAML header missing 'v'");
+            throw new \RuntimeException("YAML header missing 'v'");
         }
         foreach (['created', 'cols', 'rows', 'runtime'] as $key) {
             if (!array_key_exists($key, $data)) {
-                throw new \RuntimeException("candy-vcr: YAML header missing '{$key}'");
+                throw new \RuntimeException("YAML header missing '{$key}'");
             }
         }
         $envRaw = $data['env'] ?? [];
         if (!\is_array($envRaw)) {
-            throw new \RuntimeException("candy-vcr: YAML header 'env' must be a map");
+            throw new \RuntimeException("YAML header 'env' must be a map");
         }
         $env = [];
         foreach ($envRaw as $k => $v) {
             if (!\is_string($k) || !\is_string($v)) {
-                throw new \InvalidArgumentException('candy-vcr: YAML header env must map strings to strings');
+                throw new \InvalidArgumentException('YAML header env must map strings to strings');
             }
             $env[$k] = $v;
         }
@@ -183,12 +183,12 @@ final class YamlFormat implements Format
     private function decodeEvent(array $data, int $eventNo): Event
     {
         if (!array_key_exists('t', $data) || !array_key_exists('k', $data)) {
-            throw new \RuntimeException("candy-vcr: YAML event #{$eventNo} missing 't' or 'k'");
+            throw new \RuntimeException("YAML event #{$eventNo} missing 't' or 'k'");
         }
         $kind = EventKind::tryFrom(Scalars::string($data['k'], 'YAML event k'));
         if ($kind === null) {
             $bad = Scalars::string($data['k'], 'YAML event k');
-            throw new \RuntimeException("candy-vcr: YAML event #{$eventNo} has unknown kind '{$bad}'");
+            throw new \RuntimeException("YAML event #{$eventNo} has unknown kind '{$bad}'");
         }
         $t = Scalars::float($data['t'], 'YAML event t');
         unset($data['t'], $data['k']);

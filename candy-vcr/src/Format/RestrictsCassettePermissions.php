@@ -18,7 +18,7 @@ trait RestrictsCassettePermissions
     private static function restrictToOwner(string $path): void
     {
         if (!@chmod($path, 0600)) {
-            throw new \RuntimeException("candy-vcr: cannot restrict permissions on {$path}");
+            throw new \RuntimeException("cannot restrict permissions on {$path}");
         }
     }
 }

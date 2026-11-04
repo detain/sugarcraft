@@ -627,7 +627,7 @@ final class RecordCommand implements DocumentedCommand
         // so the pattern probe lands here too and fails loud.
         if (@\preg_match($effectiveRegex, '') === false) {
             throw new \InvalidArgumentException(
-                "candy-vcr: env-filter pattern is not a valid PCRE pattern: {$effectiveRegex}",
+                "env-filter pattern is not a valid PCRE pattern: {$effectiveRegex}",
             );
         }
 

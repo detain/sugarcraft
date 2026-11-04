@@ -64,7 +64,7 @@ final class JsonlFormat implements Format
     {
         $contents = $this->encode($cassette);
         if (@file_put_contents($path, $contents) === false) {
-            throw new \RuntimeException("candy-vcr: cannot write cassette to {$path}");
+            throw new \RuntimeException("cannot write cassette to {$path}");
         }
         // Cassettes hold everything that was typed; land them owner-readable
         // only instead of at the ambient umask (Recorder's streaming path
@@ -76,7 +76,7 @@ final class JsonlFormat implements Format
     {
         $raw = @file_get_contents($path);
         if ($raw === false) {
-            throw new \RuntimeException("candy-vcr: cannot read cassette from {$path}");
+            throw new \RuntimeException("cannot read cassette from {$path}");
         }
         return $this->decode($raw);
     }
@@ -116,7 +116,7 @@ final class JsonlFormat implements Format
                 if ($lastLineIsTorn && $i === $lastIndex && $header !== null) {
                     continue;
                 }
-                throw new \RuntimeException("candy-vcr: invalid JSON on line {$lineNo}");
+                throw new \RuntimeException("invalid JSON on line {$lineNo}");
             }
             if ($header === null) {
                 $header = $this->decodeHeader($data, $i + 1);
@@ -126,7 +126,7 @@ final class JsonlFormat implements Format
         }
 
         if ($header === null) {
-            throw new \RuntimeException('candy-vcr: cassette is empty (no header line)');
+            throw new \RuntimeException('cassette is empty (no header line)');
         }
 
         if ($header->timestampMode === CassetteHeader::TIMESTAMP_MODE_RELATIVE) {
@@ -196,11 +196,11 @@ final class JsonlFormat implements Format
     private function decodeHeader(array $data, int $lineNo): CassetteHeader
     {
         if (!isset($data['v'])) {
-            throw new \RuntimeException("candy-vcr: header on line {$lineNo} missing 'v'");
+            throw new \RuntimeException("header on line {$lineNo} missing 'v'");
         }
         foreach (['created', 'cols', 'rows', 'runtime'] as $key) {
             if (!array_key_exists($key, $data)) {
-                throw new \RuntimeException("candy-vcr: header on line {$lineNo} missing '{$key}'");
+                throw new \RuntimeException("header on line {$lineNo} missing '{$key}'");
             }
         }
         $env = [];
@@ -280,11 +280,11 @@ final class JsonlFormat implements Format
     private function decodeEvent(array $data, int $lineNo): Event
     {
         if (!array_key_exists('t', $data) || !array_key_exists('k', $data)) {
-            throw new \RuntimeException("candy-vcr: event on line {$lineNo} missing 't' or 'k'");
+            throw new \RuntimeException("event on line {$lineNo} missing 't' or 'k'");
         }
         $kind = EventKind::tryFrom(Scalars::string($data['k'], 'event k'));
         if ($kind === null) {
-            throw new \RuntimeException("candy-vcr: event on line {$lineNo} has unknown kind '" . Scalars::string($data['k'], 'event k') . "'");
+            throw new \RuntimeException("event on line {$lineNo} has unknown kind '" . Scalars::string($data['k'], 'event k') . "'");
         }
         $t = Scalars::float($data['t'], 'event t');
         unset($data['t'], $data['k']);
@@ -303,7 +303,7 @@ final class JsonlFormat implements Format
     {
         $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
-            throw new \RuntimeException('candy-vcr: json_encode failed: ' . json_last_error_msg());
+            throw new \RuntimeException('json_encode failed: ' . json_last_error_msg());
         }
         return $json;
     }

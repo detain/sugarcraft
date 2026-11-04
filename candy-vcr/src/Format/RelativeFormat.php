@@ -32,7 +32,7 @@ final class RelativeFormat implements Format
     {
         $contents = $this->encode($cassette);
         if (@file_put_contents($path, $contents) === false) {
-            throw new \RuntimeException("candy-vcr: cannot write cassette to {$path}");
+            throw new \RuntimeException("cannot write cassette to {$path}");
         }
         self::restrictToOwner($path);
     }
@@ -41,7 +41,7 @@ final class RelativeFormat implements Format
     {
         $raw = @file_get_contents($path);
         if ($raw === false) {
-            throw new \RuntimeException("candy-vcr: cannot read cassette from {$path}");
+            throw new \RuntimeException("cannot read cassette from {$path}");
         }
         return $this->decode($raw);
     }
@@ -76,7 +76,7 @@ final class RelativeFormat implements Format
                 if ($lastLineIsTorn && $i === $lastIndex && $header !== null) {
                     continue;
                 }
-                throw new \RuntimeException("candy-vcr: invalid JSON on line {$lineNo}");
+                throw new \RuntimeException("invalid JSON on line {$lineNo}");
             }
             if ($header === null) {
                 $header = $this->decodeHeader($data, $i + 1);
@@ -86,7 +86,7 @@ final class RelativeFormat implements Format
         }
 
         if ($header === null) {
-            throw new \RuntimeException('candy-vcr: cassette is empty (no header line)');
+            throw new \RuntimeException('cassette is empty (no header line)');
         }
 
         $events = $this->decodeEvents($eventsText);
@@ -158,11 +158,11 @@ final class RelativeFormat implements Format
     private function decodeHeader(array $data, int $lineNo): CassetteHeader
     {
         if (!isset($data['v'])) {
-            throw new \RuntimeException("candy-vcr: header on line {$lineNo} missing 'v'");
+            throw new \RuntimeException("header on line {$lineNo} missing 'v'");
         }
         foreach (['created', 'cols', 'rows', 'runtime'] as $key) {
             if (!array_key_exists($key, $data)) {
-                throw new \RuntimeException("candy-vcr: header on line {$lineNo} missing '{$key}'");
+                throw new \RuntimeException("header on line {$lineNo} missing '{$key}'");
             }
         }
         $env = [];
@@ -229,16 +229,16 @@ final class RelativeFormat implements Format
     private function decodeEvent(array $data, int $lineNo, float $cumulativeBase): Event
     {
         if (!array_key_exists('dt', $data) || !array_key_exists('k', $data)) {
-            throw new \RuntimeException("candy-vcr: event on line {$lineNo} missing 'dt' or 'k'");
+            throw new \RuntimeException("event on line {$lineNo} missing 'dt' or 'k'");
         }
         $kind = EventKind::tryFrom(Scalars::string($data['k'], 'event k'));
         if ($kind === null) {
             $bad = Scalars::string($data['k'], 'event k');
-            throw new \RuntimeException("candy-vcr: event on line {$lineNo} has unknown kind '{$bad}'");
+            throw new \RuntimeException("event on line {$lineNo} has unknown kind '{$bad}'");
         }
         $dt = Scalars::float($data['dt'], 'event dt');
         if ($dt < 0) {
-            throw new \InvalidArgumentException("candy-vcr: negative dt on line {$lineNo}");
+            throw new \InvalidArgumentException("negative dt on line {$lineNo}");
         }
         $absoluteT = round($cumulativeBase + $dt, self::T_PRECISION);
         unset($data['dt'], $data['k']);
@@ -257,7 +257,7 @@ final class RelativeFormat implements Format
     {
         $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
-            throw new \RuntimeException('candy-vcr: json_encode failed: ' . json_last_error_msg());
+            throw new \RuntimeException('json_encode failed: ' . json_last_error_msg());
         }
         return $json;
     }

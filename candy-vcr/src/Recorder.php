@@ -157,11 +157,11 @@ final class Recorder implements RecorderInterface
     ): self {
         $fh = @fopen($path, 'wb');
         if ($fh === false) {
-            throw new \RuntimeException("candy-vcr: cannot open recorder file {$path}");
+            throw new \RuntimeException("cannot open recorder file {$path}");
         }
         if (@chmod($path, 0600) === false) {
             fclose($fh);
-            throw new \RuntimeException("candy-vcr: cannot set owner-only permissions on cassette file {$path}");
+            throw new \RuntimeException("cannot set owner-only permissions on cassette file {$path}");
         }
         return new self($fh, $header ?? self::defaultHeader());
     }
@@ -262,12 +262,12 @@ final class Recorder implements RecorderInterface
         }
         if ($wantsRelative) {
             throw new \RuntimeException(
-                'candy-vcr: RelativeFormat requested against an absolute-timestamp cassette — '
+                'RelativeFormat requested against an absolute-timestamp cassette — '
                 . 'pass a CassetteHeader with timestampMode "relative" when opening the recorder'
             );
         }
         throw new \RuntimeException(sprintf(
-            'candy-vcr: %s requested against a relative-timestamp cassette — the header was '
+            '%s requested against a relative-timestamp cassette — the header was '
             . 'written with timestampMode "relative"; use RelativeFormat (or open with an '
             . 'absolute header)',
             $f::class
@@ -452,10 +452,10 @@ final class Recorder implements RecorderInterface
     {
         $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         if ($json === false) {
-            throw new \RuntimeException('candy-vcr: json_encode failed: ' . json_last_error_msg());
+            throw new \RuntimeException('json_encode failed: ' . json_last_error_msg());
         }
         if (!is_resource($this->fh)) {
-            throw new \LogicException('candy-vcr: recorder stream is not open');
+            throw new \LogicException('recorder stream is not open');
         }
         $payload = $json . "\n";
         $written = @fwrite($this->fh, $payload);

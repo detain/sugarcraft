@@ -57,7 +57,7 @@ final class SanitizingHook implements Hook
             $pattern = (string) $pattern;
             if (@preg_replace($pattern, (string) $replacement, '') === null) {
                 throw new \InvalidArgumentException(
-                    "candy-vcr: sanitize pattern is not a valid PCRE pattern: {$pattern}",
+                    "sanitize pattern is not a valid PCRE pattern: {$pattern}",
                 );
             }
             $normalized[$pattern] = $replacement;

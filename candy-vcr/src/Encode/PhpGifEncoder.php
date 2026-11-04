@@ -31,7 +31,7 @@ final class PhpGifEncoder implements GifEncoder
         // message. Reject at entry, where the argument is named.
         if ($fps <= 0) {
             throw new \InvalidArgumentException(
-                "candy-vcr: PhpGifEncoder fps must be a positive number of frames per second, got {$fps}."
+                "PhpGifEncoder fps must be a positive number of frames per second, got {$fps}."
             );
         }
 

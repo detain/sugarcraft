@@ -550,7 +550,7 @@ final class TapeToGif
         }
 
         throw new \RuntimeException(
-            "candy-vcr: the '{$backend}' rasterizer backend requires the {$extension} PHP extension, "
+            "the '{$backend}' rasterizer backend requires the {$extension} PHP extension, "
             . "which is not loaded. Install/enable ext-{$extension}, or pick --backend={$alternative}.",
         );
     }

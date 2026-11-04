@@ -120,14 +120,14 @@ final class Player
     {
         $fh = @fopen($path, 'rb');
         if ($fh === false) {
-            throw new \RuntimeException("candy-vcr: cannot open cassette {$path}");
+            throw new \RuntimeException("cannot open cassette {$path}");
         }
 
         try {
             // Skip header line
             $headerLine = fgets($fh);
             if ($headerLine === false) {
-                throw new \RuntimeException('candy-vcr: cassette is empty');
+                throw new \RuntimeException('cassette is empty');
             }
 
             // Read first event line to detect format
@@ -198,7 +198,7 @@ final class Player
 
         $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         if ($sockets === false) {
-            throw new \RuntimeException('candy-vcr Player: stream_socket_pair() failed');
+            throw new \RuntimeException('stream_socket_pair() failed');
         }
         [$inputRead, $inputWrite] = $sockets;
 
@@ -209,7 +209,7 @@ final class Player
         try {
             $output = fopen('php://memory', 'w+b');
             if ($output === false) {
-                throw new \RuntimeException('candy-vcr Player: fopen(php://memory) failed');
+                throw new \RuntimeException('fopen(php://memory) failed');
             }
 
             $loop = new \React\EventLoop\StreamSelectLoop();

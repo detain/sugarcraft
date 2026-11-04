@@ -35,7 +35,7 @@ final class CompressedJsonlFormat implements Format
         if (!self::isGzipPath($path)) {
             // Write as plain JSONL
             if (@file_put_contents($path, $contents) === false) {
-                throw new \RuntimeException("candy-vcr: cannot write cassette to {$path}");
+                throw new \RuntimeException("cannot write cassette to {$path}");
             }
             self::restrictToOwner($path);
             return;
@@ -43,7 +43,7 @@ final class CompressedJsonlFormat implements Format
 
         $gz = @gzopen($path, 'wb' . $this->compressionLevel);
         if ($gz === false) {
-            throw new \RuntimeException("candy-vcr: cannot open gzip stream for {$path}");
+            throw new \RuntimeException("cannot open gzip stream for {$path}");
         }
 
         try {
@@ -56,7 +56,7 @@ final class CompressedJsonlFormat implements Format
                 }
                 $written = gzwrite($gz, $line . "\n");
                 if ($written === false) {
-                    throw new \RuntimeException("candy-vcr: gzip write failed for {$path}");
+                    throw new \RuntimeException("gzip write failed for {$path}");
                 }
             }
         } finally {
@@ -70,7 +70,7 @@ final class CompressedJsonlFormat implements Format
     {
         $raw = $this->readAll($path);
         if ($raw === false) {
-            throw new \RuntimeException("candy-vcr: cannot read cassette from {$path}");
+            throw new \RuntimeException("cannot read cassette from {$path}");
         }
         return $this->decode($raw);
     }

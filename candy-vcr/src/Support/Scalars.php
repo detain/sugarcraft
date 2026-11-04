@@ -95,7 +95,7 @@ final class Scalars
     private static function reject(string $where, string $want, mixed $value): never
     {
         throw new \InvalidArgumentException(sprintf(
-            'candy-vcr: %s must be %s, %s given',
+            '%s must be %s, %s given',
             $where,
             $want,
             get_debug_type($value),

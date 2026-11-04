@@ -84,7 +84,7 @@ final class FrameStream implements \IteratorAggregate
         // (echo and exec alike) behind the same door.
         if (!is_finite($fps) || $fps <= 0.0) {
             throw new \InvalidArgumentException(
-                "candy-vcr: FrameStream fps must be a positive finite number of frames per second, got {$fps}."
+                "FrameStream fps must be a positive finite number of frames per second, got {$fps}."
             );
         }
     }
