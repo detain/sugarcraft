@@ -1687,7 +1687,7 @@ final readonly class ScriptHook implements BoundedHookInterface
      * an envelope there would make an argument named `decision` a verdict.
      *
      * AN ENVELOPE THAT CARRIES A KNOWN KEY BUT CANNOT BE HONOURED DENIES
-     * ({@see malformedEnvelope()}): the hook evidently meant to steer the
+     * ({@see HookEnvelope::malformed()}): the hook evidently meant to steer the
      * call, and guessing which way — `"decision": "Block"` read as
      * unrecognised and therefore allowed — is the fail-open this class's
      * MODIFY handling already refuses.
@@ -1753,17 +1753,6 @@ final readonly class ScriptHook implements BoundedHookInterface
             },
             questionFallback: fn (): string => $this->defaultQuestion(),
         ))->verdict($envelope, $replacedBytes);
-    }
-
-    /**
-     * The refusal an envelope that carried a known key but cannot be honoured
-     * settles to — see {@see allowOrEnvelope()} for why it fails closed.
-     */
-    private function malformedEnvelope(string $why): HookResult
-    {
-        // C-EXT-6.c (LATE): the wording is HookEnvelope::malformed(), which HttpHook
-
-        return (new HookEnvelope($this->name))->malformed($why);
     }
 
     /**
