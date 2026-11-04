@@ -95,6 +95,11 @@ Msg object — in place of raw `b` bytes:
 {"t":0.450,"k":"input","msg":{"@type":"KeyMsg","key":"j"}}
 ```
 
+Input bytes are stored verbatim: whatever was typed — including a password
+entered at a prompt — is in the file. Redaction is not automatic; a
+recorder that needs one attaches a `SanitizingHook` at the call site (see
+the README's [Limitations](../README.md#limitations)).
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `t` | `float` | Timestamp. |

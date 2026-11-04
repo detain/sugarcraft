@@ -24,6 +24,7 @@ equality via [sugar-vterm](https://github.com/detain/sugar-vterm), with byte-equ
 - [Renderer pipeline](#frame-renderer) — Renderer / FrameStream / FrameDedup
 - [Rasterizer](#frame-rasterizer) — GdRasterizer / ImagickRasterizer / Glyphs / FontLoader
 - [GIF encoder](#gif-encoder) — FfmpegGifEncoder / PhpGifEncoder / TapeToGif
+- [Limitations](#limitations) — memory · seeking · clip export · exec timing · redaction
 - [Examples](#examples) — record / replay / mouse encodings / Msg serializers
 - [Visual regression goldens](#visual-regression-goldens) · [Snapshot tests](#snapshot-tests)
 - [Development](#development) · [CI integration](#ci-integration) · [License](#license) · [Credits](#credits--inspiration)
@@ -177,8 +178,9 @@ $cassette = $format->read('/tmp/session.cas.gz');
 
 Compressed cassettes are typically 5–10× smaller than plain JSONL,
 making them suitable for CI storage and git repositories. The format
-uses streaming gzip with per-line flush to maintain memory efficiency
-for large cassettes.
+uses streaming gzip with per-line flush on the **write** side to keep
+memory flat as events are recorded; reading still materializes the whole
+tape in memory (see [Limitations](#limitations)).
 
 ### Asciinema import
 
@@ -380,6 +382,12 @@ $recorder->withHook(new MetadataHook([
 
 Hooks are managed by `Hook\HookRegistry`
 (`addHook`, `beforeSave`, `afterCapture`, `count`, `clear`).
+
+**Redaction is opt-in wiring.** Nothing attaches a hook automatically: a
+`record` run stores exactly what the terminal sent, so scrubbing typed
+secrets is a call-site decision — attach `SanitizingHook` on the recorder
+yourself. The `--env` flags filter header environment *names* only, never
+event payload bytes (see [Limitations](#limitations)).
 `Recorder::withHook()` appends to its private registry; returning
 `null` from `beforeSave()` drops the event entirely.
 
@@ -406,7 +414,7 @@ Custom matchers implement `EventMatcher::matches(Event $recorded, Event $actual)
 
 ### Rendering `.tape` files to GIF
 
-The `render-tape` and `render-batch` commands convert `.tape` files to animated GIFs. They use the `TapeToGif` pipeline: Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder.
+The `render-tape` and `render-batch` commands convert `.tape` files to animated GIFs. They use the `TapeToGif` pipeline: Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder. `.tape` is the only renderable input — a recorded cassette cannot be exported to GIF, and no command seeks or window-crops a tape (see [Limitations](#limitations)).
 
 > **⚠ Security — a `.tape` file is a program.** The `Set Shell` directive,
 > `--shell=<sh>`, or `--exec` put the renderer into exec mode: every typed
@@ -476,6 +484,13 @@ into the frames on the tape clock (a `Sleep Ns` after `Enter` becomes the
 real read window during which output streams in) — the same model the
 `.tape` format prescribes. This makes candy-vcr a drop-in renderer for
 program-output demos.
+
+> **Timing caveat:** that read window is derived from tape-clock deltas
+> *divided by* `Set PlaybackSpeed`, so a 2× render halves the real seconds
+> the live shell gets to answer each command, and a command at the very end
+> of the tape drains for a single frame interval. Keep speed at 1 (or pad
+> the final `Sleep`) for output-heavy exec tapes — see
+> [Limitations](#limitations).
 
 Enable it three ways, in precedence order: the CLI `--shell=<sh>`
 (operator override) → the tape's own `Set Shell "<sh>"` directive →
@@ -879,6 +894,38 @@ The last frame is listed twice to give it a display duration (the entry before i
 
 **Requirements:** `ffmpeg` must be in `$PATH` for `FfmpegGifEncoder`. The `symfony/process` package is required as a runtime dependency.
 
+## Limitations
+
+Honest capability boundaries, each with what closing it would take:
+
+- **Reading loads the whole tape.** The JSONL/gzip write side streams, but
+  every `read()` path materializes the cassette fully before the first
+  event is returned — raw string, per-line array, `Event` list, and the
+  `Cassette` copy stack, so peak RSS is a small multiple of the file size
+  and a multi-gigabyte cassette runs out of memory before validation even
+  starts. Closing it needs lazy, generator-based readers that the
+  `Player` and CLI consume without re-buffering.
+- **No seek or windowed export.** Replay and render always run a cassette
+  from `t=0`; `inspect --since`/`--until` can *view* a slice but nothing
+  writes a trimmed cassette back out, so cutting a demo out of a long
+  recording means hand-editing JSONL. Closing it needs a time-window filter
+  that rewrites a slice with rebased timestamps through the format writers.
+- **A recording can't become a shareable clip.** `render-tape` accepts only
+  hand-authored `.tape` DSL files, and the Asciinema importer has no
+  writer, so there is no cassette → GIF path today. Closing it needs a
+  cassette → tape translation (or a direct cassette renderer) feeding the
+  same `TapeToGif` pipeline.
+- **Exec-mode timing scales with playback speed.** The live shell's read
+  window per command is tape-clock deltas divided by `Set PlaybackSpeed`,
+  so 2× playback halves every command's real time and the final command
+  drains for one frame interval. Closing it needs speed-independent command
+  holds scaled after the fact (VFR-style), not a shrunken window.
+- **Secrets stay raw unless you redact.** Cassettes store the exact
+  keystrokes typed; `SanitizingHook` exists but is wired to nothing on the
+  record path, and the `record --env` machinery filters environment *names*
+  only. Closing it needs a decision on which default redaction set ships
+  enabled, then wiring into the CLI record path.
+
 ## Examples
 
 `examples/record.php`, `examples/replay.php`, `examples/inspect.php` — runnable scripts using a tiny `CounterModel`. The `examples/cassettes/counter.cas` fixture is a real recording you can play with:
@@ -1110,6 +1157,13 @@ php candy-vcr/scripts/refresh-goldens.php --force   # commit the new baseline
 ```
 
 The manifest lives at `candy-vcr/tests/golden/MANIFEST.md`.
+
+**Committed-GIF exception:** the repo-wide rule is that rendered GIFs are
+regenerated by CI and never committed. These golden GIFs are the deliberate
+exception: `VisualRegressionTest` compares fresh renders against the
+committed bytes, so the baselines are *test fixtures* and must live in git
+alongside the `.tape` inputs. Demo GIFs rendered through
+`.github/workflows/vhs.yml` still follow the no-commit rule.
 
 ## Development
 
