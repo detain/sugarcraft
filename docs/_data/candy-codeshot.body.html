@@ -1,7 +1,7 @@
-<p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG screenshot. No ext-gd / Imagick — output is plain text suitable for git diffs and CI artifacts. ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes <code>&lt;tspan&gt;</code> in the SVG.</p>
+<p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG or PNG screenshot. SVG needs no extensions — plain text output suitable for git diffs and CI artifacts; PNG renders through ext-gd (no Imagick). ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes <code>&lt;tspan&gt;</code> in the SVG, and colour bands on the PNG canvas.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codeshot</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codeshot:dev-master</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\CodeShot\SvgRenderer;
@@ -35,7 +35,6 @@ $svg = SvgRenderer::dark()
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-codeshot">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-codeshot/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-codeshot/tree/main/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/freeze">freeze</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
