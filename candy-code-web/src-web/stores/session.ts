@@ -419,13 +419,16 @@ function disposeSessionStore(sessionId: string): void {
   definitions.delete(sessionId)
   const pinia = getActivePinia()
   if (pinia !== undefined) {
-    // $dispose stops the store's effects; the two maps are Pinia's own
-    // instance and state registries — deleting keeps `pinia.state.value`
-    // from caching the transcript after the store itself is gone.
+    // CW-5: the public disposal path only. $dispose() stops the store's
+    // effect scope and unregisters it from Pinia's live-instance map; the
+    // state entry is dropped through state.value, Pinia's own public
+    // registry. (The silenced cast into `_s` this replaces was reaching
+    // through into private internals to do what $dispose already does.)
+    store?.$dispose()
     delete pinia.state.value[`session/${sessionId}`]
-    ;(pinia as unknown as { _s: Map<string, { $dispose(): void }> })._s.delete(`session/${sessionId}`)
+  } else {
+    store?.$dispose()
   }
-  store?.$dispose()
 }
 
 /** Test seam: how many session stores are alive. */
