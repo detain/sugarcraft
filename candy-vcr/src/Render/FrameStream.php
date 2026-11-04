@@ -237,6 +237,16 @@ final class FrameStream implements \IteratorAggregate
         return $terminal;
     }
 
+    /**
+     * Apply a resize by retiring the current grid and starting a fresh
+     * `Terminal` at the new size (same theme) — a deliberate fidelity
+     * choice, not a bug: the previous screen is NOT reflowed, so a frame
+     * captured across the boundary shows the new empty grid until the tape
+     * repaints it, and an escape sequence that was mid-flight at resize
+     * time is dropped. The exec-mode master PTY (when still open) is
+     * resized first, best-effort, so the live child re-negotiates its
+     * window before subsequent output is read.
+     */
     private function processResize(Event $event, Terminal $terminal): Terminal
     {
         $cols = $event->payload['cols'] ?? null;

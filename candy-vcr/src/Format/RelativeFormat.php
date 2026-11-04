@@ -247,7 +247,7 @@ final class RelativeFormat implements Format
     }
 
     /**
-     * Encode one JSONL line. The substitute flag is load-bearing (F1): a
+     * Encode one JSONL line. The substitute flag is load-bearing: a
      * cassette payload can carry bytes a strict encoder would reject, and a
      * throw here would abort a rewrite of an already-recorded session.
      *
