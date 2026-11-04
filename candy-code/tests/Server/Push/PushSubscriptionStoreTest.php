@@ -11,9 +11,10 @@ use SugarCraft\Code\Server\StateDir;
 
 /**
  * The subscription rows' life on disk (C-WEB-5.d): owner-only file mode,
- * sha256-keyed rows, per-principal ownership, the revocation prune, and the
+ * sha256-keyed rows, per-principal ownership, the revocation prune, the
  * load-time re-validation that keeps a tampered or drifted row from ever
- * reaching a dial. The state directory is the same `serve` corner
+ * reaching a dial, and the row cap (CWPD-6) that bounds the fan-out and the
+ * per-put rewrite. The state directory is the same `serve` corner
  * {@see \SugarCraft\Code\Server\Push\VapidKeys} keeps its PEM in, so every
  * write here rides the {@see \SugarCraft\Code\Support\PrivateRetainedDir}
  * discipline the session store set.
@@ -191,6 +192,43 @@ final class PushSubscriptionStoreTest extends TestCase
         $entries = $store->entries();
         self::assertCount(1, $entries, 'push.subscribe is idempotent by endpoint');
         self::assertTrue($entries[PushSubscriptionStore::keyHash($subscription->endpoint)]['withName']);
+    }
+
+    public function testTheRowCapIsADeliberateCeiling(): void
+    {
+        self::assertSame(64, (new \ReflectionClass(PushSubscriptionStore::class))->getConstant('MAX_ROWS'));
+    }
+
+    public function testTheStoreEvictsTheOldestRegistrationsPastTheRowCap(): void
+    {
+        $cap = (new \ReflectionClass(PushSubscriptionStore::class))->getConstant('MAX_ROWS');
+        $store = $this->store();
+        for ($i = 0; $i < $cap; $i++) {
+            self::assertTrue($store->put($this->rowOn('t' . $i), 'bearer', false));
+        }
+        self::assertCount($cap, $store->entries(), 'fixture: the cap is reachable one write away');
+
+        self::assertTrue($store->put($this->rowOn('overflow'), 'bearer', false));
+        $kept = $store->entries();
+        self::assertCount($cap, $kept);
+        self::assertArrayNotHasKey(PushSubscriptionStore::keyHash(self::SERVICE_BASE . 't0'), $kept, 'the first registration is what pays for the bound');
+        self::assertArrayHasKey(PushSubscriptionStore::keyHash(self::SERVICE_BASE . 't1'), $kept);
+        self::assertArrayHasKey(PushSubscriptionStore::keyHash(self::SERVICE_BASE . 'overflow'), $kept, 'the newest intent survives');
+    }
+
+    public function testReplacingAnEndpointDoesNotEatAnotherSlot(): void
+    {
+        $store = $this->store();
+        for ($i = 0; $i < 60; $i++) {
+            $store->put($this->rowOn('t' . $i), 'bearer', false);
+        }
+        for ($i = 0; $i < 5; $i++) {
+            $store->put($this->rowOn('t0'), 'bearer', true);
+        }
+
+        self::assertCount(60, $store->entries(), 'a refresh is a replace, not a duplicate — the cap counts rows, not writes');
+        $rows = $store->entries();
+        self::assertTrue($rows[PushSubscriptionStore::keyHash(self::SERVICE_BASE . 't0')]['withName'] ?? false, 'the refreshed row carries the fresh write');
     }
 
     private function store(): PushSubscriptionStore

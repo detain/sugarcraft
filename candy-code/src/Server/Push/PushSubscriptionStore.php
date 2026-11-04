@@ -48,6 +48,19 @@ final class PushSubscriptionStore
 
     private const KEY_ROWS = 'subscriptions';
 
+    /**
+     * Rows the store will hold. One browser subscription per tab of every
+     * device the owner signs up is legitimate; an unbounded push.json is
+     * neither — it grows the fan-out of every trigger and rewrites a bigger
+     * file on every put. Eviction is oldest-registration-first: a replaced
+     * endpoint keeps its position (registration order, not last-use), and
+     * the policy is honest because the class docblock's own recovery path
+     * covers it — a browser whose row was evicted re-subscribes on its own,
+     * `push.subscribe` being idempotent by key. Newest intent survives;
+     * abandoned registrations are what goes.
+     */
+    private const MAX_ROWS = 64;
+
     /** @var array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool}>|null loaded rows, dirty only through this instance's writes */
     private ?array $rows = null;
 
@@ -80,6 +93,12 @@ final class PushSubscriptionStore
      * Store (or replace) $subscription's row under $principal. True only when
      * the disk now holds it; an unusable state directory costs durability,
      * never the connection — the client's own retry re-subscribes.
+     *
+     * There is deliberately no write coalescing here: the answer "the disk
+     * now holds it" is what makes the method worth calling, and deferring
+     * the rewrite would turn every success line into a crash-window lie.
+     * The per-put rewrite is paid for by {@see self::MAX_ROWS} keeping the
+     * file small instead.
      */
     public function put(PushSubscription $subscription, string $principal, bool $withName): bool
     {
@@ -89,6 +108,9 @@ final class PushSubscriptionStore
             'principal' => $principal,
             'name' => $withName,
         ];
+        while (\count($rows) > self::MAX_ROWS) {
+            unset($rows[\array_key_first($rows)]);
+        }
 
         return $this->persist($rows);
     }
