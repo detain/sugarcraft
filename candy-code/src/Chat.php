@@ -17643,18 +17643,35 @@ final class Chat implements Model
      * ISS-051: replace every chip in $text with the payload it filed. Called
      * by each reader that sends the draft's text — submit, queue, the
      * AskUser/permission answer, the scope editor and the agent-mailbox send —
-     * so the model and the transcript never see the marker. Unknown or
-     * hand-edited chip text simply does not match and survives literally.
+     * so the model and the transcript never see the marker. CC-QA-5: the
+     * match is STRUCTURAL, not byte-exact — a bracketed run carrying a filed
+     * '#N' id and a '+' count tail expands even after a caret splice or a
+     * width rewrap moved a character inside the chip; silently dropping the
+     * payload behind one mis-clicked key was the defect. Text whose id was
+     * never filed — hand-typed chip shapes included — survives literally.
      */
     public function expandPasteChips(string $text): string
     {
-        foreach ($this->pasteChips as $chip => $payload) {
-            if (str_contains($text, $chip)) {
-                $text = str_replace($chip, $payload, $text);
+        if ($this->pasteChips === []) {
+            return $text;
+        }
+
+        // Stored keys are chips this class minted from the twelve locale
+        // templates, and every template carries '#N'; keying on the id makes
+        // expansion locale-, width- and edit-tolerant. A future tokenized
+        // '#N:<token>' key yields the same N.
+        $byId = [];
+        foreach (array_keys($this->pasteChips) as $chip) {
+            if (preg_match('/#(\d+)/', (string) $chip, $key) === 1) {
+                $byId[(int) $key[1]] = $this->pasteChips[$chip];
             }
         }
 
-        return $text;
+        return (string) preg_replace_callback(
+            '/\[[^\[\]#]*#(\d+)[^\[\]]*\+\d[^\[\]]*\]/',
+            static fn (array $match): string => $byId[(int) $match[1]] ?? $match[0],
+            $text,
+        );
     }
 
     /**

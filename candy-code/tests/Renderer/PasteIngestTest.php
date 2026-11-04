@@ -373,4 +373,59 @@ final class PasteIngestTest extends TestCase
         $this->assertStringContainsString('[Pasted text #1 +300 lines]', $plain, 'the chip is what the user sees');
         $this->assertLessThan(30, count(explode("\n", $plain)), 'and the frame is a frame, not a paste dump');
     }
+
+    // =========================================================================
+    // CC-QA-5: chip detection at expansion is STRUCTURAL — located by the
+    // bracketed '#N' id and the '+' count tail, not by byte-exact rendered
+    // text. One spliced character (the review's repro: caret edits inside the
+    // chip) or a width rewrap used to un-detect the chip, and the payload
+    // then survived as a literal marker into the transcript and store.
+    // =========================================================================
+
+    public function testAPasteSurvivesATypedCharacterSplicedIntoTheChip(): void
+    {
+        $payload = implode("\n", array_map(static fn (int $i): string => "line {$i}", range(1, 300)));
+        [$chat] = $this->pasteBox()->update(new PasteMsg($payload));
+
+        // The review's exact repro: End, ten Rights (clamped), ten Lefts stop
+        // the caret between '#1' and ' +300', and one typed 'Z' lands there.
+        $broken = str_replace('#1 ', '#1Z ', $chat->inputBuf);
+        $this->assertSame('[Pasted text #1Z +300 lines]', $broken, 'the spliced shape the repro submits');
+
+        $this->assertSame($payload, $chat->expandPasteChips($broken), 'the chip is still recognized, the payload still sent');
+    }
+
+    public function testAPasteSurvivesAWidthRewrapOfTheChip(): void
+    {
+        $payload = implode("\n", array_map(static fn (int $i): string => "line {$i}", range(1, 300)));
+        [$chat] = $this->pasteBox()->update(new PasteMsg($payload));
+
+        // Same chip, one space traded for a line break — the shape a rewrap
+        // of the placeholder produces between paint and submit.
+        $rewrapped = str_replace(' +300', "\n+300", $chat->inputBuf);
+
+        $this->assertSame($payload, $chat->expandPasteChips($rewrapped), 'a rewrapped chip still expands');
+    }
+
+    public function testATokenizedChipShapeExpandsFromTheNumberAlone(): void
+    {
+        $payload = implode("\n", array_map(static fn (int $i): string => "line {$i}", range(1, 300)));
+        [$chat] = $this->pasteBox()->update(new PasteMsg($payload));
+
+        // The forward-compatible shape the pending LANG REQUEST proposes (a
+        // per-chip token riding the template); the matcher must key on the
+        // number alone so the strings lane can adopt it without a code edit.
+        $this->assertSame($payload, $chat->expandPasteChips('[Pasted text #1:7f3a +300 lines]'));
+    }
+
+    public function testHandTypedBracketTextWithoutAFiledIdIsLeftAlone(): void
+    {
+        $payload = implode("\n", array_map(static fn (int $i): string => "line {$i}", range(1, 300)));
+        [$chat] = $this->pasteBox()->update(new PasteMsg($payload));
+
+        // Chip #1 is filed. Text with a hash-number but no chip tail, and a
+        // chip-tail shape for an id nobody filed, are prose — they ride on.
+        $this->assertSame('[look at #1]', $chat->expandPasteChips('[look at #1]'));
+        $this->assertSame('[issue #3 +1]', $chat->expandPasteChips('[issue #3 +1]'));
+    }
 }
