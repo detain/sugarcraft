@@ -201,6 +201,27 @@ final class WsUpgradeTest extends TestCase
         self::assertInstanceOf(\Throwable::class, $this->settle($this->browser->get($this->url('/api/health'))), 'the port no longer answers');
     }
 
+    public function testTheUpgradeSignatureClosesItsParameterListOnItsOwnLines(): void
+    {
+        // CWPD-17: the constructor parameter list grew a glued `…) {` leg
+        // (the `$log` addition rode the same line as the closing brace) —
+        // PSR-12 violation, and the exact shape a careless grep for
+        // parameters misses. One line per parameter, brace on its own.
+        $src = (string) \file_get_contents(__DIR__ . '/../../src/Server/Ws/Upgrade.php');
+        $signatureStart = \strpos($src, 'public function __construct(');
+        self::assertNotFalse($signatureStart, 'fixture: the constructor is still declared');
+        $signatureEnd = \strpos($src, '{', $signatureStart);
+        self::assertNotFalse($signatureEnd, 'fixture: the constructor still has a body');
+        $signature = \substr($src, $signatureStart, $signatureEnd - $signatureStart);
+        foreach (\explode("\n", $signature) as $line) {
+            self::assertFalse(
+                \str_contains($line, ',') && \str_contains($line, ')'),
+                'a parameter line must not carry the closing paren: ' . \trim($line),
+            );
+        }
+        self::assertStringContainsString("private readonly ?\\Closure \$log = null,\n    ) {\n", $src);
+    }
+
     private function url(string $path): string
     {
         return 'http://127.0.0.1:' . $this->port . $path;

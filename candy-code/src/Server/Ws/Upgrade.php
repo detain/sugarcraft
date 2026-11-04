@@ -48,7 +48,8 @@ final class Upgrade
         private readonly \Closure $onOpen,
         private readonly \Closure $onGone,
         private readonly int $maxMessageBytes = ServerConfig::MAX_CLIENT_FRAME_BYTES,
-        private readonly ?\Closure $log = null,    ) {
+        private readonly ?\Closure $log = null,
+    ) {
     }
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface
