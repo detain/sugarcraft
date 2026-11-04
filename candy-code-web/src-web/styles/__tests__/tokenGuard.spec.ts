@@ -86,4 +86,77 @@ describe('token guard (CW-UX-04)', () => {
     const untokens = rules.filter((rule) => !rule.includes('var(--ansi-'))
     expect(untokens, `ANSI rules not driven by --ansi-*: ${untokens.join(' | ')}`).toEqual([])
   })
+
+  it('keeps lane-A component colors token-driven (CW-UX-04/05/17)', () => {
+    // Lane A (reviews-1103) converted the canvas/panel/grid components to
+    // theme tokens. A literal hex — or a hex-bearing var() fallback — re-
+    // entering one of these files resurrects the theme-blind rendering the
+    // CW-UX-01/02/04/05 cluster fixed. Font-family fallbacks (var(--mono, …))
+    // are NOT colors and stay allowed.
+    const owned = [
+      'components/CanvasCard.vue',
+      'components/panels/GeneratePanel.vue',
+      'components/panels/UsagePanel.vue',
+      'components/panels/ChangesPanel.vue',
+      'components/panels/FilesPanel.vue',
+      'components/panels/ContextPanel.vue',
+      'components/panels/SidePanels.vue',
+      'components/panels/ProcessesSection.vue',
+      'components/grid/SessionTabs.vue',
+    ]
+    const hexes: string[] = []
+    const fallbacks: string[] = []
+    for (const rel of owned) {
+      const text = readFileSync(resolve(ROOT, rel), 'utf8')
+      const style = (text.match(/<style[^>]*>[\s\S]*?<\/style>/g) ?? []).join('\n')
+      const code = style.replace(/\/\*[\s\S]*?\*\//g, '')
+      for (const m of code.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) hexes.push(`${rel}: ${m[0]}`)
+      for (const m of code.matchAll(/var\(\s*--[A-Za-z0-9-]+\s*,[^)]*#[^)]*\)/g)) fallbacks.push(`${rel}: ${m[0]}`)
+    }
+    expect(hexes, 'literal hex inside a lane-A style block').toEqual([])
+    expect(fallbacks, 'hex-bearing var() fallbacks (dead weight masking a token gap)').toEqual([])
+  })
+
+  it('paints the eleven context categories from the --ctx-* family (CW-UX-17)', () => {
+    const vue = readFileSync(resolve(ROOT, 'components/panels/ContextPanel.vue'), 'utf8')
+    const block = vue.match(/const CATEGORY_COLORS[^=]*=\s*\{([\s\S]*?)\n\}/)?.[1]
+    expect(block, 'CATEGORY_COLORS moved out of ContextPanel').toBeTruthy()
+    const entries = [...(block as string).matchAll(/'?([a-z-]+)'?\s*:\s*'([^']+)'/g)].map((m) => [m[1], m[2]] as const)
+    expect(entries.length, 'the category roster changed size').toBe(11)
+    for (const [key, value] of entries) {
+      expect(value, `category ${key} is not painted from its --ctx-* token`).toBe(`var(--ctx-${key})`)
+      const name = `--ctx-${key}`
+      const declarations = [...tokensCss.matchAll(new RegExp(`^\\s*${name}:\\s*(#[0-9a-fA-F]{6});$`, 'gm'))].map((m) => m[1])
+      // dark + the two light blocks; dracula/tokyoNight are dark surfaces
+      // and inherit the dark set by design (tokens.css carries the comment).
+      expect(declarations.length, `${name} must be declared once in dark and once in each light block`).toBe(3)
+      expect(declarations[1], `the two ${name} light-block values drifted apart`).toBe(declarations[2])
+    }
+  })
+
+  it('holds the invariant geometry zone and the un-dimmed resting tab', () => {
+    // CW-UX-19/21/25/11: geometry, typography and width tokens are not
+    // colors — each lives exactly once in the :root invariant zone. A second
+    // declaration means someone painted a layout token by theme.
+    for (const name of [
+      '--sans', '--mono', '--canvas-paper',
+      '--panels-width', '--chrome-height', '--chrome-reserve', '--fs-small',
+      '--radius-1', '--radius-2', '--radius-3', '--shadow-1', '--shadow-2',
+    ]) {
+      const declared = (tokensCss.match(new RegExp(`^\\s*${name}:`, 'gm')) ?? []).length
+      expect(declared, `${name} declared outside its single invariant home`).toBe(1)
+    }
+    // CW-UX-06: resting tabs dim through an explicit muted color, never
+    // through opacity — opacity washed every layer under the tab, the close
+    // glyph included (measured 3.19-3.91:1 before the fix).
+    const tabs = readFileSync(resolve(ROOT, 'components/grid/SessionTabs.vue'), 'utf8')
+    const tabRule = tabs.match(/\.tab \{[^}]*\}/)?.[0]
+    expect(tabRule, '.tab rule moved or renamed').toBeTruthy()
+    expect(tabRule).toContain('color: var(--muted)')
+    expect(tabRule).not.toMatch(/opacity:/)
+    const activeRule = tabs.match(/\.tab\.active \{[^}]*\}/)?.[0]
+    expect(activeRule, '.tab.active rule moved or renamed').toBeTruthy()
+    expect(activeRule).toContain('color: var(--text)')
+    expect(activeRule).not.toMatch(/opacity:/)
+  })
 })
