@@ -11,10 +11,15 @@ namespace SugarCraft\Image;
  * The difference between "corrupt file" and "valid file we refuse
  * to pretend to understand" matters to callers — the first is retried or
  * reported as damage, the second must name the missing capability and where
- * to get it (chafa CLI / ffmpeg). Today both arrive as a generic
+ * to get it (for these containers that answer is the chafa CLI; animation
+ * belongs to sugar-video, which decodes the frames).
+ *
+ * Before this exception existed both arrived as a generic
  * InvalidArgumentException ("GD failed to load image"), and on hosts whose
- * libwebp demuxes animated WebP to its first frame the file is not refused at
- * all — it silently degrades to a one-frame still.
+ * libwebp demuxed animated WebP to its first frame the file was not refused at
+ * all — it silently degraded to a one-frame still. Now each case is named:
+ * animated WebP throws with the decoder that handles it, and an undecodable
+ * container throws with the CLI that would.
  *
  * Extends \InvalidArgumentException so callers that already catch the whole
  * "bad input" family keep catching this: the change refines the message, it

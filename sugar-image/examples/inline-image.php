@@ -11,9 +11,13 @@
  *   php inline-image.php screenshot.jpg 80
  *   php inline-image.php diagram.gif 60
  *
- * The script detects the terminal's capabilities (Kitty > iTerm2 > Sixel > Half-block)
- * and renders the image using the best protocol available.  The HalfBlock fallback
- * works on any terminal but uses only 256 colours.
+ * The script probes the terminal (Mosaic::auto()) and renders through the best
+ * protocol available: Kitty, then iTerm2, then Sixel, then the text tiers.  The
+ * chafa rung is explicit opt-in only (it is the one tier that shells out), and the
+ * practical floor is the symbol-map renderer rather than plain half-block, so a
+ * Unicode-capable terminal keeps more colour than the two-row half block alone.
+ * Every text tier ships 24-bit foreground and background, so a fallback still
+ * renders truecolour — the compromise is glyph resolution, not palette.
  *
  * Exit codes:
  *   0 — image rendered successfully

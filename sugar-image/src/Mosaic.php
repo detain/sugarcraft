@@ -105,23 +105,32 @@ final class Mosaic
     /**
      * Auto-detect the best renderer.
      *
-     * NEVER throws — falls back to HalfBlock on every error.
-     * This is the safe, user-friendly entry point for new users.
+     * NEVER throws: every failure route lands on a renderer, because the
+     * text tier is always available. This is the safe, user-friendly entry
+     * point for new users.
      *
      * Detection strategy: one path, two stages.
      *
      *  1. {@see Detect::probe()} is the authoritative stage — environment
      *     variables plus DA1/XTWINOPS TTY queries. If it identifies any
-     *     graphics protocol (Kitty, iTerm2, Sixel, Chafa) that answer wins.
+     *     graphics protocol (Kitty, iTerm2, Sixel) that answer wins. Chafa
+     *     is NOT part of this stage: its capability slot is set only by
+     *     {@see Capability::universal()}, so the chafa tier is reachable
+     *     through {@see self::chafa()} or fromModeString('chafa'), never
+     *     through auto-detection.
      *  2. Only when Detect finds no graphics protocol at all does the
      *     explicit fallback run: sugar-colorprofile's {@see TerminalProbe}
      *     environment-derived {@see ProbeReport}, which can still spot a
      *     Kitty-keyboard- or iTerm2-advertising terminal Detect's env table
      *     missed. Its result feeds the same {@see self::fromCapability()}
      *     selection; if the report yields nothing either, the Detect
-     *     snapshot stands and HalfBlock (always available) is chosen.
+     *     snapshot stands and the text tier is chosen — the symbol-map
+     *     renderer on the terminal's Unicode coverage, HalfBlock only when
+     *     the text-availability slot is off itself.
      *
-     * Precedence: kitty → iterm2 → sixel → chafa → halfblock
+     * Precedence: kitty → iterm2 → sixel → chafa (explicit opt-in only) →
+     * symbols → halfblock. Symbols, not HalfBlock, is the practical floor:
+     * a probed text-capable terminal always lands one rung above it.
      *
      * @see Mosaic::diagnose() for structured probe report
      * @see Detect::probe() for the primary TTY-probing implementation
@@ -987,8 +996,13 @@ final class Mosaic
      * display aspect so portrait posters are never squashed (see CELL_ASPECT).
      *
      * $cache, when given, is keyed with
-     * {@see DiskCache::key()} over ($url, $cellW, $cellH, protocol|scale) —
-     * a hit returns the stored bytes without touching the network. Pass
+     * {@see DiskCache::key()} over ($url, $cellW, $cellH, identity) where
+     * `identity` is the full render identity — protocol plus mode detail, the
+     * {@see Scale} NAME, the renderer's own `rendererConfigFingerprint()`
+     * and the optimization mask (only the non-empty parts append, so a default
+     * configuration keeps the keys it has always had) — two sixel posters with
+     * different dithers or palettes therefore never share an entry. A hit
+     * returns the stored bytes without touching the network. Pass
      * {@see DiskCache::key()}-compatible explicit dimensions on both sides of
      * a process restart for stable hits; a null $cellH hashes as the sentinel
      * auto-height.

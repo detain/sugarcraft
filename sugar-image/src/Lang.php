@@ -10,8 +10,8 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * Per-library translation facade for sugar-image.
  *
  * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
- * `'mosaic'` namespace baked in. Translated strings live in
- * {@see ../lang/en.php}.
+ * `'image'` namespace baked in. Translated strings live in `lang/en.php`
+ * beside this file, keyed with the same `image.` prefix the lookups use.
  *
  * @extends BaseLang
  */

@@ -15,6 +15,13 @@ final class Capability
         public readonly bool $kitty,
         public readonly bool $iterm2,
         public readonly bool $halfblock,
+        /**
+         * Whether the chafa CLI tier may be selected.  {@see self::universal()}
+         * is the only writer that sets it: a probed snapshot never does, because
+         * shelling out is never inferred from a terminal's advertised abilities.
+         * {@see Mosaic::bestBackend()} therefore reaches this rung only for an
+         * explicitly opted-in snapshot.
+         */
         public readonly bool $chafa,
         /** Cell pixel dimensions if probed, null otherwise. */
         public readonly ?CellSize $cellSize,
@@ -167,6 +174,12 @@ final class Capability
     /**
      * Return a human-readable summary of which protocols were detected.
      * Mirrors Charmbracelet's image.(Kitty|Sixel|Iterm2|HalfBlock)Protocol.Name().
+     *
+     * The names are the probed CAPABILITY slots, not the renderer
+     * {@see Mosaic::bestBackend()} finally chose: the symbol-map tier rides the
+     * same text-availability slot as HalfBlock, so a terminal that lands on
+     * symbols still reports "HalfBlock".  The arm set stays that way on
+     * purpose — the strings are what the diagnostic surfaces print.
      *
      * @return string e.g. "Kitty", "iTerm2", "Sixel", "HalfBlock", "Unknown"
      */
