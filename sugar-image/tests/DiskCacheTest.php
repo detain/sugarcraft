@@ -155,6 +155,7 @@ final class DiskCacheTest extends TestCase
         $cache->put('k', 'v');
 
         $this->assertDirectoryExists($nested);
+        $this->assertSame(0o700, fileperms($nested) & 0o777, 'a created cache directory is owner-only');
         $this->assertSame('v', $cache->get('k'));
 
         // tidy nested dirs the simple tearDown won't reach

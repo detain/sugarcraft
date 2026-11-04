@@ -270,7 +270,10 @@ final class DiskCache
             return;
         }
 
-        if (!@mkdir($this->dir, 0o775, true) && !is_dir($this->dir)) {
+        // 0o700: cached payloads are render output of (possibly private)
+        // source images — the entry file mode is umask-dependent, so the
+        // containing directory is the privacy boundary that must be owner-only.
+        if (!@mkdir($this->dir, 0o700, true) && !is_dir($this->dir)) {
             throw new \RuntimeException(Lang::t('disk_cache.mkdir_failed', ['dir' => $this->dir]));
         }
     }
