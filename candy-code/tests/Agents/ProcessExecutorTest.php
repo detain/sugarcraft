@@ -476,7 +476,10 @@ final class ProcessExecutorTest extends TestCase
 
     public function testExecuteThrowsOnMemoryPressure(): void
     {
-        // Use a memory pressure threshold of 0.0 so ANY memory usage triggers backpressure.
+        // Use a memory pressure threshold of 0.0 so ANY machine memory usage
+        // triggers backpressure — since PHPD-01 the ratio is the machine's,
+        // which any loaded box comfortably clears (on the old own-heap
+        // formula this pinned a ratio this process could barely reach).
         $executor = new ProcessExecutor(
             binaryPath: 'php',
             timeoutSeconds: 300,
