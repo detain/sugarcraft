@@ -65,10 +65,10 @@ $buf = Buffer::new(4, 1)->withCellAt(1, 0, Cell::new('中', null, null, 2));
 // (1,0) carries '中' (width 2); (2,0) is now a continuation (rune '', width 0).
 
 $cont = Cell::continuation(); // only needed for hand-built grids
-$manual = Buffer::fromGrid([[Cell::new('中', null, null, 2), $cont]]);
+$manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 ```
 
-`fromGrid()` is the unvalidated escape hatch: it accepts any cell layout as given, so pair maintenance there is the caller's duty.
+`fromGrid()` is the escape hatch that skips the pair law: it demands a flat list of exactly `width*height` cells (dimensions and the count are validated), but the cells are taken as given — pair maintenance there is the caller's duty.
 
 ## API
 
@@ -85,7 +85,7 @@ $manual = Buffer::fromGrid([[Cell::new('中', null, null, 2), $cont]]);
 - `Buffer::toAnsi(): string` — full-repaint ANSI for the whole grid.
 - `Buffer::text(?Region $region = null): string` — plain-text extraction (continuations skipped).
 - `Buffer::fromString(?string $ansi, int $width, int $height): self` — **test-support** ANSI parser (lossy; see Security); all three arguments are required and non-positive dimensions are refused.
-- `Buffer::fromGrid(array $grid): self` — build from a literal cell grid (no pair enforcement).
+- `Buffer::fromGrid(int $width, int $height, array $flatGrid): self` — wrap a flat cell list (index = `row*width + col`); positive dimensions and exactly `width*height` cells are enforced, pair law is not.
 - `Buffer::width(): int`, `Buffer::height(): int`, `Buffer::region(): Region`.
 
 ### Cell
@@ -165,7 +165,7 @@ Total: 44 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (wh
 - **Cell runes are stored and emitted VERBATIM.** `toAnsi()` and the diff encoder write whatever rune you put in a cell. Stripping control bytes is the CALLER's duty: C0 controls and DEL (and the hostile 8-bit C1 range) must not reach a cell from untrusted input — pass external text through sugar-core's `Sanitize::untrusted()` first. Raw escapes in runes desync the cursor and inject live SGR onto the wire.
 - **`Hyperlink` hard-rejects** C0/DEL in url and id, and semicolons in the id, at construction and again on unserialization — the OSC 8 fields cannot be forged through those types.
 - **`Buffer::fromString()` is test-support**, not a terminal emulator: it walks bytes, skips OSC frames, and is lossy by contract (hyperlinks never re-attached; a lone trailing `ESC` or an unrecognised `ESC` digraph is stored as a plain rune; an unterminated CSI deposits its parameter text into cells). Do not feed it untrusted input expecting a parse.
-- **`Buffer::fromGrid()` is unvalidated** (see Wide characters) — the pair law is yours there.
+- **`Buffer::fromGrid()` skips pair enforcement** (see Wide characters) — it validates the dimensions and the exact `width*height` cell count, but takes the cells as given; the pair law is yours there.
 - **Serialize hooks re-validate**: `__unserialize` on Buffer/Cell/Style/Hyperlink/Region re-runs every constructor invariant, so a forged payload fails closed instead of minting a structurally invalid buffer.
 - **`applyDiff()` refuses negative cursor coordinates**; the wire encoder clamps them fail-soft to the grid edge.
 

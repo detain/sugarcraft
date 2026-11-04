@@ -91,7 +91,7 @@ echo $buf->height(); // 3</code></pre>
       <div class="feature"><strong>Region</strong><span>Rectangular sub-region defined by Position origin + width/height. contains() helper for hit-testing; zero-area regions no-op in fill()/withRegion().</span></div>
       <div class="feature"><strong>Style</strong><span>Per-cell pen: foreground/background as RGB 0xRRGGBB <em>or</em> palette-slot identity (0-255), underline colour, and an attribute bitmask. The with*() builders keep slot and RGB mutually exclusive per channel; the public fromSgr() parses SGR parameter strings back into styles. The rich styling API (border, padding, transforms) lives in sugar-style.</span></div>
       <div class="feature"><strong>Hyperlink</strong><span>OSC 8 anchor — url and optional id grouping field, validated at construction (C0/DEL and semicolons-in-id refused).</span></div>
-      <div class="feature"><strong>Wide char handling</strong><span>width=2 cells (CJK, many emoji) carry a width-0 continuation partner at col+1. The writing API enforces the pair law automatically; Buffer::fromGrid() is the unvalidated escape hatch where pair maintenance is the caller's duty.</span></div>
+      <div class="feature"><strong>Wide char handling</strong><span>width=2 cells (CJK, many emoji) carry a width-0 continuation partner at col+1. The writing API enforces the pair law automatically; Buffer::fromGrid() is the escape hatch that skips it — it validates the dimensions and requires a flat list of exactly width×height cells, but takes the cells as given, so pair maintenance is the caller's duty.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
