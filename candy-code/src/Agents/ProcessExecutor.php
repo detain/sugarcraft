@@ -54,7 +54,7 @@ final class ProcessExecutor implements ExecutorInterface
     /** Grace period between SIGTERM and SIGKILL (seconds). */
     private const SIGTERM_GRACE_SECS = 5;
 
-    /** Default fraction of available memory above which we pause scheduling (0.0–1.0). */
+    /** Default fraction of MACHINE memory in use above which we pause scheduling (0.0–1.0). */
     private const DEFAULT_MEMORY_THRESHOLD = 0.8;
 
     /**
@@ -87,7 +87,7 @@ final class ProcessExecutor implements ExecutorInterface
          * gets one.
          */
         private readonly ?int $timeoutSeconds = null,
-        /** Memory usage fraction above which new task scheduling is paused (0.0–1.0). */
+        /** Machine memory usage fraction above which new task scheduling is paused (0.0–1.0). */
         private readonly float $memoryPressureThreshold = self::DEFAULT_MEMORY_THRESHOLD,
         /**
          * The provider the WORKER consults, as a {@see \SugarCraft\Code\Providers\ProviderFactory}
@@ -1948,23 +1948,98 @@ PHP;
     }
 
     /**
-     * Returns true when system memory pressure exceeds the configured threshold,
-     * indicating the pool should pause new task scheduling.
+     * Returns true when MACHINE memory pressure exceeds the configured
+     * threshold, indicating the pool should pause new task scheduling.
      *
-     * Uses PHP's memory usage and an approximation of total available memory.
-     * On Linux, reads /proc/meminfo for accurate total memory; falls back to
-     * a conservative estimate on other platforms.
+     * Both sides of the ratio belong to the machine: usage is
+     * `(MemTotal - MemAvailable) / MemTotal`, read fresh from
+     * /proc/meminfo on every dispatch because pressure is exactly the
+     * kind of thing that changes between dispatches. It used to be THIS
+     * PHP process's own heap (`memory_get_usage(false)`) divided by the
+     * whole machine's MemTotal — a numerator with the wrong owner, so on
+     * a 16 GiB box even a 2 GiB heap read 12.5% against the 80% gate and
+     * the backpressure never closed (PHPD-01, reviews-1103).
+     *
+     * The null verdict — the kernel cannot answer (no /proc, unreadable
+     * meminfo, a meminfo that names neither MemAvailable nor MemFree) —
+     * is a NAMED state here, not a silently conflated one: scheduling
+     * proceeds (fail-open, the same verdict the old `$total <= 0` branch
+     * reached by accident) but the choice is explicit, documented, and
+     * pinned by the provider table in ProcessExecutorTest, so "unknown"
+     * can never again masquerade as a measured "no pressure".
      */
     private function isMemoryPressure(): bool
     {
-        $used = memory_get_usage(false);
-        $total = $this->getTotalMemoryBytes();
+        $usage = self::machineMemoryUsage();
 
-        if ($total <= 0) {
-            return false; // Cannot determine — allow scheduling
+        if ($usage === null) {
+            return false; // Unknown — allow scheduling, deliberately (see docblock)
         }
 
-        return ($used / $total) >= $this->memoryPressureThreshold;
+        return $usage >= $this->memoryPressureThreshold;
+    }
+
+    /**
+     * The machine's memory usage fraction in [0, 1], or null when the
+     * kernel interface cannot answer.
+     *
+     * Reads /proc/meminfo once per call (no process-lifetime cache: the
+     * old one froze the denominator forever, and the point of this gate
+     * is the moving part). The arithmetic lives in
+     * {@see memoryUsageFraction()} so the whole table is pinned without
+     * touching the real /proc.
+     */
+    private static function machineMemoryUsage(): ?float
+    {
+        if (PHP_OS !== 'Linux') {
+            return null;
+        }
+
+        $content = @file_get_contents('/proc/meminfo');
+        if ($content === false) {
+            return null;
+        }
+
+        return self::memoryUsageFraction($content);
+    }
+
+    /**
+     * Pure arithmetic over /proc/meminfo contents: the fraction of
+     * MemTotal that MemAvailable does not cover.
+     *
+     * MemAvailable (kernel 3.14+) is the honest "what can still be
+     * served" number — it counts reclaimable page cache and slab back.
+     * Where it is absent (older kernels, containers with a filtered
+     * meminfo) the fallback is MemFree, which is CONSERVATIVE: free is
+     * never larger than available, so this substitution can read
+     * pressure earlier than MemAvailable would, never later. Anything
+     * the three keys cannot settle answers null — see the fail-open
+     * note on {@see isMemoryPressure()}.
+     */
+    private static function memoryUsageFraction(string $meminfoContents): ?float
+    {
+        if (!preg_match('/^MemTotal:\s+(\d+)\s+kB/m', $meminfoContents, $total)) {
+            return null;
+        }
+        $totalKb = (int) $total[1];
+
+        if ($totalKb <= 0) {
+            return null;
+        }
+
+        if (preg_match('/^MemAvailable:\s+(\d+)\s+kB/m', $meminfoContents, $available)) {
+            $availableKb = (int) $available[1];
+        } elseif (preg_match('/^MemFree:\s+(\d+)\s+kB/m', $meminfoContents, $free)) {
+            $availableKb = (int) $free[1];
+        } else {
+            return null;
+        }
+
+        // Clamp: a filtered or racing meminfo can momentarily name an
+        // available larger than total. Usage never reads negative.
+        $availableKb = max(0, min($availableKb, $totalKb));
+
+        return (float) ($totalKb - $availableKb) / $totalKb;
     }
 
     /**
@@ -1979,39 +2054,6 @@ PHP;
                 'Memory pressure threshold exceeded — pausing task scheduling'
             );
         }
-    }
-
-    /**
-     * Get the total physical memory in bytes.
-     *
-     * On Linux reads /proc/meminfo; returns 0 on unknown platforms.
-     */
-    private function getTotalMemoryBytes(): int
-    {
-        static $cached = null;
-        if ($cached !== null) {
-            return $cached;
-        }
-
-        if (PHP_OS !== 'Linux' || !file_exists('/proc/meminfo')) {
-            $cached = 0;
-            return $cached;
-        }
-
-        $content = @file_get_contents('/proc/meminfo');
-        if ($content === false) {
-            $cached = 0;
-            return $cached;
-        }
-
-        // "MemTotal:       16384084 kB"
-        if (preg_match('/^MemTotal:\s+(\d+)\s+kB/m', $content, $matches)) {
-            $cached = (int) $matches[1] * 1024;
-        } else {
-            $cached = 0;
-        }
-
-        return $cached;
     }
 
     /**

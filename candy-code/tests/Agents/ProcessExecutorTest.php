@@ -508,17 +508,142 @@ final class ProcessExecutorTest extends TestCase
 
     public function testExecuteSucceedsWithHighMemoryThreshold(): void
     {
-        // With threshold 1.0 (100%) memory pressure is never triggered.
+        // The gate must not close, whatever the machine is doing. A
+        // threshold of 1.0 used to be "never" because the ratio it was
+        // compared against was THIS process's heap over machine total —
+        // a number that could not reach 1.0 on any real box. Since
+        // PHPD-01 the ratio is machine usage, which hits exactly 1.0 the
+        // moment MemAvailable drains to zero, so "never" needs a value
+        // outside the [0,1] fraction the clamp can produce.
         $executor = new ProcessExecutor(
             binaryPath: 'php',
             timeoutSeconds: 300,
-            memoryPressureThreshold: 1.0,
+            memoryPressureThreshold: 2.0,
             simulatedWorker: true,
         );
 
         $result = $executor->execute($this->agent, $this->request);
 
         $this->assertSame(AgentStatus::Completed, $result->status);
+    }
+
+    // -------------------------------------------------------------------------
+    // PHPD-01 (reviews-1103) — the pressure arithmetic reads the MACHINE,
+    // not this heap. (MemTotal - MemAvailable) / MemTotal, with a MemFree
+    // fallback and a NAMED unknown verdict; synthetic /proc/meminfo
+    // contents pin the whole table without touching the real one.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @return array<string, array{0: string, 1: ?float}>
+     */
+    public static function meminfoPressureTable(): array
+    {
+        return [
+            'idle box: 10% of a 1 GB machine in use' => [
+                self::meminfoFixture(totalKb: 1_000_000, availableKb: 900_000, freeKb: 950_000),
+                0.1,
+            ],
+            'gate boundary: exactly 80% used' => [
+                self::meminfoFixture(totalKb: 1_000_000, availableKb: 200_000, freeKb: 250_000),
+                0.8,
+            ],
+            'pressure: 90% used — the base formula read 12.5% of a 2 GiB heap here' => [
+                self::meminfoFixture(totalKb: 1_000_000, availableKb: 100_000, freeKb: 120_000),
+                0.9,
+            ],
+            'starved: MemAvailable at zero answers the full 1.0 the clamp can give' => [
+                self::meminfoFixture(totalKb: 1_000_000, availableKb: 0, freeKb: 10),
+                1.0,
+            ],
+            'no MemAvailable key: MemFree carries the verdict (pre-3.14 kernels)' => [
+                self::meminfoFixture(totalKb: 1_000_000, availableKb: null, freeKb: 100_000),
+                0.9,
+            ],
+            'both keys present: MemAvailable wins, and wins OVER the stricter MemFree' => [
+                // MemFree 20% used-up vs MemAvailable 50% — the precedence
+                // decides which story the gate hears; Available must.
+                self::meminfoFixture(totalKb: 1_000_000, availableKb: 500_000, freeKb: 200_000),
+                0.5,
+            ],
+            'MemAvailable racing above MemTotal clamps to zero usage, never negative' => [
+                self::meminfoFixture(totalKb: 1_000_000, availableKb: 1_500_000, freeKb: 900_000),
+                0.0,
+            ],
+            'MemTotal missing: unknown, not zero' => [
+                self::meminfoFixture(totalKb: null, availableKb: 500_000, freeKb: 400_000),
+                null,
+            ],
+            'MemTotal zero: unknown, not a divide-by-zero' => [
+                self::meminfoFixture(totalKb: 0, availableKb: 0, freeKb: 0),
+                null,
+            ],
+            'neither available nor free named: unknown' => [
+                self::meminfoFixture(totalKb: 1_000_000, availableKb: null, freeKb: null),
+                null,
+            ],
+            'empty contents: unknown' => ['', null],
+            'contents that are not a meminfo at all: unknown' => ["MemTotal: lots of kB\nMemAvailable: many things kB\n", null],
+        ];
+    }
+
+    /** A /proc/meminfo-shaped excerpt; null values omit that line entirely. */
+    private static function meminfoFixture(?int $totalKb, ?int $availableKb, ?int $freeKb): string
+    {
+        $lines = [];
+        if ($totalKb !== null) {
+            $lines[] = sprintf('MemTotal:       %8d kB', $totalKb);
+        }
+        if ($freeKb !== null) {
+            $lines[] = sprintf('MemFree:        %8d kB', $freeKb);
+        }
+        if ($availableKb !== null) {
+            $lines[] = sprintf('MemAvailable:   %8d kB', $availableKb);
+        }
+        // Realistic noise: the keys between the ones we parse.
+        $lines[] = 'Buffers:             12345 kB';
+        $lines[] = 'Cached:             987654 kB';
+
+        return implode("\n", $lines) . "\n";
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('meminfoPressureTable')]
+    public function testThePressureFractionIsMachineMemoryUsedOverMachineMemoryTotal(string $contents, ?float $expected): void
+    {
+        $fraction = (new \ReflectionMethod(ProcessExecutor::class, 'memoryUsageFraction'))
+            ->invoke(null, $contents);
+
+        if ($expected === null) {
+            self::assertNull($fraction, 'unreadable-by-shape contents answer the NAMED unknown, never a silent 0.0');
+
+            return;
+        }
+
+        self::assertEqualsWithDelta($expected, $fraction, 1e-9);
+    }
+
+    public function testThePressureNumeratorIsNoLongerThisProcessesHeap(): void
+    {
+        // The defect was a wrong-ownership numerator; pin its absence on
+        // the three methods that now carry the verdict. Source-slice
+        // shape (the house carrier-census genre — same reader
+        // autoloadPath() above uses), so a reintroduced memory_get_usage
+        // inside the gate goes red even if every behavior test stays green
+        // on a lightly loaded box.
+        $slice = '';
+        foreach (['isMemoryPressure', 'machineMemoryUsage', 'memoryUsageFraction'] as $name) {
+            $method = new \ReflectionMethod(ProcessExecutor::class, $name);
+            $lines = file((string) $method->getFileName());
+            $this->assertIsArray($lines);
+            $slice .= self::declaredSlice($lines, $name, $method->getStartLine(), $method->getEndLine());
+        }
+
+        self::assertStringNotContainsString('memory_get_usage', $slice);
+        self::assertStringNotContainsString('getTotalMemoryBytes', $slice);
+        // The three keys the arithmetic is allowed to consult, exactly.
+        foreach (['MemTotal', 'MemAvailable', 'MemFree'] as $key) {
+            self::assertStringContainsString($key, $slice);
+        }
     }
 
     // -------------------------------------------------------------------------

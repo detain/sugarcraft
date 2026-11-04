@@ -1394,7 +1394,7 @@ final class AgentWorkerPool
             //    exiting clean.
             //
             // Nothing here catches: ProcessExecutor::checkBackpressure() throws
-            // at >=80% memory and spawnWorker() throws when proc_open() fails,
+            // at >=80% machine memory used (PHPD-01) and spawnWorker() throws when proc_open() fails,
             // both BEFORE any result is written. The child then fatals on the
             // uncaught exception and this agent's only completion evidence is
             // its exit status — no signal, no crash, just a child that ends
