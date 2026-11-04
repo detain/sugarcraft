@@ -1404,6 +1404,23 @@ final class BinCandyCodeDispatchTest extends TestCase
         $this->assertStringContainsString('sess-drop-0002', $listed['stdout']);
         $this->assertStringContainsString('drop-me', $listed['stdout']);
 
+        // NN-09 (OD-1 clause j): the list leads with exactly one fixed-width
+        // header naming the columns, and every header label sits at the same
+        // offset as the field it names — both rows come from one printf format,
+        // so a drift between them means the format was hand-edited per side.
+        $lines = array_values(array_filter(explode("\n", rtrim($listed['stdout'], "\n")), static fn (string $l): bool => $l !== ''));
+        $headers = preg_grep('/^  ID\s+UPDATED\s+KIND\s+TURNS\s+SPEND\s+PROVIDER\/MODEL\s+NAME$/', $lines);
+        $this->assertCount(1, $headers, 'the list must print the header exactly once: ' . $listed['stdout']);
+        $this->assertSame(0, array_key_first($headers), 'the header must lead the table: ' . $listed['stdout']);
+        $header = (string) reset($headers);
+        $keepRows = array_values(preg_grep('/sess-keep-0001/', $lines) ?: []);
+        $this->assertNotCount(0, $keepRows, 'the seeded row must still print: ' . $listed['stdout']);
+        $keepRow = (string) $keepRows[0];
+        $this->assertSame(strpos($header, 'ID'), strpos($keepRow, 'sess-keep-0001'));
+        $this->assertSame(strpos($header, 'KIND'), strpos($keepRow, 'main'));
+        $this->assertSame(strpos($header, 'PROVIDER/MODEL'), strpos($keepRow, 'openai/gpt-4o'));
+        $this->assertSame(strpos($header, 'NAME'), strpos($keepRow, 'keep-me'));
+
         $deleted = $this->runBin(['session', 'delete', 'sess-drop-0002'], ['HOME' => $home]);
         $this->assertSame(0, $deleted['status'], 'stderr: ' . $deleted['stderr']);
         $this->assertStringContainsString('sess-drop-0002', $deleted['stdout']);

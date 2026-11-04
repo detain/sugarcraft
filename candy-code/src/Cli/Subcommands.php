@@ -1039,7 +1039,9 @@ final class Subcommands
      * with `[archived]` after an archived row's name and `spend` the session's
      * cached ledger figure — {@see \SugarCraft\Code\Host\SpendLedger::boundUsd()}
      * spelling, `≥$` when an unpriced model set the lower bound, an em dash when
-     * no accounted call ever named the row; the JSON rows are
+     * no accounted call ever named the row; a fixed-width untranslated header
+     * row (NN-09, OD-1 clause j) names the columns above them, absent when no
+     * rows print; the JSON rows are
      * {@see \SugarCraft\Code\Session\SessionRow::toArray()} plus the
      * `spentUsd`/`spendUnpriced` pair, which carries every column the store
      * keeps (kind, parent, pinned, archived_at, turns,
@@ -1106,6 +1108,23 @@ final class Subcommands
         foreach ($rows as $row) {
             $idWidth = \max($idWidth, \strlen($row->id));
         }
+        // NN-09 (OD-1 clause j): the fixed-width table header is a machine
+        // literal, untranslated by design — a translated label would no longer
+        // sit over the column it names. It shares the rows' format string, so
+        // every field starts at its column's offset whatever $idWidth the
+        // widest id forces. The empty store prints no header, only the
+        // none-stored notice.
+        \printf(
+            "%s %-{$idWidth}s  %-19s  %-10s  %5s  %-9s  %-24s  %s\n",
+            ' ',
+            'ID',
+            'UPDATED',
+            'KIND',
+            'TURNS',
+            'SPEND',
+            'PROVIDER/MODEL',
+            'NAME',
+        );
         foreach ($rows as $row) {
             \printf(
                 "%s %-{$idWidth}s  %-19s  %-10s  %5s  %-9s  %-24s  %s\n",

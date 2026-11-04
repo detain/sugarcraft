@@ -132,8 +132,9 @@ final class SessionTitleInjectionTest extends TestCase
         self::assertStringContainsString('^[[2J', $stdout);
         self::assertStringContainsString('^J', $stdout);
         $rows = array_values(array_filter(explode("\n", $stdout), static fn (string $l): bool => $l !== ''));
-        // exactly one line for the one session — a raw \n in the name would have made more.
-        self::assertCount(1, $rows, $stdout);
+        // The fixed-width header (NN-09, OD-1 clause j) plus exactly one line
+        // for the one session — a raw \n in the name would have made more.
+        self::assertCount(2, $rows, $stdout);
     }
 
     public function testTheShowHeaderSanitisesItsLabel(): void
