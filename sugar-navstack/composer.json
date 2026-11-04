@@ -33,7 +33,8 @@
     },
     "autoload": {
         "psr-4": {
-            "SugarCraft\\NavStack\\": "src/"
+            "SugarCraft\\NavStack\\": "src/",
+            "SugarCraft\\Crumbs\\": "aliases/"
         }
     },
     "autoload-dev": {
