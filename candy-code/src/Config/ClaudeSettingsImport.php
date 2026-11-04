@@ -140,7 +140,7 @@ final class ClaudeSettingsImport
         // restriction on a pattern (deny over ask over allow), never loosen it.
         /** @var array<string, string> $chosen */
         $chosen = [];
-        /** @var list<string> $wideningPatterns */
+        /** @var list<string> $widening */
         $widening = [];
         $skipped = [];
         $rejected = [];
@@ -154,10 +154,10 @@ final class ClaudeSettingsImport
                 throw new RuntimeException(Lang::t('cli.sub.import.permissions_not_object', ['path' => $source]));
             } else {
                 foreach (['deny', 'ask', 'allow'] as $action) {
+                    // `?? []` already makes the null arm impossible; an
+                    // explicit JSON null for a bucket is a shape error and
+                    // the is_array refusal below is what reports it.
                     $list = $permissions[$action] ?? [];
-                    if ($list === null) {
-                        continue;
-                    }
                     if (!\is_array($list)) {
                         throw new RuntimeException(Lang::t('cli.sub.import.list_not_array', ['path' => $source, 'list' => $action]));
                     }
