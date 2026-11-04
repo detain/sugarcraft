@@ -279,6 +279,26 @@ final class UserToolLoaderTest extends TestCase
         self::assertFileExists($this->home . '/' . UserToolLoader::DIRECTORY . '/fmt.json');
     }
 
+    public function testARefusalClassTheMatchDoesNotNameDegradesToASkipRowNotAFatal(): void
+    {
+        // PHP-m7 (reviews-1103): the eight arms mirror UserToolSpec::refusal()
+        // exactly as it ships, but refusal() is declared ?string, so a ninth
+        // word is legal at the call site. Pre-ruling the match had no default
+        // arm, and an UnhandledMatchError out of refusalNotice() killed
+        // discovery wholesale — one misclassified file, every user tool gone.
+        // The ruling keeps the string comparison (the strings lane is closed)
+        // and pins the fail-loud net: the unknown class lands in the row, in
+        // brackets, as a skip — never a crash.
+        $notice = new \ReflectionMethod(UserToolLoader::class, 'refusalNotice');
+        $notice->setAccessible(true);
+
+        $row = $notice->invoke(null, 'made_up_class', $this->home . '/made-up.json');
+
+        self::assertIsString($row);
+        self::assertStringContainsString($this->home . '/made-up.json', $row);
+        self::assertStringContainsString('[made_up_class]', $row);
+    }
+
     /**
      * @param array<string, mixed> $overrides
      */

@@ -144,6 +144,29 @@ final class UserToolLoader
      * The validator's one-word class of failure, as the row the person sees.
      * Every key is spelled whole — the parity and catalogue censuses read
      * `Lang::t()` literals, and a composed prefix would slip past both.
+     *
+     * RULING (G1-L3A, PHP-m7): the comparison stays over the validator's
+     * strings. The eight arms above are exactly the classes
+     * UserToolSpec::refusal() can answer, so the match is complete against
+     * the vocabulary as it ships; it is not complete as a TYPE, because
+     * refusal() is declared ?string and an unknown word would raise an
+     * UnhandledMatchError from inside discovery and take every user tool
+     * down with one misclassified file. Converting the vocabulary to a real
+     * enum would make that illegal state unrepresentable, but it rewrites
+     * UserToolSpec (out of this lane) and every arm here — the durable
+     * churn is @todo'd below rather than paid in one wave.
+     *
+     * Until then the default arm is the fail-loud net: it degrades the
+     * unknown class to a skip row carrying the least-wrong existing
+     * wording plus the classifier word in brackets. The bracketed token is
+     * the validator's own machine vocabulary, not prose, so the row adds no
+     * user-facing string while the strings lane is closed — no new lang
+     * key is minted here.
+     *
+     * @todo replace the string vocabulary with a UserToolRefusal enum
+     *       returned by UserToolSpec::refusal(); arms then match on enum
+     *       cases, exhaustiveness is checked by the type, and this default
+     *       arm becomes unreachable and is deleted.
      */
     private static function refusalNotice(string $refusal, string $path): string
     {
@@ -156,6 +179,8 @@ final class UserToolLoader
             'argv_placeholder' => Lang::t('cli.usertools.skip.argv_placeholder', ['file' => $path]),
             'undeclared_placeholder' => Lang::t('cli.usertools.skip.undeclared_placeholder', ['file' => $path]),
             'bad_timeout' => Lang::t('cli.usertools.skip.bad_timeout', ['file' => $path]),
+            default => Lang::t('cli.usertools.skip.bad_shape', ['file' => $path])
+                . ' [' . $refusal . ']',
         };
     }
 }
