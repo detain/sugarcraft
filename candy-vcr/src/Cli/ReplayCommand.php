@@ -156,7 +156,7 @@ final class ReplayCommand implements DocumentedCommand
                 if ($interrupted !== 0) {
                     break;
                 }
-                // P6.5.3 dual-timestamp replay: when --no-trim is passed
+                // Dual-timestamp replay: when --no-trim is passed
                 // and the event carries `tRaw` (recorded with --idle-trim),
                 // honour the uncompressed timestamp so the playback cadence
                 // matches the original wallclock. Default replay (no flag)

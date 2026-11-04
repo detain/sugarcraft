@@ -202,7 +202,7 @@ final class Application
     }
 
     /**
-     * The `--version` answer, phar-aware (the DST-1 lesson from candy-code).
+     * The `--version` answer, phar-aware (the version-stamp lesson from candy-code).
      *
      * Inside a phar the archive's own build manifest is the authority: the
      * frozen `vendor/` baked into the artifact makes Composer's InstalledVersions
@@ -239,7 +239,7 @@ final class Application
      * when this code is not running from an archive.
      *
      * Three identities, first answer wins (measured on PHP 8.3.6 while porting
-     * the candy-code DST-1 guard): {@see \Phar::running()} names the archive
+     * the candy-code version-stamp guard): {@see \Phar::running()} names the archive
      * for any script executing from inside it; in the stub region of a directly
      * executed archive it answers '' and the archive is named by `__FILE__`
      * ending in `.phar`; the `phar://` prefix on this file's own `__FILE__`

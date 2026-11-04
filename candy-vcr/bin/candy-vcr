@@ -12,10 +12,10 @@ declare(strict_types=1);
 //   - via `php vendor/bin/candy-vcr` where vendor/bin is a Composer
 //     proxy script that already required the autoload before delegating.
 //   - as a phar archive: the archive's own vendor/, addressed as phar://
-//     (see the DST-1 block below).
+//     (see the version-stamp block below).
 $autoload = null;
 
-// DST-1 (guard shape ported from candy-code/candy-top, measured on PHP 8.3.6):
+// Version-stamp guard (shape ported from candy-code/candy-top, measured on PHP 8.3.6):
 // when `php candy-vcr.phar` runs, THIS file is the archive's stub and the
 // process is NOT inside the archive — Phar::running() answers '' in exactly
 // this context, and a bare '/x.phar/entry' path fails is_file()/require for

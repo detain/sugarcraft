@@ -181,7 +181,7 @@ final class FfmpegGifEncoder implements GifEncoder
 
     private function cleanup(string $tempDir): void
     {
-        // E712 keep: mirrors TapeToGif::cleanupDir — the ffmpeg child may
+        // Keep: mirrors TapeToGif::cleanupDir — the ffmpeg child may
         // still hold frame files at reap time; vanished files are the
         // success case and a busy rmdir is not actionable.
         $files = glob($tempDir . '/*') ?: [];

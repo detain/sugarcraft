@@ -279,7 +279,7 @@ final class Compiler
     }
 
     /**
-     * E668: `Wait <duration>` advances the recorder clock. `Wait /re/` is a
+     * `Wait <duration>` advances the recorder clock. `Wait /re/` is a
      * CONDITION wait — upstream blocks the recorder until the output matches,
      * but this compiler is the record-side clock with no live output stream to
      * poll (the Player/Recorder render captured events; neither gates today).

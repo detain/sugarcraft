@@ -136,7 +136,7 @@ final class ImagickRasterizer implements Rasterizer
             while ($col < $cols) {
                 $cell = $grid->cell($row, $col);
 
-                // F4 (round 90): same cell-grid contract as GdRasterizer —
+                // Same cell-grid contract as GdRasterizer —
                 // wide iff the neighbour is a Cell::continuation() tail of
                 // this head, tails paint nothing. The old mb_strwidth oracle
                 // was an independent width table and drifted from the vt

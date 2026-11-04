@@ -111,7 +111,7 @@ final readonly class Parser
             Lexer::TOKEN_UNKNOWN => null,
 
             // E15 grammar port classified JSON/REGEX values by the lexer (so
-            // they can never hide the directive behind them). E668 gave REGEX
+            // they can never hide the directive behind them). A grammar follow-up gave REGEX
             // its directive. TOKEN_REGEX arrives from BOTH lexer arms that
             // emit it: the `Wait /re/` arm (which strips the keyword) and the
             // generic value arm, which starts a line-initial bare `/re/` on

@@ -45,7 +45,7 @@ final class RenderTapeCommand extends Command
         $outputOpt = $input->getOption('output');
         $explicitOutput = is_string($outputOpt) ? $outputOpt : null;
 
-        // F2 (round 90): parse --fps at the door. Previously any is_numeric
+        // Parse --fps at the door. Previously any is_numeric
         // string passed — "--fps 0" reached FrameStream's 1.0/$fps (float
         // DivisionByZeroError mid-render) and integer 0 the encoder's 1000/$fps
         // (ArithmeticError/hang). Fail loud here instead.

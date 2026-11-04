@@ -130,7 +130,7 @@ final class GdRasterizer implements Rasterizer
             while ($col < $cols) {
                 $cell = $grid->cell($row, $col);
 
-                // F4 (round 90): advance by the cell-grid contract, not by
+                // Advance by the cell-grid contract, not by
                 // font metrics. The vt emulator (9a8c8879c) models a wide
                 // glyph as a head cell carrying the rune plus a right-hand
                 // Cell::continuation() tail — a head is wide exactly when

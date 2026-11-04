@@ -7,7 +7,7 @@ namespace SugarCraft\Vcr\Cli;
 /**
  * Parses the `--fps` option at the CLI boundary into a render cadence.
  *
- * F2 (round 90): before this door existed, any `is_numeric` string reached
+ * Before this door existed, any `is_numeric` string reached
  * the render pipeline, and `--fps 0` produced a float division-by-zero in
  * {@see \SugarCraft\Vcr\Render\FrameStream} (or, past the int-casting
  * encoder paths, a `1000 % 0` ArithmeticError / hang). The command layer

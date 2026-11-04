@@ -7,8 +7,7 @@ namespace SugarCraft\Vcr\Assert;
 /**
  * Strategy for comparing replay output against the cassette's recorded
  * output. Implementations decide WHAT counts as "equal" — exact bytes
- * (`ByteAssertion`), cell-grid screen state (`ScreenAssertion` via
- * sugar-vterm, PR5), or anything else.
+ * (`ByteAssertion`), cell-grid screen state (`ScreenAssertion` via sugar-vterm), or anything else.
  */
 interface Assertion
 {

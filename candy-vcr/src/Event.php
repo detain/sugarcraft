@@ -11,7 +11,7 @@ namespace SugarCraft\Vcr;
  * `payload` is an opaque associative map whose keys depend on `kind`:
  * - Resize: `cols`, `rows`
  * - Output: `b` (string, may contain raw bytes — JSONL serializer handles encoding)
- * - Input:  `msg` (envelope written by a MsgSerializer; PR3)
+ * - Input:  `msg` (envelope written by a MsgSerializer)
  * - Quit:   (empty)
  *
  * Mirrors charmbracelet/x/vcr Event.

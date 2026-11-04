@@ -10,8 +10,7 @@ namespace SugarCraft\Vcr\Assert;
  * The strictest form of assertion — fails on any byte-level
  * difference, even semantically equivalent reorderings (e.g. a
  * redundant SGR re-emission, an alternative cursor-position sequence
- * that lands the cursor in the same spot). Use {@see ScreenAssertion}
- * (PR5) for replay-time tolerance to those reorderings.
+ * that lands the cursor in the same spot). Use {@see ScreenAssertion} for replay-time tolerance to those reorderings.
  *
  * Mirrors charmbracelet/x/vcr Assert/Bytes.
  */
@@ -29,8 +28,8 @@ final class ByteAssertion implements Assertion
      * Compact human-readable diff: byte length of each side, the byte
      * offset of the first divergence, and a short hex window around
      * that offset. Long-form diffs are out of scope here — for a true
-     * side-by-side viewer use the cell-grid assertion in PR5 or pipe
-     * the cassette through `vendor/bin/candy-vcr diff` (PR7).
+     * side-by-side viewer use the cell-grid assertion (ScreenAssertion) or pipe
+     * the cassette through `vendor/bin/candy-vcr diff`.
      */
     private function summarize(string $expected, string $actual): string
     {

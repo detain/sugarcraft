@@ -38,7 +38,7 @@ final class RenderBatchCommand extends Command
         $outputDir = is_string($outputDir) ? $outputDir : null;
         $recursive = (bool) $input->getOption('recursive');
 
-        // F2 (round 90): same door as render-tape — a bad --fps aborts the
+        // Same door as render-tape — a bad --fps aborts the
         // whole batch before the first render starts, never mid-flight.
         try {
             $fps = FpsOption::parse($input->getOption('fps')) ?? 30.0;

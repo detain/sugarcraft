@@ -24,7 +24,7 @@ final class PhpGifEncoder implements GifEncoder
         if ($pngPaths === []) {
             throw new \RuntimeException('No frames provided to encode');
         }
-        // F2 (round 90): the int-casting door. buildDelayArray divides by
+        // The int-casting door. buildDelayArray divides by
         // $fps twice (1000/$fps and the durations fallback); fps <= 0 there
         // is an ArithmeticError (modulo by zero) or a silent infinite-loop
         // risk on the fps=0 float path, surfaced as a hang rather than a

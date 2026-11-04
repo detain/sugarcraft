@@ -13,7 +13,7 @@ use SugarCraft\Vcr\Hook\HookRegistry;
  * Streaming JSONL cassette writer. Each event is encoded and flushed
  * immediately so a crash mid-recording doesn't lose the cassette.
  *
- * Output-fidelity contract (F1, round 90): recording never throws because a
+ * Output-fidelity contract: recording never throws because a
  * PTY chunk sliced a multibyte sequence — {@see recordOutput()} defers the
  * incomplete tail to the next tap so split glyphs stay byte-exact, and any
  * remaining invalid bytes degrade to U+FFFD via
@@ -82,7 +82,7 @@ final class Recorder implements RecorderInterface
 
     /**
      * Count of failed stream writes + flushes (C3). The recorder never
-     * aborts a live session over I/O errors (E712 best-effort ruling: the
+     * aborts a live session over I/O errors (best-effort ruling: the
      * child program outranks the tape), but the losses are NO LONGER
      * invisible — {@see captureWriteErrors()} surfaces them so the CLI
      * can refuse to call an incomplete capture a success.
@@ -98,7 +98,7 @@ final class Recorder implements RecorderInterface
 
     /**
      * Bytes of an incomplete UTF-8 sequence whose start arrived but whose
-     * continuation bytes did not (F1, round 90). A PTY read loop slices the
+     * continuation bytes did not. A PTY read loop slices the
      * output stream at arbitrary byte boundaries, so a 3-byte glyph can
      * arrive across two {@see recordOutput()} taps. Writing the torn half
      * straight into `json_encode` would either abort the session (pre-fix
@@ -295,7 +295,7 @@ final class Recorder implements RecorderInterface
         if ($this->closed) {
             return;
         }
-        // F1 (round 90): re-join the previous tap's torn UTF-8 tail before
+        // Re-join the previous tap's torn UTF-8 tail before
         // deciding what to write. An empty merged buffer means there is
         // nothing new and no completed prefix to flush — stay silent, the
         // old per-tap empty skip generalises to "skip empty writes".
@@ -369,7 +369,7 @@ final class Recorder implements RecorderInterface
         if ($this->closed) {
             return;
         }
-        // F1 (round 90): a session that ends mid-glyph must not silently drop
+        // A session that ends mid-glyph must not silently drop
         // the deferred bytes — flush the pending tail as a final output event
         // while the stream is still open (substitution degrades it if it is
         // genuinely invalid, which by then nothing can complete anyway).
@@ -380,7 +380,7 @@ final class Recorder implements RecorderInterface
         }
         $this->closed = true;
         if (is_resource($this->fh)) {
-            // E712 keep: close() is teardown and runs from finally on EVERY
+            // Keep: close() is teardown and runs from finally on EVERY
             // failure path; a double-close/EBADF warning raised here would
             // mask the exception actually unwinding. The is_resource guard
             // above already handles the meaningful case. A failed close is
@@ -434,7 +434,7 @@ final class Recorder implements RecorderInterface
             $this->cumulativeEffectiveT = $event->t;
         }
         if ($this->cumulativeTrim > 0.0 && !isset($line['tRaw'])) {
-            // P6.5.3 dual-timestamp: any event after a trim carries the
+            // Dual-timestamp: any event after a trim carries the
             // original wallclock-relative timestamp so a replay can opt
             // back into the real cadence via --no-trim.
             $line['tRaw'] = round($realT, 3);
@@ -459,14 +459,14 @@ final class Recorder implements RecorderInterface
         }
         $payload = $json . "\n";
         $written = @fwrite($this->fh, $payload);
-        // E712 keep (upgraded, C3): never ABORT the session over tape I/O —
+        // Keep (later hardening): never ABORT the session over tape I/O —
         // but a lost write is now COUNTED, not discarded. Disk-full /
         // broken-device short writes previously vanished (fwrite's return
         // dropped entirely), and the CLI still announced success.
         if ($written === false || $written < \strlen($payload)) {
             $this->writeErrors++;
         }
-        // E712 keep: per-event flush is best-effort — fclose() in close()
+        // Keep: per-event flush is best-effort — fclose() in close()
         // (and the OS) backstops the buffer; refusing the flush mid
         // recording must not abort the session. Failures are counted (C3).
         if (@fflush($this->fh) === false) {

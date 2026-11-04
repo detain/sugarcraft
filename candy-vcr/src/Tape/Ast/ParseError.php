@@ -7,7 +7,7 @@ namespace SugarCraft\Vcr\Tape\Ast;
 /**
  * Represents a parse error at a specific line.
  *
- * Accessors follow the house bare-name law (F7, round 90); the public
+ * Accessors follow the house bare-name law; the public
  * readonly props are the primary read surface — Compiler formats nodes
  * via `$node->line`/`$node->message` directly.
  */

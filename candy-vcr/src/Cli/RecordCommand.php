@@ -24,7 +24,7 @@ use SugarCraft\Vcr\Recorder;
  * (`record … | replay`), and the existing API-mode capture via
  * `\SugarCraft\Core\Program::withRecorder()` for in-program recording.
  *
- * Wired in plan step P6.5.1; depends on sugar-pty's P6.1 recorder tap.
+ * Wired behind the record verb; depends on sugar-pty's recorder tap.
  */
 final class RecordCommand implements DocumentedCommand
 {
@@ -51,7 +51,7 @@ final class RecordCommand implements DocumentedCommand
     /**
      * Termios snapshot held in static scope so the shutdown-function +
      * signal handlers from {@see installRescueHandlers()} can reach it
-     * without closures. Wired by P6.5.4 (host termios safety net).
+     * without closures. Wired as the host termios safety net.
      */
     private static ?Termios $rescueSnapshot = null;
 
@@ -209,7 +209,7 @@ final class RecordCommand implements DocumentedCommand
                 try {
                     $savedTermios->restore();
                 } catch (\Throwable) {
-                    // Best-effort restore; the P6.5.4 shutdown_function +
+                    // Best-effort restore; the shutdown_function +
                     // signal handlers cover the still-armed paths.
                 }
             }
@@ -485,7 +485,7 @@ final class RecordCommand implements DocumentedCommand
             // every other path. Swallow any late-restore failure.
         }
         if (self::$rescueMarkerPath !== '' && \file_exists(self::$rescueMarkerPath)) {
-            // E712 keep: the file_exists guard is advisory only — handler,
+            // Keep: the file_exists guard is advisory only — handler,
             // shutdown-function and in-band finally race each other on this
             // marker, so a vanished-but-for-this-path unlink is a normal
             // outcome; a raw warning would print into a just-restored
@@ -507,14 +507,14 @@ final class RecordCommand implements DocumentedCommand
         self::rescueRestore();
         if (\function_exists('pcntl_signal') && \function_exists('posix_kill') && \function_exists('posix_getpid')) {
             \pcntl_signal($signo, \SIG_DFL);
-            // E712 keep: self-kill while mid signal-dispatch; the return
+            // Keep: self-kill while mid signal-dispatch; the return
             // value is meaningless (the death IS the success path) and an
             // EPERM/ESRCH warning here would smear onto the raw-mode host
             // terminal this handler just cleaned up.
             @\posix_kill(\posix_getpid(), $signo);
             return;
         }
-        // E712 justified exit-in-src (the ONLY one — census-pinned by
+        // Justified exit-in-src (the ONLY one — census-pinned by
         // tests/Cli/SrcExitCensusTest.php): async pcntl fallback for
         // pcntl-present / ext-posix-absent hosts. The process must die NOW
         // with the conventional 128 + signo status. This frame is not on
@@ -540,7 +540,7 @@ final class RecordCommand implements DocumentedCommand
     {
         self::$rescueSnapshot = null;
         if (self::$rescueMarkerPath !== '' && \file_exists(self::$rescueMarkerPath)) {
-            // E712 keep: the file_exists guard is advisory only — handler,
+            // Keep: the file_exists guard is advisory only — handler,
             // shutdown-function and in-band finally race each other on this
             // marker, so a vanished-but-for-this-path unlink is a normal
             // outcome; a raw warning would print into a just-restored
@@ -627,7 +627,7 @@ final class RecordCommand implements DocumentedCommand
         // caller can never accidentally slurp secrets by passing ''.
         $effectiveRegex = ($regex === null || $regex === '') ? self::SECRET_KEY_REGEX : $regex;
 
-        // E712 fix (was a masked suppression): an invalid PCRE made every
+        // Fix (was a masked suppression): an invalid PCRE made every
         // per-key preg_match() return false, `=== 1` never fired, and a
         // mistyped pattern SILENTLY DISABLED secret stripping — the exact
         // footgun this function exists to close. The CLI validates
@@ -759,7 +759,7 @@ final class RecordCommand implements DocumentedCommand
 
     /**
      * Capture a minimal env for the recorded child. Full env capture
-     * (with secret stripping) lands in P6.5.2 behind --env.
+     * (with secret stripping) lands behind --env.
      *
      * @return array<string, string>
      */

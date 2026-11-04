@@ -157,7 +157,7 @@ final class Player
 
             return new JsonlFormat();
         } finally {
-            // E712 keep: finally-close must never throw/moan over a body
+            // Keep: finally-close must never throw/moan over a body
             // exception already unwinding; the fopen above proved readable.
             @fclose($fh);
         }
@@ -213,7 +213,7 @@ final class Player
         }
         [$inputRead, $inputWrite] = $sockets;
 
-        // F5 (round 90): the descriptors built below live inside a try/finally.
+        // The descriptors built below live inside a try/finally.
         // $output is declared before the try so finally sees it even when
         // fopen() itself is the throwing call.
         $output = null;
@@ -331,10 +331,10 @@ final class Player
                 undecodedInputCount: $tally['undecoded'],
             );
         } finally {
-            // E712 keep: ephemeral pipe teardown after their contents were
+            // Keep: ephemeral pipe teardown after their contents were
             // fully drained into $actualOutput — a close failure here cannot
             // change the verdict, and a warning would corrupt CLI stderr.
-            // F5 (round 90): teardown moved out of the straight-line tail into
+            // Teardown moved out of the straight-line tail into
             // finally — a throw at the factory door, inside run(), or in any
             // dispatched timer now still releases the socket pair and the
             // memory buffer; pre-fix each failed replay leaked two fds plus a
@@ -411,7 +411,7 @@ final class Player
                             $tally['undecoded']++;
                         }
                     } elseif (isset($event->payload['b']) && is_string($event->payload['b'])) {
-                        // Raw-byte input (PR2 form): re-parse via a fresh
+                        // Raw-byte input (un-enveloped form): re-parse via a fresh
                         // InputReader and send the resulting Msgs directly.
                         // Bypassing the program's stream watcher avoids the
                         // async race between fwrite + fread + parse.

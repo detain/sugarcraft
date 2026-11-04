@@ -37,13 +37,13 @@ final class SanitizingHook implements Hook
      *        Declared array-key, not string: PHP's engine casts a numeric-string pattern ("0") to an int key
      *        before this method ever sees it, so the door — not the caller's literal — owns the cast-back.
      *
-     * @throws \InvalidArgumentException when a replace pattern is not a valid PCRE (E724)
+     * @throws \InvalidArgumentException when a replace pattern is not a valid PCRE
      */
     public function __construct(
         array $removeKeys = [],
         array $replacePatterns = [],
     ) {
-        // E724 (door probe — mirrors this lib's RegexAssertion ctor and
+        // Door probe — mirrors this lib's RegexAssertion ctor and
         // q2's filteredHostEnv fix): a mistyped pattern used to make every
         // preg_replace() below return NULL, the ?? fallback then handed the
         // ORIGINAL unsanitized value to the cassette — silently defeating
@@ -108,7 +108,7 @@ final class SanitizingHook implements Hook
     {
         foreach ($data as $key => $value) {
             if (is_string($value)) {
-                // E724 truth + keep: preg_replace() returns NULL on ANY PCRE
+                // Keep: preg_replace() returns NULL on ANY PCRE
                 // error — never FALSE (that sentinel belongs to preg_match();
                 // the stub type is array|string|null) — so ?? is the
                 // complete guard and no value can be corrupted with a
