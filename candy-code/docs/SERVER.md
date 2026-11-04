@@ -587,6 +587,13 @@ rather than written by two processes. `server.maxOpenSessions` (32) bounds the
 sessions open at once — the least recently used idle one is released past it,
 never one with a turn running.
 
+A live share page (`session.share` with the live flag, served at `/s/{token}`)
+renders the session's newest rows up to a fixed window and byte budget, and a
+truncated page says so in its own body; snapshots published before the budget
+shipped keep their frozen bytes. Re-publish a live share after upgrading so its
+page reflects what the session holds today — the server never rewrites a
+published snapshot behind your back.
+
 ### Events
 
 **Durable** events of a session are written to its event log before they are

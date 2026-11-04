@@ -412,30 +412,54 @@ final class Serve
         // C-SES-3.d: the renderer carries LIVE pages (`/share serve --live`).
         // It re-reads the CURRENT transcript through the exact serializer a
         // snapshot went through — ShareSession's row filter and SecretRedactor
-        // included. The filter is not a size bound and no row cap exists, so
-        // every request re-renders the full filtered transcript — the cost
-        // the design's risk-line priced against a cap that never existed.
-        // Every failure
+        // included. OD-10 (D-19) put a size bound on what that re-render may
+        // cost: the newest SharePageController::MAX_SHARE_ROWS rows survive
+        // into the serialize, a fixed notice row says how many did not, and
+        // the byte budget caps the finished page — all before the reply
+        // returns, so the render memo (D-20) only ever holds post-budget
+        // bytes. The reply carries the session's event lastSeq as its
+        // revision: a new transcript row bumps it, the memo key misses, the
+        // page re-renders. Every other failure
         // (session deleted, store unreadable, a row nothing can revive)
         // answers null, which the controller returns as the shared 404; the
         // page can never outlive its session nor leak more than a snapshot
-        // could, and `Cache-Control: no-store` (the controller's own law)
-        // keeps proxies from freezing what promises to track.
+        // could, and `Cache-Control: no-store` (the controller's own law,
+        // D-22) keeps proxies from freezing what promises to track.
         $sessionStore = Bootstrap::sessionStore(prune: false);
         $share = new SharePageController(
             ShareStore::atPath($sessionStore->path()),
-            static function (string $sessionId) use ($sessionStore): ?string {
+            static function (string $sessionId) use ($sessionStore): ?array {
                 try {
                     $rows = $sessionStore->loadTranscript($sessionId);
                     if ($rows === null) {
                         return null;
                     }
+                    $revision = $sessionStore->sessionEventBounds($sessionId)[1];
+                    $dropped = 0;
+                    $rows = SharePageController::budgetRows($rows, $dropped);
                     $messages = array_map(
                         static fn(array $row): \SugarCraft\Code\Message => \SugarCraft\Code\Host\TranscriptStore::reviveRow($row),
                         $rows,
                     );
 
-                    return (new ShareSession($messages, ShareSession::FORMAT_HTML))->serialize();
+                    $html = (new ShareSession($messages, ShareSession::FORMAT_HTML))->serialize();
+
+                    return [
+                        'html' => SharePageController::capBytes(
+                            $dropped > 0 ? $html . SharePageController::truncationNotice($dropped) : $html,
+                        ),
+                        'revision' => $revision,
+                    ];
+                } catch (\Throwable) {
+                    return null;
+                }
+            },
+            // D-20 probe: lastSeq as a single indexed MAX() read — this is
+            // what lets the memo answer without the full re-serialize above.
+            // A null (unreadable store) simply forces the honest render path.
+            static function (string $sessionId) use ($sessionStore): ?int {
+                try {
+                    return $sessionStore->sessionEventBounds($sessionId)[1];
                 } catch (\Throwable) {
                     return null;
                 }

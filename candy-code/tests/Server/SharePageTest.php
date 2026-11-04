@@ -23,8 +23,8 @@ use SugarCraft\Code\Share\ShareStore;
  * `/s/{token}` through the real Router (SES-3, COMPARISON §6.5): public by
  * the auth middleware's own rule, dead tokens one indistinguishable 404,
  * expiry and revocation enforced per request (every test re-answers the
- * SAME controller — nothing here caches), and the static UI kept behind the
- * share branch instead of in front of it.
+ * SAME store — the render memo, OD-10, never outranks the lookup gate), and
+ * the static UI kept behind the share branch instead of in front of it.
  */
 final class SharePageTest extends TestCase
 {
@@ -72,27 +72,51 @@ final class SharePageTest extends TestCase
     }
 
     /**
-     * C-SES-3.d: a LIVE row is not a frozen page — the controller asks its
-     * renderer for the session's current transcript on EVERY request, and
-     * the stored publish-time HTML is only the fallback for a serve built
-     * without a renderer. The same public surface, the same headers: the
-     * live page answers with no-store for the strongest of reasons (it must
-     * never cache what the next edit will change).
+     * C-SES-3.d + OD-10: a LIVE row is not a frozen page — the controller
+     * asks its renderer for the session's current transcript, and the stored
+     * publish-time HTML is only the fallback for a serve built without a
+     * renderer. D-20 turned "on EVERY request" into "on every NEW revision":
+     * the renderer names the session's lastSeq, a repeat GET at the same
+     * revision answers from the process memo, and a bump re-renders. The
+     * same public surface, the same headers: the page answers with no-store
+     * for the strongest of reasons (D-22 — revocation outranks the memo AND
+     * the browser cache, so a revoked page has nowhere to hide).
      */
-    public function testALiveLinkReRendersTheSessionOnEveryRequest(): void
+    public function testALiveLinkReRendersWhenTheRevisionBumpsAndMemoizesWithinOne(): void
     {
         $store = ShareStore::atPath($this->dbPath);
         $page = '<p>EARLY</p>';
+        $revision = 1;
         $renders = 0;
-        $renderer = function (string $sessionId) use (&$page, &$renders): ?string {
+        $renderer = function (string $sessionId) use (&$page, &$revision, &$renders): ?array {
             $renders++;
             self::assertSame('sess-live', $sessionId, 'the renderer is asked for the record\'s own session');
 
-            return $page;
+            return ['html' => $page, 'revision' => $revision];
+        };
+        // The fixture's stand-in for sessionEventBounds(): an external clock
+        // the GETs consult before deciding whether the render is owed at all.
+        // The peek closes over the by-reference counters exactly like the
+        // renderer does: a frozen arrow would name a stale revision and
+        // defeat the bump-out law the moment $revision moves.
+        $probe = function (string $sessionId) use (&$revision): ?int {
+            return $revision;
         };
         $record = $store->publish('sess-live', 'html', '<p>SNAPSHOT-FALLBACK</p>', 7, live: true);
 
-        $first = $this->route($store, $record->path(), liveRenderer: $renderer);
+        // The memo is instance state, so the controller (and its Router) is
+        // built ONCE here and re-asked — route() would mint a fresh one per
+        // call and every GET would be a cold miss.
+        $share = new SharePageController($store, $renderer, $probe);
+        $router = new Router(
+            static fn(): ResponseInterface => Responses::error(500, 'no', 'upgrade must not run'),
+            static fn(): ResponseInterface => Responses::error(500, 'no', 'api must not run'),
+            static fn(): ResponseInterface => Responses::error(500, 'no', 'static must not run'),
+            $share(...),
+        );
+        $request = fn(): ServerRequest => new ServerRequest('GET', 'http://127.0.0.1:7420' . $record->path());
+
+        $first = $router($request());
         self::assertSame(200, $first->getStatusCode());
         self::assertStringContainsString('<p>EARLY</p>', (string) $first->getBody());
         self::assertStringNotContainsString('SNAPSHOT-FALLBACK', (string) $first->getBody(), 'a live row serves the render, not the stored fallback');
@@ -100,11 +124,16 @@ final class SharePageTest extends TestCase
         self::assertSame('text/html; charset=utf-8', $first->getHeaderLine('Content-Type'));
         self::assertSame('DENY', $first->getHeaderLine('X-Frame-Options'));
 
+        $second = $router($request());
+        self::assertSame(1, $renders, 'the same revision serves from the memo, it does not re-render (D-20)');
+        self::assertStringContainsString('<p>EARLY</p>', (string) $second->getBody());
+
         $page = '<p>LATE</p>';
-        $second = $this->route($store, $record->path(), liveRenderer: $renderer);
-        self::assertStringContainsString('<p>LATE</p>', (string) $second->getBody());
-        self::assertStringNotContainsString('<p>EARLY</p>', (string) $second->getBody());
-        self::assertSame(2, $renders, 'the renderer runs per request, nothing about the page is cached');
+        $revision = 2;
+        $third = $router($request());
+        self::assertStringContainsString('<p>LATE</p>', (string) $third->getBody());
+        self::assertStringNotContainsString('<p>EARLY</p>', (string) $third->getBody());
+        self::assertSame(2, $renders, 'a new revision is a key miss: the page re-renders');
     }
 
     public function testALiveRowWithoutAWiredRendererFallsBackToItsStoredSnapshot(): void
@@ -122,10 +151,10 @@ final class SharePageTest extends TestCase
     {
         $store = ShareStore::atPath($this->dbPath);
         $renders = 0;
-        $renderer = function () use (&$renders): ?string {
+        $renderer = function () use (&$renders): ?array {
             $renders++;
 
-            return '<p>live-render</p>';
+            return ['html' => '<p>live-render</p>', 'revision' => 1];
         };
         $snapshot = $store->publish('sess-1', 'html', '<p>stored</p>', 7);
 
@@ -141,7 +170,7 @@ final class SharePageTest extends TestCase
     {
         $store = ShareStore::atPath($this->dbPath);
         $record = $store->publish('sess-gone', 'html', '<p>old</p>', 7, live: true);
-        $renderer = static fn(string $sessionId): ?string => null;
+        $renderer = static fn(string $sessionId): ?array => null;
 
         $dead = $this->route($store, $record->path(), liveRenderer: $renderer);
         $unknown = $this->route($store, '/s/' . str_repeat('0f', 16));
@@ -154,10 +183,10 @@ final class SharePageTest extends TestCase
     {
         $store = ShareStore::atPath($this->dbPath);
         $renders = 0;
-        $renderer = function () use (&$renders): ?string {
+        $renderer = function () use (&$renders): ?array {
             $renders++;
 
-            return '<p>x</p>';
+            return ['html' => '<p>x</p>', 'revision' => 1];
         };
         $revoked = $store->publish('sess-1', 'html', '<p>x</p>', 7, live: true);
         $expired = $store->publish('sess-1', 'html', '<p>x</p>', 7, live: true);
