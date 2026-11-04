@@ -48,6 +48,8 @@ final class InspectCommand implements DocumentedCommand
         $path = null;
         $since = null;
         $until = null;
+        $sinceRaw = null;
+        $untilRaw = null;
         $frames = false;
         $fpsRaw = null;
         $fpsMissingValue = false;
@@ -55,9 +57,9 @@ final class InspectCommand implements DocumentedCommand
         for ($i = 0; $i < $count; $i++) {
             $arg = $args[$i];
             if (str_starts_with($arg, '--since=')) {
-                $since = (float) substr($arg, 8);
+                $sinceRaw = substr($arg, 8);
             } elseif (str_starts_with($arg, '--until=')) {
-                $until = (float) substr($arg, 8);
+                $untilRaw = substr($arg, 8);
             } elseif ($arg === '--fps') {
                 // Space form, matching `render-tape --fps <n>` and the kv
                 // ArgParser family. A following token starting with `--` is
@@ -87,6 +89,24 @@ final class InspectCommand implements DocumentedCommand
         if ($fpsMissingValue) {
             fwrite($stderr, "candy-vcr inspect: --fps requires a value\n");
             return 2;
+        }
+        // `--since=abc` used to cast to 0.0 through (float) and silently
+        // show the whole cassette — a window filter that quietly becomes no
+        // filter. The flag takes a non-negative finite number or the verb
+        // refuses at the same rc-2 door as the other misuse shapes.
+        if ($sinceRaw !== null) {
+            if (!is_numeric($sinceRaw) || !is_finite((float) $sinceRaw) || (float) $sinceRaw < 0.0) {
+                fwrite($stderr, "candy-vcr inspect: --since must be a non-negative number\n");
+                return 2;
+            }
+            $since = (float) $sinceRaw;
+        }
+        if ($untilRaw !== null) {
+            if (!is_numeric($untilRaw) || !is_finite((float) $untilRaw) || (float) $untilRaw < 0.0) {
+                fwrite($stderr, "candy-vcr inspect: --until must be a non-negative number\n");
+                return 2;
+            }
+            $until = (float) $untilRaw;
         }
         try {
             // Single validation door shared with render-tape (FpsOption):
@@ -268,7 +288,11 @@ final class InspectCommand implements DocumentedCommand
                 ? $this->formatMsgTag($event->payload['msg'])
                 : $this->summarizeBytes(Scalars::string($event->payload['b'] ?? '', 'inspect input bytes')),
             EventKind::Quit => '',
-            EventKind::Snapshot => 'screenshot: ' . Scalars::string($event->payload['path'] ?? '?', 'inspect snapshot path'),
+            // The path comes off the cassette; a forged snapshot event could
+            // carry ANSI/OSC bytes that would be emitted raw to the host.
+            EventKind::Snapshot => 'screenshot: ' . $this->displaySafe(
+                Scalars::string($event->payload['path'] ?? '?', 'inspect snapshot path')
+            ),
             EventKind::Hide => '',
             EventKind::Show => '',
         };
@@ -283,7 +307,17 @@ final class InspectCommand implements DocumentedCommand
         if (!is_array($msg)) {
             return '@?';
         }
-        return '@' . Scalars::string($msg['@type'] ?? '?', 'inspect msg @type');
+        return '@' . $this->displaySafe(Scalars::string($msg['@type'] ?? '?', 'inspect msg @type'));
+    }
+
+    /**
+     * Replace every non-printable byte with '.' so cassette-carried strings
+     * (paths, @type labels) can never smuggle escape sequences to the host
+     * through `inspect`. Same shape as the byte previews in summarizeBytes().
+     */
+    private function displaySafe(string $text): string
+    {
+        return preg_replace('/[^\x20-\x7e]/', '.', $text) ?? '';
     }
 
     private function summarizeBytes(string $bytes): string

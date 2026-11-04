@@ -102,6 +102,14 @@ final class RecordCommand implements DocumentedCommand
         }
 
         $outputPath = $opts['output'] ?? \sprintf(self::DEFAULT_OUTPUT_PATTERN, \date('Ymd-His'));
+        // Recorder::open() writes plain JSONL bytes; naming that file .gz
+        // produced a lying artifact — a "gzip cassette" gunzip refuses.
+        // Compressed recording is API-level (CompressedJsonlFormat); the
+        // CLI declines the mismatch instead of shipping it.
+        if (\str_ends_with(\strtolower($outputPath), '.gz')) {
+            \fwrite($stderr, "candy-vcr record: --output cannot be a .gz path; record writes plain JSONL — use a .cas/.jsonl name (gzip via CompressedJsonlFormat in the API)\n");
+            return 2;
+        }
         // M10: recording is destructive (fopen 'wb' truncates). Silently
         // annihilating an existing cassette — possibly the ONLY copy of a
         // session — was the default behavior; it now requires --force.

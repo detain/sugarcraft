@@ -13,6 +13,8 @@ use SugarCraft\Vcr\Migration\MigrationRunner;
  * Migrate a cassette to the current format version. If output.cas is
  * omitted the file is migrated in-place after creating a .bak backup.
  * With --dry-run the cassette is validated but no files are written.
+ * Input is a JSONL cassette; the other formats the loader knows (cast,
+ * YAML, tape, gzip) are refused rather than fed to the JSON parser.
  */
 final class MigrateCommand implements DocumentedCommand
 {
@@ -29,6 +31,7 @@ final class MigrateCommand implements DocumentedCommand
             'usage: candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--info]',
             '  --dry-run  Validate migration without writing files',
             '  --info     Show registered migrators and exit',
+            '  Input: JSONL cassettes only (.cas/.jsonl); .cast/.yaml/.tape/.gz inputs are refused',
         ]) . "\n";
     }
 
@@ -74,6 +77,16 @@ final class MigrateCommand implements DocumentedCommand
             return 1;
         }
 
+        // The reader below is a plain JsonlFormat, so feeding it a cast,
+        // YAML, tape or gzip file produced a raw JSON parse error that read
+        // like a corrupt cassette. Name the file kind instead and refuse at
+        // the usage door: migrate has exactly one supported input.
+        $kind = self::refusedInputKind($inputPath);
+        if ($kind !== null) {
+            fwrite($stderr, "candy-vcr migrate: {$inputPath} is a {$kind} file; migrate reads JSONL cassettes (.cas/.jsonl) only\n");
+            return 2;
+        }
+
         try {
             $format = new JsonlFormat();
             $cassette = $format->read($inputPath);
@@ -100,6 +113,15 @@ final class MigrateCommand implements DocumentedCommand
                 }
             }
             return 0;
+        }
+
+        // Symmetric honesty with the input door and `record --output`: the
+        // writer emits plain JSONL bytes, so an explicit .gz target would be
+        // an artifact gunzip refuses. Checked before the in-place backup so
+        // the refusal has zero side effects.
+        if ($outputPath !== null && str_ends_with(strtolower($outputPath), '.gz')) {
+            fwrite($stderr, "candy-vcr migrate: output cannot be a .gz path; migrate writes plain JSONL\n");
+            return 2;
         }
 
         // Determine output path
@@ -141,5 +163,21 @@ final class MigrateCommand implements DocumentedCommand
             fwrite($stdout, "v{$d['source']} → v{$d['target']}: {$d['description']}\n");
         }
         return 0;
+    }
+
+    /**
+     * Name the format a file extension promises, when that format is one
+     * migrate does not read. Null means "extension gives no objection" —
+     * bare and .cas/.jsonl paths still fall through to the content reader.
+     */
+    private static function refusedInputKind(string $path): ?string
+    {
+        return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'cast' => 'asciinema cast',
+            'yaml', 'yml' => 'YAML',
+            'tape' => 'tape script',
+            'gz' => 'gzip',
+            default => null,
+        };
     }
 }

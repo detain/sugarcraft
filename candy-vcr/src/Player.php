@@ -11,6 +11,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Assert\Assertion;
 use SugarCraft\Vcr\Assert\ByteAssertion;
 use SugarCraft\Vcr\Format\CassetteLoader;
+use SugarCraft\Vcr\Format\CompressedJsonlFormat;
 use SugarCraft\Vcr\Format\Format;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Format\RelativeFormat;
@@ -118,6 +119,12 @@ final class Player
      */
     private static function detectFormat(string $path): Format
     {
+        // The sniff below reads raw bytes; a gzipped cassette is binary
+        // until decompressed, so the extension is the only honest tell.
+        if (str_ends_with(strtolower($path), '.gz')) {
+            return new CompressedJsonlFormat();
+        }
+
         $fh = @fopen($path, 'rb');
         if ($fh === false) {
             throw new \RuntimeException("cannot open cassette {$path}");
@@ -161,10 +168,14 @@ final class Player
      * output matches the recording.
      *
      * @param \Closure(resource, resource, LoopInterface): Program $programFactory
-     *        Build a fresh Program. Receives an input stream resource
-     *        the Player writes recorded inputs to, an output stream
-     *        the Player reads from, and the React loop the Player
-     *        owns. The factory must wire these into ProgramOptions.
+     *        Build a fresh Program. Receives the two pipe ends of a stream
+     *        pair and the React loop the Player owns: the factory wires
+     *        them into ProgramOptions as the child's stdin and stdout.
+     *        Recorded inputs are NOT written to the first resource — they
+     *        reach the program through Program::send(); the Player keeps
+     *        its write end open (closing only at teardown) so the child's
+     *        stdin never sees an EOF mid-session. The Player reads the
+     *        second resource for output frames.
      * @param Assertion|null $assertion        Defaults to {@see ByteAssertion}.
      * @param int            $speed            {@see self::SPEED_INSTANT} (default) or {@see self::SPEED_REALTIME}.
      * @param Registry|null  $serializerRegistry For `input.msg`-form events. Defaults to {@see Registry::default}.
