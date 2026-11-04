@@ -47,17 +47,21 @@ use SugarCraft\Style\Style;
 // Activate the locale detected from LANG/LC_ALL/LC_MESSAGES before any string
 // is translated (house pattern, cf. candy-mail): in-game text routes through
 // Lang::t, and without this call T's 'en' default would make the shipped
-// locales unreachable. The usage/error prose below this point stays English on
-// purpose — it must be parseable even when the terminal's locale is broken.
+// locales unreachable. The bin's OWN usage/refusal prose stays English below
+// on purpose — it must be parseable even when the terminal's locale is broken.
+// Board-validation refusals from CustomDifficulty::fromInput() are the
+// deliberate exception: they arrive through Lang::t and ARE translated.
 \SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
 
-// Pre-rename env compatibility (plan_rename.md R4.5): CANDY_MINES_STATS was // @rename-keep
-// this app's stats-path var before the 2026-10 rename. Import any old-prefix
-// exports under the new name (new name always wins), then warn once per var.
+// Pre-rename env compatibility: CANDY_MINES_STATS was this app's stats-path // @rename-keep
+// var before the 2026-10 rename. Import any old-prefix exports under the new
+// name (new name always wins), then warn once per var — naming the var's OWN
+// replacement, not a hardcoded _STATS (CANDY_MINES_FOO's remedy is
+// CANDY_MINESWEEPER_FOO).
 foreach (\SugarCraft\Core\Util\LegacyEnv::import([
     'CANDY_MINES_' => 'CANDY_MINESWEEPER_', // @rename-keep
 ]) as $legacyVar) {
-    fwrite(STDERR, "candy-minesweeper: {$legacyVar} is deprecated; set CANDY_MINESWEEPER_STATS instead.\n"); // @rename-keep
+    fwrite(STDERR, "candy-minesweeper: {$legacyVar} is deprecated; set " . 'CANDY_MINESWEEPER_' . substr($legacyVar, strlen('CANDY_MINES_')) . " instead.\n"); // @rename-keep
 }
 
 // Honour NO_COLOR / CLICOLOR=0 / TERM=dumb through the fleet colour authority
@@ -87,8 +91,14 @@ if ($profile === ColorProfile::Ascii || $profile === ColorProfile::NoTty) {
  * completed game's outcome is recorded there across sessions.
  * Mid-game saves (in-app 'S' / 'L') live at $HOME/.config/candy-minesweeper/savegame.json.
  */
-$usage = "usage: candy-minesweeper [width] [height] [mines]\n"
-      . "       candy-minesweeper --easy | --standard | --medium | --expert\n";
+$usage = "usage: candy-minesweeper --easy | --standard | --medium | --expert\n"
+      . "       candy-minesweeper [width] [height] [mines]\n"
+      . "       board sizes are columns (width) then rows (height) —\n"
+      . "       e.g. candy-minesweeper 16 10 starts 16 wide by 10 tall\n"
+      . "       keys: hjkl/arrows move · space reveal · f flag · c chord ·\n"
+      . "             S save · L load · r restart · q quit\n"
+      . "       save slot: " . (Game::savePath() ?? '$HOME/.config/candy-minesweeper/savegame.json') . "\n"
+      . "       stats: set CANDY_MINESWEEPER_STATS=/path/stats.json to tally across sessions\n";
 $args   = array_slice($argv ?? [], 1);
 
 // Diagnostic flags answer before any board or stats file is touched, and
@@ -100,8 +110,44 @@ if (in_array('--version', $args, true)) {
 if (in_array('--help', $args, true) || in_array('-h', $args, true)) {
     fwrite(STDOUT, $usage
         . "       candy-minesweeper --version  Print the version\n"
-        . "       candy-minesweeper --help     Show this help\n");
+        . "       candy-minesweeper --help     Show this help\n"
+        . "       no pause; the board is fixed at launch (no mid-session resize re-fit)\n");
     exit(0);
+}
+
+/**
+ * Render a raw argv fragment safely for stderr: control bytes (ESC, BEL, NUL,
+ * newlines…) become '?' and anything past 40 cells is clipped. Deliberately
+ * NOT sugar-core's Sanitize — its ANSI-arena handling targets terminal-payload
+ * trust boundaries; argv echoes want printable-but-recognisable names, and the
+ * '?' substitution keeps a pasted escape sequence from reformatting the very
+ * error message that reports it.
+ */
+function cliVisible(string $raw): string
+{
+    $probe = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
+    return strlen($probe) > 40 ? substr($probe, 0, 39) . '…' : $probe;
+}
+
+/**
+ * M08: positional board sizes are PLAIN digit strings or nothing — the old
+ * (int) cast happily booted '10x10', '9.5' and '10abc' as 10/9/10. Null means
+ * the slot was absent (the caller applies its default).
+ *
+ * @param list<string> $positional
+ */
+function integerArgument(array $positional, int $index, string $name, string $usage): ?int
+{
+    if (!isset($positional[$index])) {
+        return null;
+    }
+    $raw = $positional[$index];
+    if ($raw === '' || !ctype_digit($raw)) {
+        fwrite(STDERR, "candy-minesweeper: {$name} must be a plain integer (got '" . cliVisible($raw) . "')\n");
+        fwrite(STDERR, $usage);
+        exit(1);
+    }
+    return (int) $raw;
 }
 
 $preset = null;
@@ -124,7 +170,7 @@ foreach ($args as $arg) {
         continue;
     }
     if (str_starts_with($arg, '-')) {
-        fwrite(STDERR, "candy-minesweeper: unknown option {$arg}\n");
+        fwrite(STDERR, 'candy-minesweeper: unknown option ' . cliVisible($arg) . "\n");
         fwrite(STDERR, $usage);
         exit(1);
     }
@@ -134,6 +180,13 @@ if ($preset !== null && $positional !== []) {
     // Refuse loudly: silently letting the preset win turns `--expert 10 10`
     // into a game the player did not ask for, with no signal anything moved.
     fwrite(STDERR, "candy-minesweeper: a preset flag and custom dimensions are mutually exclusive\n");
+    fwrite(STDERR, $usage);
+    exit(1);
+}
+if (count($positional) > 3) {
+    // A fourth size-looking word was never part of the grammar; ignoring it
+    // silently reads as 'the board I asked for' when it is not.
+    fwrite(STDERR, "candy-minesweeper: unexpected extra argument '" . cliVisible($positional[3]) . "'\n");
     fwrite(STDERR, $usage);
     exit(1);
 }
@@ -158,9 +211,9 @@ $resumeNotice = ($slot !== null && is_file($slot)) ? Lang::t('ui.resume') : null
 if ($preset !== null) {
     $game = Game::withDifficulty($preset, stats: $stats, statsPath: $statsPath, notice: $resumeNotice);
 } else {
-    $w = (int)($positional[0] ?? 10);
-    $h = (int)($positional[1] ?? 10);
-    $m = (int)($positional[2] ?? max(1, intdiv($w * $h, 8)));
+    $w = integerArgument($positional, 0, 'width', $usage) ?? 10;
+    $h = integerArgument($positional, 1, 'height', $usage) ?? 10;
+    $m = integerArgument($positional, 2, 'mines', $usage) ?? max(1, intdiv($w * $h, 8));
     // Route raw CLI ints through CustomDifficulty::fromInput() so unsafe boards
     // (e.g. a mine count that leaves no safe 3×3 for the first click) are
     // rejected loudly instead of producing a broken game.

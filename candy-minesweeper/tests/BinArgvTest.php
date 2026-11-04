@@ -16,7 +16,8 @@ use PHPUnit\Framework\TestCase;
 final class BinArgvTest extends TestCase
 {
     /** @return array{0:int,1:string,2:string} exit code, stdout, stderr */
-    private static function runBinary(array $args): array
+    /** @param array<string,string> $extraEnv */
+    private static function runBinary(array $args, array $extraEnv = []): array
     {
         $bin = realpath(__DIR__ . '/../bin/candy-minesweeper');
         self::assertIsString($bin, 'sanity: binary exists');
@@ -28,7 +29,7 @@ final class BinArgvTest extends TestCase
             null,
             // HOME without stats env: the refusal path never reads either, but
             // pinning the env keeps the child hermetic against the dev HOME.
-            ['HOME' => sys_get_temp_dir(), 'PATH' => (string) getenv('PATH')],
+            ['HOME' => sys_get_temp_dir(), 'PATH' => (string) getenv('PATH')] + $extraEnv,
         );
         self::assertIsResource($proc);
 
@@ -105,5 +106,68 @@ final class BinArgvTest extends TestCase
         [$code, , $err] = self::runBinary(['3', '3', '1']);
         $this->assertSame(1, $code);
         $this->assertStringContainsString('candy-minesweeper:', $err);
+    }
+
+    public function testNonIntegerWidthIsRefusedNotSilentlyCast(): void
+    {
+        // M08: the (int) cast booted '10x10' as width 10; the parse now
+        // requires plain digit strings.
+        [$code, , $err] = self::runBinary(['10x10', '10', '12']);
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString("width must be a plain integer", $err);
+    }
+
+    public function testFractionalAndWordHeightsAreRefused(): void
+    {
+        foreach (['9.5', '10abc', ' 10'] as $junk) {
+            [$code, , $err] = self::runBinary(['10', $junk, '12']);
+            $this->assertSame(1, $code, 'junk height ' . $junk . ' must not boot');
+            $this->assertStringContainsString('height must be a plain integer', $err);
+        }
+    }
+
+    public function testFourthPositionalIsRefusedNotIgnored(): void
+    {
+        [$code, , $err] = self::runBinary(['10', '10', '12', '99']);
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString("unexpected extra argument '99'", $err);
+    }
+
+    public function testUsageTeachesColumnRowOrderAndSlotPath(): void
+    {
+        // M19/m03: the error surface itself must say which axis is which,
+        // name the save slot, and teach the stats env.
+        [$code, , $err] = self::runBinary(['nope-not-a-number-at-all', '10']);
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('columns (width) then rows (height)', $err);
+        $this->assertStringContainsString('savegame.json', $err);
+        $this->assertStringContainsString('CANDY_MINESWEEPER_STATS', $err);
+    }
+
+    public function testUnknownOptionEchoIsControlByteSafe(): void
+    {
+        // m21: an argv fragment carrying ESC reformatting the very error that
+        // reports it is an injection of the terminal, not a message.
+        [$code, , $err] = self::runBinary(["--\x1b[31mred\x07"]);
+        $this->assertSame(1, $code);
+        $this->assertStringNotContainsString("\x1b", $err, 'raw ESC must never reach stderr');
+        $this->assertStringNotContainsString("\x07", $err);
+        $this->assertStringContainsString('unknown option --?', $err, 'control bytes become ? marks');
+
+        // Positive control that the child CAN emit raw bytes when it means to
+        // (locale-independent): --version rides Version::line() verbatim.
+        [$vcode, $vout] = self::runBinary(['--version']);
+        $this->assertSame(0, $vcode);
+        $this->assertNotEmpty($vout);
+    }
+
+    public function testLegacyEnvRemedyNamesTheVarsOwnReplacement(): void
+    {
+        // m22: every pre-rename var used to be told to set _STATS.
+        [$code, , $err] = self::runBinary(['--version'], ['CANDY_MINES_DEBUG' => '1']);
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('CANDY_MINES_DEBUG is deprecated', $err);
+        $this->assertStringContainsString('set CANDY_MINESWEEPER_DEBUG instead', $err);
+        $this->assertStringNotContainsString('CANDY_MINESWEEPER_STATS instead', $err);
     }
 }
