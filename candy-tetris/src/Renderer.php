@@ -20,11 +20,15 @@ use SugarCraft\Style\Style as SugarStyle;
  * Decomposes the screen into two side-by-side blocks:
  *
  *   ┌─────────────┐  ┌────────────┐
- *   │  playfield  │  │ next       │
- *   │   (board)   │  │ score      │
- *   │             │  │ level      │
+ *   │  playfield  │  │ hold       │
+ *   │   (board)   │  │ next       │
+ *   │             │  │ score      │
  *   │             │  │ help       │
  *   └─────────────┘  └────────────┘
+ *
+ * The sidebar is a stack of cards in that order (see `renderSidebar()`):
+ * level and lines ride inside the score card, and the help card is the
+ * first thing dropped in compact posture.
  *
  * The board is painted from the visible 20 rows of {@see Board},
  * with the falling {@see Piece} composited over locked cells. A

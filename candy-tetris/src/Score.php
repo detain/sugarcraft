@@ -45,8 +45,9 @@ final class Score
 
     /**
      * Frames-per-row gravity at the current level. Cribbed from
-     * NES Tetris: starts at 48 frames/row at level 0, ramps down
-     * to 1 frame/row past level 29. We're frame-rate-agnostic
+     * NES Tetris: starts at 48 frames/row at level 0, steps down through
+     * 2 frames/row for levels 19-28, and holds at 1 frame/row from
+     * level 29 up. We're frame-rate-agnostic
      * (SugarCraft uses a wall-clock tick), so consumers convert
      * this to a microsecond delay via `framesPerRow() * 16667`
      * (i.e. 60 fps).

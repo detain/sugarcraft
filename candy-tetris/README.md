@@ -17,6 +17,8 @@ Tetris built on the SugarCraft stack. SugarCraft runtime, SugarStyle for the rou
 
 ## Run it
 
+From a source checkout:
+
 ```bash
 composer install
 ./bin/candy-tetris         # Single player mode
@@ -25,6 +27,26 @@ composer install
 ./bin/candy-tetris -h      # Usage screen (also --help)
 ./bin/candy-tetris --version # Print the version and exit 0
 ```
+
+As a consumer, depend on the published package instead — the `bin` entry
+installs the launcher into your project's vendor bin:
+
+```bash
+composer require sugarcraft/candy-tetris
+./vendor/bin/candy-tetris
+```
+
+A rolling development phar is published on GitHub Releases under
+`candy-tetris/dev` as `candy-tetris.phar` (with `.sha256` and `.sig`
+sidecars); stable cuts ride the same release pipeline on `candy-tetris/v*`
+tags. The launcher detects that it is running from inside a phar and loads
+the autoloader bundled in the archive, so the downloaded file needs nothing
+else installed.
+
+Requirements: `php-cli` 8.3+ with `ext-intl` and `ext-mbstring`. Both are
+hard-required transitively by [sugar-core](https://packagist.org/packages/sugarcraft/sugar-core),
+whose cell-width math segments through ICU — on a bare php-cli machine
+`composer install` is the step that refuses, naming sugar-core.
 
 `--version` short-circuits wherever it appears in the argv — even alongside a
 bogus flag — and exits 0. Any *other* unrecognised flag is refused with a usage
@@ -55,8 +77,10 @@ Compete against an AI opponent in split-screen mode. When you clear lines, garba
 | p         | Pause / resume    |
 | q         | Quit              |
 
-Hold works on your field, but the VS sidebar does not paint a hold card — the
-swap only becomes visible when the piece enters play.
+Hold works on your field, and the VS sidebar does paint your hold card — it
+carries an `(used)` cue while the slot is spent for the current drop. The
+computer's queue stays private by design: the strip shows its score, not its
+next piece.
 
 The computer opponent uses weighted heuristics (board height, holes, gaps,
 lines) to make optimal moves. If both boards top out on the same tick, the
@@ -104,7 +128,10 @@ rotation while grounded re-arms the full window, up to the SRS-style 15-reset
 cap — once the budget is spent the open window locks on expiry and further
 inputs no longer extend it. Moving the piece back off a surface closes the
 window and hands timing back to gravity; a hard drop bypasses it and locks
-immediately. Pausing extends the window instead of locking a frozen game.
+immediately. Pausing extends the window instead of locking a frozen game:
+while paused, gravity and lock-delay ticks re-arm rather than step, so a paused
+board never idles out from under you — nothing falls, nothing locks, and
+unpausing resumes the same window where it stopped.
 
 ## Scoring
 
@@ -118,6 +145,20 @@ immediately. Pausing extends the window instead of locking a frozen game.
 | 4 (Tetris)    | 1200                       |
 
 Level rises every 10 lines. Gravity speeds up at every level — by level 9 pieces fall every 6 frames, by level 29+ they fall every frame. The frame-rate-agnostic `Score::framesPerRow()` is what the gravity tick consults.
+
+### Drop points
+
+Drops pay too, and the award is flat (never scaled by level):
+
+| Action | Points |
+|--------|--------|
+| Soft drop (↓) | +1 per cell moved |
+| Hard drop (space) | +2 per cell fallen |
+
+A soft drop that cannot move the piece down pays nothing; a hard drop counts
+the cells from the piece's position at release to where it comes to rest. The
+awards are applied in `src/Game.php` (`softDrop()` / `hardDrop()`) through
+`Score::withDropPoints()`.
 
 ### T-Spin scoring
 
@@ -179,6 +220,9 @@ When all lines are cleared at once and the board becomes completely empty, an ad
   value logic, independent of the renderer.
 - **Modes**: VS is a second Model (`VsGame`) wrapping two `Game` instances —
   copy that pattern for a third mode rather than branching inside `Game`.
+  `Game::mutate()` is public on purpose: the wrapper (and the tests) plant
+  child-board state through it, while `VsGame::mutate()` itself stays private.
+  Narrow your third model the same way.
 - **Renderer**: `Renderer::render()` is a pure static view function (state →
   ANSI string); it never mutates the game.
 

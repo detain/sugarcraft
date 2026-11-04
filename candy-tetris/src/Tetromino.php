@@ -13,9 +13,11 @@ namespace SugarCraft\Tetris;
  * *down* — terminal-native coordinates, not Cartesian.) The Piece
  * class adds the global board offset on top.
  *
- * Colours are returned as ANSI 256-color codes for consistency
- * across terminals; a SugarStyle `Style` background does the
- * actual painting.
+ * Each piece carries one palette in two forms: `color()` is the xterm-256
+ * index, `rgbColor()` its true-color (0xRRGGBB) twin. The single-player
+ * board paints a SugarStyle `Style` background from `rgbColor()`; the VS
+ * panels stay on the 256 form, where the computer board substitutes the
+ * disjoint `VsRenderer::COMPUTER_COLORS` map.
  */
 enum Tetromino: string
 {

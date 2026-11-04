@@ -25,8 +25,11 @@ use SugarCraft\Style\Style;
  *   ┌ both scores · next · hold · keys ┐   (match strip)
  *   └──────────────────────────────────┘
  *
- * Player pieces are rendered normally.
- * Computer pieces are rendered with a different hue (more magenta).
+ * Player pieces use the shared `Tetromino::color()` palette; computer pieces
+ * use `VsRenderer::COMPUTER_COLORS` — an explicit 256-colour map deliberately
+ * DISJOINT from it, because the old `(color + 150) % 256` hue shift made
+ * computer S land on player Z's red (see that constant's docblock). The two
+ * boards never paint the same kind identically.
  */
 final class VsRenderer
 {
