@@ -148,6 +148,48 @@ final class WsUpgradeTest extends TestCase
         }
     }
 
+    /**
+     * D-2 production leg: the flag must ride the SERVER's own wiring, not just
+     * a hand-built controller. A `Server` constructed with a populated dist
+     * root — the same StaticFiles instance the router serves files from —
+     * answers `/api/health` with `web: true` end to end. Drop the one
+     * `$this->static` argument in `Server::start()` and the flag silently
+     * reverts to the controller default of false; every other health pin here
+     * stays green through that cut (double default). This is the pin that
+     * keeps the wiring itself load-bearing.
+     */
+    public function testHealthReportsTheWebUiThroughTheServerWiringItself(): void
+    {
+        $dist = \sys_get_temp_dir() . '/cc-d2-serve-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(\mkdir($dist, 0777, true));
+        \file_put_contents($dist . '/index.html', '<!doctype html><title>ui</title>');
+
+        $server = null;
+        try {
+            $server = Server::new(
+                ServerConfig::new('/nonexistent')->withPort(0),
+                $this->auth,
+                StaticFiles::new($dist),
+                null,
+                Loop::get(),
+            );
+            $server->start();
+            $response = $this->settle($this->browser->get('http://127.0.0.1:' . (int) $server->port() . '/api/health'));
+            self::assertInstanceOf(ResponseInterface::class, $response);
+            self::assertSame(
+                ['ok' => true, 'protocol' => ServerConfig::PROTOCOL_MAJOR, 'web' => true],
+                \json_decode((string) $response->getBody(), true),
+                'the live server answers web: true for the UI its own file server serves'
+            );
+        } finally {
+            if ($server !== null) {
+                $server->stop();
+            }
+            @\unlink($dist . '/index.html');
+            @\rmdir($dist);
+        }
+    }
+
     public function testABrowserSignsInWithTheLoginCodeAndOpensTheSocketWithATicket(): void
     {
         $url = $this->server->loginUrl();
