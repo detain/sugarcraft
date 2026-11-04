@@ -4,9 +4,13 @@
 // this file only receives what the push service already delivered.
 //
 // The payload is UNTRUSTED server data crossing a network service: the shape
-// is fixed ({kind, body, sessionId}), every field is coerced or dropped, and
-// the notification's heading comes from the committed chrome catalogue, never
-// from the wire. A notification body is plain text, so there is no markup
+// is fixed ({kind, body, sessionId, localizedTitle}), every field is coerced
+// or dropped. The heading is normally the committed chrome catalogue; the one
+// wire-woven exception is `localizedTitle` (CW-12) — that same catalogue
+// rendered server-side in the session owner's language, because the worker's
+// own t() is EN-only and never learns a locale — and it is swept and clamped
+// exactly like the body and never given any routing power. A notification
+// body is plain text, so there is no markup
 // channel here at all; the control-character sweep keeps a hostile body from
 // smuggling escape-adjacent runes into the OS inbox, and the length clamp
 // bounds what a buggy sender can shout. No token, endpoint or key is ever
@@ -16,11 +20,16 @@ import { t } from './lib/i18n'
 
 /** The payload `ServerContext::pushNotify()` writes; `title` rides only rows
  *  that opted into `name` (C-WEB-5.d), which this client never requests — the
- *  field is ignored even if an older server or a fork sends it. */
+ *  field stays ignored even if an older server or a fork sends it, and stays
+ *  OUT of this shape. CW-12 adds `localizedTitle`: the generic catalogue
+ *  heading composed server-side in the owner's locale, parsed into a cleaned
+ *  string — the only wire value allowed to title a card, and only via
+ *  cleanTitle. */
 interface PushWirePayload {
   kind: 'question' | 'finished'
   body: string
   sessionId: string
+  localizedTitle: string
 }
 
 /** Structural view of the worker globals. Declared locally rather than
@@ -88,9 +97,18 @@ const INVISIBLES = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\
 
 const BODY_MAX = 300
 
+/** CW-12: the heading's own budget — a notification title is one display
+ *  line, not a paragraph, so the clamp bites harder than the body's. */
+const TITLE_MAX = 80
+
 function cleanText(value: unknown): string {
   if (typeof value !== 'string') return ''
   return value.replace(INVISIBLES, ' ').trim().slice(0, BODY_MAX)
+}
+
+function cleanTitle(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value.replace(INVISIBLES, ' ').trim().slice(0, TITLE_MAX)
 }
 
 function payloadOf(raw: string | null): PushWirePayload | null {
@@ -105,15 +123,22 @@ function payloadOf(raw: string | null): PushWirePayload | null {
   const record = parsed as Record<string, unknown>
   const kind = record.kind === 'question' || record.kind === 'finished' ? record.kind : null
   const body = cleanText(record.body)
+  const localizedTitle = cleanTitle(record.localizedTitle)
   const candidate = typeof record.sessionId === 'string' ? record.sessionId : ''
   const sessionId = SESSION_ID.test(candidate) ? candidate : ''
   // A payload that yields nothing typed, nothing bounded and no id has no
-  // safe content to show — the callers fall back to the generic heading.
+  // safe content to show — the callers fall back to the generic heading. A
+  // heading alone never earns a card: it decorates one, it does not create
+  // one (CW-12 keeps the null screen exactly where FIX-1 pinned it).
   if (kind === null && body === '' && sessionId === '') return null
-  return { kind: kind ?? 'question', body, sessionId }
+  return { kind: kind ?? 'question', body, sessionId, localizedTitle }
 }
 
 function titleFor(payload: PushWirePayload | null): string {
+  // CW-12 precedence: the server-composed localized heading wins when it
+  // survived cleaning; the EN catalogue stays the fallback for every payload
+  // that never carried one (and for old servers that never send it).
+  if (payload !== null && payload.localizedTitle !== '') return payload.localizedTitle
   if (payload === null) return t('web.chrome.push.generic')
   return payload.kind === 'question' ? t('web.chrome.push.question') : t('web.chrome.push.finished')
 }

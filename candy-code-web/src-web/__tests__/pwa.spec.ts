@@ -102,6 +102,19 @@ describe('notification-click route handoff (CW-6)', () => {
     expect(worker).toContain("if (href !== './') focused.postMessage({ type: 'navigate', href })")
   })
 
+  it('the worker reads the localized heading through the same cleanText gate', () => {
+    // CW-12 structural leg: the server-composed `localizedTitle` may win the
+    // heading, but only swept+clamped (cleanTitle) and only when non-empty —
+    // respell the precedence line or bypass the cleaner and this reddens.
+    const sw = read('../sw.ts')
+    expect(sw).toContain("if (payload !== null && payload.localizedTitle !== '') return payload.localizedTitle")
+    expect(sw).toContain('const localizedTitle = cleanTitle(record.localizedTitle)')
+    // The R13 law survives the new field: `title` (session name) stays out of
+    // the payload shape — cleanTitle must not be applied to record.title.
+    expect(sw).not.toContain('cleanTitle(record.title)')
+    expect(sw).not.toContain('record.title')
+  })
+
   it('the app shell answers the worker channel and unbinds it on teardown', () => {
     const app = read('../App.vue')
     expect(app).toMatch(/window\.addEventListener\('message', onPushNavigate\)/)

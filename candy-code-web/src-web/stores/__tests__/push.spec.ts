@@ -470,6 +470,55 @@ describe('push service worker payload handling (C-WEB-5.e)', () => {
     expect(shown[0]?.options?.body).toBe('a body')
   })
 
+  it('prefers a server-composed localized heading over the EN catalogue (CW-12)', async () => {
+    // The worker has no locale channel — its t() is seeded EN — so every push
+    // heading read English whatever the session owner spoke. A non-empty
+    // `localizedTitle` (the same catalogue heading rendered server-side in the
+    // owner's language) now wins; the card's routing power stays id-derived.
+    await loadWorker()
+    await dispatchPush(JSON.stringify({
+      kind: 'question',
+      body: 'Die Antwort fehlt',
+      sessionId: 's-42_x',
+      localizedTitle: 'Eine Frage braucht dich',
+    }))
+    expect(shown.length).toBe(1)
+    expect(shown[0]?.title).toBe('Eine Frage braucht dich')
+    expect(shown[0]?.options?.body).toBe('Die Antwort fehlt')
+    expect(shown[0]?.options?.tag).toBe('candy-code:question:s-42_x')
+    expect(shown[0]?.options?.data).toEqual({ href: '#/s/s-42_x' })
+  })
+
+  it('sweeps and clamps a hostile localizedTitle like the body (CW-12)', async () => {
+    // The field rides the same untrusted wire as `body`: escape-adjacent runes
+    // are out, the heading budget is hard, and what survives is EXACTLY the
+    // cleaned value — no fall-through to the catalogue, no silent drop.
+    await loadWorker()
+    await dispatchPush(JSON.stringify({
+      kind: 'finished',
+      body: 'ok',
+      sessionId: 's1',
+      localizedTitle: '\u202e\u0000' + 'x'.repeat(400),
+    }))
+    expect(shown.length).toBe(1)
+    const title = shown[0]?.title ?? ''
+    expect(title).not.toMatch(/[\u0000-\u001f\u202a-\u202e]/)
+    expect(title.length).toBeLessThanOrEqual(80)
+    expect(title).toBe('x'.repeat(80))
+  })
+
+  it('falls back to the catalogue when localizedTitle is empty or not a string (CW-12)', async () => {
+    // The precedence leg must be gated on a NON-EMPTY cleaned value: a server
+    // that sends '' (or 42, or null) may not blank or garble the heading.
+    await loadWorker()
+    await dispatchPush(JSON.stringify({ kind: 'question', body: 'x', sessionId: 's1', localizedTitle: '' }))
+    await dispatchPush(JSON.stringify({ kind: 'question', body: 'x', sessionId: 's1', localizedTitle: 42 }))
+    await dispatchPush(JSON.stringify({ kind: 'question', body: 'x', sessionId: 's1', localizedTitle: null }))
+    expect(shown.map((entry) => entry.title)).toEqual([
+      'A question needs you', 'A question needs you', 'A question needs you',
+    ])
+  })
+
   it('opens the stored route on click, and only a route', async () => {
     await loadWorker()
     await dispatchClick({ href: '#/s/s-42_x' })
