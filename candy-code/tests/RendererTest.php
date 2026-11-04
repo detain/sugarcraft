@@ -22,6 +22,9 @@ use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Tests\Support\OpensSessionTabs;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Mouse\Mark;
+use SugarCraft\Overlay\Position;
+use SugarCraft\Overlay\Veil;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -2284,6 +2287,79 @@ final class RendererTest extends TestCase
         )));
 
         $this->assertSame(1, substr_count($out, 'Run this command?'), 'with no stated question the header is the only one');
+    }
+
+    /**
+     * CC-UXD-02 regression guard: a centred modal narrower than the
+     * transcript must keep its left edge.
+     *
+     * The mechanism was repaired by the visible-cell overlay geometry
+     * rewrite (258c7ab86); this pin keeps it repaired. A mouse zone costs
+     * the terminal zero cells but costs a byte counter its sentinels and
+     * id, so a pre-composite backdrop sizing that measures the marked row
+     * in bytes believes the narrow frame already hosts the modal, skips
+     * the padding — and Veil then centres against the true (narrow)
+     * width, chopping the head off every modal row. Drives the exact
+     * pad → shift → composite legs render() runs around an overlay.
+     */
+    public function testAMarkedTranscriptRowLeavesTheCentredModalLeftEdgeIntact(): void
+    {
+        $overlay = self::permissionModal($this->chatAwaitingPermission(cols: 80, rows: 40));
+
+        // 40 visible cells, inflated to 72 raw by a 30-char zone id: the
+        // modal's 66 cells must exceed the frame's visible width and fall
+        // under its byte width, or the two metrics agree and the fixture
+        // proves nothing.
+        $marked = Mark::zone('tool:call-0123456789abcdefghij', \str_repeat('-', 40));
+        $frame = $marked . "\n" . \str_repeat(\str_repeat('-', 20) . "\n", 38) . \str_repeat('-', 8);
+
+        $backdrop = (string) (new \ReflectionMethod(Renderer::class, 'padForOverlay'))
+            ->invoke(null, $frame, $overlay, 80);
+        $shift = (int) (new \ReflectionMethod(Renderer::class, 'overlayLeftShift'))
+            ->invoke(null, $backdrop, $overlay, 80);
+        $composited = Veil::new()->withBackdrop(50)->composite(
+            $overlay,
+            $backdrop,
+            Position::CENTER,
+            Position::CENTER,
+            $shift,
+        );
+
+        // Measured with the test's own metrics, not the renderer's: the
+        // pad must land the backdrop at least on the modal's visible width.
+        $zonePattern = '/\x{e000}\/?[A-Za-z0-9._:-]{0,}\x{e001}/u';
+        $widestBackdrop = 0;
+        foreach (explode("\n", $backdrop) as $line) {
+            $widestBackdrop = max(
+                $widestBackdrop,
+                Width::string((string) preg_replace($zonePattern, '', Ansi::strip($line))),
+            );
+        }
+        $widestOverlay = 0;
+        foreach (explode("\n", $overlay) as $line) {
+            $widestOverlay = max($widestOverlay, Width::string(Ansi::strip($line)));
+        }
+        $this->assertSame(66, $widestOverlay, 'fixture: the modal is 66 visible cells wide');
+        $this->assertGreaterThanOrEqual(
+            $widestOverlay,
+            $widestBackdrop,
+            'a marked row must not starve the centred modal of a canvas',
+        );
+
+        // The consequence: the composited frame keeps the modal's head.
+        $topBorder = trim(explode("\n", Ansi::strip($overlay))[0]);
+        $headIntact = false;
+        $leftBorderSeen = false;
+        foreach (explode("\n", Ansi::strip($composited)) as $line) {
+            if (str_contains($line, $topBorder)) {
+                $headIntact = true;
+            }
+            if (str_starts_with($line, '│')) {
+                $leftBorderSeen = true;
+            }
+        }
+        $this->assertTrue($headIntact, 'the modal top border survived the composite intact');
+        $this->assertTrue($leftBorderSeen, 'at least one modal row shows its left edge');
     }
 
     /**
