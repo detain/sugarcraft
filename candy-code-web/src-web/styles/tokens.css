@@ -70,6 +70,15 @@
      (two shell notices, the approvals drawer, the background mode note,
      the usage panel) read from one scale token. */
   --fs-small: 0.75rem;
+  /* CW-UX-19: the corner-radius ladder and the side-panel drop shadows,
+     minted theme-invariant; components own their state styling, geometry
+     comes from the table. 3px/999px/50% sites stay literals (below the
+     ladder floor / geometric). */
+  --radius-1: 2px;
+  --radius-2: 4px;
+  --radius-3: 6px;
+  --shadow-1: 0 0.2rem 0.6rem rgb(0 0 0 / 0.25);
+  --shadow-2: -0.4rem 0 1rem rgb(0 0 0 / 0.3);
   /* CW-UX-17: the eleven context-breakdown swatch hues (dark set — the
      values the panel shipped as literals). Dracula and tokyoNight are dark
      surfaces and inherit these; the light blocks below carry a legible
@@ -297,7 +306,7 @@ button {
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-3);
   padding: 0.3rem 0.7rem;
   cursor: pointer;
 }

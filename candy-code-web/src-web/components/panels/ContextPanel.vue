@@ -538,7 +538,7 @@ li.cat {
   display: inline-block;
   width: 0.55rem;
   height: 0.55rem;
-  border-radius: 2px;
+  border-radius: var(--radius-1);
   flex: none;
 }
 .drill-mark {
@@ -571,7 +571,7 @@ li.cat {
 }
 .edit-modal {
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   padding: 0.6rem;
   display: grid;
   gap: 0.4rem;

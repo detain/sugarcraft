@@ -308,7 +308,7 @@ pre {
   font-family: var(--mono);
   font-size: 0.8125rem;
   background: var(--bg);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

@@ -249,7 +249,7 @@ onMounted(() => void load())
   background: none;
   border: 0;
   padding: 0.15rem 0.3rem;
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   cursor: pointer;
 }
 .row:hover {

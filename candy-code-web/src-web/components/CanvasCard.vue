@@ -83,7 +83,7 @@ function hide(): void {
 <style scoped>
 .canvas-card {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-3);
   margin: 0.5rem 0 0;
   padding: 0.5rem 0.75rem;
   background: var(--bg);
@@ -101,7 +101,7 @@ figcaption {
   letter-spacing: 0.04em;
   font-size: 0.65rem;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   padding: 0 0.3rem;
 }
 .artifact {
@@ -120,7 +120,7 @@ button.show {
   color: var(--ink);
   background: none;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   padding: 0.2rem 0.6rem;
   cursor: pointer;
 }
@@ -131,7 +131,7 @@ button.show {
   width: 100%;
   height: 18rem;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-2);
   /* CW-UX-01: theme-blind #fff literal, now a token. Invariant on purpose —
      canvas documents are model-authored HTML that assume white paper. */
   background: var(--canvas-paper);

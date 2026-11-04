@@ -118,7 +118,7 @@ function onKey(event: KeyboardEvent): void {
   z-index: 20;
   font-size: 0.8125rem;
   padding: 0.2rem 0.6rem;
-  box-shadow: 0 0.2rem 0.6rem rgb(0 0 0 / 0.25);
+  box-shadow: var(--shadow-1);
 }
 .drawer {
   position: fixed;
@@ -131,7 +131,7 @@ function onKey(event: KeyboardEvent): void {
   flex-direction: column;
   background: var(--panel);
   border-left: 1px solid var(--line);
-  box-shadow: -0.4rem 0 1rem rgb(0 0 0 / 0.3);
+  box-shadow: var(--shadow-2);
 }
 .tabs {
   display: flex;

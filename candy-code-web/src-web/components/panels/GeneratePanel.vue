@@ -183,7 +183,7 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
   background: var(--panel);
   color: var(--muted);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-3);
   cursor: pointer;
 }
 .tabs .tab.active {
@@ -208,7 +208,7 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
   background: var(--panel);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-3);
 }
 .form input[type='number'] {
   width: 5rem;
@@ -236,7 +236,7 @@ watch(() => props.sessionId, (id) => generate.follow(id), { immediate: true })
 }
 .bar {
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-1);
   background: var(--accent);
   transition: width 0.4s;
 }
