@@ -653,6 +653,12 @@ is unset, the `sessionRetentionDays` setting) is a positive integer; the default
 `0` prunes nothing. A named session is never pruned, nor is
 the one about to be resumed.
 
+Because nothing is pruned by default, doctor's `session store` line carries the
+database size (write-ahead log and shared-memory journal included) beside the
+row count, and turns `WARN` past 2 GiB — that line is where unbounded growth
+becomes visible before it becomes a surprise. The retention knob above is the
+lever; `serve` sets no size cap of its own.
+
 ## See also
 
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — every variable and its unset behaviour.

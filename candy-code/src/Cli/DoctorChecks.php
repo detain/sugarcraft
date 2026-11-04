@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Cli;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\ProviderFactory;
+use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
@@ -93,6 +94,59 @@ final class DoctorChecks
      * the same way the mbstring/intl probes fail: the manifest declares it.
      */
     private const SESSION_STORE_PROBE_DSN = 'sqlite::memory:';
+
+    /**
+     * CCOPS-5: the session store is unbounded by default — retention prunes
+     * only when CANDY_CODE_SESSION_RETENTION_DAYS (or its settings twin) is a
+     * positive integer — so the `session store` row carries the on-disk size
+     * next to the row count and turns WARN past this cap. Two GiB of sessions
+     * is far past any honest install; the store itself has no size cap by
+     * design, so this row is the only place the growth is caught.
+     */
+    public const SESSION_STORE_WARN_BYTES = 2 * 1024 * 1024 * 1024;
+
+    /**
+     * The `session store` verdict, kept off the probe so the WARN edge is
+     * pin-testable without engineering a two-gigabyte database.
+     *
+     * @return array{status: string, detail: string}
+     */
+    public static function sessionStoreRow(int $count, int $bytes): array
+    {
+        $detail = Lang::t('cli.doctor.sessions', ['count' => $count])
+            . ' (' . self::humanBytes($bytes) . ')';
+        if ($bytes > self::SESSION_STORE_WARN_BYTES) {
+            return ['status' => 'WARN', 'detail' => $detail . ' — prune with CANDY_CODE_SESSION_RETENTION_DAYS'];
+        }
+
+        return ['status' => 'OK', 'detail' => $detail];
+    }
+
+    /** On-disk bytes of the store and its journals — stat only, no reads (CCOPS-5). */
+    private static function sessionStoreBytes(EnhancedSessionStore $store): int
+    {
+        $bytes = 0;
+        foreach (['', '-wal', '-shm'] as $suffix) {
+            $size = @\filesize($store->path() . $suffix);
+            $bytes += $size === false ? 0 : $size;
+        }
+
+        return $bytes;
+    }
+
+    /** Coarse binary sizing for the doctor's one-line detail: 4096 -> "4.0 KiB". */
+    private static function humanBytes(int $bytes): string
+    {
+        $units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+        $value = (float) $bytes;
+        $unit = 0;
+        while ($value >= 1024.0 && $unit < count($units) - 1) {
+            $value /= 1024.0;
+            ++$unit;
+        }
+
+        return $unit === 0 ? $bytes . ' B' : \number_format($value, 1) . ' ' . $units[$unit];
+    }
 
     /**
      * Can PDO actually open this DSN, and can `ext-sqlite3` open a database?
@@ -468,7 +522,10 @@ final class DoctorChecks
                 $store = Bootstrap::sessionStore(prune: false);
                 $count = \count($store->listSessions(1000));
 
-                return ['status' => 'OK', 'detail' => Lang::t('cli.doctor.sessions', ['count' => $count])];
+                // CCOPS-5: a count alone hid an unbounded store — the row now
+                // carries the database size (journals included) and warns past
+                // the cap; the retention knob is named in the warning.
+                return self::sessionStoreRow($count, self::sessionStoreBytes($store));
             },
 
             'mcp config' => static function () use ($root): array {

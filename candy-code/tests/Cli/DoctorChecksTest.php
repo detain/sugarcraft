@@ -153,6 +153,28 @@ final class DoctorChecksTest extends TestCase
         }
     }
 
+    /**
+     * CCOPS-5: a row count alone hid an unbounded store — rows grow forever
+     * unless the retention knob is set. The row now carries the on-disk size
+     * beside the count, and past the cap it turns WARN and names the lever.
+     */
+    public function testTheSessionStoreRowCarriesBytesAndWarnsOverTheCap(): void
+    {
+        $quiet = DoctorChecks::sessionStoreRow(3, 4096);
+        self::assertSame('OK', $quiet['status']);
+        self::assertStringContainsString('3 session(s) stored', $quiet['detail']);
+        self::assertStringContainsString(' (4.0 KiB)', $quiet['detail']);
+        self::assertStringNotContainsString("\n", $quiet['detail'], 'still a table cell, not a paragraph');
+
+        $edge = DoctorChecks::sessionStoreRow(1, DoctorChecks::SESSION_STORE_WARN_BYTES);
+        self::assertSame('OK', $edge['status'], 'the cap itself is still tolerable — strictly over is what warns');
+
+        $heavy = DoctorChecks::sessionStoreRow(9, DoctorChecks::SESSION_STORE_WARN_BYTES + 1);
+        self::assertSame('WARN', $heavy['status']);
+        self::assertStringContainsString('2.0 GiB', $heavy['detail']);
+        self::assertStringContainsString('CANDY_CODE_SESSION_RETENTION_DAYS', $heavy['detail'], 'the warning names the knob to turn');
+    }
+
     // ---- fixtures -------------------------------------------------------------
 
     /** @return array<string, \Closure(): array{status: string, detail: string}> */
