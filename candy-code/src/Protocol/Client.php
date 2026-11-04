@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol;
 
+use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Server\Ws\Outbox;
 
@@ -22,6 +23,27 @@ final class Client
 
     /** Appendix O §6.9: the burst a client may spend at once. */
     public const RATE_BURST = 200.0;
+
+    /**
+     * Bytes the byte meter (CWPD-1) refills per second, sustained. The
+     * request bucket counts ROUNTRIPS; this one counts WIRE — a client that
+     * floods 16 MiB frames spends the meter at ~8 MiB/s however cheap each
+     * frame is to answer, so a hostile socket cannot keep the server
+     * decoding at full rate forever. Half the frame ceiling per second: one
+     * legal maximum frame per two seconds of steady flood.
+     */
+    public const BYTE_RATE_PER_SECOND = 8_388_608.0;
+
+    /**
+     * Bytes the meter holds at rest — exactly the transport's own client
+     * frame ceiling ({@see ServerConfig::MAX_CLIENT_FRAME_BYTES}, pinned by
+     * that equality), so ONE legal maximum frame always fits from an idle
+     * bucket: the meter refuses floods, never a legitimate single
+     * `session.import`. The pre-existing `json_decode` ceiling only refused
+     * AFTER the parse, so up to 16 MiB of hostile text reached the parser
+     * per frame; the meter refuses before it.
+     */
+    public const BYTE_BURST = 16_777_216.0;
 
     private bool $initialized = false;
 
@@ -42,6 +64,10 @@ final class Client
 
     private float $refilledAt;
 
+    private float $byteBudget = self::BYTE_BURST;
+
+    private float $bytesRefilledAt;
+
     /**
      * @param list<string> $scopes
      * @param \Closure(): float $clock
@@ -53,6 +79,7 @@ final class Client
         private readonly \Closure $clock,
     ) {
         $this->refilledAt = ($this->clock)();
+        $this->bytesRefilledAt = $this->refilledAt;
     }
 
     public function id(): string
@@ -179,6 +206,26 @@ final class Client
             return false;
         }
         $this->budget -= 1.0;
+
+        return true;
+    }
+
+    /**
+     * Spend $bytes from the byte meter (a token bucket: {@see BYTE_BURST}
+     * at rest, refilled at {@see BYTE_RATE_PER_SECOND}); false when the
+     * meter cannot cover the whole frame. The dispatcher consults it on
+     * every message BEFORE decoding (CWPD-1): an oversized flood is refused
+     * as wire, never parsed.
+     */
+    public function admitBytes(int $bytes): bool
+    {
+        $now = ($this->clock)();
+        $this->byteBudget = \min(self::BYTE_BURST, $this->byteBudget + \max(0.0, $now - $this->bytesRefilledAt) * self::BYTE_RATE_PER_SECOND);
+        $this->bytesRefilledAt = $now;
+        if ($this->byteBudget < $bytes) {
+            return false;
+        }
+        $this->byteBudget -= $bytes;
 
         return true;
     }

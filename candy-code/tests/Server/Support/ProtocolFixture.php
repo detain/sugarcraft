@@ -48,7 +48,7 @@ final class ProtocolFixture
 
     public readonly Dispatcher $dispatcher;
 
-    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log, ?AgentManager $agentManager, ?PermissionGate $permissionGate)
+    private function __construct(?ServerConfig $config, int $retain, ?BackgroundSupervisor $supervisor, ?WorkflowEngineInterface $workflows, ?MemoryStore $memoryStore, ?\Closure $log, ?AgentManager $agentManager, ?PermissionGate $permissionGate, ?\Closure $clock)
     {
         $this->dir = \sys_get_temp_dir() . '/crush-protocol-' . \bin2hex(\random_bytes(6));
         $this->root = $this->dir . '/project';
@@ -74,7 +74,7 @@ final class ProtocolFixture
 
         $config ??= ServerConfig::new($this->dir);
         $this->hub = SessionHub::new($workspace, $config->maxOpenSessions);
-        $this->context = ServerContext::new($this->hub, $config->withRoot($this->root), 'test', Loop::get(), log: $log);
+        $this->context = ServerContext::new($this->hub, $config->withRoot($this->root), 'test', Loop::get(), clock: $clock, log: $log);
         $this->dispatcher = Dispatcher::new($this->context);
     }
 
@@ -91,10 +91,13 @@ final class ProtocolFixture
      *        default, which leaves `agents.list` an empty array
      * @param PermissionGate|null $permissionGate the workspace's permission gate;
      *        none by default, which leaves `permission.rules` an empty rule list
+     * @param (\Closure(): float)|null $clock the server's clock, exactly the seam
+     *        `ServerContext::new()` offers; null keeps wall time (a scripted clock
+     *        lets meter tests move time without sleeping — CWPD-1)
      */
-    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null, ?AgentManager $agentManager = null, ?PermissionGate $permissionGate = null): self
+    public static function new(?ServerConfig $config = null, int $retain = EventLog::DEFAULT_RETAIN, ?BackgroundSupervisor $supervisor = null, ?WorkflowEngineInterface $workflows = null, ?MemoryStore $memoryStore = null, ?\Closure $log = null, ?AgentManager $agentManager = null, ?PermissionGate $permissionGate = null, ?\Closure $clock = null): self
     {
-        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log, $agentManager, $permissionGate);
+        return new self($config, $retain, $supervisor, $workflows, $memoryStore, $log, $agentManager, $permissionGate, $clock);
     }
 
     /** A client that has said hello. */

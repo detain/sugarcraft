@@ -298,6 +298,15 @@ final class Dispatcher implements MessageHandler
             return;
         }
 
+        if (!$client->admitBytes(\strlen($payload))) {
+            // Refused before the parse (CWPD-1): the meter never saw an id,
+            // so the answer carries a null one — the shape JsonRpc::decode
+            // refusals already use.
+            $client->send(JsonRpc::error(null, RpcError::of(ErrorCode::RateLimited, 'send rate exceeded', null, ['retryAfterMs' => 1000])));
+
+            return;
+        }
+
         $request = JsonRpc::decode($payload);
         if (\is_array($request)) {
             [$error, $id] = $request;

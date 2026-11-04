@@ -460,6 +460,55 @@ final class ConformanceTest extends TestCase
         self::assertLessThan(220, \count($client->received()) - \count($limited) + 1);
     }
 
+    /**
+     * CWPD-1: the byte meter is consulted BEFORE the frame is decoded, so a
+     * socket that has exhausted it can no longer reach the parser — not even
+     * to be told "parse error". The scripted clock freezes refill, so the
+     * flood itself (legal-shaped unknown-method notifications, which the
+     * dispatcher answers with silence) is what drains the meter.
+     */
+    public function testOverBudgetWireIsRefusedBeforeTheParserSeesIt(): void
+    {
+        $now = 0.0;
+        $fixture = ProtocolFixture::new(clock: static function () use (&$now): float {
+            return $now;
+        });
+        try {
+            $client = $fixture->client('meter');
+            $pad = \str_repeat('A', 2 * 1024 * 1024);
+            $frame = '{"jsonrpc":"2.0","method":"x/pad","params":{"pad":"' . $pad . '"}}';
+            $refusals = 0;
+            for ($i = 0; $i < 20; $i++) {
+                $client->raw($frame);
+                foreach ($client->received() as $message) {
+                    if (($message['error']['data']['kind'] ?? null) === 'rate_limited') {
+                        $refusals++;
+                    }
+                }
+                if ($refusals > 0) {
+                    break;
+                }
+            }
+            self::assertGreaterThan(0, $refusals, 'the flood itself must meet a rate refusal (base-red: without the meter, twenty flooded frames all parse, answer-silently, and none is refused)');
+
+            // A frame of the SAME size as one just refused cannot fit the
+            // leftover meter; yet at base these exact bytes reach json_decode.
+            $junk = 'not json' . \str_repeat('B', \strlen($frame) - 8);
+            $client->clear();
+            $client->raw($junk);
+
+            $received = $client->received();
+            self::assertNotEmpty($received, 'the flooded socket still gets an answer for the garbage frame');
+            // Base-red: at the meterless dispatcher this reply is the
+            // parse error (-32700) — proof the bytes reached json_decode.
+            self::assertSame('rate_limited', $received[0]['error']['data']['kind'] ?? null);
+            self::assertArrayHasKey('id', $received[0]);
+            self::assertNull($received[0]['id'], 'an undecoded frame has no id to echo');
+        } finally {
+            $fixture->tearDown();
+        }
+    }
+
     /** @return array<string, mixed> */
     private function helloTwice(): array
     {
