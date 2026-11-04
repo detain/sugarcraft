@@ -57,7 +57,10 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — forty-nine sites (2026-11-04: +1 in
+ *  1. `fwrite(STDERR, …)` — forty-seven sites (X-CORE1 2026-11-04: -2 — the bin
+ *     guard's abnormal-exit restore line and its attach twin retire under
+ *     OD-17; sugar-core's shutdown backstop is the single terminal-release
+ *     path, so neither consumer announcement survives; 2026-11-04: +1 in
  *     `Subcommands::sessionStoreForVerbs()` — CC-QA-1: a corrupt session.db
  *     now announces its funnel notice on stderr at exit 1 instead of dying
  *     as an uncaught PDOException at 255, stderr-alone by the same
@@ -345,7 +348,10 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const DIRECT_SITES = [
-        'bin/candy-code' => 4,
+        // X-CORE1 2026-11-04: -1 — the guard's abnormal-exit restore line
+        // retired with the hand-rolled byte list (OD-17); sugar-core owns the
+        // release. The TTY-guard refusal line and the fatal writer stand.
+        'bin/candy-code' => 3,
         // C-TOOL-6.j 2026-10-31: +9 — the forked pty relay's own report lines:
         // bad launch argv, pty mechanism unavailable, staged command file
         // unreadable, no pcntl_fork, the pump fork failing, SIGTERM arming
@@ -368,12 +374,10 @@ final class StderrEmitterCensusTest extends TestCase
         // O-8a: `attach`'s fail(), the one line saying why it could not reach
         // a server. Stderr alone: it is written before any TUI or session
         // exists, and the verb then exits 1.
-        // +1 in the 2026-11 attach guard: the abnormal-exit restore
-        // announcement, written by the same shutdown hook that pops the
-        // terminal back. Stderr alone: the alt-screen is already being left,
-        // so the frame is gone whatever the line said, and a fatal mid-attach
-        // would otherwise strand the user in a raw terminal with no word.
-        'src/Cli/Attach.php' => 2,
+        // X-CORE1 2026-11-04: -1 — the 2026-11 attach guard's abnormal-exit
+        // restore line retired with its byte list (OD-17); the library's
+        // shutdown backstop is the single terminal-release path now.
+        'src/Cli/Attach.php' => 1,
         // +1 in ISS-026: the cross-project --continue notice. Stderr alone,
         // the same decision as the retention detail line beside it: the launch
         // succeeded, there is nothing the session can no longer DO, and the
@@ -517,7 +521,9 @@ final class StderrEmitterCensusTest extends TestCase
     private const MESSAGE_SHAPES = [
         // +1 in C-AGT-6.c: the `--worktree` refusal hand-off passes the
         // prefixed message through failUsage like every other exit-2 door here.
-        'bin/candy-code' => 8,
+        // X-CORE1 2026-11-04: -1 — the guard's 'exited abnormally' shape left
+        // with the byte list.
+        'bin/candy-code' => 7,
         // W7-C NOTE, reads forward: the nine E154 files whose in-code
         // `candy-code: ` literals sat only on error_log lines (AgentWorkerPool,
         // ForeignAgentPresetRegistry, CommandLoader, RuleLoader,

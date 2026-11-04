@@ -7,125 +7,118 @@ namespace SugarCraft\Code\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 
 /**
- * 1021 v2:NEW-1 (MAJOR) — the terminal-shutdown guard must not fire in forked children.
+ * The 1021 v2:NEW-1 defect: the recovery shutdown guard bin/candy-code used
+ * to register ran in EVERY process that shut down the entrypoint script —
+ * including forked children. AgentWorkerPool::startAgent() forks inside the
+ * main chat process, and a worker child reaches a shutdown path (exit(0)
+ * after running its task), so the PARENT's inherited guard closure re-ran in
+ * the child: DEC-off bytes painted the parent's live TUI mid-render and a
+ * false "exited abnormally - terminal restored" line printed on a normal
+ * worker exit. The guard's fix at the time was a pid latch on the consumer
+ * side, and this class pinned it there.
  *
- * THE DEFECT: the guard in `bin/candy-code` is armed by a BY-REFERENCE flag
- * (`use (&$terminalWasRun)`) that is set true just before `Program::run()`.
- * `AgentWorkerPool` forks children mid-session whose tail is a plain `exit(0)`
- * (src/Agents/AgentWorkerPool.php); a fork clones the registered closure AND
- * the already-armed referent, so every completed forked stage ran the guard in
- * the child — painting DEC-off bytes onto STDOUT and a false "exited abnormally
- * — terminal restored" line onto STDERR while the parent's TUI was mid-render.
- *
- * THE FIX THIS PINS: the guard records the pid that installed it and each
- * shutdown handler compares `getmypid()` against that capture, early-returning
- * in silence on a mismatch. Like the sibling {@see BinInteractiveTtyGuardTest}
- * this cannot be exercised in-process — a real fork of the running suite would
- * exit the test itself — so the pin is the sanctioned order-preserving source
- * scan: the capture must exist BEFORE the registration (a capture taken inside
- * the closure body would re-run per shutdown, in the child's own pid, and
- * always match), the closure must carry it by value, and the pid early-return
- * must precede both emissions. Removing the pid check reddens this class; the
- * existing flag-shape pins in the sibling class stay green, because the fix is
- * an ADDITIVE early-return — the two guards are separate statements on purpose.
+ * X-CORE1 (2026-11-04, owner ruling OD-17) retired both hand-rolled guards —
+ * bin's and src/Cli/Attach.php's twin — in favour of sugar-core's single
+ * authoritative release path. The entrypoint now arms the core backstop on
+ * the Program itself (armTerminalRelease(), registered before run() so the
+ * constructor-time window the flag-guarded superset used to cover stays
+ * covered) and the install-pid discipline lives in the library: Program
+ * captures the pid at arm time and releaseTerminalForShutdown() returns
+ * silently in any process other than the installer. That fork-child safety
+ * net is pinned in sugar-core/tests/ProgramTerminalRecoveryTest.php —
+ * testShutdownReleaseStaysSilentBehindEveryGate (the gate returns) and
+ * testReleaseHookArmsOncePerProgramWithCaptureBeforeRegister (the capture
+ * precedes registration). What this class pins instead is the shape of the
+ * retirement: the entrypoint carries no recovery byte list, no flag, and no
+ * second shutdown function - only the fatal-error writer that answers a
+ * different question, and the arm in the order that protects the window.
+ * A planted copy of the old byte-emitting guard reddens the absence and
+ * single-shutdown-function pins; moving the arm after the run reddens the
+ * order pin.
  */
 final class BinTerminalGuardPidTest extends TestCase
 {
-    private static function binSource(): string
+    /**
+     * The load-bearing order: construct the Program, arm the core release on
+     * it, then enter run(). Arming BEFORE the call is what keeps the
+     * window around setupTerminal() covered - the property the retired flag
+     * guard encoded as "armed at the call, a deliberate superset".
+     */
+    public function testTheCoreReleaseHookIsArmedBeforeTheRunItProtects(): void
     {
-        return (string) file_get_contents(dirname(__DIR__, 2) . '/bin/candy-code');
+        $bin = $this->entrypointSource();
+
+        $construct = strpos($bin, '$program = new Program(');
+        $arm = strpos($bin, '$program->armTerminalRelease();');
+        $run = strpos($bin, '$program->run();');
+
+        self::assertGreaterThan(0, $construct, 'the entrypoint must build the named Program the arm hangs off');
+        self::assertGreaterThan($construct, $arm, 'the core release must be armed on the constructed Program');
+        self::assertGreaterThan($arm, $run, 'the arm must precede run() - a hook armed after the call protects nothing');
     }
 
     /**
-     * Offset of the terminal guard's OWN registration. `strpos` on a bare
-     * 'register_shutdown_function' finds the earlier `--tui-error-log` handler
-     * and slices the wrong function, so every read here starts from the flag's
-     * initialisation that immediately precedes the registration.
+     * The byte list is core-owned now: no flag, no captured pid, no
+     * abnormal-exit announcement, and none of the seven recovery sequences
+     * may reappear in the entrypoint. Each is a name the retired guard
+     * carried; re-spreading any of them here duplicates the library's
+     * teardown (the drift this lane exists to end).
      */
-    private static function guardStart(string $bin): int
+    public function testTheEntrypointCarriesNoHandRolledRecoveryByteList(): void
     {
-        $flagInit = strpos($bin, '$terminalWasRun = false;');
-        self::assertIsInt($flagInit, 'the by-ref flag the guard closes over is gone');
+        $bin = $this->entrypointSource();
 
-        $register = strpos($bin, 'register_shutdown_function', (int) $flagInit);
-        self::assertIsInt($register, 'no shutdown guard follows the flag — the recovery vanished');
-
-        return (int) $register;
+        foreach ([
+            '$terminalWasRun',
+            '$installPid',
+            'exited abnormally',
+            'Ansi::mouseCellMotionOff()',
+            'Ansi::mouseAllMotionOff()',
+            'Ansi::bracketedPasteOff()',
+            'Ansi::unicodeOff()',
+            'Ansi::cursorShow()',
+            'Ansi::altScreenLeave()',
+        ] as $retired) {
+            self::assertFalse(
+                str_contains($bin, $retired),
+                "the retired guard shape '{$retired}' must not live in the entrypoint - sugar-core owns the terminal release",
+            );
+        }
     }
 
-    public function testTheInstallingPidIsCapturedBeforeTheGuardIsRegistered(): void
+    /**
+     * Exactly one shutdown function survives in bin: the tui-error-log
+     * fatal writer, which announces fatals and is a different concern. The
+     * deleted guard was the second; a re-planted recovery closure is caught
+     * by the count, and deleting the fatal writer out from under the error
+     * log is caught by the phrase.
+     */
+    public function testTheFatalWriterRemainsTheOnlyBinShutdownFunction(): void
     {
-        $bin = self::binSource();
-        $flagInit = (int) strpos($bin, '$terminalWasRun = false;');
-        $register = self::guardStart($bin);
+        $bin = $this->entrypointSource();
 
-        $capture = strpos($bin, '$installPid = getmypid();');
-
-        $this->assertIsInt($capture, 'the guard records no installing pid — forked children fire it');
-        $this->assertLessThan(
-            $register,
-            $capture,
-            'the pid capture must happen before registration; inside the closure it would take the '
-                . 'child\'s own pid at shutdown time and match, which is the defect restated',
+        self::assertSame(
+            1,
+            substr_count($bin, 'register_shutdown_function'),
+            'the tui-error-log fatal writer is bin\'s only shutdown function since X-CORE1 retired the recovery guard',
         );
-        $this->assertGreaterThan(
-            $flagInit,
-            $capture,
-            'the capture must sit in the guard\'s own preamble, between the flag and its registration',
-        );
-    }
-
-    public function testTheClosureCarriesTheCapturedPidByValue(): void
-    {
-        $bin = self::binSource();
-
-        $register = self::guardStart($bin);
-        $arm = (int) strpos($bin, '$terminalWasRun = true;');
-        $this->assertGreaterThan($register, $arm);
-        $closureHead = substr($bin, $register, $arm - $register);
-
-        $this->assertStringContainsString(
-            'use (&$terminalWasRun, $installPid)',
-            $closureHead,
-            'the closure must capture $installPid by value — by-ref would let a child "correct" it, '
-                . 'and its absence means the guard cannot tell whose shutdown this is',
+        self::assertStringContainsString(
+            'candy-code: fatal error',
+            $bin,
+            'the fatal writer\'s announcement itself must survive the retirement',
         );
     }
 
-    public function testTheGuardEarlyReturnsOnPidMismatchBeforeEmittingAnything(): void
+    /**
+     * @return string the bin/candy-code source, the only artifact that can
+     *                pin the entrypoint's shape
+     */
+    private function entrypointSource(): string
     {
-        $bin = self::binSource();
+        $path = dirname(__DIR__, 2) . '/bin/candy-code';
+        $source = file_get_contents($path);
+        self::assertIsString($source, "the entrypoint at {$path} must be readable for its shape to be pinned");
 
-        $start = self::guardStart($bin);
-        $end = (int) strpos($bin, '$terminalWasRun = true;');
-        $guard = substr($bin, $start, $end - $start);
-
-        $mismatch = strpos($guard, 'if (getmypid() !== $installPid) {');
-        $this->assertIsInt(
-            $mismatch,
-            'no pid comparison in the guard body — every forked AgentWorkerPool child restores a '
-                . 'terminal that was never its own to touch',
-        );
-        $firstEmission = strpos($guard, 'fwrite(STDOUT');
-        $this->assertIsInt($firstEmission);
-        $this->assertLessThan(
-            $firstEmission,
-            $mismatch,
-            'the pid early-return must precede the DEC-off emissions; a restore that writes first '
-                . 'and then thinks is the original defect',
-        );
-        $stderrEmission = strpos($guard, 'fwrite(STDERR');
-        $this->assertIsInt($stderrEmission);
-        $this->assertLessThan(
-            $stderrEmission,
-            $mismatch,
-            'the pid early-return must precede the "terminal restored" stderr line too',
-        );
-
-        // The two early-returns are separate statements on purpose: the flag
-        // guard stays byte-identical so the sibling class's flag-shape pin
-        // ({@see BinInteractiveTtyGuardTest}) keeps discriminating clean exits.
-        $this->assertStringContainsString('if (!$terminalWasRun)', $guard);
-        $this->assertStringContainsString("if (getmypid() !== \$installPid) {\n        return;\n    }", $guard);
+        return $source;
     }
 }

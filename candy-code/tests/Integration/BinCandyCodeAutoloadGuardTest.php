@@ -32,7 +32,7 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FORTY-NINE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FORTY-SEVEN:
  *
  *  - {@see \SugarCraft\Code\Cli\NonInteractive}, fifteen —
  *    `run()` four times (a thrown backend error, an answer that would not encode
@@ -76,11 +76,11 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *    pre-TUI process with no transcript to name it in.
  *  - {@see \SugarCraft\Code\Cli\Serve}, one — `stderr()`, the `serve` verb's
  *    single funnel for its startup lines, request log and stop notice (O-3a).
- *  - {@see \SugarCraft\Code\Cli\Attach}, two — `fail()`, the line saying why
- *    `attach` could not reach a server, written before any TUI exists (O-8a),
- *    and — added by the 2026-11 attach guard — the shutdown hook's
- *    terminal-restored announcement, stderr-alone like its sibling: the
- *    alt-screen is already being left, so no transcript can carry it.
+ *  - {@see \SugarCraft\Code\Cli\Attach}, one — `fail()`, the line saying why
+ *    `attach` could not reach a server, written before any TUI exists (O-8a);
+ *    the 2026-11 attach guard's terminal-restored announcement was retired by
+ *    X-CORE1 (OD-17) with its hand-rolled byte list — sugar-core's shutdown
+ *    backstop is the single terminal-release path now.
  *  - {@see \SugarCraft\Code\Cli\Acp}, one — `stderr()`, the `acp` verb's
  *    single funnel for what PHP would have printed onto the editor's protocol
  *    and for the launch warnings (roadmap 5.9).

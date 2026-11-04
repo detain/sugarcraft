@@ -16,18 +16,19 @@ use PHPUnit\Framework\TestCase;
  * side before the TUI branch, and points at the two paths that ARE headless
  * by design.
  *
- * THE SIBLING GUARD HERE: bin also carries the rv-sec (fix 3) shutdown
- * recovery — kitty pop, mouse off, bracketed paste off, unicode off, cursor
- * show, alt-screen leave — armed by a flag set at the `Program::run()` call
- * and cleared on its return, so a fatal or an uncaught throw between them
- * still restores the terminal. Its emission cannot be exercised in-process
- * (a real attach needs a tty and a full loop), and faking it in a child buys
- * nothing the source shape does not already pin: the ORDER (registration
- * before the run, flag arming before the call, clearing after it) is the
- * load-bearing property, and an order-preserving source scan is exactly what
- * a mutation breaks. The behavioral half of the pair is the negative one:
- * headless launches stay byte-silent, which the piped child runs below assert
- * on every path that does exit (guard, `--version`).
+ * THE SIBLING GUARD HERE — RETIRED (X-CORE1, reviews-1103, OD-17): bin once
+ * carried the rv-sec (fix 3) shutdown recovery — a hand-written kitty pop,
+ * mouse off, bracketed paste off, unicode off, cursor show, alt-screen leave
+ * list behind a flag armed at the `Program::run()` call. OD-17 ruled that
+ * terminal release is sugar-core's job: the entrypoint now arms the library's
+ * own backstop (`$program->armTerminalRelease()` before `run()`, with the
+ * install-pid fork latch living in `Program`), and the byte list is pinned on
+ * the library side by testTheReleaseByteListLivesInTheLibrary below. The
+ * ORDER property survives unchanged in shape — arm before the call it
+ * protects — and is exactly what an order-flipping mutation breaks, now
+ * pinned against the arm. The behavioral half of the pair is the negative
+ * one: headless launches stay byte-silent, which the piped child runs below
+ * assert on every path that does exit (guard, `--version`).
  *
  * v2:MAJOR-3 (this wave) grew the third shape the entrypoint depends on:
  * launching with ONE side redirected — `echo hi | candy-code`, the case the
@@ -163,9 +164,9 @@ final class BinInteractiveTtyGuardTest extends TestCase
 
     /**
      * `--version` on a pipe stays byte-silent apart from its one line — the
-     * guard and the recovery shutdown must not have leaked into the pre-TUI
-     * exits (rv-tui-3's headless-silence demand, re-pinned from the owned
-     * side next to the guard that owns the same branch).
+     * guard and the terminal-release arm must not have leaked into the
+     * pre-TUI exits (rv-tui-3's headless-silence demand, re-pinned from the
+     * owned side next to the guard that owns the same branch).
      */
     public function testVersionOnAPipeEmitsNoEscapeBytes(): void
     {
@@ -176,42 +177,22 @@ final class BinInteractiveTtyGuardTest extends TestCase
     }
 
     // =========================================================================
-    // Fix 3 — source-shape pins on the recovery guard
+    // X-CORE1 (OD-17) — source-shape pins on the terminal release arm
     // =========================================================================
 
-    public function testTheRecoveryShutdownIsArmedByTheRunCallItProtects(): void
+    public function testTheReleaseByteListLivesInTheLibrary(): void
     {
-        $bin = (string) file_get_contents(\dirname(__DIR__, 2) . '/bin/candy-code');
+        $programPath = dirname(__DIR__, 3) . '/sugar-core/src/Program.php';
+        $core = file_get_contents($programPath);
+        $this->assertIsString($core, "the authoritative release lives at {$programPath}");
 
-        $register = strpos($bin, 'register_shutdown_function');
-        $arm = strpos($bin, '$terminalWasRun = true;');
-        $call = strpos($bin, '->run(');
-        // Last occurrence: the first is the flag's initialisation above the
-        // registration; the one that matters is the clear after the call.
-        $disarm = strrpos($bin, '$terminalWasRun = false;');
-
-        $this->assertIsInt($register);
-        $this->assertIsInt($arm);
-        $this->assertIsInt($call);
-        $this->assertIsInt($disarm);
-        $this->assertLessThan($arm, $register, 'the guard must be registered before the run it covers');
-        $this->assertLessThan($call, $arm, 'the flag must be set before the call — a throw inside run() has to find it armed');
-        $this->assertLessThan($disarm, $call, 'and cleared after it returns, when Program has torn the terminal down itself');
-    }
-
-    public function testTheRecoverySequenceCarriesEveryStateTheProgramToggles(): void
-    {
-        $bin = (string) file_get_contents(\dirname(__DIR__, 2) . '/bin/candy-code');
-
-        // The guard body is the slice between its registration and the flag
-        // arming — pin the idempotent-off set inside exactly that slice, not
-        // anywhere in the file, so relocating the existing normal-path pop
-        // cannot satisfy it vacuously.
-        $start = (int) strpos($bin, 'register_shutdown_function');
-        $end = (int) strpos($bin, '$terminalWasRun = true;');
-        $this->assertGreaterThan($start, $end);
-        $guard = substr($bin, $start, $end - $start);
-
+        // X-CORE1 moved the recovery list out of the two candy-code
+        // entrypoints and into sugar-core's teardownTerminal()/
+        // releaseTerminalForShutdown() — its single authoritative home. This
+        // pin guards the library side: every state the run can leave on must
+        // be switched off there. The retired bin copy had silently dropped
+        // focusReportingOff even though the app arms reportFocus (the drift
+        // that motivated OD-17), so that leg is now asserted by name.
         foreach ([
             'Ansi::popKittyKeyboard()',
             'Ansi::mouseCellMotionOff()',
@@ -220,11 +201,33 @@ final class BinInteractiveTtyGuardTest extends TestCase
             'Ansi::unicodeOff()',
             'Ansi::cursorShow()',
             'Ansi::altScreenLeave()',
+            'Ansi::focusReportingOff()',
         ] as $sequence) {
-            $this->assertStringContainsString($sequence, $guard, "recovery must emit {$sequence}");
+            $this->assertStringContainsString(
+                $sequence,
+                $core,
+                "the terminal release in the library must carry {$sequence}",
+            );
         }
+    }
 
-        $this->assertStringContainsString('if (!$terminalWasRun)', $guard, 'a clean exit must stay byte-silent');
+    public function testTheAttachEntrypointArmsTheSameCoreRelease(): void
+    {
+        $attach = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Cli/Attach.php');
+
+        // The attach path had its own byte-for-byte twin of the retired bin
+        // guard (tui-n1). It now rides the same library seam, armed before
+        // the run it protects, and must not have grown a flag back.
+        $construct = strpos($attach, '$program = new Program(');
+        $arm = strpos($attach, '$program->armTerminalRelease();');
+        $call = strpos($attach, '$program->run();');
+
+        $this->assertIsInt($construct);
+        $this->assertIsInt($arm);
+        $this->assertIsInt($call);
+        $this->assertGreaterThan($construct, $arm, 'the core release must be armed on the constructed Program');
+        $this->assertGreaterThan($arm, $call, 'the arm must precede run() — a hook armed after the call protects nothing');
+        $this->assertStringNotContainsString('$terminalWasRun', $attach, 'the retired flag must not live in the attach path');
     }
 
     // =========================================================================

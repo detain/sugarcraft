@@ -145,13 +145,18 @@ final class KittyKeyboardNegotiationTest extends TestCase
             substr_count($bin, 'fwrite(STDOUT, Ansi::popKittyKeyboard());'),
             'exactly one STANDALONE pop after run() balances the single push',
         );
+        // X-CORE1 (OD-17) retired the shutdown guard's second pop: fatal and
+        // uncaught-throw exits now ride sugar-core's releaseTerminalForShutdown(),
+        // which pops as part of the single authoritative release. The normal
+        // path pays exactly one pop — the standalone call above, kept because
+        // it is the house pattern every candy-core Program consumer follows
+        // (E705, and sugar-core's own bin does the same).
         $this->assertSame(
-            2,
+            1,
             substr_count($bin, 'popKittyKeyboard'),
-            'the second mention is the shutdown guard\'s recovery byte-set (the launch-restore '
-            . 'fix); it is disarmed by $terminalWasRun = false on the normal path, so the normal '
-            . 'path pays the pop once and only the exception path pays it twice - both spellings '
-            . 'are idempotent OFF sequences',
+            'bin carries exactly one popKittyKeyboard mention since X-CORE1 retired the guard twin '
+            . '— abnormal exits pop inside the library now; a re-spelled consumer byte list is what '
+            . 'this count catches',
         );
     }
 }
