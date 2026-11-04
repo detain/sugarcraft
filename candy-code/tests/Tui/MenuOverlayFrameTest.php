@@ -20,12 +20,15 @@ use SugarCraft\Code\Tui\Settings\OpenSettingsMsg;
 use SugarCraft\Code\Tui\Settings\SettingsSources;
 use SugarCraft\Code\Tui\VideoPlayer\VideoPlayerScreen;
 use SugarCraft\Code\Tests\Support\VideoPlayerScriptedDecoder;
+use SugarCraft\ColorProfile\Probe\Capability;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Msg\TickMsg;
 use SugarCraft\Video\Player;
 use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Render\RendererFactory;
 
 /**
  * The menu overlay seam every shell surface shares (P-MENU.c).
@@ -173,30 +176,40 @@ final class MenuOverlayFrameTest extends TestCase
      */
     public function testTheGraphicsLegRefusesToPaintAndMarkTogether(): void
     {
-        $app = $this->bandApp('chat');
+        // The graphics legs build explicit Kitty/iTerm2 Players; the M1
+        // capability door refuses such a mode on a seat that never claimed
+        // the protocol, so the pin scripts the memo through the lib's own
+        // seam and clears it again at the end.
+        $this->armGraphicsCapableSeat();
 
-        foreach ($this->graphicsScreens() as $label => $screen) {
-            MenuBar::closeMenu();
-            MenuBar::openMenu(1);
-            TuiRenderer::chromeScanner()->clear();
+        try {
+            $app = $this->bandApp('chat');
 
-            self::assertFalse($screen->clipsLines(), $label . ': graphics modes are the refusal premise');
-            self::assertNotEmpty(
-                MenuBar::panels($app->withVideoPlayer($screen), 120, 1),
-                $label . ': a panel exists to be refused — the menu is genuinely open',
-            );
+            foreach ($this->graphicsScreens() as $label => $screen) {
+                MenuBar::closeMenu();
+                MenuBar::openMenu(1);
+                TuiRenderer::chromeScanner()->clear();
 
-            $plain = Ansi::strip(TuiRenderer::renderView($app->withVideoPlayer($screen), 120, 30)->body);
+                self::assertFalse($screen->clipsLines(), $label . ': graphics modes are the refusal premise');
+                self::assertNotEmpty(
+                    MenuBar::panels($app->withVideoPlayer($screen), 120, 1),
+                    $label . ': a panel exists to be refused — the menu is genuinely open',
+                );
 
-            self::assertStringNotContainsString('┌', $plain, $label . ': no border row may splice into protocol bytes');
-            self::assertStringNotContainsString('│ …', $plain, $label . ': no overflow row may splice into protocol bytes either');
-            self::assertSame(
-                [],
-                TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_ITEM_ZONE_PREFIX),
-                $label . ': the graphics leg must not mark rows it did not paint',
-            );
+                $plain = Ansi::strip(TuiRenderer::renderView($app->withVideoPlayer($screen), 120, 30)->body);
 
-            $screen->stop();
+                self::assertStringNotContainsString('┌', $plain, $label . ': no border row may splice into protocol bytes');
+                self::assertStringNotContainsString('│ …', $plain, $label . ': no overflow row may splice into protocol bytes either');
+                self::assertSame(
+                    [],
+                    TuiRenderer::chromeScanner()->prefixed(MenuBar::MENU_ITEM_ZONE_PREFIX),
+                    $label . ': the graphics leg must not mark rows it did not paint',
+                );
+
+                $screen->stop();
+            }
+        } finally {
+            RendererFactory::setDiagnoseForTesting(null);
         }
 
         MenuBar::closeMenu();
@@ -208,6 +221,20 @@ final class MenuOverlayFrameTest extends TestCase
             30,
         )->body);
         self::assertStringContainsString('┌', $control, 'control: the text leg splices — the refusal is the mode');
+    }
+
+    /**
+     * Script the capability memo so this process believes the seat speaks the
+     * graphics protocols (the M1 door's sanctioned test seam; the caller
+     * clears it in its finally block).
+     */
+    private function armGraphicsCapableSeat(): void
+    {
+        RendererFactory::setDiagnoseForTesting(new ProbeReport([
+            Capability::Sixel->value => true,
+            Capability::KittyKeyboard->value => true,
+            Capability::ITerm2->value => true,
+        ]));
     }
 
     /**

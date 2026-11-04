@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Video\Tests\Render;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Probe\Capability;
 use SugarCraft\ColorProfile\Probe\ProbeReport;
+use SugarCraft\Image\TermDb;
 use SugarCraft\Video\Render\FrameRenderer;
 use SugarCraft\Video\Render\GraphicsRenderer;
 use SugarCraft\Video\Render\Mode;
@@ -59,6 +61,37 @@ final class CapabilityDoorTest extends TestCase
                 );
             }
         }
+    }
+
+    /**
+     * The door may refuse an EXPLICIT choice, but the auto ladder is never an
+     * explicit choice: on a seat with no graphics capability EVERY ladder leg
+     * must walk to a rung that passes this very door. The legs are walked
+     * through the pure seam with explicit profiles, so no CI host's live
+     * color profile can hide one. This is the structural law the ladder and
+     * the door share signals for — and the production default path
+     * (Player::open() with no mode, the candy-code ladder fallback) renders
+     * through it on every ordinary terminal.
+     */
+    public function testTheAutoLadderDegradesOnABlindSeatInsteadOfHandingTheDoorAGarbageMode(): void
+    {
+        RendererFactory::setDiagnoseForTesting(new ProbeReport([]));
+
+        $modern = TermDb::matchChain(['TERM' => 'xterm-256color', 'COLORTERM' => 'truecolor']);
+
+        foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, null] as $profile) {
+            $mode = RendererFactory::autoModeFrom(false, false, false, $profile, $modern);
+            $this->assertFalse(
+                $mode->isGraphics(),
+                'a seat that claimed no graphics protocol must not be auto-picked into one (profile ' . var_export($profile, true) . ')',
+            );
+            $this->assertTrue(
+                RendererFactory::supports($mode),
+                'the ladder must never hand the door a mode this seat cannot receive (profile ' . var_export($profile, true) . ')',
+            );
+        }
+
+        $this->assertInstanceOf(FrameRenderer::class, RendererFactory::auto(), 'auto() must build, never throw');
     }
 
     public function testTextRungsAreAlwaysTransportSafe(): void

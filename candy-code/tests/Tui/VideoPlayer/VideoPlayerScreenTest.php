@@ -15,10 +15,13 @@ use SugarCraft\Code\Tui\VideoPlayer\PlayerReadyMsg;
 use SugarCraft\Code\Tui\VideoPlayer\Scrubber;
 use SugarCraft\Code\Tui\VideoPlayer\VideoPlayerKeys;
 use SugarCraft\Code\Tui\VideoPlayer\VideoPlayerScreen;
+use SugarCraft\ColorProfile\Probe\Capability;
+use SugarCraft\ColorProfile\Probe\ProbeReport;
 use SugarCraft\Video\Decode\RgbFrame;
 use SugarCraft\Video\Msg\TickMsg;
 use SugarCraft\Video\Player;
 use SugarCraft\Video\Render\Mode;
+use SugarCraft\Video\Render\RendererFactory;
 
 /**
  * The W5.4 player surface in isolation: state machine, chrome composition,
@@ -115,22 +118,32 @@ final class VideoPlayerScreenTest extends TestCase
     {
         // Raw rgb24 frames: GraphicsRenderer encodes them through GD into the
         // iterm2 envelope itself — the scripted decoder never fakes a PNG.
-        [$player] = $this->vpScriptedPlayer(Mode::Iterm2);
-        $screen = $this->vpReady($player, Mode::Iterm2);
-        [$ticked] = $screen->update(new TickMsg());
+        // The M1 capability door (RendererFactory::new) refuses an EXPLICIT
+        // graphics mode on a seat that never claimed the protocol, so this
+        // pin scripts the capability memo — the lib's own sanctioned seam —
+        // rather than lying about the mode it means to exercise.
+        $this->armGraphicsCapableSeat();
 
-        $view = $ticked->view(Theme::byName('dark'), 80, 20);
-        $cursor = Ansi::cursorTo(20, 1);
+        try {
+            [$player] = $this->vpScriptedPlayer(Mode::Iterm2);
+            $screen = $this->vpReady($player, Mode::Iterm2);
+            [$ticked] = $screen->update(new TickMsg());
 
-        $at = strpos($view, $cursor);
-        self::assertGreaterThan(0, $at, 'the cursor op lands after the blob, not at position zero');
+            $view = $ticked->view(Theme::byName('dark'), 80, 20);
+            $cursor = Ansi::cursorTo(20, 1);
 
-        $tail = substr($view, (int) $at);
-        self::assertStringStartsWith($cursor . Ansi::eraseLine(), $tail);
-        self::assertStringNotContainsString("\n", substr($tail, strlen($cursor)), 'no newline may ride after the cursor op');
-        self::assertStringContainsString(Scrubber::HEAD, $tail);
-        self::assertStringContainsString(VideoPlayerKeys::hint(), $tail);
-        self::assertFalse($ticked->clipsLines());
+            $at = strpos($view, $cursor);
+            self::assertGreaterThan(0, $at, 'the cursor op lands after the blob, not at position zero');
+
+            $tail = substr($view, (int) $at);
+            self::assertStringStartsWith($cursor . Ansi::eraseLine(), $tail);
+            self::assertStringNotContainsString("\n", substr($tail, strlen($cursor)), 'no newline may ride after the cursor op');
+            self::assertStringContainsString(Scrubber::HEAD, $tail);
+            self::assertStringContainsString(VideoPlayerKeys::hint(), $tail);
+            self::assertFalse($ticked->clipsLines());
+        } finally {
+            RendererFactory::setDiagnoseForTesting(null);
+        }
     }
 
     public function testCloseKeysAreInterceptedByTheGateNotTheScreen(): void
@@ -226,6 +239,20 @@ final class VideoPlayerScreenTest extends TestCase
             Scrubber::render(16.0, 8.0, 24),
             'a clock past its duration parks the head at the tail, never overflows',
         );
+    }
+
+    /**
+     * Script the capability memo so this process believes the seat speaks the
+     * graphics protocols (the M1 door's sanctioned test seam; the caller
+     * clears it in its finally block).
+     */
+    private function armGraphicsCapableSeat(): void
+    {
+        RendererFactory::setDiagnoseForTesting(new ProbeReport([
+            Capability::Sixel->value => true,
+            Capability::KittyKeyboard->value => true,
+            Capability::ITerm2->value => true,
+        ]));
     }
 
     /**
