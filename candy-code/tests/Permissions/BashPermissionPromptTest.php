@@ -78,7 +78,10 @@ final class BashPermissionPromptTest extends TestCase
 
         $out = self::plain($asking);
 
-        self::assertStringContainsString('Run this command?', $out);
+        // CC-UXD-09: the engine ask states its own question, so the
+        // renderer's generic header stands down — one question, not two.
+        self::assertStringContainsString('Allow Bash to run? (permission mode: default)', $out);
+        self::assertStringNotContainsString('Run this command?', $out);
         self::assertStringContainsString('$ cd /home/sites/sugarcraft && ls -d */ | head -80', $out, 'the command itself is on screen');
         self::assertStringContainsString('git log --oneline -3', $out, 'all of it, wrapped');
         self::assertStringContainsString("Agent's note: List workspace lib directories", $out);

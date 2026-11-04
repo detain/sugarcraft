@@ -7647,16 +7647,21 @@ final class Renderer
         // owner — the box's own border + padding(1, 2).)
         $inner = max(1, min(self::PERMISSION_MODAL_COLS, $chat->cols() - self::PERMISSION_MODAL_CHROME_COLS));
 
+        // CC-UXD-09: hoisted above the subject so the shell branch can see
+        // whether the request already states its own question — a gate that
+        // reads "Run this command?" twice, once as the renderer's header and
+        // once as the ask's message, asks nothing new the second time.
+        $prompt = self::wrapPermissionText($request->prompt, $inner);
+
         $lines = [
             Style::new()->foreground($theme->userLabel)->bold()
                 ->render(self::PERMISSION_TITLE_ICON . self::permissionTitle(
                     $call->name,
                     $inner - Width::of(self::PERMISSION_TITLE_ICON),
                 )),
-            ...self::permissionSubjectLines($call, $inner, $theme, $chat->projectRoot(), $chat->isToolOutputExpanded($call->id)),
+            ...self::permissionSubjectLines($call, $inner, $theme, $chat->projectRoot(), $chat->isToolOutputExpanded($call->id), $prompt !== ''),
         ];
 
-        $prompt = self::wrapPermissionText($request->prompt, $inner);
         if ($prompt !== '') {
             $lines[] = '';
             $lines[] = Style::new()->foreground($theme->systemLabel)->render($prompt);
@@ -7963,8 +7968,11 @@ final class Renderer
      * three file-changing tools the read-only preview diff the call would
      * produce. $expanded (the `v` key, riding the transcript's own expansion
      * map) lifts the preview's row cap; null previews degrade to arguments.
+     * $askStated (CC-UXD-09) means the request already carries its own
+     * question line, so the shell header — whose text is itself a question —
+     * is suppressed and the `$ ` gutter marks the block as the subject.
      */
-    private static function permissionSubjectLines(\SugarCraft\Code\ToolCall $call, int $inner, Theme $theme, string $root = '', bool $expanded = false): array
+    private static function permissionSubjectLines(\SugarCraft\Code\ToolCall $call, int $inner, Theme $theme, string $root = '', bool $expanded = false, bool $askStated = false): array
     {
         $arguments = $call->arguments;
         $caption = $arguments['description'] ?? null;
@@ -7978,8 +7986,10 @@ final class Renderer
         $command = $isShell ? ($arguments['command'] ?? null) : null;
         $lines = [];
         if (\is_string($command) && trim($command) !== '') {
-            $lines[] = Style::new()->foreground($theme->userLabel)->bold()
-                ->render(self::wrapPermissionText(Lang::t('tui.permission.run_command'), $inner));
+            if (!$askStated) {
+                $lines[] = Style::new()->foreground($theme->userLabel)->bold()
+                    ->render(self::wrapPermissionText(Lang::t('tui.permission.run_command'), $inner));
+            }
             $lines[] = Style::new()->foreground($theme->assistantLabel)
                 ->render(self::permissionCommandBlock($command, $inner));
         } else {

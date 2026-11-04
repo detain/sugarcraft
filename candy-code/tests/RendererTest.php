@@ -2260,6 +2260,32 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('y ', $stripped, 'the first answer key survives even the extreme window');
     }
 
+    // CC-UXD-09: the permission question is printed ONCE.
+
+    public function testTheModalPrintsOneQuestionWhenTheAskStatesItsOwn(): void
+    {
+        // The engine path carries the ask's message as request->prompt; the
+        // shell subject block used to add its own 'Run this command?' header
+        // on top — a hook quoting that very sentence as its question printed
+        // the same words twice inside one modal.
+        $out = Ansi::strip(self::permissionModal($this->chatAwaitingPermission(
+            'Run this command?',
+            ['command' => 'rm -rf build', 'description' => 'x'],
+        )));
+
+        $this->assertSame(1, substr_count($out, 'Run this command?'));
+    }
+
+    public function testTheModalKeepsTheGenericHeaderWhenTheAskCarriesNoQuestion(): void
+    {
+        $out = Ansi::strip(self::permissionModal($this->chatAwaitingPermission(
+            '',
+            ['command' => 'rm -rf build', 'description' => 'x'],
+        )));
+
+        $this->assertSame(1, substr_count($out, 'Run this command?'), 'with no stated question the header is the only one');
+    }
+
     /**
      * The permission modal's box straight from the private renderer — the
      * same string the frame composites, without the transcript around it.
