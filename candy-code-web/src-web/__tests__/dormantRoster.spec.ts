@@ -25,9 +25,9 @@ const DORMANT_REASONS: Record<string, string> = {
   // in the same commit that added the caller, per this spec's own rule.
   // C-WEB-5.g wired server.shutdown's only caller (the confirmed About stop);
   // its roster row came out in that step, per this spec's own rule.
-  // C-SES-7.e shipped the session.import method; the browser's import dialog
-  // arrives with a later step — external clients ride the wire meanwhile.
-  'session.import': 'transcript import rides the protocol for external clients; the browser import dialog lands with a later step',
+  // C-SES-7.e shipped session.import and CW-EU-01 wired its browser seat (the
+  // sidebar's Import affordance); that roster row came out in the same commit
+  // as the caller, per this spec's own rule.
 }
 
 /** Every module that ships to the browser: src minus the generated schema, tests and fixtures. */

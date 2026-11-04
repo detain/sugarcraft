@@ -28,6 +28,14 @@ const slowCreating = useSlowPending(() => creating.value)
 const error = ref<string | null>(null)
 /** WEB-1a: the session whose row action menu is open, at most one at a time. */
 const menuFor = ref<string | null>(null)
+/**
+ * CW-EU-01 (web seat for session.import): the file picker is driven by the
+ * Import button through this hidden input — the input itself is never in
+ * the tab order, and its value is cleared after every attempt so re-picking
+ * the same file still fires change.
+ */
+const fileInput = ref<HTMLInputElement | null>(null)
+const importing = ref(false)
 
 /**
  * MA-32: the menu had no dismissal beyond its own toggle — a click anywhere else left it
@@ -150,6 +158,34 @@ async function create(incognito = false): Promise<void> {
     error.value = failure instanceof Error ? failure.message : String(failure)
   } finally {
     creating.value = false
+  }
+}
+
+/**
+ * CW-EU-01/CWPM-3 (web seat for session.import): upload a transcript file
+ * and follow the minted session, exactly as a creation does. The server
+ * detects the source format from the content and idempotency rides the
+ * protocol lane's keying; a refusal lands in the sidebar's one error line.
+ */
+function pickTranscript(): void {
+  fileInput.value?.click()
+}
+
+async function importTranscript(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || importing.value) return
+  importing.value = true
+  error.value = null
+  try {
+    const content = await file.text()
+    const summary = await connection.request('session.import', { content, name: file.name })
+    if (summary) open(summary.id)
+  } catch (failure) {
+    error.value = failure instanceof Error ? failure.message : String(failure)
+  } finally {
+    importing.value = false
   }
 }
 
@@ -370,6 +406,11 @@ function onKey(event: KeyboardEvent): void {
         {{ createKind === 'plain' && slowCreating ? t('web.chrome.about.loading') : t('web.chrome.sidebar.new') }}
       </button>
       <button type="button" :disabled="creating || !connection.connected" :aria-busy="creating" :title="!connection.connected ? t('web.chrome.banner.no_answer') : t('web.chrome.sidebar.incognito_hint')" data-testid="new-incognito" @click="create(true)">{{ createKind === 'incognito' && slowCreating ? t('web.chrome.about.loading') : t('web.chrome.sidebar.incognito_button') }}</button>
+      <!-- CW-EU-01: the import seat, mirroring the create pair's busy/disabled
+           discipline; session.import is write-scoped, so a read-only
+           connection is not shown a door it cannot open. -->
+      <input ref="fileInput" type="file" accept=".json,.md,.txt" class="pick-file" data-testid="import-file" @change="importTranscript">
+      <button v-if="canWrite" type="button" :disabled="importing || !connection.connected" :aria-busy="importing" :title="connection.connected ? undefined : t('web.chrome.banner.no_answer')" data-testid="import-session" @click="pickTranscript">Import</button>
     </div>
     <input v-model="filter" type="search" :placeholder="t('web.chrome.sidebar.filter_placeholder')" :aria-label="t('web.chrome.sidebar.filter_aria')">
     <!-- C-SES-7.e: the tray toggle drives the store's re-read of the server. -->
@@ -445,6 +486,11 @@ function onKey(event: KeyboardEvent): void {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+/* CW-EU-01: the file input is a programmatic trigger for the OS picker —
+   the Import button carries the label and focus, the input carries neither. */
+.pick-file {
+  display: none;
 }
 .tray {
   display: flex;
