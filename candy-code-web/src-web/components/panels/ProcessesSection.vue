@@ -350,31 +350,31 @@ pre {
 .processes :deep(.ansi-inverse) {
   filter: invert(1);
 }
-/* fg-black would vanish on the dark theme; it rides the muted foreground. */
-.processes :deep(.ansi-fg-black) {
-  color: #6a737d;
-}
-.processes :deep(.ansi-fg-red) { color: #e05c5c; }
-.processes :deep(.ansi-fg-green) { color: #57ab5a; }
-.processes :deep(.ansi-fg-yellow) { color: #c8a103; }
-.processes :deep(.ansi-fg-blue) { color: #4078c2; }
-.processes :deep(.ansi-fg-magenta) { color: #b37ac4; }
-.processes :deep(.ansi-fg-cyan) { color: #39a8b5; }
-.processes :deep(.ansi-fg-white) { color: #d1d5da; }
-.processes :deep(.ansi-fg-bright-black) { color: #959da5; }
-.processes :deep(.ansi-fg-bright-red) { color: #f08080; }
-.processes :deep(.ansi-fg-bright-green) { color: #7bc97e; }
-.processes :deep(.ansi-fg-bright-yellow) { color: #e8c547; }
-.processes :deep(.ansi-fg-bright-blue) { color: #74b3e8; }
-.processes :deep(.ansi-fg-bright-magenta) { color: #d6a8e0; }
-.processes :deep(.ansi-fg-bright-cyan) { color: #66ccd9; }
-.processes :deep(.ansi-fg-bright-white) { color: #ffffff; }
-.processes :deep(.ansi-bg-black) { background: #1b1f23; }
-.processes :deep(.ansi-bg-red) { background: #e05c5c; }
-.processes :deep(.ansi-bg-green) { background: #57ab5a; }
-.processes :deep(.ansi-bg-yellow) { background: #c8a103; }
-.processes :deep(.ansi-bg-blue) { background: #4078c2; }
-.processes :deep(.ansi-bg-magenta) { background: #b37ac4; }
-.processes :deep(.ansi-bg-cyan) { background: #39a8b5; }
-.processes :deep(.ansi-bg-white) { background: #d1d5da; }
+/* CW-UX-02: the palette follows the active theme through the --ansi-* tokens
+   in tokens.css. fg-black rides --ansi-black-fg — the readable-foreground
+   black convention terminals use, since pure black on a dark card vanishes. */
+.processes :deep(.ansi-fg-black) { color: var(--ansi-black-fg); }
+.processes :deep(.ansi-fg-red) { color: var(--ansi-1); }
+.processes :deep(.ansi-fg-green) { color: var(--ansi-2); }
+.processes :deep(.ansi-fg-yellow) { color: var(--ansi-3); }
+.processes :deep(.ansi-fg-blue) { color: var(--ansi-4); }
+.processes :deep(.ansi-fg-magenta) { color: var(--ansi-5); }
+.processes :deep(.ansi-fg-cyan) { color: var(--ansi-6); }
+.processes :deep(.ansi-fg-white) { color: var(--ansi-7); }
+.processes :deep(.ansi-fg-bright-black) { color: var(--ansi-8); }
+.processes :deep(.ansi-fg-bright-red) { color: var(--ansi-9); }
+.processes :deep(.ansi-fg-bright-green) { color: var(--ansi-10); }
+.processes :deep(.ansi-fg-bright-yellow) { color: var(--ansi-11); }
+.processes :deep(.ansi-fg-bright-blue) { color: var(--ansi-12); }
+.processes :deep(.ansi-fg-bright-magenta) { color: var(--ansi-13); }
+.processes :deep(.ansi-fg-bright-cyan) { color: var(--ansi-14); }
+.processes :deep(.ansi-fg-bright-white) { color: var(--ansi-15); }
+.processes :deep(.ansi-bg-black) { background: var(--ansi-0); }
+.processes :deep(.ansi-bg-red) { background: var(--ansi-1); }
+.processes :deep(.ansi-bg-green) { background: var(--ansi-2); }
+.processes :deep(.ansi-bg-yellow) { background: var(--ansi-3); }
+.processes :deep(.ansi-bg-blue) { background: var(--ansi-4); }
+.processes :deep(.ansi-bg-magenta) { background: var(--ansi-5); }
+.processes :deep(.ansi-bg-cyan) { background: var(--ansi-6); }
+.processes :deep(.ansi-bg-white) { background: var(--ansi-7); }
 </style>

@@ -29,6 +29,29 @@
   --accent-soft: rgb(122 162 247 / 0.12);
   --danger: var(--error);
   --canvas-paper: #ffffff;
+  /* CW-UX-02: the 16-colour ANSI palette. Tail panes paint the content's
+     own SGR colours, so the palette must follow the theme instead of being
+     a pinned GitHub-light constant (dark-theme measurements reached
+     1.24:1). --ansi-N is indexed like the SGR codes (0 black … 7 white,
+     8-15 bright); --ansi-black-fg is the readable-foreground-black
+     convention terminals use when they do not paint black-on-black. */
+  --ansi-0: #15161e;
+  --ansi-1: #f7768e;
+  --ansi-2: #9ece6a;
+  --ansi-3: #e0af68;
+  --ansi-4: #7aa2f7;
+  --ansi-5: #bb9af7;
+  --ansi-6: #7dcfff;
+  --ansi-7: #a9b1d6;
+  --ansi-8: #414868;
+  --ansi-9: #f7768e;
+  --ansi-10: #9ece6a;
+  --ansi-11: #e0af68;
+  --ansi-12: #7aa2f7;
+  --ansi-13: #bb9af7;
+  --ansi-14: #7dcfff;
+  --ansi-15: #c0caf5;
+  --ansi-black-fg: #8b93bb;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 }
@@ -53,6 +76,24 @@
     --ink: #343b58;
     --panel-2: #dfe2ee;
     --accent-soft: rgb(29 95 191 / 0.10);
+    /* CW-UX-02: light keeps the palette's 16 colour identities unchanged. */
+  --ansi-0: #1b1f23;
+    --ansi-1: #e05c5c;
+    --ansi-2: #57ab5a;
+    --ansi-3: #c8a103;
+    --ansi-4: #4078c2;
+    --ansi-5: #b37ac4;
+    --ansi-6: #39a8b5;
+    --ansi-7: #d1d5da;
+    --ansi-8: #959da5;
+    --ansi-9: #f08080;
+    --ansi-10: #7bc97e;
+    --ansi-11: #e8c547;
+    --ansi-12: #74b3e8;
+    --ansi-13: #d6a8e0;
+    --ansi-14: #66ccd9;
+    --ansi-15: #ffffff;
+    --ansi-black-fg: #6a737d;
     --danger: var(--error);
   }
 }
@@ -73,6 +114,24 @@
   --ink: #343b58;
   --panel-2: #dfe2ee;
   --accent-soft: rgb(29 95 191 / 0.10);
+  /* CW-UX-02: light keeps the palette's 16 colour identities unchanged. */
+  --ansi-0: #1b1f23;
+  --ansi-1: #e05c5c;
+  --ansi-2: #57ab5a;
+  --ansi-3: #c8a103;
+  --ansi-4: #4078c2;
+  --ansi-5: #b37ac4;
+  --ansi-6: #39a8b5;
+  --ansi-7: #d1d5da;
+  --ansi-8: #959da5;
+  --ansi-9: #f08080;
+  --ansi-10: #7bc97e;
+  --ansi-11: #e8c547;
+  --ansi-12: #74b3e8;
+  --ansi-13: #d6a8e0;
+  --ansi-14: #66ccd9;
+  --ansi-15: #ffffff;
+  --ansi-black-fg: #6a737d;
   --danger: var(--error);
 }
 
@@ -99,6 +158,24 @@
   --diff-del: rgb(255 85 85 / 0.16);
   --ink: #f8f8f2;      /* DRACULA['foreground'] — text on panels/cards */
   --panel-2: #42444e;  /* lifted row, between currentLineSelection and comment */
+  /* CW-UX-02: the canonical Dracula ANSI set. */
+  --ansi-0: #21222c;
+  --ansi-1: #ff5555;
+  --ansi-2: #50fa7b;
+  --ansi-3: #f1fa8c;
+  --ansi-4: #bd93f9;
+  --ansi-5: #ff79c6;
+  --ansi-6: #8be9fd;
+  --ansi-7: #f8f8f2;
+  --ansi-8: #6272a4;
+  --ansi-9: #ff6e6e;
+  --ansi-10: #69ff94;
+  --ansi-11: #fffebf;
+  --ansi-12: #d6acff;
+  --ansi-13: #ff92df;
+  --ansi-14: #a4ffff;
+  --ansi-15: #ffffff;
+  --ansi-black-fg: #9ea8c3;
   --accent-soft: rgb(255 121 198 / 0.12);
   --danger: var(--error);
 }
@@ -118,6 +195,25 @@
   --diff-del: rgb(247 118 142 / 0.16);
   --ink: #c0caf5;
   --panel-2: #2b3049;
+  /* CW-UX-02: tokyoNight rides the same Tokyo Night ANSI set the dark theme
+     uses — that is what the TUI paints when this palette is selected. */
+  --ansi-0: #15161e;
+  --ansi-1: #f7768e;
+  --ansi-2: #9ece6a;
+  --ansi-3: #e0af68;
+  --ansi-4: #7aa2f7;
+  --ansi-5: #bb9af7;
+  --ansi-6: #7dcfff;
+  --ansi-7: #a9b1d6;
+  --ansi-8: #414868;
+  --ansi-9: #f7768e;
+  --ansi-10: #9ece6a;
+  --ansi-11: #e0af68;
+  --ansi-12: #7aa2f7;
+  --ansi-13: #bb9af7;
+  --ansi-14: #7dcfff;
+  --ansi-15: #c0caf5;
+  --ansi-black-fg: #8b93bb;
   --accent-soft: rgb(187 154 247 / 0.12);
   --danger: var(--error);
 }

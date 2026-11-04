@@ -58,7 +58,14 @@ describe('token guard (CW-UX-04)', () => {
     // --canvas-paper is excluded by design: the canvas iframe renders
     // model-authored HTML that assumes white paper, so it is theme-invariant
     // and set once in :root (same rule as --sans/--mono).
-    const themeDependent = ['--ink']
+    // CW-UX-02: the 16-entry ANSI palette plus its readable-black leg —
+    // every theme must carry the full set, or a tail pane renders SGR
+    // colours through a fallback (or nothing) on that theme.
+    const themeDependent = [
+      '--ink',
+      '--ansi-black-fg',
+      ...Array.from({ length: 16 }, (_, i) => `--ansi-${i}`),
+    ]
     for (const [theme, pattern] of themeBlockPatterns) {
       const body = tokensCss.match(pattern)?.[1]
       expect(body, `tokens.css lost the ${theme} block`).toBeTruthy()
@@ -66,5 +73,17 @@ describe('token guard (CW-UX-04)', () => {
         expect((body as string).includes(`${token}:`), `${token} missing from ${theme}`).toBe(true)
       }
     }
+  })
+
+  it('paints the ANSI rules from tokens, never literal hex (CW-UX-02)', () => {
+    // The 24 :deep(.ansi-fg-*/.ansi-bg-*) rules carry the content palette;
+    // a hex literal there is theme-blind by construction — that was the bug.
+    const vue = readFileSync(resolve(ROOT, 'components/panels/ProcessesSection.vue'), 'utf8')
+    const rules = [...vue.matchAll(/:deep\(\.ansi-(?:fg|bg)-[a-z-]+\) \{[^}]*\}/g)].map((m) => m[0])
+    expect(rules.length, 'the ANSI style block moved or shrank').toBe(24)
+    const strays = rules.filter((rule) => /#[0-9a-fA-F]{3,8}\b/.test(rule))
+    expect(strays, `literal hex in ANSI rules: ${strays.join(' | ')}`).toEqual([])
+    const untokens = rules.filter((rule) => !rule.includes('var(--ansi-'))
+    expect(untokens, `ANSI rules not driven by --ansi-*: ${untokens.join(' | ')}`).toEqual([])
   })
 })
