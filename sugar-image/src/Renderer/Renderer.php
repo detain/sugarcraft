@@ -9,9 +9,10 @@ use SugarCraft\Image\ImageSource;
 /**
  * Contract for image-to-terminal renderers.
  *
- * Each backend (Sixel, Kitty, iTerm2, HalfBlock) implements this
- * interface. Renderers are immutable — all configuration is supplied
- * at construction time via their own factory methods.
+ * Each backend (Sixel, Kitty, iTerm2, Chafa, HalfBlock, QuarterBlock,
+ * ASCII, SymbolMap) implements this interface. Renderers are immutable —
+ * all configuration is supplied at construction time via their own
+ * factory methods.
  *
  * A backend whose construction config changes the encoded bytes
  * beyond what name() identifies (Sixel's dither, Chafa's CLI options)
@@ -32,13 +33,15 @@ interface Renderer
     public function render(ImageSource $image, int $width, ?int $height = null): string;
 
     /**
-     * Stable backend identifier: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock'.
+     * Stable backend identifier: 'sixel' | 'kitty' | 'iterm2' | 'chafa' |
+     * 'halfblock' | 'quarterblock' | 'ascii' | 'symbols'.
      */
     public function name(): string;
 
     /**
      * True if this backend supports partial transparency (alpha channel).
-     * Half-block does not; Sixel and Kitty do.
+     * The graphics tiers (Sixel, Kitty, iTerm2, Chafa) do; the text tiers
+     * (half-block, quarter-block, ASCII, symbol map) do not.
      *
      * ADVISORY — capability reporting, not mode
      * selection. No logic consumer exists tree-wide (the tmux/screen
@@ -61,9 +64,10 @@ interface Renderer
     /**
      * True if {@see render()} produces inline cell text — newline-separated
      * rows, one terminal line per cell row — that can be placed directly in a
-     * text frame and stitched beside other content (half/quarter-block, ASCII).
+     * text frame and stitched beside other content (half-block,
+     * quarter-block, ASCII, symbol map, and Chafa).
      *
-     * False for pixel-graphics protocols (Sixel, Kitty, iTerm2) whose output is
+     * False for the pixel-graphics protocols (Sixel, Kitty, iTerm2) whose output is
      * one opaque escape blob with no per-row structure: it must be painted as an
      * out-of-band overlay (see sugar-core's `ImageOverlay`) rather than embedded
      * in the frame. Lets a caller route output without hard-coding protocol names.
