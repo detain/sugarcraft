@@ -1,20 +1,27 @@
 /**
  * Local structural types for the viewer-token RPC family — the G5-G seam.
  *
- * SEAM (G4-E): the token.grant / token.list / token.revoke defs are specced in
- * /tmp/opencode/reviews-1103/design/X-DESIGN1.md §D-2 and handed off in
- * /tmp/opencode/reviews-1103/fixes/G4-G.md ## HANDOFFS, but they are NOT in
- * src-web/protocol/generated.ts yet — that file is regenerated from the server
- * schema by `npm run gen:protocol`, which is G4-E's weld duty. Until then the
- * panel types the family from this file and routes calls through tokenRpc(),
- * which casts around the generated MethodName union.
+ * SEAM: the token.grant / token.list / token.revoke defs are specced in
+ * /tmp/opencode/reviews-1103/design/X-DESIGN1.md §D-2 and realized server-side
+ * by TokenMethods (G4-G + addendum, rv1103/g4ga). This branch's
+ * src-web/protocol/generated.ts predates that weld chain, so the token.*
+ * names are absent from its generated maps here; the panel types the family
+ * from this file and routes calls through tokenRpc(), which casts around the
+ * generated MethodName union.
  *
- * When G4-E's regenerated generated.ts lands (weld order law: G4-E → G4-G →
- * G5-G), the swap is mechanical: delete tokenRpc() and this file's Params/
- * Result aliases, call `connection.request('token.list', {})` directly — the
- * generated maps will name the same shapes — and the panel needs no other
- * change. If a shape here ever disagrees with the HANDOFFS section, HANDOFFS
- * wins; fix this file to match, never the server.
+ * Now that the G4-G chain (with its addendum) carries the realized handlers
+ * and the regenerated generated.ts (weld order law: G4-E → G4-G/addendum →
+ * G5-G), the swap is mechanical and the welder's option: delete tokenRpc()
+ * and this file's Params/Result aliases, call
+ * `connection.request('token.list', {})` directly — the generated maps name
+ * the same shapes — and the panel needs no other change. If a shape here
+ * ever disagrees with the server's TokenMethods answer, the server wins;
+ * fix this file to match, never the server. Two realized-shape laws this
+ * file previously drifted from and now pins (G4-G-ADDENDUM review MAJOR-1):
+ *  - `createdAt`/`expiresAt` are ISO-8601 strings (`date(ATOM)` of the
+ *    store's float), NOT epoch numbers;
+ *  - a token.list row OMITS the `sessionIds` key entirely when the grant is
+ *    unpinned — the wire never carries null there.
  *
  * Copy note: the panel's sentences are inline English rostered in
  * src-web/__tests__/rawCopyCensus.spec.ts, with the catalogue keys filed as a
@@ -36,14 +43,13 @@ export interface TokenGrantRow {
   readonly id: string
   readonly label: string
   readonly scopes: string[]
-  /** null = the grant covers every session; [] would cover none. */
-  readonly sessionIds: string[] | null
-  /** Epoch seconds (the store stamps microtime floats). */
-  readonly createdAt: number
-  /** Epoch seconds — absolute, never slid by use. */
-  readonly expiresAt: number
-  /** Epoch seconds when the bearer last authenticated; absent never-used. */
-  readonly lastUsedAt?: number | null
+  /** Absent = the grant covers every session (the server omits the key
+   * rather than answering null); a present [] would cover none. */
+  readonly sessionIds?: string[]
+  /** ISO-8601 (`date(ATOM)` of the store's float) — the server's stamp(). */
+  readonly createdAt: string
+  /** ISO-8601 — absolute, never slid by use. */
+  readonly expiresAt: string
 }
 
 export interface TokenListResult {
@@ -65,8 +71,9 @@ export interface TokenGrantResult {
   readonly token: string
   readonly label: string
   readonly scopes: string[]
-  readonly createdAt: number
-  readonly expiresAt: number
+  /** ISO-8601 stamps — same `date(ATOM)` shape as the list rows. */
+  readonly createdAt: string
+  readonly expiresAt: string
 }
 
 export interface TokenRevokeParams {

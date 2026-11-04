@@ -24,14 +24,19 @@ const tick = async (): Promise<void> => {
   await flushPromises()
 }
 
+/**
+ * Realized-server shapes (G4-G + addendum, TokenMethods): stamps are
+ * ISO-8601 `date(ATOM)` strings and an unpinned list row OMITS the
+ * sessionIds key entirely — fabricating the old epoch-number / explicit-
+ * null drift here would make this suite a false oracle.
+ */
 const ROW = {
   id: 'a1b2c3d4',
   label: 'demo-viewer',
   scopes: ['read'],
-  sessionIds: null,
-  createdAt: 1_760_000_000.5,
-  expiresAt: 1_762_592_000.5,
-  lastUsedAt: 1_760_100_000.25,
+  // No sessionIds key: the unpinned wire shape omits it, never nulls it.
+  createdAt: '2026-10-09T09:46:40+00:00',
+  expiresAt: '2026-11-08T12:00:00+00:00',
 }
 
 const LIST = { tokens: [ROW] }
@@ -41,8 +46,8 @@ const MINT = {
   token: 'cv1_' + '0'.repeat(40),
   label: 'fresh',
   scopes: ['read'],
-  createdAt: 1_760_200_000.5,
-  expiresAt: 1_762_792_000.5,
+  createdAt: '2026-10-11T08:00:00+00:00',
+  expiresAt: '2026-11-10T08:00:00+00:00',
 }
 
 async function open(hello: Record<string, unknown> = {}): Promise<ReturnType<typeof mount>> {
@@ -75,8 +80,47 @@ describe('TokenPanel list (G5-G)', () => {
     expect(wrapper.find('[data-testid="tokens-row-a1b2c3d4"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="tokens-row-a1b2c3d4"]').text()).toContain('demo-viewer')
     expect(wrapper.text()).toContain('all sessions')
+    // The realized stamp is an ISO string; the row renders its UTC expiry.
+    // Under the old epoch math this render throws RangeError — crash pin.
+    expect(wrapper.find('[data-testid="tokens-row-a1b2c3d4"]').text()).toContain('Expires 2026-11-08 12:00 UTC')
     // The list result has no token field and nothing renders a cv1_ string.
     expect(wrapper.text()).not.toContain('cv1_')
+  })
+
+  it('renders the unpinned state for a row whose sessionIds key is omitted', async () => {
+    // G4-G-ADDENDUM review MAJOR-1(b): the wire never answers null here —
+    // the key is simply absent, and the row must not touch .length on it.
+    const wrapper = await open()
+    await wire.answer('token.list', { tokens: [{ ...ROW, id: 'unpin1', label: 'unpinned-row' }] })
+    await tick()
+    const row = wrapper.find('[data-testid="tokens-row-unpin1"]')
+    expect(row.exists()).toBe(true)
+    expect(row.text()).toContain('all sessions')
+    expect(row.text()).not.toContain('pinned to')
+  })
+
+  it('renders a pinned row from the present-array shape', async () => {
+    const wrapper = await open()
+    await wire.answer('token.list', { tokens: [{ ...ROW, id: 'pin100', label: 'pinned-row', sessionIds: ['s1', 's2'] }] })
+    await tick()
+    expect(wrapper.find('[data-testid="tokens-row-pin100"]').text()).toContain('pinned to 2 sessions')
+  })
+
+  it('sorts newest-first by the parsed instant, honouring each stamp offset', async () => {
+    // summer-east is 10:00Z and summer-z is 10:30Z: a raw string compare
+    // would rank '…T12:00:00+02:00' above '…T10:30:00+00:00'. Date.parse
+    // does not. Feeding an already-sorted-by-string order makes every
+    // wrong comparator produce a wrong DOM order.
+    const summerEast = { id: 'stmr-east', label: 'summer-east', scopes: ['read'], createdAt: '2026-06-01T12:00:00+02:00', expiresAt: '2026-07-01T00:00:00+02:00' }
+    const summerZ = { id: 'stmr-zulu', label: 'summer-zulu', scopes: ['read'], createdAt: '2026-06-01T10:30:00+00:00', expiresAt: '2026-07-01T00:00:00+00:00' }
+    const winterZ = { id: 'wntr-zulu', label: 'winter-zulu', scopes: ['read'], createdAt: '2026-01-15T09:00:00+00:00', expiresAt: '2026-02-14T09:00:00+00:00' }
+    const wrapper = await open()
+    await wire.answer('token.list', { tokens: [winterZ, summerEast, summerZ] })
+    await tick()
+    const ids = wrapper
+      .findAll('li.row')
+      .map((li) => li.attributes('data-testid') ?? '')
+    expect(ids).toEqual(['tokens-row-stmr-zulu', 'tokens-row-stmr-east', 'tokens-row-wntr-zulu'])
   })
 
   it('states the empty', async () => {
@@ -102,6 +146,8 @@ describe('TokenPanel grant (G5-G)', () => {
     await wire.answer('token.grant', MINT)
     await tick()
     expect(wrapper.find('[data-testid="tokens-mint-token"]').text()).toBe(MINT.token)
+    // The mint answer carries the same ISO stamp shape (expiryLabel crash pin).
+    expect(wrapper.find('.mint-meta').text()).toContain('Expires 2026-11-10 08:00 UTC')
   })
 
   it('drops the raw token for good when the mint dialog closes, and reloads', async () => {

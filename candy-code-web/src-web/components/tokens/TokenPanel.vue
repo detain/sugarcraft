@@ -57,12 +57,22 @@ onMounted(() => {
   if (canManage.value) void reload()
 })
 
-function expiryLabel(expiresAt: number): string {
-  return new Date(expiresAt * 1000).toISOString().slice(0, 16).replace('T', ' ')
+/**
+ * The realized server stamps ISO-8601 (`date(ATOM)`), not epoch seconds —
+ * parse the string and render UTC, matching the 'Expires {when} UTC'
+ * catalogue line. (G4-G-ADDENDUM review MAJOR-1.)
+ */
+function expiryLabel(expiresAt: string): string {
+  return new Date(expiresAt).toISOString().slice(0, 16).replace('T', ' ')
 }
 
+/**
+ * The list answer OMITS `sessionIds` for an unpinned grant — omitted means
+ * no session restriction, the same law the old explicit null carried.
+ */
 function sessionsLabel(row: TokenGrantRow): string {
-  return row.sessionIds === null ? 'all sessions' : `pinned to ${String(row.sessionIds.length)} sessions`
+  const ids = row.sessionIds ?? null
+  return ids === null ? 'all sessions' : `pinned to ${String(ids.length)} sessions`
 }
 
 /** The uniform-401 discriminator: kind travels in the error envelope (HANDOFFS). */
@@ -85,7 +95,11 @@ async function reload(): Promise<void> {
   error.value = ''
   try {
     const result = await tokenRpc<TokenListResult>(connection, 'token.list', {})
-    grants.value = [...result.tokens].sort((a, b) => b.createdAt - a.createdAt)
+    // Newest-first over the ISO stamps: Date.parse honours each stamp's own
+    // offset (the server formats with date(ATOM), so summer and winter rows
+    // on a DST server can legitimately carry different offsets — a raw
+    // string compare would misorder those).
+    grants.value = [...result.tokens].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
   } catch (failure) {
     refuse(failure)
   } finally {
