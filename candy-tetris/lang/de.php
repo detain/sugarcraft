@@ -17,15 +17,15 @@ return [
     'score_card' => 'Punkte: %d
 Zeilen: %d
 Level:  %d',
-    'help_card'  => '← →  bewegen
-↑ x  im Uhrzeigersinn
-z    gegen den Uhrz.
-↓    langsam fallen
-spc  schnell fallen
-c    Lager
-p    Pause
-r    Neustart
-q    beenden',
+    'help_card'  => 'bewegen
+im Uhrzeigersinn
+gegen den Uhrz.
+langsam fallen
+schnell fallen
+Lager
+Pause
+Neustart
+beenden',
     'next_label' => 'nächste:',
     'hold_label' => 'Lager:',
     'paused'     => '[ Pause — p zum Fortsetzen ]',
@@ -50,7 +50,11 @@ q    beenden',
     'win.player'     => 'DU GEWINNST!',
     'win.computer'   => 'COMPUTER GEWINNT!',
     'over.quit_hint' => 'q zum Beenden',
-    'vs_keys'        => 'spc fallen  c Lager  p Pause  r Neustart  q beenden',
+    'vs_keys'        => 'fallen
+Lager
+Pause
+Neustart
+beenden',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: unbekannter Modus "{flag}"',

@@ -14,7 +14,7 @@ declare(strict_types=1);
 return [
     // Single-player renderer
     'score_card'   => "score:  %d\nlines:  %d\nlevel:  %d",
-    'help_card'    => "← →  move\n↑ x  rotate cw\nz    rotate ccw\n↓    soft drop\nspc  hard drop\nc    hold\np    pause\nr    restart\nq    quit",
+    'help_card'    => "move\nrotate cw\nrotate ccw\nsoft drop\nhard drop\nhold\npause\nrestart\nquit",
     'next_label'   => 'next:',
     'hold_label'   => 'hold:',
     'paused'       => '[ paused — press p to resume ]',
@@ -44,7 +44,11 @@ return [
     'win.computer'   => 'COMPUTER WINS!',
     'over.quit_hint' => 'press q to quit',
     // MA-9: the VS match strip names the bindings the old frame never showed.
-    'vs_keys'        => 'spc hard  c hold  p pause  r restart  q quit',
+    'vs_keys'        => 'hard
+hold
+pause
+restart
+quit',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: unknown mode "{flag}"',

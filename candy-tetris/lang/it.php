@@ -17,15 +17,15 @@ return [
     'score_card' => 'punti:  %d
 linee:  %d
 livello: %d',
-    'help_card'  => '← →  muovi
-↑ x  rotazione oraria
-z    rotazione antior.
-↓    discesa lenta
-spc  discesa rapida
-c    riserva
-p    pausa
-r    ricomincia
-q    esci',
+    'help_card'  => 'muovi
+rotazione oraria
+rotazione antior.
+discesa lenta
+discesa rapida
+riserva
+pausa
+ricomincia
+esci',
     'next_label' => 'successivo:',
     'hold_label' => 'riserva:',
     'paused'     => '[ in pausa — premi p per riprendere ]',
@@ -50,7 +50,11 @@ q    esci',
     'win.player'     => 'HAI VINTO!',
     'win.computer'   => 'VINCE IL COMPUTER!',
     'over.quit_hint' => 'premi q per uscire',
-    'vs_keys'        => 'spc scendi  c riserva  p pausa  r ricomincia  q esci',
+    'vs_keys'        => 'scendi
+riserva
+pausa
+ricomincia
+esci',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: modalità sconosciuta "{flag}"',

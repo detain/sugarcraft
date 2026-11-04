@@ -17,15 +17,15 @@ return [
     'score_card' => 'skor:  %d
 satır: %d
 seviye: %d',
-    'help_card'  => '← →  hareket
-↑ x  saat yönünde
-z    ters yönde
-↓    yumuşak iniş
-spc  sert iniş
-c    bekleme
-p    duraklat
-r    yeniden
-q    çık',
+    'help_card'  => 'hareket
+saat yönünde
+ters yönde
+yumuşak iniş
+sert iniş
+bekleme
+duraklat
+yeniden
+çık',
     'next_label' => 'sonraki:',
     'hold_label' => 'bekleme:',
     'paused'     => '[ duraklatıldı — devam için p ]',
@@ -50,7 +50,11 @@ q    çık',
     'win.player'     => 'KAZANDIN!',
     'win.computer'   => 'BİLGİSAYAR KAZANDI!',
     'over.quit_hint' => 'çıkmak için q',
-    'vs_keys'        => 'spc iniş  c bekleme  p duraklat  r yeniden  q çık',
+    'vs_keys'        => 'iniş
+bekleme
+duraklat
+yeniden
+çık',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: bilinmeyen mod "{flag}"',

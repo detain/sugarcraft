@@ -17,15 +17,15 @@ return [
     'score_card' => '점수: %d
 줄:   %d
 레벨: %d',
-    'help_card'  => '← →  이동
-↑ x  시계 방향 회전
-z    반시계 방향 회전
-↓    소프트 드롭
-spc  하드 드롭
-c    홀드
-p    일시 정지
-r    재시작
-q    종료',
+    'help_card'  => '이동
+시계 방향 회전
+반시계 방향 회전
+소프트 드롭
+하드 드롭
+홀드
+일시 정지
+재시작
+종료',
     'next_label' => '다음:',
     'hold_label' => '홀드:',
     'paused'     => '[ 일시 정지 — p로 재개 ]',
@@ -50,7 +50,11 @@ q    종료',
     'win.player'     => '당신이 이겼습니다!',
     'win.computer'   => '컴퓨터가 이겼습니다!',
     'over.quit_hint' => 'q로 종료',
-    'vs_keys'        => 'spc 드롭  c 홀드  p 정지  r 재시작  q 종료',
+    'vs_keys'        => '드롭
+홀드
+정지
+재시작
+종료',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 알 수 없는 모드 "{flag}"',

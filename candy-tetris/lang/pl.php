@@ -17,15 +17,15 @@ return [
     'score_card' => 'wynik: %d
 linie: %d
 poziom: %d',
-    'help_card'  => '← →  ruch
-↑ x  obrót w prawo
-z    obrót w lewo
-↓    powolny zjazd
-spc  szybki zjazd
-c    bufor
-p    pauza
-r    restart
-q    wyjście',
+    'help_card'  => 'ruch
+obrót w prawo
+obrót w lewo
+powolny zjazd
+szybki zjazd
+bufor
+pauza
+restart
+wyjście',
     'next_label' => 'następny:',
     'hold_label' => 'bufor:',
     'paused'     => '[ pauza — naciśnij p aby wznowić ]',
@@ -50,7 +50,11 @@ q    wyjście',
     'win.player'     => 'WYGRAŁEŚ!',
     'win.computer'   => 'KOMPUTER WYGRAŁ!',
     'over.quit_hint' => 'naciśnij q aby wyjść',
-    'vs_keys'        => 'spc zjazd  c bufor  p pauza  r restart  q wyjście',
+    'vs_keys'        => 'zjazd
+bufor
+pauza
+restart
+wyjście',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: nieznany tryb "{flag}"',

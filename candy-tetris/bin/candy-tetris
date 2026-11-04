@@ -9,6 +9,9 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\LaunchMode;
 use SugarCraft\Tetris\Support\Version;
+use SugarCraft\Tetris\Support\Bindings;
+use SugarCraft\Tetris\Support\KeyMap;
+use SugarCraft\Tetris\Support\Paths;
 use SugarCraft\Tetris\VsGame;
 
 (static function () {
@@ -41,6 +44,17 @@ use SugarCraft\Tetris\VsGame;
     exit(1);
 })();
 
+/**
+ * One-line clamp for startup notices (mirrors the candy-minesweeper
+ * stats-notice shape): control bytes are replaced so a filename from
+ * the environment can never smuggle escapes into the terminal.
+ */
+function cliVisible(string $raw): string
+{
+    $clean = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
+    return strlen($clean) > 40 ? substr($clean, 0, 39) . '…' : $clean;
+}
+
 // UI language from $LANG / $LC_ALL (matters only once non-en catalogues
 // exist; 'en' values are byte-identical to the literals they replaced).
 \SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
@@ -69,11 +83,21 @@ if ($mode === LaunchMode::HELP) {
     exit(0);
 }
 
+// m27: the live key map. A missing file leaves the shipped table
+// byte-identical; an unreadable one is ignored LOUDLY on stderr and the
+// game still launches on defaults — never silently on half a map.
+try {
+    $bindings = KeyMap::load(Paths::keys(), Bindings::table());
+} catch (Throwable $problem) {
+    fwrite(STDERR, 'candy-tetris: ignoring unreadable keys file (' . cliVisible($problem->getMessage()) . ")\n");
+    $bindings = Bindings::table();
+}
+
 $game = match ($mode) {
-    LaunchMode::VS => VsGame::start(),
+    LaunchMode::VS => VsGame::start($bindings),
     // Single-player enables lock delay so a grounded piece can still be
     // nudged/rotated for a short window before it locks (W15 / SRS QoL).
-    default => Game::startWithLockDelay(),
+    default => Game::startWithLockDelay(bindings: $bindings),
 };
 
 // MA-12: one capability profile, probed once at launch, drives BOTH the

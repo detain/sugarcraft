@@ -1,0 +1,52 @@
+<?php
+
+/**
+ * candy-tetris/src/Support/Paths.php
+ *
+ * The per-user config slots under the candy-* XDG convention — the same
+ * shape candy-minesweeper's savegame uses (resolved from the environment at
+ * call time, NEVER cached: a process that learned its HOME after boot should
+ * still find its files, and tests sandbox HOME per test).
+ */
+
+declare(strict_types=1);
+
+namespace SugarCraft\Tetris\Support;
+
+final class Paths
+{
+    private const APP_DIR = 'candy-tetris';
+
+    /**
+     * Absolute path of the key-remap file, or null when the environment
+     * names no home (then there is simply no user table).
+     */
+    public static function keys(): ?string
+    {
+        return self::dir() === null ? null : self::dir() . '/keys.json';
+    }
+
+    /**
+     * Absolute path of the high-score/onboarding store (findings MA-23 and
+     * MA-24 share one file so one corrupt file costs one honest notice).
+     */
+    public static function scores(): ?string
+    {
+        return self::dir() === null ? null : self::dir() . '/scores.json';
+    }
+
+    private static function dir(): ?string
+    {
+        $xdg = getenv('XDG_CONFIG_HOME');
+        if ($xdg !== false && $xdg !== '') {
+            return rtrim($xdg, '/') . '/' . self::APP_DIR;
+        }
+
+        $home = getenv('HOME');
+        if ($home === false || $home === '') {
+            return null;
+        }
+
+        return rtrim($home, '/') . '/.config/' . self::APP_DIR;
+    }
+}

@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Tetris;
 
 use SugarCraft\Core\Cmd;
-use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Keys\KeyBindings;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Core\Msg\KeyReleaseMsg;
-use SugarCraft\Core\Msg\KeyRepeatMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\ColorProfile;
 
@@ -52,6 +50,12 @@ final class VsGame implements Model
         public readonly int       $frameCols = VsRenderer::NATURAL_COLS,
         public readonly int       $frameRows = VsRenderer::NATURAL_ROWS,
         public readonly ?ColorProfile $colorProfile = null,
+        /**
+         * m27 live binding registry shared by BOTH inner games and the
+         * strip's derived key row (null = shipped defaults, same law as
+         * {@see Game::$bindings}).
+         */
+        public readonly ?KeyBindings $bindings = null,
     ) {}
 
     /**
@@ -68,24 +72,24 @@ final class VsGame implements Model
      * case-insensitive) — copied rather than exposed because they are
      * per-model dispatch policy, not a public contract.
      */
-    private static function isPress(KeyMsg $msg): bool
+    /**
+     * m27: the live action table for the q/r/p gates this class owns
+     * (the pause toggle stays owned here, not delegated — the gate is
+     * the release/repeat double-fire guard, m11, a duty now carried by
+     * KeyBindings::matches itself). Null bindings resolve to the
+     * shipped default table byte-for-byte.
+     */
+    private function keys(): KeyBindings
     {
-        return !$msg instanceof KeyReleaseMsg && !$msg instanceof KeyRepeatMsg;
-    }
-
-    private static function charKey(KeyMsg $msg, string $key): bool
-    {
-        return self::isPress($msg)
-            && $msg->type === KeyType::Char
-            && \strtolower($msg->rune) === $key;
+        return $this->bindings ?? Support\Bindings::table();
     }
 
     /**
      * Start a new VS Computer game.
      */
-    public static function start(): self
+    public static function start(?KeyBindings $bindings = null): self
     {
-        return new self(Game::start(), Game::start());
+        return new self(Game::start(bindings: $bindings), Game::start(bindings: $bindings), bindings: $bindings);
     }
 
     public function init(): ?\Closure
@@ -125,7 +129,7 @@ final class VsGame implements Model
         // it: q still quits, the tick chain keeps its heartbeat, and a
         // resize back into fit resumes with nothing double-armed (C-2).
         if ($this->tooSmall() === true) {
-            if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
+            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
             if ($msg instanceof GravityMsg) {
@@ -136,13 +140,13 @@ final class VsGame implements Model
 
         // If game is over, only accept quit
         if ($this->over === true) {
-            if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
+            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
-            if ($msg instanceof KeyMsg && self::charKey($msg, 'r')) {
+            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'restart')) {
                 // Restart the pair and arm one fresh tick chain — parity
                 // with the solo game's 'r'.
-                $fresh = self::start()->mutate([
+                $fresh = self::start($this->bindings)->mutate([
                     // The live terminal size survives the restart: the
                     // Program only re-reports on the next SIGWINCH.
                     'frameCols' => $this->frameCols,
@@ -155,7 +159,7 @@ final class VsGame implements Model
         }
 
         // Handle quit key for player
-        if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
+        if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
             return [$this, Cmd::quit()];
         }
 
@@ -165,7 +169,7 @@ final class VsGame implements Model
         // The toggle is owned here rather than delegated: a release or a
         // stray repeat must not flip the flag a second time on the way
         // (m11 — this gate is load-bearing, not a pass-through).
-        if ($msg instanceof KeyMsg && self::charKey($msg, 'p')) {
+        if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'pause')) {
             return [$this->mutate(['player' => $this->player->mutate(['paused' => !$this->player->paused])]), null];
         }
 
@@ -364,6 +368,7 @@ final class VsGame implements Model
             // Nullable: presence, not truthiness, decides (same law as
             // Game::mutate's lockWindowGeneration/colorProfile legs).
             array_key_exists('colorProfile', $changes) ? $changes['colorProfile'] : $this->colorProfile,
+            $changes['bindings'] ?? $this->bindings,
         );
     }
 }

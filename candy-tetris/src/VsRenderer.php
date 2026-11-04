@@ -280,7 +280,7 @@ final class VsRenderer
                 $computer->score->level,
             )),
             $line(sprintf('%s %s        %s %s', Lang::t('next_label'), $nextLetters, Lang::t('hold_label'), $holdText)),
-            $line(Lang::t('vs_keys')),
+            $line(Support\Bindings::vsStrip($player->bindings ?? Support\Bindings::table())),
         ]);
 
         $card = Style::new()

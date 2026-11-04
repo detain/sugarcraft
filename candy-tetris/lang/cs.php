@@ -17,15 +17,15 @@ return [
     'score_card' => 'skóre:  %d
 řádky:  %d
 úroveň: %d',
-    'help_card'  => '← →  posun
-↑ x  otočit ve směru
-z    otočit proti směru
-↓    pomalý pád
-spc  rychlý pád
-c    hold
-p    pauza
-r    restart
-q    konec',
+    'help_card'  => 'posun
+otočit ve směru
+otočit proti směru
+pomalý pád
+rychlý pád
+hold
+pauza
+restart
+konec',
     'next_label' => 'další:',
     'hold_label' => 'hold:',
     'paused'     => '[ pauza — p obnoví hru ]',
@@ -50,7 +50,11 @@ q    konec',
     'win.player'     => 'Vyhrál jsi!',
     'win.computer'   => 'Počítač vyhrál!',
     'over.quit_hint' => 'q pro konec',
-    'vs_keys'        => 'spc pád  c hold  p pauza  r restart  q konec',
+    'vs_keys'        => 'pád
+hold
+pauza
+restart
+konec',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: neznámý režim "{flag}"',

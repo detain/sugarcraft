@@ -17,15 +17,15 @@ return [
     'score_card' => 'score:  %d
 lijnen: %d
 niveau: %d',
-    'help_card'  => '← →  verplaats
-↑ x  met klok mee
-z    tegen klok in
-↓    langzaam laten
-spc  snel laten
-c    opslag
-p    pauze
-r    opnieuw
-q    afsluiten',
+    'help_card'  => 'verplaats
+met klok mee
+tegen klok in
+langzaam laten
+snel laten
+opslag
+pauze
+opnieuw
+afsluiten',
     'next_label' => 'volgende:',
     'hold_label' => 'opslag:',
     'paused'     => '[ gepauzeerd — druk p om verder te gaan ]',
@@ -50,7 +50,11 @@ q    afsluiten',
     'win.player'     => 'JIJ WINT!',
     'win.computer'   => 'COMPUTER WINT!',
     'over.quit_hint' => 'druk q om af te sluiten',
-    'vs_keys'        => 'spc laten  c opslag  p pauze  r opnieuw  q afsluiten',
+    'vs_keys'        => 'laten
+opslag
+pauze
+opnieuw
+afsluiten',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: onbekende modus "{flag}"',

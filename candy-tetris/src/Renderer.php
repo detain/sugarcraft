@@ -293,7 +293,9 @@ final class Renderer
         if ($game->backToBack === true) {
             $score .= "\n" . Lang::t('b2b_line');
         }
-        $help = Lang::t('help_card');
+        // m27: the key column is DERIVED from the live table, so a remap
+        // moves the card text with it — the card can no longer lie.
+        $help = Support\Bindings::helpCard($game->bindings ?? Support\Bindings::table());
 
         $nextStr = Lang::t('next_label') . "\n" . implode("\n\n", $previews);
 

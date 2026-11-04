@@ -17,15 +17,15 @@ return [
     'score_card' => 'スコア: %d
 ライン: %d
 レベル: %d',
-    'help_card'  => '← →  移動
-↑ x  右回転
-z    左回転
-↓    ソフトドロップ
-spc  ハードドロップ
-c    ホールド
-p    一時停止
-r    リスタート
-q    終了',
+    'help_card'  => '移動
+右回転
+左回転
+ソフトドロップ
+ハードドロップ
+ホールド
+一時停止
+リスタート
+終了',
     'next_label' => '次:',
     'hold_label' => 'ホールド:',
     'paused'     => '[ 一時停止中 — p で再開 ]',
@@ -50,7 +50,11 @@ q    終了',
     'win.player'     => 'あなたの勝ち!',
     'win.computer'   => 'コンピューターの勝ち!',
     'over.quit_hint' => 'q で終了',
-    'vs_keys'        => 'spc 落とす  c ホールド  p 停止  r 再開  q 終了',
+    'vs_keys'        => '落とす
+ホールド
+停止
+再開
+終了',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 不明なモード "{flag}"',

@@ -17,15 +17,15 @@ return [
     'score_card' => '分数: %d
 行数: %d
 等级: %d',
-    'help_card'  => '← →  移动
-↑ x  顺时针旋转
-z    逆时针旋转
-↓    软降
-spc  硬降
-c    暂存
-p    暂停
-r    重新开始
-q    退出',
+    'help_card'  => '移动
+顺时针旋转
+逆时针旋转
+软降
+硬降
+暂存
+暂停
+重新开始
+退出',
     'next_label' => '下一个:',
     'hold_label' => '暂存:',
     'paused'     => '[ 已暂停 — 按 p 继续 ]',
@@ -50,7 +50,11 @@ q    退出',
     'win.player'     => '你赢了!',
     'win.computer'   => '电脑赢了!',
     'over.quit_hint' => '按 q 退出',
-    'vs_keys'        => 'spc 硬降  c 暂存  p 暂停  r 重开  q 退出',
+    'vs_keys'        => '硬降
+暂存
+暂停
+重开
+退出',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 未知模式 "{flag}"',

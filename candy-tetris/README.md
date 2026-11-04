@@ -100,10 +100,42 @@ computer wins: the player's field is checked first.
 | r         | New game (after game over only) |
 | q         | Quit              |
 
-These are the bindings. There is no configuration file, environment variable,
-or in-game screen that remaps them — the keys are decided where the input
-handler matches on them, so a layout you dislike is a layout you work around
-for now.
+The table above is the shipped default. The on-screen help card and the
+versus strip are derived from the live table, so a remap shows up wherever
+the game teaches its own keys (see "Remapping keys").
+
+### Remapping keys
+
+Write overrides to `$XDG_CONFIG_HOME/candy-tetris/keys.json` (falling back
+to `$HOME/.config/candy-tetris/keys.json`) as a JSON object that maps an
+action id to a non-empty list of key tokens:
+
+```json
+{ "hold": ["b"], "hard-drop": ["enter"] }
+```
+
+Action ids: `quit`, `pause`, `restart`, `hold`, `move-left`, `move-right`,
+`soft-drop`, `rotate-cw`, `rotate-ccw`, `hard-drop`, `begin`. A token is a
+single character (`"b"`) or a key name (`"left"`, `"down"`, `"space"`,
+`"enter"`, …), case-folded when the file loads. An override REPLACES that
+action's whole list; ids you do not name keep their shipped binding, and
+the versus table is shared — one file drives both fields of a split.
+
+The edges, honestly:
+
+- No file, no change: launches are byte-identical to the defaults, and the
+  game reads nothing at boot.
+- A malformed file is refused LOUDLY — candy-tetris prints
+  `candy-tetris: ignoring unreadable keys file (…)` on stderr and launches
+  on the defaults. One bad entry discards the whole file rather than
+  silently applying half a map.
+- Modifier chords are not in the vocabulary (a deliberate v1 non-goal).
+  The legacy no-modifier-match semantics are preserved exactly: `Ctrl+q`
+  still quits, because nothing consults modifiers.
+- Unknown action ids load fine and simply never fire until something
+  dispatches on that id.
+- One token may serve two actions (by default `space` is both `hard-drop`
+  and `begin`): each screen dispatches in one context.
 
 ### Game over
 

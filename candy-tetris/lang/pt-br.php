@@ -17,15 +17,15 @@ return [
     'score_card' => 'pontos: %d
 linhas: %d
 nível:  %d',
-    'help_card'  => '← →  mover
-↑ x  girar horário
-z    girar anti-horário
-↓    queda suave
-spc  queda rápida
-c    guardar
-p    pausar
-r    reiniciar
-q    sair',
+    'help_card'  => 'mover
+girar horário
+girar anti-horário
+queda suave
+queda rápida
+guardar
+pausar
+reiniciar
+sair',
     'next_label' => 'próxima:',
     'hold_label' => 'reserva:',
     'paused'     => '[ pausado — pressione p para retomar ]',
@@ -50,7 +50,11 @@ q    sair',
     'win.player'     => 'VOCÊ VENCEU!',
     'win.computer'   => 'O COMPUTADOR VENCEU!',
     'over.quit_hint' => 'pressione q para sair',
-    'vs_keys'        => 'spc queda  c guardar  p pausar  r reiniciar  q sair',
+    'vs_keys'        => 'queda
+guardar
+pausar
+reiniciar
+sair',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: modo desconhecido "{flag}"',

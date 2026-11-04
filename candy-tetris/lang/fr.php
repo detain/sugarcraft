@@ -17,15 +17,15 @@ return [
     'score_card' => 'score :  %d
 lignes : %d
 niveau : %d',
-    'help_card'  => '← →  déplacer
-↑ x  rotation horaire
-z    rotation anti-hor.
-↓    chute lente
-spc  chute rapide
-c    réserve
-p    pause
-r    relancer
-q    quitter',
+    'help_card'  => 'déplacer
+rotation horaire
+rotation anti-hor.
+chute lente
+chute rapide
+réserve
+pause
+relancer
+quitter',
     'next_label' => 'suivante :',
     'hold_label' => 'réserve :',
     'paused'     => '[ en pause — appuyez sur p pour reprendre ]',
@@ -50,7 +50,11 @@ q    quitter',
     'win.player'     => 'VOUS GAGNEZ !',
     'win.computer'   => "L'ORDINATEUR GAGNE !",
     'over.quit_hint' => 'appuyez sur q pour quitter',
-    'vs_keys'        => 'spc chute  c réserve  p pause  r relance  q quitter',
+    'vs_keys'        => 'chute
+réserve
+pause
+relance
+quitter',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris : mode inconnu "{flag}"',

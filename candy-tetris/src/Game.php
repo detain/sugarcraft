@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Tetris;
 
 use SugarCraft\Core\Cmd;
-use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Keys\KeyBindings;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
@@ -125,6 +125,13 @@ final class Game implements Model
          * the sidebar badges the token while it is the fresh achievement.
          */
         public readonly ?string      $lastAward = null,
+        /**
+         * m27 live binding registry (null = the shipped default table,
+         * resolved per access through {@see self::keys()}). The launcher
+         * injects the user-configured table when the keys file carries
+         * overrides; tests may inject any registry directly.
+         */
+        public readonly ?KeyBindings $bindings = null,
     ) {}
 
     /** Death by spawn-block: the freshly spawned piece does not fit. */
@@ -178,6 +185,7 @@ final class Game implements Model
             array_key_exists('lastAward', $changes)
                 ? $changes['lastAward']
                 : $this->lastAward,
+            $changes['bindings']      ?? $this->bindings,
         );
     }
 
@@ -192,14 +200,14 @@ final class Game implements Model
         return $this->frameCols < Renderer::MIN_COLS || $this->frameRows < Renderer::MIN_ROWS;
     }
 
-    public static function start(?Bag $bag = null): self
+    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null): self
     {
         $bag ??= new Bag();
         [$first, $bag] = $bag->next();
         $piece = self::spawn($first);
         // init() will arm the gravity chain; the pending slot starts taken
         // so no key path can double-book it before then.
-        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true);
+        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings);
     }
 
     /**
@@ -208,7 +216,7 @@ final class Game implements Model
      * @param int $lockDelayMs Grounded window length in milliseconds
      *                         (SRS-style: ~0.5 s, independent of gravity).
      */
-    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS): self
+    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null): self
     {
         $bag ??= new Bag();
         [$first, $bag] = $bag->next();
@@ -220,6 +228,7 @@ final class Game implements Model
             new Score(),
             lockDelayMs: $lockDelayMs,
             gravityPending: true,
+            bindings: $bindings,
         );
     }
 
@@ -274,15 +283,18 @@ final class Game implements Model
     }
 
     /**
-     * Actuation of one letter/space binding: a press (m11) whose rune
-     * matches case-insensitively (m26 — Caps Lock used to strand every
-     * binding, 'Q' quit included).
+     * m27: the live action table. An un-injected game answers with the
+     * shipped default table, so dispatch without a registry behaves the
+     * way the hardcoded per-arm comparisons did — the press-only rule
+     * (m11) and the case fold (m26) live in KeyBindings::matches, and the
+     * space token now fires on BOTH wire shapes: the legacy decoder
+     * delivers KeyType::Space with rune ' ' (the old charKey arm could
+     * only ever see the hand-built Char fixture shape, never the wire —
+     * README's hard-drop promise was dead on real terminals).
      */
-    private static function charKey(KeyMsg $msg, string $key): bool
+    private function keys(): KeyBindings
     {
-        return self::isPress($msg)
-            && $msg->type === KeyType::Char
-            && \strtolower($msg->rune) === $key;
+        return $this->bindings ?? Support\Bindings::table();
     }
 
     public function update(Msg $msg): array
@@ -309,7 +321,7 @@ final class Game implements Model
             // its heartbeat (consume, re-arm), the lock window stays open
             // for a full delay — so a resize back into fit resumes here
             // with nothing lost and nothing double-armed.
-            if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
+            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
             if ($msg instanceof GravityMsg) {
@@ -328,10 +340,10 @@ final class Game implements Model
         }
 
         if ($this->over === true) {
-            if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
+            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'quit')) {
                 return [$this, Cmd::quit()];
             }
-            if ($msg instanceof KeyMsg && self::charKey($msg, 'r')) {
+            if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'restart')) {
                 // 'r' starts a completely fresh game. The score does NOT
                 // carry over: Score embeds the level, so keeping it would
                 // spawn the new board under the old gravity. The fresh state
@@ -339,8 +351,8 @@ final class Game implements Model
                 // chain is armed right here — init() ran once at boot and
                 // will not re-run.
                 $fresh = $this->lockDelayMs > 0
-                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs)
-                    : self::start();
+                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings)
+                    : self::start(bindings: $this->bindings);
                 // Bump the chain tag so any tick still in flight from the
                 // dead chain lands inert on the fresh board.
                 $fresh = $fresh->mutate([
@@ -417,33 +429,32 @@ final class Game implements Model
      */
     private function handleKey(KeyMsg $msg): array
     {
-        if (self::charKey($msg, 'q')) {
+        if ($this->keys()->matches($msg, 'quit')) {
             return [$this, Cmd::quit()];
         }
-        if (self::charKey($msg, 'p')) {
+        if ($this->keys()->matches($msg, 'pause')) {
             return [$this->withPaused(!$this->paused), null];
         }
         if ($this->paused) {
             // Nothing mutates game state while paused — hold included.
             return [$this, null];
         }
-        if (self::charKey($msg, 'c')) {
+        if ($this->keys()->matches($msg, 'hold')) {
             return $this->tryHold();
         }
 
         return match (true) {
-            $msg->type === KeyType::Left
+            $this->keys()->matches($msg, 'move-left')
                 => $this->tryMove(-1, 0),
-            $msg->type === KeyType::Right
+            $this->keys()->matches($msg, 'move-right')
                 => $this->tryMove(1, 0),
-            $msg->type === KeyType::Down
+            $this->keys()->matches($msg, 'soft-drop')
                 => $this->softDrop(),
-            $msg->type === KeyType::Up,
-            self::charKey($msg, 'x')
+            $this->keys()->matches($msg, 'rotate-cw')
                 => $this->tryRotate(1),
-            self::charKey($msg, 'z')
+            $this->keys()->matches($msg, 'rotate-ccw')
                 => $this->tryRotate(-1),
-            self::charKey($msg, ' ')
+            $this->keys()->matches($msg, 'hard-drop')
                 => $this->hardDrop(),
             default => [$this, null],
         };

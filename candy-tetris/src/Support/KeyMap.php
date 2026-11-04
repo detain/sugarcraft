@@ -1,0 +1,64 @@
+<?php
+
+/**
+ * candy-tetris/src/Support/KeyMap.php
+ *
+ * The user-override half of finding m27: a tiny JSON file — action id to
+ * tokens — folded onto the shipped table. The file is deliberately permissive
+ * about WHICH ids appear (the registry is context-free; naming an action the
+ * game does not dispatch is inert, not an error) and strict about SHAPE,
+ * refusing loudly rather than half-applying a malformed map: a typo in a
+ * key file must not silently strand a binding mid-session.
+ *
+ * A missing file is the defaults — byte for byte, no notices. An unreadable
+ * one costs the session its overrides, not its game: the binary catches the
+ * throw, warns on stderr, and boots the shipped table.
+ */
+
+declare(strict_types=1);
+
+namespace SugarCraft\Tetris\Support;
+
+use SugarCraft\Core\Keys\KeyBindings;
+use SugarCraft\Core\Util\AtomicJsonFile;
+
+final class KeyMap
+{
+    /**
+     * Fold the user's overrides (when the file exists) onto $defaults.
+     *
+     * @throws \RuntimeException when the file is unparseable or malformed
+     */
+    public static function load(?string $path, KeyBindings $defaults): KeyBindings
+    {
+        if ($path === null || is_file($path) === false) {
+            return $defaults;
+        }
+
+        $entries = AtomicJsonFile::new($path)->read();
+
+        $bindings = $defaults;
+        foreach ($entries as $id => $tokens) {
+            if (!\is_string($id) || $id === '') {
+                throw new \RuntimeException(self::problem($path, 'action name is not a non-empty string'));
+            }
+            if (!\is_array($tokens) || $tokens === [] || array_is_list($tokens) === false) {
+                throw new \RuntimeException(self::problem($path, "tokens for \"$id\" are not a non-empty list"));
+            }
+            foreach ($tokens as $token) {
+                if (!\is_string($token) || $token === '' || str_contains($token, ' ')) {
+                    throw new \RuntimeException(self::problem($path, "token for \"$id\" is not a single key"));
+                }
+            }
+
+            $bindings = $bindings->withOverride($id, ...$tokens);
+        }
+
+        return $bindings;
+    }
+
+    private static function problem(string $path, string $detail): string
+    {
+        return 'candy-tetris: ' . $detail . ' in ' . $path;
+    }
+}

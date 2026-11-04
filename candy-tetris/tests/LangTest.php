@@ -44,9 +44,12 @@ final class LangTest extends TestCase
             "  --version    Print the version\n",
             Lang::t('help_text'),
         );
+        // m27: help_card is the VERB column now — the key column is
+        // derived at render time from the live binding table (the
+        // glyph-pairing pins live in BindingsDerivationTest).
         $help = Lang::t('help_card');
-        self::assertStringContainsString('spc  hard drop', $help);
-        self::assertStringContainsString('r    restart', $help);
+        self::assertStringContainsString("hard drop\nhold", $help);
+        self::assertStringContainsString('restart', $help);
     }
 
     public function testMissingKeyFallsBackToTheNamespacedRawKey(): void
