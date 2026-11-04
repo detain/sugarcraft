@@ -168,6 +168,17 @@ final class CpuPanelTest extends TestCase
         $grid = PanelPaint::grid(PanelPaint::surface($panel, $config, $layout, $host), $layout->box('cpu'));
         $this->assertStringContainsString('Load avg: n/a n/a n/a', $grid);
         $this->assertStringNotContainsString(' up ', $grid);
+
+        $cpuRow = null;
+        foreach (explode("\n", $grid) as $line) {
+            if (str_contains($line, 'CPU')) {
+                $cpuRow = $line;
+                break;
+            }
+        }
+        $this->assertNotNull($cpuRow, 'the meter row is there');
+        $this->assertStringContainsString('n/a', (string) $cpuRow, 'an unmeasured total is not a calm green 0 %');
+        $this->assertStringNotContainsString('0%', (string) $cpuRow);
     }
 
     public function testInactiveCoreIsDimmed(): void

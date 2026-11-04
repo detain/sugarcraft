@@ -72,7 +72,7 @@ final class NetPanel implements Panel, ClickCapture
 
     /**
      * @param array<string, array{download: list<int>, upload: list<int>}> $history
-     * @param array<string, array{download: int, upload: int}>             $speed   last MEASURED bytes/s
+     * @param array<string, array{download: int|null, upload: int|null}>   $speed   last MEASURED bytes/s, null before the first rate
      * @param array<string, array{download: int, upload: int}>             $offsets `z` totals offsets
      */
     private function __construct(
@@ -130,10 +130,15 @@ final class NetPanel implements Panel, ClickCapture
         return $iface === null ? [] : ($this->history[$iface][$direction] ?? []);
     }
 
-    /** Last measured bytes/s of the selected interface (0 before any measurement). */
-    public function speed(string $direction): int
+    /**
+     * Last measured bytes/s of the selected interface, or null when there is no
+     * measurement yet. A rate needs two samples, so the first tick cannot
+     * answer: 0 would be a claim of no traffic, which is what the panel must
+     * not say before it has looked.
+     */
+    public function speed(string $direction): ?int
     {
-        return $this->selected === null ? 0 : ($this->speed[$this->selected][$direction] ?? 0);
+        return $this->selected === null ? null : ($this->speed[$this->selected][$direction] ?? null);
     }
 
     /** The selected interface's total minus its `z` offset. */
@@ -382,7 +387,9 @@ final class NetPanel implements Panel, ClickCapture
         $measured = false;
         foreach ($snapshot->interfaces as $name => $iface) {
             $h = $this->history[$name] ?? [self::DOWNLOAD => [], self::UPLOAD => []];
-            $s = $this->speed[$name] ?? [self::DOWNLOAD => 0, self::UPLOAD => 0];
+            // Null, not 0: an interface that has never produced a rate has no
+            // speed to show, and 0 would be read as an idle link.
+            $s = $this->speed[$name] ?? [self::DOWNLOAD => null, self::UPLOAD => null];
             $rates = [self::DOWNLOAD => $iface->rxRate, self::UPLOAD => $iface->txRate];
             foreach ($rates as $dir => $rate) {
                 if ($rate < 0.0) {

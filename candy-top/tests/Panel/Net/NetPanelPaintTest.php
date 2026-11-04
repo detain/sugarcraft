@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Top\Collect\NetSnapshot;
+use SugarCraft\Top\Collect\Sentinel;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Panel\Net\NetPanel;
 use SugarCraft\Top\Panel\Net\NetView;
@@ -44,6 +45,25 @@ final class NetPanelPaintTest extends TestCase
         }
 
         return $panel;
+    }
+
+    public function testTheRateSaysWhenItHasNotMeasuredYet(): void
+    {
+        // A rate needs two samples; the first frame must not print '0 B/s' and
+        // claim an idle link (M7).
+        $config = Config::new();
+        $layout = FrameBuilder::layout(120, 40, $config, 8);
+        $ctx = new PanelContext($config, $layout, $layout->box('net'));
+        $u = Sentinel::UNMEASURED;
+        $panel = NetPanel::new(ScriptedNetSource::of(
+            new NetSnapshot(['eth0' => ScriptedNetSource::iface('eth0', $u, $u, 2148, 1074)], 'eth0'),
+        ));
+        $panel = $panel->update(($panel->collect($ctx))(), $ctx)->panel;
+        $this->assertNull($panel->speed(NetPanel::DOWNLOAD), 'the first tick has no rate to show');
+        [$surface, $box] = self::render(120, 40, $config, panel: $panel);
+        $grid = self::boxGrid($surface, $box);
+        $this->assertStringContainsString('n/a', $grid);
+        $this->assertStringNotContainsString('0 B/s', $grid);
     }
 
     /**

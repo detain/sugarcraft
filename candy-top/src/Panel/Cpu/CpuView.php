@@ -264,11 +264,16 @@ final class CpuView
         $bcols = max(1, $layout->coreColumns);
         $row = $c->y + 1;
         $x = $c->x + 1;
-        $total = $p->history()->last('total') ?? 0;
+        // An unsampled machine is not an idle one: the bar stays empty and the
+        // number reads 'n/a' until the first sample lands, so a loaded host
+        // cannot open on a calm green 0 %.
+        $sampled = $p->history()->last('total');
+        $total = $sampled ?? 0;
+        $sampled = $sampled !== null;
         $x += $box->put($x, $row, Lang::t('cpu.label') . ' ', $ink->fg('main_fg') . Symbols::BOLD);
         $meterW = $c->width - ($showTemps ? 23 - ($bcs <= 1 && $bcols === 1 ? 6 : 0) : 11);
         $x += $box->ansi($x, $row, PositionMeter::render($ink, $meterW, $total, 'cpu'), $ink->fg('main_fg') . Symbols::BOLD);
-        $x += $box->put($x, $row, Just::right((string) $total, 4), $ink->gradient('cpu', max(0, min(100, $total))));
+        $x += $box->put($x, $row, Just::right($sampled ? (string) $total : Lang::t('value.unavailable'), 4), $sampled ? $ink->gradient('cpu', max(0, min(100, $total))) : $ink->fg('inactive_fg'));
         $x += $box->put($x, $row, '%', $ink->fg('main_fg'));
         $temp = $p->history()->last('temp:cpu');
         if ($showTemps && $temp !== null) {

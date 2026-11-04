@@ -57,6 +57,15 @@ final class MemPanelTest extends TestCase
         return PanelPaint::grid(PanelPaint::surface($panel, $config, $layout, $host), $layout->box('mem'));
     }
 
+    public function testTheInteriorSaysWhenItHasNotSampledYet(): void
+    {
+        // snapshot() is null before the first collect(), and the interior used
+        // to be left blank: indistinguishable from a machine with no memory
+        // figures at all (M7).
+        $grid = self::grid(self::scripted(), Config::new());
+        $this->assertStringContainsString('n/a', $grid);
+    }
+
     private static function key(string $rune, bool $ctrl = false): KeyMsg
     {
         return new KeyMsg(KeyType::Char, $rune, ctrl: $ctrl);

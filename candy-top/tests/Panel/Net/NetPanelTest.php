@@ -112,7 +112,7 @@ final class NetPanelTest extends TestCase
         );
         $panel = self::feed(NetPanel::new($source), 1);
         $this->assertSame([], $panel->history(NetPanel::DOWNLOAD), 'the first, unmeasured rate never reaches the graph');
-        $this->assertSame(0, $panel->speed(NetPanel::DOWNLOAD));
+        $this->assertNull($panel->speed(NetPanel::DOWNLOAD), 'no measurement yet is not zero traffic');
         $this->assertTrue($panel->scale()->rescalePending(), 'no sample offered to the scaler');
 
         $panel = self::feed($panel, 2);

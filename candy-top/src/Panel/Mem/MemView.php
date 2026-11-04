@@ -62,6 +62,10 @@ final class MemView
             } else {
                 self::stacked($box, $f, $p, $mem, $memWidth);
             }
+        } else {
+            // Before the first sample the interior used to be blank, which a
+            // reader cannot tell apart from a machine with nothing in it.
+            $box->put(1, 0, Lang::t('value.unavailable'), $f->ink->fg('inactive_fg'));
         }
         if ($layout->showDisks && $layout->memDivider !== null) {
             $x = $layout->memDivider - $f->box->x;

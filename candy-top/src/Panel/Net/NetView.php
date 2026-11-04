@@ -161,12 +161,16 @@ final class NetView
     {
         $wide = $bWidth >= 20;
         $speed = $panel->speed($dir);
+        $pending = $speed === null;
         $symbol = $dir === NetPanel::UPLOAD ? self::UP_SYMBOL : self::DOWN_SYMBOL;
-        $sgr = $frame->ink->fg('main_fg');
+        $sgr = $pending ? $frame->ink->fg('inactive_fg') : $frame->ink->fg('main_fg');
+        $shown = static fn (bool $bit): string => $pending
+            ? Lang::t('value.unavailable')
+            : $human->format((int) $speed, bit: $bit, perSecond: true);
 
         $first = $onTop ? 1 : $bHeight - intdiv($bHeight, 2);
-        $line = $symbol . ' ' . self::ljust($human->format($speed, perSecond: true), 10)
-            . ($wide ? self::rjust('(' . $human->format($speed, bit: true, perSecond: true) . ')', 13) : '');
+        $line = $symbol . ' ' . self::ljust($shown(false), 10)
+            . ($wide ? self::rjust('(' . $shown(true) . ')', 13) : '');
         $stats->put(1, $first, $line, $sgr);
         if ($bHeight >= 8) {
             $top = $human->format($panel->top($dir), bit: true, perSecond: true);
