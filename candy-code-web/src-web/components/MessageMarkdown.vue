@@ -43,8 +43,9 @@ async function colour(): Promise<void> {
  * its children under some DOM implementations (happy-dom under vitest,
  * reproducibly), so a wrapper-keyed pass would silently decorate nothing in
  * those tests. In a browser the wrapper survives and `closest()` returns it,
- * which keeps the absolutely-positioned button anchored to the block box
- * rather than the (horizontally scrollable) `pre`.
+ * so the button lands on the block box — which (CW-UX-23) lays it out as a
+ * flex column member BELOW the horizontally scrollable `pre`, never floated
+ * over its code.
  */
 function decorate(): void {
   const element = root.value
@@ -116,6 +117,10 @@ onUpdated(paint)
 }
 .markdown :deep(.code-block) {
   position: relative;
+  /* CW-UX-23: a flex column, so the injected copy button flows UNDER the
+     scrollable pre instead of floating over its code. */
+  display: flex;
+  flex-direction: column;
   margin: 0 0 0.6rem;
 }
 .markdown :deep(.code-lang) {
@@ -126,9 +131,11 @@ onUpdated(paint)
   color: var(--muted);
 }
 .markdown :deep(.code-copy) {
-  position: absolute;
-  bottom: 0.4rem;
-  right: 0.6rem;
+  /* CW-UX-23: static flow member of the block, pinned to its end edge —
+     formerly absolute over the pre, where it occluded the last code lines. */
+  position: static;
+  align-self: flex-end;
+  margin: 0.3rem 0 0;
   padding: 0.05rem 0.45rem;
   font-size: 0.75rem;
   color: var(--muted);

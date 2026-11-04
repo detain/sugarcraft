@@ -125,9 +125,25 @@ describe('code-block copy buttons', () => {
   it('placement styling lives in the component source (happy-dom computes none)', () => {
     // vitest runs from the package root (the generated.spec.ts source-scan pattern).
     const source = readFileSync(resolve(process.cwd(), 'src-web/components/MessageMarkdown.vue'), 'utf8')
-    // The rule must be a :deep selector — scoped CSS cannot reach the
-    // injected DOM nodes any other way — and must position inside .code-block.
-    expect(source).toMatch(/\.markdown :deep\(\.code-copy\)\s*\{[^}]*position:\s*absolute/)
-    expect(source).toMatch(/\.markdown :deep\(\.code-block\)\s*\{[^}]*position:\s*relative/)
+    // CW-UX-23 FLIP of the old pin: this rule used to REQUIRE `position:
+    // absolute` on the copy button — exactly the defect. An absolute button
+    // floats over the scrollable <pre> and occludes code at the bottom-right
+    // of long blocks. The button now flows BELOW the code: the block is a
+    // flex column and the button is a static member aligned to its end.
+    const copyRule = /\.markdown :deep\(\.code-copy\)\s*\{([^}]*)\}/s
+    const blockRule = /\.markdown :deep\(\.code-block\)\s*\{([^}]*)\}/s
+    const copyMatch = source.match(copyRule)
+    const blockMatch = source.match(blockRule)
+    expect(copyMatch, ':deep(.code-copy) rule exists').not.toBeNull()
+    expect(blockMatch, ':deep(.code-block) rule exists').not.toBeNull()
+    expect(copyMatch![1]).toMatch(/position:\s*static/)
+    expect(copyMatch![1]).toMatch(/align-self:\s*flex-end/)
+    expect(copyMatch![1]).not.toMatch(/position:\s*absolute/)
+    expect(blockMatch![1]).toMatch(/display:\s*flex/)
+    expect(blockMatch![1]).toMatch(/flex-direction:\s*column/)
+    // The language tag keeps its absolute corner; the wrapper stays relative
+    // so it has something to anchor to.
+    expect(source).toMatch(/\.markdown :deep\(\.code-lang\)\s*\{[^}]*position:\s*absolute/)
+    expect(blockMatch![1]).toMatch(/position:\s*relative/)
   })
 })
