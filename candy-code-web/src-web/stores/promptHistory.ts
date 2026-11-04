@@ -30,14 +30,23 @@ export function loadPromptHistory(): string[] {
 }
 
 /**
- * Record $prompt at the head of $history and persist the ring.
- * Returns $history untouched when it adds nothing: blank, or a repeat of the
+ * Record $prompt at the head of the ring and persist it.
+ * Returns the ring untouched when it adds nothing: blank, or a repeat of the
  * entry already at the head (re-sending one prompt must not eat two slots).
+ *
+ * CW-DBA-3: the ring is READ-merge-WRITE like the drafts map in layout.ts —
+ * storage is consulted fresh, so a prompt another tab pushed mid-flight
+ * rides the result instead of being clobbered by this tab's stale memory.
+ * The head-only dedupe law is kept on the stored view too: when the stored
+ * head already IS $prompt, nothing new is written and the caller adopts
+ * storage's ring.
  */
 export function pushPromptHistory(history: string[], prompt: string): string[] {
   const text = prompt.trim()
   if (text === '' || history[0] === text) return history
-  const next = [text, ...history].slice(0, PROMPT_HISTORY_CAP)
+  const stored = loadPromptHistory()
+  if (stored[0] === text) return stored
+  const next = [text, ...stored].slice(0, PROMPT_HISTORY_CAP)
   writeJson(KEY, next)
   return next
 }

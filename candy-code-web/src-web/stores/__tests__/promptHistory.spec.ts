@@ -106,3 +106,42 @@ describe('searchPromptHistory (C-WEB-4.a)', () => {
     expect(searchPromptHistory(loadPromptHistory(), 'older')).toEqual(['older'])
   })
 })
+
+/**
+ * CW-DBA-3 (reviews-1103): pushPromptHistory persisted its own in-memory
+ * argument — a blind last-writer write. Two tabs open, one pushes, the
+ * other pushes from its stale ring: the first prompt vanishes. The ring
+ * now follows the drafts law from layout.ts: read storage, merge, write,
+ * and hand the merged ring back so the caller adopts the other tab too.
+ * The documented head-only dedupe law survives: only a prompt the stored
+ * ring already carries AT THE HEAD is skipped.
+ */
+describe('prompt history merges across tabs (CW-DBA-3)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('adopts entries another tab stored while this tab held a stale ring', () => {
+    writeJson('promptHistory', ['from other tab', 'shared old'])
+    const stale = ['shared old']
+    const ring = pushPromptHistory(stale, 'mine')
+    expect(ring).toEqual(['mine', 'from other tab', 'shared old'])
+    expect(loadPromptHistory()).toEqual(ring)
+  })
+
+  it('a prompt the stored ring already carries at the head is not written twice', () => {
+    writeJson('promptHistory', ['x', 'older'])
+    const ring = pushPromptHistory([], 'x')
+    expect(ring).toEqual(['x', 'older'])
+    expect(loadPromptHistory()).toEqual(['x', 'older'])
+  })
+
+  it('keeps a stored tail duplicate — only the head dedupes', () => {
+    // Preserves the WEB-5a-i law pinned above: a repeat after a different
+    // prompt rides the ring again, and the cross-tab merge must not
+    // silently widen that rule.
+    writeJson('promptHistory', ['two', 'one'])
+    const ring = pushPromptHistory(['two'], 'one')
+    expect(ring).toEqual(['one', 'two', 'one'])
+  })
+})
