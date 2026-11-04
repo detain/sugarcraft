@@ -17,6 +17,18 @@
   --error: #f7768e;
   --diff-add: rgb(158 206 106 / 0.16);
   --diff-del: rgb(247 118 142 / 0.16);
+  /* CW-UX-01/04: tokens consumed by components that lived only in fallbacks.
+     --ink is text drawn on card/panel surfaces, --panel-2 the raised row,
+     --accent-soft the hover wash, --danger the error-foreground alias.
+     --canvas-paper is deliberately theme-invariant (like --sans/--mono, so
+     it is defined only here): the canvas iframe renders model-authored HTML
+     that assumes white paper, and a dark wash would make bg-less documents
+     unreadable. */
+  --ink: #c0caf5;
+  --panel-2: #2b3049;
+  --accent-soft: rgb(122 162 247 / 0.12);
+  --danger: var(--error);
+  --canvas-paper: #ffffff;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 }
@@ -38,6 +50,10 @@
     --error: #c64343;
     --diff-add: rgb(56 150 80 / 0.16);
     --diff-del: rgb(198 67 67 / 0.14);
+    --ink: #343b58;
+    --panel-2: #dfe2ee;
+    --accent-soft: rgb(29 95 191 / 0.10);
+    --danger: var(--error);
   }
 }
 
@@ -54,6 +70,10 @@
   --error: #c64343;
   --diff-add: rgb(56 150 80 / 0.16);
   --diff-del: rgb(198 67 67 / 0.14);
+  --ink: #343b58;
+  --panel-2: #dfe2ee;
+  --accent-soft: rgb(29 95 191 / 0.10);
+  --danger: var(--error);
 }
 
 /* C-TUI-4.b: the two named TUI palettes, mirroring candy-code's own themes —
@@ -77,6 +97,10 @@
   --error: #ff5555;    /* DRACULA['red'] */
   --diff-add: rgb(80 250 123 / 0.16);
   --diff-del: rgb(255 85 85 / 0.16);
+  --ink: #f8f8f2;      /* DRACULA['foreground'] — text on panels/cards */
+  --panel-2: #42444e;  /* lifted row, between currentLineSelection and comment */
+  --accent-soft: rgb(255 121 198 / 0.12);
+  --danger: var(--error);
 }
 
 :root[data-theme='tokyoNight'] {
@@ -92,6 +116,10 @@
   --error: #f7768e;    /* tokyoNight() error */
   --diff-add: rgb(158 206 106 / 0.16);
   --diff-del: rgb(247 118 142 / 0.16);
+  --ink: #c0caf5;
+  --panel-2: #2b3049;
+  --accent-soft: rgb(187 154 247 / 0.12);
+  --danger: var(--error);
 }
 
 *,

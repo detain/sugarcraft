@@ -52,6 +52,11 @@ const pairs: Array<[string, string]> = [
   ['bg', 'accent'],
   ['text', 'bg'],
   ['text', 'panel'],
+  // CW-UX-01: --ink was consumed by three components while defined nowhere;
+  // now that every theme carries it, it must clear AA on the very surfaces
+  // it is drawn on (cards sit on --bg, form fields on --panel).
+  ['ink', 'bg'],
+  ['ink', 'panel'],
 ]
 
 describe.each(Object.entries(themes))('%s theme (ISS-107)', (_name, tokens) => {

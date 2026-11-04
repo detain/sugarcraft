@@ -132,7 +132,9 @@ button.show {
   height: 18rem;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: #fff;
+  /* CW-UX-01: theme-blind #fff literal, now a token. Invariant on purpose —
+     canvas documents are model-authored HTML that assume white paper. */
+  background: var(--canvas-paper);
 }
 .fold {
   margin: 0.35rem 0 0;
