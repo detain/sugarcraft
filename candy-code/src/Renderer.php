@@ -7363,8 +7363,12 @@ final class Renderer
      * Wrap each action glyph of the highlighted picker row in its
      * `session-act:<row>:<verb>` zone. The cluster is right-aligned, so each
      * glyph is found by its LAST occurrence, right to left (delete, pin,
-     * rename): the pin glyph also opens a pinned row's title, and the search
-     * for each glyph stops short of the one wrapped before it.
+     * rename), each search stopping short of the glyph wrapped before it:
+     * every verb binds to its own cluster position and a search never
+     * consumes bytes already claimed by a neighbour. A glyph absent from the
+     * painted line (a star in a title is padded out of byte-equality by the
+     * row fit; a pinned row's leading star is styled shellWarning, not the
+     * cluster's shellPrimary) simply mints no zone.
      *
      * @param array<string, string> $acts verb => the styled glyph as painted
      */
