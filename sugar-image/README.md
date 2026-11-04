@@ -4,9 +4,9 @@ Image-to-cell renderer for the terminal — PNG, JPEG, GIF (still and
 animated), APNG, WebP and BMP decoded via ext-gd and rendered via the best
 available protocol:
 
-- **Sixel** — xterm, foot, mlterm, wezterm, contour
+- **Sixel** — xterm, foot, mlterm, contour
 - **Kitty graphics protocol** — kitty, ghostty, wezterm
-- **iTerm2 inline images** (OSC 1337) — iTerm2, wezterm, mintty
+- **iTerm2 inline images** (OSC 1337) — iTerm2, mintty
 - **Half-block Unicode** (▀ + 24-bit fg/bg) — universal fallback
 - **Quarter-block Unicode** (░▒▓█ 2×2) — higher fidelity than half-block
 - **Symbols** (braille/sextant/octant/block glyph cells) — coverage-class rendering chosen by Hamming-distance candidate search (the chafa symbol engine). `SymbolMap::withSelectors()` applies chafa's `--symbols=` tag grammar over the narrow glyph corpus (ASCII/Latin/misc/legacy tables, the U+1FB80–U+1FB8B eighth-block tier, braille, sextants, octants) — **1,251 glyphs effective** under `all`: the corpus parses to 1,260 entries, but nine misc-narrow glyphs carry chafa's AMBIGUOUS tag (they have emoji variants) and are BAD-vetoed by every selector that does not name ambiguous/ugly/bad, exactly as the C build does (derivation: `Symbol/SymbolSetTables.php`). The default 676-glyph corpus is byte-frozen.
@@ -15,6 +15,22 @@ available protocol:
 composer require sugarcraft/sugar-image
 ```
 
+## Requirements
+
+PHP `^8.3`, `ext-gd` and `ext-mbstring` — all three are `require`d in
+`composer.json`, not advisory. GD is the decode path for every pure-PHP tier;
+without it each entry point answers with a translated refusal rather than an
+undefined-function error, and `src/Support/GdAvailability.php` owns that probe.
+The chafa CLI is never required: the chafa tier is opt-in, selected only by
+`Mosaic::chafa()` / `fromModeString('chafa')`, and it is the only place the lib
+runs an external program to produce image output.
+
+Why a library rather than the `chafa` viewer: every tier here is a byte string
+your program owns. Graphic tiers emit the terminal's own escape sequences and
+text tiers emit glyphs, so the same render works over ssh, inside tmux (with
+`allow-passthrough`) and down a CI pipe — and it can be placed by id, animated,
+cached on disk and layered into a text frame instead of printed and forgotten.
+
 ## Quickstart
 
 ```php
@@ -22,10 +38,17 @@ use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\ImageSource;
 
 $mosaic = Mosaic::halfBlock();
-$image  = ImageSource::fromFile('cat.png');
+$image  = ImageSource::fromFile('examples/fixture-gradient.png');
 $ansi   = $mosaic->render($image, width: 40, height: 20);
 echo $ansi;
 ```
+
+## Examples
+
+- `examples/inline-image.php <path> [width]` prints one image on the terminal's
+  best tier and exits 0/1/2 — the shortest read of the detection path.
+- `examples/fixture-gradient.png` is a committed image, so both the quickstart
+  above and that script run against the checkout without hunting for a file.
 
 ## API
 
@@ -212,8 +235,10 @@ $cache  = new DiskCache($_SERVER['HOME'] . '/.cache/posters', maxEntries: 512);
 
 // Key includes the protocol — the same image at the same size encodes
 // differently for sixel vs kitty vs half-block. The ASCII renderer's colour
-// arms share one protocol name, so append modeDetail() to protocol() (this
-// protocol/modeDetail split is how Mosaic keys its own posters internally)
+// arms share one protocol name, so append modeDetail() to protocol(). The
+// real key Mosaic uses for its own posters is wider still: protocol + mode
+// detail + the Scale NAME + the renderer's config fingerprint + the
+// optimisation mask, each part appended only when non-empty (posterCacheKey).
 // to keep them cache-distinct.
 $key = DiskCache::key($url, width: 24, height: 36, protocol: $mosaic->protocol() . ($mosaic->modeDetail() ? ':' . $mosaic->modeDetail() : ''));
 
@@ -228,6 +253,15 @@ approximately least-recently-used entries once the directory exceeds
 same-second writes order arbitrarily). Writes are atomic (temp file + rename)
 and keys are hashed to derive the filename, so an arbitrary key can never escape
 the cache directory.
+
+`Mosaic` carries the fetch-and-render pair directly, so a poster needs no
+hand-rolled cache plumbing:
+
+| Method | Transport | Notes |
+|---|---|---|
+| `poster($url, $cellW, $cellH, ?DiskCache, ?array $allowedHosts)` | sync | SSRF ladder + cache key above |
+| `posterAsync(...)` | react/promise | same doors, resolves to the bytes |
+| `posterFile($path, ...)` | local file | same key, no network |
 
 ## KittyOptions — virtual-image placement and compression
 
@@ -272,6 +306,19 @@ $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 ```
 
 ## Protocol detection
+
+`Mosaic::auto()` asks `Detect::probe()` — environment variables first, then a
+DA1/XTWINOPS round trip on the TTY — and `bestBackend()` seats a renderer on
+the answer: kitty → iterm2 → sixel → the symbol-map tier. Chafa is not on that
+ladder (its capability slot is written only by `Capability::universal()`), and
+plain half-block appears only when the text-availability slot is off itself, so
+the practical floor is the glyph-coverage engine. `Mosaic::diagnose()` returns
+the structured `ProbeReport` behind a decision, and
+`Capability::detectSummary()` names the probed slots rather than the chosen
+renderer — a terminal that lands on the symbol tier still reports `HalfBlock`,
+because that tier rides the same text slot.
+
+
 
 Every renderer implements `Renderer::delete(string $imageId): string`
 which emits the protocol-specific sequence to remove a previously
@@ -364,10 +411,31 @@ text, so they work everywhere:
   wide-glyph engine plus the opt-in kana tier ride
   `SymbolMap::withSelectors('wide')` and the renderer's lookback pass.
 
-`Mosaic::auto()` seats the symbol engine on the fallback ladder below the
-chafa CLI rung and above half-block; the ASCII ramp is explicit-selection
-only. Every text-tier renderer also honours `withCanvasMode()` and
-`withOptimization()` like the protocol backends.
+`Mosaic::auto()` seats the symbol engine as the floor of the fallback ladder —
+plain half-block is reached only when text output itself is refused — while the
+ASCII ramp and the chafa CLI tier are explicit-selection only. Canvas mode is
+not universal: `QuarterBlockRenderer` and `SymbolMapRenderer` implement
+`withCanvasMode()`, `SymbolMapRenderer` alone implements `withWorkFactor()`, and
+every other backend hands back the same instance, because it has no canvas to
+reinterpret and no search window to widen.
+
+## Scaling
+
+`Mosaic::withScale(Scale::…)` decides how a source fills the requested cell box;
+the default is `Fit`, except `poster()`, which defaults to `Fill`.
+
+| Scale | Behaviour |
+|---|---|
+| `None` | never resamples — the source keeps its pixel size |
+| `Fit` | shrink or grow to the box, aspect preserved |
+| `Fill` | cover the box, cropping the overflow |
+| `Crop` | crop from the source to the box aspect, then fit |
+| `Stretch` | ignore aspect and pull to the exact box |
+| `ShrinkToFit` | like `Fit` but never upscales: native pixels are centred on a blank-padded box (the quarter-block tier cannot pad and falls back to filling) |
+
+Cell boxes are not square, so the cover modes crop against a cell-height
+multiple of the box (`CellGeometry`), and an auto height divides the source
+aspect by that same cell ratio.
 
 ## ImageLayer — image boxes in a text frame
 
