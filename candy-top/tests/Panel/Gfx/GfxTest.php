@@ -120,6 +120,53 @@ final class GfxTest extends TestCase
         $this->assertSame(10, mb_substr_count($out, '■'));
     }
 
+    /**
+     * NO_COLOR answers Ascii and TERM=dumb answers NoTty: every Ink escape
+     * resolves to '', so the bar has to carry its fill in the glyphs or it
+     * reads as 100 % whatever the value is.
+     */
+    public function testTheColourlessBarCarriesItsFillInTheGlyphs(): void
+    {
+        $expected = [
+            0   => '░░░░░░░░░░',
+            7   => '░░░░░░░░░░',
+            42  => '████░░░░░░',
+            50  => '█████░░░░░',
+            99  => '█████████░',
+            100 => '██████████',
+        ];
+
+        foreach ([ColorProfile::Ascii, ColorProfile::NoTty] as $profile) {
+            $ink = Ink::new(ThemeConfig::new(), $profile);
+            foreach ($expected as $value => $bar) {
+                $this->assertSame($bar . "\x1b[0m", PositionMeter::render($ink, 10, $value, 'cpu'), $profile->name . " at {$value}%");
+                // The gradient direction is a colour decision; mono ignores it.
+                $this->assertSame($bar . "\x1b[0m", PositionMeter::render($ink, 10, $value, 'cpu', true), $profile->name . " inverted at {$value}%");
+            }
+        }
+    }
+
+    /** Both tiers measure the same bar: the fill boundary is the shared law. */
+    public function testTheColourlessBoundaryIsTheColourBoundary(): void
+    {
+        $colourInk = Ink::new(ThemeConfig::new(), ColorProfile::TrueColor);
+        $monoInk = Ink::new(ThemeConfig::new(), ColorProfile::Ascii);
+        $tail = $colourInk->fg('meter_bg');
+        $this->assertNotSame('', $tail, 'the pin below is worthless if meter_bg carries no escape');
+
+        foreach ([0, 7, 42, 50, 99, 100] as $value) {
+            $colour = PositionMeter::render($colourInk, 10, $value, 'cpu');
+            $mono = PositionMeter::render($monoInk, 10, $value, 'cpu');
+            $filled = mb_substr_count(explode($tail, $colour, 2)[0], PositionMeter::GLYPH);
+
+            $this->assertSame($filled, mb_substr_count($mono, PositionMeter::MONO_FILLED), "filled cells at {$value}%");
+            $this->assertSame(10, $filled + mb_substr_count($mono, PositionMeter::MONO_EMPTY), 'the bar is still ten cells wide');
+        }
+
+        $flat = PositionMeter::render($monoInk, 10, 0, 'cpu');
+        $this->assertNotSame(PositionMeter::render($monoInk, 10, 100, 'cpu'), $flat, 'an empty bar must not read as a full one');
+    }
+
     /** In TrueColor the tinted bytes equal the graph coloured with the palette's own ramp. */
     public function testTintedGraphEqualsThePaletteRampInTrueColor(): void
     {
