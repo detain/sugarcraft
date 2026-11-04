@@ -3584,9 +3584,12 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
                 // AskUser shape, so the SAME approver the delegation arm below
                 // relays lands here too (Bash and PtyRun implement the progress
                 // leg but not RelaysPermissionAsks, so they pass through this
-                // gate untouched; TaskTool delegates and never reaches it).
+                // gate untouched). PHP-n2: the former `&& !$tool instanceof
+                // TaskTool` exclusion was DELETED as structurally dead —
+                // TaskTool is final, implements DelegatesToEngine and NOT
+                // AcceptsToolProgress, so it can never reach this branch for
+                // the leg to exclude (the delegation arm below is its path).
                 if ($tool instanceof \SugarCraft\Code\Tools\RelaysPermissionAsks
-                    && !$tool instanceof \SugarCraft\Code\Tools\BuiltIn\TaskTool
                     && $this->permissionApprover !== null
                 ) {
                     $tool = $tool->withPermissionApprover($this->permissionApprover);
