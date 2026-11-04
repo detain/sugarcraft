@@ -744,7 +744,7 @@ final class ProgramTerminalRecoveryTest extends TestCase
         $this->assertIsInt($resource);
         $this->assertIsInt($pop);
         $this->assertIsInt($teardown);
-        $this->assertLessThan($pid, $latch, 'latch first, mirroring the bin guard order');
+        $this->assertLessThan($pid, $latch, 'latch first, pid capture second — the order X-CORE1 retired from candy-code and kept here');
         $this->assertLessThan($resource, $pid);
         $this->assertLessThan($pop, $resource);
         $this->assertLessThan($teardown, $pop);
