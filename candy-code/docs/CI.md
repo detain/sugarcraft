@@ -364,6 +364,16 @@ way: per-lib `composer.lock` files are forbidden by house rule and the `sugarcra
 resolve from Packagist's moving `dev-master`, so two builds of the same tag need not be
 byte-identical. A published `.sha256` names the bytes that job produced, not a rebuild promise.
 
+Pins carry a cadence, and the cadence is this section. The base-image digests in
+`candy-code/Dockerfile` and any versioned apt pins in the workflows record their verification
+date in the comment beside them; when you cut a release — or whenever a `runs-on` label moves —
+re-derive them and move the pin in the same commit that updates the comment's date:
+`docker buildx imagetools inspect php:8.3-cli` (or the registry's manifest API) answers the
+current digest for an image tag, and `rmadison` or `packages.ubuntu.com` answers the current apt
+version for a runner's Ubuntu release. A drifted pin is a deliberate choice the repo does not
+want: a frozen digest that nobody refreshes stops passing upstream security patches, which is
+worse than the floating tag it replaced, so a pin without its cadence is worse than no pin.
+
 ## Linting this action
 
 `.github/` workflows are guarded by the monorepo CI; `action.yml` itself is a plain composite and

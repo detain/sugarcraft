@@ -257,6 +257,9 @@ jobs:
         # already installed the dev vendor from apt-adjacent network above, so
         # installing rg here is no new privilege class. The parity legs then
         # run for real (the cure is never a placeholder data leg).
+        # Unpinned while ubuntu-latest migrates 24.04 -> 26.04 (Oct-Nov 2026): the
+        # verified noble string, for whoever pins it after the label is fixed, is
+        # ripgrep=14.1.0-1. Cadence: candy-code/docs/CI.md.
         run: |
           set -euo pipefail
           command -v rg >/dev/null 2>&1 && exit 0

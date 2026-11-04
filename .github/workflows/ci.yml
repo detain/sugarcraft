@@ -495,6 +495,9 @@ jobs:
         # (ci.yml run 39365805245, release-phar run 39371841327). Installing
         # rg runs the parity legs for real — the honest cure is never a
         # placeholder leg, and a host-side skip would hide the same void.
+        # Deliberately UNPINNED while ubuntu-latest migrates 24.04 -> 26.04 (Oct-Nov 2026):
+        # a version pin is only sound once runs-on names a fixed label. Verified noble string
+        # for whoever lands it after that: ripgrep=14.1.0-1. Refresh cadence: docs/CI.md.
         run: |
           set -euo pipefail
           command -v rg >/dev/null 2>&1 && exit 0
@@ -928,6 +931,9 @@ jobs:
         # parity provider is empty and PHPUnit 10 errors the whole candy-code
         # cell at suite-load. The sharded coverage run below loads the same
         # suite, so it needs the same binary present.
+        # Unpinned for the same reason as the test job's arm: the 24.04 -> 26.04
+        # migration of ubuntu-latest makes a fixed apt version unsound until the
+        # runner label is fixed (verified noble string: ripgrep=14.1.0-1).
         run: |
           set -euo pipefail
           command -v rg >/dev/null 2>&1 && exit 0

@@ -19,7 +19,11 @@
 # HOME is /data, so the default state directory (~/.candy-code/server) lands
 # on the volume and the app itself creates it 0700.
 
-FROM php:8.3-cli
+# Digest-pinned 2026-11-04 (Docker Hub manifest digest; the index digest, so every
+# platform child resolves through it). The php:8.3-cli tag floats with every PHP
+# patch release — refresh the pin per the cadence note in docs/CI.md ("Cutting a
+# release"), never let it silently rot.
+FROM php:8.3-cli@sha256:600bce7c7acf524756e5aac989f4a763aed709960d7326970bb670f46efee53a
 
 # Dev headers for the PHP extensions built below. Note the package names:
 # intl needs libicu-dev and ffi needs libffi-dev — the names "libintl-dev"
@@ -60,7 +64,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN docker-php-ext-install -j"$(nproc)" pcntl posix ffi intl gd \
     && php -r 'foreach (["pcntl","posix","ffi","intl","gd","mbstring","sqlite3","pdo_sqlite"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "Dockerfile build probe: extension {$ext} is not loaded\n"); exit(1); } } FFI::cdef("int getpid(void);"); fwrite(STDOUT, "php-extensions-ok\n");'
 
-COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+# Digest-pinned 2026-11-04 alongside the base image above (same index-digest
+# caveat, same refresh cadence — docs/CI.md).
+COPY --from=composer:2@sha256:5190d9b445add2fa26090108273cb1ef1e1af98175201c737b85b3c4f90fbf7c /usr/bin/composer /usr/local/bin/composer
 
 # Published resolution only: no path repositories exist in a lib manifest
 # (that is the repo-wide path-repo law), so this works in a bare container.
