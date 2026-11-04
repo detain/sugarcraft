@@ -273,6 +273,18 @@ final class Game implements Model
         return !$msg instanceof KeyReleaseMsg && !$msg instanceof KeyRepeatMsg;
     }
 
+    /**
+     * Actuation of one letter/space binding: a press (m11) whose rune
+     * matches case-insensitively (m26 — Caps Lock used to strand every
+     * binding, 'Q' quit included).
+     */
+    private static function charKey(KeyMsg $msg, string $key): bool
+    {
+        return self::isPress($msg)
+            && $msg->type === KeyType::Char
+            && \strtolower($msg->rune) === $key;
+    }
+
     public function update(Msg $msg): array
     {
         // Terminal posture first (C-2): a resize or capability report is
@@ -297,7 +309,7 @@ final class Game implements Model
             // its heartbeat (consume, re-arm), the lock window stays open
             // for a full delay — so a resize back into fit resumes here
             // with nothing lost and nothing double-armed.
-            if ($msg instanceof KeyMsg && self::isPress($msg) && $msg->type === KeyType::Char && $msg->rune === 'q') {
+            if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
                 return [$this, Cmd::quit()];
             }
             if ($msg instanceof GravityMsg) {
@@ -316,10 +328,10 @@ final class Game implements Model
         }
 
         if ($this->over === true) {
-            if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
+            if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
                 return [$this, Cmd::quit()];
             }
-            if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'r') {
+            if ($msg instanceof KeyMsg && self::charKey($msg, 'r')) {
                 // 'r' starts a completely fresh game. The score does NOT
                 // carry over: Score embeds the level, so keeping it would
                 // spawn the new board under the old gravity. The fresh state
@@ -345,7 +357,7 @@ final class Game implements Model
             return [$this, null];
         }
 
-        if ($msg instanceof KeyMsg) {
+        if ($msg instanceof KeyMsg && self::isPress($msg)) {
             return $this->handleKey($msg);
         }
 
@@ -405,17 +417,17 @@ final class Game implements Model
      */
     private function handleKey(KeyMsg $msg): array
     {
-        if ($msg->type === KeyType::Char && $msg->rune === 'q') {
+        if (self::charKey($msg, 'q')) {
             return [$this, Cmd::quit()];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 'p') {
+        if (self::charKey($msg, 'p')) {
             return [$this->withPaused(!$this->paused), null];
         }
         if ($this->paused) {
             // Nothing mutates game state while paused — hold included.
             return [$this, null];
         }
-        if ($msg->type === KeyType::Char && $msg->rune === 'c') {
+        if (self::charKey($msg, 'c')) {
             return $this->tryHold();
         }
 
@@ -427,11 +439,11 @@ final class Game implements Model
             $msg->type === KeyType::Down
                 => $this->softDrop(),
             $msg->type === KeyType::Up,
-            $msg->type === KeyType::Char && $msg->rune === 'x'
+            self::charKey($msg, 'x')
                 => $this->tryRotate(1),
-            $msg->type === KeyType::Char && $msg->rune === 'z'
+            self::charKey($msg, 'z')
                 => $this->tryRotate(-1),
-            $msg->type === KeyType::Char && $msg->rune === ' '
+            self::charKey($msg, ' ')
                 => $this->hardDrop(),
             default => [$this, null],
         };

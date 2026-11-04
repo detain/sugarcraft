@@ -10,6 +10,8 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\KeyReleaseMsg;
+use SugarCraft\Core\Msg\KeyRepeatMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\ColorProfile;
 
@@ -62,6 +64,23 @@ final class VsGame implements Model
     }
 
     /**
+     * Key-actuation gates shared with Game's (m11 press-only, m26
+     * case-insensitive) — copied rather than exposed because they are
+     * per-model dispatch policy, not a public contract.
+     */
+    private static function isPress(KeyMsg $msg): bool
+    {
+        return !$msg instanceof KeyReleaseMsg && !$msg instanceof KeyRepeatMsg;
+    }
+
+    private static function charKey(KeyMsg $msg, string $key): bool
+    {
+        return self::isPress($msg)
+            && $msg->type === KeyType::Char
+            && \strtolower($msg->rune) === $key;
+    }
+
+    /**
      * Start a new VS Computer game.
      */
     public static function start(): self
@@ -106,7 +125,7 @@ final class VsGame implements Model
         // it: q still quits, the tick chain keeps its heartbeat, and a
         // resize back into fit resumes with nothing double-armed (C-2).
         if ($this->tooSmall() === true) {
-            if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
+            if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
                 return [$this, Cmd::quit()];
             }
             if ($msg instanceof GravityMsg) {
@@ -117,10 +136,10 @@ final class VsGame implements Model
 
         // If game is over, only accept quit
         if ($this->over === true) {
-            if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
+            if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
                 return [$this, Cmd::quit()];
             }
-            if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'r') {
+            if ($msg instanceof KeyMsg && self::charKey($msg, 'r')) {
                 // Restart the pair and arm one fresh tick chain — parity
                 // with the solo game's 'r'.
                 $fresh = self::start()->mutate([
@@ -136,14 +155,14 @@ final class VsGame implements Model
         }
 
         // Handle quit key for player
-        if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
+        if ($msg instanceof KeyMsg && self::charKey($msg, 'q')) {
             return [$this, Cmd::quit()];
         }
 
         // Handle pause — toggle pause; the in-flight tick stays in flight,
         // so no new tick is armed here (arming on key messages was the
         // chain-duplication defect fixed alongside Game's gravity guard).
-        if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'p') {
+        if ($msg instanceof KeyMsg && self::charKey($msg, 'p')) {
             [$newPlayer] = $this->player->update($msg);
             return [$this->mutate(['player' => $newPlayer]), null];
         }
