@@ -10,6 +10,7 @@ use SugarCraft\Code\Backend\PendingAsk;
 use SugarCraft\Code\Host\SessionEvent;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Permissions\PermissionReply;
+use SugarCraft\Code\Server\ErrorLog;
 
 /**
  * One open session's events, fanned out to the clients subscribed to it
@@ -148,6 +149,7 @@ final class SessionFeed
 
     /**
      * @param (\Closure(SessionEvent): void)|null $onHeard
+     * @param (\Closure(string): void)|null $log told a fan-out fault that was swallowed to keep the listener
      */
     private function __construct(
         private readonly SessionHost $host,
@@ -155,6 +157,7 @@ final class SessionFeed
         private readonly float $askTimeoutSeconds,
         private readonly \Closure $clock,
         private readonly ?\Closure $onHeard,
+        private readonly ?\Closure $log = null,
     ) {
         $this->status = $host->isBusy() ? self::STATUS_BUSY : self::STATUS_IDLE;
     }
@@ -165,10 +168,11 @@ final class SessionFeed
      * @param float $askTimeoutSeconds 0 waits for an answer forever (§6.7)
      * @param (\Closure(): float)|null $clock
      * @param (\Closure(SessionEvent): void)|null $onHeard told every event once its subscribers have it
+     * @param (\Closure(string): void)|null $log sink for swallowed fan-out faults (§6.4; silence would hide a broken feed)
      */
-    public static function attach(SessionHost $host, LoopInterface $loop, float $askTimeoutSeconds = 0.0, ?\Closure $clock = null, ?\Closure $onHeard = null): self
+    public static function attach(SessionHost $host, LoopInterface $loop, float $askTimeoutSeconds = 0.0, ?\Closure $clock = null, ?\Closure $onHeard = null, ?\Closure $log = null): self
     {
-        $feed = new self($host, $loop, \max(0.0, $askTimeoutSeconds), $clock ?? static fn (): float => \microtime(true), $onHeard);
+        $feed = new self($host, $loop, \max(0.0, $askTimeoutSeconds), $clock ?? static fn (): float => \microtime(true), $onHeard, $log);
         $feed->detach = $host->onEvent($feed->hear(...));
 
         return $feed;
@@ -453,9 +457,13 @@ final class SessionFeed
                 $this->handle($deferred);
                 $this->offer($deferred);
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $fault) {
             // A fan-out fault must never cost the session its listener; the
-            // client recovers what it missed by replay.
+            // client recovers what it missed by replay. The fault itself is
+            // disclosed — a silently broken feed is worse than a logged one.
+            if ($this->log !== null) {
+                ($this->log)(ErrorLog::line($fault, \sprintf('session %s fan-out dropped', $this->host->sessionId())));
+            }
             $this->deferred = [];
         } finally {
             $this->hearing = false;

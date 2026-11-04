@@ -19,6 +19,10 @@ use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
  * overflow already say it (`dropped` + `action: resubscribe`), the hoard is
  * thrown away, and the subscription ends at go-live. The client's way back
  * is a resubscribe for a fresh snapshot — no gap repair is attempted.
+ *
+ * CWPD-9 lives here too: the fan-out faults {@see SessionFeed::hear()}
+ * swallows to keep the session's listener are now disclosed to the server's
+ * log sink — a silently broken feed is worse than a logged one.
  */
 final class SessionFeedBufferTest extends TestCase
 {
@@ -96,6 +100,61 @@ final class SessionFeedBufferTest extends TestCase
 
         self::assertSame(1, $feed->subscriberCount());
         self::assertCount(3, $client->events('tool.progress'), 'what a short stall hoarded still rides the flush');
+    }
+
+    /**
+     * CWPD-9: a subscriber whose fan-out throws must not take the feed's
+     * listener with it — and the fault must not vanish silently either. The
+     * poison rides after the real client (fan-out walks array order), and a
+     * pre-seeded deferred queue gives the catch's reset real work a later
+     * announce cannot fake.
+     */
+    public function testAFanOutFaultIsDisclosedToTheLogAndCostsNobodyTheirListener(): void
+    {
+        $faults = [];
+        $this->fixture->tearDown();
+        $this->fixture = ProtocolFixture::new(log: static function (string $line) use (&$faults): void {
+            $faults[] = $line;
+        });
+
+        $client = $this->fixture->client();
+        $sessionId = $this->fixture->session($client);
+        $client->call('session.subscribe', ['sessionId' => $sessionId]);
+        $feed = $this->fixture->context->feed($sessionId);
+        self::assertNotNull($feed);
+        $this->fixture->run();
+
+        $feedClass = new ReflectionClass(SessionFeed::class);
+        $subscribers = $feedClass->getProperty('subscribers');
+        $subscribers->setAccessible(true);
+        $deferred = $feedClass->getProperty('deferred');
+        $deferred->setAccessible(true);
+
+        $live = $subscribers->getValue($feed);
+        $live['poison'] = ['client' => new \stdClass(), 'mode' => 'full', 'live' => true, 'buffer' => [], 'lastSent' => -1, 'stale' => false];
+        $subscribers->setValue($feed, $live);
+        $deferred->setValue($feed, [$this->progress($sessionId, 'seeded', 1_699_999_999_999)]);
+
+        $host = $this->fixture->hub->get($sessionId);
+        self::assertNotNull($host);
+        $host->announce($this->progress($sessionId, 'boom', 1_700_000_002_000));
+
+        $told = \array_values(\array_filter($faults, static fn (string $line): bool => \str_contains($line, 'fan-out dropped')));
+        self::assertCount(1, $told, 'the swallowed fault is logged exactly once');
+        self::assertStringContainsString("session $sessionId fan-out dropped", $told[0]);
+        self::assertStringContainsString('Call to undefined method stdClass::', $told[0], 'the line names the fault behind the silence');
+        self::assertSame([], $deferred->getValue($feed), 'the catch still clears the deferred queue');
+
+        // The listener survived: a later event still reaches the real client,
+        // and the poison earns a second line — not a detached feed.
+        $host->announce($this->progress($sessionId, 'after', 1_700_000_003_000));
+        self::assertSame(
+            ['boom', 'after'],
+            \array_map(static fn (array $e): string => (string) $e['data']['callId'], $client->events('tool.progress')),
+            'the healthy subscriber hears past the fault, in order',
+        );
+        self::assertCount(2, \array_filter($faults, static fn (string $line): bool => \str_contains($line, 'fan-out dropped')));
+        self::assertSame(2, $feed->subscriberCount(), 'the fault detached nobody');
     }
 
     private function progress(string $sessionId, string $callId, int $tsMs): SessionEvent

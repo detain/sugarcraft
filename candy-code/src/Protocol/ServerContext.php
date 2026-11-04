@@ -424,6 +424,9 @@ final class ServerContext
                 // turn.completed only at C-WEB-5.d, for the push trigger.
                 $this->announceOutbound($sessionId, $event);
             },
+            // CWPD-9: the feed swallows fan-out faults to keep its listener;
+            // the cause still reaches the server log through this sink.
+            $this->log,
         );
     }
 
