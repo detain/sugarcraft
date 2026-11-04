@@ -162,9 +162,11 @@ final class VsGame implements Model
         // Handle pause — toggle pause; the in-flight tick stays in flight,
         // so no new tick is armed here (arming on key messages was the
         // chain-duplication defect fixed alongside Game's gravity guard).
+        // The toggle is owned here rather than delegated: a release or a
+        // stray repeat must not flip the flag a second time on the way
+        // (m11 — this gate is load-bearing, not a pass-through).
         if ($msg instanceof KeyMsg && self::charKey($msg, 'p')) {
-            [$newPlayer] = $this->player->update($msg);
-            return [$this->mutate(['player' => $newPlayer]), null];
+            return [$this->mutate(['player' => $this->player->mutate(['paused' => !$this->player->paused])]), null];
         }
 
         // While paused, only the tick chain keeps beating: gravity re-arms
