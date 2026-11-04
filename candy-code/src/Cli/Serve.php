@@ -391,8 +391,9 @@ final class Serve
         // dispatcher threads it onto its workspace as a service, so a revoke
         // made over the wire and a rotation made at the cookie layer act on
         // the same rows. The construction is hoisted here because the
-        // workspace is built before the server; its failure would land in the
-        // catch below as a workspace refusal, which is honest enough.
+        // workspace is built before the server; AuthContext::new is a pure
+        // in-memory mint by the store's own law (nothing touches disk at
+        // construction), so it cannot throw and needs no guard here.
         $auth = AuthContext::new($tokens);
 
         // The protocol's sessions are built HERE, in the process that serves
