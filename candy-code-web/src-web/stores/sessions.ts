@@ -46,6 +46,13 @@ export const useSessionsStore = defineStore('sessions', () => {
   const error = ref<string | null>(null)
   const loaded = ref(false)
   /**
+   * CW-DBA-7: the listing walk stops at PAGE x MAX_PAGES rows whatever the
+   * server still has. The cap was silent until now; this ref says so out
+   * loud so the UI can offer a real "more" affordance instead of letting a
+   * 2001st session simply not exist. (Painting it is the sidebar lane's.)
+   */
+  const capped = ref(false)
+  /**
    * C-SES-7.e: the archived tray is OFF by default — the server's default
    * `session.list` hides archived rows, and so does the sidebar until the
    * toggle asks for them. Toggling re-loads; it never client-side-sweeps a
@@ -64,6 +71,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   async function load(): Promise<void> {
     loading.value = true
     error.value = null
+    capped.value = false
     try {
       const knownBefore = new Set(Object.keys(byId.value))
       const next: Record<string, SessionSummary> = {}
@@ -112,6 +120,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       cursor = result.nextCursor
       if (cursor === null) break
     }
+    // CW-DBA-7: reaching here with a live cursor means the budget ran out,
+    // not the listing — the server still has rows we never asked for.
+    if (cursor !== null) capped.value = true
   }
 
   /** C-SES-7.e: show or hide the archived tray; the index follows the server on the reload. */
@@ -440,6 +451,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     loading,
     loaded,
     error,
+    capped,
     showArchived,
     searchResults,
     searching,

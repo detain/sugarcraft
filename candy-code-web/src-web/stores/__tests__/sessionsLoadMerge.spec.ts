@@ -79,3 +79,35 @@ describe('sessions load merges instead of clobbering (CW-DBA-2)', () => {
     expect(sessions.byId.z).toBeUndefined()
   })
 })
+
+/**
+ * CW-DBA-7 (reviews-1103): the walk silently stopped at PAGE x MAX_PAGES
+ * (2,000 rows) with no signal that the server had more. `capped` now says
+ * so; the sidebar/banner paint is deferred to its own lane (seam row in
+ * the lane report).
+ */
+describe('sessions listing reports its page budget (CW-DBA-7)', () => {
+  it('flags capped when the walk stops on its budget with rows still listed', async () => {
+    const { wire, sessions } = await quiet()
+
+    const pending = sessions.load()
+    for (let page = 0; page < 10; page++) {
+      await wire.answer('session.list', { items: [row(`p${page}`)], nextCursor: `c${page}` })
+    }
+    await pending
+
+    expect(sessions.capped).toBe(true)
+    expect(Object.keys(sessions.byId)).toHaveLength(10)
+  })
+
+  it('keeps the flag down when a walk runs to the end of the listing', async () => {
+    const { wire, sessions } = await quiet()
+    expect(sessions.capped).toBe(false)
+
+    const pending = sessions.load()
+    await wire.answer('session.list', { items: [row('a')], nextCursor: null })
+    await pending
+
+    expect(sessions.capped).toBe(false)
+  })
+})
