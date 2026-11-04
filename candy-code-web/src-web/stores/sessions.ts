@@ -65,11 +65,27 @@ export const useSessionsStore = defineStore('sessions', () => {
     loading.value = true
     error.value = null
     try {
+      const knownBefore = new Set(Object.keys(byId.value))
       const next: Record<string, SessionSummary> = {}
       await loadPages(next, {})
       if (showArchived.value) await loadPages(next, { archived: true })
       await loadOtherRoots(next)
-      byId.value = next
+      // CW-DBA-2: the walk took as long as it took; anything the events put
+      // into the index in the meantime must not vanish under the page. Same
+      // before-keys law as the approvals shelf: rows that appeared while the
+      // request was in flight survive; a pre-existing row the server omits
+      // is retired; a mid-flight update with a newer stamp beats the page's
+      // older copy of the same row.
+      const merged = { ...next }
+      for (const [id, summary] of Object.entries(byId.value)) {
+        const pageCopy = merged[id]
+        if (pageCopy === undefined) {
+          if (!knownBefore.has(id)) merged[id] = summary
+          continue
+        }
+        if (stamp(summary) > stamp(pageCopy)) merged[id] = summary
+      }
+      byId.value = merged
       loaded.value = true
     } catch (failure) {
       error.value = failure instanceof Error ? failure.message : String(failure)
