@@ -53,9 +53,13 @@ echo $ansi;
 ## API
 
 ```php
+use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\AsciiColorMode;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
+
+$image  = ImageSource::fromFile('examples/fixture-gradient.png');
 
 // Probe terminal once, pick best protocol
 $mosaic = Mosaic::probe();
@@ -133,6 +137,7 @@ Decoding untrusted images is budgeted — the caps are live constants on
 |---|---|---|
 | `ImageSource::MAX_BYTES` | 64 MiB | the file/payload read itself — oversized files are refused before GD ever sees them |
 | `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget (constructor and every factory take `maxPixels` to tune it) |
+| `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: one frame wider than `width × height` allows is refused with a mosaic-owned message before sugar-animation's decoder sees it (the sibling's own `Decoder::MAX_CELLS` mirror) |
 | `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
 | `MAX_RIFF_CHUNKS` (private) | 64 | the pure-PHP WebP RIFF walk bails out of a chunk flood instead of iterating forever |
 
@@ -187,6 +192,7 @@ use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 
 // Synchronous (blocks) — handy for scripts/CLIs.
+$token = getenv('POSTER_TOKEN'); // from wherever your credentials live
 $image = ImageSource::fromUrl('https://example.com/poster.png', [
     'Authorization' => 'Bearer ' . $token,   // optional request headers
 ]);
@@ -289,7 +295,12 @@ The Kitty renderer supports two advanced options via `KittyOptions`:
   modest CPU overhead.
 
 ```php
+use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
+use SugarCraft\Image\Mosaic;
+
+$renderer = (Mosaic::kitty())->renderer();
+$image    = ImageSource::fromFile('examples/fixture-gradient.png');
 
 // Storing transmit: a=T,U=1 payload frames + a trailing control-only a=p
 $opts = KittyOptions::transmit(imageId: 1)->withUseVirtual(true);
@@ -447,10 +458,13 @@ to the `View`. The runtime paints each marker it finds.
 ```php
 use SugarCraft\Core\View;
 use SugarCraft\Image\ImageLayer;
+use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
 
 $layer = new ImageLayer();
 
 // Reserve a 20x10 box and stash the rendered bytes.
+$ansiBytes = Mosaic::sixel()->render(ImageSource::fromFile('examples/fixture-gradient.png'), 20, 10);
 $cell = $layer->place($ansiBytes, 20, 10);
 
 // ...compose $cell into the frame like any other text...
@@ -471,6 +485,7 @@ just the cells one image occupied. `placeTracked()` returns both as a
 `PlacedImage`:
 
 ```php
+// continued from the snippet above; $card is any widget with a withImage() setter
 $placed = $layer->placeTracked($ansiBytes, 20, 10);
 
 if ($placed->imageId !== null) {
