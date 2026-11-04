@@ -11,11 +11,13 @@ use Ratchet\Client\WebSocket;
 use Ratchet\RFC6455\Messaging\MessageInterface;
 use React\EventLoop\Loop;
 use React\Http\Browser;
+use React\Http\Message\ServerRequest;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\CookieSessions;
 use SugarCraft\Code\Server\Auth\TokenStore;
+use SugarCraft\Code\Server\Http\ApiController;
 use SugarCraft\Code\Server\Http\AuthMiddleware;
 use SugarCraft\Code\Server\Http\StaticFiles;
 use SugarCraft\Code\Server\Server;
@@ -78,14 +80,72 @@ final class WsUpgradeTest extends TestCase
         self::assertLessThan($before, ForkedChild::registeredServerStreams(), 'a closed listener is forgotten');
     }
 
-    public function testHealthIsPublicAndSaysOnlyOkAndTheProtocol(): void
+    public function testHealthIsPublicSaysOkProtocolAndNoWebUi(): void
     {
         $response = $this->health();
 
         self::assertSame(200, $response->getStatusCode());
-        self::assertSame(['ok' => true, 'protocol' => ServerConfig::PROTOCOL_MAJOR], \json_decode((string) $response->getBody(), true));
+        self::assertSame(['ok' => true, 'protocol' => ServerConfig::PROTOCOL_MAJOR, 'web' => false], \json_decode((string) $response->getBody(), true));
         self::assertSame('nosniff', $response->getHeaderLine('X-Content-Type-Options'));
         self::assertSame('DENY', $response->getHeaderLine('X-Frame-Options'));
+    }
+
+    /**
+     * D-2: the health endpoint used to claim nothing about the UI while the
+     * router answered `/` with a notice page. Now it reports the truth of the
+     * root it serves, re-probed per request, and a root without an index (or
+     * no root at all) never reads as an installed UI.
+     */
+    public function testHealthReportsTheWebUiPresenceOfTheRootItServes(): void
+    {
+        $dist = \sys_get_temp_dir() . '/cc-d2-' . \bin2hex(\random_bytes(6));
+        self::assertTrue(\mkdir($dist . '/assets', 0777, true));
+        $index = $dist . '/index.html';
+        \file_put_contents($index, '<!doctype html><title>ui</title>');
+
+        try {
+            $credentials = new AuthMiddleware($this->auth, ServerConfig::new('/nonexistent'));
+            $api = new ApiController(
+                $this->auth,
+                ServerConfig::new('/nonexistent'),
+                $credentials,
+                null,
+                null,
+                StaticFiles::new($dist),
+            );
+            $request = new ServerRequest('GET', 'http://127.0.0.1:7420/api/health');
+
+            self::assertSame(
+                ['ok' => true, 'protocol' => ServerConfig::PROTOCOL_MAJOR, 'web' => true],
+                \json_decode((string) $api($request)->getBody(), true),
+                'a root carrying an index answers web: true'
+            );
+
+            \unlink($index);
+            self::assertSame(
+                ['ok' => true, 'protocol' => ServerConfig::PROTOCOL_MAJOR, 'web' => false],
+                \json_decode((string) $api($request)->getBody(), true),
+                'the same controller re-probes: a vanished index turns the flag false mid-run'
+            );
+
+            $bare = new ApiController(
+                $this->auth,
+                ServerConfig::new('/nonexistent'),
+                $credentials,
+                null,
+                null,
+                StaticFiles::new(null),
+            );
+            self::assertSame(
+                ['ok' => true, 'protocol' => ServerConfig::PROTOCOL_MAJOR, 'web' => false],
+                \json_decode((string) $bare($request)->getBody(), true),
+                'no root at all answers web: false'
+            );
+        } finally {
+            @\unlink($index);
+            @\rmdir($dist . '/assets');
+            @\rmdir($dist);
+        }
     }
 
     public function testABrowserSignsInWithTheLoginCodeAndOpensTheSocketWithATicket(): void

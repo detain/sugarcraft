@@ -209,7 +209,7 @@ final class Server
         $api = new ApiController($this->auth, $this->config, $credentials, function (string $session): void {
             unset($this->sessionLastUsed[$session]);
             $this->closeSessionSockets($session, 'you have signed out');
-        }, $this->webhooks);
+        }, $this->webhooks, $this->static);
         $upgrade = new Upgrade(
             $this->handler,
             function (Connection $connection): void {

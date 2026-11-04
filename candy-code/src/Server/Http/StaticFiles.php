@@ -80,6 +80,18 @@ final class StaticFiles
         return $this->root;
     }
 
+    /**
+     * Whether this server actually has a web UI to answer with — a root is
+     * configured AND that root carries an `index.html` RIGHT NOW. `/api/health`
+     * reports this as `web` (D-2): the answer must not be frozen at startup,
+     * because a custom `--web-root` can point at a directory that was never a
+     * build, and a build's index can vanish out from under a running server.
+     */
+    public function uiAvailable(): bool
+    {
+        return $this->root !== null && \is_file($this->root . '/index.html');
+    }
+
     public function __invoke(ServerRequestInterface $request): ResponseInterface
     {
         $method = $request->getMethod();

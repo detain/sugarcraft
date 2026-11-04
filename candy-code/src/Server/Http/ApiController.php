@@ -17,8 +17,10 @@ use SugarCraft\Code\Server\ServerConfig;
  * WebSocket tickets and sign-out. Everything a session DOES travels over the
  * WebSocket; these four exist to get a browser onto it safely.
  *
- * - `GET /api/health` — public; `{ok, protocol}` and nothing else, so an
+ * - `GET /api/health` — public; `{ok, protocol, web}` and nothing else, so an
  *   unauthenticated prober learns neither the version nor the project root.
+ *   `web` is the honest UI-presence flag (D-2): it reports whether the served
+ *   root actually carries an `index.html` right now, re-probed per request.
  * - `POST /api/login` — `{"code": …}` (the one-time code from the URL
  *   fragment) or `{"token": …}` (the owner token) for an HttpOnly,
  *   SameSite=Strict session cookie PLUS a `loginSecret` in the JSON body
@@ -40,6 +42,7 @@ final class ApiController
     /**
      * @param \Closure(string): void|null $onSessionRevoked the server's hook to close the sockets a revoked session opened
      * @param HookWebhooks|null           $webhooks         AUT-6 delivery handler; null when no hooks are configured — `/api/hooks/…` then falls through to the ordinary 404, which is the default-off mount
+     * @param StaticFiles|null            $static           the file server whose UI presence `/api/health` reports; null answers `web: false` (D-2)
      */
     public function __construct(
         private readonly AuthContext $auth,
@@ -47,6 +50,7 @@ final class ApiController
         private readonly AuthMiddleware $credentials,
         private readonly ?\Closure $onSessionRevoked = null,
         private readonly ?HookWebhooks $webhooks = null,
+        private readonly ?StaticFiles $static = null,
     ) {
     }
 
@@ -69,7 +73,7 @@ final class ApiController
 
         return match ($path) {
             '/api/health' => $method === 'GET' || $method === 'HEAD'
-                ? Responses::json(200, ['ok' => true, 'protocol' => ServerConfig::PROTOCOL_MAJOR])
+                ? Responses::json(200, ['ok' => true, 'protocol' => ServerConfig::PROTOCOL_MAJOR, 'web' => $this->static?->uiAvailable() ?? false])
                 : self::methodNotAllowed('GET'),
             '/api/login' => $method === 'POST' ? $this->login($request) : self::methodNotAllowed('POST'),
             '/api/ticket' => $method === 'POST' ? $this->ticket($request) : self::methodNotAllowed('POST'),
