@@ -217,8 +217,13 @@ final class Renderer
         }
 
         $lines = [Width::truncate($title, $text)];
-        if ($shown === []) {
+        if ($rows === []) {
             $lines[] = self::tint(Style::new(), '#7d6e98', $profile)->render(Width::truncate('  (no activity)', $text));
+        } elseif ($shown === []) {
+            // A cap of zero entries is not "no activity" — a screen short
+            // enough to starve the pane must name how much it hides.
+            $lines[] = self::tint(Style::new(), '#7d6e98', $profile)
+                ->render(Width::truncate('  +' . count($rows) . ' more', $text));
         } else {
             $durationWidth = 4;
             foreach ($shown as [, $duration]) {

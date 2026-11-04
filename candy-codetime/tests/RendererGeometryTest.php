@@ -262,6 +262,34 @@ final class RendererGeometryTest extends TestCase
         $tiny = explode("\n", rtrim($render(40, 10, self::busy()), "\n"));
         $this->assertLessThanOrEqual(10, count($tiny), 'an absurdly short screen is clipped, not scrolled');
         $this->assertStringStartsWith('CandyCodetime', ltrim(\SugarCraft\Core\Util\Ansi::strip($tiny[0])), 'the header keeps row 1 — the whole point of the ladder');
+
+        // The busy() fixture fits a 24-row screen even with the ladder
+        // neutered; only a SATURATED window (more projects than any cap)
+        // forces the trim path. Without these legs, a clip-only renderer
+        // that amputates the right pane passed every pin (R3 MAJOR-1).
+        $deep = [];
+        $t0 = (new \DateTimeImmutable(self::END))->getTimestamp();
+        foreach (range(1, 25) as $i) {
+            $deep[] = new Heartbeat($t0 + $i * 60, 'project-' . $i, 'lang-' . $i, '/a.php', 60);
+        }
+        $saturated = explode("\n", rtrim($render(40, 20, $deep), "\n"));
+        $this->assertLessThanOrEqual(20, count($saturated), 'twenty-five projects and languages must fit a 20-row screen');
+        foreach ($saturated as $row) {
+            $plain = Ansi::strip($row);
+            if (preg_match('/^[\x{256D}\x{2570}\x{2502}]/u', $plain) === 1) {
+                $this->assertMatchesRegularExpression('/[\x{256E}\x{256F}\x{2502}]$/u', rtrim($plain),
+                    'the ladder trims entries; it never amputates a pane mid-border');
+            }
+        }
+
+        // A starved pane discloses what it hid — it never calls a busy
+        // account idle (R3 NIT-1). 16 rows still affords two entries; a
+        // 10-row budget starves the ladder into the side-by-side fallback.
+        foreach ([16, 10] as $h) {
+            $starved = Ansi::strip($render(40, $h, $deep));
+            $this->assertStringNotContainsString('(no activity)', $starved, "a busy account is never labelled idle (h=$h)");
+            $this->assertMatchesRegularExpression('/\+2\d more/u', $starved, "hidden rows are counted honestly (h=$h)");
+        }
     }
 
     private static function timelineRows(string $frame): array

@@ -386,7 +386,7 @@ final class DashboardTest extends TestCase
     public function testAColorProfileMsgLandsOnTheModelAndSurvivesNavigation(): void
     {
         $store = new Store(sys_get_temp_dir());
-        $d = new Dashboard($store, new \DateTimeImmutable('2024-06-07'), 3, new Stats([], []), 80);
+        $d = new Dashboard($store, new \DateTimeImmutable('2024-06-07'), 3, new Stats([], []), 80, null, 20);
         $this->assertNull($d->colorProfile);
 
         [$withProfile, $cmd] = $d->update(new \SugarCraft\Core\Msg\ColorProfileMsg(\SugarCraft\Core\Util\ColorProfile::Ascii));
@@ -394,6 +394,7 @@ final class DashboardTest extends TestCase
         $this->assertInstanceOf(Dashboard::class, $withProfile);
         $this->assertSame(\SugarCraft\Core\Util\ColorProfile::Ascii, $withProfile->colorProfile);
         $this->assertSame(80, $withProfile->width);
+        $this->assertSame(20, $withProfile->height, 'the colour leg must not drop the row budget');
 
         [$shifted, ] = $withProfile->update(new KeyMsg(KeyType::Right));
         $this->assertSame(\SugarCraft\Core\Util\ColorProfile::Ascii, $shifted->colorProfile);
