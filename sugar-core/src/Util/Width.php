@@ -31,7 +31,12 @@ namespace SugarCraft\Core\Util;
  * - East_Asian_Width W and F score 2; A, N, H, Na and unassigned score 1.
  *   Ambiguous-in-CJK (the GNU wcwidth table rendering A as 2) is NOT applied:
  *   PHP's mb_strwidth, the terminals in this fleet, and every golden in the
- *   repo agree on A = 1.
+ *   repo agree on A = 1. One deliberate exception rides the block shape
+ *   against the data: the ~257 ASSIGNED EAW=Neutral text-presentation emoji
+ *   inside the legacy U+1F300..U+1F64F, U+1F680..U+1F6FF and U+1F900..U+1F9FF
+ *   block legs (e.g. U+1F321) score 2 with their block, matching fleet
+ *   wcwidth parity — the terminals that paint this family lay those slots
+ *   two cells wide too.
  * - Holes inside the pre-2026 block legs (U+3248..U+324F, Plane-2/3 gaps) keep
  *   the block's charge — those legs are Kuhn-2006 spans and the EAW file
  *   itself defaults Plane-2/3 undesignated regions to W. Every leg ADDED by
