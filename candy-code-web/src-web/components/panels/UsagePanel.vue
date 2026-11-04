@@ -182,14 +182,14 @@ const windowLabel = computed(() => (windowDays.value === 0 ? t('web.panels.usage
 .usage-panel .head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .usage-panel .head .count { font-weight: 600; }
 .usage-panel .scopes, .usage-panel .windows { display: inline-flex; gap: 4px; }
-.usage-panel .link { background: none; border: none; color: var(--accent, #7aa2f7); cursor: pointer; padding: 0; font: inherit; }
+.usage-panel .link { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; font: inherit; }
 .usage-panel .link[disabled] { opacity: 0.5; cursor: default; }
 .usage-panel .link.on { text-decoration: underline; }
 .usage-panel .totals { margin: 0; }
-.usage-panel .totals .meta { color: var(--muted, #888); }
-.usage-panel .meta { color: var(--muted, #888); }
-.usage-panel .empty { color: var(--muted, #888); font-style: italic; margin: 0; }
+.usage-panel .totals .meta { color: var(--muted); }
+.usage-panel .meta { color: var(--muted); }
+.usage-panel .empty { color: var(--muted); font-style: italic; margin: 0; }
 .usage-panel .error { color: var(--error); margin: 0; }
 .usage-panel table { width: 100%; border-collapse: collapse; }
-.usage-panel th, .usage-panel td { text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--line, #33393f); }
+.usage-panel th, .usage-panel td { text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--line); }
 </style>
