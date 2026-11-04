@@ -80,7 +80,15 @@ export const useClientToolsStore = defineStore('clientTools', () => {
     if (disabled.value || !connection.connected) return
     try {
       const result = await request('tools.client.register', { sessionId, tools: announcements() })
-      registrations.set(sessionId, String(result['registrationId']))
+      // CW-14: an answer without a string id must not become the literal
+      // 'undefined' in the map — every call that followed would answer
+      // under a registration nobody issued. Same law as the deadline guard.
+      const registrationId = result['registrationId']
+      if (typeof registrationId !== 'string') {
+        lastError.value = 'tools.client.register answered without a registration id'
+        return
+      }
+      registrations.set(sessionId, registrationId)
       lastError.value = null
     } catch (failure) {
       if (failure instanceof ProtocolError && failure.kind === 'client_tools_disabled') {

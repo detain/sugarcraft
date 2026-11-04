@@ -194,3 +194,30 @@ describe('client-hosted tools in the tab', () => {
     expect(wire.sent('tools.client.result')).toHaveLength(0)
   })
 })
+
+/**
+ * CW-14 (reviews-1103): a tools.client.register answer WITHOUT the id was
+ * String()ed into the literal 'undefined' and stored as if real — every
+ * later call for that session then answered with a registration id nobody
+ * had ever issued. The guard mirrors the deadline guard's shape.
+ */
+describe('registration answers are checked (CW-14)', () => {
+  it('refuses to remember a registration the answer did not carry', async () => {
+    const wire = await Wire.connect()
+    const store = useClientToolsStore()
+    void store.attach('s1')
+    await flush()
+    wire.answer('tools.client.register', { names: ['client__browser_context'] })
+    await flush()
+
+    expect(store.registrations.has('s1')).toBe(false)
+    expect(store.lastError).toContain('registration id')
+  })
+
+  it('a well-formed answer registers with the id it carried', async () => {
+    const wire = await Wire.connect()
+    const store = await attached(wire)
+    expect(store.registrations.get('s1')).toBe('abcd1234abcd1234')
+    expect(store.lastError).toBeNull()
+  })
+})
