@@ -123,3 +123,58 @@ describe('contextSources ordering latch (WEB-3a MINOR-2)', () => {
     expect(store.pendingTrusts.find((row) => row.askId === 'trust-9f0e1d2c3')?.status).toBe('granted')
   })
 })
+
+/**
+ * CW-DBA-18 (reviews-1103): the measurement answer RE-STATES the whole
+ * truth about the root's prompts — but a prompt pushed while the read was
+ * in flight is not in that (older) snapshot, and the wholesale replace
+ * erased it until the next load. Before-keys law: rows that appeared
+ * during the request survive; a prompt the fresh measurement retires was
+ * known before the request and is legitimately gone.
+ */
+describe('trust shelf survives in-flight prompts (CW-DBA-18)', () => {
+  it('keeps a prompt that arrived while the measurement was in flight', async () => {
+    await wire.connect()
+    const store = useContextSourcesStore()
+
+    const load = store.load('s1')
+    await flushPromises()
+    wire.event('s1', 'permission.asked', {
+      askId: 'trust-mid',
+      kind: 'trust',
+      target: 'mcp',
+      root: '/repo-s1',
+      status: 'asked',
+      persisted: false,
+      sessionId: 's1',
+    })
+    const frame = wire.sent('context.sources').at(-1)
+    wire.socket().answer({ ...sourcesFor('s1'), trusts: [] }, frame?.id as string)
+    await load
+    await flushPromises()
+
+    expect(store.pendingTrusts.map((row) => row.askId)).toEqual(['trust-mid'])
+  })
+
+  it('still retires a KNOWN prompt the fresh measurement drops', async () => {
+    await wire.connect()
+    const store = useContextSourcesStore()
+
+    const first = store.load('s1')
+    await flushPromises()
+    wire.answer('context.sources', {
+      ...sourcesFor('s1'),
+      trusts: [{ askId: 'trust-old', kind: 'trust', target: 'mcp', root: '/repo-s1', status: 'asked', persisted: false }],
+    })
+    await first
+    await flushPromises()
+    expect(store.pendingTrusts.map((row) => row.askId)).toEqual(['trust-old'])
+
+    const second = store.load('s1')
+    await flushPromises()
+    wire.answer('context.sources', { ...sourcesFor('s1'), trusts: [] })
+    await second
+    await flushPromises()
+    expect(store.pendingTrusts).toEqual([])
+  })
+})

@@ -66,6 +66,7 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
   async function load(id: string): Promise<void> {
     const mine = ++generation
     loading.value = true
+    const knownBefore = new Set(pendingTrusts.value.map((row) => row.askId))
     try {
       const result = await connection.request('context.sources', { sessionId: id })
       if (mine !== generation) return
@@ -77,7 +78,14 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
       // this root's prompts — pending rows and settled rows alike — so the
       // shelf is replaced by it, not merged into it. A prompt that vanishes
       // from the list has no server record and retires with it.
-      pendingTrusts.value = (result.trusts ?? []).map((row) => ({ ...row, sessionId: id }))
+      // CW-DBA-18 keeps exactly one class out of that retirement: a prompt
+      // that ARRIVED while the read was in flight is not in the older
+      // snapshot and stays on the shelf (it was not known before the
+      // request, so "absent" here means "unseen", not "retired").
+      const measured = (result.trusts ?? []).map((row) => ({ ...row, sessionId: id }))
+      const measuredIds = new Set(measured.map((row) => row.askId))
+      const inflight = pendingTrusts.value.filter((row) => !measuredIds.has(row.askId) && !knownBefore.has(row.askId))
+      pendingTrusts.value = [...measured, ...inflight]
     } catch (failure) {
       if (mine !== generation) return
       // Fail soft: the panel shows the reason and stays mounted for a reload.
