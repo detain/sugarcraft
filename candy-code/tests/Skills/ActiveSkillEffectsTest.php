@@ -686,6 +686,22 @@ final class ActiveSkillEffectsTest extends TestCase
         $this->assertSame(['WebFetch'], self::patterns($effects->denyRules));
     }
 
+    public function testAFailedRootSkillCallGrantsNothing(): void
+    {
+        // The root-shape twin of testAFailedSkillCallGrantsNothing: a failed
+        // Skill call grants nothing on EITHER transcript shape, and the root
+        // fold in normalizeTranscript() is the only code that can honour that
+        // promise on the Chat path — without this pin the fold could be
+        // deleted and every other root test would stay green (review MINOR-1).
+        $this->assertTrue(
+            ActiveSkillEffects::derive(
+                self::rootInvocation([['name' => 'php-wizard']], failLast: true),
+                self::registry(self::wizard()),
+                projectTierTrusted: true,
+            )->isEmpty()
+        );
+    }
+
     /**
      * PHP-M2, the user-visible half: gateToolCall()'s
      * `isEmpty() && !$gate->hasTurnGrants()` short-circuit made the Chat-path

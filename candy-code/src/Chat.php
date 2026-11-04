@@ -21927,8 +21927,8 @@ final class Chat implements Model
 
     /**
      * A copy of $message with $content swapped in and every other field carried
-     * across — {@see \SugarCraft\Code\Host\CompactionService::messageWithContent()}, whose field list is the
-     * maintenance contract `CompactionHidesNotDeletesTest` checks.
+     * across — {@see Message::withContent()}, whose field list is the maintenance
+     * contract `MessageWithContentFieldCensusTest` checks.
      */
     private static function messageWithContent(Message $message, string $content): Message
     {
