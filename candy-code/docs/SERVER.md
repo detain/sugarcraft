@@ -247,7 +247,13 @@ says so.
    The cookie is port-scoped — `candy_code_session_<port>` — so two `serve`
    instances on one host never share ambient sign-ins (7-day sliding lifetime;
    `Secure` when the browser arrives over TLS — the built-in listener with
-   `--tls-cert`/`--tls-key`, or a trusted proxy reporting HTTPS).
+   `--tls-cert`/`--tls-key`, or a trusted proxy reporting HTTPS). Under that
+   same TLS condition the name carries the `__Host-` prefix
+   (`__Host-candy_code_session_<port>`), pinning it to this exact origin; a
+   cleartext bind keeps the bare name, which is what plaintext can honestly
+   carry. Adopting the prefix renames the cookie, so sessions opened before
+   the upgrade sign out once on next visit — an accepted one-time cost, not a
+   rolling behaviour.
    Posting `{"token": "…"}` works too.
 3. Before each WebSocket connect the page asks `POST /api/ticket` (cookie +
    `X-Candy-Code-Auth` secret) for a **single-use ticket** valid 30 s, bound to

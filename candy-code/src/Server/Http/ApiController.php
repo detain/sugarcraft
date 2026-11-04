@@ -148,10 +148,11 @@ final class ApiController
     private function cookieHeader(ServerRequestInterface $request, string $value, int $maxAge): string
     {
         // Port-scoped name (ISS-007): see AuthMiddleware::cookieName() for
-        // why the name is hygiene and the login secret is authority, and for
-        // the `__Host-` prefix still owed here (the server speaks HTTPS
-        // since C-WEB-5.a; renaming is a separate, session-breaking step).
-        return AuthMiddleware::cookieName($request) . '=' . $value
+        // why the name is hygiene and the login secret is authority. The
+        // `__Host-` prefix is adopted there under TLS (D-29, OD-13 flip) —
+        // one decision, shared with the reader so name and attribute can
+        // never disagree; cleartext keeps the bare name.
+        return AuthMiddleware::cookieName($request, $this->config->trustedProxies) . '=' . $value
             . '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' . $maxAge
             . (ClientAddress::isSecure($request, $this->config->trustedProxies) ? '; Secure' : '');
     }

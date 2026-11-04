@@ -292,6 +292,19 @@ final class AuthMiddlewareTest extends TestCase
         self::assertSame(CookieSessions::COOKIE . '_7420', AuthMiddleware::cookieName($dial('http://127.0.0.1:7420/api/ticket')));
         self::assertSame(CookieSessions::COOKIE . '_8443', AuthMiddleware::cookieName($dial('http://127.0.0.1/', ['Host' => '127.0.0.1:8443'])), 'the Host port when the URI carries none');
         self::assertSame(CookieSessions::COOKIE . '_443', AuthMiddleware::cookieName($dial('https://example.com/api/ticket')), 'the scheme default when neither names one');
+
+        // D-29 (OD-13 flip): the name gains `__Host-` exactly when the cookie
+        // also earns `Secure` — same ClientAddress::isSecure decision — so the
+        // prefix cannot be claimed where the attribute would be dropped. The
+        // port stays INSIDE the name text: the prefix constrains attributes,
+        // not names. A URI scheme of https alone is NOT TLS (the listener
+        // stamps HTTPS, above); only a TRUSTED proxy may forward the claim.
+        $tls = new ServerRequest('GET', 'http://127.0.0.1:7420/api/ticket', [], '', '1.1', ['HTTPS' => 'on']);
+        self::assertSame('__Host-' . CookieSessions::COOKIE . '_7420', AuthMiddleware::cookieName($tls), 'a direct-TLS request resolves the prefixed name');
+        $forwarded = new ServerRequest('GET', 'http://127.0.0.1:7420/api/ticket', ['X-Forwarded-Proto' => 'https'], '', '1.1', ['REMOTE_ADDR' => '127.0.0.1']);
+        self::assertSame('__Host-' . CookieSessions::COOKIE . '_7420', AuthMiddleware::cookieName($forwarded, ['127.0.0.1']), 'a trusted proxy may forward the TLS claim');
+        self::assertSame(CookieSessions::COOKIE . '_7420', AuthMiddleware::cookieName($forwarded, []), 'an untrusted peer cannot forge the prefix');
+        self::assertSame(CookieSessions::COOKIE . '_7420', AuthMiddleware::cookieName($dial('http://127.0.0.1:7420/api/ticket')), 'cleartext keeps the bare name — __Host- requires Secure, which plaintext cannot honestly carry');
     }
 
     public function testEveryAuthenticatedUseOfASessionIsObservedForTheExpirySweep(): void

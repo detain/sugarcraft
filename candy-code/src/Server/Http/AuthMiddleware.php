@@ -135,7 +135,7 @@ final class AuthMiddleware
             if (\is_string($ticket) && $ticket !== '') {
                 $presented = true;
                 $session = $this->auth->tickets->consume($ticket);
-                $cookie = self::cookie($request);
+                $cookie = self::cookie($request, $this->config->trustedProxies);
                 if (
                     $session !== null
                     && $this->auth->sessions->validate($session)
@@ -154,7 +154,7 @@ final class AuthMiddleware
         // subprotocol (Appendix O §8.2). A browser sends the cookie on every
         // same-site upgrade by itself, so accepting it there would make the
         // single-use ticket decorative.
-        $cookie = $path === '/ws' ? null : self::cookie($request);
+        $cookie = $path === '/ws' ? null : self::cookie($request, $this->config->trustedProxies);
         if ($cookie !== null) {
             $presented = true;
             $crossSite = \strtolower($request->getHeaderLine('Sec-Fetch-Site')) === 'cross-site';
@@ -204,13 +204,20 @@ final class AuthMiddleware
      * session, and the login secret, origin-scoped where cookies are not,
      * carries the actual authority.
      *
-     * The name should gain the `__Host-` prefix under HTTPS (Secure, Path=/,
-     * no Domain — all already true here). Since C-WEB-5.a this server can
-     * terminate TLS itself, so the prefix is reachable at last; adopting it
-     * renames the cookie and signs out every open session, so it remains a
-     * deliberate follow-up rather than a side effect of the TLS flags.
+     * Adopted under TLS (D-29, OD-13): when the request arrived over TLS —
+     * the listener's own, or a trusted proxy's forwarded claim, the same
+     * {@see ClientAddress::isSecure()} decision that mints the `Secure`
+     * attribute — the name carries the `__Host-` prefix (Secure, Path=/, no
+     * Domain are all true of this cookie, and the port stays INSIDE the name
+     * text, which the prefix does not constrain). Over cleartext the bare
+     * name stays: `__Host-` requires `Secure`, which plaintext cannot honestly
+     * set, and loopback development must never break. The rename signs every
+     * session that was open across the upgrade out once — an accepted,
+     * announced cost, not a silent re-widening (docs/SERVER.md, "Browsers").
+     *
+     * @param list<string> $trustedProxies
      */
-    public static function cookieName(ServerRequestInterface $request): string
+    public static function cookieName(ServerRequestInterface $request, array $trustedProxies = []): string
     {
         $port = $request->getUri()->getPort();
         if ($port === null && \preg_match('/:(\d{1,5})$/', $request->getHeaderLine('Host'), $m) === 1) {
@@ -220,13 +227,13 @@ final class AuthMiddleware
             $port = $request->getUri()->getScheme() === 'https' ? 443 : 80;
         }
 
-        return CookieSessions::COOKIE . '_' . $port;
+        return (ClientAddress::isSecure($request, $trustedProxies) ? '__Host-' : '') . CookieSessions::COOKIE . '_' . $port;
     }
 
     /** The session cookie's value, or null when the request carries none. */
-    public static function cookie(ServerRequestInterface $request): ?string
+    public static function cookie(ServerRequestInterface $request, array $trustedProxies = []): ?string
     {
-        $value = $request->getCookieParams()[self::cookieName($request)] ?? null;
+        $value = $request->getCookieParams()[self::cookieName($request, $trustedProxies)] ?? null;
 
         return \is_string($value) && $value !== '' ? $value : null;
     }

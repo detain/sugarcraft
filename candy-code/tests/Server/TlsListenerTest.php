@@ -146,7 +146,7 @@ final class TlsListenerTest extends TestCase
         self::assertStringStartsWith('HTTP/1.1 200', $this->drainAll($after));
     }
 
-    public function testTheSignInCookieCarriesSecureOverTlsAndNotOverPlainHttp(): void
+    public function testTheSignInCookieAdoptsTheHostPrefixOverTlsAndStaysBareOverPlainHttp(): void
     {
         $code = \substr((string) \parse_url($this->tls->loginUrls()[0], \PHP_URL_FRAGMENT), \strlen('code='));
         self::assertNotFalse($code);
@@ -158,8 +158,15 @@ final class TlsListenerTest extends TestCase
         $answer = $this->drainAll($socket);
 
         self::assertStringStartsWith('HTTP/1.1 200', $answer, 'a fresh code signs in over TLS');
-        self::assertStringContainsString('Set-Cookie: candy_code_session_', $answer);
+        // D-29 (OD-13 flip): under TLS the name gains the `__Host-` prefix —
+        // the attributes it requires (Secure, Path=/, no Domain) are all
+        // already true of this cookie, and the port stays INSIDE the name
+        // text, which the prefix does not constrain.
+        self::assertStringContainsString('Set-Cookie: __Host-candy_code_session_', $answer, 'the TLS mint takes the __Host- prefix');
         self::assertStringContainsString('; Secure', $answer, 'the direct-TLS connection sets the Secure flag (C-WEB-5.a: ClientAddress::isSecure reads the TLS state of the listener itself)');
+        self::assertStringContainsString('Path=/', $answer, 'the __Host- contract wants Path=/ and the mint already carried it');
+        self::assertStringContainsString('HttpOnly', $answer);
+        self::assertStringNotContainsString('Domain=', $answer, 'a Domain attribute would violate the __Host- contract, and the mint never emitted one');
 
         $plainCode = \substr((string) \parse_url($this->plain->loginUrls()[0], \PHP_URL_FRAGMENT), \strlen('code='));
         $plainSocket = $this->plainConnect($this->plainPort);
@@ -170,6 +177,7 @@ final class TlsListenerTest extends TestCase
 
         self::assertStringStartsWith('HTTP/1.1 200', $plainAnswer);
         self::assertStringContainsString('Set-Cookie: candy_code_session_', $plainAnswer);
+        self::assertStringNotContainsString('__Host-', $plainAnswer, 'a cleartext response cannot honestly set __Host- (the prefix requires Secure); localhost development keeps the bare name');
         self::assertStringNotContainsString('; Secure', $plainAnswer, 'the same sign-in over plain HTTP must NOT mark the cookie Secure — the browser would drop it');
     }
 
