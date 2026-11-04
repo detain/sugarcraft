@@ -130,6 +130,8 @@ return [
     'config.warn.invalid_graph_symbol' => 'Invalid graph symbol identifier: {value}',
     'config.warn.invalid_graph_symbol_box' => 'Invalid graph symbol identifier for {name}: {value}',
     'config.warn.invalid_log_level' => 'Invalid log_level: {value}',
+    'config.warn.boxes_reset' => 'shown_boxes reset to the default layout: {reason}',
+    'config.warn.box_gpu_missing' => '{box} names GPU {index}, and only {count} were detected',
     'config.warn.no_boxes' => 'No boxes selected!',
     'config.warn.invalid_boxes' => 'Invalid box name(s) in shown_boxes!',
     'config.warn.invalid_core_map' => 'Invalid formatting of cpu_core_map!',

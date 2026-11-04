@@ -143,14 +143,38 @@ final class Config
      */
     public function withShownBoxesSettled(?int $gpuCount): self
     {
+        $reason = $this->shownBoxesSettlement($gpuCount);
+
+        return $reason === null ? $this : $this->mutate(['shown_boxes' => (string) Schema::defaults()['shown_boxes']]);
+    }
+
+    /**
+     * Why {@see withShownBoxesSettled()} would reset this list, or null when it
+     * stands. The settlement used to be silent: the box layout a user hand-
+     * picked could vanish on a startup where a GPU went undetected, and the
+     * reset was then what the next save wrote back. Callers that own a notice
+     * channel (bin, the reload report) surface this instead.
+     */
+    public function shownBoxesSettlement(?int $gpuCount): ?string
+    {
         $boxes = $this->shownBoxes();
-        $valid = \count(GpuPanels::targets($boxes)) <= GpuPanels::MAX;
+        $reason = null;
+        if (\count(GpuPanels::targets($boxes)) > GpuPanels::MAX) {
+            $reason = Lang::t('config.warn.too_many_gpu_boxes');
+        }
         foreach ($boxes as $box) {
+            if ($reason !== null) {
+                break;
+            }
             $gpu = GpuPanels::index($box);
-            $valid = $valid && GpuPanels::valid($box) && ($gpu === null || $gpuCount === null || $gpu < $gpuCount);
+            if (!GpuPanels::valid($box)) {
+                $reason = Lang::t('config.warn.invalid_boxes');
+            } elseif ($gpu !== null && $gpuCount !== null && $gpu >= $gpuCount) {
+                $reason = Lang::t('config.warn.box_gpu_missing', ['box' => $box, 'index' => (string) $gpu, 'count' => (string) $gpuCount]);
+            }
         }
 
-        return $valid ? $this : $this->mutate(['shown_boxes' => (string) Schema::defaults()['shown_boxes']]);
+        return $reason === null ? null : Lang::t('config.warn.boxes_reset', ['reason' => $reason]);
     }
 
     /**

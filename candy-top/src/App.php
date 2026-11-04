@@ -1715,8 +1715,11 @@ final class App implements Model
     {
         $config = $this->config;
         $writeNew = $this->writeNew;
+        $boxReset = null;
         if ($msg->result !== null) {
-            $config = $config->withPersistedFrom($msg->result->config)->withShownBoxesSettled($this->roster()->count());
+            $pending = $config->withPersistedFrom($msg->result->config);
+            $boxReset = $pending->shownBoxesSettlement($this->roster()->count());
+            $config = $pending->withShownBoxesSettled($this->roster()->count());
             $config = $config->with('lowcolor', !$config->bool('truecolor'));
             $writeNew = $writeNew || $msg->result->needsRewrite;
         }
@@ -1727,7 +1730,7 @@ final class App implements Model
         $next = $next->settledBackdrop(true);
         // btop only logs load warnings; on screen the first one shows in a
         // warning box (each rejected value kept its previous setting).
-        $warning = $msg->result?->warnings[0] ?? null;
+        $warning = $msg->result?->warnings[0] ?? ($boxReset ?? null);
         if ($warning !== null && $next->framed()) {
             $next = $next->withOverlay(Menus::warning($warning));
         }

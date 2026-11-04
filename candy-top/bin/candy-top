@@ -174,7 +174,14 @@ $host = $fake ? $host->withBmcHost(true) : $host;
 // is settled (a gpuN beyond them resets the list) and before the first frame,
 // so the gpu slot keys 5-0 work at once. One bounded sample, outside the loop.
 $gpuProbe = $fake ? null : GpuPanel::probe($config, $platform);
-$config = $config->withShownBoxesSettled($fake ? FakeGpu::new()->count() : count($gpuProbe?->accelerators() ?? []));
+$detected = $fake ? FakeGpu::new()->count() : count($gpuProbe?->accelerators() ?? []);
+// A layout this machine cannot show resets to the defaults (m28): say so, on
+// the same sanitized channel every other startup notice uses, before the reset
+// is what the next save persists.
+if (($boxReset = $config->shownBoxesSettlement($detected)) !== null) {
+    $report($boxReset);
+}
+$config = $config->withShownBoxesSettled($detected);
 // btop Theme::updateThemes: the list the options menu cycles (rescanned on ctrl+r).
 $catalog = ThemeRegistry::new();
 $palette = $catalog->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());

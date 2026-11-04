@@ -254,6 +254,42 @@ final class ConfigTest extends TestCase
         $this->assertSame($fine, $fine->withShownBoxesSettled(0), 'no change → same instance');
     }
 
+    public function testTheShownBoxesSettlementSaysWhyItResets(): void
+    {
+        $fine = Config::new();
+        $this->assertNull($fine->shownBoxesSettlement(0), 'the default layout stands');
+        $this->assertNull(Config::new()->withParsed('shown_boxes', '', true)->shownBoxesSettlement(0), 'empty is kept, as btop');
+        $this->assertNull(
+            Config::new()->withParsed('shown_boxes', 'cpu gpu1 proc', true)->shownBoxesSettlement(2),
+            'gpu1 is showable with two GPUs',
+        );
+
+        $gpuGap = Config::new()->withParsed('shown_boxes', 'cpu gpu4 proc', true);
+        $why = $gpuGap->shownBoxesSettlement(2);
+        $this->assertIsString($why);
+        $this->assertStringContainsString('gpu4', $why, 'the box that cannot be shown is named');
+        $this->assertStringContainsString('reset to the default layout', $why);
+        $this->assertSame(['cpu', 'mem', 'net', 'proc'], $gpuGap->withShownBoxesSettled(2)->shownBoxes());
+
+        $bogus = Config::new()->withParsed('shown_boxes', 'cpu disk', true)->shownBoxesSettlement(0);
+        $this->assertIsString($bogus);
+        $this->assertStringContainsString('Invalid box name(s)', $bogus);
+
+        $crowded = Config::new()->withParsed('shown_boxes', 'gpu0 gpu1 gpu2 gpu3 gpu4 gpu5 gpu6', true);
+        $why = $crowded->shownBoxesSettlement(8);
+        $this->assertIsString($why);
+        $this->assertStringContainsString('Too many GPU boxes', $why);
+
+        // One decision, not two: the reset and the notice cannot disagree.
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Config/Config.php');
+        $body = substr($source, (int) strpos($source, 'function withShownBoxesSettled('));
+        $this->assertStringContainsString(
+            '$reason = $this->shownBoxesSettlement($gpuCount);',
+            substr($body, 0, (int) strpos($body, \PHP_EOL . '    }')),
+            'the reset is driven by the reported reason',
+        );
+    }
+
     public function testShownBoxesSkipsRepeatedSpaces(): void
     {
         $this->assertSame(['cpu', 'proc'], Config::new()->with('shown_boxes', ' cpu   proc ')->shownBoxes());

@@ -22,6 +22,7 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Top\App;
 use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\Config\ConfigFile;
+use SugarCraft\Top\Config\LoadResult;
 use SugarCraft\Top\Config\ConfigWriter;
 use SugarCraft\Top\Msg\ClockTickMsg;
 use SugarCraft\Top\Msg\ConfigLoadedMsg;
@@ -543,6 +544,22 @@ final class AppOptionsTest extends TestCase
         $this->assertSame('warning', $app->overlay()->title);
         $this->assertSame(2000, $app->config->updateMs(), 'the rejected value kept its setting');
         $this->assertStringContainsString('update_ms', implode("\n", $app->surface()?->plainLines() ?? []));
+    }
+
+    public function testAReloadShowsTheBoxLayoutReset(): void
+    {
+        // Nothing in this file is malformed: the box layout is only refused
+        // once the detected accelerators are known (m28). The reset used to be
+        // silent and the reload wrote it back, so the notice is the user's
+        // only sign that hand-picked boxes vanished.
+        $app = self::app();
+        [$settled] = $app->update(new ConfigLoadedMsg(new LoadResult(Config::new()->withParsed('shown_boxes', 'cpu gpu3 mem', true), [], false)));
+        $this->assertSame(['cpu', 'mem', 'net', 'proc'], $settled->config->shownBoxes(), 'the settle drops gpu3');
+        $this->assertInstanceOf(MsgBox::class, $settled->overlay());
+        $this->assertSame('warning', $settled->overlay()->title);
+        $text = implode("\n", $settled->surface()?->plainLines() ?? []);
+        $this->assertStringContainsString('gpu3', $text);
+        $this->assertStringContainsString('reset to the default layout', $text);
     }
 
     public function testASaveOnlyClearsWhatItWrote(): void

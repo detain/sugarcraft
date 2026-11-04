@@ -140,10 +140,11 @@ final class BinTest extends TestCase
         }
         $this->assertSame(1, $inChoke, 'the choke owns exactly one raw write');
 
-        // The eight startup diagnostics route through it: two flag refusals,
-        // the config-path refusal, every load warning, and the four
-        // exit/save-state error reports (2 in the crash path, 2 after run()).
-        $this->assertSame(8, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
+        // The nine startup diagnostics route through it: two flag refusals,
+        // the config-path refusal, every load warning, the box-layout reset
+        // notice, and the four exit/save-state error reports (2 in the crash
+        // path, 2 after run()).
+        $this->assertSame(9, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
         $this->assertStringContainsString('foreach ($loaded->warnings as $warning) {', $source);
 
         $at = strpos($source, '$file = ConfigFile::new($configPath);');
@@ -152,6 +153,28 @@ final class BinTest extends TestCase
         $this->assertStringContainsString('catch (\RuntimeException $e) {', $window, 'a throwing ConfigFile::new is a refusal, not a fatal (m27)');
         $this->assertStringContainsString('$report($e->getMessage());', $window);
         $this->assertStringContainsString('exit(2);', $window);
+    }
+
+    /**
+     * The box-layout reset used to be silent: the layout a user hand-picked
+     * vanished on a host that could not show it, and needsRewrite then made the
+     * loss permanent (m28). The notice has to be reported from the same decision
+     * the reset takes, before the reset is applied.
+     */
+    public function testTheBoxLayoutResetIsReportedFromTheSameDecision(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../bin/candy-top');
+
+        $at = strpos($source, '$boxReset = $config->shownBoxesSettlement($detected)');
+        $this->assertNotFalse($at, 'startup consults the settlement for its reason');
+        $window = substr($source, (int) $at, 260);
+        $this->assertStringContainsString('$report($boxReset);', $window, 'the reason reaches the sanitizing choke');
+        $this->assertStringContainsString('$config->withShownBoxesSettled($detected);', $window, 'and the reset follows the notice');
+        $this->assertLessThan(
+            (int) strpos($window, 'withShownBoxesSettled($detected)'),
+            (int) strpos($window, '$report($boxReset);'),
+            'notice first: the reset is what the next save persists',
+        );
     }
 
     /**
