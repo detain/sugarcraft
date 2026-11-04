@@ -181,6 +181,15 @@ const cachePct = computed<number | null>(() => {
   if (prompt <= 0) return null
   return Math.round((read / prompt) * 100)
 })
+
+/**
+ * CW-SEC-03 (handoff per rv1103/g4d): the PR url is server-shaped data
+ * landing on a live `href`. Only an absolute http(s) target renders as a
+ * link — anything else (javascript:, data:, ftp:, a bare relative string)
+ * keeps the identical chip as plain text, so no click can hand a
+ * script-bearing scheme to the browser.
+ */
+const prLinkable = computed(() => /^https?:\/\//i.test(props.summary?.pr?.url ?? ''))
 </script>
 
 <template>
@@ -215,9 +224,12 @@ const cachePct = computed<number | null>(() => {
     <span v-if="summary?.branch" class="item branch" data-testid="branch-chip" :title="t('web.chrome.status.branch_title', { branch: summary.branch })">⎇ {{ summary.branch }}</span>
     <!-- C-AGT-6.e (R13): the open PR for that branch with a CI dot, served
          from the server's cached `gh pr view` refresh path — the chip never
-         fetches and appears only once the cache holds an answer. -->
+         fetches and appears only once the cache holds an answer.
+         CW-SEC-03 (handoff per rv1103/g4d): the anchor half requires an
+         absolute http(s) url; a non-web scheme renders the same chip as
+         plain text so no href ever carries javascript:, data:, or kin. -->
     <a
-      v-if="summary?.pr"
+      v-if="summary?.pr && prLinkable"
       class="item pr"
       data-testid="pr-chip"
       :href="summary.pr.url"
@@ -225,6 +237,12 @@ const cachePct = computed<number | null>(() => {
       rel="noopener noreferrer"
       :title="t('web.chrome.status.pr_title', { number: summary.pr.number, state: summary.pr.state, checks: summary.pr.checks })"
     >#{{ summary.pr.number }}<span class="pr-dot" :class="`is-${summary.pr.checks}`" data-testid="pr-dot" aria-hidden="true" /></a>
+    <span
+      v-else-if="summary?.pr"
+      class="item pr"
+      data-testid="pr-chip"
+      :title="t('web.chrome.status.pr_title', { number: summary.pr.number, state: summary.pr.state, checks: summary.pr.checks })"
+    >#{{ summary.pr.number }}<span class="pr-dot" :class="`is-${summary.pr.checks}`" data-testid="pr-dot" aria-hidden="true" /></span>
     <button
       type="button"
       class="item action"

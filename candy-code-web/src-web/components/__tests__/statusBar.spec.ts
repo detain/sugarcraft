@@ -330,6 +330,45 @@ describe('StatusBar PR chip (C-AGT-6.e)', () => {
   })
 })
 
+/**
+ * CW-SEC-03 (handoff per rv1103/g4d): the chip links only absolute http(s)
+ * targets. Any other scheme the server might echo keeps the identical chip
+ * as text — no anchor, no href, no click-through to javascript: or data:.
+ */
+describe('StatusBar PR chip scheme gate (CW-SEC-03)', () => {
+  const base = { number: 7, state: 'OPEN', checks: 'pass' }
+
+  it('renders the anchor for an absolute http url', () => {
+    const wrapper = mountBar({ pr: { ...base, url: 'http://example.test/o/r/pull/7' } })
+    const chip = wrapper.find('[data-testid="pr-chip"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.element.tagName).toBe('A')
+    expect(chip.attributes('href')).toBe('http://example.test/o/r/pull/7')
+  })
+
+  it.each([
+    ['javascript:alert(1)', 'javascript:alert(1)'],
+    ['data url', 'data:text/html,<script>alert(1)</script>'],
+    ['ftp url', 'ftp://example.test/pull/7'],
+    ['scheme-relative', '//example.test/pull/7'],
+    ['bare relative', 'pull/7'],
+    ['empty string', ''],
+  ])('keeps the %s chip as plain text', (_label, url) => {
+    const wrapper = mountBar({ pr: { ...base, url } })
+    const chip = wrapper.find('[data-testid="pr-chip"]')
+    expect(chip.exists(), 'the answer still shows').toBe(true)
+    expect(chip.element.tagName).toBe('SPAN')
+    expect(chip.attributes('href')).toBeUndefined()
+    expect(chip.text()).toContain('#7')
+    expect(chip.find('[data-testid="pr-dot"]').exists()).toBe(true)
+  })
+
+  it('accepts the HTTPS upper-case spelling', () => {
+    const wrapper = mountBar({ pr: { ...base, url: 'HTTPS://EXAMPLE.TEST/pull/7' } })
+    expect(wrapper.find('[data-testid="pr-chip"]').element.tagName).toBe('A')
+  })
+})
+
 describe('StatusBar context meter and cache (P-CTX.g)', () => {
   function mountWith(state: ReturnType<typeof createState>, contextPct: number | null) {
     return mount(StatusBar, {
