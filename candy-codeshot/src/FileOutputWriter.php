@@ -72,6 +72,24 @@ final class FileOutputWriter implements OutputWriter
         }
     }
 
+    /**
+     * Push buffered bytes to disk. Unlike {@see write()}, flush() on an already
+     * closed writer stays a silent no-op instead of raising — the asymmetry is
+     * deliberate and narrower than it looks.
+     *
+     * Why write() is loud: a dropped post-close write means bytes the caller
+     * intended to emit never land, and they land nowhere discoverable — the
+     * only honest answer is a LogicException. Why flush() is quiet: closing a
+     * stream already flushes it (fclose drains the buffer), so a late flush()
+     * has no pending payload to lose; it is asking for completion of something
+     * that is already true. That makes it safe to keep the call unconditional
+     * in teardown-shaped code paths that cannot know whether close() already
+     * ran — a throw there would turn a redundant call into a fatal during
+     * destruction.
+     *
+     * The remaining failure mode stays reported: flush() over a LIVE handle
+     * whose fflush() answers false raises.
+     */
     public function flush(): void
     {
         if ($this->fp !== null && !fflush($this->fp)) {

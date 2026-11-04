@@ -212,4 +212,27 @@ final class FileOutputWriterTest extends TestCase
             unlink($path);
         }
     }
+
+    public function testFlushAfterCloseStaysASilentNoOpWhereWriteRefuses(): void
+    {
+        // The documented asymmetry, pinned so it stays a decision rather than
+        // drift: fclose() already drains the buffer, so a late flush() has
+        // nothing left to lose and must not fatal in teardown-shaped callers,
+        // while a late write() drops real bytes and raises. Aligning flush() to
+        // throw would redden this row on purpose.
+        $path = tempnam(sys_get_temp_dir(), 'cff');
+        self::assertIsString($path);
+
+        $writer = new FileOutputWriter($path);
+        $writer->write('sealed');
+        $writer->close();
+        self::assertSame('sealed', (string) file_get_contents($path));
+
+        try {
+            $writer->flush();
+            $this->assertSame('sealed', (string) file_get_contents($path));
+        } finally {
+            unlink($path);
+        }
+    }
 }
