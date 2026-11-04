@@ -889,7 +889,7 @@ final class BackgroundShellRegistry
                     continue;
                 }
                 $innerPath = $path . '/' . $inner;
-                if (\is_file($innerPath) || \is_fifo($innerPath)) {
+                if (\is_file($innerPath) || self::pathIsFifo($innerPath)) {
                     $mtime = @filemtime($innerPath);
                     if ($mtime !== false && (float) $mtime < $ceiling) {
                         @unlink($innerPath);
@@ -898,6 +898,33 @@ final class BackgroundShellRegistry
             }
             @rmdir($path);
         }
+    }
+
+    /**
+     * Is this path a named pipe (FIFO)? The interactive relay's `<id>.in` is a
+     * FIFO, and {@see \is_file()} answers false for one, so the dead-launch
+     * sweep needs a separate verdict to unlink it and reclaim the directory —
+     * a leftover FIFO is the only thing that keeps a `launch-<pid>` dir from
+     * being empty enough to rmdir.
+     *
+     * There is no `is_fifo()` in PHP core nor as an ext-posix function (a bare
+     * call to it — the form this line once carried — is an uncaught
+     * `Error: Call to undefined function is_fifo()`, `function_exists('is_fifo')`
+     * being false everywhere; ext-posix only names the `POSIX_S_IFIFO` bit, and
+     * its `posix_getstat()` is not portable). That fatal sat on the sweep loop,
+     * so the first dead background shell whose directory held a FIFO took the
+     * whole registry down with it. The verdict is the file-type nibble of the
+     * inode mode read through {@see \fileperms()} instead: `S_IFIFO` (0x1000)
+     * under the `S_IFMT` (0xF000) mask — the very bit `POSIX_S_IFIFO` names.
+     * `clearstatcache()` first so a path the sweep already stat'd through
+     * `is_file()` is answered from the inode rather than a possibly-stale cache.
+     */
+    private static function pathIsFifo(string $path): bool
+    {
+        \clearstatcache(true, $path);
+        $perms = @\fileperms($path);
+
+        return $perms !== false && ($perms & 0xF000) === 0x1000;
     }
 
     /**

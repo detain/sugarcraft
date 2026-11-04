@@ -508,13 +508,87 @@ final class PtyRelay
         if (!$reaped) {
             // Never got the pump's own status: a surprise, say so in the
             // exit shape rather than mirroring a code we never observed.
-            return 2;
+            return self::UNOBSERVED_EXIT_CODE;
         }
 
-        if (WIFSIGNALED($status)) {
-            return 128 + WTERMSIG($status);
+        return self::interpretExitStatus($status);
+    }
+
+    /**
+     * The exit code this relay mirrors when no real one was ever observed:
+     * the same `2` the class docblock assigns to "this process refused to run
+     * at all" (bad argv, unopenable sinks). Reused here for a wait status that
+     * is neither an exit nor a signal death, where inventing a code the pump
+     * never returned would be the greater lie — the E688 child-exit doctrine
+     * ("null = UNKNOWN") carried into an int-only mirror.
+     */
+    private const UNOBSERVED_EXIT_CODE = 2;
+
+    /**
+     * Interpret a raw {@see \pcntl_waitpid()} status into the exit code to
+     * mirror for the pump this relay reaped.
+     *
+     * WHY THIS EXISTS: `WIFSIGNALED`/`WTERMSIG`/`WIFEXITED`/`WEXITSTATUS` are
+     * the C macros of wait(2), NOT PHP functions. Calling them bare (as the
+     * previous inline form of this method did) raises an uncaught
+     * `Error: Call to undefined function` the instant the line runs — the
+     * `function_exists('WIFSIGNALED')` census below is false on every PHP, so
+     * the branch was a guaranteed fatal on the FIRST real reap, not a warning
+     * anything could paper over.
+     *
+     * With ext-pcntl present the real `pcntl_w*()` accessors answer. They live
+     * in the same extension as the `pcntl_waitpid()` that produced `$status`,
+     * and this method is only reached behind {@see main()}'s
+     * `extension_loaded('pcntl')` refusal gate (pcntl is one extension: if
+     * waitpid loaded, so did the rest) — the identical reasoning that lets
+     * {@see \SugarCraft\Code\Agents\AgentWorkerPool::workerDiedResult()} skip
+     * per-function guards. When pcntl is somehow absent the kernel's status
+     * layout is decoded from the bits directly by {@see decodeRawStatus()}, so
+     * the interpretation never hinges on an optional extension, and never
+     * fatals.
+     *
+     * A status neither exited nor signalled — `WUNTRACED` lets a STOPPED pump
+     * answer this way — carries no exit code: it maps to
+     * {@see UNOBSERVED_EXIT_CODE} rather than a fabricated number.
+     */
+    private static function interpretExitStatus(int $status): int
+    {
+        if (\function_exists('pcntl_wifsignaled')) {
+            if (pcntl_wifsignaled($status)) {
+                return 128 + pcntl_wtermsig($status);
+            }
+
+            return pcntl_wifexited($status) ? pcntl_wexitstatus($status) : self::UNOBSERVED_EXIT_CODE;
         }
 
-        return WIFEXITED($status) ? WEXITSTATUS($status) : 2;
+        return self::decodeRawStatus($status) ?? self::UNOBSERVED_EXIT_CODE;
+    }
+
+    /**
+     * Decode a raw wait status WITHOUT pcntl, straight from the kernel's
+     * composition `(exit_code << 8) | signal`:
+     *  - low byte `0x7F`            => WIFSTOPPED — a stopped pump, no code → null
+     *  - low 7 bits `1..0x7E`       => WIFSIGNALED — killed by that signal → 128+signal
+     *    (bit 7 of the low byte is the core-dump flag and is masked off)
+     *  - low 7 bits `0`             => WIFEXITED — the exit code rides bits 8-15
+     *
+     * Returns null ONLY for the uninterpretable (stopped) shape, so the caller
+     * routes it to the named sentinel; every other status decodes. Kept as a
+     * separate pure function so the arithmetic is pinned DIRECTLY (independent
+     * of whether pcntl is loaded) and cross-checked against the pcntl
+     * accessors' answers on the same integers.
+     */
+    private static function decodeRawStatus(int $status): ?int
+    {
+        if (($status & 0xFF) === 0x7F) {
+            return null;
+        }
+
+        $termsig = $status & 0x7F;
+        if ($termsig !== 0) {
+            return 128 + $termsig;
+        }
+
+        return ($status >> 8) & 0xFF;
     }
 }
