@@ -357,10 +357,10 @@ depth of **every** `Style` the process mints afterwards:
 | `NO_COLOR` | Colour off, decoration kept. When truthy the profile becomes `Ascii` — bold, faint and italic still ship, `38;2;…` sweeps never do — per [no-color.org](https://no-color.org). It outranks the two force variables below. Truthy means non-empty, not `0`, not `false`. |
 | `FORCE_COLOR` | The escape-anyways switch. When truthy the ladder returns `TrueColor`, and a non-tty or `TERM=dumb` destination is treated as a terminal rather than silenced. |
 | `CLICOLOR_FORCE` | The libcli-family spelling of the same switch as `FORCE_COLOR`; either one truthy forces the same way. |
+| `CLICOLOR` | The BSD/libcli "disable colour without unsetting it" switch: exactly `0` (no other value) drops the profile to `Ascii` like `NO_COLOR`. Unlike `NO_COLOR` it does **not** outrank the force variables — `CLICOLOR=0` with `CLICOLOR_FORCE=1` still publishes colour. |
 
-Plain `CLICOLOR` (the libcli "disable colour without unsetting it" switch, no
-`_FORCE`) is deliberately **not** consulted: this ladder reads only the three
-variables above for colour decisions. `TERM`, `TERM_PROGRAM`, `COLORTERM`,
+The ladder reads only the four variables above for colour decisions. `TERM`,
+`TERM_PROGRAM`, `COLORTERM`,
 `WT_SESSION` and the CI-family variables ride the same ladder as capability
 hints, but `TERM` and `TERM_PROGRAM` keep their own rows in the
 [OS variables](#os-variables) table, where their multiplexer and dumb-terminal

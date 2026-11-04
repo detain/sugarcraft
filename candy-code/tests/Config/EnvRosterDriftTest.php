@@ -88,7 +88,8 @@ use SugarCraft\Core\Util\ColorProfile;
  * follows READS INSIDE `candy-code/src` only, so an environment variable that
  * `src/` never names is structurally invisible to it — and yet the page opens
  * with "every environment variable". That is exactly the shape of the terminal
- * colour family: `NO_COLOR`, `FORCE_COLOR` and `CLICOLOR_FORCE` are consulted by
+ * colour family: `NO_COLOR`, `FORCE_COLOR`, `CLICOLOR` and `CLICOLOR_FORCE`
+ * are consulted by
  * `sugar-core`'s `ColorProfile::detect()`, which `src/Tui/Renderer.php` hands
  * the whole environment snapshot at launch, so no `getenv()` call anywhere in
  * this package names them. Widening the scanner to sibling sources is NOT the
@@ -98,9 +99,10 @@ use SugarCraft\Core\Util\ColorProfile;
  * legs the OS roster uses (pinned⊆documented, documented⊆pinned, and a liveness
  * check that each pinned name is still a quoted env key in the real
  * `ColorProfile::detect()` source, resolved through reflection so it works from
- * a vendor copy as well as from a monorepo path). Plain `CLICOLOR` joins
- * neither the roster nor the table, and the absence is pinned too: the page
- * states it is not consulted, and the colour source is asserted not to read it.
+ * a vendor copy as well as from a monorepo path). Plain `CLICOLOR` joined
+ * the roster and the table once the palette began honouring the BSD
+ * `CLICOLOR=0` opt-out — it is read, but unlike `NO_COLOR` it never outranks
+ * a force variable.
  *
  * @internal
  */
@@ -1487,7 +1489,7 @@ final class EnvRosterDriftTest extends TestCase
      * @var list<string>
      */
     private const AMBIENT_COLOR_ROSTER = [
-        'CLICOLOR_FORCE', 'FORCE_COLOR', 'NO_COLOR',
+        'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR', 'NO_COLOR',
     ];
 
     public function testTheOsEnvironmentRosterIsPinnedInBothDirections(): void
@@ -1562,12 +1564,6 @@ final class EnvRosterDriftTest extends TestCase
             $unlive,
             'pinned colour variables with no quoted env key in the palette source — it stopped '
             . 'consulting them, and the page still tells readers to set them',
-        );
-        $this->assertSame(
-            0,
-            substr_count($colourSource, "'CLICOLOR'"),
-            'docs/ENVIRONMENT.md says plain CLICOLOR is deliberately not consulted — the palette now '
-            . 'reads it, so the page sentence and this roster need the same judgment',
         );
     }
 
