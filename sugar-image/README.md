@@ -236,6 +236,7 @@ use SugarCraft\Image\DiskCache;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 
+$url = 'https://example.com/poster.png';
 $mosaic = Mosaic::probe();
 $cache  = new DiskCache($_SERVER['HOME'] . '/.cache/posters', maxEntries: 512);
 
@@ -467,7 +468,9 @@ $layer = new ImageLayer();
 $ansiBytes = Mosaic::sixel()->render(ImageSource::fromFile('examples/fixture-gradient.png'), 20, 10);
 $cell = $layer->place($ansiBytes, 20, 10);
 
-// ...compose $cell into the frame like any other text...
+// Compose $cell into the frame like any other text; $frame is the result —
+// the text rows with $cell's marker in place.
+$frame = "top row\n" . $cell . "\nbottom row";
 return new View($frame, images: $layer->placements());
 ```
 
