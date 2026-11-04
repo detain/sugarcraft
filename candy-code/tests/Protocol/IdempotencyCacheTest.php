@@ -93,12 +93,16 @@ final class IdempotencyCacheTest extends TestCase
     public function testAnUnretainableAnswerRefusesTheCacheWithoutTouchingState(): void
     {
         $cache = IdempotencyCache::new(static fn (): float => 0.0);
+        // House shape (SwallowingCatchCensus): capture in the catch, assert after it —
+        // a fail() standing inside the try is swallowed by the RuntimeException clause.
+        $refusal = null;
         try {
             $cache->put('owner', 'm.x', 'k', static fn (): int => 1);
-            self::fail('fixture: a closure is not a retainable answer');
-        } catch (RuntimeException $refusal) {
-            self::assertStringContainsString('cannot be retained', $refusal->getMessage());
+        } catch (RuntimeException $caught) {
+            $refusal = $caught;
         }
+        self::assertNotNull($refusal, 'fixture: a closure is not a retainable answer');
+        self::assertStringContainsString('cannot be retained', $refusal->getMessage());
         self::assertSame(0, $cache->count('owner'));
         self::assertSame(0, $cache->bytes('owner'), 'the measurement happens before any state moves');
     }
