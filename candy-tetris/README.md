@@ -23,11 +23,15 @@ composer install
 ./bin/candy-tetris -v      # VS Computer mode
 ./bin/candy-tetris --vs    # VS Computer mode (long form)
 ./bin/candy-tetris -h      # Usage screen (also --help)
+./bin/candy-tetris --version # Print the version and exit 0
 ```
 
+`--version` short-circuits wherever it appears in the argv — even alongside a
+bogus flag — and exits 0. Any *other* unrecognised flag is refused with a usage
+note on stderr and exit code 1.
+
 Needs a colour-capable TTY of at least ~40 columns by 22 rows; empty cells
-render as `·` so the grid stays readable even without colour. Any flag other
-than the ones above is refused with a usage note on stderr and exit code 1.
+render as `·` so the grid stays readable even without colour.
 
 ## VS Computer Mode
 
@@ -88,7 +92,9 @@ dims until the current piece locks.
 A grounded piece does not lock instantly — you get a real-time window
 (~500 ms by default, independent of the gravity speed, so it stays a constant
 half-second even at level 29) to slide or rotate it before it settles. The
-binary arms it via `Game::startWithLockDelay()`. Every successful move or
+binary arms it via `Game::startWithLockDelay()` — single-player only: the VS
+boards run plain `Game::start()`, so a piece locks on the gravity tick that
+finds it grounded (no window). Every successful move or
 rotation while grounded re-arms the full window, up to the SRS-style 15-reset
 cap — once the budget is spent the open window locks on expiry and further
 inputs no longer extend it. Moving the piece back off a surface closes the
@@ -110,37 +116,43 @@ Level rises every 10 lines. Gravity speeds up at every level — by level 9 piec
 
 ### T-Spin scoring
 
-When the **last successful input before a T piece locks was a rotation** (moves,
-drops and the fall itself reset that flag — settling under gravity keeps it) and
-two or more of the piece's four diagonal corner cells are already filled (walls
-count as filled), it scores as a **T-Spin**:
+When the **last successful input before a T piece locks was a rotation** (moves
+and drops clear that flag; gravity's fall neither sets nor clears it, so a
+rotate-then-settle spin is legal) and the guideline **three-corner rule** holds
+— at least three of the four cells diagonal to the T's centre are filled, walls
+and floor counting as filled — it scores as a **T-Spin**:
 
 | Type     | Base points |
 |----------|-------------|
 | T-Spin   | 400 × (level + 1) |
 | T-Spin Mini | 100 × (level + 1) |
 
-T-Spin Mini is detected when exactly two corners are filled and they are the
-**front pair** — the top pair at rotation 0, the bottom pair at rotation 2. At
-the side-facing rotations (R/L) the front pair is undefined, so a two-corner
-spin there always scores as a full T-Spin.
+T-Spin Mini is detected when **exactly two** of the centre-diagonal corners are
+filled and at least one of them sits on the **nub side** of the T: the top pair
+at rotation 0, the right pair at rotation R, the bottom pair at rotation 2, the
+left pair at rotation L. Two filled corners with no nub-side corner score
+nothing — the spin never engaged the slot. A mini that clears two or more lines
+is promoted to a full T-Spin (difficulty parity).
 
-**Last-input rule:** A T-Spin is active when the piece's last successful action
-before locking was a rotation (`Game::$lastActionWasRotation`, set by rotate,
-cleared by move/soft drop/hard drop — gravity steps leave it alone, so a
-rotate-then-settle spin is legal), AND at least two of the four diagonal corner
-cells around the T are occupied (wall/out-of-bounds = occupied). With exactly
-two filled corners and they are the front pair, it scores as a mini. See
-`Scoring\TSpin::detect()`.
+**Last-input rule:** the flag is `Game::$lastActionWasRotation` — set by
+rotate, cleared by move/soft drop/hard drop; gravity steps leave it alone. The
+corner test runs against the board **before** the piece is written, on the four
+diagonals of the T's centre cell. See `Scoring\TSpin::detect()`.
 
 ### Back-to-Back (B2B) bonus
 
-Consecutive Tetris clears or full T-Spins (non-mini) carry a **1.5× multiplier** on the line-clear base points:
+Consecutive difficult clears — a 4-line Tetris, or a **full** T-Spin that
+actually cleared at least one line — carry a **1.5× multiplier** on that lock's
+bonus points:
 
 - 4-line Tetris after a prior Tetris → 1200 × 1.5 × (level + 1)
-- Full T-Spin after a prior full T-Spin → 400 × 1.5 × (level + 1)
+- Full T-Spin Single/Double/Triple after a prior eligible clear → base × 1.5
 
-B2B resets when a 1–3 line clear or a T-Spin Mini breaks the streak.
+A mini that clears two or more lines is promoted to a full T-Spin and is
+eligible too. The chain BREAKS on any line clear that is not a difficult clear
+(1–3 lines, or a small mini); a **clear-less** lock — even a 3-corner spin,
+which still pays its bonus — neither arms nor breaks the chain. Arming requires
+a clear: no-clear spins can never start a B2B run.
 
 ### Combo bonus
 
@@ -158,7 +170,7 @@ When all lines are cleared at once and the board becomes completely empty, an ad
 - **Kick table**: `src/Rotation/SrsKickTable.php` transcribes the published
   SRS offsets verbatim (spec `+y` = up); the only sign conversion to
   board coordinates lives at `Piece::rotationsWithKicks`.
-- **Scoring**: `src/Scoring/TSpin.php` and `src/Scoring/Score.php` are pure
+- **Scoring**: `src/Scoring/TSpin.php` and `src/Score.php` are pure
   value logic, independent of the renderer.
 - **Modes**: VS is a second Model (`VsGame`) wrapping two `Game` instances —
   copy that pattern for a third mode rather than branching inside `Game`.
