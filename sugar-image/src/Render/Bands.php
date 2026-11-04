@@ -48,7 +48,8 @@ use InvalidArgumentException;
  * Verdict note (measured 2026-10-20): the worker-pool stage was
  * ruled out by measurement, so this partition keeps its planned consumers —
  * cost gating and the incremental pump — and gains none. With forking banned
- * (§0.13), a {@see \React\ChildProcess\Process} per band re-pays PHP
+ * by this library's no-child-process rule for encoding, a
+ * {@see \React\ChildProcess\Process} per band re-pays PHP
  * exec+autoload+decode (~110–160 ms) PLUS the whole-canvas setup the encode
  * front-loads (resample + palette build: 83 ms at 512 rows, 296 ms at 8190)
  * PLUS — because SixelRenderer::encodeBandStream() exposes no band-seek seam —
