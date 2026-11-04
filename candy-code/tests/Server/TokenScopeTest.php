@@ -228,13 +228,15 @@ final class TokenScopeTest extends TestCase
         }
         self::assertSame(ViewerTokens::MAX_GRANTS, $store->count());
 
+        $refusal = null;
         try {
             $store->grant('one too many');
-            self::fail('the 65th grant must be refused');
-        } catch (\RuntimeException $refusal) {
-            self::assertStringContainsString('cap', $refusal->getMessage());
-            self::assertStringContainsString('revoke', $refusal->getMessage(), 'the refusal names the way out');
+        } catch (\RuntimeException $e) {
+            $refusal = $e;
         }
+        self::assertNotNull($refusal, 'the 65th grant must be refused');
+        self::assertStringContainsString('cap', $refusal->getMessage());
+        self::assertStringContainsString('revoke', $refusal->getMessage(), 'the refusal names the way out');
 
         self::assertSame(ViewerTokens::MAX_GRANTS, $store->count(), 'a refusal changes nothing');
         self::assertNotNull($store->match($first['token']), 'cap pressure never silently revokes');

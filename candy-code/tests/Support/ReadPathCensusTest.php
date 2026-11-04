@@ -995,6 +995,12 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — the owner-token file this store minted, in the `serve` state dir '
                 . 'PrivateRetainedDir::verified() created 0700 and checked is ours; lstat refuses a link',
         ],
+        'Server/Auth/ViewerTokens.php|file_get_contents' => [
+            'SELF_LOCATED — viewer-tokens.json, the grant rows this store itself wrote 0600 through '
+                . 'PrivateRetainedDir into the `serve` state dir PrivateRetainedDir::verified() created '
+                . '0700 and checked is ours; filePath() lstat-refuses a link, and the bytes decode as '
+                . 'JSON at depth 8 (only token hashes and labels), never executed',
+        ],
         'Server/DiscoveryFile.php|file_get_contents' => [
             'SELF_LOCATED — server.json, the record a server wrote 0600 into the state dir '
                 . 'PrivateDir verified 0700 and ours; lstat refuses a link, and it is decoded as '
