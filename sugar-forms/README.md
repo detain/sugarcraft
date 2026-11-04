@@ -97,25 +97,26 @@ $form = Form::new(
 );
 ```
 
-> Every field exposes short-form aliases (`title`, `desc`, `placeholder`,
-> `width`, `height`, `validator`, `options`, `min`, `max`, …). The long forms
-> (`withTitle`, `withDescription`, …) work identically — pick whichever reads
-> better at the call site.
+> Where a field supports a knob, it also exposes a short-form alias for it
+> (`title`, `desc`, `placeholder`, `width`, `height`, `validator`, `options`,
+> `min`, `max`, …): the short form delegates to the long `with*` name
+> (`withTitle`, `withDescription`, …). Pick whichever reads better at the
+> call site.
 
 ### Field types
 
 | Field         | Description                                                 | Notable knobs |
 | ------------- | ----------------------------------------------------------- | ------------- |
-| `Input`       | Single-line text (wraps `SugarCraft\Widgets\TextInput`)             | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator|\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
-| `Text`        | Multi-line text editor                                      | `withCharLimit`, `withMaxLines`, `withShowLineNumbers`, `withValidator` |
-| `Confirm`     | Yes/no boolean                                              | `withAffirmative`/`withNegative`, `withValidator(Validator|\Closure(bool):?string)`, `withTitleFunc`, `withDescriptionFunc` |
-| `Select`      | Single-choice list (wraps `SugarCraft\Widgets\ItemList`)            | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` |
+| `Input`       | Single-line text (wraps `SugarCraft\Forms\TextInput\TextInput`)     | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator|\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
+| `Text`        | Multi-line text editor                                      | `withCharLimit`, `withHeight`, `withWidth`, `withValidator` |
+| `Confirm`     | Yes/no boolean                                              | `withLabels(affirmative, negative)`, `withDefault(bool)`, `withValidator(Validator|\Closure(bool):?string|null)`, `withTitleFunc`, `withDescriptionFunc` |
+| `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` |
 | `MultiSelect` | Multi-choice list (j/k vim keys + space to toggle)          | `withOptions(...)`, `withLimit(int)` |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) |
-| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Widgets\FilePicker`)          | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
-| `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withWidth`, `withValidator(Validator|\Closure|null)` |
+| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Forms\FilePicker\FilePicker`) | `withDirAllowed`, `withFileAllowed`, `withAllowedExtensions`, `withShowHidden` (starting directory via `FilePicker::new($key, $cwd)`) |
+| `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withValidator(Validator|\Closure|null)` |
 | `Slider`      | Numeric range slider (keyboard drag, snapping step)         | `withMin` / `withMax` / `withStep`, `withValue(int|float)`, `withValidator` |
-| `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)`, `withValidator` |
+| `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)` |
 | `NumberField` | Bounded numeric input — draft + committed int64-safe value on a step lattice | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withoutValue()` (never-set ≠ 0), `withPlaceholder`, `withWidth` |
 | `RadioPills`  | Horizontal pill row, single choice by arrows or mouse      | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc` |
 
@@ -175,7 +176,7 @@ mode flips the entire form to plain-text rendering — useful when you detect
 
 ### Validators and dynamic labels
 
-Every value-producing field supports `withValidator(Validator|\Closure)` — a ready-made validator instance or a closure. The closure
+`Input`, `Text`, `Confirm`, `Date` and `Slider` support `withValidator` — a ready-made validator instance or a closure (per-field union in the table above; `null` clears wherever the union admits it). The other fields (`Select`, `MultiSelect`, `Note`, `FilePicker`, `NumberField`, `RadioPills`, `Color`) carry no validator today. The closure
 runs on every keystroke (or every value flip for `Confirm`) and returns
 `null` for valid or an error string. The error renders inline beneath the
 field and shows up in `Form::errors()`.
