@@ -9,6 +9,14 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use React\Http\Message\Response;
 use React\Http\Message\ServerRequest;
+use SugarCraft\Code\Protocol\CallContext;
+use SugarCraft\Code\Protocol\Dispatcher;
+use SugarCraft\Code\Protocol\ErrorCode;
+use SugarCraft\Code\Protocol\MethodRegistry;
+use SugarCraft\Code\Protocol\MethodSpec;
+use SugarCraft\Code\Protocol\Methods\ServerMethods;
+use SugarCraft\Code\Protocol\Params;
+use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\RateLimiter;
 use SugarCraft\Code\Server\Auth\TokenStore;
@@ -17,6 +25,8 @@ use SugarCraft\Code\Server\Http\AuthMiddleware;
 use SugarCraft\Code\Server\Http\HostAndOriginGuard;
 use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Support\PrivateRetainedDir;
+use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
+use SugarCraft\Code\Tests\Server\Support\WireClient;
 
 /**
  * The viewer-token store (X-DESIGN1 D-1, reviews-1103 G4-G): hashed at rest,
@@ -44,6 +54,12 @@ final class TokenScopeTest extends TestCase
 
     private ?ServerRequestInterface $mwPassed = null;
 
+    private ?ProtocolFixture $wireFixture = null;
+
+    private ?Dispatcher $myDispatcher = null;
+
+    private int $noteCount = 0;
+
     protected function setUp(): void
     {
         $this->now = 1_700_000_000.0;
@@ -55,6 +71,16 @@ final class TokenScopeTest extends TestCase
 
     protected function tearDown(): void
     {
+        if ($this->myDispatcher !== null) {
+            $this->myDispatcher->stop('over');
+            $this->myDispatcher = null;
+        }
+
+        if ($this->wireFixture !== null) {
+            $this->wireFixture->tearDown();
+            $this->wireFixture = null;
+        }
+
         foreach ([$this->dir, ...$this->extraDirs] as $victim) {
             if (!\is_dir($victim)) {
                 continue;
@@ -522,5 +548,187 @@ final class TokenScopeTest extends TestCase
 
         self::assertSame(204, $response->getStatusCode());
         self::assertSame('viewer', $this->mwPassed?->getAttribute(AuthMiddleware::ATTR_PRINCIPAL));
+    }
+
+    /**
+     * D-9 keystone: an idempotency answer belongs to the principal that minted
+     * it. At base the dispatcher cached every answer under one shared owner
+     * bucket, so a second credential replaying the same key was served the
+     * FIRST principal's cached answer - the cross-principal replay leak the
+     * X-DESIGN1 D-9 review caught (base-red evidence:
+     * /tmp/opencode/reviews-1103/fixes/d9-base-red.txt).
+     */
+    public function testIdempotencyCannotReplayAcrossPrincipals(): void
+    {
+        $dispatcher = $this->notesDispatcher();
+
+        $owner = WireClient::open($dispatcher, 'c-owner');
+        $owner->hello();
+        $minted = $owner->request('test.note', ['idempotencyKey' => 'shared-key']);
+        self::assertSame('bearer', $minted['result']['served'] ?? null);
+        self::assertSame(1, $minted['result']['n'] ?? null);
+
+        $viewer = WireClient::open($dispatcher, 'c-view', 'viewer', ['read'], 'tok-v1');
+        $viewer->hello();
+        $replayed = $viewer->request('test.note', ['idempotencyKey' => 'shared-key']);
+
+        // The viewer must run the method fresh, never see the owner's answer.
+        self::assertSame('viewer', $replayed['result']['served'] ?? null);
+        self::assertSame(2, $replayed['result']['n'] ?? null);
+        self::assertSame(2, $this->noteCount, 'the handler ran once per principal, no more');
+
+        // The owner replaying its OWN key still gets the cached first answer.
+        $again = $owner->request('test.note', ['idempotencyKey' => 'shared-key']);
+        self::assertSame(1, $again['result']['n'] ?? null);
+        self::assertSame(2, $this->noteCount, 'the owner replay was served from its own bucket');
+    }
+
+    /** Distinct viewer grants are distinct principals: no shared cache slot. */
+    public function testTwoViewerTokensNeverShareAnIdempotencyAnswer(): void
+    {
+        $dispatcher = $this->notesDispatcher();
+
+        $first = WireClient::open($dispatcher, 'c-v1', 'viewer', ['read'], 'tok-v1');
+        $first->hello();
+        $second = WireClient::open($dispatcher, 'c-v2', 'viewer', ['read'], 'tok-v2');
+        $second->hello();
+
+        $one = $first->request('test.note', ['idempotencyKey' => 'twin-key']);
+        $two = $second->request('test.note', ['idempotencyKey' => 'twin-key']);
+
+        self::assertSame(1, $one['result']['n'] ?? null);
+        self::assertSame(2, $two['result']['n'] ?? null, 'the second grant ran fresh');
+    }
+
+    /** Isolation runs both ways: the viewer mints first, the owner replays. */
+    public function testTheOwnerCannotReplayAViewersAnswerEither(): void
+    {
+        $dispatcher = $this->notesDispatcher();
+
+        $viewer = WireClient::open($dispatcher, 'c-first', 'viewer', ['read'], 'tok-first');
+        $viewer->hello();
+        $minted = $viewer->request('test.note', ['idempotencyKey' => 'flipped-key']);
+        self::assertSame(1, $minted['result']['n'] ?? null);
+
+        $owner = WireClient::open($dispatcher, 'c-after');
+        $owner->hello();
+        $after = $owner->request('test.note', ['idempotencyKey' => 'flipped-key']);
+        self::assertSame(2, $after['result']['n'] ?? null);
+        self::assertSame('bearer', $after['result']['served'] ?? null);
+    }
+
+    /**
+     * The wire harness: a fixture session plus a registry carrying server.hello
+     * and two extra side-effecting methods — a Read counter whose handler
+     * counts real executions, and a Write twin for the scope wall. The counting
+     * is the discriminator: a served-from-cache replay does not increment it,
+     * so a cross-principal collision is visible as a STALE n rather than a
+     * shape difference.
+     */
+    private function notesDispatcher(): Dispatcher
+    {
+        $this->wireFixture ??= ProtocolFixture::new();
+
+        $registry = MethodRegistry::new();
+        ServerMethods::register($registry);
+        $registry->add(MethodSpec::new(
+            'test.note',
+            Scope::Read,
+            'counts how often it actually ran (D-9 harness)',
+            function (CallContext $call, Params $params): array {
+                $this->noteCount++;
+
+                return ['served' => $call->client->principal(), 'n' => $this->noteCount];
+            },
+            sideEffects: true,
+        ));
+        $registry->add(MethodSpec::new(
+            'test.shout',
+            Scope::Write,
+            'a write-scope twin proving the scope wall (D-6 harness)',
+            static fn (CallContext $call, Params $params): array => ['shouted' => true],
+            sideEffects: true,
+        ));
+
+        return $this->myDispatcher ??= Dispatcher::new($this->wireFixture->context, $registry);
+    }
+
+    /**
+     * Send a request and unwrap its result. Failures surface the wire error
+     * inline so a cross-principal leak reads as a stale counter, not a crash.
+     * Named unwrapResult(): TestCase::result() is final (PHPUnit 10) and a
+     * `result()` helper would collide with it.
+     *
+     * @param array<string,mixed> $params
+     *
+     * @return array<string,mixed>
+     */
+    private function unwrapResult(WireClient $client, string $method, array $params): array
+    {
+        $reply = $client->request($method, $params);
+        self::assertArrayHasKey('result', $reply, 'expected a result, got: ' . \json_encode($reply['error'] ?? null));
+
+        return (array) $reply['result'];
+    }
+
+    public function testPinnedViewerSeesOnlyItsGrantedSessions(): void
+    {
+        $dispatcher = $this->notesDispatcher();
+        $pinned = WireClient::open($dispatcher, 'c-pin', 'viewer', ['read'], 'tok-pin', ['s-one']);
+        $pinned->hello();
+
+        self::assertSame(1, $this->unwrapResult($pinned, 'test.note', [
+            'sessionId' => 's-one',
+            'idempotencyKey' => 'gate-key',
+        ])['n'] ?? 0, 'the granted session must execute normally');
+
+        // The very same key for a session OUTSIDE the pin is refused, not
+        // answered from the s-one cache entry — the gate precedes the store,
+        // so a refusal can never launder a pinned grant across sessions.
+        $refused = $pinned->request('test.note', [
+            'sessionId' => 's-two',
+            'idempotencyKey' => 'gate-key',
+        ]);
+        self::assertArrayNotHasKey('result', $refused, 'a foreign session must not be served the cached answer');
+        self::assertSame(ErrorCode::Forbidden->value, $refused['error']['code'] ?? null);
+        self::assertStringContainsString('does not cover', $refused['error']['message'] ?? '');
+        self::assertSame(1, $this->noteCount, 'the refusal never touched the handler');
+    }
+
+    public function testAnUnpinnedViewerReachesEverySessionNamed(): void
+    {
+        $dispatcher = $this->notesDispatcher();
+        $free = WireClient::open($dispatcher, 'c-free', 'viewer', ['read'], 'tok-free');
+        $free->hello();
+
+        self::assertSame(1, $this->unwrapResult($free, 'test.note', ['sessionId' => 's-one'])['n'] ?? 0);
+        self::assertSame(2, $this->unwrapResult($free, 'test.note', ['sessionId' => 's-two'])['n'] ?? 0);
+        // The absent-argument law: naming no session is a plain read, fine
+        // for a pinned OR unpinned grant alike.
+        self::assertSame(3, $this->unwrapResult($free, 'test.note', [])['n'] ?? 0);
+
+        $pinned = WireClient::open($dispatcher, 'c-free-pin', 'viewer', ['read'], 'tok-free-pin', ['s-one']);
+        $pinned->hello();
+        self::assertSame(4, $this->unwrapResult($pinned, 'test.note', [])['n'] ?? 0, 'a pinned grant without sessionId is not refused');
+    }
+
+    public function testViewerReadGrantsRefuseWriteAndAdminMethods(): void
+    {
+        // D-6: the scope wall predates this lane and already discriminates;
+        // pinned here so a future grant widening cannot silently let a
+        // viewer reach side-effecting or administrative methods.
+        $dispatcher = $this->notesDispatcher();
+        $viewer = WireClient::open($dispatcher, 'c-scope', 'viewer', ['read'], 'tok-scope');
+        $viewer->hello();
+
+        $send = $viewer->request('test.shout', ['sessionId' => 's-one']);
+        self::assertArrayNotHasKey('result', $send, 'a read-only grant must never reach a write-scope method');
+        self::assertSame(ErrorCode::Forbidden->value, $send['error']['code'] ?? null);
+
+        // token.list will be Admin once G4-E registers it; today it simply
+        // does not exist, and an unknown method is refused before any scope
+        // work — either refusal shape keeps the viewer out.
+        $unknown = $viewer->request('token.list', []);
+        self::assertArrayNotHasKey('result', $unknown);
     }
 }

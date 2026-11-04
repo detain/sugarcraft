@@ -100,7 +100,13 @@ final class Dispatcher implements MessageHandler
     /** Appendix O §6.2: the close code for a client that skipped the hello. */
     public const CLOSE_NOT_INITIALIZED = 4002;
 
-    /** The principal idempotency answers are kept under: every credential today is the owner's. */
+    /**
+     * The legacy bucket every credential was kept under before viewer grants
+     * existed (D-9, reviews-1103). Owner-class doors (bearer, subprotocol,
+     * ticket, cookie) still answer from this stable slot; each viewer grant
+     * hashes to a bucket of its own so a cached answer can never replay across
+     * principals.
+     */
     private const OWNER = 'owner';
 
     /** @var array<string, Client> */
@@ -370,6 +376,18 @@ final class Dispatcher implements MessageHandler
 
     // ── calls ──────────────────────────────────────────────────────────
 
+    /**
+     * Which idempotency bucket a call answers from (D-9, reviews-1103): the
+     * legacy owner slot for owner-class doors, a per-grant hash for viewers.
+     * Keying every principal under OWNER let a viewer that presented the same
+     * idempotency key collect the owner's cached answer for a side-effecting
+     * method — the bucket is derived, never client-supplied.
+     */
+    private function idempotencyBucket(Client $client): string
+    {
+        return \hash('sha256', $client->tokenId() ?? self::OWNER);
+    }
+
     private function call(Client $client, Request $request): void
     {
         try {
@@ -386,9 +404,30 @@ final class Dispatcher implements MessageHandler
             }
 
             $params = Params::of($request->params);
+            // D-13 (reviews-1103 G4-G): a grant pinned to sessions never
+            // answers for another one — and the pin fires BEFORE the
+            // idempotency cache, so replaying a pinned session's key from an
+            // unpinned session cannot smuggle the cached answer past the gate.
+            // A refusal, unlike a success, is never remembered.
+            $viewerSessions = $client->viewerSessions();
+
+            if ($viewerSessions !== null && $client->principal() === 'viewer') {
+                $sessionId = $request->params['sessionId'] ?? null;
+
+                if (\is_string($sessionId) && !\in_array($sessionId, $viewerSessions, true)) {
+                    throw RpcError::of(
+                        ErrorCode::Forbidden,
+                        'this viewer grant does not cover that session',
+                        'viewer_session_denied',
+                    );
+                }
+            }
+
             $key = $spec->sideEffects ? $params->optionalString('idempotencyKey', IdempotencyCache::MAX_KEY_LENGTH) : null;
+            $bucket = $this->idempotencyBucket($client);
+
             if ($key !== null) {
-                $remembered = $this->idempotency->get(self::OWNER, $spec->name, $key);
+                $remembered = $this->idempotency->get($bucket, $spec->name, $key);
                 if ($remembered !== null) {
                     $this->answer($client, $request, $remembered['answer']);
 
@@ -398,7 +437,7 @@ final class Dispatcher implements MessageHandler
 
             $result = ($spec->handler)($call, $params);
             if ($key !== null) {
-                $this->idempotency->put(self::OWNER, $spec->name, $key, $result);
+                $this->idempotency->put($bucket, $spec->name, $key, $result);
             }
             $this->answer($client, $request, $result);
         } catch (RpcError $e) {
