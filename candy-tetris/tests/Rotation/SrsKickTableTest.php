@@ -47,9 +47,9 @@ final class SrsKickTableTest extends TestCase
         '2→L' => [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]],
         'L→0' => [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]],
         'R→0' => [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]],
-        '0→L' => [[0, 0], [-1, 0], [2, 0], [-1, -2], [2, 1]],
-        'L→2' => [[0, 0], [1, 0], [-2, 0], [1, 2], [-2, -1]],
-        '2→R' => [[0, 0], [-2, 0], [1, 0], [-2, 1], [1, 2]],
+        '0→L' => [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]],
+        'L→2' => [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]],
+        '2→R' => [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]],
     ];
 
     /** Transition key → [from, to] rotation indices. */
@@ -84,6 +84,30 @@ final class SrsKickTableTest extends TestCase
                 SrsKickTable::kicks(Tetromino::I, $from, $to),
                 sprintf('I-piece kick %s drifted from the spec', $key),
             );
+        }
+    }
+
+    public function testCounterClockwiseRowsAreTheNegatedReverseOfTheirClockwisePairs(): void
+    {
+        // SRS publishes every counter-clockwise transition as the negation
+        // of its reverse clockwise pair. Deriving each CCW row from the
+        // table's own CW rows reddens on any one-sided edit — the literal
+        // SPEC pins above alone let mirrored typos pass both halves.
+        $mirror = ['R→0' => '0→R', '0→L' => 'L→0', 'L→2' => '2→L', '2→R' => 'R→2'];
+
+        foreach ([Tetromino::T, Tetromino::I] as $kind) {
+            $all = SrsKickTable::allKicks($kind);
+            foreach ($mirror as $ccwKey => $cwKey) {
+                $expected = array_map(
+                    static fn(array $delta): array => [-$delta[0], -$delta[1]],
+                    $all[$cwKey],
+                );
+                self::assertSame(
+                    $expected,
+                    $all[$ccwKey],
+                    sprintf('%s %s must equal the negation of %s', $kind->name, $ccwKey, $cwKey),
+                );
+            }
         }
     }
 

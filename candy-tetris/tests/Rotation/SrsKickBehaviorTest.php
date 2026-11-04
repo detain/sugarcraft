@@ -172,4 +172,58 @@ final class SrsKickBehaviorTest extends TestCase
         self::assertSame(4, $after->piece->x, 'the [0, +2] kick shifts no column');
         self::assertSame(1, $after->piece->y, 'spec +2 must land two rows UP (y 3 → 1)');
     }
+
+    /**
+     * I-piece 0→L spec deltas [[0,0],[-1,0],[+2,0],[-1,+2],[+2,-1]] — the
+     * published row. Pre-fix the table carried [-1,-2]/[+2,+1] on legs 4/5
+     * (signs flipped), so no board-space leg of the old table was ever
+     * exercised; this enumeration pins the corrected candidates themselves.
+     */
+    public function testIPieceCounterClockwiseCandidatesFollowTheSpecRow(): void
+    {
+        $i = new Piece(Tetromino::I, 0, 4, 2);
+
+        self::assertSame(
+            [
+                [4, 2], // naive rotation
+                [4, 2], // [0, 0]
+                [3, 2], // [-1, 0]
+                [6, 2], // [+2, 0]
+                [3, 0], // [-1, +2] (UP twice in spec → y decreases)
+                [6, 3], // [+2, -1] (DOWN in spec → y increases)
+            ],
+            $this->candidatePositions($i, -1),
+        );
+    }
+
+    /**
+     * Load-bearing scenario for the corrected leg: an I at spawn rotation
+     * one cell above the floor with naive and both horizontal kicks blocked.
+     * The pre-fix table drove leg 4 through the floor and refused the
+     * rotation outright; the spec row must instead climb two rows up the
+     * board while shifting one column left.
+     */
+    public function testIPieceCounterClockwiseKickClimbsWhereThePreFixTableRefused(): void
+    {
+        $rows = $this->deterministicGame()->board->rows();
+        // rot-3 verticals at x+1: naive/[0,0] land in column 5, [-1,0] in
+        // column 4, [+2,0] in column 7 — floor-cell blocks kill all three.
+        $rows[23][5] = Tetromino::I;
+        $rows[23][4] = Tetromino::I;
+        $rows[23][7] = Tetromino::I;
+        $board = new Board($rows);
+
+        $game = $this->deterministicGame()
+            ->mutate(['board' => $board, 'piece' => new Piece(Tetromino::I, 0, 4, 20)]);
+
+        [$after] = $game->update($this->key('z')); // z = rotate counter-clockwise
+
+        self::assertSame(3, $after->piece->rotation, 'the CCW rotation must succeed via the spec kick');
+        self::assertSame(3, $after->piece->x, 'the [-1, +2] kick shifts one column left');
+        self::assertSame(
+            18,
+            $after->piece->y,
+            'spec +2 must climb two rows (y 20 → 18); the pre-fix row pushed through the floor and refused',
+        );
+    }
 }
