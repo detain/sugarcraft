@@ -504,8 +504,57 @@ jobs:
             exit 0
           fi
 
-          # Stage all GIFs from the rendered artifacts
-          git add */.vhs/*.gif
+          # Stage the rendered GIFs — but never let one lib's local ignore
+          # policy veto every other lib's refresh.
+          #
+          # The old single `git add */.vhs/*.gif` is fatal the moment any lib
+          # ignores its own .vhs/*.gif: git names the path, exits 1, and set -e
+          # takes the whole aggregate-commit job down *after* staging the rest,
+          # so the run dies red with half the work done. candy-mail/.gitignore
+          # is that lib, which made every run that renders it fail here.
+          #
+          # git's own rule is that a path already tracked is addable whatever
+          # the ignore files say, so only untracked candidates are tested. The
+          # refusals are then reported rather than dropped quietly: a green run
+          # that renders GIFs and commits none is exactly the failure this job
+          # was rewritten to surface (see the placement check above).
+          shopt -s nullglob
+          candidates=( */.vhs/*.gif )
+
+          declare -A tracked=()
+          while IFS= read -r gif; do
+            [ -n "$gif" ] && tracked["$gif"]=1
+          done < <(git ls-files -- '*/.vhs/*.gif')
+
+          declare -A refused_path=()
+          unchecked=()
+          for gif in "${candidates[@]}"; do
+            if [ -n "${tracked[$gif]:-}" ]; then
+              continue
+            fi
+            unchecked+=( "$gif" )
+          done
+          if [ ${#unchecked[@]} -gt 0 ]; then
+            while IFS= read -r gif; do
+              [ -n "$gif" ] && refused_path["$gif"]=1
+            done < <(printf '%s\n' "${unchecked[@]}" | git check-ignore --stdin || true)
+          fi
+
+          refused=0
+          stageable=()
+          for gif in "${candidates[@]}"; do
+            if [ -n "${refused_path[$gif]:-}" ]; then
+              echo "::warning::$gif is excluded by this lib's .gitignore — rendered but NOT committed. The repo-wide law is that CI commits demo GIFs (candy-sql/.gitignore carries the note); drop the .vhs/*.gif rule from that lib's .gitignore to let it refresh."
+              refused=$((refused + 1))
+              continue
+            fi
+            stageable+=( "$gif" )
+          done
+
+          if [ ${#stageable[@]} -gt 0 ]; then
+            git add -- "${stageable[@]}"
+          fi
+          echo "Staged ${#stageable[@]} GIF path(s); $refused refused by a per-lib ignore rule"
 
           # Count staged files
           staged_count=$(git diff --cached --name-only -- "*/.vhs/*.gif" | wc -l)
