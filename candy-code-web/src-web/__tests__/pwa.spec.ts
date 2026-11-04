@@ -126,3 +126,29 @@ describe('notification-click route handoff (CW-6)', () => {
     expect(app).toContain("!/^#\\/s\\/[A-Za-z0-9_-]{1,64}$/.test(data.href)")
   })
 })
+
+/**
+ * CW-DBA-8 (reviews-1103): a persisted push consent is RE-VALIDATED at boot.
+ * The behaviour lives in push.spec.ts (nine direct reconcile() scenarios);
+ * these are the structural legs for the two wiring seats a unit test cannot
+ * mount — the store-level hello watch whose reactive firing the plain-object
+ * connection mock cannot exercise, and the App shell that creates the store
+ * so boot re-validates even when the settings screen is never opened.
+ */
+describe('boot-time consent re-validation wiring (CW-DBA-8)', () => {
+  it('the store gates boot revalidation behind every consent state and watches the offer', () => {
+    const store = read('../stores/push.ts')
+    expect(store).toContain('async function reconcile(): Promise<void> {')
+    expect(store).toContain('if (!consent.value || active.value) return')
+    expect(store).toContain('watch(serverOffersPush, (on) => {')
+    expect(store).toContain('if (on && consent.value && !active.value) void reconcile()')
+  })
+
+  it('the app shell creates the push store and reconciles a stored consent', () => {
+    const app = read('../App.vue')
+    expect(app).toContain('const push = usePushStore()')
+    expect(app).toContain('if (push.consent) void push.reconcile()')
+    // Boot must never be able to raise the permission prompt from the shell.
+    expect(app).not.toContain('Notification.requestPermission')
+  })
+})

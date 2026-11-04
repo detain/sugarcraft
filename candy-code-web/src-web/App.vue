@@ -19,6 +19,7 @@ import { useSessionStore } from './stores/session'
 import { useSessionsStore } from './stores/sessions'
 import { useLocaleStore } from './stores/locale'
 import { NOTIFICATION_PROBLEM_TEXT, useSettingsStore } from './stores/settings'
+import { usePushStore } from './stores/push'
 import { useQuestionAnnouncements } from './lib/questions'
 import { t } from './lib/i18n'
 import { bindingFor, captureActive, matchesBinding } from './lib/keymap'
@@ -32,6 +33,9 @@ useSessionsStore()
 // strings once — created up front like the sessions store so the very first
 // handshake is heard.
 useLocaleStore()
+// CW-DBA-8: created up front so a persisted push consent is re-validated on
+// boot even when the settings screen is never opened (never prompts; push.ts).
+const push = usePushStore()
 const layout = useLayoutStore()
 const panels = usePanelsStore()
 const settings = useSettingsStore()
@@ -120,6 +124,8 @@ onMounted(async () => {
   window.addEventListener('pageshow', onPageShow)
   window.addEventListener('keydown', onHelpKey, true)
   window.addEventListener('message', onPushNavigate)
+  // CW-DBA-8: a stored ON is a promise, not a live subscription.
+  if (push.consent) void push.reconcile()
   if (code !== null) {
     try {
       await connection.signIn({ code })

@@ -298,6 +298,129 @@ describe('push store (C-WEB-5.e)', () => {
   })
 })
 
+/**
+ * CW-DBA-8: the boot path re-validates a persisted consent instead of
+ * trusting it. The store instance a fresh page creates reads consent ON from
+ * localStorage with `active` false — the revalidation decides whether the ON
+ * was still true. (The hello watch that re-runs this when the offer lands
+ * cannot be exercised here: the connection mock's `hello` is a plain getter,
+ * so the computed never invalidates — the watch's presence is pinned in
+ * pwa.spec.ts and its callback body IS reconcile(), tested directly below.
+ * The real app's store reads the reactive hello and does fire it.)
+ */
+describe('boot-time consent re-validation (CW-DBA-8)', () => {
+  /** A live consent dialled by the first store, then the pinia is dropped:
+   *  the next usePushStore() is what boot sees — persisted ON, nothing live. */
+  async function seedPersistedConsent(): Promise<void> {
+    installPushRuntime()
+    const first = usePushStore()
+    expect(await first.setConsent(true)).toBe(true)
+    setActivePinia(createPinia())
+    recorder.calls = []
+    recorder.rpc = []
+  }
+
+  it('dials nothing when no consent was ever given', async () => {
+    installPushRuntime()
+    const push = usePushStore()
+    await push.reconcile()
+    expect(push.consent).toBe(false)
+    expect(recorder.calls).toEqual([])
+  })
+
+  it('revalidates a live consent by re-using the browser subscription', async () => {
+    await seedPersistedConsent()
+    const push = usePushStore()
+    expect(push.consent).toBe(true)
+    await push.reconcile()
+    expect(recorder.calls).toEqual(['push.vapidKey', 'push.subscribe'])
+    expect(push.active).toBe(true)
+    expect(push.problem).toBeNull()
+    expect(push.consent).toBe(true)
+  })
+
+  it('rolls a stale consent back without a grant and never prompts at boot', async () => {
+    await seedPersistedConsent()
+    const prompted: string[] = []
+    stubNotification({
+      permission: 'default',
+      requestPermission: async () => { prompted.push('boot'); return 'granted' },
+    })
+    const push = usePushStore()
+    await push.reconcile()
+    expect(prompted).toEqual([])
+    expect(push.problem).toBe('denied')
+    expect(push.consent).toBe(false)
+    expect(recorder.calls).toEqual([])
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(allStoredValues()).toContain('false')
+  })
+
+  it('rolls a stale consent back when the permission was revoked', async () => {
+    await seedPersistedConsent()
+    const prompted: string[] = []
+    stubNotification({
+      permission: 'denied',
+      requestPermission: async () => { prompted.push('boot'); return 'denied' },
+    })
+    const push = usePushStore()
+    await push.reconcile()
+    expect(prompted).toEqual([])
+    expect(push.problem).toBe('denied')
+    expect(push.consent).toBe(false)
+    expect(recorder.calls).toEqual([])
+  })
+
+  it('keeps consent through a missing runtime — not the user revoking', async () => {
+    await seedPersistedConsent()
+    Reflect.deleteProperty(window, 'PushManager')
+    const push = usePushStore()
+    await push.reconcile()
+    expect(push.problem).toBe('unsupported')
+    expect(push.consent).toBe(true)
+    expect(recorder.calls).toEqual([])
+  })
+
+  it('keeps consent through an insecure context', async () => {
+    await seedPersistedConsent()
+    forceSecureContext(false)
+    const push = usePushStore()
+    await push.reconcile()
+    expect(push.problem).toBe('insecure')
+    expect(push.consent).toBe(true)
+    expect(recorder.calls).toEqual([])
+  })
+
+  it('keeps consent while hello has not offered push yet', async () => {
+    await seedPersistedConsent()
+    recorder.methods = ['session.list']
+    const push = usePushStore()
+    await push.reconcile()
+    expect(push.problem).toBe('unavailable')
+    expect(push.consent).toBe(true)
+    expect(recorder.calls).toEqual([])
+  })
+
+  it('is a no-op once a live subscription exists', async () => {
+    installPushRuntime()
+    const push = usePushStore()
+    expect(await push.setConsent(true)).toBe(true)
+    recorder.calls = []
+    await push.reconcile()
+    expect(recorder.calls).toEqual([])
+  })
+
+  it('rolls consent back when the server refuses the row', async () => {
+    await seedPersistedConsent()
+    recorder.subscribedResult = { subscribed: false, keyHash: '' }
+    const push = usePushStore()
+    await push.reconcile()
+    expect(push.problem).toBe('refused')
+    expect(push.consent).toBe(false)
+    expect(recorder.calls).toEqual(['push.vapidKey', 'push.subscribe', 'browser-unsubscribe'])
+  })
+})
+
 describe('SettingsView push row (C-WEB-5.e)', () => {
   it('shows the toggle in a secure context with push support', async () => {
     installPushRuntime()

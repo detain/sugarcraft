@@ -192,5 +192,51 @@ export const usePushStore = defineStore('push', () => {
     return ok
   }
 
-  return { consent, problem, active, visible, serverOffersPush, setConsent }
+  /**
+   * CW-DBA-8: boot-time RE-VALIDATION of a persisted consent. The toggle can
+   * read ON from storage while nothing behind it is live — permission
+   * revoked, browser profile wiped, or simply a reload that outlived the
+   * server-side row. The flip law says "persisted consent always matches a
+   * live subscription"; this keeps that promise across reloads.
+   *
+   * The boot path NEVER prompts for permission (enable()'s requestPermission
+   * line stays unreachable from here — a prompt on load is the nag the
+   * header forbids). A missing grant means the stored consent is a stale
+   * promise: roll it back to OFF so the toggle tells the truth and the next
+   * flip is a fresh user act. The environmental gates (no runtime, insecure,
+   * hello not yet offering push) KEEP consent — they are not the user's
+   * revocation; the watch below spends exactly one deferred attempt when the
+   * offer lands. One attempt per trigger, never silently retried (E646, the
+   * header law).
+   */
+  async function reconcile(): Promise<void> {
+    if (!consent.value || active.value) return
+    if (!pushRuntimePresent()) {
+      problem.value = 'unsupported'
+      return
+    }
+    if (window.isSecureContext === false) {
+      problem.value = 'insecure'
+      return
+    }
+    if (Notification.permission !== 'granted') {
+      problem.value = 'denied'
+      consent.value = false
+      return
+    }
+    if (!serverOffersPush.value) {
+      problem.value = 'unavailable'
+      return
+    }
+    const ok = await enable()
+    if (!ok) consent.value = false
+  }
+
+  // CW-DBA-8: when hello first offers push.subscribe, a consent that survived
+  // the boot gates gets its one deferred attempt — no polling, no retry loop.
+  watch(serverOffersPush, (on) => {
+    if (on && consent.value && !active.value) void reconcile()
+  })
+
+  return { consent, problem, active, visible, serverOffersPush, setConsent, reconcile }
 })
