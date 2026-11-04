@@ -197,4 +197,24 @@ final class StaticFilesTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         StaticFiles::new($this->webRoot . '/index.html');
     }
+
+    /**
+     * CWPM-10: the Composer instruction reaches the page only where Composer
+     * actually works. Inside a phar the vendor tree is frozen, so the bundled
+     * build must be pointed at a build through --web-root instead of at an
+     * install command it could never satisfy.
+     */
+    public function testTheNoticePageBranchesOnTheRuntime(): void
+    {
+        $branch = new \ReflectionMethod(StaticFiles::class, 'noticePageFor');
+
+        $composer = (string) $branch->invoke(null, false);
+        $phar = (string) $branch->invoke(null, true);
+
+        self::assertStringContainsString('composer require sugarcraft/candy-code-web', $composer, 'a Composer runtime can act on the package advice');
+        self::assertStringNotContainsString('composer require', $phar, 'a phar cannot add packages to its frozen vendor');
+        self::assertStringContainsString('--web-root', $phar, 'the bundled build is pointed at a root it can serve');
+        self::assertStringContainsString('/api/', $composer);
+        self::assertStringContainsString('/api/', $phar, 'both pages promise the API works without a UI');
+    }
 }

@@ -26,7 +26,10 @@ use SugarCraft\Code\Support\ContainedPath;
  *
  * NO WEB ROOT (the package is not installed, or `--no-web`): `/` answers a
  * one-page notice saying how to get the UI, and the API and WebSocket work
- * regardless.
+ * regardless. The notice branches on the runtime: a phar carries a frozen
+ * vendor tree, so telling it to `composer require` anything is advice it can
+ * never follow (CWPM-10) — the bundled build is pointed at `--web-root` and
+ * the release bundle instead.
  */
 final class StaticFiles
 {
@@ -102,7 +105,7 @@ final class StaticFiles
         $path = \rawurldecode($request->getUri()->getPath());
         if ($this->root === null) {
             return $path === '/' || $path === '/index.html'
-                ? new Response(200, ['Content-Type' => self::TYPES['html'], 'Cache-Control' => 'no-store'], self::NOTICE_PAGE)
+                ? new Response(200, ['Content-Type' => self::TYPES['html'], 'Cache-Control' => 'no-store'], self::noticePage())
                 : Responses::error(404, 'not_found', 'not found');
         }
 
@@ -227,6 +230,24 @@ final class StaticFiles
         return \implode('/', $segments);
     }
 
+    /**
+     * The notice page for the runtime this class was loaded from. Phar code
+     * ships a frozen vendor tree — `composer require` inside a phar installs
+     * nothing candy-code will ever load — so the bundled build gets the
+     * `--web-root` instruction instead (CWPM-10). Factored through the bool
+     * seam because {@see \Phar::running()} cannot be mocked from a test.
+     */
+    private static function noticePage(): string
+    {
+        return self::noticePageFor(\Phar::running(false) !== '');
+    }
+
+    /** @internal pin-tested by reflection; the runtime branch has no other seam. */
+    private static function noticePageFor(bool $inPhar): string
+    {
+        return $inPhar ? self::NOTICE_PAGE_PHAR : self::NOTICE_PAGE;
+    }
+
     private const NOTICE_PAGE = <<<'HTML'
 <!doctype html>
 <html lang="en">
@@ -236,6 +257,18 @@ final class StaticFiles
 <p>The server is running, but no web UI is installed. Install it next to candy-code with</p>
 <pre>composer require sugarcraft/candy-code-web</pre>
 <p>or point <code>--web-root</code> at a build. The WebSocket endpoint <code>/ws</code> and the HTTP API under <code>/api/</code> work without it.</p>
+</body>
+</html>
+HTML;
+
+    private const NOTICE_PAGE_PHAR = <<<'HTML'
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>candy-code serve</title></head>
+<body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5">
+<h1>candy-code serve</h1>
+<p>The server is running, but no web UI is installed. This executable is a bundled phar, so Composer cannot add packages to it: point <code>--web-root</code> at a build — for example an unpacked <code>candy-code-web</code> release bundle — or run the Composer-installed candy-code with the <code>sugarcraft/candy-code-web</code> package beside it.</p>
+<p>The WebSocket endpoint <code>/ws</code> and the HTTP API under <code>/api/</code> work without it.</p>
 </body>
 </html>
 HTML;
