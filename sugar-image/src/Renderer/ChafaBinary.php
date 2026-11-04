@@ -45,8 +45,8 @@ final class ChafaBinary
     /**
      * Operator-controlled override naming the chafa binary — an
      * absolute path, or a bare name that authorises the PATH lookup
-     * for that one explicit value. Configuration is trusted input
-     * (docs/TRUST-BOUNDARY.md §4), so naming a binary here is consent
+     * for that one explicit value. Configuration is trusted operator input,
+     * so naming a binary here is consent
      * to run it; the default (unset) carries no PATH duty at all.
      */
     public const ENV_OVERRIDE = 'SUGAR_IMAGE_CHAFA';

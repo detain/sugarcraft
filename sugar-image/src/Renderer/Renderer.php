@@ -40,7 +40,7 @@ interface Renderer
      * True if this backend supports partial transparency (alpha channel).
      * Half-block does not; Sixel and Kitty do.
      *
-     * (Chafa campaign): ADVISORY — capability reporting, not mode
+     * ADVISORY — capability reporting, not mode
      * selection. No logic consumer exists tree-wide (the tmux/screen
      * passthrough decorators only forward it; chafa by contrast picks its
      * rung from terminal capability — the CLI default consults

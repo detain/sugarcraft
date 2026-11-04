@@ -147,7 +147,7 @@ final class SymbolSetTables
      * face per map, which makes this data a FACE SWAP for the ascii tier
      * ({@see SymbolMap::withAsciiIbm()}), never a selector class of its own;
      * inventing an "ibm" tag would break the 1:1 SELECTOR_NAMES↔chafa
-     * parse_symbol_tag correspondence. KANA-tier precedent: §4.15(11).
+     * parse_symbol_tag correspondence.
      *
      * Transcribed VERBATIM from /home/sites/chafa @ 413b76e4d,
      * chafa/internal/chafa-symbols-ascii-ibm.h:55-1289 — 95 entries,

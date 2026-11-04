@@ -14,8 +14,8 @@ use React\Promise\PromiseInterface;
  * {@see PacedAsyncRenderer}, which drives a {@see PacedRenderSession}
  * slice pump from futureTick callbacks — neither owns a child
  * process. The worker-pool and pcntl_fork-per-render
- * backends named below are design invitations, not shipped code, and the
- * the older audit note about a "64 MiB stderr cap" has no referent here at all
+ * backends named below are design invitations, not shipped code, and a
+ * previously circulated note about a "64 MiB stderr cap" has no referent here at all
  * (erratum: no such cap exists anywhere in sugar-image or its history —
  * the only external children in the lib are {@see \SugarCraft\Image\Renderer\ChafaRenderer}'s
  * probe and render: the render redirects fd 2 to a private

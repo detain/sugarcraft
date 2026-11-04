@@ -1314,8 +1314,8 @@ final class ImageSource
      * address. A host named in $allowedHosts bypasses the check: the opt-in
      * seam for deployments that must reach a specific internal host.
      *
-     * KNOWN RESIDUAL — check-time guard, connect-time TOCTOU (round-90 audit
-     * MEDIUM-1; decision: DISCLOSE, do not pin). This resolves and judges the
+     * KNOWN RESIDUAL — check-time guard, connect-time TOCTOU (decision:
+     * DISCLOSE, do not pin). This resolves and judges the
      * name, then the caller fetches the NAME again, so a TTL-0 round-robin
      * zone can answer public here and private at connect time. Closing it
      * means pinning the connection to a validated IP: for the sync path a
@@ -1560,7 +1560,7 @@ final class ImageSource
             if (!class_exists(Browser::class)) {
                 return reject(new \RuntimeException(Lang::t('image_source.url_http_missing')));
             }
-            // Timeout parity with the sync fetch (round-90 audit INFO): the
+            // Timeout parity with the sync fetch: the
             // default Browser is armed with FETCH_TIMEOUT_SECONDS. An injected
             // Browser is used exactly as the caller configured it — their
             // connector/timeout choice is theirs, only redirects are overridden.
@@ -1680,7 +1680,7 @@ final class ImageSource
 
     /**
      * Default per-request fetch timeout in seconds, shared by the sync stream
-     * context and the default-constructed async Browser (round-90 audit INFO:
+     * context and the default-constructed async Browser —
      * the async path previously fell back to react's 60s default_socket_timeout
      * unless the caller injected a configured Browser).
      */

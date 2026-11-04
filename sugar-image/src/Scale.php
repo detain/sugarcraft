@@ -135,8 +135,8 @@ enum Scale
      * ShrinkToFit: like fit() but the factor is floored at 1 — never
      * enlarge (per chafa chafa-math-util.c:70-79). When the source
      * already fits, both legs stay at native size; Mosaic::applyScale then
-     * pastes it centred onto a box-sized transparent pad canvas (the fix,
-     * lane: the quarter tier alone cannot pad and falls back to fill);
+     * pastes it centred onto a box-sized transparent pad canvas (known gap:
+     * the quarter tier alone cannot pad and falls back to fill);
      * otherwise it shrinks by the smaller factor so neither dimension
      * exceeds the target.
      */

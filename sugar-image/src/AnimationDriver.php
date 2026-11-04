@@ -16,7 +16,7 @@ use SugarCraft\Image\Renderer\Renderer;
  * Model via {@see \SugarCraft\Core\Composite}.
  *
  * Frame timing uses {@see Cmd::tick()}; per-frame redraw uses the
- * {@see Renderer::delete()} API added in step 07.12, emitted in the
+ * {@see Renderer::delete()} API, emitted in the
  * order that renderer family's delete semantics allow.
  *
  * Delete-before-redraw left a per-frame empty-cell window (visible
@@ -39,7 +39,7 @@ use SugarCraft\Image\Renderer\Renderer;
  * - Renderers without targeted deletion (Sixel, HalfBlock, QuarterBlock,
  *   Chafa): `Renderer::delete()` returns '' and the existing cell grid is
  *   naturally overwritten on the next render — order is moot; the emitted
- *   bytes are unchanged (correct per step 07.12).
+ *   bytes are unchanged (correct under the delete contract).
  *
  * Mirrors no upstream — this is a SugarCraft addition.
  */

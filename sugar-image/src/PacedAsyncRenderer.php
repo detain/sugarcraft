@@ -25,7 +25,7 @@ use SugarCraft\Image\Renderer\IncrementalRenderer;
  * cursor were left. Other watchers run in between; a TUI driving this can
  * paint partial progress or abandon the generator to cancel.
  *
- * E646, the sentence that must survive edits: the deadline bounds EACH
+ * The no-blanket-timeout rule, which must survive edits: the deadline bounds EACH
  * SLICE, never the whole render — so it is a fairness device, not a
  * timeout, and cannot truncate a slow-but-legitimate encode. There is no
  * request-wide ceiling anywhere in this class by design.

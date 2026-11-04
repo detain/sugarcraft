@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\TtyDetect;
  *
  * The OSC 10/11 default fg/bg query is a DETECTION surface only —
  * the answers ride {@see Capability::$defaultFg}/{@see Capability::$defaultBg}
- * and no renderer consumes them yet (consumer wiring is the W6/W7 seam).
+ * and no renderer consumes them yet (consumer wiring is a recorded seam).
  *
  * Probes environment variables and sends DA1 queries to determine
  * which image-rendering protocols the current terminal supports.
@@ -26,7 +26,7 @@ use SugarCraft\Core\Util\TtyDetect;
  * Precedence: Kitty → iTerm2 → Sixel → HalfBlock (always available).
  *
  * The query phase runs with the tty briefly in non-canonical, echo-off
- * mode (ISS-048) — in cooked mode the queries echo, the replies sit
+ * mode — in cooked mode the queries echo, the replies sit
  * behind Enter, and leftovers ride into the next reader.
  */
 final class Detect
@@ -95,7 +95,7 @@ final class Detect
      *
      * It deliberately requires the ``?`` flag byte, which no real reply
      * omits and the query itself (`` ESC [ c ``) never carries — echoed
-     * query bytes therefore cannot terminate a read (ISS-048). Public so
+     * query bytes therefore cannot terminate a read. Public so
      * tests pin its polarity.
      */
     public const DA1_REPLY_TERMINATOR = '/\e\[\?[\d;]*c/';
@@ -115,8 +115,8 @@ final class Detect
      * It demands the ``rgb:`` prefix and the full hex triplet — a shape the
      * query (`` ESC ] 10 ; ? ST ``) never carries and typed text cannot
      * fabricate, so echoed query bytes and stray user keystrokes can neither
-     * terminate the read nor fake a reply (ISS-048 polarity, applied to the
-     * OSC reply space). BEL is accepted alongside ST because xterm-class
+     * terminate the read nor fake a reply (the same echo-safety argument,
+     * applied to the OSC reply space). BEL is accepted alongside ST because xterm-class
      * terminals close string sequences either way. Public so tests pin its
      * polarity; scope note: XTerm replies ``rgb:``, and the '#rrggbb'
      * spelling some emulators use is NOT modelled here — chafa's reply
@@ -221,7 +221,7 @@ final class Detect
      */
     public static function probe(): Capability
     {
-        // ISS-048: every path below writes query bytes and waits ≤100 ms for
+        // Cooked-mode hazard (class docblock): every path below writes query bytes and waits ≤100 ms for
         // a reply. In the terminal's default COOKED mode that exchange is
         // broken three ways: the query echoes to the screen, the reply only
         // becomes readable after Enter, and any bytes left unread when we
@@ -411,8 +411,8 @@ final class Detect
      *    beyond these rows are the TermDb table's REP-axis follow-up, not
      *    a guess the env ladder should make.
      *
-     * TODO: supportsRepeat REP-axis chicle parity — follow-up E-ID mint at
-     * W5 docs (never claim parity now).
+     * TODO: supportsRepeat REP-axis chicle parity remains an open follow-up
+     * (never claim parity now).
      */
     public static function supportsRepeat(): bool
     {
@@ -757,7 +757,7 @@ final class Detect
         // unlikely (we're the only thing writing), and even if some
         // arrive they can't be confused for a valid DA1 reply: the
         // reply shape requires the '?' flag byte the query never carries,
-        // and the read only stops on it (ISS-048).  In tests, pre-loading
+        // and the read only stops on it.  In tests, pre-loading
         // the reply avoids any drain-then-read race condition.
 
         // Write DA1 query to stdout (terminal receives it as input).
@@ -854,7 +854,7 @@ final class Detect
             }
             $buf .= $chunk;
 
-            // Break on the REPLY's shape (ISS-048). This used to scan for
+            // Break on the REPLY's shape (see the class docblock). This used to scan for
             // the QUERY bytes "\x1b[c", which a reply never contains — the
             // read then always ran the full 100 ms budget.
             if (preg_match($replyTerminator, $buf) === 1) {
@@ -946,7 +946,7 @@ final class Detect
      * query phase, returning the `stty -g` snapshot that undoes it — or
      * null when this process must not touch a terminal at all.
      *
-     * WHY IT CAN BE NULL, in order (ISS-048):
+     * WHY IT CAN BE NULL, in order:
      *  - a probe stdin was injected (tests, harnesses): the real tty is
      *    not the stream under test, and re-setting it would be a side
      *    effect on the developer's own terminal for an exchange that

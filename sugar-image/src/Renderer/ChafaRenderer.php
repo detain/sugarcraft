@@ -249,7 +249,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
      * proc_close() so the wait happens there regardless.
      *
      * The deadlines here are a test/slice budget, NEVER a kill-on-request-
-     * time policy (E646 blanket-timeout ban): this function puts no bound
+     * time policy (the no-blanket-timeout rule): this function puts no bound
      * on chafa's rendering work — {@see drainStdout()} reads to EOF however
      * long a legitimate encode takes (a poster may run minutes). It bounds
      * only the wait for a child that has ALREADY closed stdout to leave the

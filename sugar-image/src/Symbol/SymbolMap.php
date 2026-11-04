@@ -8,7 +8,7 @@ namespace SugarCraft\Image\Symbol;
  * Coverage-class symbol engine — the glyph corpus and candidate search
  * behind the 'symbols' render tier.
  *
- * SYMBOL-TIER W11: the chafa narrow tables ascii (95), misc-narrow (23)
+ * The chafa narrow tables ascii (95), misc-narrow (23)
  * and the orphaned ascii-ibm (95) alternate face are all carried verbatim
  * in {@see SymbolSetTables}; ascii and misc-narrow ride the corpus and the
  * tag grammar (their own tags plus technical/geometric/dot and the nine
@@ -41,7 +41,7 @@ namespace SugarCraft\Image\Symbol;
  * (popcount, codepoint) at compile time (compare_symbols_popcount,
  * chafa/chafa-symbol-map.c:357-370, qsorted at :428) and walks that, so a
  * tied-distance winner can differ between the two. A faithful port of the
- * sort was measured (audit fix lane FA-5): it flips the byte-frozen
+ * sort was measured: it flips the byte-frozen
  * default-corpus render digests (24829bdb…, the ansi16 and quantized-pens
  * family, the WideErrorGuardPin ' ▘' row) because those were captured over
  * build-order winners, and the re-pin-vs-divergence ruling sits with the
@@ -60,7 +60,7 @@ namespace SugarCraft\Image\Symbol;
  * ordinary candidates and the fill-map selection semantics stay a seam.
  *
  * Corpus extension (2026-10-21): the default corpus stays exactly the
- * 676 W6 entries above — byte-frozen, because {@see SymbolMapRenderer}'s
+ * 676 base entries above — byte-frozen, because {@see SymbolMapRenderer}'s
  * output digest is pinned. Two additive tiers ride the FULL corpus
  * (1,260 glyphs = chafa's narrow symbol array: 95 ASCII + 365 Latin +
  * 229 block-table + 23 misc-narrow + 256 braille + 59 sextant + 234
@@ -80,8 +80,8 @@ namespace SugarCraft\Image\Symbol;
  * and partitioned into {@see self::$wideDefs} exactly like chafa's
  * init_symbol_array_wide() keeps the two arrays separate.
  *
- * The opt-in LATIN tier ({@see withLatin()}) is a SEPARATE additive path
- * (SYMBOL-LATIN, W10): chafa's 365 narrow chafa-symbols-latin.h glyphs
+ * The opt-in LATIN tier ({@see withLatin()}) is a SEPARATE additive path:
+ * chafa's 365 narrow chafa-symbols-latin.h glyphs
  * (U+00A1–U+03F6, table {@see SymbolSetLatin}) appended AFTER the current
  * corpus, so the default 676-entry prefix — and every byte-frozen render
  * digest — stays untouched. It coexists with {@see withSelectors()}, which
@@ -361,7 +361,7 @@ final class SymbolMap
      * latin flag; the flag records withLatin()-built provenance, while
      * codepoint presence — not the flag — is what makes an append a no-op.
      *
-     * (State-carry law): like every tier ADDER, this one composes
+     * (Carried state): like every tier ADDER, this one composes
      * onto the current map — the wide selection and kana flag ride
      * through untouched, so withKana()->withLatin() keeps the 181-glyph
      * symbols2 tier (chafa's symbol sets are cumulative per map instance).
@@ -408,7 +408,7 @@ final class SymbolMap
      * withSelectors() — the face is not an appended tier, so preserving
      * it cannot double-apply.
      *
-     * (State-carry law): the face swap rewrites only carried ASCII
+     * (Carried state): the face swap rewrites only carried ASCII
      * codepoints, so the wide symbols2 selection and kana flag ride
      * through untouched — withKana()->withAsciiIbm() keeps the 181-glyph
      * tier (the face is orthogonal to the wide partition; chafa hosts
@@ -546,7 +546,7 @@ final class SymbolMap
 
     /**
      * The default corpus: chafa's block table (U+2500–259F), the braille
-     * dots, the sextants and the octants — byte-frozen since W6.
+     * dots, the sextants and the octants — byte-frozen as the base corpus.
      *
      * @return list<SymbolDef>
      */
@@ -734,7 +734,7 @@ final class SymbolMap
      * relative to this map's current corpus, otherwise it replaces it.
      * Unknown class names throw (fail fast, never a silent empty corpus).
      *
-     * (State-carry audit, verdict: coherent): this REBUILD is not an
+     * This REBUILD is not an
      * adder — both tier flags reset (provenance law, withKana()
      * docblock) — yet nothing is silently dropped: the wide symbols2
      * selection is filtered through the same tag walk as the narrow array,

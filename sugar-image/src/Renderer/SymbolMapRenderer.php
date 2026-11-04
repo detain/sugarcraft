@@ -107,7 +107,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
      * behaviour byte-identical.
      *
      * Concrete-class dial only: widening the shared Renderer interface
-     * would force edits onto renderers outside this lane's ownership
+     * would force edits onto renderers outside this class's ownership
      * (recorded seam).
      */
     public function withWorkFactor(float $workFactor): self
@@ -131,7 +131,7 @@ final class SymbolMapRenderer implements Renderer, AcceptsOptimization, ConfigFi
     /**
      * Select the glyph corpus with chafa's `--symbols=`
      * tag grammar ({@see SymbolMap::withSelectors()}). The default corpus
-     * (W6's 676 entries) stays byte-frozen; a selector widens the map to
+     * (the base 676 entries) stays byte-frozen; a selector widens the map to
      * the full 1,260-glyph narrow array (1,251 under the BAD-vetoing `all`)
      * or narrows it to one class family. An invalid expression throws at
      * configuration time.

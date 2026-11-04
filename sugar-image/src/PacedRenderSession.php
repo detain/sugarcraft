@@ -16,7 +16,7 @@ namespace SugarCraft\Image;
  *
  * The deadline bounds EACH SLICE, never the whole render — it is a fairness
  * device, not a request timeout, and cannot truncate a slow-but-legitimate
- * encode (E646). No slice can stall the pipeline forever: each advance starts
+ * encode (the no-blanket-timeout rule). No slice can stall the pipeline forever: each advance starts
  * a fresh budget, and each advance consumes at least one row whenever rows
  * remain (a single row whose encode alone overshoots the slice still
  * lands IN that slice — expiry is checked after consuming a row — and the
