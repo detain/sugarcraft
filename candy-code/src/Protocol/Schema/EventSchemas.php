@@ -231,7 +231,12 @@ final class EventSchemas
             ], ['sessionId', 'askId']),
             EventType::SERVER_TICK => Schema::object(['now' => Schema::integer(0), 'turnsRunning' => Schema::integer(0)], ['now', 'turnsRunning']),
             EventType::SERVER_SHUTDOWN => Schema::object(['reason' => Schema::string(), 'graceSeconds' => Schema::number(0)], ['reason', 'graceSeconds']),
+            // CWPD-8/9: the SessionFeed stale-mark and the Gateway outbox
+            // watermark name the session they dropped; the dispatcher's
+            // per-connection pending-notice overflow has no session to
+            // name — so sessionId is declared, never required.
             EventType::SERVER_OVERFLOW => Schema::object([
+                'sessionId' => Schema::ref(D::SESSION_ID),
                 'dropped' => Schema::integer(0),
                 'action' => Schema::enum(['resubscribe']),
             ], ['dropped', 'action']),

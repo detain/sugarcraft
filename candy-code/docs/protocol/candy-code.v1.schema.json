@@ -7227,6 +7227,9 @@
             "data": {
                 "type": "object",
                 "properties": {
+                    "sessionId": {
+                        "$ref": "#/$defs/SessionId"
+                    },
                     "dropped": {
                         "type": "integer",
                         "minimum": 0
