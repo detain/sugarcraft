@@ -562,6 +562,42 @@ final class Theme
     }
 
     /**
+     * Derive a copy with every Style slot passed through `$map`.
+     *
+     * WHY: an embedding terminal's contrast law must be able to rewrite
+     * foreground colours across a whole palette without hard-coding this
+     * class's slot list at the consumer (reviews-1103 A11Y-1: candy-code
+     * projects its chrome tokens against the real terminal background and
+     * needed the markdown half to ride the same resolver). Scalar and
+     * layout fields ride through untouched; an unset optional Style stays
+     * unset. Returning the SAME instance from the mapper is explicitly
+     * supported, so a projection that changes nothing rebuilds nothing —
+     * identity survives slot by slot.
+     *
+     * @param callable(Style): Style $map
+     */
+    public function mapStyles(callable $map): self
+    {
+        $args = [];
+        foreach ((new \ReflectionClass(self::class))->getProperties() as $property) {
+            if (!$property->isPromoted()) {
+                continue;
+            }
+            $value = $property->getValue($this);
+            if ($value instanceof Style) {
+                $mapped = $map($value);
+                if (!$mapped instanceof Style) {
+                    throw new \InvalidArgumentException('Theme::mapStyles() expects the mapper to return a Style, got ' . get_debug_type($mapped));
+                }
+                $value = $mapped;
+            }
+            $args[$property->getName()] = $value;
+        }
+
+        return new self(...$args);
+    }
+
+    /**
      * Load a theme from a JSON file. The JSON shape is one object per
      * element, each carrying a subset of `foreground` / `background`
      * (hex `#rrggbb` or `ansi:N` or `ansi256:N`) and the standard
