@@ -153,4 +153,28 @@ describe('agents store stall wiring', () => {
     expect(agents.stalledRuns.s2).toBeUndefined()
     expect(agents.stalledRuns.s1).toEqual({ a1: 40 })
   })
+
+  it('re-baselines a re-delegated run whose generation restarted its seq', () => {
+    const agents = useAgentsStore()
+    // Generation 1 (startedAt 1) accrues a stalled badge in silence.
+    agents.observeStalls('s1', fold(beat({ seq: 1 })), T0)
+    agents.observeStalls('s1', fold(beat({ seq: 1 })), T0 + 40_000)
+    expect(agents.stalledRuns.s1).toEqual({ a1: 40 })
+
+    // The terminal fold and the re-delegation coalesce into one dispatch
+    // batch, so the detector never sees the finished row: the new generation
+    // (higher startedAt) arrives with a RESTARTED, lower seq. That is a first
+    // sight of a different run — not a replay — and must re-baseline instead
+    // of freezing on the old generation's totals and clock.
+    agents.observeStalls('s1', fold(beat({ seq: 1, tokens: 0, stats: { startedAt: 2 } })), T0 + 41_000)
+    expect(agents.stallTracks['s1/a1']?.generation).toBe(2)
+    expect(agents.stallTracks['s1/a1']?.slowSeconds).toBe(0)
+    expect(agents.stallTracks['s1/a1']?.seq).toBe(1)
+    expect(agents.stalledRuns.s1).toBeUndefined()
+
+    // The new generation accrues against the new clock: one 10s below-floor
+    // window adds 10s, not the stale generation's frozen accrual.
+    agents.observeStalls('s1', fold(beat({ seq: 2, tokens: 0, stats: { startedAt: 2 } })), T0 + 51_000)
+    expect(agents.stallTracks['s1/a1']?.slowSeconds).toBe(10)
+  })
 })

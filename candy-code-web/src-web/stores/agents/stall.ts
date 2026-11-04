@@ -17,7 +17,10 @@ import type { AgentRun } from './tree'
  * accumulation exactly as `StallDetector::track()` does
  * (candy-code/src/Tui/StallDetector.php:57) — reset at or above the floor,
  * accrue below it, keep the prior state through clock skew, and record a first
- * observation as a baseline without flagging it. A run that is not live (a
+ * observation as a baseline without flagging it. A re-delegation of the same
+ * id is a new generation (the run's `startedAt`), and a new generation is a
+ * fresh first sight: its beat seq restarts, so the replay guard must not eat
+ * it. A run that is not live (a
  * queued placeholder or any terminal state) is never tracked and never
  * flagged, the parity rule the TUI enforces by consulting only its live rows.
  */
@@ -33,7 +36,9 @@ export const STALL_TICK_MS = 1000
 
 /** What one run's detector thread holds between observations. */
 export interface StallTrack {
-  /** The last beat seq folded in — the fold can replay, a beat may not repeat. */
+  /** The run generation (`AgentRun.startedAt`) this thread belongs to: a re-delegation of the same id restarts its seq, so a changed generation re-baselines like a first sight. */
+  readonly generation: number
+  /** The last beat seq folded in — within one generation the fold can replay, a beat may not repeat. */
   readonly seq: number
   /** The last observed token total (the wire carries a running total). */
   readonly tokens: number
@@ -53,18 +58,21 @@ export function isTrackedRun(run: AgentRun): boolean {
 /**
  * Fold one arrival into $track, mirroring `StallDetector::track()`
  * (candy-code/src/Tui/StallDetector.php:57). Returns $track unchanged — same
- * identity — for a repeated or regressed beat and for a clock-skewed arrival,
- * a fresh baseline for a first observation, undefined when the run is not (or
- * is no longer) live, and a new thread otherwise.
+ * identity — for a repeated or regressed beat within the track's generation,
+ * and for a clock-skewed arrival; a fresh baseline for a first observation or
+ * a generation change (a re-delegated run restarts its seq, so its older-seq
+ * beats are new run, not replay); undefined when the run is not (or is no
+ * longer) live; a new thread otherwise.
  */
 export function observeStall(track: StallTrack | undefined, run: AgentRun, nowMs: number): StallTrack | undefined {
   if (!isTrackedRun(run)) return undefined
-  if (track === undefined) {
-    return { seq: run.seq, tokens: run.tokens, chars: run.tail.length, slowSeconds: 0, lastAtMs: nowMs }
+  if (track === undefined || run.startedAt !== track.generation) {
+    return { generation: run.startedAt, seq: run.seq, tokens: run.tokens, chars: run.tail.length, slowSeconds: 0, lastAtMs: nowMs }
   }
-  // The fold re-presents what it already holds on every seed/beat merge; only
-  // a genuinely newer beat is an observation. The server never sees replays
-  // (its rows advance once per dispatch), so this guard is the port's own.
+  // Within one generation the fold re-presents what it already holds on every
+  // seed/beat merge; only a genuinely newer beat is an observation. The server
+  // never sees replays (its rows advance once per dispatch), so this guard is
+  // the port's own — and it is generation-scoped, per the doc above.
   if (run.seq <= track.seq) return track
   const elapsed = (nowMs - track.lastAtMs) / 1000
   if (elapsed <= 0) return track // clock skew: keep the state, consume nothing (StallDetector.php:66-71)
@@ -72,6 +80,7 @@ export function observeStall(track: StallTrack | undefined, run: AgentRun, nowMs
   const charDelta = Math.max(0, run.tail.length - track.chars) / CHARS_PER_TOKEN
   const rate = Math.max(tokenDelta, charDelta) / elapsed
   return {
+    generation: track.generation,
     seq: run.seq,
     tokens: Math.max(track.tokens, run.tokens),
     chars: Math.max(track.chars, run.tail.length),

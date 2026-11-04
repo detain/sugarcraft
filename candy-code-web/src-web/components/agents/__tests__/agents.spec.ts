@@ -180,6 +180,7 @@ describe('AgentsPanel stall badges (CWP-03)', () => {
     wire.event('s1', 'subagent.progress', { id: 'a1', op: 'progress', seq: 2, tail: 'thinking hard', tokens: 3000 }, false)
     await flushPromises()
     expect(wrapper.find('[data-testid="agent-stall"]').exists()).toBe(false)
+    expect(agents.stallTracks['s1/a1']?.slowSeconds).toBe(0)
 
     // Silence again: another minute without a beat badges it once more.
     agents.observeStalls('s1', foldNow(), Date.now() + 61_000)
