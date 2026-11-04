@@ -5940,6 +5940,183 @@
                 ]
             }
         },
+        "token.grant": {
+            "description": "Mint one viewer-token grant; the answer carries the raw token exactly once.",
+            "scope": "admin",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "scopes": {
+                        "type": "array",
+                        "items": {
+                            "enum": [
+                                "read"
+                            ]
+                        },
+                        "description": "v1 read-only allowlist; any other scope is refused."
+                    },
+                    "days": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 365,
+                        "description": "Grant lifetime in days; absent means 30."
+                    },
+                    "sessionIds": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/$defs/SessionId"
+                        },
+                        "description": "Pin the grant to these sessions; absent means unpinned."
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "label",
+                    "scopes"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "token": {
+                        "type": "string",
+                        "description": "The full cv1_ token — presented ONCE at mint, never again on any surface."
+                    },
+                    "label": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "scopes": {
+                        "type": "array",
+                        "items": {
+                            "enum": [
+                                "read"
+                            ]
+                        }
+                    },
+                    "createdAt": {
+                        "type": "string"
+                    },
+                    "expiresAt": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "token",
+                    "label",
+                    "scopes",
+                    "createdAt",
+                    "expiresAt"
+                ]
+            }
+        },
+        "token.list": {
+            "description": "List the viewer-token grants in force — never the hashes, never a token.",
+            "scope": "admin",
+            "idempotent": false,
+            "params": {
+                "type": "object"
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "tokens": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string"
+                                },
+                                "label": {
+                                    "type": "string",
+                                    "maxLength": 64
+                                },
+                                "scopes": {
+                                    "type": "array",
+                                    "items": {
+                                        "enum": [
+                                            "read"
+                                        ]
+                                    }
+                                },
+                                "sessionIds": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/$defs/SessionId"
+                                    }
+                                },
+                                "createdAt": {
+                                    "type": "string"
+                                },
+                                "expiresAt": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "label",
+                                "scopes",
+                                "createdAt",
+                                "expiresAt"
+                            ],
+                            "description": "The hash and the token are NEVER present on this surface."
+                        }
+                    }
+                },
+                "required": [
+                    "tokens"
+                ]
+            }
+        },
+        "token.revoke": {
+            "description": "Revoke one viewer-token grant by id; unknown and already-revoked answer alike.",
+            "scope": "admin",
+            "idempotent": true,
+            "params": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "idempotencyKey": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "A retry with the same key gets the original answer (5 min)."
+                    }
+                },
+                "required": [
+                    "id"
+                ]
+            },
+            "result": {
+                "type": "object",
+                "properties": {
+                    "revoked": {
+                        "enum": [
+                            true
+                        ]
+                    }
+                },
+                "required": [
+                    "revoked"
+                ],
+                "description": "Unknown or already-revoked ids answer through the existing uniform error shape — no existence oracle."
+            }
+        },
         "tool.output": {
             "description": "A finished tool call's full output, from an offset.",
             "scope": "read",

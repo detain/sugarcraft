@@ -17,6 +17,7 @@ use SugarCraft\Code\Protocol\ServerContext;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\LoginCodes;
 use SugarCraft\Code\Server\Auth\TokenStore;
+use SugarCraft\Code\Server\Auth\ViewerTokens;
 use SugarCraft\Code\Server\DiscoveryFile;
 use SugarCraft\Code\Server\Http\CanvasLinks;
 use SugarCraft\Code\Server\Http\CanvasPageController;
@@ -385,12 +386,21 @@ final class Serve
         };
         $loop = Loop::get();
 
+        // One AuthContext (and with it one ViewerTokens instance) serves both
+        // the HTTP auth path below and the token.* protocol handlers — the
+        // dispatcher threads it onto its workspace as a service, so a revoke
+        // made over the wire and a rotation made at the cookie layer act on
+        // the same rows. The construction is hoisted here because the
+        // workspace is built before the server; its failure would land in the
+        // catch below as a workspace refusal, which is honest enough.
+        $auth = AuthContext::new($tokens);
+
         // The protocol's sessions are built HERE, in the process that serves
         // them — after a --detach fork, never before it: the workspace holds
         // the session database and the forked turns' notice inbox, neither of
         // which may be shared with the process that returns to the shell.
         try {
-            $protocol = self::protocol($config, $loop, $log);
+            $protocol = self::protocol($config, $loop, $log, $auth);
         } catch (\Throwable $e) {
             $state->releaseLock();
             $reason = Lang::t('cli.serve.workspace_unavailable', ['error' => $e->getMessage()]);
@@ -521,7 +531,7 @@ final class Serve
                 return $events->summary($session);
             },
         );
-        $server = Server::new($config, AuthContext::new($tokens), $static, $gateway, $loop, $log, null, null, $share(...), $canvas(...), $hooks);
+        $server = Server::new($config, $auth, $static, $gateway, $loop, $log, null, null, $share(...), $canvas(...), $hooks);
 
         try {
             $server->start();
@@ -656,9 +666,16 @@ final class Serve
      * `server.maxOpenSessions`, and the {@see Dispatcher} the WebSocket
      * transport hands its messages to.
      */
-    private static function protocol(ServerConfig $config, LoopInterface $loop, ?\Closure $log = null): Dispatcher
+    private static function protocol(ServerConfig $config, LoopInterface $loop, ?\Closure $log = null, ?AuthContext $auth = null): Dispatcher
     {
         $workspace = Bootstrap::workspace($config->root);
+        // G4-G addendum: the token.* handlers reach the store through the
+        // workspace locator (ServerContext carries no auth accessor). Hosts
+        // without an AuthContext answer tokens_unavailable, never a half-
+        // governed grant surface.
+        if ($auth !== null) {
+            $workspace = $workspace->withService(ViewerTokens::class, $auth->viewerTokens);
+        }
         $hub = SessionHub::new($workspace, $config->maxOpenSessions, \SugarCraft\Code\Context\CompactorConfig::fromSettings(Bootstrap::readUserConfig()));
 
         // ISS-057: the dispatcher's -32099 arms hide their cause from the

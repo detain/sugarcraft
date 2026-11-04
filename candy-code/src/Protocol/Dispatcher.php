@@ -23,6 +23,7 @@ use SugarCraft\Code\Protocol\Methods\SessionMethods;
 use SugarCraft\Code\Protocol\Methods\SettingsMethods;
 use SugarCraft\Code\Protocol\Methods\ShellsMethods;
 use SugarCraft\Code\Protocol\Methods\TodoMethods;
+use SugarCraft\Code\Protocol\Methods\TokenMethods;
 use SugarCraft\Code\Protocol\Methods\WorkflowMethods;
 use SugarCraft\Code\Protocol\Methods\WorkspaceMethods;
 use SugarCraft\Code\Protocol\Methods\MediaMethods;
@@ -150,6 +151,7 @@ final class Dispatcher implements MessageHandler
         McpMethods::register($registry);
         SettingsMethods::register($registry);
         MemoryMethods::register($registry);
+        TokenMethods::register($registry);
         ContextMethods::register($registry);
         AgentsMethods::register($registry);
         BgMethods::register($registry);

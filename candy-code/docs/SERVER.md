@@ -570,6 +570,9 @@ it and the two tables below are generated from the code
 | `shells.output` | read |  | `sessionId`, `shellId` | One windowed read of a background shell's output from a cursor. |
 | `shells.stop` | write | yes | `sessionId`, `shellId` | Stop a background shell through the launch's kill ladder; a settled or foreign id is a no-op answer. |
 | `todo.get` | read |  | `sessionId` | A session's todo list, as its Todo tool last wrote it. |
+| `token.grant` | admin | yes | `label`, `scopes` | Mint one viewer-token grant; the answer carries the raw token exactly once. |
+| `token.list` | admin |  | — | List the viewer-token grants in force — never the hashes, never a token. |
+| `token.revoke` | admin | yes | `id` | Revoke one viewer-token grant by id; unknown and already-revoked answer alike. |
 | `tool.output` | read |  | `sessionId`, `toolCallId` | A finished tool call's full output, from an offset. |
 | `tools.client.register` | write | yes | `sessionId`, `tools` | Announce client-hosted tools for this connection; an empty list withdraws them. |
 | `tools.client.result` | write | yes | `sessionId`, `callId`, `registrationId`, `content` | Answer one tool.client.call with the client's result. |

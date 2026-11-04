@@ -529,6 +529,42 @@ final class MethodSchemas
                 ], ['restored']),
             ],
 
+            'token.grant' => [
+                Schema::object([
+                    'label' => Schema::string(64),
+                    'scopes' => Schema::arrayOf(Schema::enum(['read']))->describe('v1 read-only allowlist; any other scope is refused.'),
+                    'days' => Schema::integer(1, 365)->describe('Grant lifetime in days; absent means 30.'),
+                    'sessionIds' => Schema::arrayOf(Schema::ref(D::SESSION_ID))->describe('Pin the grant to these sessions; absent means unpinned.'),
+                ], ['label', 'scopes']),
+                Schema::object([
+                    'id' => Schema::string(),
+                    'token' => Schema::string()->describe('The full cv1_ token — presented ONCE at mint, never again on any surface.'),
+                    'label' => Schema::string(64),
+                    'scopes' => Schema::arrayOf(Schema::enum(['read'])),
+                    'createdAt' => Schema::string(),
+                    'expiresAt' => Schema::string(),
+                ], ['id', 'token', 'label', 'scopes', 'createdAt', 'expiresAt']),
+            ],
+
+            'token.list' => [
+                $empty,
+                Schema::object([
+                    'tokens' => Schema::arrayOf(Schema::object([
+                        'id' => Schema::string(),
+                        'label' => Schema::string(64),
+                        'scopes' => Schema::arrayOf(Schema::enum(['read'])),
+                        'sessionIds' => Schema::arrayOf(Schema::ref(D::SESSION_ID)),
+                        'createdAt' => Schema::string(),
+                        'expiresAt' => Schema::string(),
+                    ], ['id', 'label', 'scopes', 'createdAt', 'expiresAt'])->describe('The hash and the token are NEVER present on this surface.')),
+                ], ['tokens']),
+            ],
+
+            'token.revoke' => [
+                Schema::object(['id' => Schema::string()], ['id']),
+                Schema::object(['revoked' => Schema::enum([true])], ['revoked'])->describe('Unknown or already-revoked ids answer through the existing uniform error shape — no existence oracle.'),
+            ],
+
             'context.sources' => [
                 $sessionOnly,
                 Schema::ref(D::CONTEXT_SOURCES),

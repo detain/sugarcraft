@@ -1661,6 +1661,54 @@ export interface Methods {
       })[]
     }
   }
+  /** Mint one viewer-token grant; the answer carries the raw token exactly once. */
+  "token.grant": {
+    params: {
+      label: string
+      /** v1 read-only allowlist; any other scope is refused. */
+      scopes: "read"[]
+      /** Grant lifetime in days; absent means 30. */
+      days?: number
+      /** Pin the grant to these sessions; absent means unpinned. */
+      sessionIds?: SessionId[]
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      id: string
+      /** The full cv1_ token — presented ONCE at mint, never again on any surface. */
+      token: string
+      label: string
+      scopes: "read"[]
+      createdAt: string
+      expiresAt: string
+    }
+  }
+  /** List the viewer-token grants in force — never the hashes, never a token. */
+  "token.list": {
+    params: Record<string, unknown>
+    result: {
+      tokens: {
+        id: string
+        label: string
+        scopes: "read"[]
+        sessionIds?: SessionId[]
+        createdAt: string
+        expiresAt: string
+      }[]
+    }
+  }
+  /** Revoke one viewer-token grant by id; unknown and already-revoked answer alike. */
+  "token.revoke": {
+    params: {
+      id: string
+      /** A retry with the same key gets the original answer (5 min). */
+      idempotencyKey?: string
+    }
+    result: {
+      revoked: true
+    }
+  }
   /** A finished tool call's full output, from an offset. */
   "tool.output": {
     params: {
@@ -1967,6 +2015,9 @@ export const METHOD_SCOPES: { readonly [M in MethodName]: Scope } = {
   "shells.output": "read",
   "shells.stop": "write",
   "todo.get": "read",
+  "token.grant": "admin",
+  "token.list": "admin",
+  "token.revoke": "admin",
   "tool.output": "read",
   "tools.client.register": "write",
   "tools.client.result": "write",
@@ -2019,6 +2070,8 @@ export const IDEMPOTENT_METHODS: readonly MethodName[] = [
   "settings.set",
   "shells.input",
   "shells.stop",
+  "token.grant",
+  "token.revoke",
   "tools.client.register",
   "tools.client.result",
   "workflow.pause",

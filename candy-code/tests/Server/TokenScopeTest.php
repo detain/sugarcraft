@@ -15,6 +15,7 @@ use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\MethodRegistry;
 use SugarCraft\Code\Protocol\MethodSpec;
 use SugarCraft\Code\Protocol\Methods\ServerMethods;
+use SugarCraft\Code\Protocol\Methods\TokenMethods;
 use SugarCraft\Code\Protocol\Params;
 use SugarCraft\Code\Protocol\Scope;
 use SugarCraft\Code\Server\Auth\AuthContext;
@@ -61,6 +62,17 @@ final class TokenScopeTest extends TestCase
 
     private int $noteCount = 0;
 
+    /**
+     * The G4-G-ADDENDUM harness: a store-backed dispatcher for the wired
+     * token.* handlers (mirrors how Serve::protocol() threads one shared
+     * AuthContext's store onto the protocol workspace).
+     */
+    private ?ProtocolFixture $tokenFixture = null;
+
+    private ?Dispatcher $tokenDispatcher = null;
+
+    private ?ViewerTokens $tokenStore = null;
+
     protected function setUp(): void
     {
         $this->now = 1_700_000_000.0;
@@ -75,6 +87,16 @@ final class TokenScopeTest extends TestCase
         if ($this->myDispatcher !== null) {
             $this->myDispatcher->stop('over');
             $this->myDispatcher = null;
+        }
+
+        if ($this->tokenDispatcher !== null) {
+            $this->tokenDispatcher->stop('over');
+            $this->tokenDispatcher = null;
+        }
+
+        if ($this->tokenFixture !== null) {
+            $this->tokenFixture->tearDown();
+            $this->tokenFixture = null;
         }
 
         if ($this->wireFixture !== null) {
@@ -784,10 +806,225 @@ final class TokenScopeTest extends TestCase
         self::assertArrayNotHasKey('result', $send, 'a read-only grant must never reach a write-scope method');
         self::assertSame(ErrorCode::Forbidden->value, $send['error']['code'] ?? null);
 
-        // token.list will be Admin once G4-E registers it; today it simply
-        // does not exist, and an unknown method is refused before any scope
-        // work — either refusal shape keeps the viewer out.
+        // Against the notes registry — which does not mount token.* at all —
+        // an unknown method is refused before any scope work.
         $unknown = $viewer->request('token.list', []);
         self::assertArrayNotHasKey('result', $unknown);
+
+        // On a dispatcher that DOES mount the addendum handlers, token.list is
+        // a registered Admin surface: the read-only grant is now refused by
+        // the scope wall itself, before any handler or store work happens.
+        $wall = WireClient::open($this->tokenDispatcher(), 'c-scope-wall', 'viewer', ['read'], 'tok-scope-wall');
+        $wall->hello();
+        $refused = $wall->request('token.list', []);
+        self::assertArrayNotHasKey('result', $refused, 'the scope wall refuses the registered Admin surface');
+        self::assertSame(ErrorCode::Forbidden->value, $refused['error']['code'] ?? null);
+        self::assertSame(0, $this->tokenStore?->count(), 'the refused probe minted nothing');
+    }
+
+    /**
+     * A store-backed dispatcher carrying the real token.* handlers, mirroring
+     * how Serve::protocol() threads one AuthContext's ViewerTokens onto the
+     * workspace the handlers look it up from. The store shares $this->dir,
+     * which tearDown() already sweeps.
+     */
+    private function tokenDispatcher(): Dispatcher
+    {
+        if ($this->tokenDispatcher !== null) {
+            return $this->tokenDispatcher;
+        }
+
+        $this->tokenStore = $this->store($this->tokens());
+        $this->tokenFixture = ProtocolFixture::new(viewerTokens: $this->tokenStore);
+
+        $registry = MethodRegistry::new();
+        ServerMethods::register($registry);
+        TokenMethods::register($registry);
+
+        return $this->tokenDispatcher = Dispatcher::new($this->tokenFixture->context, $registry);
+    }
+
+    public function testTheOwnerMintsAViewerTokenExactlyOnceOverTheWire(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-mint');
+        $owner->hello();
+
+        $mint = $this->unwrapResult($owner, 'token.grant', ['label' => 'phone watch', 'scopes' => ['read']]);
+
+        self::assertStringStartsWith(ViewerTokens::PREFIX, (string) $mint['token']);
+        self::assertSame(44, strlen((string) $mint['token']), 'cv1_ plus forty hex digits, presented once');
+        self::assertMatchesRegularExpression('/^[0-9a-f]{8}$/', (string) $mint['id']);
+        self::assertSame(['read'], $mint['scopes']);
+        self::assertSame('phone watch', $mint['label']);
+        self::assertMatchesRegularExpression('/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$/', (string) $mint['createdAt']);
+        self::assertSame(
+            30 * 86400,
+            strtotime((string) $mint['expiresAt']) - strtotime((string) $mint['createdAt']),
+            'the default lifetime is thirty days, spelled in ISO-8601 on the wire'
+        );
+        self::assertArrayNotHasKey('sessionIds', $mint, 'the mint answer is exactly the X-DESIGN1 surface');
+        self::assertArrayNotHasKey('lastUsedAt', $mint);
+        self::assertNotNull($this->tokenStore?->match((string) $mint['token']), 'the wire mint landed in the shared store');
+    }
+
+    public function testTheListSurfaceNeverSpeaksTheTokenOrHash(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-list');
+        $owner->hello();
+        $mint = $this->unwrapResult($owner, 'token.grant', ['label' => 'quiet', 'scopes' => ['read']]);
+
+        $listed = $this->unwrapResult($owner, 'token.list', []);
+        $encoded = (string) json_encode($listed);
+
+        self::assertStringNotContainsString((string) $mint['token'], $encoded, 'the raw token never rides the list surface');
+        self::assertStringNotContainsString(ViewerTokens::PREFIX, $encoded);
+        self::assertStringNotContainsString('hash', $encoded);
+        self::assertStringNotContainsString('lastUsedAt', $encoded);
+
+        $row = (array) $listed['tokens'][0];
+        self::assertSame($mint['id'], $row['id']);
+        self::assertSame('quiet', $row['label']);
+        self::assertSame(['read'], $row['scopes']);
+        self::assertArrayNotHasKey('sessionIds', $row, 'an unpinned grant omits the key entirely');
+    }
+
+    public function testTheSchemaRejectsScopesOffTheReadAllowlistBeforeTheHandler(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-schema');
+        $owner->hello();
+
+        $reply = $owner->request('token.grant', ['label' => 'wider', 'scopes' => ['write']]);
+
+        self::assertArrayNotHasKey('result', $reply);
+        self::assertSame(ErrorCode::InvalidParams->value, $reply['error']['code'] ?? null, 'the generated schema enum is the first wall');
+        self::assertSame(0, $this->tokenStore?->count());
+    }
+
+    public function testTheHandlerRefusesAnEmptyScopeListWithItsOwnKind(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-empty');
+        $owner->hello();
+
+        $reply = $owner->request('token.grant', ['label' => 'bare', 'scopes' => []]);
+
+        self::assertArrayNotHasKey('result', $reply);
+        self::assertSame(ErrorCode::InvalidParams->value, $reply['error']['code'] ?? null);
+        self::assertSame('invalid_scopes', $reply['error']['data']['kind'] ?? null);
+        self::assertSame('at least one scope is required', $reply['error']['message'] ?? null);
+        self::assertSame(0, $this->tokenStore?->count());
+    }
+
+    public function testTheGrantCapRefusesTheNextMintAsAConflict(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-cap');
+        $owner->hello();
+
+        for ($i = 0; $i < ViewerTokens::MAX_GRANTS; $i++) {
+            $this->unwrapResult($owner, 'token.grant', ['label' => 'cap-' . $i, 'scopes' => ['read']]);
+        }
+
+        $over = $owner->request('token.grant', ['label' => 'one too many', 'scopes' => ['read']]);
+
+        self::assertArrayNotHasKey('result', $over);
+        self::assertSame(ErrorCode::Conflict->value, $over['error']['code'] ?? null);
+        self::assertSame('grant_cap_reached', $over['error']['data']['kind'] ?? null);
+        self::assertStringContainsString('cap', (string) ($over['error']['message'] ?? ''), 'the store message rides through verbatim');
+        self::assertSame(ViewerTokens::MAX_GRANTS, $this->tokenStore?->count());
+    }
+
+    public function testTheListAnswersNewestFirstAndEchoesPinsOnlyWhenSet(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-order');
+        $owner->hello();
+
+        $older = $this->unwrapResult($owner, 'token.grant', ['label' => 'older', 'scopes' => ['read']]);
+        $this->now += 1.0;
+        $newer = $this->unwrapResult($owner, 'token.grant', ['label' => 'newer', 'scopes' => ['read'], 'sessionIds' => ['s-one']]);
+
+        $listed = $this->unwrapResult($owner, 'token.list', []);
+        $rows = (array) $listed['tokens'];
+
+        self::assertCount(2, $rows);
+        self::assertSame($newer['id'], $rows[0]['id'], 'newest first');
+        self::assertSame(['s-one'], $rows[0]['sessionIds']);
+        self::assertSame($older['id'], $rows[1]['id']);
+        self::assertArrayNotHasKey('sessionIds', $rows[1]);
+    }
+
+    public function testTheWireRevokeCutsTheGateInTheSharedStore(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-cut');
+        $owner->hello();
+        $mint = $this->unwrapResult($owner, 'token.grant', ['label' => 'temporary', 'scopes' => ['read']]);
+        self::assertNotNull($this->tokenStore?->match((string) $mint['token']));
+
+        $answer = $this->unwrapResult($owner, 'token.revoke', ['id' => $mint['id']]);
+        self::assertSame(['revoked' => true], $answer);
+
+        self::assertSame(0, $this->tokenStore?->count());
+        self::assertNull($this->tokenStore?->match((string) $mint['token']), 'the wire revoke cuts the same rows the HTTP door reads');
+        self::assertSame([], $this->unwrapResult($owner, 'token.list', [])['tokens']);
+    }
+
+    public function testTheUnknownIdAndTheAlreadyCutIdAnswerIdentically(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-oracle');
+        $owner->hello();
+        $mint = $this->unwrapResult($owner, 'token.grant', ['label' => 'once', 'scopes' => ['read']]);
+        $this->unwrapResult($owner, 'token.revoke', ['id' => $mint['id']]);
+
+        $again = $owner->request('token.revoke', ['id' => $mint['id']]);
+        $never = $owner->request('token.revoke', ['id' => 'ffffffff']);
+
+        self::assertSame(ErrorCode::NotFound->value, $again['error']['code'] ?? null);
+        self::assertSame('token_not_found', $again['error']['data']['kind'] ?? null);
+        self::assertSame(
+            (string) json_encode($again['error'] ?? null),
+            (string) json_encode($never['error'] ?? null),
+            'a second cut and a miss are indistinguishable — no existence oracle'
+        );
+    }
+
+    public function testTheViewerGrantRefusesAllThreeTokenMoves(): void
+    {
+        $viewer = WireClient::open($this->tokenDispatcher(), 'c-governor', 'viewer', ['read'], 'tok-governor');
+        $viewer->hello();
+
+        foreach ([
+            'token.grant' => ['label' => 'self-mint', 'scopes' => ['read']],
+            'token.list' => [],
+            'token.revoke' => ['id' => 'deadbeef'],
+        ] as $method => $params) {
+            $reply = $viewer->request($method, $params);
+            self::assertArrayNotHasKey('result', $reply, $method . ' is Admin-only');
+            self::assertSame(ErrorCode::Forbidden->value, $reply['error']['code'] ?? null, $method);
+            self::assertSame('this needs the admin scope', (string) ($reply['error']['message'] ?? ''), $method);
+        }
+
+        self::assertSame(0, $this->tokenStore?->count(), 'a viewer cannot mint, enumerate, or cut its own gate');
+    }
+
+    public function testTheHandlersRefuseAWorkspaceThatCarriesNoStore(): void
+    {
+        $barren = ProtocolFixture::new();
+        $registry = MethodRegistry::new();
+        ServerMethods::register($registry);
+        TokenMethods::register($registry);
+        $dispatcher = Dispatcher::new($barren->context, $registry);
+
+        try {
+            $owner = WireClient::open($dispatcher, 'c-barren');
+            $owner->hello();
+
+            $reply = $owner->request('token.grant', ['label' => 'nowhere', 'scopes' => ['read']]);
+
+            self::assertArrayNotHasKey('result', $reply);
+            self::assertSame(ErrorCode::UnsupportedInServer->value, $reply['error']['code'] ?? null);
+            self::assertSame('tokens_unavailable', $reply['error']['data']['kind'] ?? null);
+            self::assertSame('this server supervises no viewer token store', $reply['error']['message'] ?? null);
+        } finally {
+            $dispatcher->stop('over');
+            $barren->tearDown();
+        }
     }
 }
