@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // Roadmap GIT-1. The security-shaped sibling of `/review`: same `@diff`
 // mention close and the same "report, do not edit" mandate, but the body
@@ -21,5 +22,6 @@ return BuiltInCommand::new(CommandSpec::new(
     Lang::t('cmd.security-review.description'),
     Lang::t('cmd.category.tools'),
     argumentHint: Lang::t('cmd.security-review.hint'),
+    paletteAction: PaletteAction::RunSecurityReview,
 ))->withHandler('handleSecurityReviewCommand')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\ReviewHostCommand::class);

@@ -6,14 +6,15 @@ use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Commands\Specs\CommandArguments;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // The premium service lane (C-PRV-3.b, sibling of the C-PRV-3.a `serviceTier`
 // setting): bare reads the state of the pair, `on` arms the lane the pair
 // shapes, `off` drops to the standard lane. Parsed args like /effort — the
-// token is one word and the parser has already unquoted it. Deliberately no
-// palette action: like the effort dial, the control belongs to the pair it
-// speaks for, and a palette row that would half the roster into refusals is
-// a trap with a nicer frame.
+// token is one word and the parser has already unquoted it. CC-UXD-04 adopted
+// the row like its effort-dial sibling: bare Enter reads the state of the
+// pair, the refusal gate answers windows that cannot act, and arming the lane
+// still takes the typed word.
 //
 // The TUI handler persists the WORD through the user settings tier; the
 // served command (FastHostCommand) overlays the session backend only — the
@@ -23,5 +24,6 @@ return BuiltInCommand::new(CommandSpec::new(
     Lang::t('cmd.fast.description'),
     Lang::t('cmd.category.model'),
     argumentHint: Lang::t('cmd.fast.hint'),
+    paletteAction: PaletteAction::ShowFast,
 ))->withHandler('handleFastCommand', CommandArguments::Parsed)
     ->withHostCommand(\SugarCraft\Code\Host\Commands\FastHostCommand::class);

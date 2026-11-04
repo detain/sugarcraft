@@ -54,16 +54,15 @@ enum PaletteAction: string
     // ({@see CommandRegistry::paletteEntries()}); their dispatch is generic
     // ({@see \SugarCraft\Code\Chat::dispatchPaletteCommand()}), so no handler
     // name lives on any of them. The case VALUES are wire-stable ids like the
-    // older ones' — none may be renamed, and rows whose bare form only prints
-    // usage stayed slash-only with the judgement recorded in their spec file.
+    // older ones' — none may be renamed.
     // C-EXT-5.b moved the VISIBILITY half of this comment: this enum is no
-    // longer what bounds the palette. Every slash-visible row now reaches the
-    // list — an action row when it names a case like these, a
-    // {@see PaletteCatalog} PREFILL row otherwise, whose Enter fills the
-    // blank draft with '/name ' instead of dispatching. What stays true of
-    // the enum is only that no case may be renamed, and that a row WITHOUT a
-    // case here has no bare-action dispatch anywhere — the prefill is a draft
-    // write, not the command's execution.
+    // longer what bounds the palette. CC-UXD-04 (reviews-1103) restored the
+    // EXECUTION half — what a row shows is what Enter runs: every bare-
+    // meaningful row is an ACTION row dispatching its real verb through the
+    // generic tail, and a row stays a {@see PaletteCatalog} PREFILL only when
+    // its bare form needs an argument — then its '/name <hint>' label IS
+    // exactly the draft Enter leaves behind, never a half-run, never a
+    // dispatching lie.
     case ShowKeys = 'show_keys';
     case ShowHelp = 'show_help';
     case ShowPermissions = 'show_permissions';
@@ -95,6 +94,24 @@ enum PaletteAction: string
     case ShowRenderMode = 'show_render_mode';
     // W4-B: the raw local export, `/export` — dispatched generically.
     case ExportTranscript = 'export_transcript';
+    // CC-UXD-04 (reviews-1103): the fifteen rows that were prefills though
+    // their bare form answers with a real read or action. Each carries its
+    // spec paletteAction line; Enter runs the verb through the generic tail.
+    case ShowEffort = 'show_effort';
+    case ShowFast = 'show_fast';
+    case ShowStatus = 'show_status';
+    case RunDoctor = 'run_doctor';
+    case OutputStyles = 'output_styles';
+    case CopyLastReply = 'copy_last_reply';
+    case ShowUsage = 'show_usage';
+    case ShowInsights = 'show_insights';
+    case ShowInstructions = 'show_instructions';
+    case RunReview = 'run_review';
+    case RunSecurityReview = 'run_security_review';
+    case CreatePullRequest = 'create_pull_request';
+    case ShowShells = 'show_shells';
+    case ShowSchedules = 'show_schedules';
+    case RecapSession = 'recap_session';
 
     /**
      * This action's registry row. Throws rather than returning null: an

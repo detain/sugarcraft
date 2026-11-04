@@ -57,13 +57,12 @@ final class PaletteClickTest extends TestCase
      * seam in the lane's REPORT.md.
      */
     private const WIDE_UNCLICKABLE_ROWS = [
-        // §7 closeout: the shells surface (C-TOOL-6.l) added the fifth wide
-        // label first in census order; same judgement as the four below —
-        // the argument-hint half of the PaletteCatalog label is longer than
-        // the box interior, so the row paints clipped and owns no click
-        // zone. Keyboard half only.
-        '/shells [list|output <id> [cursor]|send <id> <keys…>|stop <id>]',
-        '/schedules [list|add <name> <interval> <prompt>|enable|disable|delete <name>]',
+        // CC-UXD-04: the shells and schedules labels left this roster with
+        // their prefill rows — both are action rows now, labels short enough
+        // to own a click zone. What remains is judged as before: the
+        // argument-hint half of the PaletteCatalog label is longer than the
+        // box interior, so the row paints clipped and owns no click zone.
+        // Keyboard half only.
         '/websearch <query> [--safesearch 0|1|2] [--time-range day|month|year]',
         '/generate <prompt> [--steps N] [--size WxH] [--seed N] [--save]',
         '/sendto <file.png> [--to img2img|inpaint] [--mask FILE]',

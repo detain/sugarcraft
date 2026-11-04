@@ -32,13 +32,13 @@ use SugarCraft\Core\Msg\KeyMsg;
  * lists, shell overlays and specific sub-command texts. The staleness arm keeps
  * it from accreting rows the generic tail could have carried.
  *
- * C-EXT-5.b widened the palette from "superset by judgement" to full superset:
- * the survivor roster below now lists rows that carry no PALETTE ACTION, not
- * rows absent from the palette — every slash-visible command reaches the root
- * list, survivors as `/<name>` PREFILL rows that fill a blank draft instead of
- * dispatching. {@see testTheRootPaletteListsEverySlashVisibleRow()} is the
- * coverage arm that proves it; the survivor census above stays honest next to
- * it because the census measures the action half, which is unchanged.
+ * C-EXT-5.b widened the palette from "superset by judgement" to full superset.
+ * CC-UXD-04 (reviews-1103) then closed the loop: every row whose bare form
+ * answers with a real read or action is an ACTION row now — the survivor
+ * roster below is exactly the set whose bare form needs an argument, and each
+ * still reaches the palette as a `/<name> [hint]` PREFILL row whose label IS
+ * the draft Enter leaves. {@see testTheRootPaletteListsEverySlashVisibleRow()}
+ * stays the coverage arm; the census below measures the roster itself.
  */
 final class PaletteSupersetDispatchTest extends TestCase
 {
@@ -59,101 +59,28 @@ final class PaletteSupersetDispatchTest extends TestCase
     ];
 
     /**
-     * Rows VIS-4 judged to stay WITHOUT a palette action, name => the measured
-     * reason. Since C-EXT-5.b every one of them still reaches the palette as a
-     * `/<name>` prefill row (coverage is the test below); what this roster
-     * pins is the absence of an ACTION. The roster test below is
-     * bidirectional: an unjudged promotion reddens it, and so does a survivor
-     * quietly gaining a PaletteAction elsewhere.
+     * Rows whose bare form only prints usage — the CC-UXD-04 residue of the
+     * VIS-4 judgement, name => the measured reason. Every other slash-visible
+     * row is an action row now; these still reach the palette as `/<name>`
+     * prefill rows whose label is exactly the draft (coverage is the test
+     * below). The roster test is bidirectional: an unjudged promotion reddens
+     * it, and so does a survivor quietly gaining a PaletteAction elsewhere.
      */
     private const SLASH_ONLY_SURVIVORS = [
-        // PRV-2 (w5b): /effort stays a typed command by the judgement recorded
-        // in its spec file - a palette row carries no argument, and half the
-        // providers refuse the tier, so the picker would be a trap with a
-        // nicer frame.
-        'effort' => 'the dial takes a tier as its argument; the bare form reads, never sets',
-        // C-PRV-3.b: /fast is the /effort sibling — the bare form reads the
-        // lane, `on|off` IS the argument, and a provider or model without a
-        // premium lane answers for itself. Same judgement as effort's spec
-        // records: a picker row for a dial that can refuse this model would
-        // be a trap with a nicer frame.
-        'fast' => 'bare /fast reads the lane; on|off takes the argument — /effort sibling judgement',
-        // OBS-2 (w5): the spec file records its own no-paletteAction call —
-        // /status is a destination, not a mode, and the palette has no status
-        // pane to pre-open. Bare form IS the whole read-only restatement.
-        'status' => 'bare /status is the whole read surface; no palette pane exists to open',
-        // C-TUI-5.a: 1345-doctor.php, deliberately without a paletteAction for
-        // the same reason /status is. The install roster has no second shape to
-        // switch into — `/doctor` and a palette row would be the same table.
-        'doctor' => 'bare /doctor prints the whole install roster; no palette pane exists to open',
-        // C-CTX-4.e (weld-18q): the spec file (builtin-commands/1405-output-style.php)
-        // records its own no-paletteAction judgement — a style switch names a
-        // file, which is a typed act, on the 0350-effort.php precedent this row
-        // sits beside in registry order. The judgement landed at that weld
-        // without this roster row, reddening the census; the row is the cure the
-        // spec file's own recorded reason calls for (W29 wave-review finding 2),
-        // NOT a minted PaletteAction — this lib's enum is not in that step's
-        // declared files and the bare form already reaches the palette as its
-        // `/<name>` prefill row under C-EXT-5.b (coverage arm below).
-        'output-style' => 'bare /output-style lists the styles; selecting one names a file — the /effort sibling judgement',
+        // CC-UXD-04 (reviews-1103): the fifteen rows whose bare form answers
+        // with a real read or action (effort, fast, status, doctor,
+        // output-style, copy, usage, insights, instructions, review,
+        // security-review, pr, shells, schedules, recap) LEFT this roster —
+        // each carries a PaletteAction case now and Enter runs the verb
+        // through the generic tail. What survives here is exactly the set
+        // whose bare form only prints usage.
         'pane' => 'bare /pane prints usage; the palette actions are the dock-left/dock-right rows',
-        // C-TUI-3.a: the spec file (builtin-commands/1910-copy.php) records
-        // its own no-paletteAction judgement — a picker row could not carry
-        // the [n] block number, and the copy target is the terminal the verb
-        // was typed in, which a serve palette does not own.
-        'copy' => 'bare /copy takes no argument the palette could supply; the [n] verb needs typing',
-        // OBS-3 (w5): same shape as /status by its spec's own judgement — a
-        // typed readout of the durable ledger, not a panel the palette can
-        // pre-open; the cross-launch /budget pairing rides the argument hint.
-        'usage' => 'bare /usage is the whole ledger readout; no palette pane exists to open',
-        // C-SES-8.d: /insights (2215 spec) carries the same judgement its own
-        // spec file records — the report is a typed readout of the durable
-        // store (plus a file on the export shelf), not a panel to pre-open.
-        'insights' => 'bare /insights is the whole report readout; no palette pane exists to open',
-        // C-CTX-3.a: /instructions (2405 spec) landed after VIS-4 cut this
-        // census and no PaletteAction arm was minted for it; the bare form is
-        // the list read, `open <n|path>` needs an argument. Since C-EXT-5.b
-        // it reaches the palette as its prefill row.
-        'instructions' => 'bare /instructions is the whole list read; the open verb needs a file argument',
-        // W4 merge coupling: GIT-1 (w4c) added /review and /security-review
-        // after VIS-4 cut this census — no PaletteAction arm yet (VIS-4
-        // predates GIT-1), typed dispatch only. A palette row for the pair is
-        // a W5-micro judgement, not a silent promotion here.
-        'review' => 'needs a diff range; the bare form only answers with usage',
-        'security-review' => 'needs a diff range; the bare form only answers with usage',
-        // C-AGT-6.a (w16): /commit landed after VIS-4 cut this census; the
-        // spec file (builtin-commands/2850-commit.php) records its own
-        // judgement — a palette row would tempt an unintended whole-tree
-        // commit, and no PaletteAction arm was minted. Census order follows
-        // the registry, so this row sits on its 2850 spec position, before
-        // pr's 2860.
         'commit' => 'honestly a write; the typed command IS the intent — no PaletteAction arm was minted',
-        // C-AGT-6.d (w15): /pr landed after VIS-4 cut this census; the spec
-        // file (builtin-commands/2860-pr.php) records its own judgement —
-        // the push and the PR post run as gated writes inside the turn
-        // through the Bash tool — and no PaletteAction arm was minted.
-        // Typed dispatch only; a palette row is a per-row judgement, not a
-        // silent promotion here.
-        'pr' => 'honestly a write; the typed command IS the intent — no PaletteAction arm was minted',
         'bg' => 'bare /bg answers usage rather than backgrounding something unintended',
-        // C-TOOL-3.d: bare /shells IS the read-only list (registry order puts
-        // its 2905 spec ahead of schedules' 2910); the output/stop verbs need
-        // a shell id, and the palette has no shell pane to pre-open.
-        'shells' => 'bare /shells is the whole list surface; the argument verbs need a shell id',
-        // AUT-1 (w5c), welded judgement: /schedules' bare form IS the
-        // read-only list — a palette row that only prints a table has nothing
-        // to pick; /loop needs its interval and prompt, the bare form answers
-        // usage.
-        'schedules' => 'bare /schedules is the whole read surface; no picker target exists',
         'loop' => 'needs an interval and a prompt; the bare form only answers with usage',
         'fork' => 'needs a prompt to run against the clone',
         'websearch' => 'needs a query; the bare form only answers with usage',
         'btw' => 'needs a question for the title model',
-        // C-TOOL-4.f family (away-recap wave): /recap rides RecapHostCommand —
-        // the bare form prints the away-window summary as a transcript readout
-        // (README's slash roster carries it); no pane exists for the palette
-        // to pre-open and no PaletteAction arm was minted.
-        'recap' => 'bare /recap is the whole away-window readout; no palette pane exists to open',
         'generate' => 'needs a prompt; the palette twin is the generate-form row',
         'sendto' => 'needs a PNG path to import',
         'play' => 'needs a video artifact to open',

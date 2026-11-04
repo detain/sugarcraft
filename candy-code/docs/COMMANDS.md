@@ -446,13 +446,16 @@ handler its palette arm already ran, so the typed spelling opens the same door
 with the same confirmation.
 The Ctrl+P palette and the draft box are two different surfaces over one
 registry, and a palette row may be a fuller sentence than a slash spelling.
-Since this release the palette lists EVERY slash-visible command: rows with a
-palette action dispatch as before, and every other row is a prefill row —
-running it closes the palette and fills a blank draft with `/<name> `, caret
-at the end, while a draft that already holds text is KEPT and the row answers
-with a one-line notice instead (the draft-preservation law). Prefilling is
-allowed mid-turn, because filling a draft is not running the command — the
-typed spelling still has to be submitted.
+Since this release the palette lists EVERY slash-visible command, and CC-UXD-04
+(reviews-1103) made every row run the real verb: a row whose bare `/<name>` form
+means something is an ACTION row — Enter on it dispatches exactly what the typed
+spelling dispatches, what the row shows is what happens. A row is a PREFILL only
+when its bare form needs an argument; running it closes the palette and fills a
+blank draft with `/<name> `, caret at the end, and its `/name [hint]` label IS
+that draft — never a half-run. A draft that already holds text is KEPT and the
+row answers with a one-line notice instead (the draft-preservation law).
+Prefilling stays allowed mid-turn, because filling a draft is not running the
+command — the typed spelling still has to be submitted.
 
 `/new` is the one row that is both: typed, it opens the folder picker
 (`Chat::handleNewCommand()`; `/new <dir>` chooses straight away), while its

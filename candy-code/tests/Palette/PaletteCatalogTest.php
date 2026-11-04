@@ -43,22 +43,94 @@ final class PaletteCatalogTest extends TestCase
     public function testSurvivorBuiltInGetsPrefillRow(): void
     {
         $specs = CommandRegistry::slashCommands();
-        $status = null;
+        $commit = null;
         foreach ($specs as $spec) {
-            if ($spec->name === 'status') {
-                $status = $spec;
+            if ($spec->name === 'commit') {
+                $commit = $spec;
             }
         }
-        self::assertInstanceOf(CommandSpec::class, $status, 'status is a slash-only survivor');
-        self::assertNull($status->paletteAction, 'status has no palette action to ride');
+        self::assertInstanceOf(CommandSpec::class, $commit, 'commit is a slash-only survivor');
+        self::assertNull($commit->paletteAction, 'commit has no palette action to ride');
 
-        $entry = self::prefillByName(PaletteCatalog::rows($specs), 'status');
+        $entry = self::prefillByName(PaletteCatalog::rows($specs), 'commit');
         self::assertInstanceOf(PaletteEntry::class, $entry);
         self::assertSame(PaletteEntryKind::Prefill, $entry->kind);
-        self::assertStringStartsWith('/status', $entry->label);
+        self::assertStringStartsWith('/commit', $entry->label);
         self::assertNull($entry->badge, 'a built-in survivor carries no tier badge');
-        self::assertSame($status->category, $entry->category);
-        self::assertSame($status->shortcut, $entry->shortcut);
+        self::assertSame($commit->category, $entry->category);
+        self::assertSame($commit->shortcut, $entry->shortcut);
+    }
+
+    /**
+     * CC-UXD-04 (reviews-1103): every row whose bare form MEANS something is an
+     * ACTION row — Enter runs the real verb through the generic tail, exactly as
+     * typing the spelling does. The fifteen rows this finding names (the dial
+     * readers, the reports, the lists, the turn openers) each carry their spec's
+     * `paletteAction:` now; their labels come from the registry row (CC-UXD-04
+     * asks for no new lang keys — `derivedMenuLabel` shapes them).
+     */
+    public function testBareMeaningfulRowsAreActionRows(): void
+    {
+        $promoted = ['effort', 'fast', 'status', 'doctor', 'output-style', 'copy', 'usage',
+            'insights', 'review', 'security-review', 'pr', 'shells', 'schedules', 'recap'];
+        $rows = PaletteCatalog::rows(CommandRegistry::slashCommands());
+
+        foreach ($promoted as $name) {
+            $spec = null;
+            foreach (CommandRegistry::slashCommands() as $candidate) {
+                if ($candidate->name === $name) {
+                    $spec = $candidate;
+                }
+            }
+            self::assertNotNull($spec, '/' . $name . ' is slash-visible');
+            self::assertNotNull(
+                $spec->paletteAction,
+                'CC-UXD-04: /' . $name . ' answers bare — its palette row must name the '
+                . 'PaletteAction that dispatches it, not prefill a draft that runs nothing',
+            );
+
+            $found = null;
+            foreach ($rows as $entry) {
+                if ($entry->kind === PaletteEntryKind::Action && $entry->label === $spec->label()) {
+                    $found = $entry;
+                }
+            }
+            self::assertNotNull(
+                $found,
+                'the palette lists /' . $name . ' as an action row labelled ' . $spec->label(),
+            );
+            self::assertSame(
+                $spec->category,
+                $found->category,
+                'the action row groups under the spec category',
+            );
+        }
+    }
+
+    /**
+     * CC-UXD-04's other half: prefill rows survive ONLY where the bare spelling
+     * needs an argument to mean anything — there the '/name <hint>' label IS
+     * exactly what Enter drafts, so display and effect agree. Anything else
+     * staying a prefill re-introduces the dead row the finding names.
+     */
+    public function testPrefillRowsAreExactlyTheArgumentBearers(): void
+    {
+        $expected = ['bg', 'btw', 'commit', 'fork', 'generate', 'loop', 'pane', 'play', 'sendto', 'websearch'];
+        $names = [];
+        foreach (PaletteCatalog::rows(CommandRegistry::slashCommands()) as $entry) {
+            if ($entry->kind === PaletteEntryKind::Prefill) {
+                $names[] = $entry->commandName;
+            }
+        }
+        sort($names);
+
+        self::assertSame(
+            $expected,
+            $names,
+            'CC-UXD-04: the prefill surface is exactly the rows whose bare form only '
+            . 'answers with usage (a row that runs nothing while looking like one '
+            . 'that runs something is the defect this pin refuses)',
+        );
     }
 
     public function testSpecCarryingPaletteActionIsNotPrefilled(): void

@@ -88,7 +88,7 @@ final class PalettePrefillRowsTest extends TestCase
             self::assertSame($label, $next->paletteMru()[0], 'running a prefill row records it in the MRU');
         }
 
-        self::assertGreaterThanOrEqual(15, $walked, 'fixture: the survivor set must be a real walk, not a vacuous loop');
+        self::assertGreaterThanOrEqual(10, $walked, 'CC-UXD-04: the survivor set (rows whose bare form needs an argument) must be a real walk, not a vacuous loop');
     }
 
     public function testAFileCommandAndAnMcpPromptBothArriveAsPrefillRows(): void
@@ -124,7 +124,7 @@ final class PalettePrefillRowsTest extends TestCase
     {
         $chat = $this->prefillFixture(draft: 'long running task');
 
-        [$next, $cmd] = $chat->runPaletteAction('/status');
+        [$next, $cmd] = $chat->runPaletteAction('/commit <message>');
 
         self::assertNull($cmd);
         self::assertSame('long running task', $next->inputBuf, 'the draft-preservation law: a filled box is never overwritten');
@@ -133,7 +133,7 @@ final class PalettePrefillRowsTest extends TestCase
         $notice = $next->history[2];
         self::assertSame('system', $notice->role->value);
         self::assertTrue($notice->uiOnly, 'the notice is for the user, never the model wire');
-        self::assertStringContainsString('/status', $notice->content);
+        self::assertStringContainsString('/commit', $notice->content);
         self::assertStringNotContainsString("\n", $notice->content, 'one line, not a paragraph');
     }
 
@@ -166,8 +166,8 @@ final class PalettePrefillRowsTest extends TestCase
             backend: new EchoBackend(),
             palette: PaletteState::root(),
         );
-        $index = array_search('/status', $chat->paletteMatches(), true);
-        self::assertIsInt($index, 'fixture: /status carries a prefill row');
+        $index = array_search('/commit <message>', $chat->paletteMatches(), true);
+        self::assertIsInt($index, 'fixture: /commit <message> carries a prefill row');
 
         $current = $chat;
         for ($step = 0; $step < $index; $step++) {
@@ -178,7 +178,7 @@ final class PalettePrefillRowsTest extends TestCase
         [$next, $cmd] = $current->update(new KeyMsg(KeyType::Enter, ''));
 
         self::assertNull($cmd, 'Enter on a prefill row dispatches no command');
-        self::assertSame('/status ', $next->inputBuf);
+        self::assertSame('/commit ', $next->inputBuf);
         self::assertNull($next->palette(), 'Enter closed the palette');
         self::assertCount(2, $next->history, 'the blank-draft fill writes no transcript row');
     }

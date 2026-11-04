@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // C-TUI-3.g (GAP-UI-N4): Claude Code's away-recap, made on demand. The
 // automatic arm fires the same host command on a focus regain past the
@@ -18,5 +19,6 @@ return BuiltInCommand::new(CommandSpec::new(
     'recap',
     Lang::t('cmd.recap.description'),
     Lang::t('cmd.category.session'),
+    paletteAction: PaletteAction::RecapSession,
 ))->withHandler('handleRecapCommand')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\RecapHostCommand::class);

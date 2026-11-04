@@ -5,6 +5,7 @@ declare(strict_types=1);
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Palette\PaletteAction;
 
 // Roadmap GIT-1. A canned review prompt rather than a diff generator: the
 // prompt closes on the `@diff` mention (scoped to the revision argument when
@@ -23,5 +24,6 @@ return BuiltInCommand::new(CommandSpec::new(
     Lang::t('cmd.review.description'),
     Lang::t('cmd.category.tools'),
     argumentHint: Lang::t('cmd.review.hint'),
+    paletteAction: PaletteAction::RunReview,
 ))->withHandler('handleReviewCommand')
     ->withHostCommand(\SugarCraft\Code\Host\Commands\ReviewHostCommand::class);
