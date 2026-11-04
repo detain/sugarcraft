@@ -1069,4 +1069,115 @@ final class StatusLineCommandTest extends TestCase
 
         rmdir($dir);
     }
+    /**
+     * THE CAP IS A STOP, NOT A TRIM — the half of the volume policy the shared
+     * walker cannot decide (PHP-m1, G1-L5). The raw drain on a ~2 MB stdout
+     * comes back as exactly {@see StatusLineCommand::MAX_OUTPUT_BYTES} bytes
+     * with NO hook-style stamp, because there is nothing to explain to a
+     * one-row readout, and its second element says KILL, which is what routes
+     * {@see StatusLineCommand::run()} off the read-to-EOF path that used to
+     * freeze the TUI thread. The hook answers the same shape with a marker and
+     * a false — see `ScriptHookJsonStdoutTest::testTheSharedWalkerStillTrimsEachStreamSeparately()`.
+     */
+    public function testTheDrainStopsAtTheCapAndReportsItForTheKillPath(): void
+    {
+        $drain = new \ReflectionMethod(StatusLineCommand::class, 'drain');
+
+        $pipes = [];
+        $proc = proc_open(
+            [PHP_BINARY, '-r', 'for ($i = 0; $i < 260; ++$i) { echo str_repeat("a", 8192); }'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+
+        try {
+            [$readout, $kill] = $drain->invoke(null, $pipes[1], $pipes[2], microtime(true) + 20.0);
+        } finally {
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($proc);
+        }
+
+        self::assertSame(StatusLineCommand::MAX_OUTPUT_BYTES, \strlen($readout));
+        self::assertStringNotContainsString(
+            'capped at',
+            $readout,
+            'the status line truncates in silence — the marker is the hook policy, not this one',
+        );
+        self::assertTrue($kill, 'a capped readout must reach run() as the kill signal, not as a finished read');
+    }
+
+    /**
+     * PHP-m1 (G1-L5): the read-and-discard stream, the mid-line EOF, and the
+     * clean-close flag — the whole-buffer policy's other halves, pinned as
+     * bytes. The child pings 20 KB down stderr (well past nothing, and enough
+     * that a reader which stopped draining slot 1 on cap logic would wedge
+     * the child) while its stdout ends WITHOUT a newline. The readout must be
+     * the stdout bytes alone — no stderr letters, no trailing-EOF trimming —
+     * and the second element must be FALSE: the child exited and closed both
+     * pipes, so the walk ended CLOSED and run() must NOT take the kill path
+     * for a command that simply finished.
+     */
+    public function testStderrIsDiscardedAndAMidLineStdoutEofSurvivesWithNoKillFlag(): void
+    {
+        $drain = new \ReflectionMethod(StatusLineCommand::class, 'drain');
+
+        $source = 'fwrite(STDERR, str_repeat("e", 20000)); fflush(STDERR);'
+            . ' echo "status ok 4 now";';
+        $pipes = [];
+        $proc = proc_open(
+            [PHP_BINARY, '-r', $source],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+
+        try {
+            [$readout, $kill] = $drain->invoke(null, $pipes[1], $pipes[2], microtime(true) + 20.0);
+        } finally {
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($proc);
+        }
+
+        self::assertSame('status ok 4 now', $readout, 'the discard stream leaked into the readout or the mid-line tail was eaten');
+        self::assertStringNotContainsString('e', $readout, 'stderr bytes reached the one-row readout');
+        self::assertFalse($kill, 'a child that closed both pipes finished — the kill flag is the cap and the budget, not this');
+    }
+
+    /**
+     * PHP-m1 (G1-L5): the BUDGET leg — expired clock, empty readout, TRUE
+     * flag. The child writes nothing at all and outlives the 0.1 s budget, so
+     * the walk can only leave through the deadline; what run() receives is
+     * the empty string marked as needing the kill, the same pair the
+     * pre-consolidation loop produced for a wedged command.
+     */
+    public function testAnIdleChildThatOutlivesTheBudgetComesBackEmptyAndMarkedForKill(): void
+    {
+        $drain = new \ReflectionMethod(StatusLineCommand::class, 'drain');
+
+        $pipes = [];
+        $proc = proc_open(
+            [PHP_BINARY, '-r', 'usleep(3_000_000);'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+
+        try {
+            [$readout, $kill] = $drain->invoke(null, $pipes[1], $pipes[2], microtime(true) + 0.1);
+        } finally {
+            proc_terminate($proc);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($proc);
+        }
+
+        self::assertSame('', $readout, 'the deadline exit invented bytes');
+        self::assertTrue($kill, 'an expired budget must reach run() as the kill signal');
+    }
 }
