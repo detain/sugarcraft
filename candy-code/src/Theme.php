@@ -10,6 +10,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tui\TerminalBackground;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Markdown\Theme as MarkdownTheme;
+use SugarCraft\Style\Style;
 use SugarCraft\Style\Theme as StyleTheme;
 
 /**
@@ -375,9 +376,12 @@ final class Theme
         // line from the key moves no test in the suite. It is a line of
         // insurance against #000000-the-slot and #000000-the-value sharing an
         // entry if that fallback ever becomes reachable. The markdown
-        // half needs no key of its own: both call sites pick it in the same
-        // branch that picks the palette, so the palette colours already separate
-        // them. Nothing here reads the clock or the environment, so a hit is
+        // half feeds the projection now (see projectMarkdown below), but it
+        // still needs no key of its own: both call sites pick it in the same
+        // branch that picks the palette, so the palette colours already
+        // separate them, and the projection's other inputs — the chrome
+        // claims, the background, the fill — are all in this key. Nothing here
+        // reads the clock or the environment, so a hit is
         // byte-identical to a miss.
         $key = implode('|', [
             $name,
@@ -408,26 +412,95 @@ final class Theme
         // depend on which token asked first at run time.
         $claimed = [];
 
+        // Evaluation order IS the law here: the chrome tokens claim their
+        // results first, in the historical declaration order of the
+        // constructor arguments below, and the markdown half rides the SAME
+        // `$claimed` map afterwards. Computing the locals before constructing
+        // is what pins that order — inline, `markdown:` is the second
+        // argument, and a projected markdown would get the first claim on
+        // every result instead of the chrome it must not steal.
+        $border = self::project($sprinkles->border, $background, $fill, $lighten, $claimed);
+        $userLabel = self::project($sprinkles->primary, $background, $fill, $lighten, $claimed);
+        $assistantLabel = self::project($sprinkles->secondary, $background, $fill, $lighten, $claimed);
+        $systemLabel = self::project($sprinkles->muted, $background, $fill, $lighten, $claimed);
+        $shellForeground = self::project($sprinkles->foreground, $background, $fill, $lighten, $claimed);
+        $shellMuted = self::project($sprinkles->muted, $background, $fill, $lighten, $claimed);
+        $shellPrimary = self::project($sprinkles->primary, $background, $fill, $lighten, $claimed);
+        $shellSuccess = self::project($sprinkles->success, $background, $fill, $lighten, $claimed);
+        $shellWarning = self::project($sprinkles->warning, $background, $fill, $lighten, $claimed);
+        $shellError = self::project($sprinkles->error, $background, $fill, $lighten, $claimed);
+        $shellInfo = self::project($sprinkles->info, $background, $fill, $lighten, $claimed);
+        $markdown = self::projectMarkdown($markdown, $background, $fill, $lighten, $claimed);
+
         return self::$projected[$key] = new self(
             name: $name,
             markdown: $markdown,
-            border: self::project($sprinkles->border, $background, $fill, $lighten, $claimed),
-            userLabel: self::project($sprinkles->primary, $background, $fill, $lighten, $claimed),
-            assistantLabel: self::project($sprinkles->secondary, $background, $fill, $lighten, $claimed),
-            systemLabel: self::project($sprinkles->muted, $background, $fill, $lighten, $claimed),
-            shellForeground: self::project($sprinkles->foreground, $background, $fill, $lighten, $claimed),
-            shellMuted: self::project($sprinkles->muted, $background, $fill, $lighten, $claimed),
-            shellPrimary: self::project($sprinkles->primary, $background, $fill, $lighten, $claimed),
-            shellSuccess: self::project($sprinkles->success, $background, $fill, $lighten, $claimed),
-            shellWarning: self::project($sprinkles->warning, $background, $fill, $lighten, $claimed),
-            shellError: self::project($sprinkles->error, $background, $fill, $lighten, $claimed),
-            shellInfo: self::project($sprinkles->info, $background, $fill, $lighten, $claimed),
+            border: $border,
+            userLabel: $userLabel,
+            assistantLabel: $assistantLabel,
+            systemLabel: $systemLabel,
+            shellForeground: $shellForeground,
+            shellMuted: $shellMuted,
+            shellPrimary: $shellPrimary,
+            shellSuccess: $shellSuccess,
+            shellWarning: $shellWarning,
+            shellError: $shellError,
+            shellInfo: $shellInfo,
             // A row-highlight FILL, not a glyph colour, so it has no contrast
             // threshold of its own — what has to be legible is whatever is
             // painted on top of it, which is why the contrast suite tracks the
             // active SGR background rather than assuming the terminal's.
             shellSeparator: $fill,
         );
+    }
+
+    /**
+     * Put the sugar-markdown palette through the SAME resolver the chrome
+     * tokens get, slot by slot, sharing the `$claimed` map (the chrome has
+     * already claimed its results; markdown steps on past THOSE too, so a
+     * body colour and a label colour that would collide still cannot).
+     *
+     * This is the closure of the A11Y-1 bypass: assistant answers are the
+     * highest-volume text in the product and they are painted from
+     * `$theme->markdown`, which pair() used to store VERBATIM while every
+     * chrome token beside it was projected — so dracula's body text reached a
+     * white terminal at 1.07:1 despite the repo having a 4.5:1 law. OD-18
+     * ruled the remedy a PROJECTION (nudge the palette's own colours until
+     * they clear the floor), not a theme-resolution swap, precisely so dark
+     * terminals keep seeing the palette they chose: a slot already legible on
+     * its native background comes back as the same object, unmoved.
+     *
+     * Two categories of slot are left byte-identical, and both are measured on
+     * a surface this resolver does not own:
+     *   - no explicit foreground: the slot paints the terminal's default text
+     *     colour against the user's own default background — a pairing this
+     *     app does not choose and must not colour (this is every body slot of
+     *     `ansi`/`dark`, and the whole point of those palettes);
+     *   - carries its own background (`code`/`codeBlock` paint a slab): the
+     *     foreground is seen on THAT slab, not on the terminal, and the slab's
+     *     colours are fixed pairs designed together — nudging the text without
+     *     the slab would break the pair instead of fixing it.
+     */
+    private static function projectMarkdown(
+        MarkdownTheme $markdown,
+        Color $background,
+        Color $fill,
+        bool $lighten,
+        array &$claimed,
+    ): MarkdownTheme {
+        return $markdown->mapStyles(static function (Style $style) use ($background, $fill, $lighten, &$claimed): Style {
+            $foreground = $style->getForeground();
+            if ($foreground === null || $style->getBackground() !== null) {
+                return $style;
+            }
+
+            $projected = self::project($foreground, $background, $fill, $lighten, $claimed);
+
+            // project() yields the preferred colour ITSELF as its first
+            // candidate, so an already-legible slot returns the same object
+            // and the Style is not even rebuilt.
+            return $projected === $foreground ? $style : $style->foreground($projected);
+        });
     }
 
     /**

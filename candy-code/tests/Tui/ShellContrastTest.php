@@ -47,15 +47,17 @@ use SugarCraft\Style\Theme as StyleTheme;
  * OSC 11 reply to one bit), or the fill when a run paints its own. Written that
  * way it covers every file the frame reaches and every theme added later.
  *
- * ONE EXCLUSION, deliberate and measured. The transcript's assistant turns are
- * rendered by SugarMarkdown from `Theme::$markdown` — a {@see \SugarCraft\Markdown\Theme},
- * a second colour system with its own tokens that W3 did not touch — so the
- * history driven here is user/system only. Running the same assertion WITH an
- * assistant turn present fails, and legitimately: on a white terminal
- * `dracula`'s markdown body paints #f8f8f2 (1.07:1) and `tokyoNight`'s #a9b1d6
- * (2.11:1). That is the same class of bug one layer down and it needs
- * sugar-markdown's palette put under the same guard; it is NOT covered here, and
- * saying so beats a test that quietly skips it.
+ * The assistant half is INCLUDED, and that inclusion is the point. The
+ * transcript's assistant turns are rendered by SugarMarkdown from
+ * `Theme::$markdown` — a {@see \SugarCraft\Markdown\Theme}, a second colour
+ * system that for a long time bypassed this guard entirely: on a white
+ * terminal `dracula`'s markdown body painted #f8f8f2 (1.07:1) and
+ * `tokyoNight`'s #a9b1d6 (2.11:1). That bypass is closed — pair() puts the
+ * markdown palette through the SAME resolver — and the assistant turn driven
+ * below is what fails, loudly, if the bypass is ever reintroduced. (Two kinds
+ * of run still step over: text that paints NO foreground, which is the
+ * terminal's own pairing, and a style that carries its OWN background, which
+ * is measured on that surface, not the terminal's.)
  */
 final class ShellContrastTest extends TestCase
 {
@@ -201,7 +203,7 @@ final class ShellContrastTest extends TestCase
                 // per pane, and a focused box is a different token from an
                 // unfocused one.
                 foreach (Pane::cases() as $pane) {
-                    $app = $this->app($themeName, $pane);
+                    $app = $this->app($themeName, $pane, withAssistant: true);
 
                     // Menu 1 open, so the dropdown panel — the reported surface —
                     // is part of the frame being measured.
@@ -509,12 +511,24 @@ final class ShellContrastTest extends TestCase
         return [$fg, $bg];
     }
 
-    private function app(string $themeName, Pane $pane): App
+    /**
+     * A representative assistant answer: the slots sugar-markdown paints with
+     * its OWN foregrounds — heading, paragraph, list marker, link — so the
+     * frame walk measures the markdown palette, not just the chrome one.
+     */
+    private const ASSISTANT_BODY = "# Status\n\nThe deploy **landed**.\n\n- first item\n\nSee the [runbook](https://example.com/runbook).";
+
+    private function app(string $themeName, Pane $pane, bool $withAssistant = false): App
     {
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('name')->willReturn('stub');
 
-        $chat = (new Chat(history: [Message::user('hello'), Message::system('a note')]))
+        $history = [Message::user('hello'), Message::system('a note')];
+        if ($withAssistant) {
+            $history[] = Message::assistant(self::ASSISTANT_BODY);
+        }
+
+        $chat = (new Chat(history: $history))
             ->withThemeName($themeName)
             ->withSize(self::COLS, self::ROWS);
 
@@ -541,6 +555,13 @@ final class ShellContrastTest extends TestCase
      * So: under `ansi` the frame must carry NO absolute colour at all. Under
      * `dark` it must carry them, or the assertion would pass on a shell that had
      * simply stopped emitting colour.
+     *
+     * The history driven here is deliberately bare user/system. The markdown
+     * palette legitimately carries absolute accents at source (its `heading1`
+     * is a hex literal, not a palette slot), so an assistant turn would paint
+     * absolute colour without any shell slot misbehaving; the assistant half's
+     * contrast contract is asserted by the frame walk above and by
+     * {@see AssistantBodyContrastTest}, not by this palette-purity test.
      */
     public function testTheAnsiThemeReachesTheTerminalAsPaletteCodesNotAbsoluteColour(): void
     {
