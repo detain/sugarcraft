@@ -30,7 +30,10 @@ composer install
 bogus flag — and exits 0. Any *other* unrecognised flag is refused with a usage
 note on stderr and exit code 1.
 
-Needs a colour-capable TTY of at least ~40 columns by 22 rows; empty cells
+Needs a colour-capable TTY of at least 40 columns by 24 rows (the full
+frame is 40x32 — at squeezed heights the sidebar drops its help card
+first, and anything under the floor shows a resize notice and freezes
+play until you widen back). The VS duel wants 54x29. Empty cells
 render as `·` so the grid stays readable even without colour.
 
 ## VS Computer Mode
@@ -75,7 +78,9 @@ computer wins: the player's field is checked first.
 
 ### Game over
 
-Top-out ends the game and paints a banner with the final score. Press **r** to
+The game ends when the next piece has no room to spawn, the stack reaches the
+ceiling, or garbage crushes a piece into the board — the banner painted across
+the playfield names the reason and the final score. Press **r** to
 start a completely new game — the score does not carry over (it embeds the
 level, so a restarted board falls at level-0 gravity again). **q** quits.
 
