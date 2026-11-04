@@ -429,4 +429,35 @@ final class SettingsSchemaTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $build();
     }
+
+    /**
+     * G1-L7 (CCOPS-6): the managed tier is read through LayeredSettings::systemLayer(),
+     * whose alphabet is LayeredSettings::LAYERED_KEYS. A file spelling every schema
+     * key must therefore yield exactly the layered keys back: schema rows that are not
+     * layered (the permission keys the strict side reserves to the user tier) and keys
+     * with no schema row at all both fall out at the door, before any value is read.
+     */
+    public function testTheManagedLayerCarriesNoKeyOutsideTheLayeredAlphabet(): void
+    {
+        $path = sys_get_temp_dir() . '/g1l7_alphabet_' . uniqid('', true) . '.json';
+        $spelled = array_fill_keys(SettingsSchema::keys(), 1);
+        $spelled['notASchemaKeyThatExistsNowhere'] = 1;
+        file_put_contents($path, (string) json_encode($spelled));
+
+        try {
+            $layer = LayeredSettings::systemLayer($path);
+
+            self::assertEqualsCanonicalizing(LayeredSettings::LAYERED_KEYS, array_keys($layer));
+            self::assertArrayNotHasKey('permissionMode', $layer);
+            self::assertArrayNotHasKey('trustedProjectSettings', $layer);
+            self::assertArrayNotHasKey('notASchemaKeyThatExistsNowhere', $layer);
+            self::assertSame(
+                count(LayeredSettings::LAYERED_KEYS),
+                count($layer),
+                'every layered key survives the alphabet filter, and nothing else enters'
+            );
+        } finally {
+            @unlink($path);
+        }
+    }
 }
