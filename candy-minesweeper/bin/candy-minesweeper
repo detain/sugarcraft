@@ -39,6 +39,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Minesweeper\Difficulty;
 use SugarCraft\Minesweeper\Game;
+use SugarCraft\Minesweeper\Lang;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
 use SugarCraft\Minesweeper\Support\Version;
 use SugarCraft\Minesweeper\Ui\CustomDifficulty;
@@ -199,7 +200,11 @@ if ($statsPath !== null && is_file($statsPath)) {
     try {
         $stats = DifficultyStats::load($statsPath)?->stats();
     } catch (\Throwable $e) {
-        fwrite(STDERR, "candy-minesweeper: ignoring unreadable stats file ({$e->getMessage()})\n");
+        // m1 (review R1): the message interpolates FILE CONTENT (the refused
+        // persistence version), so the stats file's own bytes must not reach
+        // the terminal raw — same scrub the argv echoes use: control bytes
+        // become '?' before the line is written to stderr.
+        fwrite(STDERR, "candy-minesweeper: ignoring unreadable stats file (" . cliVisible($e->getMessage()) . ")\n");
     }
 }
 
