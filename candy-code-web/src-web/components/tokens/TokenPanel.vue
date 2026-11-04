@@ -17,19 +17,24 @@
  * files; this lane's contract is src-web/components/tokens/** plus the
  * minimal router/menu insertion).
  *
- * SEAM (G4-E): all three RPC calls route through wire.ts's tokenRpc() cast;
- * once generated.ts carries the token.* defs, they call
- * connection.request('token.*', …) typed. Copy is raw English rostered in
+ * Types are the generated ones (G4-E → G4-G/addendum → G5-G weld order law
+ * satisfied): the token.* defs live in protocol/generated.ts's Methods map,
+ * so all three calls are plain typed connection.request — the lane's wire.ts
+ * cast seam was deleted at the weld. Copy is raw English rostered in
  * src-web/__tests__/rawCopyCensus.spec.ts pending the lang window
  * (## LANG REQUEST in the lane report) — the 448f8dd1b 'Import' precedent.
  */
 import { computed, onMounted, ref } from 'vue'
 
+import type { MethodResult } from '../../protocol/generated'
 import { t } from '../../lib/i18n'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
-import { tokenRpc } from './wire'
-import type { TokenGrantResult, TokenGrantRow, TokenListResult, TokenRevokeResult } from './wire'
+
+/** One token.list row; the hash and raw token are NEVER in list rows. */
+type TokenGrantRow = MethodResult<'token.list'>['tokens'][number]
+/** The grant answer — the ONLY moment the raw cv1_ token crosses the wire. */
+type TokenGrantResult = MethodResult<'token.grant'>
 
 const connection = useConnectionStore()
 
@@ -94,7 +99,7 @@ async function reload(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const result = await tokenRpc<TokenListResult>(connection, 'token.list', {})
+    const result = await connection.request('token.list', {})
     // Newest-first over the ISO stamps: Date.parse honours each stamp's own
     // offset (the server formats with date(ATOM), so summer and winter rows
     // on a DST server can legitimately carry different offsets — a raw
@@ -119,7 +124,7 @@ async function submitGrant(): Promise<void> {
     const ids = pinSessions.value
       ? pinIds.value.split(/\s+/u).map((id) => id.trim()).filter((id) => id !== '')
       : undefined
-    const result = await tokenRpc<TokenGrantResult>(connection, 'token.grant', {
+    const result = await connection.request('token.grant', {
       label: name,
       scopes: ['read'],
       days: bounded,
@@ -162,7 +167,7 @@ async function revokeGrant(row: TokenGrantRow): Promise<void> {
   error.value = ''
   notice.value = ''
   try {
-    await tokenRpc<TokenRevokeResult>(connection, 'token.revoke', { id: row.id })
+    await connection.request('token.revoke', { id: row.id })
     grants.value = grants.value.filter((grant) => grant.id !== row.id)
     notice.value = 'Grant revoked.'
   } catch (failure) {

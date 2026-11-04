@@ -141,7 +141,11 @@ describe('TokenPanel grant (G5-G)', () => {
     await tick()
     const frames = wire.sent('token.grant')
     expect(frames).toHaveLength(1)
-    expect(frames[0]?.params).toEqual({ label: 'fresh', scopes: ['read'], days: 30 })
+    // The store stamps idempotencyKey on every write-scope request
+    // (IDEMPOTENT_METHODS family — memoryHistory/processesSection idiom).
+    const { idempotencyKey: grantStamp, ...grantParams } = frames[0]!.params as Record<string, unknown>
+    expect(grantStamp).toMatch(/^[0-9a-f]{32}$/)
+    expect(grantParams).toEqual({ label: 'fresh', scopes: ['read'], days: 30 })
     expect(wrapper.find('[data-testid="tokens-mint-dialog"]').exists()).toBe(false)
     await wire.answer('token.grant', MINT)
     await tick()
@@ -180,7 +184,9 @@ describe('TokenPanel grant (G5-G)', () => {
     await wrapper.find('[data-testid="tokens-days"]').setValue('90')
     await wrapper.find('[data-testid="tokens-grant-form"]').trigger('submit')
     await tick()
-    expect(wire.sent('token.grant')[0]?.params).toEqual({
+    const { idempotencyKey: pinStamp, ...pinParams } = wire.sent('token.grant')[0]!.params as Record<string, unknown>
+    expect(pinStamp).toMatch(/^[0-9a-f]{32}$/) // write-stamped (IDEMPOTENT_METHODS)
+    expect(pinParams).toEqual({
       label: 'pinned',
       scopes: ['read'],
       days: 90,
@@ -201,7 +207,9 @@ describe('TokenPanel revoke (G5-G)', () => {
     await tick()
     expect(confirmSpy).toHaveBeenCalledTimes(1)
     expect(String(confirmSpy.mock.calls[0]?.[0])).toContain('demo-viewer')
-    expect(wire.sent('token.revoke')[0]?.params).toEqual({ id: 'a1b2c3d4' })
+    const { idempotencyKey: revokeStamp, ...revokeParams } = wire.sent('token.revoke')[0]!.params as Record<string, unknown>
+    expect(revokeStamp).toMatch(/^[0-9a-f]{32}$/) // write-stamped (IDEMPOTENT_METHODS)
+    expect(revokeParams).toEqual({ id: 'a1b2c3d4' })
     await wire.answer('token.revoke', { revoked: true })
     await tick()
     expect(wrapper.find('[data-testid="tokens-row-a1b2c3d4"]').exists()).toBe(false)
