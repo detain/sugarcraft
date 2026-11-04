@@ -213,10 +213,15 @@ onBeforeUnmount(() => {
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   background: var(--bg);
-  opacity: 0.75;
+  /* CW-UX-06: resting tabs dim by colour, not by compositing opacity over
+     the whole subtree — opacity pulled every glyph (including the close
+     button, already --muted) down to 3.19-3.91:1. The muted foreground is
+     a real theme colour at full contrast; only the text and border state
+     changes with selection. */
+  color: var(--muted);
 }
 .tab.active {
-  opacity: 1;
+  color: var(--text);
   border-color: var(--accent);
 }
 .tab button {
