@@ -649,10 +649,13 @@ if ($tuiErrorLog !== null) {
 // focus-reporting-off even though Chat::programOptions() enables focus
 // reporting, no window-title pop — so the copies are gone and the library
 // path is the only path. armTerminalRelease() below registers core's hook
-// BEFORE run(), which keeps the window this guard covered (a throw from
-// run()'s first statements, before setupTerminal() has touched anything,
-// still finds the latch down and costs nothing; a fatal mid-attach or an
-// exception escaping the loop finds the full mode-conditional release).
+// BEFORE run(), covering the window the deleted guards covered: a throw
+// from run()'s first statements, before setupTerminal() has touched
+// anything, still finds the latch down and costs nothing; a hard fatal or
+// an exception escaping mid-attach — anywhere from the alt-screen enter to
+// the raw-mode acquisition — finds the latch UP, because X-CORE1-FIX moved
+// the attach latch to the top of setupTerminal(), and the hook then writes
+// the full mode-conditional release.
 // The fatal writer above was registered first, so the shutdown queue
 // still prints the reason line before the terminal is handed back.
 

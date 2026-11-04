@@ -1417,6 +1417,15 @@ final class Program
 
     private function setupTerminal(): void
     {
+        // X-CORE1-FIX (reviews-1103 MAJOR-1): the latch arms at entry, before
+        // the first write. setupTerminal() runs outside run()'s try, so a hard
+        // fatal or a throw from enableRawMode()'s TermiosFactory chain after
+        // the alt-screen is entered escapes with no finally to lean on — only
+        // the shutdown backstop can restore, and it gates on this latch. The
+        // tail-of-setup version left every throw inside attach unguarded and
+        // stranded the user in the alt screen; teardown is mirror- and
+        // options-gated, so an early arm costs nothing when nothing happened.
+        $this->terminalAttached = true;
         if ($this->options->useAltScreen) {
             $this->writeOutput(Ansi::altScreenEnter());
         }
@@ -1443,11 +1452,10 @@ final class Program
         }
         $this->activeBracketedPaste = $this->options->bracketedPaste;
         $this->tty->enableRawMode();
-        $this->terminalAttached = true;
-        // Arm only while actually attached: a Program that gets here,
-        // detaches cleanly, and never returns has a down latch the hook
-        // checks — registration itself is one-shot, so the ordering just
-        // keeps the "armed" latch honest with the first real acquisition.
+        // The attach latch was armed at the top of this method, so a throw
+        // from any emission or from enableRawMode() above finds it UP and the
+        // backstop restores. Registration itself is one-shot, so arming here
+        // only matters for a Program that never reaches attach at all.
         // Gated on catchPanics (lib-reviews-1102 M1): the knob was
         // documented as the WithoutCatchPanics mirror but never read, so
         // the backstop registered regardless. Default true keeps every

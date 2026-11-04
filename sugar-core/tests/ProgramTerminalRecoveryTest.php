@@ -845,6 +845,30 @@ final class ProgramTerminalRecoveryTest extends TestCase
         fclose($out);
     }
 
+    /**
+     * X-CORE1-FIX (reviews-1103 MAJOR-1): the attach latch must arm BEFORE
+     * the first terminal write, not at the tail of attach. setupTerminal()
+     * runs outside run()'s try, so a hard fatal (or an exception from
+     * enableRawMode's TermiosFactory open/makeRaw/apply chain) after the
+     * alt-screen is already entered escapes with no finally to lean on —
+     * only the shutdown backstop can restore, and it gates on this latch.
+     * A tail latch strands the user in the alt screen for every throw
+     * inside attach. Pinned on source order (house style): the latch sits
+     * ahead of both the first emission and the raw-mode acquisition.
+     */
+    public function testSetupTerminalArmsTheAttachLatchBeforeItsFirstEmission(): void
+    {
+        $setup = $this->methodBody('setupTerminal');
+        $latch = strpos($setup, '$this->terminalAttached = true;');
+        $enter = strpos($setup, '$this->writeOutput(Ansi::altScreenEnter());');
+        $raw = strpos($setup, '$this->tty->enableRawMode();');
+        $this->assertIsInt($latch);
+        $this->assertIsInt($enter);
+        $this->assertIsInt($raw);
+        $this->assertLessThan($enter, $latch, 'the latch arms before the first write — a fatal mid-attach finds it UP');
+        $this->assertLessThan($raw, $latch, 'the raw-mode call sits behind the latch too — its throws land inside the armed window');
+    }
+
     /** Source of one Program method — the shape BinTerminalGuardPidTest scans, per-method. */
     private function methodBody(string $name): string
     {
