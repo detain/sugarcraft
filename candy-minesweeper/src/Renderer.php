@@ -131,8 +131,10 @@ final class Renderer
         $indent = str_repeat(' ', self::INTERIOR_COL_OFFSET);
         // Every bound key names itself here — the footer is the app's only
         // discoverability surface (there is no separate help screen). Values
-        // ship translated in all 16 locales; each line stays under 80 cells
-        // so even the 2×2 board's view is not clipped on a stock terminal.
+        // ship translated in all 16 locales, and every locale's lines fit
+        // an 80-column terminal — FooterWidthGuardTest enforces that budget
+        // across the whole set so a translation can never silently overflow
+        // it again (the M16 finding: fr sat at 78-79 BEFORE this indent).
         $help = implode("\n" . $indent, [
             Lang::t('ui.help_moves'),
             Lang::t('ui.help_board'),

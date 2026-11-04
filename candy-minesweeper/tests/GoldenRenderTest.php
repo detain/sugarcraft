@@ -18,9 +18,21 @@ final class GoldenRenderTest extends TestCase
 {
     private string $fixturesDir;
 
+    private string $priorLocale = 'en';
+
     protected function setUp(): void
     {
         $this->fixturesDir = __DIR__ . '/fixtures';
+        // n04 (lib-reviews-1102): goldens embed the ENGLISH help/status copy,
+        // so they are EN by contract — pin the locale instead of inheriting
+        // whatever LANG/LC_ALL the runner happens to carry.
+        $this->priorLocale = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::setLocale('en');
+    }
+
+    protected function tearDown(): void
+    {
+        \SugarCraft\Core\I18n\T::setLocale($this->priorLocale);
     }
 
     public function testFirstClickSafeAreaRendersAnsi(): void

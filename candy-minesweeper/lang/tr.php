@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small' => 'tahta çok küçük',
-    'board.minecount_out_of_range' => 'mineCount aralık dışında',
+    'board.minecount_out_of_range' => 'mayın sayısı aralık dışında',
     'board.rows_shape_mismatch' => 'satır şekli genişlik/yükseklik ile eşleşmiyor',
     'custom.min_rows' => 'satırlar en az 2 olmalı',
     'custom.min_cols' => 'sütunlar en az 2 olmalı',
@@ -22,7 +22,7 @@ return [
     'ui.boom' => '💥 bum — yeniden başlatmak için r tuşuna basın',
     'ui.cleared' => '★ tamamlandı — tekrar oynamak için r tuşuna basın',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  hareket  ·  space / enter  aç',
-    'ui.help_board' => 'f  bayrak  ·  c / orta tık  akor  ·  sağ tık  bayrak',
+    'ui.help_board' => 'f  bayrak  ·  c / orta tık  çevreyi aç  ·  sağ tık  bayrak',
     'ui.help_session' => 'r  yeniden  ·  S  kaydet  ·  L  yükle  ·  q / Esc / Ctrl+C  çık',
     'ui.saved' => 'Oyun kaydedildi',
     'ui.restarted' => 'Tahta yeniden başlatıldı',

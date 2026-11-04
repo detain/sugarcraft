@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small' => 'plansza jest za mała',
-    'board.minecount_out_of_range' => 'mineCount poza zakresem',
+    'board.minecount_out_of_range' => 'liczba min poza zakresem',
     'board.rows_shape_mismatch' => 'kształt wierszy nie pasuje do szerokości/wysokości',
     'custom.min_rows' => 'wierszy musi być co najmniej 2',
     'custom.min_cols' => 'kolumn musi być co najmniej 2',
@@ -22,7 +22,7 @@ return [
     'ui.boom' => '💥 bum — naciśnij r, aby zacząć od nowa',
     'ui.cleared' => '★ wygrane — naciśnij r, aby zagrać ponownie',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  ruch  ·  spacja / enter  odkryj',
-    'ui.help_board' => 'f  flaga  ·  c / środkowy przycisk  chord  ·  prawy przycisk  flaga',
+    'ui.help_board' => 'f  flaga  ·  c / środkowy przycisk  dookólne  ·  prawy przycisk  flaga',
     'ui.help_session' => 'r  restart  ·  S  zapisz  ·  L  wczytaj  ·  q / Esc / Ctrl+C  wyjdź',
     'ui.saved' => 'Gra zapisana',
     'ui.restarted' => 'Plansza zrestartowana',

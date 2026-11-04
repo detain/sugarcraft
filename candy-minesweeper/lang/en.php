@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small'           => 'board too small',
-    'board.minecount_out_of_range' => 'mineCount out of range',
+    'board.minecount_out_of_range' => 'mine count out of range',
     'board.rows_shape_mismatch' => 'rows shape does not match width/height',
     'custom.min_rows'            => 'rows must be at least 2',
     'custom.min_cols'            => 'columns must be at least 2',
@@ -22,7 +22,7 @@ return [
     'ui.boom' => '💥 boom — press r to restart',
     'ui.cleared' => '★ cleared — press r to play again',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  move  ·  space / enter  reveal',
-    'ui.help_board' => 'f  flag  ·  c / middle-click  chord  ·  right-click  flag',
+    'ui.help_board' => 'f  flag  ·  c / middle-click  open around flags  ·  right-click  flag',
     'ui.help_session' => 'r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit',
     'ui.saved' => 'game saved',
     'ui.restarted' => 'board restarted',

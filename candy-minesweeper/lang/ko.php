@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small' => '보드가 너무 작습니다',
-    'board.minecount_out_of_range' => 'mineCount가 범위를 벗어남',
+    'board.minecount_out_of_range' => '지뢰 수가 범위를 벗어남',
     'board.rows_shape_mismatch' => '행 모양이 너비/높이와 일치하지 않습니다',
     'custom.min_rows' => '행은 최소 2개 이상이어야 합니다',
     'custom.min_cols' => '열은 최소 2개 이상이어야 합니다',
@@ -22,7 +22,7 @@ return [
     'ui.boom' => '💥 펑 — 다시 시작하려면 r',
     'ui.cleared' => '★ 클리어 — 다시 하려면 r',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  이동  ·  space / enter  열기',
-    'ui.help_board' => 'f  깃발  ·  c / 가운데 클릭  코드  ·  우클릭  깃발',
+    'ui.help_board' => 'f  깃발  ·  c / 가운데 클릭  주변 열기  ·  우클릭  깃발',
     'ui.help_session' => 'r  재시작  ·  S  저장  ·  L  불러오기  ·  q / Esc / Ctrl+C  종료',
     'ui.saved' => '게임 저장됨',
     'ui.restarted' => '보드 재시작',

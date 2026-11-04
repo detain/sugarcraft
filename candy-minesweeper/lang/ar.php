@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small' => 'اللوحة صغيرة جدًا',
-    'board.minecount_out_of_range' => 'mineCount خارج النطاق',
+    'board.minecount_out_of_range' => 'عدد الألغام خارج النطاق',
     'board.rows_shape_mismatch' => 'شكل الصفوف لا يطابق العرض/الارتفاع',
     'custom.min_rows' => 'يجب أن يكون عدد الصفوف 2 على الأقل',
     'custom.min_cols' => 'يجب أن يكون عدد الأعمدة 2 على الأقل',
@@ -22,7 +22,7 @@ return [
     'ui.boom' => '💥 بوم — اضغط r لإعادة البدء',
     'ui.cleared' => '★ تمّ التنقية — اضغط r للعب مجدداً',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  تحريك  ·  مسافة / enter  كشف',
-    'ui.help_board' => 'f  علم  ·  c / الزر الأوسط  وتر  ·  النقر الأيمن  علم',
+    'ui.help_board' => 'f  علم  ·  c / الزر الأوسط  ما حول  ·  النقر الأيمن  علم',
     'ui.help_session' => 'r  إعادة  ·  S  حفظ  ·  L  تحميل  ·  q / Esc / Ctrl+C  خروج',
     'ui.saved' => 'تم حفظ اللعبة',
     'ui.restarted' => 'تمت إعادة تشغيل اللوحة',

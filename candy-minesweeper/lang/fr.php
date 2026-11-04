@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small' => 'plateau trop petit',
-    'board.minecount_out_of_range' => 'mineCount hors plage',
+    'board.minecount_out_of_range' => 'nombre de mines hors plage',
     'board.rows_shape_mismatch' => 'la forme des lignes ne correspond pas à largeur/hauteur',
     'custom.min_rows' => 'les lignes doivent être au moins 2',
     'custom.min_cols' => 'les colonnes doivent être au moins 2',
@@ -22,8 +22,8 @@ return [
     'ui.boom' => '💥 boum — appuyez sur r pour recommencer',
     'ui.cleared' => '★ gagné — appuyez sur r pour rejouer',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  déplacer  ·  espace / entrée  révéler',
-    'ui.help_board' => 'f  drapeau  ·  c / clic du milieu  accord  ·  clic droit  drapeau',
-    'ui.help_session' => 'r  recommencer  ·  S  sauvegarder  ·  L  charger  ·  q / Esc / Ctrl+C  quitter',
+    'ui.help_board' => 'f  drapeau  ·  c / clic du milieu  groupée  ·  clic droit  drapeau',
+    'ui.help_session' => 'r  rejouer  ·  S  sauvegarder  ·  L  charger  ·  q / Esc / Ctrl+C  quitter',
     'ui.saved' => 'Partie sauvegardée',
     'ui.restarted' => 'Plateau relancé',
     'ui.loaded' => 'Sauvegarde chargée',

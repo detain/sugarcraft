@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small' => 'deska je příliš malá',
-    'board.minecount_out_of_range' => 'mineCount mimo rozsah',
+    'board.minecount_out_of_range' => 'počet min mimo rozsah',
     'board.rows_shape_mismatch' => 'tvar řádků neodpovídá šířce/výšce',
     'custom.min_rows' => 'řádků musí být alespoň 2',
     'custom.min_cols' => 'sloupců musí být alespoň 2',
@@ -22,7 +22,7 @@ return [
     'ui.boom' => '💥 bouch — stiskněte r pro restart',
     'ui.cleared' => '★ vyčištěno — stiskněte r pro novou hru',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  pohyb  ·  mezerník / enter  odkrytí',
-    'ui.help_board' => 'f  vlajka  ·  c / prostřední tlačítko  chord  ·  pravé tlačítko  vlajka',
+    'ui.help_board' => 'f  vlajka · c / prostřední tlačítko  odkrytí okolí · pravé tlačítko  vlajka',
     'ui.help_session' => 'r  restart  ·  S  uložit  ·  L  načíst  ·  q / Esc / Ctrl+C  konec',
     'ui.saved' => 'Hra uložena',
     'ui.restarted' => 'Plocha restartedova',

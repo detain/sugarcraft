@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small' => '棋盘太小',
-    'board.minecount_out_of_range' => 'mineCount 超出范围',
+    'board.minecount_out_of_range' => '地雷数量 超出范围',
     'board.rows_shape_mismatch' => '行的形状与宽/高不匹配',
     'custom.min_rows' => '行数至少为 2',
     'custom.min_cols' => '列数至少为 2',
@@ -22,7 +22,7 @@ return [
     'ui.boom' => '💥 砰 — 按 r 重新开始',
     'ui.cleared' => '★ 通关 — 按 r 再玩一局',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  移动  ·  space / enter  翻开',
-    'ui.help_board' => 'f  插旗  ·  c / 中键  和弦  ·  右键  插旗',
+    'ui.help_board' => 'f  插旗  ·  c / 中键  开周围  ·  右键  插旗',
     'ui.help_session' => 'r  重开  ·  S  保存  ·  L  读取  ·  q / Esc / Ctrl+C  退出',
     'ui.saved' => '游戏已保存',
     'ui.restarted' => '棋盘已重新开始',
