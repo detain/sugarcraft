@@ -1372,7 +1372,9 @@ Open the sign-in URL and the page signs in, connects and shows:
   server, answerable in place. It hears a question the moment it is put
   (`permission.asked`), whether or not the page follows that session.
 - **Panels** beside the session (the *panels* button, or a panel's name in
-  the palette): **Agents** — the tree of the runs the session delegated, live,
+  the palette): the `PANELS` registry holds twelve, and the candy-code-web
+  README documents each one in full; five are worth naming here.
+  **Agents** — the tree of the runs the session delegated, live,
   nested under the run or `Task` call that started them, each opening into an
   agent view with the run's own transcript, a box to message it and *pause*,
   *resume* and *cancel*; the same tree hangs under each `Task` card in the
@@ -1382,6 +1384,11 @@ Open the sign-in URL and the page signs in, connects and shows:
   — the workflows to run (with `key=value` context) and the session's runs,
   `/workflow` and `Workflow` tool alike, pausable while they run.
   **Memory** — the notes of each scope, searchable, to add, edit or delete.
+  The other seven are **Rules** (the policy: grants made this session, and
+  saved rules), **Catalog** (the agents the session can delegate to),
+  **Changes** (the working tree's diff), **Files** (a workspace file
+  browser), **Context** (what fills the model's context), **Generate** (the
+  session's images) and **Usage** (tokens and spend).
 - **A command palette** (Ctrl+K / ⌘K): jump to a session, run or start a
   slash command, open a panel, start a session, change the theme.
 
