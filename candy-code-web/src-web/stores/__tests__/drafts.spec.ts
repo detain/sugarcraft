@@ -133,3 +133,23 @@ describe('forgetting a session (MA-12)', () => {
     expect(layout.lastSessionId).toBeNull()
   })
 })
+
+/**
+ * CW-DBA-5 (reviews-1103): the map is bounded to DRAFT_LIMIT entries by
+ * dropping insertion-first keys — but a TOUCH (re-setting a draft that
+ * already has a slot) kept the original slot, so the draft you keep
+ * editing was the first to be evicted once the map filled. A touch is
+ * use: it must move the entry to the recency tail, and eviction keeps
+ * dropping only what has gone stale.
+ */
+describe('draft touch keeps recency (CW-DBA-5)', () => {
+  it('a re-touched draft is not evicted when a newcomer overflows the limit', () => {
+    for (let i = 0; i < 50; i++) layout.setDraft(`s${i}`, `text ${i}`)
+    layout.setDraft('s0', 'revisited')
+    layout.setDraft('newcomer', 'fresh')
+
+    expect(layout.drafts.s0).toBe('revisited')
+    expect(layout.drafts.newcomer).toBe('fresh')
+    expect(layout.drafts.s1).toBeUndefined()
+  })
+})

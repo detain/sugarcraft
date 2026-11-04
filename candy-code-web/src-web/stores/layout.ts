@@ -147,6 +147,11 @@ export const useLayoutStore = defineStore('layout', () => {
     const stored = readJson<Record<string, string>>('drafts', {})
     const merged: Record<string, string> = { ...stored }
     for (const [id, text] of Object.entries(drafts.value)) {
+      // CW-DBA-5: the same touch-keeps-recency law across the storage
+      // merge — an existing stored slot is re-opened so the memory order
+      // (this tab's freshest edits) lands at the tail eviction drops from
+      // the head.
+      delete merged[id]
       merged[id] = text.length > DRAFT_MAX_PERSISTED_CHARS ? text.slice(0, DRAFT_MAX_PERSISTED_CHARS) : text
     }
     for (const id of pendingErases) delete merged[id]
@@ -167,6 +172,10 @@ export const useLayoutStore = defineStore('layout', () => {
       delete next[sessionId]
       pendingErases.add(sessionId)
     } else {
+      // CW-DBA-5: delete-before-insert, so a touch MOVES the entry to the
+      // recency tail; without it the draft being actively edited keeps its
+      // ancient slot and is the first thing eviction drops.
+      delete next[sessionId]
       next[sessionId] = text
       pendingErases.delete(sessionId)
     }
