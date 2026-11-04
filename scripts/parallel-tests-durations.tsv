@@ -1844,3 +1844,4 @@ candy-code/tests/Context/Pruning/Strategies/SupersededTurnContextStrategyTest.ph
 candy-code/tests/Windows/WindowsBashSmokeTest.php	0.000	2
 candy-code/tests/AssistantMsgTest.php	0.000	2
 candy-code/tests/Windows/WindowsPtyRunSmokeTest.php	0.000	1
+candy-code/tests/Server/TokenScopeTest.php	12.338	38
