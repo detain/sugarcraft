@@ -1491,6 +1491,16 @@ final class Program
         if ($this->options->hideCursor === true) {
             $this->writeOutput(Ansi::cursorShow());
         }
+        if ($this->lastWindowTitle !== null) {
+            // CTSP-F-1 (X-CORE1): a titled session must not leak its title
+            // past the process. This wire set carries no DECTRA query-and-
+            // restore, so the honest pop is the OSC empty-string push — the
+            // terminal falls back to its own default. Riding BEFORE the
+            // alt-screen leave puts the clean title on the frame the user
+            // returns to.
+            $this->writeOutput(Ansi::setWindowTitle(''));
+            $this->lastWindowTitle = null;
+        }
         if ($this->options->useAltScreen) {
             $this->writeOutput(Ansi::altScreenLeave());
         }
@@ -1512,9 +1522,12 @@ final class Program
      * skips finally blocks) landing between setupTerminal() and that
      * finally. Pending finally blocks do NOT run on those exits, but
      * registered shutdown functions DO — and without this backstop every
-     * sugar-core consumer would have to re-invent candy-code's bin guard
-     * to keep from stranding the user's terminal mid-raw-mode. With it,
-     * the library that entered the alt screen is the library that leaves it.
+     * sugar-core consumer would have to re-invent a bytes-only shutdown
+     * guard to keep from stranding the user's terminal mid-raw-mode (the
+     * hazard that grew candy-code's two hand-rolled guards until X-CORE1
+     * retired them). With it, the library that entered the alt screen is
+     * the library that leaves it. Consumers that need the window to open
+     * BEFORE run() use the public {@see armTerminalRelease()} seam.
      *
      * The closure holds a WeakReference, not $this: a finished Program —
      * every one this process will ever run, in a long test suite or a
@@ -1523,7 +1536,8 @@ final class Program
      * the hook would write to. The pid is captured at registration and
      * compared at fire time: a forked child copies the shutdown queue, and
      * the child exiting must not vomit the release bytes into the parent's
-     * terminal (the same install-pid discipline as bin/candy-code's guard).
+     * terminal (the install-pid discipline X-CORE1 retired from candy-code's
+     * hand-rolled guards — it lives here now, shared by every consumer).
      */
     private function armTerminalReleaseHook(): void
     {
@@ -1542,6 +1556,29 @@ final class Program
     }
 
     /**
+     * Public seam: arm the shutdown backstop before run() is ever entered.
+     *
+     * X-CORE1 (reviews-1103, owner ruling OD-17): candy-code carried two
+     * hand-rolled last-ditch terminal guards (bin/candy-code and
+     * Cli\Attach) whose only genuine content over this library's own
+     * release path was the wider arming window — registered before the
+     * run() call, so a fatal inside setup itself was still covered. That
+     * window is now the seam: a consumer builds the Program, calls this,
+     * and the SAME WeakReference + install-pid + mode-conditional teardown
+     * machinery owns the release. The hook is one-shot
+     * ({@see armTerminalReleaseHook()}), so this pre-arm plus
+     * setupTerminal()'s own arming registers exactly once between them.
+     *
+     * Deliberately NOT gated on catchPanics: that knob declines the
+     * library's AUTOMATIC arming (the debugger-owner case); an explicit
+     * call to this method IS a considered opt-in and is honored either way.
+     */
+    public function armTerminalRelease(): void
+    {
+        $this->armTerminalReleaseHook();
+    }
+
+    /**
      * The shutdown hook's body: release a terminal this Program still
      * holds, if and only if this process is still the one that held it.
      *
@@ -1553,10 +1590,11 @@ final class Program
      *
      * The kitty pop travels unconditionally: an unbalanced `CSI < 1 u` is
      * ignored by a terminal that never took the push, and a stranded run
-     * cannot ask which of them it hit — the same byte-set reasoning as
-     * candy-code's bin guard. teardownTerminal() after it is the latch-
-     * gated, mode-conditional remainder (termios restore included — the one
-     * job a bytes-only guard can never do).
+     * cannot ask which of them it hit — the byte-set reasoning that once
+     * lived duplicated in candy-code's bin guard (X-CORE1 retired those
+     * copies in favor of this one). teardownTerminal() after it is the
+     * latch-gated, mode-conditional remainder (termios restore included —
+     * the job a bytes-only guard can never do).
      *
      * Invoked from the closure registered in {@see armTerminalReleaseHook()};
      * the recovery pins drive it directly because a test suite may not

@@ -750,6 +750,101 @@ final class ProgramTerminalRecoveryTest extends TestCase
         $this->assertLessThan($teardown, $pop);
     }
 
+    /**
+     * CTSP-F-1 (X-CORE1, reviews-1103): a session that wrote a window title
+     * must not let it outlive the process. The teardown emits the OSC
+     * empty-title pop before the alt-screen leave, and clears the memo so a
+     * re-attach re-issues a title it was given.
+     */
+    public function testTeardownPopsTheWindowTitleBeforeLeavingTheAltScreen(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program($this->noopModel(), $this->options($in, $out, $loop));
+        $setup = new \ReflectionMethod(Program::class, 'setupTerminal');
+        $teardown = new \ReflectionMethod(Program::class, 'teardownTerminal');
+        $title = new \ReflectionProperty(Program::class, 'lastWindowTitle');
+
+        $setup->invoke($program);
+        $title->setValue($program, 'candy — a session');
+        $teardown->invoke($program);
+
+        $written = $this->drain($out);
+        $pop = Ansi::setWindowTitle('');
+        $this->assertSame(1, substr_count($written, $pop), 'the title pop is emitted exactly once');
+        $this->assertLessThan(
+            strpos($written, Ansi::altScreenLeave()),
+            strpos($written, $pop),
+            'the pop rides before the alt-screen leave',
+        );
+        $this->assertNull($title->getValue($program), 'the memo clears with the emission');
+
+        $position = ftell($out);
+        $this->assertIsInt($position);
+        $teardown->invoke($program);
+        $this->assertSame($position, ftell($out), 'the latch keeps the second teardown byte-silent');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /** CTSP-F-1 negative half: a program that never titled emits no OSC pop. */
+    public function testTeardownStaysTitleSilentWhenNoTitleWasEverSet(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program($this->noopModel(), $this->options($in, $out, $loop));
+        $setup = new \ReflectionMethod(Program::class, 'setupTerminal');
+        $teardown = new \ReflectionMethod(Program::class, 'teardownTerminal');
+
+        $setup->invoke($program);
+        $teardown->invoke($program);
+
+        $this->assertStringNotContainsString(
+            Ansi::setWindowTitle(''),
+            $this->drain($out),
+            'no title was ever claimed, so there is nothing to pop',
+        );
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * X-CORE1 / TUIARCH-01 (OD-17): the consumer seam. armTerminalRelease()
+     * is public and arms the one-shot hook before run() is ever entered —
+     * the wider arming window candy-code's hand-rolled guards existed for —
+     * while setupTerminal()'s own catchPanics-gated arming stays a no-op
+     * against the first call.
+     */
+    public function testArmTerminalReleaseArmsTheBackstopBeforeRunIsEntered(): void
+    {
+        $arm = new \ReflectionMethod(Program::class, 'armTerminalRelease');
+        $this->assertTrue($arm->isPublic(), 'the seam is public API');
+        $this->assertStringContainsString('$this->armTerminalReleaseHook();', $this->methodBody('armTerminalRelease'));
+
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program($this->noopModel(), $this->options($in, $out, $loop));
+        $armed = new \ReflectionProperty(Program::class, 'terminalReleaseHookArmed');
+
+        $this->assertFalse($armed->getValue($program));
+        $arm->invoke($program);
+        $this->assertTrue($armed->getValue($program), 'the pre-run arm lands');
+
+        $setup = new \ReflectionMethod(Program::class, 'setupTerminal');
+        $setup->invoke($program);
+        $teardown = new \ReflectionMethod(Program::class, 'teardownTerminal');
+        $teardown->invoke($program);
+        $this->assertTrue($armed->getValue($program), 'arming is once per Program, ever');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
     /** Source of one Program method — the shape BinTerminalGuardPidTest scans, per-method. */
     private function methodBody(string $name): string
     {
