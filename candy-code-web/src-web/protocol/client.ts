@@ -269,6 +269,26 @@ export class CandyCodeClient {
     }
   }
 
+  /**
+   * CW-3: exactly the fields this client and the connection store dereference
+   * at hello time — server.version, principal.scopes, limits, and (when
+   * present) resumed. Everything else on the wire is read behind optional
+   * chaining and stays unguarded on purpose.
+   */
+  private static helloIsWellFormed(hello: unknown): boolean {
+    if (typeof hello !== 'object' || hello === null) return false
+    const value = hello as Record<string, unknown>
+    const server = value.server
+    if (typeof server !== 'object' || server === null) return false
+    if (typeof (server as Record<string, unknown>).version !== 'string') return false
+    const principal = value.principal
+    if (typeof principal !== 'object' || principal === null) return false
+    if (!Array.isArray((principal as Record<string, unknown>).scopes)) return false
+    if (typeof value.limits !== 'object' || value.limits === null) return false
+    if (value.resumed !== undefined && (typeof value.resumed !== 'object' || value.resumed === null)) return false
+    return true
+  }
+
   private helloAnswered(frame: RpcResponse, sentAt: number): void {
     if (frame.error) {
       const error = ProtocolError.fromResponse(frame.error)
@@ -284,6 +304,15 @@ export class CandyCodeClient {
     }
 
     const hello = frame.result as HelloResult
+    if (!CandyCodeClient.helloIsWellFormed(hello)) {
+      // CW-3: a proxy or older server that answers hello with something
+      // shapeless used to crash the response dispatch mid-deref. A malformed
+      // answer is a protocol error: close the socket (onclose fails the
+      // pending calls and re-enters the reconnect ladder) instead.
+      this.lastError = 'server.hello returned a malformed result'
+      this.socket?.close(4000, 'hello malformed')
+      return
+    }
     this.hello = hello
     this.firstVersion ??= hello.server.version
     this.rttMs = Math.max(0, this.timers.now() - sentAt)

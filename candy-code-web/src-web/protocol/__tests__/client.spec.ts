@@ -276,3 +276,46 @@ describe('hello listener isolation (CW-1)', () => {
     expect(socket().sent.filter((frame) => frame.method === 'session.send')).toHaveLength(1)
   })
 })
+
+describe('malformed hello (CW-3)', () => {
+  it('treats a malformed hello answer as a protocol error instead of a crash', async () => {
+    const { client, socket } = harness()
+    client.start()
+    await flush()
+    socket().open()
+    // CW-3 at base: the hello answer was cast without a shape check, so a
+    // server (or proxy) that answers with server: null derefences a TypeError
+    // inside the response dispatch — right here — instead of being answered
+    // as a protocol error.
+    expect(() => socket().answer(helloResult({ server: null }), 'hello')).not.toThrow()
+    await flush()
+    expect(socket().closedWith?.code).toBe(4000)
+    expect(socket().closedWith?.reason).toBe('hello malformed')
+    // The synchronous onclose names the close as the visible error — the
+    // point is the malformed hello never reached a deref.
+    expect(client.lastError).toContain('hello malformed')
+    expect(client.status).toBe('reconnecting')
+    client.stop()
+  })
+
+  it('rejects a hello missing the principal scopes the connection store dereferences', async () => {
+    const { client, socket } = harness()
+    client.start()
+    await flush()
+    socket().open()
+    expect(() => socket().answer(helloResult({ principal: { kind: 'owner' } }), 'hello')).not.toThrow()
+    await flush()
+    expect(socket().closedWith?.code).toBe(4000)
+    expect(client.status).toBe('reconnecting')
+    client.stop()
+  })
+
+  it('still accepts a well-formed hello', async () => {
+    const { client, handshake } = harness()
+    client.start()
+    await flush()
+    handshake()
+    expect(client.status).toBe('connected')
+    client.stop()
+  })
+})
