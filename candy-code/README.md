@@ -1752,8 +1752,8 @@ A `PreToolUse` hook can allow, deny, rewrite or ask about a tool call; other
 events fire around the prompt, the turn's end (`Stop`, `SubagentStop`), the
 session's end and every compaction. Hooks are shell commands in
 `~/.candy-code/hooks.yaml` (or a trusted project's), answering by exit code or
-a JSON object on stdout. Built on the same chain, each opt-in in your own
-settings:
+a JSON object on stdout. Built-in stages ride the same chain as those shell
+commands, each one opt-in in your own settings:
 
 - **Post-edit lint** — every `Edit`/`Write` (each file of an `ApplyPatch`) is linted (`php -l` built in,
   others through `lintCommands`) and the errors are appended to the result.
