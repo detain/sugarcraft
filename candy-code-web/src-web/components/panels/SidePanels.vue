@@ -179,9 +179,8 @@ function onKey(event: KeyboardEvent): void {
 </style>
 
 <style>
-:root {
-  --panels-width: min(28rem, 100vw);
-}
+/* CW-UX-25: --panels-width is defined in styles/tokens.css (theme-invariant
+   layout metric) and consumed here for the body clearance. */
 @media (min-width: 1100px) {
   html.sc-panels-open body {
     padding-right: var(--panels-width);

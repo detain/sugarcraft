@@ -54,6 +54,11 @@
   --ansi-black-fg: #8b93bb;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  /* CW-UX-25: layout metrics are theme-invariant, so the token table owns
+     them (they lived in a :root rule inside SidePanels.vue — invisible to
+     the token guard's theme walk). --panels-width sizes the slide-in
+     side-panel column and its body reserve. */
+  --panels-width: min(28rem, 100vw);
 }
 
 @media (prefers-color-scheme: light) {
