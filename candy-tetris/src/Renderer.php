@@ -277,6 +277,18 @@ final class Renderer
             $game->score->lines,
             $game->score->level,
         );
+        // MA-13: badge the earned moments INSIDE the score card — rows are
+        // added only while something is armed, so a fresh game keeps the
+        // natural-height frame the goldens and ViewportTest pin.
+        if ($game->lastAward !== null) {
+            $score .= "\n" . $game->lastAward;
+        }
+        if ($game->combo >= 2) {
+            $score .= "\n" . \sprintf(Lang::t('combo_line'), $game->combo);
+        }
+        if ($game->backToBack === true) {
+            $score .= "\n" . Lang::t('b2b_line');
+        }
         $help = Lang::t('help_card');
 
         $nextStr = Lang::t('next_label') . "\n" . implode("\n\n", $previews);

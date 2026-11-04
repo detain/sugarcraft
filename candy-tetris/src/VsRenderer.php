@@ -250,13 +250,26 @@ final class VsRenderer
             ? '-'
             : $player->hold->value . ($player->canHold === false ? ' ' . Lang::t('hold_used') : '');
 
+        // The award must land whole: the $line truncator would otherwise
+        // half-cut it into 'TETR'. A level fits ≤2 digits at any sane
+        // score (3600 lines/level → level ≤ 4 digits even absurdly), so
+        // the score/lines fields give way before the badge does.
+        $youAward = $player->lastAward !== null ? '  ' . $player->lastAward : '';
+
         $body = implode("\n", [
-            $line(sprintf(
-                'you       score: %-7d lines: %-3d level: %d',
-                $player->score->points,
-                $player->score->lines,
-                $player->score->level,
-            )),
+            $line($youAward === ''
+                ? sprintf(
+                    'you       score: %-7d lines: %-3d level: %d',
+                    $player->score->points,
+                    $player->score->lines,
+                    $player->score->level,
+                )
+                : sprintf(
+                    'you       score: %-6d lines: %-2d lvl %d',
+                    $player->score->points,
+                    $player->score->lines,
+                    $player->score->level,
+                ) . $youAward),
             $line(sprintf(
                 'computer  score: %-7d lines: %-3d level: %d',
                 $computer->score->points,

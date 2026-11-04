@@ -30,6 +30,12 @@ return [
     // m35/MA-12: on-frame text cue for an exhausted hold (the dim SGR alone
     // was a no-op where style does not land).
     'hold_used'                 => '(used)',
+    // MA-13: earned-moment badges for the score card — the combo chain and
+    // the back-to-back arm now surface on frame (they used to live only in
+    // the score math). 'lastAward' tokens ('T-SPIN', 'TETRIS', …) are
+    // gameplay vocabulary rendered verbatim, like the score numbers.
+    'combo_line' => 'combo x%d',
+    'b2b_line'   => 'B2B armed',
 
     // Versus renderer
     'label.player'   => 'PLAYER',

@@ -118,6 +118,13 @@ final class Game implements Model
          * golden paths that never set it.
          */
         public readonly ?string      $overReason = null,
+        /**
+         * What the most recent lock earned (MA-13): 'T-SPIN', 'TETRIS',
+         * 'PERFECT CLEAR' & compound names, or null for an ordinary
+         * placement. The scoring math always paid these moments silently —
+         * the sidebar badges the token while it is the fresh achievement.
+         */
+        public readonly ?string      $lastAward = null,
     ) {}
 
     /** Death by spawn-block: the freshly spawned piece does not fit. */
@@ -168,6 +175,9 @@ final class Game implements Model
             array_key_exists('overReason', $changes)
                 ? $changes['overReason']
                 : $this->overReason,
+            array_key_exists('lastAward', $changes)
+                ? $changes['lastAward']
+                : $this->lastAward,
         );
     }
 
@@ -725,6 +735,21 @@ final class Game implements Model
             $score->level,
         );
 
+        // MA-13: NAME the earned moment the math above just paid. T-spins
+        // lead (the difficult input is the story), perfect clears compound
+        // with what earned them, and the rarest composites are spelled out
+        // rather than flattened into their parts.
+        $perfect = $cleared->isPerfectClear();
+        $award = match (true) {
+            $tspin->active === true && $perfect === true => 'T-SPIN+PC',
+            $tspinFull === true                          => 'T-SPIN',
+            $tspin->active === true                      => 'T-SPIN MINI',
+            $count >= 4 && $perfect === true             => 'TETRIS+PC',
+            $count >= 4                                  => 'TETRIS',
+            $perfect === true                            => 'PERFECT CLEAR',
+            default                                      => null,
+        };
+
         [$newKind, $nextBag] = $this->bag->next();
         $newPiece = self::spawn($newKind);
         if ($cleared->fits($newPiece) === false) {
@@ -741,6 +766,7 @@ final class Game implements Model
                 'lastActionWasRotation' => false,
                 'lockWindowGeneration' => null,
                 'lockResets' => 0,
+                'lastAward' => $award,
             ]);
         }
 
@@ -762,6 +788,7 @@ final class Game implements Model
             'lastActionWasRotation' => false,
             'lockWindowGeneration' => null,
             'lockResets' => 0,
+            'lastAward' => $award,
         ]);
     }
 
