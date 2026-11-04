@@ -130,8 +130,9 @@ final class WidthTest extends TestCase
             ["\u{1FAEA}", 1],                           // past the handshake
             ["\u{1FAF9}", 1],                           // just past the extended-A tail
             ["\u{1F1FF}", 1],                           // lone regional indicator (letter box)
-            // deliberate exclusions, pinned toward narrow
-            ["\u{2329}", 1], ["\u{232A}", 1],           // deprecated angle brackets — NOT emoji
+            // not emoji members, but EAW Wide: charged 2 via the isWide()
+            // path since the SC-1 census (they left the narrow column then)
+            ["\u{2329}", 2], ["\u{232A}", 2],           // 〈 〉 angle brackets
             // classic wide siblings still 2 (no regression on the EAW path)
             ["\u{1F600}", 2], ["\u{4E00}", 2],
         ];
@@ -739,23 +740,29 @@ final class WidthTest extends TestCase
      * the class's own corpus and range table actually claim — every
      * single-codepoint member of {@see self::widthFuzzAlphabet()}, both
      * endpoints of every `isWide()` range, and the C1 controls — and pins the
-     * five residual disagreements EXPLICITLY, each with its mechanism.
+     * residual disagreements EXPLICITLY, each with its mechanism.
+     *
+     * SC-1 UPDATE (2026-11): the census closed the combining-marks bulk that
+     * the paragraph above measured at this test's introduction — U+094D and
+     * the other Mn members now agree, and the U+FF00 leg-head off-by-one is
+     * fixed, so two roster entries deleted themselves exactly as the BOTH-ways
+     * assertion intends. The remaining three are the block-leg endpoint/
+     * head-creep cases, each justified below.
      */
     public function testEverySingleCodepointWidthAgreesWithIcusOwnCharacterProperties(): void
     {
-        // The five known departures, asserted BOTH ways below so the list
+        // The known departures, asserted BOTH ways below so the list
         // cannot rot into a rubber stamp: an entry that stops disagreeing
         // fails this test and must be deleted.
-        //   U+094D  DEVANAGARI SIGN VIRAMA — a real gap: Mn, but outside every
-        //           combining range isZeroWidth() knows, so it scores 1 not 0.
-        //   U+A4CF / U+FF00 / U+1F6FF — UNASSIGNED codepoints that sit at the
+        //   U+A4CF / U+1F6FF — UNASSIGNED codepoints that sit at the
         //           end of a block-shaped isWide() range, so they score 2
         //           where the oracle's fallback says 1. Benign: nothing paints
-        //           an unassigned codepoint.
+        //           an unassigned codepoint. (U+FF00, the third endpoint case
+        //           this line once covered, is fixed — the leg starts FF01.)
         //   U+1F900 CIRCLED CROSS FORMEE WITH FOUR DOTS — assigned, and ICU
         //           calls it Neutral, but it is the first codepoint of the
         //           block-shaped 0x1F900..0x1F9FF range, so it scores 2.
-        $knownDepartures = [0x094D, 0xA4CF, 0xFF00, 0x1F6FF, 0x1F900];
+        $knownDepartures = [0xA4CF, 0x1F6FF, 0x1F900];
 
         $mismatches = [];
         $departuresStillReal = [];

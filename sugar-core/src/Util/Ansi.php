@@ -906,11 +906,37 @@ final class Ansi
      * no backtracking — so it stays safe on untrusted input of any size,
      * and is idempotent: `strip(strip($s)) === strip($s)`.
      *
+     * A pure-text guard runs first (see {@see STRIP_TRIGGER_BYTES}): the
+     * machine can only drop bytes at an ESC lead or a freshly-judged C1 byte,
+     * so text containing neither returns itself without entering the loop.
+     * `Width::compute()` calls `strip()` per string per frame, which is the
+     * case the guard serves.
+     *
      * @param string $s Potentially hostile input
      * @return string Text with every escape sequence removed
      */
+    /**
+     * Bytes that can cause any removal inside {@see strip()}: ESC and the C1
+     * range 0x80..0x9F. Bytes >= 0xA0 never drop text — the machine either
+     * claims them as well-formed UTF-8 continuations of a run that passes
+     * through verbatim or skips them inert as lone continuation/out-of-range
+     * bytes — so a string free of ESC and C1 is provably its own strip().
+     * `AnsiStripPureTextTest` pins that reasoning structurally (guard before
+     * the walk; drop branches gated on exactly these leads) and adversarially
+     * (trigger-bearing inputs still byte-identical to the pre-guard scan).
+     */
+    private const STRIP_TRIGGER_BYTES =
+        "\x1b\x80\x81\x82\x83\x84\x85\x86"
+        . "\x87\x88\x89\x8a\x8b\x8c\x8d\x8e"
+        . "\x8f\x90\x91\x92\x93\x94\x95\x96"
+        . "\x97\x98\x99\x9a\x9b\x9c\x9d\x9e"
+        . "\x9f";
+
     public static function strip(string $s): string
     {
+        if (\strcspn($s, self::STRIP_TRIGGER_BYTES) === \strlen($s)) {
+            return $s; // Pure text: no ESC, no C1 — the loop would return $s.
+        }
         $out = '';
         $len = strlen($s);
         $i = 0;
