@@ -156,10 +156,13 @@ final class GraphicsRendererTest extends TestCase
 
         // APC kitty intro: ESC _ G (0x1b 0x5f 0x47) — the Kitty graphics
         // protocol is APC-framed (xterm ctlseqs `ESC _`), followed by the
-        // `c=<w>,r=<h>,f=100,m=1;` begin chunk. (The old DCS `ESC P q` pin
-        // here was the DECSIXEL introducer — ANSI audit defect #10, fixed
-        // in sugar-core kittyGraphicsBegin.)
-        $this->assertStringStartsWith("\x1b_Gc=", $output, 'Kitty output should begin with APC kitty header _Gc=');
+        // `a=T,c=<w>,r=<h>,f=100,m=1;` begin chunk. The leading `a=T` states
+        // the transmit-and-display action: an absent `a=` defaults to
+        // transmit-without-display (sugar-image 94d16dbb7), so the plain
+        // route must carry it. (The old DCS `ESC P q` pin here was the
+        // DECSIXEL introducer — ANSI audit defect #10, fixed in sugar-core
+        // kittyGraphicsBegin.)
+        $this->assertStringStartsWith("\x1b_Ga=T,c=1,r=1,f=100,m=1;", $output, 'Kitty output should begin with APC kitty header _Ga=T,');
     }
 
     /**
@@ -228,7 +231,7 @@ final class GraphicsRendererTest extends TestCase
 
         $output = (new GraphicsRenderer(Mode::Kitty))->render($frame, Mode::Kitty);
 
-        $this->assertStringStartsWith("\x1b_Gc=", $output);
+        $this->assertStringStartsWith("\x1b_Ga=T,c=4,r=2,f=100,m=1;", $output);
     }
 
     /**
