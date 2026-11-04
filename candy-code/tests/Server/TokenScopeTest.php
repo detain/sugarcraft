@@ -5,16 +5,27 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use React\Http\Message\Response;
+use React\Http\Message\ServerRequest;
 use SugarCraft\Code\Server\Auth\AuthContext;
+use SugarCraft\Code\Server\Auth\RateLimiter;
 use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\Auth\ViewerTokens;
+use SugarCraft\Code\Server\Http\AuthMiddleware;
+use SugarCraft\Code\Server\Http\HostAndOriginGuard;
+use SugarCraft\Code\Server\ServerConfig;
 use SugarCraft\Code\Support\PrivateRetainedDir;
 
 /**
  * The viewer-token store (X-DESIGN1 D-1, reviews-1103 G4-G): hashed at rest,
  * raw never persisted nor logged, the cap REFUSES rather than evicts, expiry
  * is absolute, and every revocation path — explicit, sweep, rotation — holds
- * on disk as loudly as it does in memory.
+ * on disk as loudly as it does in memory. The second half is the admission
+ * door (D-4): a matching `cv1_` carries the `viewer` principal and its grant
+ * attributes before the limiter, and a wrong one is indistinguishable from
+ * every other failed credential.
  */
 final class TokenScopeTest extends TestCase
 {
@@ -28,11 +39,18 @@ final class TokenScopeTest extends TestCase
     /** @var list<string> lines the store's log closure was handed */
     private array $notes = [];
 
+    /** @var list<string> lines the AuthMiddleware log closure was handed */
+    private array $mwLogLines = [];
+
+    private ?ServerRequestInterface $mwPassed = null;
+
     protected function setUp(): void
     {
         $this->now = 1_700_000_000.0;
         $this->dir = (string) \sys_get_temp_dir() . '/crush-g4g-' . \bin2hex(\random_bytes(6));
         $this->notes = [];
+        $this->mwLogLines = [];
+        $this->mwPassed = null;
     }
 
     protected function tearDown(): void
@@ -332,5 +350,177 @@ final class TokenScopeTest extends TestCase
         $grant = $auth->viewerTokens->grant('via context');
         self::assertFileExists($this->dir . '/' . ViewerTokens::FILE);
         self::assertNotNull($auth->viewerTokens->match($grant['token']));
+    }
+
+    private function middleware(AuthContext $auth): AuthMiddleware
+    {
+        $log = function (string $line): void {
+            $this->mwLogLines[] = $line;
+        };
+
+        return new AuthMiddleware($auth, ServerConfig::new('/nonexistent'), $log);
+    }
+
+    /**
+     * Drive one request through the door, mirroring the base harness: same
+     * host, same peer knob, recorded pass-through.
+     *
+     * @param array<string, string> $headers
+     */
+    private function dial(AuthMiddleware $middleware, string $method, string $target, array $headers = [], string $peer = '127.0.0.1'): ResponseInterface
+    {
+        $request = new ServerRequest(
+            $method,
+            'http://127.0.0.1:7420' . $target,
+            $headers + ['Host' => '127.0.0.1:7420'],
+            '',
+            '1.1',
+            ['REMOTE_ADDR' => $peer],
+        );
+        $request = $request->withAttribute(HostAndOriginGuard::ATTR_ORIGIN, HostAndOriginGuard::ORIGIN_SAME);
+
+        $response = $middleware($request, function (ServerRequestInterface $passed): Response {
+            $this->mwPassed = $passed;
+
+            return new Response(204);
+        });
+        self::assertInstanceOf(ResponseInterface::class, $response);
+
+        return $response;
+    }
+
+    /** @return array<string, string> handshake headers the upgrade door demands */
+    private function upgradeHeaders(): array
+    {
+        return [
+            'Upgrade' => 'websocket',
+            'Connection' => 'Upgrade',
+            'Sec-WebSocket-Version' => '13',
+            'Sec-WebSocket-Key' => 'dGhlIHNhbXBsZSBub25jZQ==',
+        ];
+    }
+
+    public function testViewerBearerCarriesTheViewerPrincipalAndItsAttributes(): void
+    {
+        $auth = AuthContext::new($this->tokens(), fn (): float => $this->now);
+        $grant = $auth->viewerTokens->grant('phone watch');
+
+        $response = $this->dial($this->middleware($auth), 'GET', '/api/sessions', ['Authorization' => 'Bearer ' . $grant['token']]);
+
+        self::assertSame(204, $response->getStatusCode());
+        self::assertInstanceOf(ServerRequestInterface::class, $this->mwPassed);
+        self::assertSame('viewer', $this->mwPassed->getAttribute(AuthMiddleware::ATTR_PRINCIPAL));
+        self::assertSame(['read'], $this->mwPassed->getAttribute(AuthMiddleware::ATTR_SCOPES));
+        self::assertSame($grant['id'], $this->mwPassed->getAttribute(AuthMiddleware::ATTR_TOKEN_ID));
+        self::assertNull($this->mwPassed->getAttribute(AuthMiddleware::ATTR_VIEWER_SESSIONS));
+        self::assertNull($this->mwPassed->getAttribute(AuthMiddleware::ATTR_SESSION));
+
+        $admits = \array_values(\array_filter($this->mwLogLines, static fn (string $line): bool => \str_contains($line, 'viewer grant')));
+        self::assertCount(1, $admits, 'the admit is exactly one audit line');
+        self::assertStringContainsString($grant['id'], $admits[0]);
+        foreach ($this->mwLogLines as $line) {
+            self::assertStringNotContainsString($grant['token'], $line, 'the share token itself never reaches a log line');
+        }
+    }
+
+    public function testPinnedGrantRidesItsSessionListOntoTheRequest(): void
+    {
+        $auth = AuthContext::new($this->tokens(), fn (): float => $this->now);
+        $grant = $auth->viewerTokens->grant('desk', ['s-one', 's-two']);
+
+        $response = $this->dial($this->middleware($auth), 'GET', '/api/sessions', ['Authorization' => 'Bearer ' . $grant['token']]);
+
+        self::assertSame(204, $response->getStatusCode());
+        self::assertSame(['s-one', 's-two'], $this->mwPassed?->getAttribute(AuthMiddleware::ATTR_VIEWER_SESSIONS));
+    }
+
+    public function testAWrongViewerTokenIsRefusedInTheOwnersOwnFortyOneShape(): void
+    {
+        $auth = AuthContext::new($this->tokens(), fn (): float => $this->now);
+        $middleware = $this->middleware($auth);
+
+        $wrongBearer = $this->dial($middleware, 'GET', '/api/sessions', ['Authorization' => 'Bearer ' . \str_repeat('0', 64)]);
+        $wrongViewer = $this->dial($middleware, 'GET', '/api/sessions', ['Authorization' => 'Bearer ' . ViewerTokens::PREFIX . \str_repeat('a', 40)]);
+
+        self::assertSame(401, $wrongBearer->getStatusCode());
+        self::assertSame(401, $wrongViewer->getStatusCode());
+        // Same body, same kind: the door answers an unknown share exactly like
+        // an unknown owner token, so probing cannot tell the families apart.
+        self::assertSame((string) $wrongBearer->getBody(), (string) $wrongViewer->getBody());
+        self::assertStringContainsString('"kind":"unauthorized"', (string) $wrongViewer->getBody());
+        self::assertNull($this->mwPassed);
+    }
+
+    public function testWrongViewerTokensAccrueStrikesAndMatchingOnesStillPassDuringLockout(): void
+    {
+        $auth = AuthContext::new($this->tokens(), fn (): float => $this->now);
+        $middleware = $this->middleware($auth);
+        $grant = $auth->viewerTokens->grant('phone watch');
+
+        for ($i = 0; $i < RateLimiter::MAX_FAILURES; $i++) {
+            $refused = $this->dial($middleware, 'GET', '/api/sessions', ['Authorization' => 'Bearer ' . ViewerTokens::PREFIX . \sprintf('dead%02d', $i) . \str_repeat('0', 32)]);
+            self::assertSame(401, $refused->getStatusCode());
+        }
+
+        $locked = $this->dial($middleware, 'GET', '/api/sessions');
+        self::assertSame(429, $locked->getStatusCode());
+        self::assertStringContainsString('"kind":"rate_limited"', (string) $locked->getBody());
+
+        // Pre-limiter law: a credential the owner minted on purpose is not
+        // the limiter's business — viewer AND owner still pass; so does health.
+        $this->mwPassed = null;
+        $viewerPass = $this->dial($middleware, 'GET', '/api/sessions', ['Authorization' => 'Bearer ' . $grant['token']]);
+        self::assertSame(204, $viewerPass->getStatusCode());
+        self::assertSame('viewer', $this->mwPassed?->getAttribute(AuthMiddleware::ATTR_PRINCIPAL));
+
+        $this->mwPassed = null;
+        $ownerPass = $this->dial($middleware, 'GET', '/api/sessions', ['Authorization' => 'Bearer ' . $auth->tokens->token()]);
+        self::assertSame(204, $ownerPass->getStatusCode());
+        self::assertSame('bearer', $this->mwPassed?->getAttribute(AuthMiddleware::ATTR_PRINCIPAL));
+
+        $health = $this->dial($middleware, 'GET', '/api/health');
+        self::assertSame(204, $health->getStatusCode());
+
+        foreach ($this->mwLogLines as $line) {
+            self::assertStringNotContainsString($grant['token'], $line);
+        }
+    }
+
+    public function testTheUpgradeDoorAcceptsAViewerSubprotocolTokenWhileTheAddressIsLockedOut(): void
+    {
+        $auth = AuthContext::new($this->tokens(), fn (): float => $this->now);
+        $middleware = $this->middleware($auth);
+        $grant = $auth->viewerTokens->grant('watch socket');
+
+        for ($i = 0; $i < RateLimiter::MAX_FAILURES; $i++) {
+            $this->dial($middleware, 'GET', '/api/sessions', ['Authorization' => 'Bearer ' . \str_repeat('f', 64)]);
+        }
+
+        $response = $this->dial($middleware, 'GET', '/ws', $this->upgradeHeaders() + [
+            'Sec-WebSocket-Protocol' => ServerConfig::AUTH_SUBPROTOCOL_PREFIX . $grant['token'],
+        ]);
+
+        self::assertSame(204, $response->getStatusCode());
+        self::assertSame('viewer', $this->mwPassed?->getAttribute(AuthMiddleware::ATTR_PRINCIPAL));
+        self::assertSame($grant['id'], $this->mwPassed?->getAttribute(AuthMiddleware::ATTR_TOKEN_ID));
+        foreach ($this->mwLogLines as $line) {
+            self::assertStringNotContainsString($grant['token'], $line);
+        }
+    }
+
+    public function testViewerBearerToThePublicLoginDoorStillPassesThrough(): void
+    {
+        $auth = AuthContext::new($this->tokens(), fn (): float => $this->now);
+        $grant = $auth->viewerTokens->grant('phone watch');
+
+        // The door's job on a public path is only to ride the attrs through;
+        // /api/login then refuses the cv1_ exchange itself, body-side, because
+        // its credential check is the owner tokens->matches() (D-3 — the
+        // controller is outside this lane's file-set; that leg is pinned by
+        // its own hash-equality law, not here).
+        $response = $this->dial($this->middleware($auth), 'POST', '/api/login', ['Authorization' => 'Bearer ' . $grant['token']]);
+
+        self::assertSame(204, $response->getStatusCode());
+        self::assertSame('viewer', $this->mwPassed?->getAttribute(AuthMiddleware::ATTR_PRINCIPAL));
     }
 }

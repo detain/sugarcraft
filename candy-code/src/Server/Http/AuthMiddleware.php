@@ -8,6 +8,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\CookieSessions;
 use SugarCraft\Code\Server\Auth\RateLimiter;
+use SugarCraft\Code\Server\Auth\ViewerTokens;
 use SugarCraft\Code\Server\ServerConfig;
 
 /**
@@ -24,6 +25,10 @@ use SugarCraft\Code\Server\ServerConfig;
  * - `bearer` — `Authorization: Bearer <owner token>`, for scripts and tools;
  * - `subprotocol` — the WebSocket upgrade offering `candy-code.auth.<token>`,
  *   for a non-browser WebSocket client that cannot set headers;
+ * - `viewer` — a `cv1_` share token (X-DESIGN1 D-4, G4-G) in either of those
+ *   two doors: read-only, revocable, never the owner. Its grants arrive in
+ *   {@see ATTR_SCOPES}, its id in {@see ATTR_TOKEN_ID} and its pinned session
+ *   list (null = all) in {@see ATTR_VIEWER_SESSIONS} for the dispatcher side;
  * - `ticket` — `/ws?ticket=…`, single use, bound to a live cookie session;
  * - `cookie` — the HttpOnly session cookie `/api/login` set; API only, never
  *   the upgrade. Since ISS-007 the cookie is NOT authority by itself: every
@@ -43,7 +48,9 @@ use SugarCraft\Code\Server\ServerConfig;
  * - a non-upgrade `/ws` is answered 426 before anything else: a cross-site
  *   `<img>` pointed at it used to burn the shared address budget for free;
  * - a MATCHING bearer or subprotocol token passes before the lockout is even
- *   consulted — the owner is never locked out of its own port;
+ *   consulted — the owner is never locked out of its own port; a MATCHING
+ *   viewer token passes there too (it is a credential the owner minted on
+ *   purpose; a wrong `cv1_` still strikes below, exactly like a wrong bearer);
  * - a `/ws` ticket failure strikes only on a real upgrade whose `Origin` the
  *   guard matched (same or allowed): an origin-less junk ticket cannot reach
  *   the store, let alone the budget;
@@ -60,6 +67,15 @@ final class AuthMiddleware
 
     /** The header carrying the per-login secret (ISS-007), as named with the web client. */
     public const SECRET_HEADER = 'X-Candy-Code-Auth';
+
+    /** The granted scope list carried by a `viewer` principal (X-DESIGN1 D-4). */
+    public const ATTR_SCOPES = 'candy-code.scopes';
+
+    /** The viewer grant id behind a `viewer` principal — the audit line's name (D-13). */
+    public const ATTR_TOKEN_ID = 'candy-code.tokenId';
+
+    /** Sessions a `viewer` grant pins itself to; null means every session (D-12). */
+    public const ATTR_VIEWER_SESSIONS = 'candy-code.viewerSessions';
 
     /**
      * Paths under `/api/` that answer without a session. AUT-6 hook routes are
@@ -114,6 +130,26 @@ final class AuthMiddleware
         $subprotocolToken = $path === '/ws' ? self::subprotocolToken($request) : null;
         if ($subprotocolToken !== null && $this->auth->tokens->matches($subprotocolToken)) {
             return $next($request->withAttribute(self::ATTR_PRINCIPAL, 'subprotocol'));
+        }
+
+        // X-DESIGN1 D-4 (G4-G): a `cv1_` share token is a second credential
+        // family in the SAME two doors the owner token uses. A matching one
+        // passes before the limiter, exactly like the owner's — the viewer is
+        // a credential the owner minted on purpose. A wrong one is only ever
+        // "presented but unauthenticated": it falls through to the strike and
+        // the identical 401 below, so nothing here can tell an unknown token
+        // from an expired or revoked one.
+        if ($bearer !== null && \str_starts_with($bearer, ViewerTokens::PREFIX)) {
+            $grant = $this->auth->viewerTokens->match($bearer);
+            if ($grant !== null) {
+                return $this->admitViewer($request, $next, $grant, $path);
+            }
+        }
+        if ($subprotocolToken !== null && \str_starts_with($subprotocolToken, ViewerTokens::PREFIX)) {
+            $grant = $this->auth->viewerTokens->match($subprotocolToken);
+            if ($grant !== null) {
+                return $this->admitViewer($request, $next, $grant, $path);
+            }
         }
 
         $retry = $this->auth->limiter->retryAfter($address);
@@ -180,6 +216,27 @@ final class AuthMiddleware
         }
 
         return Responses::error(401, 'unauthorized', 'authentication required');
+    }
+
+    /**
+     * Tag a validated viewer grant onto the request and hand it downstream
+     * (X-DESIGN1 D-4). The audit line names only the 8-hex grant id (D-13):
+     * the raw token is shareable by design and must never reach a log.
+     *
+     * @param array<string, mixed>      $grant a live ViewerTokens row
+     * @param callable(ServerRequestInterface): mixed $next
+     */
+    private function admitViewer(ServerRequestInterface $request, callable $next, array $grant, string $path): mixed
+    {
+        if ($this->log !== null) {
+            ($this->log)(\sprintf('viewer grant %s admitted for %s', (string) $grant['id'], $path));
+        }
+
+        return $next($request
+            ->withAttribute(self::ATTR_PRINCIPAL, 'viewer')
+            ->withAttribute(self::ATTR_SCOPES, (array) $grant['scopes'])
+            ->withAttribute(self::ATTR_TOKEN_ID, (string) $grant['id'])
+            ->withAttribute(self::ATTR_VIEWER_SESSIONS, $grant['sessionIds'] === null ? null : (array) $grant['sessionIds']));
     }
 
     /** `/ws` and every `/api/` path; the static UI is public. */
