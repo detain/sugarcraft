@@ -200,7 +200,13 @@ final class Client
     public function admit(): bool
     {
         $now = ($this->clock)();
-        $this->budget = \min(self::RATE_BURST, $this->budget + ($now - $this->refilledAt) * self::RATE_PER_SECOND);
+        // CWPD-11: elapsed time is never negative. A clock stepping backwards
+        // (NTP correction, a rebased container clock, a scripted harness) used
+        // to be credited as drain — 10 seconds of retreat emptied a 200-request
+        // burst to -300 and the client was refused everything until the clock
+        // caught up. Refill on forward time only; a backward step is simply
+        // "no time has passed for me".
+        $this->budget = \min(self::RATE_BURST, $this->budget + \max(0.0, $now - $this->refilledAt) * self::RATE_PER_SECOND);
         $this->refilledAt = $now;
         if ($this->budget < 1.0) {
             return false;

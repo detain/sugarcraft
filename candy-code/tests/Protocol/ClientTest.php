@@ -59,6 +59,20 @@ final class ClientTest extends TestCase
         self::assertTrue($client->admitBytes((int) Client::BYTE_BURST), 'a clock jump backwards refills nothing and spends nothing');
     }
 
+    public function testABackwardClockCannotDrainTheRequestBucket(): void
+    {
+        // CWPD-11: the same law for the request bucket. A clock that steps
+        // backwards (NTP, a scripted harness, a container rebasing its
+        // monotonic origin) must not be credited as negative elapsed time —
+        // at base it drove the budget to 200 - 10*50 = -300 and every request
+        // after the jump was refused until wall time caught up.
+        $now = 1000.0;
+        $client = $this->clientOnScriptedClock($now);
+        $now = 990.0;
+        self::assertTrue($client->admit(), 'a clock jump backwards neither refills nor drains the request bucket');
+        self::assertTrue($client->admit(), 'and the burst is still there to spend');
+    }
+
     /** A client whose two budgets move only when the test moves $now. */
     private function clientOnScriptedClock(float &$now): Client
     {
