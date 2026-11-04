@@ -210,12 +210,13 @@ final class ManagedTierSettingsTest extends TestCase
         );
 
         $rows = LayeredSettings::keyAuditRows($this->configDir);
+        $managed = $this->managedPath;
         $naming = array_values(array_filter(
             $rows,
-            static fn(string $row): bool => str_contains($row, 'config.json')
-                && str_contains($row, 'candy-code')
+            static fn(string $row): bool => str_contains($row, $managed)
         ));
         self::assertNotSame([], $naming, 'a corrupt managed pin must not silently un-apply');
+        self::assertSame(1, count($naming), 'exactly the managed file names itself, once');
     }
 
     public function testAMissingManagedFileCostsTheAuditNothingByteForByte(): void
