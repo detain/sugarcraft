@@ -2691,8 +2691,10 @@ turn, reloads a stored session and shows each edit in its own diff view. See
 
 ```php
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Chat;
 use SugarCraft\Code\Hooks\{HookManager, HookRegistry};
 use SugarCraft\Code\Tools\BuiltIn\{Bash, Read, Edit, Glob, Grep, WebFetch};
+use SugarCraft\Core\Program;
 
 $hooks = new HookManager(new HookRegistry());
 $hooks->registerBuiltIns();                       // audit + confirm-rm + protect-files
