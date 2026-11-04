@@ -24,7 +24,8 @@ use SugarCraft\Flappy\PipeGenerator;
  *
  * Keys: space / ⏎ / w / ↑ — flap, which also starts the run.  q / esc /
  * Ctrl+C — quit.  r — restart at any moment (README's "fresh board mid-flight
- * too" is the spec; M19).
+ * too" is the spec; M19).  Ctrl+C is the only chord action (m1, review round
+ * 2): every other Ctrl-combination is inert.
  *
  * Playability (M10/M18, lib-reviews-1102): the board opens in a READY phase —
  * the bird hovers at spawn and the world does not scroll until the first
@@ -361,8 +362,11 @@ final class Game implements Model
             // m4: a Shift-ed letter arrives as the uppercase rune; the game must not
             // silently ignore it.
             $rune = strtolower($msg->rune);
+            // m1 (r2): Ctrl+C is the ONLY chord action; plain keys behind
+            // chords (Ctrl+Q) must not fire them. Ctrl+W/Ctrl+Enter are text
+            // editor idioms — a flap on a chord would be a surprise.
             if ($msg->type === KeyType::Escape
-                || ($msg->type === KeyType::Char && $rune === 'q')
+                || ($msg->type === KeyType::Char && $rune === 'q' && $msg->ctrl === false)
                 || ($msg->ctrl && $msg->rune === 'c')) {
                 // M18: quitting mid-flight used to discard a qualifying
                 // score entirely — only a crash could persist. Settle first,
@@ -394,10 +398,11 @@ final class Game implements Model
             if ($this->crashed === true) {
                 return [$this, null];
             }
-            $isFlap = $msg->type === KeyType::Space
+            $isFlap = $msg->ctrl === false      // m1 (r2): chords are inert (see quit arm)
+                && ($msg->type === KeyType::Space
                 || $msg->type === KeyType::Enter   // M20: Enter flaps too
                 || $msg->type === KeyType::Up
-                || ($msg->type === KeyType::Char && $rune === 'w');
+                || ($msg->type === KeyType::Char && $rune === 'w'));
             if ($isFlap === true) {
                 return [$this->withBird($this->bird->flap())->withStarted(), null];
             }

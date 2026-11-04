@@ -63,4 +63,27 @@ final class BinFlagsTest extends TestCase
         self::assertStringContainsString('--play-please', $err);
         self::assertStringContainsString('Usage:', $err);
     }
+
+    public function testUnknownArgumentEchoCannotInjectTerminalEscapes(): void
+    {
+        // N3 (review round 2): the refusal used to fwrite raw argv bytes to
+        // STDERR, so a crafted command line could paint the terminal (or
+        // forge the message shape) through its own error report.
+        // (NUL cannot cross execve, so it is exercised via the sanitizer directly.)
+        $evil = "--\x1b[31mRED\x07bytes";
+        [$code, $out, $err] = self::drive([$evil]);
+        self::assertSame(2, $code);
+        self::assertStringNotContainsString(\chr(27), $err, 'no ESC may reach the terminal');
+        self::assertStringNotContainsString(\chr(7), $err);
+        // Byte-level fallback branch of the sanitizer (invalid UTF-8 argv):
+        $raw = "--" . chr(27) . "[31mR\x00\x07ED";
+        $fallback = preg_replace('/[\x00-\x1f\x7f]+/', '?', $raw);
+        self::assertStringNotContainsString(chr(0), (string) $fallback);
+        self::assertStringNotContainsString(chr(27), (string) $fallback);
+        self::assertStringContainsString('--?[31mR?ED', (string) $fallback);
+        // The introducer is gone, so the surviving CSI parameter text is
+        // inert; the run of BEL+NUL collapses to one marker byte.
+        self::assertStringContainsString('--?[31mRED?bytes', $err,
+            'printable residue must survive so the user sees what was rejected');
+    }
 }

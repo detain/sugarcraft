@@ -40,6 +40,8 @@ php candy-flappy.phar
 | `r`                  | Restart — after a crash or mid-flight; lands on the ready card |
 | `q` / `Esc` / `Ctrl+C` | Quit                                              |
 
+Other `Ctrl`-combinations do nothing; `Ctrl+C` is the only chord the game reads.
+
 The board opens on a **ready card**: the bird hovers and the world is frozen
 until your first flap, so launching never drops you into the floor. Quitting
 mid-flight with a qualifying score settles it onto the leaderboard before the

@@ -62,7 +62,19 @@ if (in_array('--help', $flags, true) || in_array('-h', $flags, true)) {
 // CI leg passing --something got an interactive hang instead of an error).
 $unknown = array_values(array_diff($flags, ['--version', '--help', '-h']));
 if ($unknown !== []) {
-    fwrite(STDERR, "candy-flappy: unknown argument(s): " . implode(' ', $unknown) . "\n\n" . $usage);
+    // N3 (review round 2): the echoed argv is untrusted bytes — replace every
+    // control character (C0/C1/DEL, incl. ESC sequences) and Unicode "other"
+    // before printing it. Category-wise on valid UTF-8 (emoji survive),
+    // byte-wise fallback for invalid sequences; both collapse runs to '?'.
+    $safe = array_map(
+        static function (string $arg): string {
+            $clean = preg_replace('/\p{C}+/u', '?', $arg);
+
+            return $clean ?? (string) preg_replace('/[\x00-\x1f\x7f]+/', '?', $arg);
+        },
+        $unknown
+    );
+    fwrite(STDERR, "candy-flappy: unknown argument(s): " . implode(' ', $safe) . "\n\n" . $usage);
     exit(2);
 }
 

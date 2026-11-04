@@ -861,6 +861,29 @@ final class GameTest extends TestCase
         self::assertNotNull($quit);
     }
 
+    public function testCtrlChordsAreInertExceptCtrlC(): void
+    {
+        // m1 (review round 2): Ctrl+C quit was documented and gated, but the
+        // ledger overclaimed full chord gating - Ctrl+Q quit and Ctrl+W
+        // flapped until this pin. The rule now: Ctrl+C is the ONLY chord the
+        // game reads; every other ctrl-combination does nothing.
+        $g = Game::start(static fn(int $_m): int => 0, $this->hermeticConfigDir());
+        [$afterW, $cmdW] = $g->update(new KeyMsg(KeyType::Char, 'w', ctrl: true));
+        self::assertFalse($afterW->started, 'Ctrl+W must not flap or start');
+        self::assertNull($cmdW);
+
+        [$afterQ, $cmdQ] = $g->update(new KeyMsg(KeyType::Char, 'q', ctrl: true));
+        self::assertNull($cmdQ, 'Ctrl+Q must not quit');
+        self::assertSame($g, $afterQ);
+
+        [$afterE, $cmdE] = $g->update(new KeyMsg(KeyType::Space, ctrl: true));
+        self::assertNull($cmdE, 'Ctrl+Space must not flap');
+
+        // The one chord that IS documented stays alive.
+        [, $cmdC] = $g->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        self::assertNotNull($cmdC, 'Ctrl+C still quits');
+    }
+
     public function testSettleOnExitSavesALiveQualifyingScore(): void
     {
         // The bin-level safety net for signal death (M18): a started,
