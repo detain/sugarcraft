@@ -649,4 +649,57 @@ final class SymbolMapTest extends TestCase
 
         return $n;
     }
+
+    /**
+     * The engine's hot call is a byte-table popcount over the 63 low bits plus
+     * the sign leg (8 lookups instead of up to 63 Kernighan iterations). This
+     * is an exact-sum decomposition, so it must agree with the loop oracle on
+     * every input — a drifted table would silently reorder candidates and move
+     * frozen digests, which is why the parity is pinned directly.
+     */
+    public function testTheTableBackedPopcountAgreesWithTheLoopOracle(): void
+    {
+        $pop = new \ReflectionMethod(SymbolMap::class, 'popcount');
+        $pop->setAccessible(true);
+
+        $values = [0, 1, -1, 2, 3, 255, 256, -255, 127, 128, PHP_INT_MAX, PHP_INT_MAX - 1, PHP_INT_MIN, -(1 << 62), 1 << 62, PHP_INT_MAX ^ 7];
+        // Deterministic spread over every byte-position pattern rather than
+        // a random draw, so a failure is reproducible from the test alone.
+        for ($shift = 0; $shift < 63; $shift++) {
+            $values[] = 1 << $shift;
+            $values[] = ~(1 << $shift);
+        }
+        $state = 0x2545F4914F6CDD1D;
+        for ($i = 0; $i < 2048; $i++) {
+            // xorshift64*: deterministic, covers mixed-density words.
+            $state ^= $state >> 12;
+            $state ^= ($state << 25) & PHP_INT_MAX;
+            $state ^= $state >> 27;
+            $values[] = $state;
+            $values[] = -$state;
+        }
+
+        foreach ($values as $value) {
+            self::assertSame(
+                self::pop64($value),
+                $pop->invoke(null, $value),
+                'popcount disagrees with the loop oracle for ' . $value,
+            );
+        }
+        }
+
+    /**
+     * Candidate search is a pure function of (bitmap, inverse-allowed) over a
+     * frozen corpus: the same query twice must return the same list. Any future
+     * demand cache has to preserve this, so the property is pinned today.
+     */
+    public function testCandidateTrialsAreRepeatableForTheSameBitmap(): void
+    {
+        foreach ([0, -1, -(int) 0x5555555555555555, 0x0F0F0F0F0F0F0F0F, PHP_INT_MAX, PHP_INT_MIN] as $bitmap) {
+            $first  = $this->map->findCandidates($bitmap, true, 8);
+            $second = $this->map->findCandidates($bitmap, true, 8);
+            self::assertNotEmpty($first);
+            self::assertSame($first, $second, 'the same query returned different candidates');
+        }
+    }
 }

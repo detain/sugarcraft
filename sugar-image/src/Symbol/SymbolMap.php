@@ -1238,15 +1238,44 @@ final class SymbolMap
     private static function popcount(int $x): int
     {
         // Sign bit handled by test-then-mask: x & (x-1) at PHP_INT_MIN
-        // overflows to float and wedges the Kernighan loop.
-        $n = ($x >> 63) & 1;
-        $x &= PHP_INT_MAX;
-        while ($x !== 0) {
-            $x &= $x - 1;
-            $n++;
+        // overflows to float and wedges any loop that relies on it reaching 0.
+        // The 63 low bits then ride a byte table: 8 lookups instead of up to 63
+        // Kernighan iterations, which matters because this is the hottest call
+        // in the engine (every candidate trial of every cell). Table sums are
+        // equal to the loop by construction; the equality is pinned.
+        $n     = ($x >> 63) & 1;
+        $x    &= PHP_INT_MAX;
+        $table = self::bytePopcounts();
+
+        for ($shift = 0; $shift < 64; $shift += 8) {
+            $n += $table[($x >> $shift) & 0xFF];
         }
 
         return $n;
+    }
+
+    /**
+     * Set-bit count for every byte value, built once per process.
+     *
+     * @return array<int, int> 256 entries indexed by byte value
+     */
+    private static function bytePopcounts(): array
+    {
+        /** @var array<int, int>|null $table */
+        static $table = null;
+
+        if ($table === null) {
+            $table = [];
+            for ($byte = 0; $byte < 256; $byte++) {
+                $count = 0;
+                for ($probe = $byte; $probe !== 0; $probe &= $probe - 1) {
+                    $count++;
+                }
+                $table[$byte] = $count;
+            }
+        }
+
+        return $table;
     }
 
     /**
