@@ -149,18 +149,34 @@ final class VsRenderer
     }
 
     /**
-     * Computer pieces use a more magenta hue (shifted color).
+     * Computer-field palette: one 256-colour code per kind, deliberately
+     * DISJOINT from the player palette ({@see Tetromino::color()}) so the
+     * two boards never paint the same kind identically. The previous
+     * `(color + 150) % 256` shift collided — computer S landed exactly on
+     * player Z's red 196, and computer O became a second green.
+     *
+     * Keyed by {@see Tetromino::value} — PHP const arrays cannot key on
+     * enum cases (measured 8.3).
+     *
+     * @var array<string, int>
      */
+    public const COMPUTER_COLORS = [
+        'I' => 80,
+        'O' => 185,
+        'T' => 99,
+        'S' => 113,
+        'Z' => 203,
+        'J' => 27,
+        'L' => 215,
+    ];
+
     private static function blockComputer(Tetromino $kind): string
     {
-        // Shift color towards magenta/pink for computer pieces
-        $shiftedColor = ($kind->color() + 150) % 256;
-        return Ansi::bg256($shiftedColor) . '  ' . Ansi::reset();
+        return Ansi::bg256(self::COMPUTER_COLORS[$kind->value]) . '  ' . Ansi::reset();
     }
 
     private static function ghostComputer(Tetromino $kind): string
     {
-        $shiftedColor = ($kind->color() + 150) % 256;
-        return Ansi::sgr(38, 5, $shiftedColor, 2) . '▒▒' . Ansi::reset();
+        return Ansi::sgr(38, 5, self::COMPUTER_COLORS[$kind->value], 2) . '▒▒' . Ansi::reset();
     }
 }

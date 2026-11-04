@@ -153,20 +153,21 @@ final class VsRendererTest extends TestCase
 
     public function testRenderComputerPiecesUseDifferentHue(): void
     {
-        // Build a VS game where computer has a piece at a known position
-        $computerGame = Game::start();
-        $pieceKind = $computerGame->piece->kind;
+        // MA-14: the two palettes must be disjoint by value. The old
+        // (color + 150) % 256 shift put computer S exactly on player Z's
+        // red, so label-presence assertions proved nothing — pin the map.
+        $playerPalette = [];
+        foreach (Tetromino::cases() as $kind) {
+            $playerPalette[] = $kind->color();
+        }
+        $computerPalette = array_values(VsRenderer::COMPUTER_COLORS);
 
-        // The renderer's blockComputer shifts color by 150
-        // We can't directly test the private method, but we can verify
-        // the overall render output contains expected content
-        $vs = new VsGame(Game::start(), $computerGame);
+        self::assertCount(7, $computerPalette, 'every kind needs a computer colour');
+        self::assertSame($computerPalette, array_values(array_unique($computerPalette)), 'computer colours must not repeat each other');
+        self::assertSame([], array_values(array_intersect($playerPalette, $computerPalette)), 'no computer colour may collide with the player palette');
+
+        $vs = new VsGame(Game::start(), Game::start());
         $output = VsRenderer::render($vs);
-
-        // Output should be a non-empty string containing board elements
-        $this->assertIsString($output);
-        $this->assertNotEmpty($output);
-        // Should render both player and computer labels
         $this->assertStringContainsString('PLAYER', $output);
         $this->assertStringContainsString('COMPUTER', $output);
     }
