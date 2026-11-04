@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { PROMPT_HISTORY_CAP, clearPromptHistory, loadPromptHistory, pushPromptHistory, searchPromptHistory } from '../promptHistory'
+import { PROMPT_HISTORY_CAP, PROMPT_HISTORY_MAX_ENTRY_CHARS, clearPromptHistory, loadPromptHistory, pushPromptHistory, searchPromptHistory, storageDegraded } from '../promptHistory'
 import { readJson, writeJson } from '../storage'
 
 describe('prompt history ring (WEB-5a-i)', () => {
@@ -143,5 +143,53 @@ describe('prompt history merges across tabs (CW-DBA-3)', () => {
     writeJson('promptHistory', ['two', 'one'])
     const ring = pushPromptHistory(['two'], 'one')
     expect(ring).toEqual(['one', 'two', 'one'])
+  })
+})
+
+/**
+ * CW-DBA-4 (reviews-1103): ring entries were length-unbounded — one
+ * pasted megabyte prompt eats the whole budget, and the 50-entry count
+ * protects nothing. Entries now carry the same 16 KiB character clamp the
+ * drafts map persists (layout.ts DRAFT_MAX_PERSISTED_CHARS), and a write
+ * the browser REFUSES (quota) is no longer swallowed: storageDegraded
+ * says so, the drafts map's own flag is the precedent.
+ */
+describe('prompt history entry bound and write truth (CW-DBA-4)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('clamps an oversized prompt to the persisted entry bound', () => {
+    const ring = pushPromptHistory([], 'x'.repeat(PROMPT_HISTORY_MAX_ENTRY_CHARS + 10_000))
+    expect(ring[0]).toHaveLength(PROMPT_HISTORY_MAX_ENTRY_CHARS)
+    expect(loadPromptHistory()[0]).toHaveLength(PROMPT_HISTORY_MAX_ENTRY_CHARS)
+    const stored = JSON.parse(localStorage.getItem('candy-code-web:promptHistory') as string) as string[]
+    expect(stored[0]).toHaveLength(PROMPT_HISTORY_MAX_ENTRY_CHARS)
+  })
+
+  it('flags degraded storage when the browser refuses the write, keeping the ring usable', () => {
+    // jsdom's Storage exotic object hides its setItem from prototype spies
+    // once real writes have happened in the file, so the quota condition is
+    // simulated by swapping globalThis.localStorage — the very binding
+    // storage.ts resolves at call time.
+    const real = globalThis.localStorage
+    let writes = 0
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+      getItem: (key: string) => real.getItem(key),
+      setItem: () => { writes++; throw new Error('QuotaExceededError') },
+      removeItem: (key: string) => real.removeItem(key),
+    } })
+    try {
+      const ring = pushPromptHistory([], 'first')
+      // The ring still works in memory; only persistence failed.
+      expect(ring).toEqual(['first'])
+      expect(storageDegraded.value).toBe(true)
+      expect(writes).toBe(1)
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: real })
+    }
+    pushPromptHistory(loadPromptHistory(), 'second')
+    expect(storageDegraded.value).toBe(false)
+    expect(loadPromptHistory()).toEqual(['second'])
   })
 })

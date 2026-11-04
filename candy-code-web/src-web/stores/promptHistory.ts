@@ -6,10 +6,32 @@
  * an empty prompt. A viewer whose storage is blocked simply has no history;
  * nothing else in the UI changes.
  */
+import { ref } from 'vue'
 import { readJson, removeJson, writeJson } from './storage'
 
 /** How far back the ring reaches; the oldest entry falls off the tail. */
 export const PROMPT_HISTORY_CAP = 50
+
+/**
+ * CW-DBA-4: one entry's persisted length bound — the same 16 KiB character
+ * law the drafts map keeps (layout.ts `DRAFT_MAX_PERSISTED_CHARS`). Counting
+ * entries protects nothing against one pasted megabyte prompt; the mirror
+ * is by comment, not import: the ring has no business depending on the
+ * layout store.
+ */
+export const PROMPT_HISTORY_MAX_ENTRY_CHARS = 16 * 1024
+
+/**
+ * CW-DBA-4: a storage write the browser refused (quota, private-mode
+ * lockdown) used to vanish into writeJson's return — the drafts map has
+ * carried a degraded flag since then, and this is the ring's same flag.
+ * Set by the next successful write; nothing else in the UI changes.
+ */
+export const storageDegraded = ref(false)
+
+function clampEntry(text: string): string {
+  return text.length > PROMPT_HISTORY_MAX_ENTRY_CHARS ? text.slice(0, PROMPT_HISTORY_MAX_ENTRY_CHARS) : text
+}
 
 const KEY = 'promptHistory'
 
@@ -46,8 +68,9 @@ export function pushPromptHistory(history: string[], prompt: string): string[] {
   if (text === '' || history[0] === text) return history
   const stored = loadPromptHistory()
   if (stored[0] === text) return stored
-  const next = [text, ...stored].slice(0, PROMPT_HISTORY_CAP)
-  writeJson(KEY, next)
+  const next = [text, ...stored].map(clampEntry).slice(0, PROMPT_HISTORY_CAP)
+  if (writeJson(KEY, next)) storageDegraded.value = false
+  else storageDegraded.value = true
   return next
 }
 

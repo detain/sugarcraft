@@ -23,8 +23,9 @@ export function writeJson(key: string, value: unknown): boolean {
     return true
   } catch {
     // storage full or blocked: a convenience lost, nothing more. The return
-    // value lets the one holder that persists user-typed text (the drafts
-    // map) show that its memory and the disk have diverged.
+    // value lets the holders that persist user-typed text — the drafts map
+    // and the prompt history ring (CW-DBA-4) — show that their memory and
+    // the disk have diverged.
     return false
   }
 }
