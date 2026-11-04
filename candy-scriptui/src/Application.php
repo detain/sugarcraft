@@ -543,7 +543,7 @@ final class Application extends SymfonyApplication
                     $target = method_exists($output, 'getErrorOutput')
                         ? $output->getErrorOutput()
                         : $output;
-                    $target->writeln("<error>candy-scriptui: {$message}</error>");
+                    $target->writeln('<error>candy-scriptui: ' . \SugarCraft\Core\Util\Sanitize::cellValue($message) . '</error>');
                     return Command::INVALID;
                 }
             }
