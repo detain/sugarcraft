@@ -4,6 +4,8 @@ A full-screen terminal system monitor for PHP 8.3+, built on the SugarCraft TUI 
 
 ![candy-top demo](https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.vhs/top.gif)
 
+(Demo data: the capture above runs `--fake`, so no number in it is a live host.)
+
 candy-top reads btop's config format and btop's `.theme` files, and its keys, menus and layout rules follow btop's source. Where it differs from btop, the [Differences from btop](#differences-from-btop) section says so.
 
 ## Contents
@@ -26,7 +28,10 @@ candy-top reads btop's config format and btop's `.theme` files, and its keys, me
 - [GPU](#gpu)
 - [Adopted upstream btop PRs](#adopted-upstream-btop-prs)
 - [Differences from btop](#differences-from-btop)
+- [Troubleshooting](#troubleshooting)
 - [Development](#development)
+- [License](#license)
+- [Credits & inspiration](#credits--inspiration)
 
 ## Requirements
 
@@ -104,11 +109,13 @@ vendor/bin/candy-top --version           # version line, no tty needed
 
 | Flag | Effect |
 |---|---|
-| `--fake` | Uses the seeded fake collectors (`Source\Fake\*`) instead of the live host. The data is deterministic and the pids are invented, so it suits demos and VHS tapes. The fake host has two GPUs and one NPU (gpu boxes `gpu0`-`gpu2`), with per-process GPU use. |
+| `--fake` | Uses the seeded fake collectors (`Source\Fake\*`) instead of the live host. The data is deterministic and the pids are invented, so it suits demos and VHS tapes. The fake host has two GPUs and one NPU (gpu boxes `gpu0`-`gpu2`), with per-process GPU use. It is still a full start, so it still needs a tty: `--fake` never bypasses the "No tty detected!" gate (only `--help`, `--version` and `self-update` answer before it). For a non-interactive look at the drawing, run it under a pty (`script -qec 'candy-top --fake' /dev/null`) or use the VHS tape. |
 | `--config <path>`, `--config=<path>` | Reads the config from `<path>` instead of `$XDG_CONFIG_HOME/candy-top/config.conf`. That file is also where the config is saved. A missing value is an error (exit 2). So is a following argument that starts with `-` in the space-separated form (`--config -x`); `--config=-x` is accepted as a path. |
 | `--version` | Prints `candy-top <version>` on stdout and exits 0, before any config, theme or host probe. Works without a tty. A tagged phar build prints the tag it was built from; a plain checkout prints the dev version and short sha (`+dirty` when the tree is modified), and `unknown` when the package's composer metadata is unavailable. |
 | `-h`, `--help` | Prints usage and the KEYS section, which is generated from the same key table as the help overlay, then exits 0. Works without a tty. |
 | `self-update [flags]` | The updater verb for a phar install: `--check`, `--rollback` and `--allow-unsigned` (see [Phar release and self-update](#phar-release-and-self-update)). It answers before the tty gate, so it works over ssh and in cron; every argument after `self-update` belongs to the updater, not to candy-top. A composer install is refused loudly rather than silently no-op'd. |
+
+On first run you get four boxes: **cpu** (per-core meters and load), **memory** (the legend, plus disks when `show_disks` is on), **network** (one interface with its rates) and **processes** (the sortable list). `1` to `4` toggle the four boxes, `5` to `0` the gpu slots, `F1` (or `h`) opens the help overlay that lists every key, and `q` quits — saving the layout on the way out, as btop does. Nothing needs configuring to start: the defaults are btop's, and a copied `btop.conf` loads as-is. Run it against fake data (`--fake`) to see all of that without touching your host.
 
 Any other argument exits with status 2. There is no `--tty` flag. TTY mode comes from the `force_tty` option or from running on a real console, as described in [TTY mode](#tty-mode). Config load warnings (bad values) are printed on stderr at startup, and the option keeps its default.
 
@@ -693,7 +700,7 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 - Batteries are re-scanned every sample, so a hot-plugged one appears without a restart.
 - Mounts whose statvfs failed are retried after a while, not ignored for the process lifetime.
 - `proc_filter_containers` also hides VMs, and the text filter also matches container and VM names.
-- Containers box (#1873): libvirt/KVM guests are listed beside the containers (engine `kvm`, the domain's configured memory as the limit when `memory.max` is `max`, the vCPU count in the detail title), unless `ctr_show_vms` is off; btop skips every `machine-qemu*` scope. The engine candy-top runs in is detected from more markers than btop's three (`KUBERNETES_SERVICE_HOST`, `container=` in `/proc/1/environ`, `/proc/self/cgroup`, the overlay root in `/proc/self/mountinfo`; `jail` on FreeBSD), systemd's names are shortened, and the label takes the `x ctr` button's own slot cut to fit before the clock and stays clickable (btop prints the whole name two cells further right, with no click zone, whatever the width). Before the first sample the box shows its labels but not "No containers found". `[`/`]` with no containers does not reset the proc selection (btop resets it on every press). Conversely, the proc selection also resets when the container selection is cleared because the container vanished or the box was hidden (btop resets it only on a key or click). Container samples come from the proc box's scans, and one covering less than half of `update_ms` is skipped (btop collects containers on every proc collect). After the box is re-shown, its first cpu% is the sum of the container's processes; btop shows the cgroup delta averaged over the hidden period. The docker reply is capped at 8 MiB and the 1 s timeout bounds the whole exchange. A cgroup path containing `..` is never read. Only a bare left click (not a drag) acts on the box's buttons and rows. A translated `[ select ]` label keeps the button's right edge and splits it into halves. A `machine-qemu…` scope that does not read as `qemu-<id>-<name>` once decoded (for example `machine-qemubox.scope`) is listed as an nspawn container; btop skips every `machine-qemu*` scope.
+- Containers box (#1873): libvirt/KVM guests are listed beside the containers (engine `kvm`, the domain's configured memory as the limit when `memory.max` is `max`, the vCPU count in the detail title), unless `ctr_show_vms` is off; btop skips every `machine-qemu*` scope. The engine candy-top runs in is detected from more markers than btop's three (btop checks `/run/.containerenv`, `/.dockerenv` and the first word of `/run/systemd/container`; candy-top adds `KUBERNETES_SERVICE_HOST`, `container=` in `/proc/1/environ`, a container path in `/proc/self/cgroup` and the overlay root in `/proc/self/mountinfo` before them, and `jail` on FreeBSD), systemd's names are shortened, and the label takes the `x ctr` button's own slot cut to fit before the clock and stays clickable (btop prints the whole name two cells further right, with no click zone, whatever the width). Before the first sample the box shows its labels but not "No containers found". `[`/`]` with no containers does not reset the proc selection (btop resets it on every press). Conversely, the proc selection also resets when the container selection is cleared because the container vanished or the box was hidden (btop resets it only on a key or click). Container samples come from the proc box's scans, and one covering less than half of `update_ms` is skipped (btop collects containers on every proc collect). After the box is re-shown, its first cpu% is the sum of the container's processes; btop shows the cgroup delta averaged over the hidden period. The docker reply is capped at 8 MiB and the 1 s timeout bounds the whole exchange. A cgroup path containing `..` is never read. Only a bare left click (not a drag) acts on the box's buttons and rows. A translated `[ select ]` label keeps the button's right edge and splits it into halves. A `machine-qemu…` scope that does not read as `qemu-<id>-<name>` once decoded (for example `machine-qemubox.scope`) is listed as an nspawn container; btop skips every `machine-qemu*` scope.
 - ipmi box (`ipmi`, `I`, `ipmi_update_ms`, `ipmi_show_serials`): candy-top's own, btop reads no BMC. A stock btop rejects `ipmi` in `shown_boxes` or a preset. Like `x`, `I` does not act behind the size notice. The `IPMI` title button is drawn only on hosts with a BMC device node (or while the box is shown).
 - VM dashboard (`vms`, `v`, `s`/`S`, `vms_sorting`): candy-top's own, btop has no VM view. It is a takeover box: while shown, mem, net, proc and ctr stay in `shown_boxes` but are not laid out or sampled, and the cpu box is only as tall as its cores need. `v` also works behind the size notice. A stock btop rejects `vms` in `shown_boxes` or a preset, like `ctr`. The `vms` title button is drawn only on hosts running libvirt (or while the dashboard is shown). Disk rates are the qemu process's storage I/O, not cgroup `io.stat` (see [vms](#vms)). FreeBSD bhyve guests are not shown.
 - Tree siblings are sorted by branch totals (#1791a).
@@ -702,6 +709,7 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 - The IO columns take exactly the 14 cells they draw, so Cpu% stays in place.
 - The `gpu` and `gpu memory` sorts come after `io total` in the sort cycle. btop #1552 inserts them before `cpu direct`; appending them keeps the stock sort positions.
 - GPU box drawing is clipped above the box's bottom border; btop overdraws the border when the grid makes a box shorter than its sections.
+- A tight box silently drops content instead of signalling it: the cpu box gives up past the per-core columns that fit its width, and the memory legend stops at the rows that fit its height. Nothing marks the cut (btop clips the same way, also without a sign).
 - A `gpuN` in `shown_boxes` that names an accelerator which is not detected is not drawn, and a preset naming one is refused with the size-error box.
 - A GPU that stops answering is held only for `max(5, ceil(30 s / update_ms))` samples, then shown as `n/a`; btop holds its last values indefinitely.
 - GPUs are sampled once per update for all boxes, as in btop, but `nvidia-smi` runs in the background, while btop's NVML calls block its collector. So while a query is running, the cpu box's GPU rows arrive a moment after its CPU readings, and the proc box shows the previous sample's per-process GPU values. Per-process data appears one update after the proc box starts wanting it, except after `g` or a gpu sort, which wait for it.
@@ -713,6 +721,17 @@ These are deliberate deviations and gaps. Each phase's full notes are in `CALIBE
 - The theme list is scanned at startup and on `ctrl+r`, not on every menu open.
 - `lowcolor` follows `truecolor` at startup.
 - The proc list samples synchronously on the UI loop. Measured on a host with about 1160 processes, a sample takes roughly 40-47 ms with the IO columns off and 56-72 ms with them on.
+
+## Troubleshooting
+
+- **"Terminal size too small".** The notice names the width and height the current layout needs. Resize, or shrink the layout from behind the notice: `1` to `4` hide boxes and `5` to `0` the gpu slots (`q` quits; `x` does nothing here, as in btop #1873). Hiding a box also lowers the minimum, and `ctrl+r` reloads a config you have edited in the meantime.
+- **Colours look wrong, or the graphs are plain.** Your terminal is being stepped down. `tty_mode` (or `force_tty`) draws in the 16-colour palette, `truecolor` asks for 24-bit, and a `NO_COLOR` in the environment steps the frame down by itself. `TERM=dumb` gets text only.
+- **A field reads `n/a`.** That is the honest answer: nothing was measured yet, or the source is unreadable here. It is not a zero. GPU rows go `n/a` when a card stops answering, and never invent a value while the reader has no data.
+- **Something is missing that btop shows** (a sensor, a watt line, ZFS pool IO). Check [Differences from btop](#differences-from-btop) first — that list is the current boundary, and each entry says what is not implemented.
+- **Where the files live.** Config `$XDG_CONFIG_HOME/candy-top/config.conf`, themes in the same directory, tree-collapse state in `$XDG_STATE_HOME/candy-top/tree-state.json`. There is no log file: `log_level` is accepted for btop.conf compatibility and ignored.
+- **It refuses to start.** `candy-top --version` proves the binary itself is fine; the startup refusals (no tty, an unusable config path) all print a reason on stderr and exit non-zero before drawing anything.
+
+Bug reports and feature requests: [the SugarCraft issue tracker](https://github.com/detain/sugarcraft/issues). Say which version (`candy-top --version`), which terminal, and whether it reproduces with `--fake` — a fake-data repro needs no host state at all.
 
 ## Development
 
