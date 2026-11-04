@@ -2167,6 +2167,112 @@ final class RendererTest extends TestCase
         $this->assertLessThanOrEqual(80, Width::of($titleRows[0]));
     }
 
+    // CC-UXD-01 (owner ruling OD-4): the modal SHRINKS TO FIT — box height is
+    // capped at rows - 2, the option tail is what survives the trim, and a
+    // terminal with room for the whole modal shows every row of it.
+
+    public function testThePermissionModalNeverGrowsPastRowsMinusTwo(): void
+    {
+        $hostile = implode("\n", array_fill(0, 30, 'why not'));
+
+        foreach ([8, 12, 16, 20, 24, 30, 40] as $rows) {
+            $shapes = [
+                'plain' => $this->chatAwaitingPermission(rows: $rows),
+                'hostile prompt' => $this->chatAwaitingPermission($hostile, rows: $rows),
+                'typed steps' => $this->chatAwaitingPermission(
+                    'ok?',
+                    ['command' => 'make deploy', 'steps' => array_fill(0, 10, ['send' => 'y'])],
+                    'PtyRun',
+                    rows: $rows,
+                ),
+            ];
+
+            foreach ($shapes as $label => $chat) {
+                $box = explode("\n", self::permissionModal($chat));
+                $this->assertLessThanOrEqual(
+                    $rows - 2,
+                    count($box),
+                    'the ' . $label . ' modal at 80x' . $rows . ' overflows the viewport',
+                );
+            }
+        }
+    }
+
+    public function testEveryOptionRowSurvivesWhenTheTerminalHasRoomForTheWholeModal(): void
+    {
+        $roomy = explode("\n", self::permissionModal($this->chatAwaitingPermission(rows: 100)));
+        $needed = count($roomy);
+
+        // OD-4's other half: whenever rows >= needed + 2, nothing is elided —
+        // byte-identical to the generous-viewport render, which is what
+        // "every option row is on-screen" measures, since the option block
+        // is the modal's tail. The elision marker's absence proves no row
+        // was dropped, and the height cap still holds.
+        foreach ([$needed + 2, $needed + 6, 40] as $rows) {
+            if ($rows < $needed + 2) {
+                continue;
+            }
+            $box = self::permissionModal($this->chatAwaitingPermission(rows: $rows));
+            $this->assertSame(
+                implode("\n", $roomy),
+                $box,
+                'a terminal with room for the modal must not lose a single row of it at ' . $rows . ' rows',
+            );
+            $this->assertStringNotContainsString('more lines', Ansi::strip($box));
+            $this->assertLessThanOrEqual($rows - 2, count(explode("\n", $box)));
+        }
+    }
+
+    public function testTheRowsTwelveSixteenAndTwentyProbesRenderTheModalWithoutFatals(): void
+    {
+        foreach ([12, 16, 20] as $rows) {
+            $box = self::permissionModal($this->chatAwaitingPermission(
+                'Run rm -rf build/?',
+                ['command' => 'rm -rf build', 'description' => 'x'],
+                'Bash',
+                80,
+                $rows,
+            ));
+            $this->assertNotSame('', $box, 'the modal must render, not fatal, at ' . $rows . ' rows');
+            $this->assertLessThanOrEqual($rows - 2, count(explode("\n", $box)));
+        }
+    }
+
+    public function testANarrowTerminalStillGetsABoundedModal(): void
+    {
+        foreach ([6, 7, 8, 10, 20] as $cols) {
+            $box = self::permissionModal($this->chatAwaitingPermission(cols: $cols, rows: 30));
+            $this->assertNotSame('', $box);
+            $this->assertLessThanOrEqual(30 - 2, count(explode("\n", $box)));
+        }
+    }
+
+    public function testThePathologicalBudgetWindowKeepsHeightAndDropsTheTitleLastResort(): void
+    {
+        // rows 8: budget = max(1, 8-2-4) = 2 — even the marker+title shape
+        // does not fit beside the option tail, so the window is the tail's
+        // leading rows (spacer + first option). Height is absolute; content
+        // degrades in the documented order.
+        $box = self::permissionModal($this->chatAwaitingPermission(rows: 8));
+        $stripped = Ansi::strip($box);
+        $this->assertLessThanOrEqual(8 - 2, count(explode("\n", $box)));
+        $this->assertStringNotContainsString('more lines', $stripped, 'the tail-window shape carries no marker — it is a slice, not an elision');
+        $this->assertStringContainsString('y ', $stripped, 'the first answer key survives even the extreme window');
+    }
+
+    /**
+     * The permission modal's box straight from the private renderer — the
+     * same string the frame composites, without the transcript around it.
+     * Reflection, not a composited-frame scan: KeyHelpTest's lesson is that
+     * border-scan extraction broke at wide terminals, so the method itself
+     * is the measurement.
+     */
+    private static function permissionModal(Chat $chat): string
+    {
+        return (string) (new \ReflectionMethod(Renderer::class, 'renderPermissionPrompt'))
+            ->invoke(null, $chat, $chat->theme());
+    }
+
     // =========================================================================
     // §1 E7: denied / interrupted tool-call visual states
     // =========================================================================
