@@ -463,6 +463,35 @@ final class ScriptRunnerTest extends TestCase
         self::assertDirectoryDoesNotExist($this->laneProjectDir . '/lane-jail-probe.txt');
     }
 
+    public function testADispatchAnsweringWithNonStringContentArrivesAsANamedErrorNotASilentEmpty(): void
+    {
+        // PHPD-03 (reviews-1103 G1-L3A): the bridge contract says content IS
+        // a string. The belt used to answer a broken shape with '' plus
+        // isError:false — a successful-looking empty result; both sides of
+        // the bridge now name the mismatch in the voice every other frame
+        // defect uses. Production dispatchers hand back
+        // ToolResult::content() — typed string — so only a hand-rolled
+        // dispatcher can ever stand here; that is exactly what this
+        // deliberately misshapen closure is.
+        $laneTrap = static fn (string $name, array $arguments): array => ['content' => ['not', 'a', 'string'], 'isError' => false];
+
+        $run = ScriptRunner::run(
+            code: '$r = tool("Trap", []); return ["err" => $r["isError"], "text" => $r["content"]];',
+            chdir: $this->laneProjectDir,
+            dispatch: $laneTrap,
+            catalog: static fn (): array => [],
+            jail: null,
+            wallSeconds: 15.0,
+        );
+
+        self::assertNull($run->refusal, $run->stderr);
+        self::assertSame(0, $run->exitCode, $run->stderr);
+        self::assertTrue((bool) ($run->return['err'] ?? false), 'a broken dispatch shape is an error for the script, never an empty success');
+        self::assertStringContainsString('tool result content must be a string, got array', (string) ($run->return['text'] ?? ''));
+        self::assertStringContainsString('Trap', (string) ($run->return['text'] ?? ''), 'the named row says which call broke');
+        self::assertSame([ScriptRun::OUTCOME_ERROR], array_column($run->calls, 'outcome'), 'the ledger books the shape violation as an error outcome');
+    }
+
     /**
      * @return array<int,string> the two pid columns of the fixture's PIDS line
      */

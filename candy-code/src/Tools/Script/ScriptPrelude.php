@@ -106,12 +106,19 @@ final class ScriptPrelude
                 }
                 $result = $response['result'] ?? null;
                 if (is_array($result) && array_key_exists('content', $result)) {
+                    $content = $result['content'];
+                    if (!is_string($content)) {
+                        return ['content' => 'script-runner: response content is not a string (' . gettype($content) . ')', 'isError' => true];
+                    }
                     return [
-                        'content' => is_string($result['content']) ? $result['content'] : '',
+                        'content' => $content,
                         'isError' => (bool) ($result['isError'] ?? false),
                     ];
                 }
-                return ['content' => is_string($result) ? $result : '', 'isError' => false];
+                if (!is_string($result)) {
+                    return ['content' => 'script-runner: response result is neither a string nor a content frame (' . gettype($result) . ')', 'isError' => true];
+                }
+                return ['content' => $result, 'isError' => false];
             }
 
             function tools(): array

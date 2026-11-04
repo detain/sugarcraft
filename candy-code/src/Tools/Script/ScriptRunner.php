@@ -82,13 +82,18 @@ final class ScriptRunner
     /**
      * Run $code as $chdir against the injected dispatch/catalog pair.
      *
-     * @param \Closure(string, array<array-key, mixed>): array{content?: mixed, isError?: bool} $dispatch
+     * @param \Closure(string, array<array-key, mixed>): array{content?: string, isError?: bool} $dispatch
      *        invoked once per accepted `call` frame; its result shape is the
-     *        bridge's `{content,isError}` contract. The caller owns everything
-     *        it does — gate, hooks, ledger — and this runner calls it on no
-     *        other path. A throw from dispatch is answered as an error frame
-     *        for THAT call (the bridge must not die mid-run) and never
-     *        replays.
+     *        bridge's `{content,isError}` contract, and the contract says
+     *        content IS A STRING: a dispatcher that answers with any other
+     *        shape is answered with a named error frame for THAT call — the
+     *        same voice as a throw (below) — never as a silent empty success
+     *        (PHPD-03; unreachable while `ToolResult::content()` is typed
+     *        `: string`, live the day that contract widens). The caller owns
+     *        everything it does — gate, hooks, ledger — and this runner calls
+     *        it on no other path. A throw from dispatch is answered as an
+     *        error frame for THAT call (the bridge must not die mid-run) and
+     *        never replays.
      * @param \Closure(): list<array{name: string, signature?: string}> $catalog
      *        invoked per `list` frame; the budgeted one-line signatures
      *        Code Mode's `tools()` shows.
@@ -429,8 +434,20 @@ final class ScriptRunner
                     $result = ['content' => 'script-runner: dispatch returned no result', 'isError' => true];
                 }
 
-                $content = is_string($result['content'] ?? null) ? $result['content'] : '';
-                $isError = (bool) ($result['isError'] ?? false);
+                $rawContent = $result['content'] ?? null;
+                if (is_string($rawContent)) {
+                    $content = $rawContent;
+                    $isError = (bool) ($result['isError'] ?? false);
+                } else {
+                    // PHPD-03: a dispatcher that answered with non-string
+                    // content broke the shape contract; that is named in the
+                    // same voice as the raised-throw and no-result arms
+                    // above, never delivered as a silent empty success.
+                    // Unreachable while ToolResult::content() is typed
+                    // string — it is the loud belt for the contract widening.
+                    $content = 'script-runner: ' . $name . ' answered with non-string content; tool result content must be a string, got ' . gettype($rawContent);
+                    $isError = true;
+                }
                 [$line, $dropped] = self::boundedResponseLine((int) ($id ?? 0), $content, $isError);
                 if ($dropped > 0) {
                     $capBreaches['response'] = ($capBreaches['response'] ?? 0) + $dropped;
