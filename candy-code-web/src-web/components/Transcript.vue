@@ -218,10 +218,13 @@ defineExpose({ jumpToEnd })
   margin-right: 1rem;
   float: right;
 }
+/* CW-UX-10: a sticky bar with no paint is a window — rows scrolled through the
+   toggles. It must occlude what passes beneath it. */
 .toolbar {
   position: sticky;
   top: 0;
   z-index: 2;
+  background: var(--bg);
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
