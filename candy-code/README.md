@@ -1306,15 +1306,26 @@ environment variable in [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).
 
 ### Settings files
 
-Four files are read, and the **highest one that mentions a key wins** for that
+Five files are read, and the **highest one that mentions a key wins** for that
 key:
 
 | # | File | Who wrote it | Wins over |
 |---|------|--------------|-----------|
+| 5 | `/etc/candy-code/config.json` | whoever administers the machine, never the CLI — **read-only** by construction | everything in the four below, the values `/theme` and `/model` persist included |
 | 4 | `~/.candy-code/config.json` | you, and the CLI itself — Ctrl+P and `/theme` write `theme` here, `/model` writes `provider`, and the settings view's save writes the keys it changes (never `provider` or `theme`) | everything |
 | 3 | `~/.candy-code/settings.json` | you, by hand | the project's two |
 | 2 | `<project>/.candy-code/settings.local.json` | whoever wrote the repository (`.gitignore`d **by convention**, which is not a trust signal — see below), or you, through the settings view's **This project (local)** tier once you trust the project | the shared project file |
 | 1 | `<project>/.candy-code/settings.json` | whoever wrote the repository, or you, through the settings view's **This project (shared)** tier once you trust the project — it is committed, so everyone who clones the repository (and trusts it) gets what you save there | nothing |
+
+The fifth file is the machine speaking. Wherever an operator administers a
+machine, `/etc/candy-code/config.json` outranks all four files a person owns,
+session-saved values included: a pin the operator sets is not undone by
+re-choosing the setting inside the program. The managed file is read-only for
+candy by construction — no write path resolves into it, and `--config=` does
+not move it — and it can speak only the keys the cascade layers, never the
+permission keys the strict side reserves to the user tier alone. Launch notices
+and the doctor report a managed file that cannot be read or that names a key it
+is not allowed to carry; a missing one costs nothing.
 
 Two things about that order are deliberate and the reverse of what most editors
 do. **Your files beat the project's**, because a project file arrived with a

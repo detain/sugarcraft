@@ -1,16 +1,18 @@
 # Settings
 
-Four files can contribute a setting. Two of them belong to you, two of them
-arrive with a `git clone` — and that split is what every rule on this page is
-about.
+Five files can contribute a setting. Two of them belong to you, two of them
+arrive with a `git clone`, and the fifth belongs to whoever administers the
+machine you are typing on — read-only for candy. That split is what every rule
+on this page is about.
 
 Everything here is implemented by `SugarCraft\Code\Config\LayeredSettings`
 and read through `Bootstrap::readUserConfig()`.
 
-## The four layers
+## The five layers
 
 Lowest precedence first. On a key present in more than one file, the **highest
-listed** file wins.
+listed** file wins. The rows run one to four across the files a person owns;
+row five is the machine's, and it sits above all four.
 
 | # | File | Whose | Read when |
 |---|---|---|---|
@@ -18,6 +20,7 @@ listed** file wins.
 | 2 | `<root>/.candy-code/settings.local.json` | the project's, meant to be `.gitignore`d | same gate as #1 |
 | 3 | `~/.candy-code/settings.json` | yours, hand-authored | whenever `$HOME` resolves and passes the ownership check |
 | 4 | `~/.candy-code/config.json` | yours, partly **written by the CLI** | always — but see the two qualifications below |
+| 5 | `/etc/candy-code/config.json` | whoever administers the machine — **read-only**: no candy-code write path targets it | always, and it outranks every file above, the session-saved values included |
 
 **Layers 1 and 2 need a project root to have been *named*, not just trusted.**
 `readUserConfig()` takes no `$root` argument and deliberately does not fall
@@ -52,7 +55,7 @@ against that same root, so the entry to write is the repository's path. The
 **working directory does not move**: Bash, Read, Edit and the other tools,
 hooks and spawned sessions still run in the directory you launched from.
 
-**Layer 4 is not always `~/.candy-code/config.json`.** Two things move it:
+**Layer 4 is not always `~/.candy-code/config.json`.** Two things move it (the managed file's path is fixed, and neither of them moves it):
 
 - `--config <path>` repoints it (`Bootstrap::userConfigPath()`), and it moves
   **that file only** — layer 3 stays in `~/.candy-code`, deliberately, so a
@@ -76,6 +79,17 @@ writes the keys the view changed, never `provider` or `theme`; `/model
 server's `settings.set` — the web UI's settings form — for the keys a client
 may write (see [Settings over the wire](SERVER.md#settings-over-the-wire)).
 Everything else in it, including `trustedProjectSettings`, you hand-author.
+
+The fifth row is the machine speaking, and it is the only row a person cannot
+move. Wherever an operator administers a machine, `/etc/candy-code/config.json`
+outranks all four files a person owns, session-saved values included: a pin the
+operator sets is not undone by re-choosing the setting inside the program. The
+file is read-only for candy by construction — no write path resolves into it,
+and no flag moves it — and it can speak only keys the cascade layers, never the
+permission keys the strict side reserves to the user tier alone. Launch notices
+and the doctor report a managed file that cannot be read or that names a key it
+is not allowed to carry; a machine with no managed file runs byte-identical to
+the same machine before it was written.
 
 Two orderings on that table are deliberate and both cost something:
 

@@ -343,13 +343,17 @@ final class ReadmeRosterDriftTest extends TestCase
     // ── roster 4: the settings layer table ───────────────────────────────
 
     /**
-     * The four-row precedence table, HIGHEST FIRST as the page prints it.
+     * The five-row precedence table, HIGHEST FIRST as the page prints it.
      *
-     * Pinned against the two path constants and the merge's own argument order
+     * Pinned against the path constants and the merge's own argument order
      * rather than against a retyped list. The table is the first thing a user
      * reads when a setting does not take effect, and a row in the wrong place
      * is worse than a missing row: it sends them to edit a file that cannot
-     * win.
+     * win. G1-L7 (CCOPS-6) added the fifth row from {@see
+     * \SugarCraft\Code\Config\LayeredSettings::SYSTEM_CONFIG_PATH} — still
+     * constant-derived, never retyped; that the managed tier sits ABOVE the
+     * four (a Bootstrap wiring fact, not a merge() fact) is pinned by
+     * {@see \SugarCraft\Code\Tests\Config\ManagedTierSettingsTest}.
      */
     public function testTheLayerTableRanksTheFilesInTheOrderTheMergeActuallyUses(): void
     {
@@ -360,6 +364,7 @@ final class ReadmeRosterDriftTest extends TestCase
 
         $this->assertSame(
             [
+                ['5', LayeredSettings::SYSTEM_CONFIG_PATH],
                 ['4', '~/.candy-code/config.json'],
                 ['3', '~/.candy-code/' . LayeredSettings::USER_FILE],
                 ['2', '<project>/' . LayeredSettings::LOCAL_PATH],
