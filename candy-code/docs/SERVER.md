@@ -1595,7 +1595,7 @@ location / {
 ```
 
 `/ws?ticket=…` carries its ticket in the query string, so a proxy access log
-for that location records it (CW-SEC-04) — sign-in codes and share URLs ride
+for that location records it — sign-in codes and share URLs ride
 query strings the same way. Tickets are single-use and expire in 30 s and the
 codes are single-use, but the log is still the loosest copy of them: prefer
 `access_log off;` for the `/ws` location, or account for the exposure when
