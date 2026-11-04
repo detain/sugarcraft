@@ -21,6 +21,12 @@ return [
     'over.title'       => 'GAME OVER',
     'over.final_score' => 'final score: {points}',
     'over.restart_hint' => 'press r to restart — press q to quit',
+    // MA-10: the game-over banner names WHY the run ended — the fatal
+    // piece sits in the hidden rows, so the banner is the only evidence.
+    'over.reason'               => 'reason: {reason}',
+    'over.reason.spawn_blocked' => 'no room for next piece',
+    'over.reason.top_out'       => 'stack reached the ceiling',
+    'over.reason.crushed'       => 'crushed by garbage',
 
     // Versus renderer
     'label.player'   => 'PLAYER',

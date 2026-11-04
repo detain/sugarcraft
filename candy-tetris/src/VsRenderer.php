@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Tetris;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
 use SugarCraft\Style\Style;
@@ -27,8 +29,34 @@ use SugarCraft\Style\Style;
  */
 final class VsRenderer
 {
+    /**
+     * Natural VS frame (both panels complete) — provisional, validated
+     * by the viewport tests; see {@see self::MIN_*} for the floor law.
+     */
+    public const NATURAL_COLS = 54;
+    public const NATURAL_ROWS = 28;
+
+    /**
+     * Hard floor for the split screen: both framed boards (22 rows),
+     * their titles, both score cards and every overlay banner fact must
+     * stay ON-frame. Below it a resize notice replaces the frame (C-2).
+     */
+    public const MIN_COLS = 54;
+    public const MIN_ROWS = 28;
+
     public static function render(VsGame $game): string
     {
+        // Posture dispatch, mirror of Renderer::render (C-2): NoTty gets a
+        // plain refusal, sub-floor terminals a resize notice, and overlays
+        // are painted INTO the fixed frame — never appended below it.
+        if ($game->colorProfile === ColorProfile::NoTty) {
+            return self::refusal();
+        }
+
+        if ($game->tooSmall() === true) {
+            return self::tooSmallNotice($game->frameCols, $game->frameRows);
+        }
+
         $playerBoard = self::renderBoard($game->player, false);
         $computerBoard = self::renderBoard($game->computer, true);
 
@@ -45,21 +73,105 @@ final class VsRenderer
         $body = Layout::joinHorizontal(0.0, $playerPanel, $vsDivider, $computerPanel);
 
         if ($game->over === true) {
-            $winnerText = $game->winner === 'PLAYER'
-                ? Lang::t('win.player')
-                : Lang::t('win.computer');
-            $banner = Style::new()
-                ->border(Border::rounded())
-                ->padding(1, 3)
-                ->render(
-                    Lang::t('over.title') . "\n" . $winnerText . "\n"
-                    . Lang::t('over.final_score', ['points' => $game->player->score->points])
-                    . "\n" . Lang::t('over.quit_hint'),
-                );
-            return $body . "\n\n" . $banner;
+            return self::paintBanner($body, self::overLines($game));
+        }
+
+        // MA-8: the VS pair has a p binding (README promises it) and a
+        // pause gate in VsGame::update — but until now the paused world
+        // was indistinguishable from a hang: zero on-frame evidence.
+        if ($game->player->paused === true) {
+            return self::paintBanner($body, [Lang::t('paused')]);
         }
 
         return $body;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function overLines(VsGame $game): array
+    {
+        $lines = [Lang::t('over.title')];
+        $lines[] = $game->winner === 'PLAYER'
+            ? Lang::t('win.player')
+            : Lang::t('win.computer');
+        $lines[] = Lang::t('over.final_score', ['points' => $game->player->score->points]);
+        // MA-10: name why the LOSING board died (the winner keeps playing
+        // facts; the loser carries the overReason).
+        $loser = $game->winner === 'PLAYER' ? $game->computer : $game->player;
+        if ($loser->overReason !== null) {
+            $lines[] = Lang::t('over.reason', ['reason' => match ($loser->overReason) {
+                Game::OVER_SPAWN_BLOCKED => Lang::t('over.reason.spawn_blocked'),
+                Game::OVER_TOP_OUT       => Lang::t('over.reason.top_out'),
+                Game::OVER_CRUSHED       => Lang::t('over.reason.crushed'),
+                default                  => $loser->overReason,
+            }]);
+        }
+        $lines[] = Lang::t('over.quit_hint');
+        return $lines;
+    }
+
+    /**
+     * Replace the vertically-centred board band rows with plain-text
+     * banner lines, centred across the body (see Renderer::paintBanner —
+     * identical posture so solo and VS overlay the same way).
+     *
+     * @param list<string> $lines
+     */
+    private static function paintBanner(string $body, array $lines): string
+    {
+        $rows = explode("\n", $body);
+        $width = 0;
+        foreach ($rows as $row) {
+            $width = max($width, Width::of($row));
+        }
+
+        $top = intdiv(Board::VISIBLE_ROWS - count($lines), 2);
+        foreach ($lines as $i => $line) {
+            $row = $top + $i;
+            if ($row < 0 || $row >= count($rows)) {
+                continue;
+            }
+            $text = Width::of($line) > $width
+                ? Width::truncateAnsi($line, $width)
+                : $line;
+            $left = max(0, intdiv($width - Width::of($text), 2));
+            $rows[$row] = \str_repeat(' ', $left) . $text;
+        }
+
+        return implode("\n", $rows);
+    }
+
+    private static function refusal(): string
+    {
+        return "candy-tetris needs a colour-capable interactive terminal.\n"
+            . "Run it from a TTY (TERM=xterm-256color or better).\n";
+    }
+
+    private static function tooSmallNotice(int $cols, int $rows): string
+    {
+        $notice = "candy-tetris VS needs a " . self::MIN_COLS . "x" . self::MIN_ROWS
+            . " terminal; this one is {$cols}x{$rows}.\n"
+            . "Resize the window and the match resumes right here.\n";
+        $width = max(20, $cols);
+        $out = [];
+        foreach (explode("\n", $notice) as $paragraph) {
+            $line = '';
+            foreach (preg_split('/ +/', $paragraph) ?: [] as $word) {
+                if ($word === '') {
+                    continue;
+                }
+                $candidate = $line === '' ? $word : $line . ' ' . $word;
+                if (Width::of($candidate) > $width && $line !== '') {
+                    $out[] = $line;
+                    $line = $word;
+                } else {
+                    $line = $candidate;
+                }
+            }
+            $out[] = $line;
+        }
+        return implode("\n", $out) . "\n";
     }
 
     /**

@@ -8,7 +8,10 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\ColorProfile;
 
 /**
  * VS Computer mode model - combines two independent Game instances.
@@ -40,7 +43,23 @@ final class VsGame implements Model
         public readonly int       $computerRotationsLeft = 0,
         /** Horizontal cells still owed by the current plan (signed). */
         public readonly int       $computerShiftLeft = 0,
+        /**
+         * Live terminal size (C-2), owned by the top model — the inner
+         * Games keep their seeds; the VS frame is what the arms reflow.
+         */
+        public readonly int       $frameCols = VsRenderer::NATURAL_COLS,
+        public readonly int       $frameRows = VsRenderer::NATURAL_ROWS,
+        public readonly ?ColorProfile $colorProfile = null,
     ) {}
+
+    /**
+     * True when the live terminal cannot host the VS frame
+     * ({@see VsRenderer::MIN_COLS} × {@see VsRenderer::MIN_ROWS}).
+     */
+    public function tooSmall(): bool
+    {
+        return $this->frameCols < VsRenderer::MIN_COLS || $this->frameRows < VsRenderer::MIN_ROWS;
+    }
 
     /**
      * Start a new VS Computer game.
@@ -67,6 +86,35 @@ final class VsGame implements Model
 
     public function update(Msg $msg): array
     {
+        // Terminal posture first (C-2): a resize or capability report is
+        // never gameplay — it lands even on the game-over screen, and the
+        // identity short-circuit keeps state from churning per frame.
+        if ($msg instanceof WindowSizeMsg) {
+            if ($msg->cols === $this->frameCols && $msg->rows === $this->frameRows) {
+                return [$this, null];
+            }
+            return [$this->mutate(['frameCols' => $msg->cols, 'frameRows' => $msg->rows]), null];
+        }
+        if ($msg instanceof ColorProfileMsg) {
+            if ($msg->profile === $this->colorProfile) {
+                return [$this, null];
+            }
+            return [$this->mutate(['colorProfile' => $msg->profile]), null];
+        }
+
+        // Below the frame floor the VS pair freezes the way pause freezes
+        // it: q still quits, the tick chain keeps its heartbeat, and a
+        // resize back into fit resumes with nothing double-armed (C-2).
+        if ($this->tooSmall() === true) {
+            if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
+                return [$this, Cmd::quit()];
+            }
+            if ($msg instanceof GravityMsg) {
+                return [$this, self::scheduleTick($this->player)];
+            }
+            return [$this, null];
+        }
+
         // If game is over, only accept quit
         if ($this->over === true) {
             if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
@@ -75,7 +123,13 @@ final class VsGame implements Model
             if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'r') {
                 // Restart the pair and arm one fresh tick chain — parity
                 // with the solo game's 'r'.
-                $fresh = self::start();
+                $fresh = self::start()->mutate([
+                    // The live terminal size survives the restart: the
+                    // Program only re-reports on the next SIGWINCH.
+                    'frameCols' => $this->frameCols,
+                    'frameRows' => $this->frameRows,
+                    'colorProfile' => $this->colorProfile,
+                ]);
                 return [$fresh, self::scheduleTick($fresh->player)];
             }
             return [$this, null];
@@ -284,6 +338,11 @@ final class VsGame implements Model
             $changes['hasComputerPlan'] ?? $this->hasComputerPlan,
             $changes['computerRotationsLeft'] ?? $this->computerRotationsLeft,
             $changes['computerShiftLeft'] ?? $this->computerShiftLeft,
+            $changes['frameCols'] ?? $this->frameCols,
+            $changes['frameRows'] ?? $this->frameRows,
+            // Nullable: presence, not truthiness, decides (same law as
+            // Game::mutate's lockWindowGeneration/colorProfile legs).
+            array_key_exists('colorProfile', $changes) ? $changes['colorProfile'] : $this->colorProfile,
         );
     }
 }

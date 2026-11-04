@@ -8,7 +8,12 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\KeyReleaseMsg;
+use SugarCraft\Core\Msg\KeyRepeatMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Tetris\Scoring\TSpin;
 
 /**
@@ -92,7 +97,35 @@ final class Game implements Model
          * not only at arming).
          */
         public readonly int          $gravityChain = 0,
+        /**
+         * Live terminal size as last reported by WindowSizeMsg (seeded at
+         * the natural frame, {@see Renderer::NATURAL_COLS}). The renderer
+         * reflows against this and refuses below its floor instead of
+         * silently clipping (C-2).
+         */
+        public readonly int          $frameCols = Renderer::NATURAL_COLS,
+        public readonly int          $frameRows = Renderer::NATURAL_ROWS,
+        /**
+         * Terminal capability reported by ColorProfileMsg (null until the
+         * Program answers — null renders the full-colour path, which is
+         * what every pre-feature frame and golden was built on).
+         */
+        public readonly ?ColorProfile $colorProfile = null,
+        /**
+         * Why the game ended (MA-10): one of Game::OVER_* — the fatal piece
+         * spawns in the hidden rows, so without a named reason the player
+         * only ever sees a banner. Null while alive and on the legacy
+         * golden paths that never set it.
+         */
+        public readonly ?string      $overReason = null,
     ) {}
+
+    /** Death by spawn-block: the freshly spawned piece does not fit. */
+    public const OVER_SPAWN_BLOCKED = 'spawn-blocked';
+    /** Death by top-out: incoming garbage would push locked content off the ceiling. */
+    public const OVER_TOP_OUT = 'top-out';
+    /** Death by crush: the active piece fits neither raised nor in place after garbage. */
+    public const OVER_CRUSHED = 'crushed';
 
     /**
      * Construct a new Game from the current state with optional field overrides.
@@ -127,7 +160,26 @@ final class Game implements Model
             $changes['combo']         ?? $this->combo,
             $changes['backToBack']    ?? $this->backToBack,
             $changes['gravityChain']  ?? $this->gravityChain,
+            $changes['frameCols']     ?? $this->frameCols,
+            $changes['frameRows']     ?? $this->frameRows,
+            array_key_exists('colorProfile', $changes)
+                ? $changes['colorProfile']
+                : $this->colorProfile,
+            array_key_exists('overReason', $changes)
+                ? $changes['overReason']
+                : $this->overReason,
         );
+    }
+
+    /**
+     * True when the live terminal cannot host the smallest honest frame
+     * ({@see Renderer::MIN_COLS} × {@see Renderer::MIN_ROWS}). Gameplay
+     * keeps its clock (the chain re-arms) but nothing steps: the renderer
+     * answers with a resize notice instead of a silently clipped board.
+     */
+    public function tooSmall(): bool
+    {
+        return $this->frameCols < Renderer::MIN_COLS || $this->frameRows < Renderer::MIN_ROWS;
     }
 
     public static function start(?Bag $bag = null): self
@@ -200,8 +252,59 @@ final class Game implements Model
         ];
     }
 
+    /**
+     * True for key events that mean "the player actuated this binding" —
+     * the base KeyMsg and explicit presses count; releases and auto-repeats
+     * (kitty REPORT_EVENT_TYPES wire, once negotiated) must not double-fire
+     * a toggle (m11).
+     */
+    private static function isPress(KeyMsg $msg): bool
+    {
+        return !$msg instanceof KeyReleaseMsg && !$msg instanceof KeyRepeatMsg;
+    }
+
     public function update(Msg $msg): array
     {
+        // Terminal posture first (C-2): a resize or capability report is
+        // never gameplay, must land even on the game-over screen, and must
+        // not churn state when nothing changed (identity short-circuit).
+        if ($msg instanceof WindowSizeMsg) {
+            if ($msg->cols === $this->frameCols && $msg->rows === $this->frameRows) {
+                return [$this, null];
+            }
+            return [$this->mutate(['frameCols' => $msg->cols, 'frameRows' => $msg->rows]), null];
+        }
+        if ($msg instanceof ColorProfileMsg) {
+            if ($msg->profile === $this->colorProfile) {
+                return [$this, null];
+            }
+            return [$this->mutate(['colorProfile' => $msg->profile]), null];
+        }
+
+        if ($this->tooSmall() === true) {
+            // The notice screen replaces the frame. The world freezes the
+            // way pause freezes it: q still quits, the gravity chain keeps
+            // its heartbeat (consume, re-arm), the lock window stays open
+            // for a full delay — so a resize back into fit resumes here
+            // with nothing lost and nothing double-armed.
+            if ($msg instanceof KeyMsg && self::isPress($msg) && $msg->type === KeyType::Char && $msg->rune === 'q') {
+                return [$this, Cmd::quit()];
+            }
+            if ($msg instanceof GravityMsg) {
+                if ($msg->chain !== $this->gravityChain || $this->gravityPending === false) {
+                    return [$this, null];
+                }
+                return self::armGravity($this->mutate(['gravityPending' => false]));
+            }
+            if ($msg instanceof LockDelayMsg) {
+                if ($msg->generation !== $this->lockWindowGeneration) {
+                    return [$this, null];
+                }
+                return [$this, $this->scheduleLockDelay($msg->generation)];
+            }
+            return [$this, null];
+        }
+
         if ($this->over === true) {
             if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
                 return [$this, Cmd::quit()];
@@ -218,7 +321,15 @@ final class Game implements Model
                     : self::start();
                 // Bump the chain tag so any tick still in flight from the
                 // dead chain lands inert on the fresh board.
-                $fresh = $fresh->mutate(['gravityChain' => $this->gravityChain + 1]);
+                $fresh = $fresh->mutate([
+                    'gravityChain' => $this->gravityChain + 1,
+                    // The live terminal size survives the restart: the
+                    // Program only re-reports on the next SIGWINCH, and a
+                    // fresh natural-size seed would re-clip a squeezed one.
+                    'frameCols' => $this->frameCols,
+                    'frameRows' => $this->frameRows,
+                    'colorProfile' => $this->colorProfile,
+                ]);
                 return [$fresh, self::scheduleGravity($fresh->score, $fresh->gravityChain)];
             }
             return [$this, null];
@@ -623,6 +734,7 @@ final class Game implements Model
                 'bag' => $nextBag,
                 'score' => $score,
                 'over' => true,
+                'overReason' => self::OVER_SPAWN_BLOCKED,
                 'canHold' => true,
                 'combo' => 0,
                 'backToBack' => false,
@@ -683,6 +795,7 @@ final class Game implements Model
                     'hold' => $currentKind,
                     'canHold' => false,
                     'over' => true,
+                    'overReason' => self::OVER_SPAWN_BLOCKED,
                     'lastActionWasRotation' => false,
                     'lockWindowGeneration' => null,
                     'lockResets' => 0,
@@ -765,6 +878,7 @@ final class Game implements Model
                 if ($cell !== null) {
                     return $this->mutate([
                         'over' => true,
+                        'overReason' => self::OVER_TOP_OUT,
                         'canHold' => true,
                         'lockWindowGeneration' => null,
                         'lockResets' => 0,
@@ -802,6 +916,7 @@ final class Game implements Model
                     'board' => $newBoard,
                     'piece' => $raised,
                     'over' => true,
+                    'overReason' => self::OVER_CRUSHED,
                     'canHold' => true,
                     'lockWindowGeneration' => null,
                     'lockResets' => 0,
