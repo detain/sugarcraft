@@ -154,8 +154,11 @@ jobs:
         working-directory: candy-code-web
         run: npm run e2e
 
+      # Uploaded on green runs too: the report is the evidence trail for flaky
+      # retries and timing regressions, and a passing job is exactly when
+      # nobody thought to look at it.
       - name: Upload the Playwright report
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: candy-code-web-playwright-report
