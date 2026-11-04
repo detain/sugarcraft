@@ -69,14 +69,21 @@ final class ChildLifetimesToolTest extends TestCase
 
         $this->assertSame(0, $code, "tool was red on its own repo:\n$out$err");
         $this->assertStringContainsString('0 problems', $out);
-        $this->assertStringContainsString('9 findings', $out);
+        // 9 -> 13: the 0bcc4346b double-walk minted four UNACCOUNTED findings
+        // (StatelessRpc advertise/negotiate, each walked twice under the lib's
+        // nested psr-4 prefixes) that were never rostered — a standing red the
+        // 2026-11-04 child-lifetime accounting lane cleared with honest
+        // ACCOUNTED rows. The pin was stale-but-honest: findings count all
+        // derivations, accounted or not.
+        $this->assertStringContainsString('13 findings', $out);
         // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
-        // 31 -> 33 landed with 0bcc4346b (candy-git-server smart-HTTP read path):
-        // StatelessRpc::advertise()/negotiate() minted two sites (each walked twice
-        // under the lib's nested psr-4 prefixes, +4) while Server.php shed its
-        // handleUploadPack()/handleReceivePack() bodies (-2). Net +2 over the pin
-        // 6aef01a8d froze at 31.
-        $this->assertStringContainsString('33 proc_open sites', $out);
+        // 33 -> 30 re-derived live with the tool on 2026-11-04: net -3 of tree
+        // drift since 0bcc4346b (the pin predates later spawn consolidation,
+        // incl. candy-git-server's ab9d2b147 argv-only BoundedCommand hygiene
+        // wave, which retired raw sites without minting new ones). The lib's
+        // own census of its current 4 spawn functions lives in
+        // candy-git-server/tests/ChildProcessLifetimeCensusTest::SPAWN_SITES_BY_FILE.
+        $this->assertStringContainsString('30 proc_open sites', $out);
     }
 
     /**

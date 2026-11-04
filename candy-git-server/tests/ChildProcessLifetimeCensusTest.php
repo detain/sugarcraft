@@ -177,6 +177,12 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         self::assertGreaterThan(0, \preg_match_all('/\bproc_close\s*\(/', $reaper), 'reapBounded must collect the exit code via proc_close');
         self::assertMatchesRegularExpression('/\bproc_terminate\s*\(/', $reaper, 'reapBounded must run the TERM/KILL ladder');
         self::assertStringContainsString('waitForExit', $reaper, 'the ladder must poll with a bound, never block an unbounded wait on a wedged child');
+        // The TERM rung alone cannot end a child that ignores SIGTERM
+        // (trap-"" dispositions survive exec) — the ladder must carry an
+        // EXPLICIT SIGKILL rung, itself followed by a bounded wait so the
+        // escalation can never degrade into an unbounded proc_close.
+        self::assertMatchesRegularExpression('/\bproc_terminate\(\s*\$proc\s*,\s*9\s*\)/', $reaper, 'reapBounded must escalate to an explicit SIGKILL (9) for TERM-immune children');
+        self::assertMatchesRegularExpression('/waitForExit\(\s*\$proc\s*,\s*self::KILL_WAIT_SECONDS/', $reaper, 'the SIGKILL rung must be followed by its own bounded wait');
         foreach (['advertise', 'negotiate'] as $spawner) {
             self::assertMatchesRegularExpression(
                 '/finally\s*\{[^{}]*self::reapBounded\s*\(/s',
@@ -184,6 +190,58 @@ final class ChildProcessLifetimeCensusTest extends TestCase
                 "{$spawner}() must hand its child to the bounded reaper from the finally block"
             );
         }
+    }
+
+    /**
+     * Behavioral pin for the KILL rung the static census above demands:
+     * a child whose SIGTERM disposition is IGNORED (trap "" TERM is
+     * inherited across exec, so the exec'd sleep cannot be TERM'd) must
+     * still end up dead and reaped within a bounded wall. This is the
+     * E721 contract under the only input class that TERM-based fixtures
+     * cannot falsify — a neutered escalation would leave the stall alive
+     * and proc_close() would block out the ceiling.
+     */
+    public function testTheLadderEscalatesToKillWhenTheChildIgnoresTerm(): void
+    {
+        if (\PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('the survivor census reads /proc (Linux only)');
+        }
+
+        $desc = [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']];
+        $proc = \proc_open(
+            ['bash', '-c', 'trap "" TERM; echo ready; exec sleep ' . self::STALL_SECONDS],
+            $desc,
+            $pipes
+        );
+        $this->assertIsResource($proc);
+
+        // Determinism: TERM must arrive AFTER the trap is installed — if it
+        // raced ahead of the disposition (bash still default-handling), the
+        // child would die instantly and this pin would go vacuously green.
+        // The ready line is emitted strictly after `trap "" TERM`, so reading
+        // it gates the ladder on the immunity actually being in place.
+        $ready = \stream_get_line($pipes[1], 16, "\n");
+        self::assertSame('ready', $ready, 'the TERM-immune fixture never came up');
+
+        $reap = new \ReflectionMethod(StatelessRpc::class, 'reapBounded');
+        $reap->setAccessible(true);
+
+        $start = \hrtime(true);
+        try {
+            $result = $reap->invoke(null, $proc, $pipes);
+            self::assertIsArray($result);
+            self::assertArrayHasKey('exitCode', $result);
+            self::assertArrayHasKey('signal', $result);
+        } finally {
+            $this->assertNoLiveChildren('after the TERM-immune child went through reapBounded');
+        }
+        $elapsedSeconds = (\hrtime(true) - $start) / 1e9;
+
+        self::assertLessThan(
+            self::BOUNDED_TEARDOWN_CEILING_SECONDS,
+            $elapsedSeconds,
+            'the ladder waited on a TERM-immune child — the KILL rung never fired (E721)'
+        );
     }
 
     // -------------------------------------------------------------------------
