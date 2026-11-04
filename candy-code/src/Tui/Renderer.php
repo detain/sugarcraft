@@ -957,6 +957,32 @@ final class Renderer
     }
 
     /**
+     * The band's live geometry: the agent split and the band left over from it.
+     *
+     * The split-pane compositor's activation decision, taken BEFORE the band
+     * is laid out because it changes the band's width. See
+     * {@see agentSplitWidth()} for the policy; 0 means "no split", and every
+     * measurement downstream then reduces to what it was before.
+     *
+     * TUIARCH-02: this is the ONE statement of the split maths. composeBand
+     * publishes its numbers into the frame static, and the parity test
+     * re-runs this call against the published frame — so "what the frame
+     * tells the model" and "what the maths says live" cannot drift apart.
+     *
+     * @return array{liveAgents: list<\SugarCraft\Code\Agents\SubAgent>, agentCols: int, bandCols: int}
+     */
+    public static function dockBandMeasure(App $a, int $cols): array
+    {
+        $liveAgents = self::liveAgentRuns($a);
+        $agentCols = self::agentSplitWidth($liveAgents, $cols, $a->agentSplitCols);
+        // The divider column is a band cost too: it is painted inside the
+        // band, between the chat edge and the agent column.
+        $bandCols = $agentCols > 0 ? $cols - $agentCols - self::SPLIT_DIVIDER_COLS : $cols;
+
+        return ['liveAgents' => $liveAgents, 'agentCols' => $agentCols, 'bandCols' => $bandCols];
+    }
+
+    /**
      * The shell's content band — sidebars, chat column, live-agent split —
      * laid out exactly as {@see renderView()} has always laid it out, moved
      * whole so the media-form popup can paint the same band dimmed behind its
@@ -986,13 +1012,10 @@ final class Renderer
      */
     private static function composeBand(App $a, int $cols, int $paneRows): array
     {
-        // The split-pane compositor's activation decision, taken BEFORE the
-        // band is laid out because it changes the band's width. See
-        // {@see agentSplitWidth()} for the policy; 0 means "no split", and
-        // every measurement below then reduces to what it was before.
-        $liveAgents = self::liveAgentRuns($a);
-        $agentCols = self::agentSplitWidth($liveAgents, $cols, $a->agentSplitCols);
-        $bandCols = $agentCols > 0 ? $cols - $agentCols - self::SPLIT_DIVIDER_COLS : $cols;
+        $band = self::dockBandMeasure($a, $cols);
+        $liveAgents = $band['liveAgents'];
+        $agentCols = $band['agentCols'];
+        $bandCols = $band['bandCols'];
 
         [$leftPane, $leftMeta, $leftHeaders] = self::renderSide($a, Side::Left, $bandCols, $paneRows);
         [$rightPane, $rightMeta, $rightHeaders] = self::renderSide($a, Side::Right, $bandCols, $paneRows);

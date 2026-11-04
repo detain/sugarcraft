@@ -3849,6 +3849,20 @@ final class App implements Model
     }
 
     /**
+     * The dock band's geometry as the LAST painted frame measured it, or null
+     * when no measured frame is standing (headless runs, and the full-band
+     * dashboard/overlay frames whose tails clear the renderer's published
+     * band). TUIARCH-02 phase 1: every model-side read of the renderer's
+     * frame static funnels through this one typed adapter, so phase 2 —
+     * retiring the static behind a model-computed geometry — swaps a single
+     * producer without touching a reader.
+     */
+    private function dockGeometry(): ?DockGeometry
+    {
+        return DockGeometry::fromFrame(TuiRenderer::lastDockFrame());
+    }
+
+    /**
      * A left press on the chrome asks the gesture phase first: a side's
      * resize seam (box border, divider, centre border — every band row) owns
      * a live resize, a docked pane owns a
@@ -3898,7 +3912,7 @@ final class App implements Model
         // The live-agent column's seam: the column takes the width the
         // pointer asks for, measured from the width it was painted at.
         if (str_starts_with($zoneId, TuiRenderer::SPLIT_DIVIDER_ZONE_PREFIX)) {
-            $cols = TuiRenderer::lastDockFrame()['agentCols'] ?? 0;
+            $cols = $this->dockGeometry()?->agentCols ?? 0;
             if ($cols < 1) {
                 return null;
             }
@@ -4028,10 +4042,10 @@ final class App implements Model
             }
 
             // A mode-switch mid-drag is the one release that CANNOT measure.
-            // Rendering a full-band dashboard/overlay frame nulls
-            // Tui\Renderer::$lastDockFrame (see that class's dashboard tail),
+            // Rendering a full-band dashboard/overlay frame clears the dock
+            // band Tui\Renderer publishes (see that class's dashboard tail),
             // so the release below lands with no band to re-state the pointer
-            // against and `previewColumnResize` takes its frame-null guard,
+            // against and `previewColumnResize` takes its null-geometry guard,
             // handing the model back untouched. Persisting there would freeze
             // the last previewed width as a manifest without a real
             // measurement — a stray write, so skip it and let the next framed
@@ -4039,7 +4053,7 @@ final class App implements Model
             // object identity: an ordinary release ALSO returns the live model
             // by identity (the same-value tail in `previewColumnResize`) and
             // MUST persist, so `$next === $this` cannot tell the two apart.
-            $commitMeasured = TuiRenderer::lastDockFrame() !== null;
+            $commitMeasured = $this->dockGeometry() !== null;
             $next = $this->previewColumnResize($drag, $msg->x);
             self::$paneDrag = null;
             self::$paneDragOrigin = null;
@@ -4074,12 +4088,12 @@ final class App implements Model
     private function previewSplitResize(PaneDragController $drag, int $pointerX): self
     {
         $origin = self::$splitDragOrigin;
-        $frame = TuiRenderer::lastDockFrame();
-        if ($origin === null || $frame === null) {
+        $bandGeometry = $this->dockGeometry();
+        if ($origin === null || $bandGeometry === null) {
             return $this;
         }
 
-        [$min, $max] = TuiRenderer::agentSplitBounds($frame['cols']);
+        [$min, $max] = TuiRenderer::agentSplitBounds($bandGeometry->cols);
         $cols = $drag->splitColumns($pointerX, $origin['cols'], $min, $max);
 
         return $cols === $this->agentSplitCols ? $this : $this->withAgentSplitCols($cols);
@@ -4094,10 +4108,10 @@ final class App implements Model
      */
     private function previewColumnResize(PaneDragController $drag, int $releaseX): self
     {
-        $frame = TuiRenderer::lastDockFrame();
+        $bandGeometry = $this->dockGeometry();
         $side = $drag->dragSide();
 
-        if ($frame === null || $side === null) {
+        if ($bandGeometry === null || $side === null) {
             return $this;
         }
 
@@ -4119,8 +4133,8 @@ final class App implements Model
         // first preview lands, after which only the measurement diverges by
         // design.
         $origin = self::$paneDragOrigin ?? $dock;
-        $usable = max(1, $frame['bandCols'] - $active * $dock->dividerCols);
-        $geometry = $origin->resolve(new \SugarCraft\Constraints\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
+        $usable = max(1, $bandGeometry->bandCols - $active * $dock->dividerCols);
+        $geometry = $origin->resolve(new \SugarCraft\Constraints\Region(0, 0, $bandGeometry->bandCols, $bandGeometry->paneRows));
         $sideSlots = $origin->slots($side);
         $current = $sideSlots === []
             ? $dock->sideMinCols
@@ -4175,14 +4189,14 @@ final class App implements Model
      */
     private function commitDockDrop(PaneDragController $drag, int $releaseX, int $releaseY): self
     {
-        $frame = TuiRenderer::lastDockFrame();
+        $bandGeometry = $this->dockGeometry();
         $paneId = $drag->dragPaneId();
 
-        if ($frame === null || $paneId === null) {
+        if ($bandGeometry === null || $paneId === null) {
             return $this;
         }
 
-        $side = $drag->dockDropSide($releaseX, $frame['centerFrom'], $frame['centerTo']);
+        $side = $drag->dockDropSide($releaseX, $bandGeometry->centerFrom, $bandGeometry->centerTo);
         $pane = Pane::tryFrom($paneId);
 
         if ($side === null || $pane === null || !$pane->dockable() || !$this->isDocked($pane)) {
@@ -4199,7 +4213,7 @@ final class App implements Model
         // somehow absent (clicks were on to press the divider, so they
         // should be on for headers; the fallback keeps the drop total).
         $dock = $this->dock();
-        $geometry = $dock->resolve(new \SugarCraft\Constraints\Region(0, 0, $frame['bandCols'], $frame['paneRows']));
+        $geometry = $dock->resolve(new \SugarCraft\Constraints\Region(0, 0, $bandGeometry->bandCols, $bandGeometry->paneRows));
         $paintedRows = [];
 
         foreach (TuiRenderer::chromeScanner()->prefixed(Renderer::PANE_ZONE_PREFIX) as $id => $zone) {
@@ -4217,7 +4231,7 @@ final class App implements Model
             $region = $geometry->regionFor($slot->paneId);
 
             if ($region !== null) {
-                $tops[] = $frame['bandTop'] + $region->y;
+                $tops[] = $bandGeometry->bandTop + $region->y;
             }
         }
 
