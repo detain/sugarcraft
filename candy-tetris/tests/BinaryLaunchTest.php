@@ -29,11 +29,21 @@ final class BinaryLaunchTest extends TestCase
         $binary = realpath(__DIR__ . '/../bin/candy-tetris');
         self::assertNotFalse($binary, 'bin/candy-tetris must exist');
 
+        // Locale-hermetic child: the help screen and the unknown-mode refusal
+        // are asserted below in their English form, and every visible string
+        // now resolves through lang/*. Once sixteen locales ship, a machine
+        // whose LANG says otherwise would print them translated and reddens
+        // this test for reasons that have nothing to do with the launch path
+        // under test. Neutralising LC_ALL/LC_MESSAGES/LANG (C lands T::detect()
+        // on English) while carrying the rest of the environment over keeps
+        // TERM and PATH intact and the pin deterministic.
+        $environment = ['LC_ALL' => 'C', 'LC_MESSAGES' => 'C', 'LANG' => 'C'] + getenv();
         $process = proc_open(
             [\PHP_BINARY, $binary, ...$args],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             \dirname(__DIR__),
+            $environment,
         );
         self::assertIsResource($process, 'the binary must be spawnable');
 

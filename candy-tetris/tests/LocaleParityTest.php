@@ -1,0 +1,166 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Tetris\Tests;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Locale parity guard. The catalogue started life as en.php alone, so every
+ * other locale silently fell back to English; now that fifteen more ship, a
+ * half-filled locale is the failure mode to fear — a missing key costs a
+ * player one English line inside an otherwise translated frame, which no
+ * runtime error ever announces. en.php is the source of truth: every locale
+ * must carry exactly its key set, in its order, with its tokens.
+ */
+final class LocaleParityTest extends TestCase
+{
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function localeFiles(): array
+    {
+        $cases = [];
+        foreach (glob(__DIR__ . '/../lang/*.php') ?: [] as $path) {
+            $code = basename($path, '.php');
+            $cases[$code] = [$code, $path];
+        }
+        return $cases;
+    }
+
+    #[DataProvider('localeFiles')]
+    public function testEveryLocaleCarriesExactlyTheEnglishKeySet(string $code, string $path): void
+    {
+        $en = require __DIR__ . '/../lang/en.php';
+        $locale = require $path;
+        $this->assertSame(
+            array_keys($en),
+            array_keys($locale),
+            "locale '$code' key set/order must match en.php",
+        );
+    }
+
+    #[DataProvider('localeFiles')]
+    public function testEveryTranslationIsANonEmptyString(string $code, string $path): void
+    {
+        $locale = require $path;
+        foreach ($locale as $key => $value) {
+            $this->assertIsString($value, "$code: $key is not a string");
+            $this->assertNotSame('', trim($value), "$code: $key is empty");
+        }
+    }
+
+    /**
+     * Substitution tokens ride the key, not the language: a translated
+     * 'final score: {points}' that drops or renames the placeholder breaks
+     * the named-argument replace at the call site with no warning. Compared
+     * as multisets, so a locale is free to reorder the sentence.
+     */
+    #[DataProvider('localeFiles')]
+    public function testEveryLocaleCarriesTheEnglishPlaceholderTokens(string $code, string $path): void
+    {
+        $en = require __DIR__ . '/../lang/en.php';
+        $locale = require $path;
+        foreach ($en as $key => $english) {
+            $expected = self::tokens($english);
+            sort($expected);
+            $actual = self::tokens((string) $locale[$key]);
+            sort($actual);
+            $this->assertSame(
+                $expected,
+                $actual,
+                "locale '$code' key '$key' must carry exactly the placeholders " . implode(',', $expected),
+            );
+        }
+    }
+
+    /**
+     * The sprintf-shaped keys (score card, combo counter) are consumed by
+     * sprintf(), so a lost or gained %d is a fatal or a silent truncation —
+     * never a translation choice.
+     */
+    #[DataProvider('localeFiles')]
+    public function testEveryLocaleCarriesTheEnglishSprintfShape(string $code, string $path): void
+    {
+        $en = require __DIR__ . '/../lang/en.php';
+        $locale = require $path;
+        foreach ($en as $key => $english) {
+            $this->assertSame(
+                substr_count((string) $english, '%d'),
+                substr_count((string) $locale[$key], '%d'),
+                "locale '$code' key '$key' must keep the %d argument count",
+            );
+        }
+    }
+
+    /**
+     * The usage screen translates its prose but never its flags: a refusal
+     * that names '--puzzle' and a help line that advertises '—puzzle' would
+     * leave the player guessing. Pinned per locale, derived flag list first.
+     */
+    #[DataProvider('localeFiles')]
+    public function testEveryUsageScreenNamesTheAcceptedFlags(string $code, string $path): void
+    {
+        $locale = require $path;
+        $help = (string) $locale['help_text'];
+        foreach (['candy-tetris', '-v', '--vs', '-h', '--help', '--version'] as $flag) {
+            $this->assertStringContainsString($flag, $help, "locale '$code' usage screen must name '$flag'");
+        }
+    }
+
+    /**
+     * A file that is a copy of en.php passes every structural leg while
+     * shipping zero translation — the quietest way to look compliant.
+     */
+    #[DataProvider('localeFiles')]
+    public function testNoLocaleIsAnUndisclosedCopyOfEnglish(string $code, string $path): void
+    {
+        if ($code === 'en') {
+            $this->assertTrue(true, 'en.php is the source of truth, not a copy');
+            return;
+        }
+        $en = require __DIR__ . '/../lang/en.php';
+        $locale = require $path;
+        $this->assertNotSame(
+            array_values($en),
+            array_values($locale),
+            "locale '$code' carries English values — translate it or drop the file",
+        );
+    }
+
+    public function testEnglishSourceOfTruthCarriesEveryRenderedKey(): void
+    {
+        $en = require __DIR__ . '/../lang/en.php';
+        foreach ([
+            'score_card', 'help_card', 'next_label', 'hold_label', 'paused',
+            'over.title', 'over.final_score', 'over.restart_hint', 'over.reason',
+            'over.reason.spawn_blocked', 'over.reason.top_out', 'over.reason.crushed',
+            'hold_used', 'combo_line', 'b2b_line',
+            'label.player', 'label.computer', 'win.player', 'win.computer',
+            'over.quit_hint', 'vs_keys', 'mode.unknown', 'help_text',
+        ] as $key) {
+            $this->assertArrayHasKey($key, $en, "en.php must own '$key' — visible strings never live inline");
+        }
+    }
+
+    /**
+     * Roster-count arm: the data provider can only compare files that exist,
+     * so deleting a whole locale would silently shrink the shipped set and
+     * every leg above would stay green. The count is pinned HERE.
+     */
+    public function testTheShippedLocaleRosterIsExactlySixteenFiles(): void
+    {
+        $codes = array_keys(self::localeFiles());
+        sort($codes);
+        $this->assertSame([
+            'ar', 'cs', 'de', 'en', 'es', 'fr', 'it', 'ja',
+            'ko', 'nl', 'pl', 'pt', 'pt-br', 'ru', 'tr', 'zh-cn',
+        ], $codes, 'shipped locale roster changed — a count change must be a deliberate edit here');
+    }
+
+    /** @return list<string> */
+    private static function tokens(string $value): array
+    {
+        return preg_match_all('/\{(\w+)\}/', $value, $m) === false ? [] : $m[1];
+    }
+}

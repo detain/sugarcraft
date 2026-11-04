@@ -1,0 +1,65 @@
+<?php
+
+/**
+ * Arabic UI strings for candy-tetris.
+ *
+ * Keys, key order and every {placeholder} / sprintf token mirror
+ * lang/en.php, which stays the source of truth. Flag spellings in the
+ * usage screen are kept verbatim, so a refusal is never half-translated.
+ *
+ * @return array<string, string>
+ */
+
+declare(strict_types=1);
+
+return [
+    // Single-player renderer
+    'score_card' => 'النقاط: %d
+الأسطر: %d
+المستوى: %d',
+    'help_card'  => '← →  تحريك
+↑ x  تدوير مع العقارب
+z    تدوير عكس العقارب
+↓    إنزال بطيء
+spc  إنزال فوري
+c    تخزين
+p    إيقاف مؤقت
+r    إعادة التشغيل
+q    خروج',
+    'next_label' => 'التالي:',
+    'hold_label' => 'التخزين:',
+    'paused'     => '[ متوقف مؤقتًا — اضغط p للمتابعة ]',
+
+    // Game-over banner
+    'over.title'                => 'انتهت اللعبة',
+    'over.final_score'          => 'النتيجة النهائية: {points}',
+    'over.restart_hint'         => 'اضغط r لإعادة التشغيل — اضغط q للخروج',
+    'over.reason'               => 'السبب: {reason}',
+    'over.reason.spawn_blocked' => 'لا توجد مساحة للقطعة التالية',
+    'over.reason.top_out'       => 'وصل الركام إلى السقف',
+    'over.reason.crushed'       => 'سحِقته الأسطر الزائدة',
+
+    // On-frame cues
+    'hold_used'  => '(مستخدم)',
+    'combo_line' => 'تتابع x%d',
+    'b2b_line'   => 'B2B جاهز',
+
+    // Versus renderer
+    'label.player'   => 'اللاعب',
+    'label.computer' => 'الحاسوب',
+    'win.player'     => 'لقد فزت!',
+    'win.computer'   => 'فاز الحاسوب!',
+    'over.quit_hint' => 'اضغط q للخروج',
+    'vs_keys'        => 'spc إنزال  c تخزين  p إيقاف  r إعادة  q خروج',
+
+    // Launch screen
+    'mode.unknown' => 'candy-tetris: وضع غير معروف "{flag}"',
+    'help_text'    => 'candy-tetris - نسخة من تتريس
+
+الاستخدام: candy-tetris [خيارات]
+  (بدون)     بدء لعبة فردية
+  -v, --vs   وضع المنافسة مع الحاسوب
+  -h, --help عرض هذه المساعدة
+  --version  طباعة الإصدار
+'
+];
