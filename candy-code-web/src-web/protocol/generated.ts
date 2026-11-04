@@ -51,13 +51,13 @@ export interface BackgroundShell {
   /** True when the lifetime wall stopped the shell. */
   expired: boolean
   ageSeconds: number
-  /** True when the row is an interactive (pty) shell — the C-TOOL-6.l tail pane and `shells.input` door apply; plain rows keep the read-only tail. */
+  /** True when the row is an interactive (pty) shell — the tail pane and `shells.input` door apply; plain rows keep the read-only tail. */
   interactive?: boolean
 }
 
 /** What the session's context is built from — structure for the panel `/context` prints as text. */
 export interface ContextSources {
-  /** The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them. */
+  /** The documents the system prompt splices — names and sizes, bodies never (on the roadmap); null when this server could not price them. */
   instructionFiles: ({
     path: string
     bytes: number
@@ -79,7 +79,7 @@ export interface ContextSources {
     status: string
     error: string | null
     skipped: string[]
-    /** C-MCP-4.a: the USER tier's verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator's own file (MCP-3). */
+    /** The USER tier's verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator's own file. */
     userStatus: string
     /** Why the user file could not be read, in the same sentence the project tier uses; null when there was nothing to report. */
     userError: string | null
@@ -90,9 +90,9 @@ export interface ContextSources {
       transport: string
       /** Rows exist only while the file is trusted; the http entry's URL stays off the wire (the `server.hello` media restraint, restated). */
       trust: "trusted"
-      /** C-MCP-4.a: which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch's precedence. */
+      /** Which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch's precedence. */
       tier: "project" | "user"
-      /** C-MCP-4.a: read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked. */
+      /** Read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked. */
       liveness: {
         /** Whether the started server reports its handshake complete; null only for a transport the client cannot answer for. */
         up: boolean | null
@@ -106,7 +106,7 @@ export interface ContextSources {
     path: string
     reason: string
   }[]
-  /** C-SEC-5.b: this root's trust prompts — the 5.a launch census' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant. */
+  /** This root's trust prompts — the launch census' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant. */
   trusts?: TrustPrompt[]
   /** The `/context` figures ({@see \SugarCraft\Code\Context\ContextBreakdown}) — same measurement, same single writer. */
   breakdown: {
@@ -264,7 +264,7 @@ export interface PendingAsk {
   /** AskUser's own choices, in order, the first recommended; answer one with `permission.respond` reply `once` and the choice as the note. Absent for every other ask. */
   choices?: string[]
   alwaysScope?: Record<string, string>
-  /** C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff. */
+  /** The server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff. */
   diff?: string
   /** The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own. */
   origin?: {
@@ -306,6 +306,8 @@ export interface SessionSnapshot {
   pendingAsks: PendingAsk[]
   queue: QueueEntry[]
   subagents?: Record<string, unknown>[]
+  /** Subagent rows dropped by the display cap while this session ran; named only when at least one row was dropped. Absent means nothing was trimmed. */
+  subagentsDropped?: number
 }
 
 export interface SessionSummary {
@@ -354,7 +356,7 @@ export interface TrustPrompt {
   askId: string
   /** The marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
   kind: "trust"
-  /** C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`). */
+  /** Which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`). */
   target: "mcp" | "mcp-pin" | "hooks" | "commands" | "settings"
   /** The project root the prompt is about — the exact string the grant writes into that door's trusted list. */
   root: string
@@ -1019,7 +1021,7 @@ export interface Methods {
       rules: ({
         pattern: string
         action: string
-        /** C-SEC-6.c: `user` for a rule the user saved through `p` / `remember: "user"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row. */
+        /** `user` for a rule the user saved through `p` / `remember: "user"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row. */
         tier: "user" | "config"
         savedIndex?: number | null
       })[]
@@ -1124,6 +1126,7 @@ export interface Methods {
       }
       limits: Record<string, number>
       principal: {
+        /** `owner` for the full-rights connection; `viewer` when a cv1_ viewer grant narrowed this principal to its read-only allowlist. Clients feature-detect viewer support on this field; the kind set may widen without a schema break. */
         kind: string
         via?: string
         scopes: ("read" | "write" | "approve" | "admin")[]
@@ -1717,7 +1720,7 @@ export interface Methods {
       sessionId?: SessionId
       /** "session" folds one session's rows; "all" spans every session the durable ledger holds — the same pair `/usage` and `/usage all` answer. */
       scope: "session" | "all"
-      /** OBS-3: trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history. */
+      /** Trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history. */
       days?: 7 | 30
     }
     result: {
@@ -1729,7 +1732,7 @@ export interface Methods {
         calls: number
         totalTokens: number
         costUsd: number
-        /** The group's rows include an unpriced call — its costUsd is a lower bound (the SES-1 `≥` law). */
+        /** The group's rows include an unpriced call — its costUsd is a lower bound (the `≥` law). */
         unpriced: boolean
       })[]
       models: ({
@@ -2096,7 +2099,7 @@ export interface Events {
     /** AskUser's own choices, in order, the first recommended; answer one with `permission.respond` reply `once` and the choice as the note. Absent for every other ask. */
     choices?: string[]
     alwaysScope?: Record<string, string>
-    /** C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff. */
+    /** The server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff. */
     diff?: string
     /** The delegated run that asked, when a sub-agent's question was relayed; absent for the turn's own. */
     origin?: {
@@ -2109,7 +2112,7 @@ export interface Events {
     askId: string
     /** The marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn's question registry). */
     kind: "trust"
-    /** C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`). */
+    /** Which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`). */
     target: "mcp" | "mcp-pin" | "hooks" | "commands" | "settings"
     /** The project root the prompt is about — the exact string the grant writes into that door's trusted list. */
     root: string
@@ -2151,6 +2154,7 @@ export interface Events {
   }
   /** This client fell behind; ephemeral events were dropped — resubscribe. */
   "server.overflow": {
+    sessionId?: SessionId
     dropped: number
     action: "resubscribe"
   }
