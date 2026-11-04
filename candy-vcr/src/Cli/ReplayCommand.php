@@ -9,7 +9,7 @@ use SugarCraft\Vcr\Format\CassetteLoader;
 use SugarCraft\Vcr\Support\Scalars;
 
 /**
- * `candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim=N]`
+ * `candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim=N|--idle-trim N]`
  *
  * Stream the cassette's recorded output bytes to stdout. With
  * `--speed=realtime`, sleeps between events so playback matches the
@@ -21,6 +21,8 @@ use SugarCraft\Vcr\Support\Scalars;
  *
  * `--idle-trim=N` clamps inter-event gaps longer than N seconds to N,
  * so long pauses in the recording don't produce long pauses in replay.
+ * The space form `--idle-trim N` is accepted as well, like every other
+ * value-taking flag on this verb.
  * Use `--no-trim` to restore original (pre-trim) wall-clock timing.
  *
  * The recorded stream is VERBATIM terminal bytes — it may leave the
@@ -74,8 +76,10 @@ final class ReplayCommand implements DocumentedCommand
 
     public function usage(): string
     {
-        return 'usage: candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim N] [--no-trim]' . "\n"
-            . "  Default --speed is instant. The header's playbackSpeed multiplier applies to rendering, not live replay." . "\n";
+        return 'usage: candy-vcr replay <cassette> [--speed=instant|realtime]
+       [--idle-trim=N|--idle-trim N] [--no-trim]' . "\n"
+            . "  Default --speed is instant. The header's playbackSpeed multiplier" . "\n"
+            . "  applies to rendering (render-tape/render-batch), not live replay." . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int

@@ -75,7 +75,9 @@ final class DiffWriter
         $actualLines = explode("\n", $this->normalizeLineEndings($actual));
 
         $maxLines = max(count($expectedLines), count($actualLines));
-        $maxWidth = 0;
+        // The EXPECTED/ACTUAL labels are the box's minimum width; anything
+        // narrower would have hand-padded the header with a negative repeat.
+        $maxWidth = 8;
         for ($i = 0; $i < $maxLines; $i++) {
             $expLine = $expectedLines[$i] ?? '';
             $actLine = $actualLines[$i] ?? '';
@@ -86,7 +88,7 @@ final class DiffWriter
 
         fwrite($output, "\n");
         fwrite($output, Ansi::sgr(1, 33) . "┌{$sep}┐" . Ansi::reset() . "\n"); // Yellow border, expected header
-        fwrite($output, Ansi::sgr(1, 33) . "│ EXPECTED" . str_repeat(' ', $maxWidth - 8) . "│" . Ansi::reset() . "\n");
+        fwrite($output, Ansi::sgr(1, 33) . "│ " . str_pad('EXPECTED', $maxWidth) . " │" . Ansi::reset() . "\n");
         fwrite($output, Ansi::sgr(1, 33) . "└{$sep}┘" . Ansi::reset() . "\n");
 
         for ($i = 0; $i < $maxLines; $i++) {
@@ -104,7 +106,7 @@ final class DiffWriter
 
         fwrite($output, "\n");
         fwrite($output, Ansi::sgr(1, 36) . "┌{$sep}┐" . Ansi::reset() . "\n"); // Cyan border, actual header
-        fwrite($output, Ansi::sgr(1, 36) . "│ ACTUAL  " . str_repeat(' ', $maxWidth - 8) . "│" . Ansi::reset() . "\n");
+        fwrite($output, Ansi::sgr(1, 36) . "│ " . str_pad('ACTUAL', $maxWidth) . " │" . Ansi::reset() . "\n");
         fwrite($output, Ansi::sgr(1, 36) . "└{$sep}┘" . Ansi::reset() . "\n");
 
         for ($i = 0; $i < $maxLines; $i++) {

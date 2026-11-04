@@ -195,7 +195,7 @@ final class Application
             if ($cmd instanceof SymfonyCommand) {
                 fwrite($out, sprintf("  %-14s %s\n", $name, $cmd->getDescription()));
             } else {
-                fwrite($out, sprintf("  %-10s %s\n", $name, $cmd->summary()));
+                fwrite($out, sprintf("  %-14s %s\n", $name, $cmd->summary()));
             }
         }
         fwrite($out, "\n  --version, -V  Print the version and exit.\n");

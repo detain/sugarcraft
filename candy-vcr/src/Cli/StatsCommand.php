@@ -89,7 +89,7 @@ final class StatsCommand implements DocumentedCommand
     private function renderHeader($stdout, Cassette $cassette): void
     {
         fwrite($stdout, sprintf(
-            "cassette v%d  %dx%d  runtime=%s  created=%s\n",
+            "cassette v%d  %dx%d\n  runtime=%s  created=%s\n",
             $cassette->header->version,
             $cassette->header->cols,
             $cassette->header->rows,
@@ -114,13 +114,15 @@ final class StatsCommand implements DocumentedCommand
             }
         }
 
-        fwrite($stdout, "Events: {$cassette->eventCount()}");
+        $parts = [];
         foreach ($tallies as $kind => $count) {
             if ($count > 0) {
-                fwrite($stdout, sprintf("  %s: %d", $kind, $count));
+                $parts[] = sprintf("%s: %d", $kind, $count);
             }
         }
-        fwrite($stdout, "\n");
+        $line = "Events: {$cassette->eventCount()}" . ($parts === [] ? '' : '  ' . implode('  ', $parts));
+        // Long tallies (all seven kinds live) would run past 80 columns.
+        fwrite($stdout, wordwrap($line, 78, "\n  ", false) . "\n");
     }
 
     /**

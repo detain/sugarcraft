@@ -15,7 +15,8 @@ use SugarCraft\Vterm\Terminal;
 use SugarCraft\Vterm\Theme;
 
 /**
- * `candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>|--fps <n>]`
+ * `candy-vcr inspect <cassette|.tape> [--frames]`
+ * `[--since=<seconds>] [--until=<seconds>] [--fps=<n>|--fps <n>]`
  *
  * Pretty-prints the events in a cassette: timestamp, kind, and a one-line
  * summary of the payload. Accepts either a JSONL/Relative/Yaml/asciinema
@@ -40,7 +41,8 @@ final class InspectCommand implements DocumentedCommand
 
     public function usage(): string
     {
-        return 'usage: candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>|--fps <n>]' . "\n";
+        return 'usage: candy-vcr inspect <cassette|.tape> [--frames]' . "\n"
+            . '       [--since=<seconds>] [--until=<seconds>] [--fps=<n>|--fps <n>]' . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
