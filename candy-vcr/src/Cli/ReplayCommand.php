@@ -34,7 +34,7 @@ use SugarCraft\Vcr\Support\Scalars;
  * For round-trip-replay-into-a-fresh-Program use the
  * {@see \SugarCraft\Vcr\Player} class from PHP code.
  */
-final class ReplayCommand implements Command
+final class ReplayCommand implements DocumentedCommand
 {
     /** DEC VT: save cursor / suspend-to-alternate-screen state (CSI ? 1049 s). */
     public const SCREEN_GUARD_SAVE = "\x1b[?1049s";
@@ -60,6 +60,11 @@ final class ReplayCommand implements Command
     public function summary(): string
     {
         return "Stream a cassette's recorded output to stdout";
+    }
+
+    public function usage(): string
+    {
+        return 'usage: candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim N] [--no-trim]' . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -102,7 +107,7 @@ final class ReplayCommand implements Command
         }
 
         if ($path === null) {
-            fwrite($stderr, "usage: candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim N] [--no-trim]\n");
+            fwrite($stderr, $this->usage());
             return 2;
         }
         if (!in_array($speed, ['instant', 'realtime'], true)) {

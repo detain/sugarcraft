@@ -31,11 +31,16 @@ use SugarCraft\Vterm\Theme;
  * output share a hash regardless of cell-construction order — while a
  * differing packed truecolour or line rendition separates them.
  */
-final class InspectCommand implements Command
+final class InspectCommand implements DocumentedCommand
 {
     public function summary(): string
     {
         return 'List the events (or frames with --frames) in a cassette';
+    }
+
+    public function usage(): string
+    {
+        return 'usage: candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>|--fps <n>]' . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -95,7 +100,7 @@ final class InspectCommand implements Command
         $fps = $parsedFps ?? 30.0;
 
         if ($path === null) {
-            fwrite($stderr, "usage: candy-vcr inspect <cassette|.tape> [--since=<seconds>] [--until=<seconds>] [--frames] [--fps=<n>|--fps <n>]\n");
+            fwrite($stderr, $this->usage());
             return 2;
         }
 

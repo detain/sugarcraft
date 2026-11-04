@@ -21,11 +21,16 @@ use SugarCraft\Vcr\Support\Scalars;
  * - 1: file read error
  * - 2: usage error (missing positional arg or unknown option)
  */
-final class StatsCommand implements Command
+final class StatsCommand implements DocumentedCommand
 {
     public function summary(): string
     {
         return 'Show cassette statistics';
+    }
+
+    public function usage(): string
+    {
+        return 'usage: candy-vcr stats <cassette>' . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -42,7 +47,7 @@ final class StatsCommand implements Command
             $paths[] = $arg;
         }
         if ($paths === []) {
-            fwrite($stderr, "usage: candy-vcr stats <cassette>\n");
+            fwrite($stderr, $this->usage());
             return 2;
         }
         if (count($paths) > 1) {

@@ -24,7 +24,7 @@ use SugarCraft\Vcr\Format\CassetteLoader;
  * session, so by default a migrated cassette compares equal to its source.
  * Pass --strict to include them in the payload comparison.
  */
-final class DiffCommand implements Command
+final class DiffCommand implements DocumentedCommand
 {
     /** Seconds of slack tolerated on event timestamps (format-rounding noise). */
     private const T_TOLERANCE_SECONDS = 0.002;
@@ -35,6 +35,11 @@ final class DiffCommand implements Command
     public function summary(): string
     {
         return 'Compare two cassettes event-by-event';
+    }
+
+    public function usage(): string
+    {
+        return 'usage: candy-vcr diff [--strict] <a.cas> <b.cas>' . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -53,7 +58,7 @@ final class DiffCommand implements Command
             $paths[] = $arg;
         }
         if (count($paths) !== 2) {
-            fwrite($stderr, "usage: candy-vcr diff [--strict] <a.cas> <b.cas>\n");
+            fwrite($stderr, $this->usage());
             return 2;
         }
         try {

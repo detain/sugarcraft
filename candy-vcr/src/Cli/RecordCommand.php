@@ -26,7 +26,7 @@ use SugarCraft\Vcr\Recorder;
  *
  * Wired in plan step P6.5.1; depends on sugar-pty's P6.1 recorder tap.
  */
-final class RecordCommand implements Command
+final class RecordCommand implements DocumentedCommand
 {
     /** Default cassette path when `--output` is omitted. */
     public const DEFAULT_OUTPUT_PATTERN = 'session-%s.cas';
@@ -672,13 +672,11 @@ final class RecordCommand implements Command
     }
 
     /**
-     * @param resource $stream
+     * The verb's own help text — also what `-h`/`--help` answers with.
      */
-    private function printUsage($stream): void
+    public function usage(): string
     {
-        \fwrite(
-            $stream,
-            "usage: candy-vcr record [--output PATH] [--force] [--cols N] [--rows N] [--no-ctty]\n"
+        return "usage: candy-vcr record [--output PATH] [--force] [--cols N] [--rows N] [--no-ctty]\n"
             . "                        [--shell] [--env] [--env-regex=PATTERN]\n"
             . "                        [--env-all] [--idle-trim N] -- <cmd> [args...]\n"
             . "\n"
@@ -708,8 +706,15 @@ final class RecordCommand implements Command
             . "                   legacy alias.)\n"
             . "  --idle-trim N    Compress inter-event gaps longer than N seconds. Trimmed\n"
             . "                   events carry both `t` (compressed) and `tRaw` (original)\n"
-            . "                   so `replay --no-trim` can opt back into the real cadence.\n",
-        );
+            . "                   so `replay --no-trim` can opt back into the real cadence.\n";
+    }
+
+    /**
+     * @param resource $stream
+     */
+    private function printUsage($stream): void
+    {
+        \fwrite($stream, $this->usage());
     }
 
     /**

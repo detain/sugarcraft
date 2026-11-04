@@ -79,7 +79,35 @@ final class Application
             return $this->runSymfonyCommand($command, $rest, $stdout, $stderr);
         }
 
+        if ($command instanceof DocumentedCommand && self::requestsHelp($rest)) {
+            // One help contract across the whole CLI: `-h`/`--help` anywhere on
+            // a hand-rolled verb answers with that verb's own usage block on
+            // stdout and exit 0. Before this the flag was refused as an unknown
+            // option by inspect/replay/migrate (exit 2), dropped by
+            // stats/diff, and only record/render-* — the Symfony verbs —
+            // honoured it; worse, `-h` after a hand-rolled verb was taken as a
+            // positional path, so `candy-vcr stats -h` tried to open a cassette
+            // literally named `-h`.
+            fwrite($stdout, $command->usage());
+
+            return 0;
+        }
+
         return $command->run($rest, $stdout, $stderr);
+    }
+
+    /**
+     * @param list<string> $args
+     */
+    private static function requestsHelp(array $args): bool
+    {
+        foreach ($args as $arg) {
+            if ($arg === '-h' || $arg === '--help') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

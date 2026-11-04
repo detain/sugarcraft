@@ -137,9 +137,18 @@ final class TapeToGif
         // (Hoisting this read above the loop froze every frame at the
         // pre-iteration value and made the directives inert.)
 
+        // Long renders used to be silent: the first thing a caller heard was
+        // 'GIF written', minutes later. The frame stream is lazy, so the total
+        // is not knowable in advance and progress is a count, not a percentage.
+        $onProgress = $options['onProgress'] ?? null;
+
         try {
             foreach ($this->buildFramesWithHolds($frameStream, 1.0 / $fps) as $index => $frameInfo) {
                 $renderCursor = $frameStream->captureCursor;
+                if ($onProgress !== null && $index % 100 === 99) {
+                    /** @var callable(int, int, int): void $onProgress */
+                    $onProgress($index + 1, $cellW, $cellH);
+                }
                 $image = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
 
                 $framePath = $tempDir . '/frame_' . sprintf('%05d', $index) . '.png';

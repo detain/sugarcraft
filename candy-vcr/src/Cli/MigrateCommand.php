@@ -14,13 +14,22 @@ use SugarCraft\Vcr\Migration\MigrationRunner;
  * omitted the file is migrated in-place after creating a .bak backup.
  * With --dry-run the cassette is validated but no files are written.
  */
-final class MigrateCommand implements Command
+final class MigrateCommand implements DocumentedCommand
 {
     private const BACKUP_SUFFIX = '.bak';
 
     public function summary(): string
     {
         return 'Migrate a cassette to the current format version';
+    }
+
+    public function usage(): string
+    {
+        return implode("\n", [
+            'usage: candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--info]',
+            '  --dry-run  Validate migration without writing files',
+            '  --info     Show registered migrators and exit',
+        ]) . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int
@@ -55,9 +64,7 @@ final class MigrateCommand implements Command
         }
 
         if ($inputPath === null) {
-            fwrite($stderr, "usage: candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--info]\n");
-            fwrite($stderr, "  --dry-run  Validate migration without writing files\n");
-            fwrite($stderr, "  --info     Show registered migrators and exit\n");
+            fwrite($stderr, $this->usage());
             return 2;
         }
 

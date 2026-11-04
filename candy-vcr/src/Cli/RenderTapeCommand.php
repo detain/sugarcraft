@@ -84,6 +84,18 @@ final class RenderTapeCommand extends Command
         $fontOpt = $input->getOption('font');
         $fontFamily = is_string($fontOpt) ? $fontOpt : 'JetBrainsMono';
 
+        // A multi-minute render used to say nothing at all until the finished
+        // file was named. Progress is a count, not a percentage (the frame
+        // stream is lazy, so the total is not knowable up front), and it rides
+        // stderr so stdout stays the machine-readable channel.
+        $errorOutput = $output instanceof ConsoleOutputInterface
+            ? $output->getErrorOutput()
+            : $output;
+        $errorOutput->writeln(sprintf('Rendering %s ...', basename($tapePath)));
+        $progress = static function (int $frames, int $cellW, int $cellH) use ($errorOutput): void {
+            $errorOutput->writeln(sprintf('  %d frames rendered (%dx%d px cells)', $frames, $cellW, $cellH));
+        };
+
         $tapeToGif = TapeToGif::create([
             'fps' => $fps,
             'backend' => $backend,
@@ -101,6 +113,7 @@ final class RenderTapeCommand extends Command
                 'strict' => $strict,
                 'shell' => $shell,
                 'exec' => $exec,
+                'onProgress' => $progress,
             ]);
         } catch (\Throwable $e) {
             $output->writeln("<error>Failed: {$e->getMessage()}</error>");
