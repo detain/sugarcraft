@@ -59,6 +59,13 @@
      the token guard's theme walk). --panels-width sizes the slide-in
      side-panel column and its body reserve. */
   --panels-width: min(28rem, 100vw);
+  /* CW-UX-11 (token half): the chrome strip is 3.4rem tall and the tab strip
+     reserves 7rem of it; both lived as bare literals in the shell styles.
+     Pre-minted here for the lane-F chrome commit to consume (the tab-strip
+     padding and the side-panel opener offset), same split as CW-UX-21's
+     --fs-small. */
+  --chrome-height: 3.4rem;
+  --chrome-reserve: 7rem;
 }
 
 @media (prefers-color-scheme: light) {
