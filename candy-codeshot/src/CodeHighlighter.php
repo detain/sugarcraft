@@ -30,6 +30,17 @@ use SugarCraft\Core\Util\Palettes;
  */
 final class CodeHighlighter
 {
+    /**
+     * Accent set for light backgrounds (GitHub-Light-ish); the Dracula
+     * accents wash out on pale themes.
+     */
+    private const LIGHT = [
+        'keyword' => '#cf222e',
+        'string'  => '#0a3069',
+        'number'  => '#0550ae',
+        'comment' => '#6e7781',
+    ];
+
     public function __construct(
         /** Colour for {@see TokenKind::Plain} spans — normally the renderer foreground. */
         public readonly string $foreground = Palettes::DRACULA['foreground'],
@@ -41,12 +52,37 @@ final class CodeHighlighter
 
     /**
      * Build a highlighter whose {@see TokenKind::Plain} colour tracks the given
-     * theme's foreground, keeping keyword/string/number/comment on the shared
-     * Dracula-ish accents.
+     * theme's foreground, choosing accents that stay readable on the theme's
+     * background: the Dracula set on dark themes, a GitHub-Light-ish set on
+     * pale ones.
      */
     public static function forTheme(Theme $theme): self
     {
-        return new self(foreground: $theme->foreground);
+        $accents = self::isLightBackground($theme->background) ? self::LIGHT : null;
+
+        return new self(
+            foreground: $theme->foreground,
+            keyword:    $accents['keyword'] ?? Palettes::DRACULA['pink'],
+            string:     $accents['string']  ?? Palettes::DRACULA['yellow'],
+            number:     $accents['number']  ?? Palettes::DRACULA['purple'],
+            comment:    $accents['comment'] ?? Palettes::DRACULA['comment'],
+        );
+    }
+
+    /**
+     * Simple channel-mean brightness of a #rrggbb background; unparseable
+     * colours count as dark (keep the existing accents).
+     */
+    private static function isLightBackground(string $hex): bool
+    {
+        $rgb = self::hexToRgb($hex);
+        if ($rgb === null) {
+            return false;
+        }
+
+        [$r, $g, $b] = $rgb;
+
+        return ($r + $g + $b) / 765.0 >= 0.5;
     }
 
     /**

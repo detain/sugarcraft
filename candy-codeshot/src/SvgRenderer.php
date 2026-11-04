@@ -64,6 +64,7 @@ final class SvgRenderer
         public readonly ?array $highlight  = null,
         int $padding = 24,
         int $borderRadius = 8,
+        public readonly ?string $title = null,
     ) {
         // A direct `new SvgRenderer(padding: -5)` must not be able to forge
         // negative geometry the withers refuse: the constructor clamps
@@ -149,6 +150,15 @@ final class SvgRenderer
     }
 
     /**
+     * Name the document for assistive technology (the SVG <title>/<desc> pair
+     * plus role="img"). PNG bitmaps carry no text metadata; SVG-only setter.
+     */
+    public function withTitle(string $title): self
+    {
+        return $this->copy(title: $title);
+    }
+
+    /**
      * Render `$text` (which may contain ANSI escape sequences) to an
      * SVG document and return the bytes.
      *
@@ -182,9 +192,14 @@ final class SvgRenderer
         $svgHeight = (int) ($totalH - $shadowMargin * 2);
 
         $svg  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-        $svg .= '<svg xmlns="http://www.w3.org/2000/svg" '
+        $svg .= '<svg xmlns="http://www.w3.org/2000/svg" role="img" '
+              . 'aria-labelledby="candy-codeshot-title candy-codeshot-desc" '
               . 'width="' . $totalW . '" height="' . $totalH . '" '
-              . 'viewBox="0 0 ' . $totalW . ' ' . $totalH . '">' . "\n";
+              . 'viewBox="0 0 ' . $totalW . ' ' . $totalH . '">' . "\n"
+              . '  <title id="candy-codeshot-title">'
+              . self::xmlEscape($this->title ?? 'candy-codeshot screenshot')
+              . '</title>' . "\n"
+              . '  <desc id="candy-codeshot-desc">Code screenshot rendered by candy-codeshot.</desc>' . "\n";
 
         // Defs (drop shadow filter + embedded font).
         $defs = '';
@@ -215,6 +230,17 @@ final class SvgRenderer
                      . '  ]]></style>' . "\n";
             }
         }
+        if ($this->window && ($this->windowStyle === WindowStyle::WindowsTerminal
+            || $this->windowStyle === WindowStyle::Hyper)) {
+            // The two square title-bar chrome styles paint full-width rects;
+            // clipping them to the rounded frame stops corner bleed when
+            // --border-radius is non-zero.
+            $defs .= '  <clipPath id="frame">'
+                 . sprintf('<rect x="%d" y="%d" width="%d" height="%d" rx="%d" />',
+                     $shadowMargin, $shadowMargin, $svgWidth, $svgHeight, $this->borderRadius)
+                 . '</clipPath>' . "\n";
+        }
+
         if ($defs !== '') {
             $svg .= '<defs>' . "\n" . $defs . '</defs>' . "\n";
         }
@@ -346,7 +372,7 @@ final class SvgRenderer
 
         // Title bar background (dark)
         $svg .= sprintf(
-            '<rect x="%d" y="%d" width="%d" height="%d" fill="%s" />' . "\n",
+            '<rect x="%d" y="%d" width="%d" height="%d" clip-path="url(#frame)" fill="%s" />' . "\n",
             $shadowMargin,
             $titleBarY,
             $geo->frameWidth,
@@ -356,7 +382,7 @@ final class SvgRenderer
 
         // Title bar border
         $svg .= sprintf(
-            '<rect x="%d" y="%d" width="%d" height="%d" fill="none" stroke="%s" stroke-width="1" />' . "\n",
+            '<rect x="%d" y="%d" width="%d" height="%d" clip-path="url(#frame)" fill="none" stroke="%s" stroke-width="1" />' . "\n",
             $shadowMargin,
             $titleBarY,
             $geo->frameWidth,
@@ -403,7 +429,7 @@ final class SvgRenderer
 
         // Thin title bar background
         $svg .= sprintf(
-            '<rect x="%d" y="%d" width="%d" height="%d" fill="%s" />' . "\n",
+            '<rect x="%d" y="%d" width="%d" height="%d" clip-path="url(#frame)" fill="%s" />' . "\n",
             $shadowMargin,
             $titleBarY,
             $geo->frameWidth,
@@ -444,6 +470,7 @@ final class SvgRenderer
         ?bool $ligatures = null,
         mixed $fontPath = null,
         mixed $highlight = null,
+        ?string $title = null,
     ): self {
         return new self(
             theme:        $theme        ?? $this->theme,
@@ -457,6 +484,7 @@ final class SvgRenderer
             ligatures:    $ligatures    ?? $this->ligatures,
             fontPath:     is_null($fontPath) ? $this->fontPath : $fontPath,
             highlight:    is_null($highlight) ? $this->highlight : $highlight,
+            title:        $title        ?? $this->title,
         );
     }
 }

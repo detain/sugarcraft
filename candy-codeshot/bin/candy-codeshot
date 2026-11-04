@@ -416,6 +416,11 @@ if ($format === 'png') {
         lineNumbers:  $lineNumbers,
         borderRadius: $borderRadius,
     );
+
+    // Accessible document name (SVG <title>): the input's basename, or
+    // 'stdin' when the code was piped in.
+    $renderer = $renderer->withTitle($inputPath !== null ? basename($inputPath) : 'stdin');
+
     if ($ligatures) {
         $renderer = $renderer->withLigatures(true);
     }

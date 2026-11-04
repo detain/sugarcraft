@@ -6,6 +6,7 @@ namespace SugarCraft\CodeShot\Tests;
 
 use SugarCraft\CodeShot\SvgRenderer;
 use SugarCraft\CodeShot\Theme;
+use SugarCraft\CodeShot\WindowStyle;
 use PHPUnit\Framework\TestCase;
 
 final class SvgRendererTest extends TestCase
@@ -116,5 +117,26 @@ final class SvgRendererTest extends TestCase
         $this->assertStringStartsWith('<?xml version="1.0" encoding="UTF-8"?>', $svg);
         $this->assertStringEndsWith("</svg>\n", $svg);
         $this->assertStringContainsString('fill="#0d1117"', $svg);
+    }
+    public function testAccessibleTitleAndDescriptionAreEmitted(): void
+    {
+        $svg = SvgRenderer::dark()->render('x');
+        $this->assertStringContainsString('role="img"', $svg);
+        $this->assertStringContainsString('<title id="candy-codeshot-title">candy-codeshot screenshot</title>', $svg);
+        $this->assertStringContainsString('<desc id="candy-codeshot-desc">Code screenshot rendered by candy-codeshot.</desc>', $svg);
+    }
+
+    public function testWithTitleOverridesTheDefaultName(): void
+    {
+        $svg = SvgRenderer::dark()->withTitle('example.php')->render('x');
+        $this->assertStringContainsString('<title id="candy-codeshot-title">example.php</title>', $svg);
+    }
+
+    public function testSquareChromeBarsAreClippedToTheFrame(): void
+    {
+        $svg = SvgRenderer::dark()->withWindowStyle(WindowStyle::WindowsTerminal)->render('x');
+        $this->assertStringContainsString('<clipPath id="frame">', $svg);
+        $this->assertStringContainsString('clip-path="url(#frame)"', $svg);
+        $this->assertStringNotContainsString('clipPath', SvgRenderer::dark()->render('x'));
     }
 }

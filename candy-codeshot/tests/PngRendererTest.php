@@ -65,15 +65,18 @@ final class PngRendererTest extends TestCase
         $this->assertSame("\x89PNG\r\n\x1a\n", substr($png, 0, 8));
     }
 
-    public function testAnsiBackgroundColorsDoNotRenderInPng(): void
+    public function testAnsiBackgroundColorsRenderInPng(): void
     {
-        // ANSI 44 = blue background
-        $png = PngRenderer::dark()->withWindow(false)->withShadow(false)
+        // The PNG backend honours ANSI 44 background bands: a banded render
+        // cannot be byte-identical to the plain one. (The old pin only
+        // checked the PNG signature and passed vacuously.)
+        $banded = PngRenderer::dark()->withWindow(false)->withShadow(false)
             ->render("\x1b[44mblue background\x1b[0m\n");
+        $plain = PngRenderer::dark()->withWindow(false)->withShadow(false)
+            ->render("blue background\n");
 
-        // GD imagestring() does not support per-character colors,
-        // so background is informational only in PNG output.
-        $this->assertSame("\x89PNG\r\n\x1a\n", substr($png, 0, 8));
+        $this->assertSame("\x89PNG\r\n\x1a\n", substr($banded, 0, 8));
+        $this->assertNotSame(md5($banded), md5($plain));
     }
 
     public function testThemePresetsProduceDifferentOutput(): void
@@ -168,6 +171,23 @@ final class PngRendererTest extends TestCase
         $this->expectExceptionMessage("PNG colour must be a 6-digit #rrggbb hex string, got 'oops'");
 
         (new PngRenderer($theme))->withWindow(false)->withShadow(false)->render("x\n");
+    }
+
+    public function testOversizedPngIsRefusedNotAllocated(): void
+    {
+        // A 5000-column line at 900px padding asks for far more than the
+        // 40-megapixel budget; the renderer must refuse, not allocate.
+        $renderer = new PngRenderer(
+            theme: Theme::dark(),
+            padding: 900,
+            window: false,
+            shadow: false,
+            border: false,
+        );
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('too large');
+        $renderer->render(str_repeat('x', 5000) . "\n");
     }
 
     public function testWindowStyleNoneCollapsesTheHeaderBandInPng(): void

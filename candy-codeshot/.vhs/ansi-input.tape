@@ -14,9 +14,9 @@ Set Theme "TokyoNight"
 Type "printf '\x1b[1;31merror:\x1b[0m \x1b[33mwarning:\x1b[0m \x1b[32msuccess\x1b[0m\n'"
 Enter
 Sleep 1s
-Type "printf '\x1b[1;31merror:\x1b[0m \x1b[33mwarning:\x1b[0m \x1b[32msuccess\x1b[0m\n' | ./bin/candy-codeshot --theme dracula -o /tmp/ansi.svg"
+Type "printf '\x1b[1;31merror:\x1b[0m \x1b[33mwarning:\x1b[0m \x1b[32msuccess\x1b[0m\n' | ./bin/candy-codeshot --theme dracula -o ansi.svg"
 Enter
 Sleep 800ms
-Type "ls -lh /tmp/ansi.svg"
+Type "ls -lh ansi.svg"
 Enter
 Sleep 2500ms

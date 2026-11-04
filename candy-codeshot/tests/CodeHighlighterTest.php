@@ -122,4 +122,23 @@ final class CodeHighlighterTest extends TestCase
         $direct = $renderer->render($code);
         $this->assertSame($direct, $viaHighlighter);
     }
+    public function testForThemePicksLightAccentsOnLightThemes(): void
+    {
+        $h = CodeHighlighter::forTheme(Theme::light());
+        $this->assertSame('#cf222e', $h->keyword);
+        $this->assertSame('#0a3069', $h->string);
+        $this->assertSame('#0550ae', $h->number);
+        $this->assertSame('#6e7781', $h->comment);
+    }
+
+    public function testForThemeKeepsDraculaAccentsOnDarkThemes(): void
+    {
+        foreach ([Theme::dark(), Theme::dracula(), Theme::tokyoNight(), Theme::nord()] as $theme) {
+            $h = CodeHighlighter::forTheme($theme);
+            $this->assertSame('#ff79c6', $h->keyword);
+            $this->assertSame('#f1fa8c', $h->string);
+            $this->assertSame('#bd93f9', $h->number);
+            $this->assertSame('#6272a4', $h->comment);
+        }
+    }
 }

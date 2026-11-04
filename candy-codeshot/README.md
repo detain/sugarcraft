@@ -22,10 +22,23 @@ suitable for git diffs and CI artifacts. PNG output is also available and
 requires `ext-gd`.
 
 ```sh
-composer require sugarcraft/candy-codeshot
+composer require sugarcraft/candy-codeshot:dev-master
 ```
 
+No stable release tags exist yet: `dev-master` (with
+`"minimum-stability": "dev"` in the root manifest) is the constraint that
+resolves. A rolling standalone binary is also published:
+`https://github.com/detain/sugarcraft/releases/download/candy-codeshot/dev/candy-codeshot.phar`
+with a sha256 sidecar; stable `candy-codeshot/v*` tags are a maintainer seam.
+
 ## CLI
+
+### Run it
+
+Inside a checkout, run `./bin/candy-codeshot` directly. When installed via
+Composer, the executable lands at `vendor/bin/candy-codeshot` — put
+`vendor/bin` on your `PATH` or call the full path. The examples below assume
+it is on `PATH`.
 
 ```sh
 echo "function hello() { return 'world'; }" \
@@ -39,7 +52,7 @@ candy-codeshot notes.md --format png -o notes.png
 
 ### Flags
 
-All sixteen options. Flag values are **separate arguments** —
+Every flag the parser accepts. Flag values are **separate arguments** —
 `--theme dracula`, not `--theme=dracula` (the `=` form is rejected as an
 unrecognised flag).
 
@@ -54,16 +67,17 @@ unrecognised flag).
 - `--ligatures` — enable ligatures (`font-variant-ligatures: normal`). **SVG only.**
 - `--font <path>` — embed a TTF/OTF/WOFF/WOFF2 font in the SVG. **SVG only.**
 - `--unsafe-paths` — allow input / `--font` / `--output` paths outside the CWD (see Path confinement).
-- `--highlight <start:end[:color]>` — highlight lines `start:end` with an optional colour (default `#fffbe6`). Ranges are validated: `start >= 1`, `end >= start`, else a friendly refusal, exit 2. **SVG only.**
+- `--highlight <start:end[:color]>` — highlight lines `start:end` with an optional colour (default: the theme’s own highlight colour). Ranges are validated: `start >= 1`, `end >= start`, else a friendly refusal, exit 2. **SVG only.**
 - `--format <svg|png>` — output format (default `svg`; `png` requires `ext-gd`).
 - `-t`, `--type <lang>` — force the syntax-highlighting language (default: filename, then shebang, then content detection).
 - `-o`, `--output <path>` — write the screenshot to a file instead of stdout.
 - `-h`, `--help` — show the help message.
+- `-v`, `--version` — print the version and exit.
 
 ### Exit codes
 
 - `0` — success.
-- `1` — missing composer `autoload.php` (installation problem; the binary names itself and says to run `composer install`).
+- `1` — I/O failure: unreadable input, unwritable output, or a missing composer `autoload.php` (installation problem; the binary names itself and says to run `composer install`).
 - `2` — usage or input error (bad flag, value missing, path outside the CWD, refused highlight, missing `ext-gd` for PNG, …).
 
 ### Path confinement
@@ -87,7 +101,7 @@ candy-codeshot script.php --theme dracula --format png -o shot.png
 PNG mode is more limited than SVG (see [Known limitations](#known-limitations)):
 theme `fontSize`/`lineHeight` are not honoured (GD's built-in bitmap font is
 fixed-size), fonts cannot be embedded, and the SVG-only options `--ligatures`,
-`--font` and `--highlight` are ignored. When you pass any of them together with
+`--font`, `--highlight` and `--border-radius` are dropped (announced on stderr). When you pass any of them together with
 `--format png`, the CLI **announces each dropped option on stderr** instead of
 failing silently. If `ext-gd` is missing, PNG requests exit 2 with a clear
 message. Writing `--format svg` (or omitting it) to a `*.png` filename — or
@@ -111,7 +125,7 @@ file_put_contents('out.svg', $svg);
 
 ANSI input is honoured — SGR foreground **and background** colours (16 / 256 /
 24-bit truecolor) plus **bold / italic / underline** become `<tspan>` segments
-and per-segment `<rect>` fills in the output. Foreground colours are read in
+and per-segment `<rect>` fills in the output. SGR state carries across lines: an unterminated colour sequence keeps painting the following lines, as in a terminal. Foreground colours are read in
 both spellings xterm allows — the flat `38;2;R;G;B` and the grouped
 `38:2::R:G:B` (ECMA-48 sub-parameters, where the slot after the mode is a
 colour-space id and not the red component) — and both resolve to the same
@@ -125,7 +139,7 @@ $svg = SvgRenderer::dark()->render("\x1b[31merror:\x1b[0m something broke");
 $svg = SvgRenderer::dark()->render("\x1b[44m\x1b[37malert:\x1b[0m background highlight");
 ```
 
-`PngRenderer` is the GD-backed sibling with the same fluent surface:
+`PngRenderer` is the GD-backed sibling with the same fluent surface — except the SVG-only `withLigatures()`, `withFont()`, `withHighlight()` and `withTitle()` setters:
 
 ```php
 use SugarCraft\CodeShot\PngRenderer;
@@ -143,7 +157,7 @@ $png = PngRenderer::dracula()
 | `PngRenderer` | GD-backed renderer producing PNG bytes; same theme, fixed bitmap fonts. |
 | `Theme` | Immutable palette + font config shared by both renderers (window-chrome style lives on the renderers). |
 | `WindowStyle` | Enum of chrome styles: `Macos`, `WindowsTerminal`, `ITerm2`, `Hyper`, `None`. |
-| `WindowChromeGeometry` | Per-style traffic-light / title-bar geometry (used by the SVG chrome). |
+| `WindowChromeGeometry` | Per-style traffic-light / title-bar geometry (used by both renderers). |
 | `CodeHighlighter` | Keyword/string/comment highlighting for a detected language under a theme. |
 | `LanguageDetector` | Heuristic language detection from filename, shebang and content. |
 | `LayoutCalculator` | Canvas maths: content box, header band, shadow margin, totals. |
@@ -181,7 +195,7 @@ $lang = LanguageDetector::detect($code);        // "php", "bash", "python", ...
 The CLI applies these sources in this order for a file argument: **filename
 extension first** (so a Python file whose body has no distinctive markers still
 highlights as Python), then shebang, then content signatures for stdin or when
-the extension is unknown. Force a language explicitly with `-t/--type`.
+the extension is unknown. Force a language explicitly with `-t/--type`. Input that already carries ANSI colour wins: the highlighter is skipped, and `-t/--type` cannot override embedded colour.
 
 Source details:
 - **Filename extension** — the richest source (`detectFromFilename`): `.php`, `.py`/`.pyw`, `.js`/`.mjs`/`.cjs`, `.ts`/`.tsx`, `.rb`, `.sh`, `.go`, `.rs`, `.c`, `.cpp`, `.java`, `.cs`, `.swift`, `.kt`, `.scala`, `.sql`, `.html`, `.css`/`.scss`/`.sass`, `.json`, `.yaml`/`.yml`, `.md`, `.xml`, and more.
@@ -209,20 +223,34 @@ Build a custom theme via the `Theme` constructor — set background / foreground
 
 - **PNG / GD bitmap fonts** — `PngRenderer` uses GD's built-in bitmap font: no
   Unicode beyond Latin-1, and the theme's `fontSize` / `lineHeight` are not
-  honoured. Font embedding, ligatures and `--highlight` are SVG-only (the CLI
-  announces what PNG drops).
+  honoured. Font embedding, ligatures, `--highlight` and `--border-radius` (PNG corners
+  stay square) are SVG-only (the CLI announces what PNG drops); SGR background
+  bands are honoured in both formats.
 - **Shadow technique differs by format** — SVG uses an `feDropShadow` filter;
   PNG draws a flat offset rectangle. Expect slightly different shadows.
 - **`windows-terminal` chrome is deliberately dark** — its title bar uses the
   hard-coded `#1e1e1e` / `#303030` / `#444444` of the real Windows Terminal
   default theme and is not re-tinted by `--theme` (future seam: theme-derived
-  chrome colours).
-- **No SVG `<title>`/`<desc>`** — screenshots carry no accessible name yet.
-- **Tabs and East-Asian-width glyphs count as one cell** — layout width uses
-  `mb_strlen` per code point, so tab stops and wide CJK glyphs can shift the
-  frame width relative to a browser's rendering.
+  chrome colours). Its title-bar rects are clipped to the rounded frame, so a
+  non-zero `--border-radius` shows rounded top corners.
+- **Accessible SVG output** — every render emits `<title>`, `<desc>` and
+  `role="img"`; the CLI names the document after the input basename (or
+  `stdin`), the library via `withTitle()`. PNG bitmaps carry no text metadata.
+- **Terminal-accurate cell math** — layout width uses `SugarCraft\Core\Util\Width`
+  (East-Asian widths) and tabs expand to 8-cell stops, matching a terminal.
+  PNG still *draws* with GD's Latin-1 bitmap font, so non-Latin-1 text can
+  overrun its computed advance in PNG output.
 - **Theme JSON truncation** — theme loaders read at most 1 MB; larger files
   fail with a `JsonException`.
+- **Numeric ceilings** — the CLI refuses `--padding` above 512 and
+  `--border-radius` above 64; engine constructors clamp to 0..4096 /
+  0..256, and PNG output above 40,000,000 pixels is refused, not allocated.
+- **Font embedding caps at 32 MiB** — unreadable or oversized font files
+  raise a loud `RuntimeException` (CLI exit 2); SVG never silently drops
+  the `@font-face`.
+- **Classic ANSI palette** — `AnsiParser::ANSI16` uses original xterm
+  values (blue `#0000ee`) for terminal parity; contrast on dark themes is
+  low by design.
 
 ## Demos
 
@@ -239,6 +267,9 @@ Build a custom theme via the `Theme` constructor — set background / foreground
 ```sh
 cd candy-codeshot && composer install && vendor/bin/phpunit
 ```
+
+The options roster guard (`tests/OptionsRosterTest.php`) fails when the parser,
+`cli.usage`, or the README flag list drift apart.
 
 ## Accessor deprecation (2026-10-24)
 
