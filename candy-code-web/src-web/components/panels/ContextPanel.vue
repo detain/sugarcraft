@@ -241,7 +241,7 @@ onMounted(() => void context.load(props.sessionId))
 <template>
   <div class="context-panel" data-testid="context-panel">
     <div class="head">
-      <span v-if="context.loaded && context.sessionId === sessionId" class="count" data-testid="context-count">{{ t('web.panels.ctx_head_badge') }}</span>
+      <span v-if="context.loaded && context.sessionId === sessionId" class="count numbers" data-testid="context-count">{{ t('web.panels.ctx_head_badge') }}</span>
       <button type="button" class="link" data-testid="context-reload" :disabled="context.loading" @click="context.load(sessionId)">{{ t('web.panels.reload') }}</button>
     </div>
     <p v-if="context.error" class="error" role="alert" data-testid="context-error">{{ context.error }}</p>
@@ -255,7 +255,7 @@ onMounted(() => void context.load(props.sessionId))
         <ul v-if="context.sources.breakdown.sections" class="layers" data-testid="context-layers">
           <li v-for="layer in context.sources.breakdown.sections" :key="layer.label">
             <span class="label">{{ layer.label }}</span>
-            <span class="tokens">~{{ layer.tokens.toLocaleString() }}</span>
+            <span class="tokens numbers">~{{ layer.tokens.toLocaleString() }}</span>
           </li>
         </ul>
         <p class="meta">
@@ -277,14 +277,14 @@ onMounted(() => void context.load(props.sessionId))
             <button type="button" class="cat-head" :disabled="cat.sub.length === 0" :data-testid="`context-cat-toggle-${cat.key}`" @click="drillCategory(cat.key)">
               <span class="swatch" :style="{ background: colorFor(cat.key) }" aria-hidden="true"></span>
               <span class="label">{{ cat.label }}</span>
-              <span class="tokens">{{ catFigure(cat) }}</span>
+              <span class="tokens numbers">{{ catFigure(cat) }}</span>
               <span v-if="cat.sub.length > 0" class="drill-mark">{{ drill === cat.key ? '▾' : '▸' }}</span>
             </button>
             <ul v-if="drill === cat.key && cat.sub.length > 0" class="subs" :data-testid="`context-subs-${cat.key}`">
               <li v-for="(row, index) in cat.sub" :key="index" class="sub" :data-testid="`context-sub-${cat.key}-${index}`">
                 <span class="label sub-label">{{ row.label }}</span>
                 <span v-if="row.personal" class="badge">{{ t('web.panels.ctx_personal') }}</span>
-                <span class="tokens">{{ subFigure(row) }}</span>
+                <span class="tokens numbers">{{ subFigure(row) }}</span>
               </li>
             </ul>
           </li>
@@ -597,5 +597,8 @@ li.cat {
   border-radius: 3px;
   padding: 0.4rem;
   box-sizing: border-box;
+}
+.numbers {
+  font-variant-numeric: tabular-nums;
 }
 </style>

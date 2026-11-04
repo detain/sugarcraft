@@ -101,7 +101,7 @@ function humaniseDenialKind(kind: string): string {
       <span class="name">{{ item.name }}</span>
       <span class="arg">{{ summary }}</span>
       <span v-if="stats" class="stats"><span class="plus">+{{ stats.added }}</span> <span class="minus">−{{ stats.removed }}</span></span>
-      <span class="time">{{ duration(item.durationMs) }}</span>
+      <span class="time numbers">{{ duration(item.durationMs) }}</span>
     </button>
     <ReasoningFold v-if="reasoning !== ''" :text="reasoning" />
     <section v-if="tail !== null" class="progress" data-testid="tool-progress">
@@ -271,5 +271,8 @@ pre {
   margin: 0 0 0.15rem;
   font-size: 0.72rem;
   opacity: 0.65;
+}
+.numbers {
+  font-variant-numeric: tabular-nums;
 }
 </style>

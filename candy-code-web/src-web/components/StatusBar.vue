@@ -196,12 +196,12 @@ const prLinkable = computed(() => /^https?:\/\//i.test(props.summary?.pr?.url ??
   <footer class="status" data-testid="status-bar" :data-status="state.status">
     <span class="item state" :class="state.status">{{ statusText }}</span>
     <button v-if="trustAwaiting" type="button" class="item action" data-testid="trust-badge" :title="trustAwaiting === 1 ? t('web.chrome.status.trust_title') : t('web.chrome.status.trust_title_count', { n: trustAwaiting })" @click="panels.show('context')">{{ trustAwaiting === 1 ? t('web.chrome.status.trust') : t('web.chrome.status.trust_count', { n: trustAwaiting }) }}</button>
-    <button type="button" class="item action" data-testid="context-meter" :title="t('web.chrome.status.context_title')" @click="panels.show('context')">
+    <button type="button" class="item action numbers" data-testid="context-meter" :title="t('web.chrome.status.context_title')" @click="panels.show('context')">
       {{ t('web.chrome.status.tokens', { tok: tokens(state.contextTokens) }) }}<template v-if="contextPct !== null"> · {{ contextPct }}%</template>
       <span v-if="contextPct !== null" class="meter" aria-hidden="true"><span :style="{ width: `${contextPct}%` }" /></span>
       <span v-if="cachePct !== null" class="cache" data-testid="status-cache">{{ t('web.chrome.status.cache', { n: cachePct }) }}</span>
     </button>
-    <span class="item" :title="state.unpriced ? t('web.chrome.status.spend_unpriced') : t('web.chrome.status.spend')" :data-unpriced="state.unpriced ? 'true' : 'false'" data-testid="spend">{{ spendLabel(spent, state.unpriced) }}</span>
+    <span class="item numbers" :title="state.unpriced ? t('web.chrome.status.spend_unpriced') : t('web.chrome.status.spend')" :data-unpriced="state.unpriced ? 'true' : 'false'" data-testid="spend">{{ spendLabel(spent, state.unpriced) }}</span>
     <label v-if="selectableProviders.length > 0" class="item" :title="model">
       <span class="sr-only">{{ t('web.chrome.status.model') }}</span>
       <select :value="modelOptionValue(currentProvider)" data-testid="model-select" @change="pickModel">
@@ -347,5 +347,8 @@ button.action:disabled {
 }
 .conn {
   margin-left: auto;
+}
+.numbers {
+  font-variant-numeric: tabular-nums;
 }
 </style>

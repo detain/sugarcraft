@@ -176,8 +176,8 @@ function showMoreRows(): void {
   <div class="diff" :class="{ split }" data-testid="diff" role="table" :aria-label="split ? t('web.transcript.diff_split_aria') : t('web.transcript.diff_aria')">
     <template v-if="!split">
       <div v-for="row in shownRows" :key="row.key" class="row" :class="row.kind" role="row">
-        <span class="no" role="cell">{{ row.oldNo }}</span>
-        <span class="no" role="cell">{{ row.newNo }}</span>
+        <span class="no numbers" role="cell">{{ row.oldNo }}</span>
+        <span class="no numbers" role="cell">{{ row.newNo }}</span>
         <span class="sign" role="cell">{{ row.sign }}</span>
         <span class="text" role="cell"><span v-if="row.html !== null" v-html="row.html" /><template v-else>{{ row.text }}</template></span>
       </div>
@@ -186,10 +186,10 @@ function showMoreRows(): void {
       <div v-for="row in shownRows" :key="row.key" class="row" :class="row.classes" role="row">
         <span v-if="row.spanText !== null" class="text" role="cell">{{ row.spanText }}</span>
         <template v-else>
-          <span class="no" role="cell">{{ row.left.no }}</span>
+          <span class="no numbers" role="cell">{{ row.left.no }}</span>
           <span class="half" :class="row.left.kind" role="cell"><span v-if="row.left.html !== null" v-html="row.left.html" /><template v-else>{{ row.left.text }}</template></span>
           <span class="divider" role="cell" aria-hidden="true">│</span>
-          <span class="no" role="cell">{{ row.right.no }}</span>
+          <span class="no numbers" role="cell">{{ row.right.no }}</span>
           <span class="half" :class="row.right.kind" role="cell"><span v-if="row.right.html !== null" v-html="row.right.html" /><template v-else>{{ row.right.text }}</template></span>
         </template>
       </div>
@@ -326,5 +326,8 @@ function showMoreRows(): void {
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 0.75rem;
+}
+.numbers {
+  font-variant-numeric: tabular-nums;
 }
 </style>

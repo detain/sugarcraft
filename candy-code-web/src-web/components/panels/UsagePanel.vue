@@ -128,7 +128,7 @@ const windowLabel = computed(() => (windowDays.value === 0 ? t('web.panels.usage
 
     <template v-else-if="answer">
       <p class="totals" data-testid="usage-totals">
-        <span>{{ spendLabel(answer.totals.costUsd, answer.unpriced) }}</span>
+        <span class="numbers">{{ spendLabel(answer.totals.costUsd, answer.unpriced) }}</span>
         <span class="meta">· {{ answer.totals.calls }} calls · {{ tokens(answer.totals.totalTokens) }} tokens</span>
       </p>
 
@@ -149,8 +149,8 @@ const windowLabel = computed(() => (windowDays.value === 0 ? t('web.panels.usage
               <td>{{ row.day }}</td>
               <td>{{ row.model ?? '—' }}</td>
               <td>{{ row.calls }}</td>
-              <td>{{ tokens(row.totalTokens) }}</td>
-              <td>{{ spendLabel(row.costUsd, row.unpriced) }}</td>
+              <td class="numbers">{{ tokens(row.totalTokens) }}</td>
+              <td class="numbers">{{ spendLabel(row.costUsd, row.unpriced) }}</td>
             </tr>
           </tbody>
         </table>
@@ -165,8 +165,8 @@ const windowLabel = computed(() => (windowDays.value === 0 ? t('web.panels.usage
             <tr v-for="row in answer.models" :key="modelKey(row)">
               <td>{{ row.model ?? '—' }}</td>
               <td>{{ row.calls }}</td>
-              <td>{{ tokens(row.totalTokens) }}</td>
-              <td>{{ spendLabel(row.costUsd, row.unpriced) }}</td>
+              <td class="numbers">{{ tokens(row.totalTokens) }}</td>
+              <td class="numbers">{{ spendLabel(row.costUsd, row.unpriced) }}</td>
             </tr>
           </tbody>
         </table>
@@ -192,4 +192,7 @@ const windowLabel = computed(() => (windowDays.value === 0 ? t('web.panels.usage
 .usage-panel .error { color: var(--error); margin: 0; }
 .usage-panel table { width: 100%; border-collapse: collapse; }
 .usage-panel th, .usage-panel td { text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--line); }
+.numbers {
+  font-variant-numeric: tabular-nums;
+}
 </style>
