@@ -231,7 +231,13 @@ r77 ruling says AGENTS.md's "Don't commit GIFs" line is the stale one). The
 `getDefaultConfigDir` fail-closed throw also had NO pin before this lane's
 closeout (an interim note wrongly claimed one did);
 `testAnUnresolvableConfigDirectoryFailsLoud` now covers it, and
-`m1`/`m3`-ctrl key-gating shipped with 150a1c9e0/efdd83108.
+`m1`-ctrl key-gating: the r-gate shipped with 150a1c9e0, but the q/flap
+gates did NOT exist at closeout — review round 1 caught that ledger overclaim
+(m1-r2) and 31e02fea6 actually gates every chord except the documented
+Ctrl+C quit (pins included). The same review noted the round-1 closeout left
+N1/N2 tallies under-derivable and the 546eebba3 author/committer degradation
++ foreign candy-starter carry (owner-gated history work, flappy content
+sound).
 DECLINED w/ SEAM: mouse flap, pause/focus (m34), gapY-delta clamp (m33,
 caps), `?` help overlay + key-surface unification (m2), alt-gate on keys
 (m3b, InputReader C0-rune ambiguity), persist-fail stderr trace (m6,
