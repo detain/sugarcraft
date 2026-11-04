@@ -33,6 +33,12 @@ use SugarCraft\Vcr\Support\Scalars;
  * No Program is involved — this just plays back what was recorded.
  * For round-trip-replay-into-a-fresh-Program use the
  * {@see \SugarCraft\Vcr\Player} class from PHP code.
+ *
+ * A finished replay reports where it got to (events streamed, output bytes,
+ * virtual time) on stderr — never on stdout, because with a piped stdout the
+ * byte stream IS the capture. Silence used to make an empty cassette and a
+ * full replay indistinguishable, and both of those indistinguishable from a
+ * failure that simply said nothing.
  */
 final class ReplayCommand implements DocumentedCommand
 {
@@ -135,6 +141,8 @@ final class ReplayCommand implements DocumentedCommand
 
             $previousT = 0.0;
             $outputBytes = 0;
+            $playedEvents = 0;
+            $totalEvents = count($cassette->events);
             foreach ($cassette->events as $event) {
                 if ($interrupted !== 0) {
                     break;
@@ -165,9 +173,17 @@ final class ReplayCommand implements DocumentedCommand
                     $outputBytes += strlen($bytes);
                 }
                 $previousT = $effectiveT;
+                $playedEvents++;
             }
 
             if ($interrupted !== 0) {
+                fwrite($stderr, sprintf(
+                    "candy-vcr replay: interrupted after %d of %d events (%d output bytes)\n",
+                    $playedEvents,
+                    $totalEvents,
+                    $outputBytes,
+                ));
+
                 return 128 + $interrupted;
             }
 
@@ -178,6 +194,20 @@ final class ReplayCommand implements DocumentedCommand
                 fwrite($stderr, "candy-vcr replay: {$path} is a tape source with no recorded output bytes — replay shows nothing; use 'candy-vcr render-tape' to render .tape files\n");
                 return 1;
             }
+
+            // A replay that printed nothing used to be indistinguishable from a
+            // silent failure — an empty cassette and a full one both exited 0
+            // with an empty terminal. The verdict goes to STDERR because on a
+            // piped stdout the byte stream IS the capture and must stay
+            // byte-exact.
+            fwrite($stderr, sprintf(
+                "candy-vcr replay: played %d of %d events (%d output bytes, %.3f s of recorded time)\n",
+                $playedEvents,
+                $totalEvents,
+                $outputBytes,
+                $previousT,
+            ));
+
             return 0;
         } finally {
             if ($interactive) {

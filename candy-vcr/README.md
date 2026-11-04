@@ -244,6 +244,15 @@ vendor/bin/candy-vcr render-batch demos/                                     # r
 
 `record` spawns the given command under a fresh master/slave PTY, drops the host stdin into raw mode, runs the sugar-pty byte pump with a `Recorder` tee'd onto every stdin/master-output chunk, and writes a `session-<timestamp>.cas` cassette (override with `--output PATH`). The recorded child gets a controlling terminal by default so Ctrl+C reaches it (use `--no-ctty` to disable); the host termios is restored on every exit path including thrown exceptions. The cassette can then be replayed via `vendor/bin/candy-vcr replay …` or loaded by tests through `Player::play()`.
 
+A finished `replay` prints one summary line to **stderr** — events streamed,
+output bytes and virtual time — so a silent terminal is never ambiguous about
+whether anything played; stdout keeps carrying only the recorded bytes, which is
+what makes `candy-vcr replay x.cas | cmp - expected` a valid test.
+`render-tape` likewise announces what it is rendering, and reports every 100
+frames while it works, so a multi-minute render is not indistinguishable from a
+hang. Every verb answers `-h` / `--help` with its own usage block on stdout and
+exit 0.
+
 `inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` flushes everything as fast as the kernel will accept it. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
 
 ### Recording commands
