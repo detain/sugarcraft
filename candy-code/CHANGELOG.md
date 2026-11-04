@@ -7,6 +7,32 @@ found to contradict each other and the actual code during the remediation
 audit described below, so treat *this* file plus `git log` as the source of
 truth going forward.
 
+## Added — media surface and help screen, 2026-10-30 → 2026-11-03
+
+The media generation recorded under the rename era kept growing, and the
+help surface caught up with what had shipped:
+
+- **`Canvas`.** A tool that places an HTML artifact into the session
+  MediaStore (`d7b3654b5`), with `MediaKind::Html` carrying the artifact
+  case and its ref projection (`fa17dc725`).
+- **Voice input.** Recorder, capture session, transcriber and command
+  landed as one core (`d3f2087e9`).
+- **Help that lists what exists.** The help screen now carries the two
+  shipped verbs it never listed (`4138c33fa`), and the serve host gained
+  real `/help` and `/budget` bodies (`c829e0954`).
+
+## Changed — get* accessor rename, 2026-10-24
+
+**Breaking is scheduled, not shipped.** 55 public `get*()` accessors
+across 27 classes were renamed to their bare twins, the house convention
+(`8368170df`; two interface rewrites and two carve-outs rode the same
+pass). Nothing breaks today: every legacy name remains callable as a
+one-line BC forwarder, each marked `@deprecated` with `REMOVED-IN: 2.0.0`
+— but they will be gone in v2.0.0, so callers should migrate off them
+now. Internal call sites in `src/` were switched to the bare forms in the
+same pass. The README's "Accessor deprecation" section carries the
+roster.
+
 ## Renamed — sugar-crush → candy-code, 2026-10 <!-- @rename-keep -->
 
 Phase 8A of the rename campaign (`plan_rename.md`). The whole product moved
