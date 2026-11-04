@@ -326,6 +326,7 @@ candy-code/tests/Chat/ColdResumeFinishedAgentTest.php	1.437	5
 candy-code/tests/Host/Commands/CommitHostCommandTest.php	1.432	7
 candy-code/tests/Backend/CancelSoftStopsAtBoundaryTest.php	1.427	4
 candy-code/tests/Cli/SubcommandsSessionLockGateTest.php	1.425	16
+candy-code/tests/Protocol/SessionFeedSubagentsTest.php	1.412	3
 candy-code/tests/Host/AheadOfNeedSkipRulesTest.php	1.407	9
 candy-code/tests/MCP/ClaudeCodeMcpServerTest.php	1.407	14
 candy-code/tests/Renderer/ScreenReaderRenderTest.php	1.400	10
@@ -466,6 +467,7 @@ candy-code/tests/Server/FsSearchTest.php	0.752	8
 candy-code/tests/Server/AgentsBackgroundControlTest.php	0.745	3
 candy-code/tests/Providers/CodexProviderTest.php	0.743	15
 candy-code/tests/Backend/ModelPruneInTurnTest.php	0.741	3
+candy-code/tests/Protocol/SessionFeedBufferTest.php	0.736	3
 candy-code/tests/Share/ShareStoreTest.php	0.729	18
 candy-code/tests/Tools/BuiltIn/ReadBinaryScanTest.php	0.725	14
 candy-code/tests/Commands/MemoryLogRestoreCommandTest.php	0.724	6
@@ -565,6 +567,7 @@ candy-code/tests/Cli/BootstrapSpendAndSummaryTest.php	0.477	50
 candy-code/tests/Chat/ChatCancelKeepsLoopLiveTest.php	0.475	2
 candy-code/tests/Host/WorkspaceContextTest.php	0.474	10
 candy-code/tests/Host/BtwMidTurnTest.php	0.470	2
+candy-code/tests/Server/WebhookTurnDropTest.php	0.470	2
 candy-code/tests/Chat/MemoryRepoRootReplyTest.php	0.468	5
 candy-code/tests/Tools/Sandbox/EgressBridgeTest.php	0.467	5
 candy-code/tests/Cli/NonInteractiveStopTrailersTest.php	0.461	8
@@ -965,6 +968,7 @@ candy-code/tests/Cli/BootstrapLayeredSettingsTest.php	0.056	66
 candy-code/tests/Providers/BedrockPromptCacheTest.php	0.056	30
 candy-code/tests/Tui/MediaForm/MediaFormKeysTest.php	0.056	12
 candy-code/tests/Context/AbsoluteThresholdTest.php	0.056	23
+candy-code/tests/Server/ApiErrorShapeTest.php	0.056	3
 candy-code/tests/Cli/BootstrapContextWindowTest.php	0.055	5
 candy-code/tests/Tools/Edit/BomPreservationTest.php	0.055	10
 candy-code/tests/App/VideoPlayerWiringTest.php	0.055	12
