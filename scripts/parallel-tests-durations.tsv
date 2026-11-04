@@ -672,6 +672,7 @@ candy-code/tests/Chat/ChatToolCancelKillsCommandTreeTest.php	0.294	1
 candy-code/tests/Context/EnvironmentBlockGitConfigIsolationTest.php	0.294	4
 candy-code/tests/Protocol/ContextTrustTargetsTest.php	0.293	3
 candy-code/tests/Chat/ChatHostLangCatalogueTest.php	0.291	3
+candy-code/tests/Server/ShareBudgetCacheTest.php	0.286	13
 candy-code/tests/Chat/InFlightInputQueueTest.php	0.286	26
 candy-code/tests/App/FirstRunWizardWiringTest.php	0.285	14
 candy-code/tests/Context/RepoMapBlockTest.php	0.284	68
@@ -968,7 +969,6 @@ candy-code/tests/Cli/BootstrapLayeredSettingsTest.php	0.056	66
 candy-code/tests/Providers/BedrockPromptCacheTest.php	0.056	30
 candy-code/tests/Tui/MediaForm/MediaFormKeysTest.php	0.056	12
 candy-code/tests/Context/AbsoluteThresholdTest.php	0.056	23
-candy-code/tests/Server/ApiErrorShapeTest.php	0.056	3
 candy-code/tests/Cli/BootstrapContextWindowTest.php	0.055	5
 candy-code/tests/Tools/Edit/BomPreservationTest.php	0.055	10
 candy-code/tests/App/VideoPlayerWiringTest.php	0.055	12
@@ -1411,6 +1411,7 @@ candy-code/tests/Commands/AgentsCommandTest.php	0.008	24
 candy-code/tests/Providers/ClaudeCodeProviderTest.php	0.008	39
 candy-code/tests/Agents/AgentManagerDelegationAccessorsTest.php	0.008	5
 candy-code/tests/Chat/ToolTailFoldTest.php	0.008	7
+candy-code/tests/Server/RouterThrowableTest.php	0.007	5
 candy-code/tests/Media/MediaJobTest.php	0.007	31
 candy-code/tests/Providers/ProviderUsageCarriersTest.php	0.007	11
 candy-code/tests/Tui/ComposerVimTest.php	0.007	27
@@ -1437,6 +1438,7 @@ candy-code/tests/Tools/BuiltIn/EditMaxBytesTest.php	0.007	3
 candy-code/tests/Context/Triggers/TriggerTest.php	0.007	33
 candy-code/tests/Automation/OutboundWebhookConfigTest.php	0.007	32
 candy-code/tests/App/DockSeedTest.php	0.007	15
+candy-code/tests/Server/ApiErrorShapeTest.php	0.006	2
 candy-code/tests/Permissions/PermissionGateReadOnlyInspectionTest.php	0.006	11
 candy-code/tests/Tools/Web/HtmlToMarkdownTest.php	0.006	29
 candy-code/tests/Agents/AgentPresetShadowNoticeTest.php	0.006	5
