@@ -96,7 +96,7 @@ echo $buf->height(); // 3</code></pre>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Shared cell-grid foundation</strong> — consumed by sugar-overlay, sugar-toast, sugar-panels, sugar-table, sugar-forms, sugar-style, sugar-charts, sugar-image, sugar-dashboard, sugar-testing, sugar-video, sugar-datepicker, candy-minesweeper and candy-tetris. Some renderers keep independent engines by design (sugar-core's line-diff Renderer, sugar-vterm's mutable grid) and candy-code does not consume this library; the package's role is the shared <em>data model</em> and its byte encoders.</li>
+      <li><strong>Shared cell-grid foundation</strong> — consumed by sugar-overlay, sugar-toast, sugar-panels, sugar-table, sugar-forms, sugar-style, sugar-charts, sugar-image, sugar-dashboard, sugar-testing, sugar-video, sugar-datepicker, sugar-flexbox, candy-minesweeper and candy-tetris. Some renderers keep independent engines by design (sugar-core's line-diff Renderer, sugar-vterm's mutable grid) and candy-code does not consume this library; the package's role is the shared <em>data model</em> and its byte encoders.</li>
       <li><strong>Per-cell dirty tracking</strong> — <code>Buffer::diff()</code> emits move / style / set-cell / repeat-run / erase-run / hyperlink ops for only the changed cells, and <code>applyDiff()</code> is its round-trip inverse.</li>
       <li><strong>Terminal rendering</strong> — the data model behind styled-grid output: <code>toAnsi()</code> full repaints and diff-encoded delta frames, hyperlinks surviving intact.</li>
     </ul>
@@ -128,7 +128,7 @@ echo $buf->height(); // 3</code></pre>
 <tr><td>Position</td><td>new(int, int)</td><td>Factory: col, row</td></tr>
 <tr><td>Region</td><td>new(Position, int, int)</td><td>Factory: origin, width, height</td></tr>
 <tr><td>Region</td><td>contains(int, int)</td><td>Hit-test a cell coordinate</td></tr>
-<tr><td>Style</td><td>new(?fg, ?bg, int attrs, ?fgSlot, ?bgSlot, ?ul, ?ulSlot)</td><td>Factory: RGB 0xRRGGBB or palette-slot identity 0-255 per channel, underline colour, attrs bitmask; slots validated 0-255</td></tr>
+<tr><td>Style</td><td>new(?fg, ?bg, int attrs)</td><td>Convenience factory: RGB 0xRRGGBB colours and attrs bitmask. The full slot-aware form is the constructor — <code>new Style(fg, bg, attrs, fgSlot, bgSlot, ul, ulSlot)</code> — where slots are palette identities 0-255, validated at construction</td></tr>
 <tr><td>Style</td><td>fromSgr(string $params, ?Style $carry)</td><td>Public SGR-parameter parser: reset, base/bright/256/RGB colours (slots recorded with an RGB fallback), underline colour, attribute on/off codes; truncated params fail-stop to null</td></tr>
 <tr><td>Hyperlink</td><td>new(string, string)</td><td>Factory: url, id (C0/DEL and semicolons-in-id refused)</td></tr>
 </table>

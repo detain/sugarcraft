@@ -17,7 +17,7 @@ Cell-grid value objects for terminal rendering — immutable `Buffer` and `Cell`
 
 `Buffer::diff()` produces minimal delta ops — see [Diffing & delta ANSI](#diffing--delta-ansi) below.
 
-The model is consumed by sugar-overlay, sugar-toast, sugar-panels, sugar-table, sugar-forms, sugar-style, sugar-charts, sugar-image, sugar-dashboard, sugar-testing, sugar-video, sugar-datepicker, candy-minesweeper and candy-tetris. Some renderers keep independent engines by design (sugar-core's line-diff Renderer, sugar-vterm's mutable grid) and candy-code does not consume this library; the package's role is the shared *data model* and its byte encoders.
+The model is consumed by sugar-overlay, sugar-toast, sugar-panels, sugar-table, sugar-forms, sugar-style, sugar-charts, sugar-image, sugar-dashboard, sugar-testing, sugar-video, sugar-datepicker, sugar-flexbox, candy-minesweeper and candy-tetris. Some renderers keep independent engines by design (sugar-core's line-diff Renderer, sugar-vterm's mutable grid) and candy-code does not consume this library; the package's role is the shared *data model* and its byte encoders.
 
 ## Install
 
@@ -84,7 +84,7 @@ $manual = Buffer::fromGrid([[Cell::new('中', null, null, 2), $cont]]);
 - `Buffer::applyDiff(array $ops): self` — replay a diff stream onto a buffer; refuses negative cursor ops.
 - `Buffer::toAnsi(): string` — full-repaint ANSI for the whole grid.
 - `Buffer::text(?Region $region = null): string` — plain-text extraction (continuations skipped).
-- `Buffer::fromString(string $ansi): self` — **test-support** ANSI parser (lossy; see Security).
+- `Buffer::fromString(?string $ansi, int $width, int $height): self` — **test-support** ANSI parser (lossy; see Security); all three arguments are required and non-positive dimensions are refused.
 - `Buffer::fromGrid(array $grid): self` — build from a literal cell grid (no pair enforcement).
 - `Buffer::width(): int`, `Buffer::height(): int`, `Buffer::region(): Region`.
 
@@ -96,7 +96,7 @@ $manual = Buffer::fromGrid([[Cell::new('中', null, null, 2), $cont]]);
 
 ### Style
 
-- `Style::new(?int $fg = null, ?int $bg = null, int $attrs = 0, ?int $fgSlot = null, ?int $bgSlot = null, ?int $ul = null, ?int $ulSlot = null): self` — colours are `0xRRGGBB`; slots are palette identities `0-255`. Slot and RGB are mutually exclusive per channel by the `with*()` contract; where both are somehow present, emission prefers the slot, which keeps theme-following colours symbolic across delta round-trips instead of baking hex values.
+- `Style::new(?int $fg = null, ?int $bg = null, int $attrs = 0): self` — convenience factory (RGB colours and the attrs bitmask only). The full slot-aware form is the constructor: `new Style($fg, $bg, $attrs, $fgSlot, $bgSlot, $ul, $ulSlot)`, where slots are palette identities `0-255` validated at construction. Colours are `0xRRGGBB`. Slot and RGB are mutually exclusive per channel by the `with*()` contract; where both are somehow present, emission prefers the slot, which keeps theme-following colours symbolic across delta round-trips instead of baking hex values.
 - `withFg()/withBg()/withUl()` set RGB and discard slot identity; `withFgSlot()/withBgSlot()/withUlSlot()` set the slot and clear the RGB twin.
 - Attribute bits: `ATTR_BOLD`, `ATTR_ITALIC`, `ATTR_UNDERLINE`, `ATTR_STRIKE`, `ATTR_FAINT`, `ATTR_BLINK`, `ATTR_REVERSE`, `ATTR_OVERLINE`, `ATTR_INVISIBLE` (bold=1, italic=2, underline=4, …). The layout is this package's own and deliberately does not match sugar-vterm's independent bits.
 - `Style::fromSgr(string $params, ?Style $carry = null): ?Style` — public SGR-parameter parser: reset, base/bright/256 palette colours (recording slots with an RGB fallback belt), RGB colours, underline colour (`58;2`/`58;5`), attribute on-codes and off-codes (`22`-`29`, `53`), clearing codes `39`/`49`/`59`. Truncated or malformed parameters fail-stop to null/throw respectively.
