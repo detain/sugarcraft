@@ -66,6 +66,10 @@
      --fs-small. */
   --chrome-height: 3.4rem;
   --chrome-reserve: 7rem;
+  /* CW-UX-21: the small-label size, minted so the five bare 12px literals
+     (two shell notices, the approvals drawer, the background mode note,
+     the usage panel) read from one scale token. */
+  --fs-small: 0.75rem;
   /* CW-UX-17: the eleven context-breakdown swatch hues (dark set — the
      values the panel shipped as literals). Dracula and tokyoNight are dark
      surfaces and inherit these; the light blocks below carry a legible

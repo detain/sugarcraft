@@ -272,7 +272,7 @@ input {
 }
 .mode-note {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-small);
   margin: 0.25rem 0 0;
 }
 

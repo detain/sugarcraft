@@ -201,7 +201,7 @@ async function signOut(): Promise<void> {
 }
 .notify-problem {
   color: var(--warn);
-  font-size: 12px;
+  font-size: var(--fs-small);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -210,7 +210,7 @@ async function signOut(): Promise<void> {
 .paste-notice {
   margin: 0.25rem 1rem 0;
   color: var(--warn);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 
 .status {

@@ -139,7 +139,7 @@ header {
 
 .notify-problem {
   color: var(--warn);
-  font-size: 12px;
+  font-size: var(--fs-small);
   margin: 0;
   flex-basis: 100%;
 }

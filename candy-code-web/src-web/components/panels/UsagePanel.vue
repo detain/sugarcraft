@@ -178,7 +178,7 @@ const windowLabel = computed(() => (windowDays.value === 0 ? t('web.panels.usage
 </template>
 
 <style scoped>
-.usage-panel { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.usage-panel { display: flex; flex-direction: column; gap: 8px; font-size: var(--fs-small); }
 .usage-panel .head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .usage-panel .head .count { font-weight: 600; }
 .usage-panel .scopes, .usage-panel .windows { display: inline-flex; gap: 4px; }
