@@ -27,14 +27,15 @@ namespace SugarCraft\CellBuffer;
  * for stripping/replacing control bytes before building cells from
  * untrusted text — escape sequences belong to the parser, never a cell.
  * A hard reject was evaluated and deferred: multiple foundation
- * consumers (sugar-treelist, candy-code, sugar-table) legitimately splat
+ * consumers (sugar-table run-length border fills, sugar-charts label
+ * compositors) legitimately splat
  * pre-rendered strings char-by-char into runes and rely on the
  * pass-through behaviour, so validation has to live at those call sites.
  *
  * Cell is a readonly value object: rebuild via new rather than with*().
  *
- * Mirrors charmbracelet/lipgloss's Cell and the charmbracelet/vte
- * terminal cell representation.
+ * The cell shape follows charmbracelet/lipgloss's Cell and the terminal
+ * cell representation in charmbracelet/x/vt.
  *
  * @readonly
  */
@@ -114,8 +115,7 @@ final class Cell implements \JsonSerializable
      * Structural equality: two cells are equal iff their rendered
      * representation (rune, style, link, width) is identical.
      *
-     * Used by Buffer::diff() for the diff hot-path and replaces the
-     * private Buffer::cellsEqual() helper.
+     * Used by Buffer::diff() for the diff hot-path .
      */
     public function equals(Cell $other): bool
     {

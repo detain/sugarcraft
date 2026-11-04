@@ -197,7 +197,7 @@ final class DiffEncoder
 
         $this->cursorCol += $op->count * ($op->width > 0 ? $op->width : 1);
 
-        // A-02: chafa gates REP on byte arithmetic (printer.c:56-92), never
+        // Chafa gates REP on byte arithmetic too, and never
         // emits it unconditionally. Below the break-even the run is written
         // as literal repeats — same cells, same cursor advance, no escape.
         // The literal arm also happens to paint $op->rune rather than the

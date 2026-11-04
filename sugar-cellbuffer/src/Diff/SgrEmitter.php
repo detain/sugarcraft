@@ -13,9 +13,9 @@ use SugarCraft\Core\Util\Ansi;
  * Produces ANSI SGR escape sequences from a {@see Style} object.
  * Used by both {@see \SugarCraft\CellBuffer\Buffer::toAnsi()} (full repaint path)
  * and {@see DiffEncoder} (delta/diff path) to ensure byte-identical output
- * and to centralize the INVISIBLE (conceal) attribute handling.
+ * and to centralise the INVISIBLE (conceal) attribute handling.
  *
- * A-01 dedup pass: the SGR PARAMETER spelling is composed from sugar-core's
+ * The SGR PARAMETER spelling is composed from sugar-core's
  * {@see \SugarCraft\Core\Util\Ansi::fgRgbParams()}/{@see Ansi::bgRgbParams()}
  * family — the same builders sugar-image's OutputOptimizer composes — so a
  * pen value can never be spelled two ways across the monorepo. The run/pen

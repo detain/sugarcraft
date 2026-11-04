@@ -12,8 +12,8 @@ namespace SugarCraft\CellBuffer;
  * information. All mutation happens through fluent with*() methods that
  * return new Buffer instances — the original is never modified.
  *
- * Mirrors charmbracelet/vte's Buffer and charmbracelet/lipgloss's
- * Style as the foundation for terminal rendering.
+ * The cell-grid model follows charmbracelet/lipgloss's Cell/Style design
+ * and the terminal buffer representation in charmbracelet/x/vt.
  */
 final class Buffer implements \JsonSerializable
 {
@@ -132,9 +132,7 @@ final class Buffer implements \JsonSerializable
             // a multibyte rune already lands one byte per cell — consulting a
             // width table here without first tokenizing UTF-8 would relabel
             // the parse, not fix it. fromString() is a test-support factory by
-            // contract (see its docblock; repo-wide callers are the
-            // sugar-cellbuffer and sugar-overlay test suites only, zero production
-            // call sites). The canonical display-width primitive is
+            // contract (see its docblock). The canonical display-width primitive is
             // SugarCraft\Core\Util\Width (sugar-core — UAX isWide table,
             // ANSI-aware); it is not consulted here because byte-wise width
             // pinning is this fixture factory's documented contract, not an

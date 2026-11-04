@@ -7,7 +7,8 @@ namespace SugarCraft\CellBuffer\Diff;
 /**
  * Byte-cost gate deciding whether a REP sequence actually pays for itself.
  *
- * A-02: chafa's flush_chars (chafa/internal/chafa-canvas-printer.c:56-92)
+ * Chafa's flush_chars (canvas printer) reached the same rule by
+ * its own byte arithmetic:
  * only emits ESC[#b when the literal byte cost of the run EXCEEDS the
  * encoding cost of the escape — an explicit byte-arithmetic gate, never a
  * blanket "always compress". This is that gate, factored into the one home
@@ -20,10 +21,10 @@ namespace SugarCraft\CellBuffer\Diff;
  *  - Literal cost: count repetitions of the rune = count * runeBytes.
  *
  * For 1-byte runes (ASCII): count 1-3 strictly lose (4 bytes vs 1-3), count 4
- * is a byte-for-byte tie ("AA" style "AAAA" vs "\x1b[4b", both 4), and count 5
- * is the FIRST strict win (4 bytes vs 5). Whole runs therefore start paying at
- * SIX cells: a run under four cells never wins, and the tie at five keeps the
- * literal form — the tie-break prefers plain glyphs because they survive every
+ * is a byte-for-byte tie ("AAAA" vs "\x1b[4b", both 4), and count 5
+ * is the FIRST strict win (5 bytes vs 4). Whole ASCII runs therefore start
+ * paying at FIVE cells: a run under five never wins, and the tie at four keeps
+ * the literal form — the tie-break prefers plain glyphs because they survive every
  * terminal, while REP is an extra capability assumption.
  *
  * For multi-byte runes the gate flips early: a 3-byte block glyph (▀, U+2580)

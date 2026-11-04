@@ -14,10 +14,10 @@ Source: step-26 ai/buffer-diff-impl
 
 ### 2026-05-28 — Buffer/Cell intentionally minimal
 Pattern: Buffer/Cell are the shared cell-grid model — rich styling logic belongs in sugar-style, not here.
-Anti-pattern: Don't add rendering concerns, SGR emission, or terminal-specific behaviour to this package.
-Source: step-02 ai/sugar-cellbuffer-new
+Anti-pattern: ~~Don't add rendering concerns, SGR emission, or terminal-specific behaviour to this package.~~ **SUPERSEDED 2026-11-03:** the package's own identity now includes the emission encoders — `SgrEmitter`, `DiffEncoder`, and `Buffer::toAnsi()` ARE SGR emitters and belong here (relocating them would break overlay/dashboard byte parity). The surviving law: no LAYOUT/PAINT policy (geometry, theming decisions, terminal I/O) in this package; byte-level encoding of already-decided state is in scope.
+Source: step-02 ai/sugar-cellbuffer-new (flip: lib-reviews-1102 M16)
 
 ### 2026-10-03 — SGR colour operands clamp, never mask
-Pattern: `Buffer::styleFromSgr()` clamps 38;2/48;2 components and 38;5/48;5 indices into 0-255 (`channel()`), matching sugar-overlay's `penFromSgr()`; terminals saturate, so `300` is 255. A truncated extended colour (`38;5`, `38;2;1`) ends the parse.
+Pattern: `Style::fromSgr()` (the parser `Buffer` delegates to) clamps 38;2/48;2 components and 38;5/48;5 indices into 0-255 (`channel()`), matching sugar-overlay's `penFromSgr()`; terminals saturate, so `300` is 255. A truncated extended colour (`38;5`, `38;2;1`) ends the parse.
 Anti-pattern: Don't `& 0xFF` a colour component (300 wraps to 44, an unrelated colour), and don't let an unconsumed `5`/`2` operand fall through to the attribute branches (it set blink/faint).
 Source: crush_libs follow-up (sugar-overlay #4 parity)

@@ -12,9 +12,8 @@ namespace SugarCraft\CellBuffer\Diff;
  * Buffer::diff() emits it for every qualifying run (run length >= 2);
  * whether the encoded stream carries the ESC[#b sequence or literal
  * repeats is decided at encode time by {@see RepeatGate::worth()}
- * (A-02, chafa printer.c:56-92 byte arithmetic).
+ * (chafa's canvas-printer byte-arithmetic precedent).
  *
- * @readonly
  */
 final class RepeatRunOp extends DiffOp
 {

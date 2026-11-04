@@ -58,7 +58,7 @@ final class Hyperlink implements \JsonSerializable
      * Null-safe value equality: two optional hyperlinks are the same link
      * state iff both are null, or both are non-null and url+id match.
      *
-     * Canonicalizer for every OSC 8 open/close decision, so hyperlink
+     * Canonicaliser for every OSC 8 open/close decision, so hyperlink
      * bytes never depend on object identity — and an ID-only change is
      * detected as a change (url-only comparison silently dropped it).
      */

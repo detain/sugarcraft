@@ -8,19 +8,18 @@ use SugarCraft\CellBuffer\Hyperlink;
 use SugarCraft\CellBuffer\Style;
 
 /**
- * Peephole optimizer over a list of DiffOps.
+ * Peephole optimiser over a list of DiffOps.
  *
- * Optimizations applied:
+ * Optimisations applied:
  * 1. Adjacent SetStyleOps → keep only the last one (last-wins SGR).
  * 2. Adjacent SetCellOps whose tail/head state matches by VALUE
  *    (same style and same hyperlink) → merge into one span.
  * 3. EraseRunOp always overwrites all prior state; no need to
- *    optimize further at this layer.
+ *    optimise further at this layer.
  *
  * DiffEncoder tracks cursor + SGR state, so the goal here is to
  * reduce op count and ensure the stream is in a canonical form.
  *
- * @readonly
  */
 final class DiffOptimiser
 {
@@ -76,8 +75,8 @@ final class DiffOptimiser
     }
 
     /**
-     * Merge consecutive SetCellOps whose cells have the same
-     * (rune, style, link) signature into a single SetCellOp span.
+     * Merge consecutive SetCellOps whose cells carry the same style and
+     * hyperlink values into a single SetCellOp span (runes may differ).
      *
      * @param list<DiffOp> $ops
      * @return list<DiffOp>
