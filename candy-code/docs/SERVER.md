@@ -1317,7 +1317,10 @@ in this order and names what it found on the `web UI:` startup line:
 
 1. `--web-root <dir>` (or `CANDY_CODE_SERVER_WEB_ROOT`);
 2. the installed package (`composer require sugarcraft/candy-code-web`; it is
-   a `suggest`, not a dependency, so headless installs stay lean);
+   a `suggest`, not a dependency, so headless installs stay lean) — a
+   composer-channel leg only: a packaged phar freezes the archive's own
+   vendor as its single autoload root, so on the phar channel the web UI
+   arrives through `--web-root` or not at all;
 3. neither: API and WebSocket only (also what `--no-web` asks for).
 
 Open the sign-in URL and the page signs in, connects and shows:
