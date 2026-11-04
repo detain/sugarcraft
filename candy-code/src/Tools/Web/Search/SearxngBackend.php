@@ -25,12 +25,17 @@ namespace SugarCraft\Code\Tools\Web\Search;
  * every search refuses loudly via {@see configurationRefusal()} rather than
  * falling back anywhere.
  *
- * Not final, unlike its hosted siblings: it is the class with the F-W3
- * history of guard pins, and a deployment that wants to answer from a cache
- * may subclass it — but the tests never needed that seam, since a transport
- * closure is injected through {@see SearchBackends::make()}.
+ * Final, like its hosted siblings — the repo law for public classes. The
+ * F-W3 history of guard pins is exactly why: its observable behaviour is
+ * answered byte-for-byte by pins in the web-search tests, so an open class
+ * would let a subclass rewrite what those pins promise. A deployment that
+ * wants to answer from a cache does not need inheritance for it — a
+ * transport closure is injected through {@see SearchBackends::make()}, and
+ * that is the override seam. Zero subclasses exist tree-wide (verified at
+ * the reviews-1103 base; PHP-n1); reopening this class would be a
+ * deliberate ruling, not a default.
  */
-class SearxngBackend implements SearchBackend
+final class SearxngBackend implements SearchBackend
 {
     /** Hostnames refused before ANY resolver is asked (kept from F-W3). */
     public const BLOCKED_HOSTNAMES = [

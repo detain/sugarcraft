@@ -75,6 +75,28 @@ final class SearchBackendsTest extends TestCase
         self::assertSame('searxng', $named->name());
     }
 
+    public function testEveryBackendClassIsFinal(): void
+    {
+        // Repo law: public classes are final unless extension is the
+        // contract (PHP-n1, reviews-1103). SearxngBackend used to break it
+        // on a docblock story about a cache-owning subclass that never
+        // existed; the transport closure through make() is the seam, and a
+        // subclass would overwrite what the byte pins promise.
+        $classes = [
+            SearxngBackend::class,
+            BraveBackend::class,
+            TavilyBackend::class,
+            ExaBackend::class,
+        ];
+
+        foreach ($classes as $class) {
+            self::assertTrue(
+                (new \ReflectionClass($class))->isFinal(),
+                $class . ' must be final'
+            );
+        }
+    }
+
     /**
      * Byte-identity is the claim of the whole refactor for the default path:
      * the unconfigured refusal is reproduced exactly, so any prompt, test or
