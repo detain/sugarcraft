@@ -85,7 +85,11 @@ final class StdioMcpServerToolTimeoutTest extends TestCase
 
         self::assertTrue($result->isError());
         self::assertLessThan(2.5, $elapsed, 'toolTimeout must bound the call');
-        self::assertStringContainsString('timed out after 0.5s (toolTimeout)', $result->content());
+        // d5864c51b rewrote the timeout copy (lib StdioMcpServer.php:1084-1087):
+        // the (toolTimeout) parenthetical is gone, replaced by the honest
+        // cancellation contract — the whole phrase, cancel clause included,
+        // is the pin, so a prefix-only regression reddens here.
+        self::assertStringContainsString('Tool call timed out after 0.5s and was cancelled; the server may still finish the work', $result->content());
     }
 
     public function testWithoutToolTimeoutTheDefaultCeilingStillAnswersRealWork(): void

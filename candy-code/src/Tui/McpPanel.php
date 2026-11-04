@@ -234,8 +234,11 @@ final class McpPanel
      * C-MCP-4.b overlay:
      *  - ` · up N tools` — a stdio child still in `proc_get_status`'s running;
      *  - ` · exited N tools` — it was up at launch and the child is gone; the
-     *    tools count shown is the cache it still advertises, which is exactly
-     *    the half-truth the operator needs to see together with the death;
+     *    tools count shown is whatever the server object still advertises: a
+     *    crashed-but-unstopped child's cache survives to be read beside its
+     *    death, while an explicit stop() forgets the roster with the
+     *    connection (d5864c51b — "isUp() is false while listTools() served a
+     *    table of dead tools"), so a stopped row reads `exited 0 tools`;
      *  - ` · ready N tools` / ` · ready (in-process) N tools` — the two
      *    transports with no process to lose;
      *  - ` · not up` — declared, and NOT in this process's started map: the

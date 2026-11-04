@@ -254,7 +254,12 @@ final class StdioMcpServerTest extends TestCase
     {
         $server = new StdioMcpServer(name: 'offline', command: 'echo', args: [], env: []);
 
-        $this->assertSame(['error' => 'Tool call failed'], $server->callTool('ping', []));
+        // d5864c51b made call-path failures diagnostic: the refusal names its
+        // cause instead of only announcing failure (StdioMcpServer.php:1096
+        // composes 'Tool call failed: ' + the reader's lastFailureCause, and
+        // :1291 sets exactly 'the server is not started' for this path). The
+        // whole-string assertSame IS the reason-suffix check.
+        $this->assertSame(['error' => 'Tool call failed: the server is not started'], $server->callTool('ping', []));
     }
 
     public function testFullLifecycleWithCatCommand(): void

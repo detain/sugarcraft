@@ -87,7 +87,10 @@ final class McpMessageResultTypeTest extends TestCase
                 . 'sentinel is not reaching callTool()',
             );
             $this->assertSame(
-                ['error' => 'Tool call failed'],
+                // d5864c51b: the absent-result branch names itself (lib
+                // StdioMcpServer.php:1110) — the reason-suffix is part of the
+                // contract, so the whole string is asserted, not the prefix.
+                ['error' => 'Tool call failed: the server answered neither result nor error'],
                 $server->callTool('noresult', []),
                 'a reply with NO result key was treated as a successful call, so callTool() has '
                 . 'stopped distinguishing "answered null" from "answered nothing"',

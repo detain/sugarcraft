@@ -113,8 +113,14 @@ final class McpClientStartedSnapshotTest extends TestCase
      * in the client's map (only stopServers() clears the map), so the
      * readout must show the registered-but-gone state rather than vanishing.
      * This is the shape m1 mutates — neuter the up-leg and this goes green.
+     *
+     * d5864c51b settled the cache question: forgetConnection() drops the
+     * tool roster WITH the connection (lib StdioMcpServer.php:766-777 —
+     * "isUp() is false while listTools() served a table of dead tools"), so
+     * the gone-row reads zero tools, not a memorial table of the dead child's
+     * advertised set.
      */
-    public function testAStoppedStdioChildReadsExitedAndKeepsItsToolCache(): void
+    public function testAStoppedStdioChildReadsExitedAndClearsItsToolCache(): void
     {
         $server = $this->startAnsweringStdioServer();
         $client = $this->clientWith(['gone-stdio' => $server]);
@@ -123,10 +129,11 @@ final class McpClientStartedSnapshotTest extends TestCase
 
         $server->stop();
 
+        self::assertSame([], $server->listTools(), 'the roster belongs to the connection that died: stop() clears the tool cache (d5864c51b)');
         $row = $client->startedSnapshot()['gone-stdio'] ?? null;
         self::assertIsArray($row, 'a stopped-but-still-registered server must still appear');
         self::assertFalse($row['up'], 'after stop() the child is gone — the readout must say so');
-        self::assertSame(1, $row['tools'], 'the advertised-tool cache survives the child, which is the half-truth the panel pairs with exited');
+        self::assertSame(0, $row['tools'], 'the readout counts the live roster, and stop() emptied it — advertising dead tools is the contract the lib retired');
     }
 
     /**
