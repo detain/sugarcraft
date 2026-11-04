@@ -298,17 +298,17 @@ final class SelfUpdate
         }
         if ($check && ($rollback || $allowUnsigned)) {
             return self::failUsage(
-                'candy-top: ' . Lang::t('cli.selfupdate.flags_exclusive'),
+                Lang::t('cli.selfupdate.flags_exclusive'),
             );
         }
         if ($invalidChannel !== null) {
             return self::failUsage(
-                'candy-top: ' . Lang::t('cli.selfupdate.channel_invalid', ['value' => $invalidChannel]),
+                Lang::t('cli.selfupdate.channel_invalid', ['value' => $invalidChannel]),
             );
         }
         if ($unexpectedOperand !== null) {
             return self::failUsage(
-                'candy-top: ' . Lang::t('cli.selfupdate.unexpected_operand', ['operand' => $unexpectedOperand]),
+                Lang::t('cli.selfupdate.unexpected_operand', ['operand' => $unexpectedOperand]),
             );
         }
 
