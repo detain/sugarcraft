@@ -139,6 +139,33 @@ final class SlashDispatchTest extends TestCase
     }
 
     /**
+     * The lifecycle trio's slash doors (CC-UXD-03): `close-tab`, `session-pin`
+     * and `session-delete` used to be palette-only rows whose confirmation and
+     * picker machinery lived behind the palette arms alone. They now carry
+     * handlers, so the typed spelling reaches the SAME handler the palette arm
+     * runs — the deck refusal line for `/close-tab` outside a tab deck, the
+     * no-session line for `/session-pin`, and the picker-with-delete-hint for
+     * `/session-delete` — inheriting the confirmation the palette inherited.
+     */
+    public function testLifecycleRowsDispatchTheirTypedSpellingsToThePaletteHandlers(): void
+    {
+        $names = array_map(static fn(CommandSpec $s): string => $s->name, CommandRegistry::slashCommands());
+        foreach (['close-tab', 'session-pin', 'session-delete'] as $name) {
+            $this->assertContains($name, $names, "/{$name} is advertised in the \"/\" popup");
+
+            $next = $this->submit('/' . $name);
+            $this->assertFalse($next->inFlight, "/{$name} must reach a handler, not the model");
+            $added = array_map(static fn(Message $m): string => (string) $m->content, $this->added($next));
+            $this->assertNotSame([], $added, "/{$name} must answer in words");
+            $this->assertStringNotContainsString(
+                'Nothing is named',
+                implode("\n", $added),
+                "/{$name} must not meet the unknown-command refusal",
+            );
+        }
+    }
+
+    /**
      * The negative control for the inventory above, and the reason its signal
      * discriminates: a draft that is NOT a command goes to the model, and that
      * is what `inFlight = true` looks like.

@@ -357,10 +357,10 @@ edit it by hand.
 |---|---|---|---|---|
 | `/new` | ✓ | | `[dir]` | Start a fresh session, here or in a directory you pick |
 | `/new-picker` | | | — | Start a fresh session in a directory picked from a folder browser |
-| `/close-tab` | | | — | Close the tab deck’s current tab |
+| `/close-tab` | ✓ | | — | Close the tab deck’s current tab |
 | `/sessions` | ✓ | | `[<query>]` | List, search and manage sessions |
-| `/session-pin` | | | — | Pin the current session to the front of the list, or unpin it |
-| `/session-delete` | | | — | Open the session list to delete a session |
+| `/session-pin` | ✓ | | — | Pin the current session to the front of the list, or unpin it |
+| `/session-delete` | ✓ | | — | Open the session list to delete a session |
 | `/model` | ✓ | ✓ | `[provider [model]]` | Switch the active provider, or a provider and its model |
 | `/effort` | ✓ | | `[low\|medium\|high\|xhigh\|max\|auto]` | Read or set the reasoning effort tier |
 | `/fast` | ✓ | | `[on\|off]` | Read or set the fast service tier |
@@ -432,16 +432,18 @@ edit it by hand.
 | `/rendermode` | ✓ | | `<mode>` | Show or switch the media render mode (images repaint from the new word, the player starts from it) |
 <!-- commands:table:end -->
 
-**S** is blank on `new-picker`, `close-tab`, `session-pin`, `session-delete`,
-`docs`, `pane-dock-left`, `pane-dock-right` and `generate-form` alone: they are
+**S** is blank on `new-picker`, `docs`, `pane-dock-left`, `pane-dock-right`
+and `generate-form` alone: they are
 palette-only (`slashVisible: false`), reachable from Ctrl+P and from no "/"
-popup. All eight
+popup. All five
 share the typed-name asymmetry —
-their spec files name no handler, so `Chat::dispatchCommand()` dispatches
-nothing for the pseudo-names and a typed
-`/pane-dock-left` is a prompt to the model; the pair's palette arms instead
-drive the COMPLETE command text (`/pane dock left`) through
-`Chat::handlePaneCommand()`, the handler the real `/pane` row dispatches to.
+a typed pseudo-name meets the unknown-command refusal, never a model turn; the
+dock pair's palette arms instead drive the COMPLETE command text
+(`/pane dock left`) through `Chat::handlePaneCommand()`, the handler the real
+`/pane` row dispatches to. Since CC-UXD-03 the lifecycle trio — `close-tab`,
+`session-pin`, `session-delete` — is no longer in this set: each gained the
+handler its palette arm already ran, so the typed spelling opens the same door
+with the same confirmation.
 The Ctrl+P palette and the draft box are two different surfaces over one
 registry, and a palette row may be a fuller sentence than a slash spelling.
 Since this release the palette lists EVERY slash-visible command: rows with a
