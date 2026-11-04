@@ -35,6 +35,7 @@ candy-code/tests/Support/DescriptorInheritanceGuardTest.php	11.961	15
 candy-code/tests/Session/CheckpointTest.php	11.926	14
 candy-code/tests/Workflows/WorkflowEngineTest.php	11.699	52
 candy-code/tests/ClaudeCodeMcpClientStdinWedgeTest.php	11.571	14
+candy-code/tests/MessageWithContentFieldCensusTest.php	11.338	3
 candy-code/tests/Renderer/SessionTabStripClipTest.php	11.308	29
 candy-code/tests/Server/ServeStatusStopTest.php	11.251	7
 candy-code/tests/App/UntouchedDockWidthSweepTest.php	10.912	16
