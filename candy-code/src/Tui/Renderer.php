@@ -271,7 +271,9 @@ final class Renderer
      * when a caller has no model size to thread (the pre-first-`WindowSizeMsg`
      * window, and helper paths like {@see terminalSize()} callers). A
      * mid-session resize therefore never writes here; pinning frames in
-     * tests can.
+     * tests can. Call-zero in src/ and bin/ is pinned by the
+     * RendererSizeSeamCensusTest walk; a future production caller must
+     * thread its size explicitly instead (CTSP-F-3).
      */
     public static function setSize(int $cols, int $rows): void
     {
@@ -318,6 +320,10 @@ final class Renderer
      */
     public static function getTerminalSize(): array { return self::terminalSize(); }
 
+    /**
+     * Re-arm the one-shot size probe. Test seam only - call-zero in src/ and
+     * bin/ is pinned by the RendererSizeSeamCensusTest walk (CTSP-F-3).
+     */
     public static function resetSizeCache(): void
     {
         self::$terminalSize = null;
