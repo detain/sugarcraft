@@ -116,10 +116,11 @@ Decoding untrusted images is budgeted — the caps are live constants on
 ## Chafa binary discovery
 
 The chafa tier is the only place sugar-image executes an external
-program, and the binary is chosen through a strict gate — the
-`sugar-colorprofile` `InfocmpBinary` precedent applied to chafa
-(`src/Renderer/ChafaBinary.php`). A bare `chafa` argv[0] is never
-spawned, so a rogue `chafa` sitting earlier on PATH is never executed:
+program to produce image output, and that binary is chosen through a
+strict gate — the `sugar-colorprofile` `InfocmpBinary` precedent applied
+to chafa (`src/Renderer/ChafaBinary.php`). A bare `chafa` argv[0] is
+never spawned, so a rogue `chafa` sitting earlier on PATH is never
+executed:
 
 1. **Operator override** `SUGAR_IMAGE_CHAFA` (configuration is trusted
    input — naming a binary is consent to run it): an absolute path is
@@ -134,6 +135,18 @@ spawned, so a rogue `chafa` sitting earlier on PATH is never executed:
 3. When nothing resolves, the tier degrades **exactly** as the missing
    binary always did: `ChafaRenderer::available()` answers `false` and
    `render()` throws the same `chafa.not_found` failure.
+
+Two terminal *consults* do spawn a program by name, and they are stated here
+rather than folded into the sentence above: `Detect` asks a live tmux for its
+client features (`tmux display-message`, `src/Detect.php`) and
+`TmuxPassthrough` drives tmux subcommands to wrap a frame for the mux
+(`src/TmuxPassthrough.php`). Both are argv-array `proc_open` calls with no shell
+in between, both are reached only when the environment already says we are
+inside that tmux session, and neither one feeds the bytes that are rendered —
+they report capabilities and manage the passthrough transaction. The three
+`stty` calls that park and restore the terminal state around a probe do run
+through `/bin/sh`, with the saved state quoted by `escapeshellarg`. No pure-PHP
+tier ever shells out for pixel data.
 
 `ChafaRenderer::reset()` re-arms both memos for long-running processes
 that install or override the binary mid-session.
