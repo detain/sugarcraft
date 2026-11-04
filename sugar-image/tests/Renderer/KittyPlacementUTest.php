@@ -41,7 +41,7 @@ final class KittyPlacementUTest extends TestCase
         $out = $this->renderer->renderWithOptions($this->image(), 8, 4, KittyOptions::place(1, 5, 10));
 
         // The pre-S7.1 frame exactly — the default must not move a byte.
-        $this->assertSame("\x1b_Ga=p,i=1,U=1,x=5,y=10\x1b\\", $out);
+        $this->assertSame("\x1b_Ga=p,i=1,U=1,X=5,Y=10\x1b\\", $out);
     }
 
     public function testPlaceOverTextEmitsUZeroOnTheFrame(): void
@@ -53,7 +53,7 @@ final class KittyPlacementUTest extends TestCase
         // U=0 must SERIALIZE (a falsy-drop formatter would lose it here):
         // this exact frame is the over-text placement the seam could not
         // express before S7.1.
-        $this->assertSame("\x1b_Ga=p,i=1,U=0,x=5,y=10\x1b\\", $out);
+        $this->assertSame("\x1b_Ga=p,i=1,U=0,X=5,Y=10\x1b\\", $out);
     }
 
     public function testVirtualTrailingFrameFollowsPlacementUStoreKeepsUnderFlag(): void
@@ -104,7 +104,7 @@ final class KittyPlacementUTest extends TestCase
 
         // And the value reaches the wire through the place branch.
         $out = $this->renderer->renderWithOptions($this->image(), 8, 4, $opts);
-        $this->assertSame("\x1b_Ga=p,i=2,U=0,x=1,y=2,z=4\x1b\\", $out);
+        $this->assertSame("\x1b_Ga=p,i=2,U=0,X=1,Y=2,z=4\x1b\\", $out);
     }
 
     public function testRefusesPlacementAboveTheTable(): void

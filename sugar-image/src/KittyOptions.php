@@ -109,9 +109,15 @@ final class KittyOptions
     /**
      * Place a previously transmitted virtual image.
      *
+     * The destination is a cell coordinate, and the frame now carries it on
+     * the spec's placement keys `X=`/`Y=` — the lowercase `x`/`y` the frame
+     * used to write are the protocol's SOURCE-RECTANGLE offsets in pixels, so
+     * a terminal read them as a crop of the stored image rather than as where
+     * to draw it.
+     *
      * @param int $imageId  The ID of the image to place (from a prior transmit with id=)
-     * @param int $x        Cell offset from left (columns)
-     * @param int $y        Cell offset from top (rows)
+     * @param int $x        Cell offset from left (columns) — emitted as `X=`
+     * @param int $y        Cell offset from top (rows) — emitted as `Y=`
      */
     public static function place(int $imageId, int $x = 0, int $y = 0): self
     {
@@ -243,15 +249,26 @@ final class KittyOptions
     }
 
     /**
-     * Set the source display area in cells: the kitty `s=` (columns) and
-     * `v=` (rows) transmit params.
+     * Set the transmitted image's display extent on the wire's `s=`/`v=` keys.
      *
-     * These size the region the terminal maps the image onto. They were
-     * carried on every instance but had no setter, so the fields stayed 0 and
-     * `s=`/`v=` were never emitted; this is the seam that makes them settable.
+     * UNITS ARE PIXELS, NOT CELLS. In the kitty graphics protocol `s=` and
+     * `v=` are the width and height the terminal scales the transmitted source
+     * to; the cell grid is the separate `c=`/`r=` pair, which the renderer
+     * fills from the render width and the aspect-derived height. The lib's own
+     * raw-RGBA route has always put pixels in these slots
+     * ({@see \SugarCraft\Image\Renderer\KittyRenderer::renderUncompressed()}),
+     * so the wire was consistent across routes and only this spelling and its
+     * first docblock called the values cells.
+     * {@see self::withSourceDimensions()} is the unit-honest name for exactly
+     * this behaviour; this method keeps its name because it is public API and
+     * a rename is breaking.
      *
-     * @param int $width   Cell columns (`s=`); 0 clears (terminal default).
-     * @param int $height  Cell rows (`v=`); 0 clears (terminal default).
+     * They were once carried on every instance but had no setter, so the
+     * fields stayed 0 and `s=`/`v=` were never emitted; this is the seam that
+     * made them settable.
+     *
+     * @param int $width   Display width in pixels (`s=`); 0 clears (terminal default).
+     * @param int $height  Display height in pixels (`v=`); 0 clears (terminal default).
      * @throws \InvalidArgumentException  if either dimension is negative
      */
     public function withCellDimensions(int $width, int $height): self
@@ -275,6 +292,33 @@ final class KittyOptions
             chunkBytes: $this->chunkBytes,
             placementU: $this->placementU,
         );
+    }
+
+    /**
+     * Set the transmitted image's display extent in pixels — the same `s=`/`v=`
+     * pair as {@see self::withCellDimensions()}, under the name that matches
+     * what the wire carries.
+     *
+     * @param int $width   Display width in pixels (`s=`); 0 clears.
+     * @param int $height  Display height in pixels (`v=`); 0 clears.
+     */
+    public function withSourceDimensions(int $width, int $height): self
+    {
+        return $this->withCellDimensions($width, $height);
+    }
+
+    /**
+     * The cell destination of a placement frame, in the spec's own keys.
+     *
+     * `X=`/`Y=` are cell coordinates (1-based columns/rows); zero means
+     * "not set" and is omitted, which is what "place at the cursor" means.
+     *
+     * @internal
+     * @return array<string, int|null>
+     */
+    public function placementCells(): array
+    {
+        return ['X' => $this->offsetX ?: null, 'Y' => $this->offsetY ?: null];
     }
 
     /**
@@ -332,8 +376,13 @@ final class KittyOptions
             // 'o' is the spec's transmission-compression key; 'f' stays the
             // data format and is emitted by the renderer as a constant 100.
             'o' => $this->isCompressed() ? 'z' : null,
+            // `s`/`v` are PIXEL extents (see KittyOptions::withCellDimensions);
+            // the cell grid is the renderer's own `c`/`r` pair.
             's' => $this->cellWidth ?: null,
             'v' => $this->cellHeight ?: null,
+            // Lowercase `x`/`y` are the spec's source-rectangle pixel offsets,
+            // meaningful only on a transmit that crops. A place frame's cell
+            // destination travels on `X`/`Y` via {@see self::placementCells()}.
             'x' => $this->offsetX ?: null,
             'y' => $this->offsetY ?: null,
         ];

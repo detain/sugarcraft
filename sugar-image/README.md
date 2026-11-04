@@ -243,6 +243,10 @@ The Kitty renderer supports two advanced options via `KittyOptions`:
   transmission can be placed at many locations, reducing bandwidth.
   Under/over text follows `withPlacementU()`: `1` renders the image under
   text (the default), `0` over it.
+- **Key units**: `c=`/`r=` are the cell grid the renderer computes, `s=`/`v=`
+  are source display extents in *pixels*, and a place frame's cell destination
+  travels on the uppercase `X=`/`Y=` pair — the lowercase `x=`/`y=` are the
+  spec's source-rectangle pixel offsets, so they crop rather than move.
 
 - **Zlib compression** (`o=z`): Pass `withCompression(1)` to compress
   the PNG payload with zlib before base64-encoding; the transmit is

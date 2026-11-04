@@ -102,7 +102,7 @@ final class KittyVirtualImageTest extends TestCase
 
         // Placement carries U by default (composited under text);
         // this frame proves the default, pinned byte-exact.
-        $this->assertSame("\x1b_Ga=p,i=1,U=1,x=5,y=10,z=5\x1b\\", $out);
+        $this->assertSame("\x1b_Ga=p,i=1,U=1,X=5,Y=10,z=5\x1b\\", $out);
     }
 
     public function testPlaceBranchOmitsZeroZIndex(): void

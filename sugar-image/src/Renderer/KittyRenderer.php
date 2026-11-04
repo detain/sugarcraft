@@ -137,12 +137,22 @@ final class KittyRenderer implements Renderer, IncrementalRenderer
             // chunked transmission (nothing would close it). The U
             // value rides the options (default 1 = under text, the value
             // this frame emitted before the seam existed; 0 = over text).
+            //
+            // The destination goes out on `X=`/`Y=`: those are the spec's
+            // cell-coordinate placement keys. This frame used to write the
+            // caller's cell numbers on the lowercase `x=`/`y=` pair, which the
+            // protocol defines as an offset INTO THE IMAGE DATA measured in
+            // pixels — a conforming terminal read a request for column 5, row
+            // 10 as "start drawing at pixel 5,10 of the source" and placed the
+            // image at the cursor anyway.
+            $cells = $opts->placementCells();
+
             return Ansi::kittyGraphicsControl([
                 'a' => 'p',
                 'i' => $optsArr['i'],
                 'U' => $opts->placementU(),
-                'x' => $optsArr['x'],
-                'y' => $optsArr['y'],
+                'X' => $cells['X'],
+                'Y' => $cells['Y'],
                 'z' => $optsArr['z'],
             ]);
         }

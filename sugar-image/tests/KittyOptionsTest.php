@@ -48,11 +48,15 @@ final class KittyOptionsTest extends TestCase
 
         $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
 
-        // Should contain a=p (place action) and i=7 and x=2 y=1
+        // Should contain a=p (place action), i=7 and the cell destination X=2 Y=1
         $this->assertStringContainsString('a=p', $out);
         $this->assertStringContainsString('i=7', $out);
-        $this->assertStringContainsString('x=2', $out);
-        $this->assertStringContainsString('y=1', $out);
+        $this->assertStringContainsString('X=2', $out);
+        $this->assertStringContainsString('Y=1', $out);
+        // Lowercase x=/y= are the spec's SOURCE-RECTANGLE pixel offsets: a
+        // place frame that wrote them asked the terminal to crop, not to move.
+        $this->assertStringNotContainsString('x=2', $out);
+        $this->assertStringNotContainsString('y=1', $out);
         // Should NOT have chunk data (no base64 data in place mode)
         $this->assertStringNotContainsString(',PHN2', $out); // no base64 PNG header
     }
@@ -111,7 +115,10 @@ final class KittyOptionsTest extends TestCase
     public function testWithCellDimensionsEmitsSAndVParams(): void
     {
         // cellWidth/cellHeight had no setter, so s=/v= were never emitted.
-        // withCellDimensions() is the seam that makes them settable.
+        // withCellDimensions() is the seam that makes them settable. Despite
+        // the name these are the source display extents in PIXELS (the spec's
+        // `s=`/`v=`); the cell grid is `c=`/`r=`, which the renderer fills from
+        // its own geometry — see testWithSourceDimensionsIsTheUnitHonestAlias.
         $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
         $opts  = KittyOptions::transmit(1)->withCellDimensions(120, 48);
 
@@ -143,6 +150,50 @@ final class KittyOptionsTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         KittyOptions::transmit(1)->withCellDimensions(-1, 10);
+    }
+
+    /**
+     * `s=`/`v=` are pixel extents, so the method that sets them is named for
+     * what it actually does. The alias exists so callers can say “source
+     * dimensions” without the historical name lying in the call site; both
+     * spellings must produce the same frame.
+     */
+    public function testWithSourceDimensionsIsTheUnitHonestAlias(): void
+    {
+        $viaLegacy = KittyOptions::transmit(1)->withCellDimensions(120, 48);
+        $viaAlias  = KittyOptions::transmit(1)->withSourceDimensions(120, 48);
+
+        $this->assertSame($viaLegacy->toArray(), $viaAlias->toArray());
+
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $out   = $this->renderer->renderWithOptions($image, 8, 4, $viaAlias);
+
+        $this->assertStringContainsString('s=120', $out);
+        $this->assertStringContainsString('v=48', $out);
+        // The cell grid the renderer chose stays separate from the pixel box.
+        $this->assertStringContainsString('c=8,r=4', $out);
+    }
+
+    /**
+     * A place frame's destination is a cell coordinate and must travel on the
+     * spec's `X=`/`Y=`; the lowercase pair means “crop the source” instead.
+     */
+    public function testAPlaceFrameCarriesTheCellDestinationOnUppercaseKeys(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png');
+        $out   = $this->renderer->renderWithOptions(
+            $image,
+            8,
+            4,
+            KittyOptions::place(7, x: 3, y: 9),
+        );
+
+        $this->assertStringContainsString('a=p', $out);
+        $this->assertStringContainsString('i=7', $out);
+        $this->assertStringContainsString('X=3', $out);
+        $this->assertStringContainsString('Y=9', $out);
+        $this->assertStringNotContainsString('x=3', $out);
+        $this->assertStringNotContainsString('y=9', $out);
     }
 
     public function testWithChunkBytesFloorsToBase64Alignment(): void
