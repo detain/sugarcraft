@@ -345,7 +345,11 @@ final class Breadcrumb
      * Render a custom list of titles (not from a NavStack).
      *
      * Inputs are treated like stack titles: untrusted, sanitized at this
-     * boundary before width math and zone wrapping.
+     * boundary before width math and zone wrapping. Note these bare
+     * strings bypass {@see NavigationItem}'s constructor guards entirely —
+     * the MAX_TITLE_BYTES ingest bound exists to keep oversized text out
+     * of Mark::wrap on the STACK path and does not hold here; a host that
+     * forwards attacker-controlled lists must bound them itself.
      *
      * @param list<string> $titles
      */
@@ -399,7 +403,10 @@ final class Breadcrumb
                 }
             } else {
                 // Unreachable via truncate() (its loop only grows while the
-                // marker-prefixed join fits) but guards the cap structurally.
+                // marker-prefixed join fits; the >1-crumbs breach corner is
+                // pinned in ZoneGeometryTest). This is a belt-brace against a
+                // future truncate() change, NOT the operative guard: the
+                // branch drops the prefix without re-clamping the survivors.
                 $prefix = '';
             }
             $result = $prefix . \implode($this->separator, $titles);

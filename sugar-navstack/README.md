@@ -39,7 +39,7 @@ composer require sugarcraft/sugar-navstack
 ```php
 use SugarCraft\NavStack\NavStack;
 
-$stack = new NavStack();
+$stack = NavStack::new();
 
 // Push navigation items (each has a title + optional data)
 $stack->push('Home');
@@ -56,8 +56,14 @@ echo $popped->title;             // "Display"
 echo $stack->current()->title;   // "Settings"
 ```
 
-`NavStack` is **mutable by design** — `push`, `pop`, `updateTop`, `setItems`, and
-`clear` mutate in place and return `$this` for chaining. This is a deliberate
+> **Untrusted-display caution** — `current()`, `parent()`, and `pop()` hand
+> back the **raw** stored title, unsanitized. When titles come from outside
+> your code (paths, URLs, user data), print them through `view()`,
+> `viewHtml()`, or `Breadcrumb::render()` — all sanitize at the boundary —
+> or call `TitleSanitizer::sanitize()` yourself before echoing.
+
+`NavStack` is **mutable by design** — `push`, `pop`, `popTo`, `updateTop`,
+`setItems`, and `clear` mutate in place and return `$this` for chaining. This is a deliberate
 exception to the repo-wide `with*()` copy-on-write convention; only `filter()`
 returns a new instance.
 
@@ -74,7 +80,7 @@ returns a new instance.
 | `updateTop(mixed $data): self` | Replace the top item's payload (no-op when empty) |
 | `setItems(array $items): self` | Replace the whole list (used by `Shell` for its immutable ops) |
 | `clear(): self` | Remove everything |
-| `view(string $separator = ' > '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
+| `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
 | `viewHtml(): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped |
 | `filter(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive substring (array payloads match when any nested scalar/Stringable value does) |
 
@@ -83,12 +89,12 @@ returns a new instance.
 ```php
 use SugarCraft\NavStack\Breadcrumb;
 
-$bc = new Breadcrumb();
+$bc = Breadcrumb::new();
 $bc->setSeparator(' › ');        // default " › "
 $bc->setMaxWidth(60);            // truncate if needed
 
 // Render from NavStack
-$stack = new NavStack();
+$stack = NavStack::new();
 $stack->push('Home');
 $stack->push('Settings');
 $stack->push('Display');
@@ -112,20 +118,35 @@ Attach a `Scanner` from [sugar-mouse](../sugar-mouse/) for mouse-click zone rout
 use SugarCraft\NavStack\Breadcrumb;
 use SugarCraft\Mouse\Scanner;
 
-$bc = (new Breadcrumb())->withScanner(Scanner::new());
+$bc = Breadcrumb::new()->withScanner(Scanner::new());
 
 $output = $bc->render($stack);
 // Each crumb is wrapped in a named zone marker keyed by stack position: "crumb-0", "crumb-1", …
 
-$bc->scan($output);
-$zone = $bc->hit($col, $row); // returns Zone for clicked crumb-N or null
+// Feed the rendered row to the owned scanner. Pass the terminal's viewport
+// width (zones then clamp the way the emulator wraps the row) and the
+// 1-based row the bar is painted on when that is not row 1 — from here on
+// hit()/hitItem() take ABSOLUTE terminal coordinates.
+$bc->scan($output, viewportWidth: $cols, row: $row);
 
-if ($zone !== null && \preg_match('/crumb-(\d+)/', $zone->id, $m)) {
-    $index = (int) $m[1];
-    // route click on crumb-$index to the appropriate handler
+// One-call click dispatcher: resolves a clicked cell straight to the stack
+// item whose crumb zone contains it (null when the click misses every
+// crumb — off the bar's row, on the "…" elision marker, or outside all
+// crumb zones; the gutter separators after non-final crumbs DO belong to
+// the crumb on their left, so instinctive mid-gap clicks still route).
+$item = $bc->hitItem($stack, $col, $row);
+if ($item !== null) {
+    // Zone ids carry the FULL-stack position, so the jump cannot misroute
+    // even after setMaxWidth() elided older crumbs:
+    $index = \array_search($item, $stack->items(), true);
     $stack->popTo($index);
 }
 ```
+
+`hit($col, $row)` stays available when you want the `Zone` itself rather
+than the item. Both throw `LogicException` if a scanner is attached but the
+current render has not been scanned (re-rendering invalidates the geometry —
+hits are never served stale).
 
 Two guarantees make that recipe safe under truncation:
 
@@ -139,8 +160,12 @@ Two guarantees make that recipe safe under truncation:
 ## Shell
 
 `Shell` is a convenience facade pairing a stack with a renderer through
-immutable `with*` operations — each returns a new `Shell` that shares the
-breadcrumb config and carries a snapshot of the items:
+immutable operations — every `with*` (and `pushDirectory`) returns a NEW
+`Shell` and never mutates the receiver. The boundary is thinner than
+"immutable" suggests: the new Shell SHARES THE SAME (mutable-by-design)
+`Breadcrumb` instance, and its item list carries the same `NavigationItem`
+objects (titles and payloads are readonly, so sharing is safe to read).
+See the `Shell` class docblock:
 
 ```php
 use SugarCraft\NavStack\Shell;
@@ -149,13 +174,16 @@ $shell = Shell::new()
     ->withPush('Home')
     ->withPush('Settings');
 
-$shell->withPop();             // new Shell, depth 1
-$shell->withPopTo(0);          // new Shell truncated to Home
-$shell->renderBreadcrumb();    // "Home › Settings"
+// Every with* returns a new Shell — discarding the return value is a
+// silent no-op. Assign or chain:
+$oneDeep = $shell->withPop();       // new Shell, depth 1
+$atHome  = $shell->withPopTo(0);    // new Shell truncated to Home
+$shell->renderBreadcrumb();         // "Home › Settings" — $shell unchanged
 
 // Directory-driven stacks are EXPLICIT: nothing detects directory changes,
-// your host loop (cwd watcher, cd command, file browser) calls this:
-$shell->pushDirectory('/home/user/projects');  // pushes home, user, projects
+// your host loop (cwd watcher, cd command, file browser) calls this —
+// also immutable-returning, so capture the result:
+$shell = $shell->pushDirectory('/home/user/projects');  // appends home, user, projects
 ```
 
 `pushDirectory()` stores the accumulated path (`/home`, `/home/user`, …) as each
@@ -167,16 +195,25 @@ depth-1 stack (guard with `NavStack::canPop()` to keep the root).
 ```php
 use SugarCraft\NavStack\{Url, NavStack};
 
-$stack = new NavStack();
+$stack = NavStack::new();
 $stack->push('Home')->push('My Settings');
 
 Url::derive($stack);            // "/Home/My%20Settings"
 Url::parse('/home/settings');   // fresh NavStack: home → settings
 ```
 
-`derive()` rawurlencodes each title; `parse()` url-decodes segments. Titles
-that reach a renderer pass through the same terminal-safety sanitization as
-everything else, so decoded-untrusted segments are neutralized at render time.
+`derive()` rawurlencodes each title; `parse()` url-decodes segments. The URL
+carries TITLES ONLY — item payloads do not travel, so a parsed stack is
+title-equivalent to its source, never deep-equal.
+
+Trust: untrusted decoded segments are safe to push because every render path
+the LIBRARY owns — `view()`, `viewHtml()`, and the default breadcrumb path —
+runs each title through `TitleSanitizer` (terminal controls, zone sentinels,
+invisible formatting) at the boundary. The one deliberate exception is
+`setItemRenderer()`: a custom closure's return string is emitted RAW so theme
+ANSI styling survives (the trust split in the `Breadcrumb` class docblock).
+A closure that includes user data in its output must sanitize it first, e.g.
+via `TitleSanitizer::sanitize()`.
 
 ## Escape
 
@@ -206,7 +243,7 @@ track stack changes around your own `push`/`pop` calls.
 
 ## Shared foundations
 
-Mouse hit-testing is self-contained via [sugar-mouse](https://github.com/detain/sugarcraft-sugar-mouse). The `Scanner` class handles zone registration and hit testing locally — no external zone-manager wiring is needed.
+Mouse hit-testing is self-contained via [sugar-mouse](https://github.com/sugarcraft/sugar-mouse). The `Scanner` class handles zone registration and hit testing locally — no external zone-manager wiring is needed.
 
 ## License
 

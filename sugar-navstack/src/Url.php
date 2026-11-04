@@ -30,8 +30,11 @@ final class Url
      *
      * Empty AND whitespace-only segments (including percent-encoded ones
      * like `/%20/`) are dropped — the counterpart to
-     * {@see NavigationItem}'s refusal of blank titles, keeping
-     * round-trips through derive() lossless for valid stacks.
+     * {@see NavigationItem}'s refusal of blank titles, which keeps the
+     * TITLE leg of a `parse(derive($stack))` round trip lossless for valid
+     * stacks. The round trip is title-level ONLY: {@see derive()} carries
+     * titles and nothing else, so item payloads (data) do not travel and
+     * every restored item comes back with `data === null`.
      */
     public static function parse(string $path): NavStack
     {

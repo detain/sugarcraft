@@ -11,7 +11,7 @@ namespace SugarCraft\NavStack;
  * Push new items to go deeper; pop to go back up.
  * The top of the stack is the "current" screen/section.
  *
- * **Mutable by design** — `push`, `pop`, `updateTop`, `clear`, and
+ * **Mutable by design** — `push`, `pop`, `popTo`, `updateTop`, `clear`, and
  * `setItems` mutate `$this` and return `$this` for fluent chaining.
  * This is a deliberate exception to the repo-wide immutable `with*()`
  * convention: `filter()` correctly returns a new instance, but the

@@ -32,7 +32,9 @@ $bc2 = (new Breadcrumb())->setSeparator(' > ');
 echo $bc2->render($stack) . "\n\n";
 
 echo "=== Breadcrumb (with max-width truncation) ===\n";
-$bc3 = (new Breadcrumb())->setMaxWidth(30);
+// 30 would NOT elide the 25-cell trail ("Home › Settings › Display") —
+// the demo proved nothing at that cap; 20 forces the oldest crumb out.
+$bc3 = (new Breadcrumb())->setMaxWidth(20);
 echo $bc3->render($stack) . "\n\n";
 
 echo "=== Pop and re-render ===\n";

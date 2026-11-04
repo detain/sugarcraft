@@ -27,6 +27,14 @@ interface Closable
     /** Called when this item is no longer the current item. */
     public function onLeave(): void;
 
-    /** Returns the item's title. */
+    /**
+     * Returns the item's title.
+     *
+     * Property/method split (see {@see NavigationItem}'s class docblock):
+     * the library's own machinery is typed on the FINAL `NavigationItem`
+     * and reads its promoted readonly `->title` PROPERTY — it never calls
+     * this method. `title()` is the vocabulary half a HOST-side Closable
+     * implementation must satisfy for the host's own dispatch code.
+     */
     public function title(): string;
 }

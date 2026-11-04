@@ -26,7 +26,7 @@ echo "Display: " . $nav->view() . "\n";
 $nav->push('Resolution', '/settings/display/resolution');
 echo "Resolution: " . $nav->view() . "\n\n";
 
-echo "--- Pop back one level (Settings) ---\n";
+echo "--- Pop back one level (Resolution dropped; Display is current) ---\n";
 $nav->pop(); // pop() mutates the stack in place and returns the removed item
 echo $nav->view() . "\n\n";
 
