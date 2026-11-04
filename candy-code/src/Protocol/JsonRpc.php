@@ -104,6 +104,15 @@ final class JsonRpc
     /** @param array<string, mixed> $message */
     public static function encode(array $message): string
     {
-        return (string) \json_encode($message, self::FLAGS);
+        $encoded = \json_encode($message, self::FLAGS);
+        if ($encoded === false) {
+            // CWPD-12: this used to ride out as `(string) false` — an empty
+            // frame written to the socket that no client can attribute. The
+            // encoder's own reason is safe to name: the message is
+            // server-authored, so nothing client-controlled leaks here.
+            throw new \JsonException(\sprintf('cannot encode a wire message: %s', \json_last_error_msg()));
+        }
+
+        return $encoded;
     }
 }

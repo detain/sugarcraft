@@ -79,4 +79,21 @@ final class JsonRpcTest extends TestCase
 
         self::assertSame('{"jsonrpc":"2.0","method":"event","params":{"type":"t","data":{"path":"a/b"}}}', JsonRpc::encode($event));
     }
+
+    public function testAMessageThatCannotBeEncodedRefusesInsteadOfEmpties(): void
+    {
+        // CWPD-12: the old `(string) json_encode(...)` swallowed failure into
+        // an empty frame — a zero-byte write on the socket the client can
+        // never attribute. A value the encoder refuses (a resource is the
+        // shape that gets here from a wiring bug) must raise with the reason.
+        $handle = \fopen('php://memory', 'r');
+        self::assertFalse(\json_encode(['r' => $handle]), 'the encoder genuinely refuses this payload');
+
+        $this->expectException(\JsonException::class);
+        try {
+            JsonRpc::encode(['jsonrpc' => JsonRpc::VERSION, 'method' => 'event', 'params' => ['handle' => $handle]]);
+        } finally {
+            \fclose($handle);
+        }
+    }
 }

@@ -90,10 +90,26 @@ final class Responses
     /** @param array<string, mixed> $body */
     public static function json(int $status, array $body, array $headers = []): ResponseInterface
     {
+        $encoded = \json_encode($body, \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($encoded === false) {
+            // CWPD-12: `(string) json_encode(false)` used to ship an EMPTY
+            // 200 under a json content-type — an unattributable zero-byte
+            // parse for the client. An unencodable body is a server-side
+            // bug, so it answers 500 in the same refusal shape the guards
+            // use. The envelope is a literal on purpose: the offending body
+            // is exactly what cannot be encoded, so it must not be fed to
+            // the encoder again to explain itself.
+            return new Response(
+                500,
+                ['Content-Type' => 'application/json', 'Cache-Control' => 'no-store'] + $headers,
+                '{"error":{"kind":"server_error","message":"the response could not be encoded"}}',
+            );
+        }
+
         return new Response(
             $status,
             ['Content-Type' => 'application/json', 'Cache-Control' => 'no-store'] + $headers,
-            (string) \json_encode($body, \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE),
+            $encoded,
         );
     }
 
