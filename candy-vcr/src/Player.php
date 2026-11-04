@@ -226,7 +226,11 @@ final class Player
             $loop = new \React\EventLoop\StreamSelectLoop();
             $program = ($programFactory)($inputRead, $output, $loop);
 
-            $tally = ['input' => 0, 'resize' => 0, 'output' => 0, 'quit' => 0];
+            // 'undecoded' counts Input events that reached no message at the
+            // program (envelope refused by the registry, or a payload with
+            // neither form the Player can consume). It is a subset of
+            // 'input', never a fifth event kind.
+            $tally = ['input' => 0, 'resize' => 0, 'output' => 0, 'quit' => 0, 'undecoded' => 0];
             $expectedOutput = '';
             $programQuitCleanly = false;
             // Track whether the first resize has been seen (and possibly
@@ -324,6 +328,7 @@ final class Player
                 outputCount: $tally['output'],
                 quitCount: $tally['quit'],
                 programQuitCleanly: $programQuitCleanly,
+                undecodedInputCount: $tally['undecoded'],
             );
         } finally {
             // E712 keep: ephemeral pipe teardown after their contents were
@@ -402,6 +407,8 @@ final class Player
                         $msg = $registry->decode($envelope);
                         if ($msg !== null) {
                             $program->send($msg);
+                        } else {
+                            $tally['undecoded']++;
                         }
                     } elseif (isset($event->payload['b']) && is_string($event->payload['b'])) {
                         // Raw-byte input (PR2 form): re-parse via a fresh
@@ -417,9 +424,15 @@ final class Player
                             break;
                         }
                         $reader = new InputReader();
-                        foreach ($reader->parse($event->payload['b']) as $msg) {
+                        $parsed = $reader->parse($event->payload['b']);
+                        foreach ($parsed as $msg) {
                             $program->send($msg);
                         }
+                        if ($parsed === []) {
+                            $tally['undecoded']++;
+                        }
+                    } else {
+                        $tally['undecoded']++;
                     }
                     break;
 

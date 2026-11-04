@@ -12,6 +12,12 @@ namespace SugarCraft\Vcr;
  * `inputCount` / `resizeCount` / `outputCount` / `quitCount` break
  * that down by kind so failure messages can pinpoint where things
  * diverged.
+ *
+ * `undecodedInputCount` is a subset of `inputCount`: Input events
+ * whose payload reached no message at the program (the serializer
+ * registry refused the envelope, or the payload carried neither a
+ * msg envelope nor a raw-byte string). Silent intake is what this
+ * counts, so it surfaces in the summary whenever it is non-zero.
  */
 final readonly class ReplayResult
 {
@@ -24,6 +30,7 @@ final readonly class ReplayResult
         public int $outputCount,
         public int $quitCount,
         public bool $programQuitCleanly,
+        public int $undecodedInputCount = 0,
     ) {
     }
 
@@ -33,7 +40,7 @@ final readonly class ReplayResult
     public function diffSummary(): string
     {
         if ($this->ok) {
-            return sprintf(
+            $summary = sprintf(
                 'replay OK — %d events (%d input, %d resize, %d output, %d quit)',
                 $this->eventCount,
                 $this->inputCount,
@@ -41,6 +48,13 @@ final readonly class ReplayResult
                 $this->outputCount,
                 $this->quitCount,
             );
+            if ($this->undecodedInputCount > 0) {
+                $summary .= sprintf(
+                    ' — %d input event(s) produced no decodable message and were skipped',
+                    $this->undecodedInputCount,
+                );
+            }
+            return $summary;
         }
         $clean = $this->programQuitCleanly ? 'clean' : 'unclean (timed out / crashed)';
         return sprintf(

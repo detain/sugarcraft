@@ -323,7 +323,7 @@ final class Compiler
             'Height' => $this->heightPx = max(1, (int) $node->value),
             'Theme' => $this->theme = trim($node->value, '"\' '),
             'TypingSpeed' => $this->typingSpeed = $this->parseTypingSpeed($node->value),
-            'PlaybackSpeed' => $this->playbackSpeed = $node->value !== '' ? (float) $node->value : null,
+            'PlaybackSpeed' => $this->playbackSpeed = $this->parsePlaybackSpeed($node->value),
             'FontSize' => $this->fontSize = (int) $node->value,
             'FontFamily' => $this->fontFamily = trim($node->value, '"\' '),
             // Opt-in exec mode: the tape's typed commands run in this shell and the
@@ -337,13 +337,39 @@ final class Compiler
 
     private function parseTypingSpeed(string $value): float
     {
+        $value = trim($value, "\"' \t");
         if (preg_match('/^(\d+(?:\.\d+)?)\s*ms$/i', $value, $m)) {
             return (float) $m[1];
         }
         if (preg_match('/^(\d+(?:\.\d+)?)\s*s$/i', $value, $m)) {
             return (float) $m[1] * 1000.0;
         }
-        return (float) ($value ?: 50.0);
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+        if ($value !== '') {
+            // Garbage used to fall through to (float) 'abc' === 0.0, which
+            // meant "type every character instantly" — the loudest possible
+            // misread of a typo. Refuse it: warn (or throw under strict)
+            // and keep the documented 50ms default.
+            $this->reportCompileProblem("Unparseable TypingSpeed value '{$value}' — using default 50ms");
+        }
+        return 50.0;
+    }
+
+    private function parsePlaybackSpeed(string $value): ?float
+    {
+        $value = trim($value, "\"' \t");
+        if ($value === '') {
+            return null;
+        }
+        if (is_numeric($value) && (float) $value >= 0.0) {
+            return (float) $value;
+        }
+        // Same family as TypingSpeed above: (float) 'abc' === 0.0 would
+        // silently collapse the playback cadence to instant.
+        $this->reportCompileProblem("Unparseable PlaybackSpeed value '{$value}' — using recorded timing");
+        return null;
     }
 
     private function compileType(TypeDirective $node): void

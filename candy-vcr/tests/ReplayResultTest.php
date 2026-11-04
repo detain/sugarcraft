@@ -9,6 +9,43 @@ use SugarCraft\Vcr\ReplayResult;
 
 final class ReplayResultTest extends TestCase
 {
+    public function testSkipNoteAppearsOnlyWhenIntakeWasRefused(): void
+    {
+        $silent = new ReplayResult(
+            ok: true,
+            diff: '',
+            eventCount: 5,
+            inputCount: 3,
+            resizeCount: 1,
+            outputCount: 0,
+            quitCount: 1,
+            programQuitCleanly: true,
+        );
+        $this->assertSame(
+            'replay OK — 5 events (3 input, 1 resize, 0 output, 1 quit)',
+            $silent->diffSummary(),
+            'zero-suppressed: the historical byte shape survives untouched',
+        );
+
+        $refused = new ReplayResult(
+            ok: true,
+            diff: '',
+            eventCount: 5,
+            inputCount: 3,
+            resizeCount: 1,
+            outputCount: 0,
+            quitCount: 1,
+            programQuitCleanly: true,
+            undecodedInputCount: 2,
+        );
+        $summary = $refused->diffSummary();
+        $this->assertStringStartsWith('replay OK — 5 events (3 input, 1 resize, 0 output, 1 quit)', $summary);
+        $this->assertStringContainsString(
+            '2 input event(s) produced no decodable message and were skipped',
+            $summary,
+        );
+    }
+
     public function testSuccessSummary(): void
     {
         $r = new ReplayResult(
