@@ -55,6 +55,28 @@ const languageByLine = computed(() => {
   return byLine
 })
 
+/* CW-10: content-addressed row identity. The index-keyed loops let a single
+   inserted line swap every row's DOM below it — Vue patched text, syntax
+   highlighting, and colour into what had been a different line. The walker
+   stamps each line `hunk:offset:kind` (hunk counts from the first `@@`
+   header, offset restarts per hunk), and both layouts key off it: split pair
+   rows take the first present half — every line lands in exactly one row, so
+   that choice is unique per row. */
+const rowKeyByLine = computed(() => {
+  const keys = new Map<DiffLine, string>()
+  let hunk = -1
+  let offset = 0
+  for (const line of lines.value) {
+    if (line.kind === 'hunk') {
+      hunk += 1
+      offset = 0
+    }
+    keys.set(line, `${hunk}:${offset}:${line.kind}`)
+    offset += 1
+  }
+  return keys
+})
+
 /** Body text as coloured HTML, or null to render it plain. highlight() escapes
  *  every source character before wrapping tokens, so a non-null answer is safe
  *  for v-html (same contract MessageMarkdown relies on). */
@@ -86,6 +108,7 @@ const BLANK_CELL: SplitCell = { kind: 'empty', no: '', text: '', html: null }
  *  not once per template call site per render (MA-30 — the old shape called
  *  `cellHtml()` twice per cell from v-if+v-html, on every reactive re-render). */
 interface DiffRowModel {
+  readonly key: string
   readonly kind: string
   readonly oldNo: string
   readonly newNo: string
@@ -103,8 +126,10 @@ function halfCell(line: DiffLine | null, which: 'oldNo' | 'newNo'): SplitCell {
   return { kind: line.kind, no: line[which] === null ? '' : String(line[which]), text: line.text, html: cellHtml(line) }
 }
 
-const unifiedModel = computed<DiffRowModel[]>(() =>
-  lines.value.map((line) => ({
+const unifiedModel = computed<DiffRowModel[]>(() => {
+  const keys = rowKeyByLine.value
+  return lines.value.map((line) => ({
+    key: keys.get(line)!,
     kind: line.kind,
     oldNo: line.oldNo === null ? '' : String(line.oldNo),
     newNo: line.newNo === null ? '' : String(line.newNo),
@@ -115,16 +140,17 @@ const unifiedModel = computed<DiffRowModel[]>(() =>
     spanText: null,
     left: BLANK_CELL,
     right: BLANK_CELL,
-  })),
-)
+  }))
+})
 
-const splitModel = computed<DiffRowModel[]>(() =>
-  rowPairs.value.map((row) =>
+const splitModel = computed<DiffRowModel[]>(() => {
+  const keys = rowKeyByLine.value
+  return rowPairs.value.map((row) =>
     row.type === 'span'
-      ? { kind: row.span.kind, oldNo: '', newNo: '', sign: '', text: '', html: null, classes: rowClasses(row), spanText: row.span.text, left: BLANK_CELL, right: BLANK_CELL }
-      : { kind: 'pair', oldNo: '', newNo: '', sign: '', text: '', html: null, classes: rowClasses(row), spanText: null, left: halfCell(row.left, 'oldNo'), right: halfCell(row.right, 'newNo') },
-  ),
-)
+      ? { key: keys.get(row.span)!, kind: row.span.kind, oldNo: '', newNo: '', sign: '', text: '', html: null, classes: rowClasses(row), spanText: row.span.text, left: BLANK_CELL, right: BLANK_CELL }
+      : { key: `${keys.get((row.left ?? row.right)!)!}:pair`, kind: 'pair', oldNo: '', newNo: '', sign: '', text: '', html: null, classes: rowClasses(row), spanText: null, left: halfCell(row.left, 'oldNo'), right: halfCell(row.right, 'newNo') },
+  )
+})
 
 /** MA-30 render budget: a 5,000-line session diff must not stamp 5,000 painted rows onto
  *  the DOM at once. Each press of the release adds another budget; a NEW diff re-arms it
@@ -149,7 +175,7 @@ function showMoreRows(): void {
 <template>
   <div class="diff" :class="{ split }" data-testid="diff" role="table" :aria-label="split ? t('web.transcript.diff_split_aria') : t('web.transcript.diff_aria')">
     <template v-if="!split">
-      <div v-for="(row, i) in shownRows" :key="i" class="row" :class="row.kind" role="row">
+      <div v-for="row in shownRows" :key="row.key" class="row" :class="row.kind" role="row">
         <span class="no" role="cell">{{ row.oldNo }}</span>
         <span class="no" role="cell">{{ row.newNo }}</span>
         <span class="sign" role="cell">{{ row.sign }}</span>
@@ -157,7 +183,7 @@ function showMoreRows(): void {
       </div>
     </template>
     <template v-else>
-      <div v-for="(row, i) in shownRows" :key="i" class="row" :class="row.classes" role="row">
+      <div v-for="row in shownRows" :key="row.key" class="row" :class="row.classes" role="row">
         <span v-if="row.spanText !== null" class="text" role="cell">{{ row.spanText }}</span>
         <template v-else>
           <span class="no" role="cell">{{ row.left.no }}</span>

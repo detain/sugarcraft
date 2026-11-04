@@ -238,3 +238,24 @@ describe('row cap keeps a giant diff paintable (MA-30)', () => {
     expect(rows.length).toBeLessThan(10)
   })
 })
+
+describe('CW-10: diff rows carry content-addressed identity', () => {
+  // happy-dom gives no way to watch Vue's DOM reuse across list mutations, so
+  // the house genre applies: pin the source, with every leg anchored to the
+  // construct itself (a bare substring elsewhere would stay green under the
+  // mutation that matters).
+  const component = readFileSync(resolve(process.cwd(), 'src-web/components/DiffView.vue'), 'utf8')
+
+  it('keys BOTH layout loops off the row model', () => {
+    expect(component.match(/v-for="row in shownRows" :key="row\.key"/g) ?? []).toHaveLength(2)
+  })
+
+  it('retires every index key', () => {
+    expect(component).not.toMatch(/:key="i"/)
+  })
+
+  it('derives the identity as hunk:offset:kind with the pair rows keyed off their first half', () => {
+    expect(component).toMatch(/`\$\{hunk\}:\$\{offset\}:\$\{line\.kind\}`/)
+    expect(component).toMatch(/:pair`/)
+  })
+})
