@@ -18,7 +18,7 @@ use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Region;
 
 /**
- * The P-D {@see DisksSection}: btop's disks half of the mem box — state
+ * The {@see DisksSection}: btop's disks half of the mem box — state
  * (per-mount io_read / io_write / io_activity histories, the last mount
  * list, the swap pseudo-disk's figures) plus the line-up the draw loop
  * walks; {@see DisksView} paints it.

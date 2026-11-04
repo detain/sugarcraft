@@ -12,10 +12,10 @@ use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Region;
 
 /**
- * The P-D seam right of the mem|disks divider: btop Mem::draw's "Disks"
+ * The seam right of the mem|disks divider: btop Mem::draw's "Disks"
  * half (btop_draw.cpp:1390-1481 — mount rows, used/free meters, io
- * graphs, io_mode). Phase P-B leaves it empty; P-D implements this
- * interface and installs it with
+ * graphs, io_mode). {@see MemPanel} starts without it and installs the
+ * implementation with
  * {@see \SugarCraft\Top\Panel\MemPanel::withDisks()}.
  *
  * MemPanel already owns what btop's mem box owns for disks: the `d`

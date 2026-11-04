@@ -30,7 +30,7 @@ use SugarCraft\Top\View\Symbols;
  * The box outline, the `disks` button and the mem|disks divider are App
  * chrome; the `io` button (shown with the disks half) is painted here, as
  * btop's Mem::draw does. Right of the divider belongs to the
- * {@see DisksSection} (P-D).
+ * {@see DisksSection}.
  */
 final class MemView
 {

@@ -10,7 +10,7 @@ namespace SugarCraft\Top\Collect;
  * A VM is recognised by its cgroup path and its cmdline, never by the
  * executable's name alone: Ubuntu's libvirt runs `/usr/bin/kvm`, RHEL
  * `/usr/libexec/qemu-kvm`, others `qemu-system-<arch>` or a custom
- * emulator path (prompt_kit/findings/kvm-reference.md).
+ * emulator path.
  *
  * cgroup layouts (any line of /proc/[pid]/cgroup, any depth):
  *  - systemd / machined (cgroup v2, and v1's name=systemd and controller

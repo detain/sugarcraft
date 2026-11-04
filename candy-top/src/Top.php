@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Top;
 
 /**
- * Placeholder root for the candy-top terminal system monitor.
+ * Package root for candy-top, the terminal system monitor.
  *
- * Mirrors aristocratos/btop concept — a btop-style TUI dashboard for
- * CPU, memory, network, disk, and process telemetry, to be built on the
- * SugarCraft charting libraries. The running program is {@see App} (launched
- * by `bin/candy-top`); this class keeps the package-level defaults.
+ * Mirrors aristocratos/btop concept — a btop-style TUI dashboard for CPU,
+ * memory, network, disk, GPU, container, VM and process telemetry over the
+ * SugarCraft TUI libraries. The running program is {@see App} (launched by
+ * `bin/candy-top`); this class keeps the package-level defaults only.
  */
 final class Top
 {

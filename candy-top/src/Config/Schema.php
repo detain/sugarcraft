@@ -17,8 +17,8 @@ use SugarCraft\Top\Lang;
  * from it), `bools`/`ints`/`strings` give the defaults, `intValid` /
  * `stringValid` / `presetsValid` give the value law.
  *
- * Wave U (adopted open upstream PRs, evaluated in
- * prompt_kit/findings/btop-upstream-prs.md) extends the 1.4.7 roster. The
+ * The adopted-upstream-PR pass (the `#NNNN` numbers cited below) extends
+ * the 1.4.7 roster. The
  * compatibility law for a btop.conf <-> config.conf round trip:
  *  - New keys are additive: show_zswap (#1739), show_core_freq (#1785),
  *    net_hide_ip (#1573), proc_command_basename (#1859),

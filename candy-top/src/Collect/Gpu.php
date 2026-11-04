@@ -85,7 +85,7 @@ final class Gpu implements Backend
 
     /**
      * Everything btop's gpu box shows that nvidia-smi can answer, verified
-     * valid on driver 595.91.07 (prompt_kit/findings/nvidia-smi-skynet2.md).
+     * valid on driver 595.91.07.
      * `uuid` maps --query-compute-apps rows to a device index; `name`
      * stays last.
      */

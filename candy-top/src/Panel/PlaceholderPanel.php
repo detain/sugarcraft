@@ -21,10 +21,11 @@ use SugarCraft\Top\View\Region;
 use SugarCraft\Top\View\Units;
 
 /**
- * Phase P-A stand-in for every box: wires a {@see Source} through the full
- * {@see Panel} lifecycle and paints the latest snapshot as plain readouts
- * (no graphs). P-B..P-E replace it box by box with the real CpuPanel /
- * MemPanel / NetPanel / ProcPanel — see {@see Panels::standard()}.
+ * Stand-in for a box with no panel of its own: wires a {@see Source}
+ * through the full {@see Panel} lifecycle and paints the latest snapshot as
+ * plain readouts (no graphs). Every shipped box has a real panel now, so this
+ * class is what a new box starts as before it grows one — see
+ * {@see Panels::standard()}.
  */
 final class PlaceholderPanel implements Panel
 {

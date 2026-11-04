@@ -23,7 +23,7 @@ use SugarCraft\Top\Overlay\Overlay;
  * for writes produced asynchronously inside a Cmd.
  *
  * `$overlay` is a menu the panel asks the App to open — btop's
- * `Menu::show()` from an input handler (P-E's `t` / `k` / `s` / `N`). The
+ * `Menu::show()` from an input handler (the proc box's `t` / `k` / `s` / `N`). The
  * App pushes it onto its overlay stack after applying `$set`; the panel
  * never draws a popup into its own Region nor keeps a modal of its own.
  */

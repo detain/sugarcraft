@@ -179,7 +179,7 @@ $config = $config->withShownBoxesSettled($fake ? FakeGpu::new()->count() : count
 $catalog = ThemeRegistry::new();
 $palette = $catalog->load($config->colorTheme(), $config->bool('theme_background'), $config->ttyMode());
 $panels = Panels::standard($host, $config, $fake, $platform, $gpuProbe);
-// #1791c proc_tree_persist_state: remembered tree collapse choices live in
+// btop PR #1791c, proc_tree_persist_state: remembered tree collapse choices live in
 // $XDG_STATE_HOME/candy-top/tree-state.json (never config.conf). Loaded even
 // with the option off, so turning it on mid-session restores them and a later
 // save cannot drop them; an unusable file loads empty.

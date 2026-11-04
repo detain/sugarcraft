@@ -69,7 +69,7 @@ use SugarCraft\Top\View\Region;
  * resizes. paint() sees the same on {@see PanelFrame}. Never cache either.
  *
  * Menus: a panel never draws a popup itself; it returns the menu in
- * {@see PanelResult::$overlay} (P-E's signal / renice menus) and the App
+ * {@see PanelResult::$overlay} (the signal / renice menus) and the App
  * opens it.
  *
  * Config writes: return them in {@see PanelResult::$set}. The App applies
@@ -87,7 +87,11 @@ use SugarCraft\Top\View\Region;
  */
 interface Panel
 {
-    /** The btop box name this panel fills: cpu | mem | net | proc. */
+    /**
+     * The box name this panel fills, i.e. its key in {@see Panels::standard()}:
+     * cpu | gpu | mem | net | proc | ctr | vms | ipmi (the last three are
+     * candy-top's own boxes, not btop's).
+     */
     public function box(): string;
 
     /**
@@ -101,7 +105,7 @@ interface Panel
 
     /**
      * True while this panel owns ALL input (step 2 of the class doc) —
-     * P-E returns `$context->config->bool('proc_filtering')`. Only asked
+     * the proc panel returns `$context->config->bool('proc_filtering')`. Only asked
      * while the panel is visible and the frame fits.
      */
     public function modal(PanelContext $context): bool;
@@ -109,7 +113,7 @@ interface Panel
     /**
      * True to take `$key` ahead of the App's global keys (step 3 of the
      * class doc). Decide from this panel's own state together with
-     * `$context` — e.g. P-E claims `+`/`-`/`=` only while
+     * `$context` — e.g. the proc panel claims `+`/`-`/`=` only while
      * `$context->config` has proc_tree on (btop_input.cpp:491). Return
      * false for anything you do not consume, or that global key stops
      * working.

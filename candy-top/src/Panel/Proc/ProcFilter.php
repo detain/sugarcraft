@@ -15,7 +15,7 @@ namespace SugarCraft\Top\Panel\Proc;
  * compiles POSIX extended syntax; PCRE accepts the same patterns users
  * type (classes, alternation, anchors, repetition).
  *
- * Extension (plan Wave U1b): the plain filter also matches a process's
+ * Extension (candy-top's own, not btop's): the plain filter also matches a process's
  * container / VM name, so typing a guest name finds its qemu process.
  *
  * {@see containerHidden()} is btop #1873's ctr_hidden: a container picked

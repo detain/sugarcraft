@@ -39,8 +39,8 @@ use SugarCraft\Top\View\Surface;
  * 60 descriptions wraps; at the 118-cell box a 120-column terminal gets,
  * 39 still do — a two-up framed layout with 56-cell-plus descriptions
  * would need a ~160-cell box, which simply is not there. Lowering KEY_COL
- * toward its 16-cell floor was measured (see the sweep in this campaign's
- * evidence report): it saves only 7 of those 39 at width 118 and nothing
+ * toward its 16-cell floor was measured: it saves only 7 of those 39 at width
+ * 118 and nothing
  * at 166, while `MenuDraw::cjust()` CLIPS the two labels longer than 16
  * cells (`Shift + Left, Right`, `Alt+Shift+Left/Right`) to mangled
  * prefixes. Truncated key names are worse data loss than a second

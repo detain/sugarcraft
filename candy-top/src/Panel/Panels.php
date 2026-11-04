@@ -23,12 +23,12 @@ use SugarCraft\Top\Source\Fake\FakeProcList;
 use SugarCraft\Top\Panel\Gpu\GpuFeed;
 
 /**
- * The panel roster — the ONE place a phase swaps its box in.
+ * The panel roster — the ONE place a box is bound to its panel class.
  *
- * P-B replaces the cpu/mem lines with `CpuPanel::new(...)` /
- * `MemPanel::new(...)`, P-C net, P-D extends mem with disks, P-E proc. The
- * App never names a concrete panel class, so those phases touch this file
- * and their own, not App.php.
+ * Every box names its own constructor here (cpu, gpu, mem + its disks
+ * section, net, proc, ctr, vms, ipmi). The App never names a concrete panel
+ * class, so a box's implementation lives in its own files and only its
+ * construction line here.
  */
 final class Panels
 {
@@ -37,8 +37,8 @@ final class Panels
     }
 
     /**
-     * One line per box: a phase swaps its box by replacing exactly its own
-     * line, so P-B..P-E edit disjoint lines and never conflict.
+     * One line per box, so giving a box a real implementation replaces
+     * exactly its own line and never touches a sibling's.
      *
      * `$config` is the startup config: a panel reads its initial options
      * (graph symbol, proc_sorting, net_iface, ...) from it when it builds

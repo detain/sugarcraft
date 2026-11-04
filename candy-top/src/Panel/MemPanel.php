@@ -29,7 +29,7 @@ use SugarCraft\Top\View\Region;
  * btop's mem box, memory half: Total, the used/available/cached/free
  * classes and the swap section as meters or graphs (mem_graphs), the
  * btop #1739 zswap row, the btop #1747 single focused graph
- * (mem_selected), and the P-D seam for the disks half
+ * (mem_selected), and the seam for the disks half
  * ({@see DisksSection}).
  *
  * Keys (btop_input.cpp:572-591, the mem-box input block): `d` flips
@@ -60,7 +60,7 @@ final class MemPanel implements Panel, ClickCapture
     }
 
     /**
-     * The roster entry {@see Panels::standard()} uses, with the P-D disks
+     * The roster entry {@see Panels::standard()} uses, with the disks
      * section installed; `$platform` picks the host's collectors (default:
      * the running OS).
      */
@@ -75,7 +75,7 @@ final class MemPanel implements Panel, ClickCapture
             ->withDisks(Disks::standard($config, false, $platform));
     }
 
-    /** Install (or remove) the P-D disks section. */
+    /** Install (or remove) the disks section. */
     public function withDisks(?DisksSection $disks): self
     {
         return new self($this->sources, $disks, $this->history, $this->snapshot);

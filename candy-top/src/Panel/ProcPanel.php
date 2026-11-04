@@ -52,7 +52,7 @@ use SugarCraft\Top\State\TreeStateSavedMsg;
 use SugarCraft\Top\View\Region;
 
 /**
- * btop's proc box (phase P-E): the process list with sorting, the filter
+ * btop's proc box: the process list with sorting, the filter
  * prompt, tree view, keyboard / wheel / click / scrollbar navigation and
  * the detailed view.
  *
@@ -95,7 +95,7 @@ use SugarCraft\Top\View\Region;
  * are claimed through {@see ClickCapture}, so the App hands a click on
  * one to this box alone.
  *
- * btop PR #1552 (Wave U4): with a GPU source ({@see withGpu()}, the App's
+ * btop PR #1552: with a GPU source ({@see withGpu()}, the App's
  * shared {@see GpuFeed}) the Cmd also asks it for a snapshot — consumer
  * `proc`, demanding per-process rows, and only while
  * {@see ProcGpuColumns::wanted()} — and {@see GpuUsage} joins its rows to

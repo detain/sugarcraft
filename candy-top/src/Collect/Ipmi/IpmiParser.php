@@ -9,7 +9,7 @@ use SugarCraft\Core\Util\Sanitize;
 /**
  * Text parsers for the ipmitool commands the ipmi box runs. Written
  * against real captures from two very different BMCs (ASUS/AMI and HP
- * iLO 4, prompt_kit/findings/ipmi-reference/) and forgiving by design:
+ * iLO 4) and forgiving by design:
  * an unknown line is skipped, never fatal, because every vendor adds its
  * own rows, units and spacing.
  *
