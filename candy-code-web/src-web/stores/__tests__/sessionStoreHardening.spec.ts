@@ -227,3 +227,40 @@ describe('disposal reaches pinia through the public path (CW-5)', () => {
     expect(registry.has('session/s1')).toBe(false)
   })
 })
+
+/**
+ * CW-1 session-store half (reviews-1103): cursor.offer() removes the whole
+ * contiguous run it hands back — an applyEvent throwing mid-run used to
+ * silently drop its already-dequeued siblings (and escape up through the
+ * connection's flush, see eventSpineIsolation.spec.ts). The store now
+ * applies the run event-by-event in isolation and, on a poison event,
+ * re-follows FRESH: a full snapshot is the honest recovery, not a partial
+ * transcript with holes.
+ */
+describe('a poison durable event re-follows fresh (CW-1)', () => {
+  it('the crashing batchmate triggers a fresh subscribe, not silent loss', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    const first = session.subscribe()
+    answer('session.subscribe', SNAPSHOT)
+    await first
+
+    // Poison, two-stage: a narration whose tail is a number slips into
+    // state.live (utf8Length is numeric-safe); the NEXT freezeLive (the
+    // tool.started arm) calls live.text.trim() and throws. Real untyped
+    // wire shapes, and no reducer guard covers either site.
+    event('assistant.narration', { partId: 'p1', tail: 42, offset: 0 })
+    event('tool.started', { toolCallId: 'c9', name: 'Bash', arguments: {} })
+    await flush()
+
+    // Base: the throw escaped handle()/flush entirely (no fresh subscribe,
+    // the error surfaced at the socket). Fixed: a fresh follow was asked for.
+    const subscribeFrames = sent('session.subscribe')
+    expect(subscribeFrames.length).toBe(2)
+    expect(subscribeFrames[1]?.params).toEqual({ sessionId: 's1' })
+
+    answer('session.subscribe', { ...SNAPSHOT, throughSeq: 8 })
+    await flush()
+    expect(session.phase).toBe('live')
+  })
+})

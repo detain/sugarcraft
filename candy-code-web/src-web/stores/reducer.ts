@@ -536,7 +536,11 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
       const { data } = envelope as unknown as Ev<'assistant.completed'>
       const key = data.messageId ?? `reply:${turnId ?? '-'}`
       // Step text already shown is part of the reply when the reply repeats it.
-      state.items = state.items.filter((item) => !(item.kind === 'assistant' && item.step === true && item.turnId === turnId && data.content.includes(item.content.trim())))
+      // CW-1: the wire is untyped after the cast — a non-string content
+      // used to THROW inside this filter (one '.includes' deref) and take
+      // the whole event spine down with it. Guard the read; a malformed
+      // reply still upserts by its key.
+      state.items = state.items.filter((item) => !(item.kind === 'assistant' && item.step === true && item.turnId === turnId && typeof data.content === 'string' && data.content.includes(item.content.trim())))
       upsert(state, {
         kind: 'assistant',
         key,

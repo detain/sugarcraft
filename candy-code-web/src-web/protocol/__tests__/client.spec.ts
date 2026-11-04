@@ -240,3 +240,39 @@ describe('CandyCodeClient', () => {
     await expect(write).resolves.toMatchObject({ id: 'new' })
   })
 })
+
+/**
+ * CW-1 (reviews-1103): helloAnswered fired the hello listeners BEFORE
+ * resending the waiting queue — one throwing listener stranded every
+ * queued idempotent request until the next reconnect, and silenced the
+ * later listeners too. The queue is drained first and each listener is
+ * isolated.
+ */
+describe('hello listener isolation (CW-1)', () => {
+  it('a throwing hello listener neither strands queued requests nor later listeners', async () => {
+    const { client, socket } = harness()
+    client.start()
+    await flush()
+    socket().open()
+    // A queue-while-connecting request: issued after open, before the hello
+    // answer. session.send is the idempotent side-effecting method, so the
+    // client parks it in `waiting` (session.list is a read — it would be
+    // refused outright while connecting).
+    void client.request('session.send', { sessionId: 's1', text: 'hi' }).catch(() => {})
+    expect(socket().sent.filter((frame) => frame.method === 'session.send')).toHaveLength(0)
+
+    client.onHello(() => {
+      throw new Error('listener exploded')
+    })
+    let later = 0
+    client.onHello(() => {
+      later += 1
+    })
+
+    socket().answer(helloResult(), 'hello')
+    await flush()
+
+    expect(later).toBe(1)
+    expect(socket().sent.filter((frame) => frame.method === 'session.send')).toHaveLength(1)
+  })
+})

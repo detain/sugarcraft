@@ -122,9 +122,33 @@ export const useConnectionStore = defineStore('connection', () => {
     const batch = queued
     queued = []
     for (const envelope of batch) {
-      handleServerEvent(envelope)
-      if (envelope.sessionId !== null) followers.get(envelope.sessionId)?.event(envelope)
-      for (const listener of listeners) listener(envelope)
+      // CW-1: each consumer is isolated. A throwing reducer apply, deaf
+      // follower, or exploding store listener must silence THAT consumer
+      // only — the batch was already spliced off the queue, so an
+      // un-caught throw here meant every later envelope in it vanished
+      // silently and permanently.
+      try {
+        handleServerEvent(envelope)
+      } catch {
+        // one consumer's crash is not the spine's
+      }
+      if (envelope.sessionId !== null) {
+        const target = followers.get(envelope.sessionId)
+        if (target !== undefined) {
+          try {
+            target.event(envelope)
+          } catch {
+            // ditto
+          }
+        }
+      }
+      for (const listener of listeners) {
+        try {
+          listener(envelope)
+        } catch {
+          // ditto — later listeners and later envelopes still get this
+        }
+      }
     }
   }
 

@@ -293,9 +293,18 @@ export class CandyCodeClient {
     const tick = typeof hello.limits.tickIntervalMs === 'number' && hello.limits.tickIntervalMs > 0 ? hello.limits.tickIntervalMs : DEFAULT_TICK_MS
     this.watchdog.arm(2 * tick)
     this.setStatus('connected')
-    for (const listener of this.helloListeners) listener(hello)
-
+    // CW-1: the waiting queue is drained BEFORE the hello listeners run and
+    // every listener is isolated — a throwing listener used to strand all
+    // queued idempotent requests until the next reconnect and silence the
+    // listeners behind it.
     const queued = this.waiting.splice(0)
+    for (const listener of this.helloListeners) {
+      try {
+        listener(hello)
+      } catch {
+        // one consumer's crash is not the spine's
+      }
+    }
     for (const entry of queued) this.send(entry)
   }
 

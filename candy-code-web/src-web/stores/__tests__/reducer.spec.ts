@@ -381,3 +381,16 @@ describe('older-page dedupe compares full item keys (CW-DBA-17)', () => {
     expect(state.items).toHaveLength(1)
   })
 })
+
+/**
+ * CW-1 reducer half (reviews-1103): the assistant.completed fold read
+ * data.content.includes() — a non-string content (the wire is untyped
+ * after the cast) threw straight through the reducer and out the event
+ * spine. The deref is guarded; a malformed reply still lands by its key.
+ */
+describe('assistant.completed content deref is guarded (CW-1)', () => {
+  it('a non-string content neither crashes the fold nor skips the upsert', () => {
+    const state = run(createState('s1'), [ev('assistant.completed', { messageId: 'm9', content: 123 })])
+    expect(state.items.map((item) => item.key)).toContain('m9')
+  })
+})

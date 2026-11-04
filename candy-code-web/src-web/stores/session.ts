@@ -65,7 +65,19 @@ function setup(sessionId: string) {
       return
     }
     const now = Date.now()
-    for (const ready of cursor.offer(envelope.seq, envelope, now)) applyEvent(state, ready)
+    // CW-1: apply the offered run event-by-event in isolation. offer()
+    // has ALREADY removed the whole contiguous run from the cursor, so a
+    // poison event mid-run must not silently drop its dequeued siblings —
+    // re-follow FRESH (a full snapshot is the honest recovery, never a
+    // transcript with holes).
+    for (const ready of cursor.offer(envelope.seq, envelope, now)) {
+      try {
+        applyEvent(state, ready)
+      } catch {
+        void subscribe(true)
+        return
+      }
+    }
     if (cursor.needsResync(now)) void subscribe()
   }
 
