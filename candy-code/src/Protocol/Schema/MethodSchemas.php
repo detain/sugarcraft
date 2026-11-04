@@ -113,7 +113,7 @@ final class MethodSchemas
                     ], ['methods', 'events']),
                     'limits' => Schema::map(Schema::integer(0)),
                     'principal' => Schema::object([
-                        'kind' => Schema::string(),
+                        'kind' => Schema::string()->describe('`owner` for the full-rights connection; `viewer` when a cv1_ viewer grant narrowed this principal to its read-only allowlist. Clients feature-detect viewer support on this field; the kind set may widen without a schema break.'),
                         'via' => Schema::string(),
                         'scopes' => Schema::arrayOf(Schema::enum(['read', 'write', 'approve', 'admin'])),
                     ], ['kind', 'scopes']),

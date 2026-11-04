@@ -150,6 +150,11 @@ final class Definitions
                 'pendingAsks' => Schema::arrayOf(Schema::ref(self::PENDING_ASK)),
                 'queue' => Schema::arrayOf(Schema::ref(self::QUEUE_ENTRY)),
                 'subagents' => Schema::arrayOf(Schema::map(Schema::any())),
+                // The snapshot side of the G4-C subagent-row cap (CWPD-2):
+                // SessionFeed trims rows past MAX_SUBAGENT_ROWS and names the
+                // counter only once a trim has fired, so an untrimmed snapshot
+                // stays byte-identical across servers that do not count yet.
+                'subagentsDropped' => Schema::integer(1)->describe('Subagent rows dropped by the display cap while this session ran; named only when at least one row was dropped. Absent means nothing was trimmed.'),
             ], ['sessionId', 'status', 'messages', 'lastSeq', 'pendingAsks', 'queue']),
             self::SUBSCRIPTION => Schema::oneOf(
                 Schema::object([

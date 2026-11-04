@@ -1189,6 +1189,11 @@
                         "type": "object",
                         "additionalProperties": {}
                     }
+                },
+                "subagentsDropped": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Subagent rows dropped by the display cap while this session ran; named only when at least one row was dropped. Absent means nothing was trimmed."
                 }
             },
             "required": [
@@ -4086,7 +4091,8 @@
                         "type": "object",
                         "properties": {
                             "kind": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "`owner` for the full-rights connection; `viewer` when a cv1_ viewer grant narrowed this principal to its read-only allowlist. Clients feature-detect viewer support on this field; the kind set may widen without a schema break."
                             },
                             "via": {
                                 "type": "string"
