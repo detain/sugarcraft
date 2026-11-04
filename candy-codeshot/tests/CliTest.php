@@ -462,6 +462,42 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $r['stderr']);
     }
 
+    public function testEscapeBytesCannotReachTerminalThroughEngineRefusalMessage(): void
+    {
+        // The one stderr leg that does NOT ride Lang::t is the mid-render engine
+        // catch. Its message interpolates the confined font path verbatim, and a
+        // Linux filename may carry ESC bytes — so the raw-message precedent needs
+        // its own Sanitize::untrustedForDisplay sweep. We plant an over-cap TTF
+        // (real 4-byte magic so it clears the signature door, then a sparse 34 MiB
+        // size to trip MAX_EMBEDDED_FONT_BYTES inside render()) whose basename
+        // carries CSI bytes. Pre-fix the ESC reached the terminal; the choke must
+        // now neutralise it.
+        $dir = $this->makeTempDir();
+        $font = "\x1b[31moversized.ttf";
+        try {
+            file_put_contents($dir . '/in.txt', "x\n");
+            $h = fopen($dir . '/' . $font, 'wb');
+            self::assertIsResource($h);
+            fwrite($h, "\x00\x01\x00\x00");   // truetype signature -> passes sniffFontMime
+            ftruncate($h, 34_000_000);         // exceeds 32 MiB embed cap -> render throws
+            fclose($h);
+
+            $r = $this->runCli(
+                ['--no-window', '--no-shadow', '--font', $font, 'in.txt'],
+                null,
+                $dir,
+            );
+
+            $this->assertSame(2, $r['exitCode'], $r['stderr']);
+            $this->assertStringContainsString('rendering failed', $r['stderr']);
+            // The refusal reason survives, only its CSI bytes are swept.
+            $this->assertStringContainsString('too large', $r['stderr']);
+            $this->assertStringNotContainsString("\x1b", $r['stderr']);
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
     private function makeTempDir(): string
     {
         $dir = sys_get_temp_dir() . '/codeshot_cwd_' . uniqid('', true);

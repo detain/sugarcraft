@@ -70,6 +70,7 @@ use SugarCraft\CodeShot\PngRenderer;
 use SugarCraft\CodeShot\SvgRenderer;
 use SugarCraft\CodeShot\Support\Version;
 use SugarCraft\CodeShot\Theme;
+use SugarCraft\Core\Util\Sanitize;
 
 // The catalogs ship sixteen locales, but nothing used to SELECT one — every
 // translated string stayed dormant behind the built-in default. Pick the
@@ -457,8 +458,13 @@ try {
     // Mid-render engine refusals (PNG pixel ceiling, unreadable or oversized
     // font files) must exit with a diagnostic, not an uncaught fatal — the
     // autoload notice above sets the raw-message precedent (engine reasons
-    // are not catalog material).
-    fwrite(STDERR, 'candy-codeshot: rendering failed: ' . $e->getMessage() . "\n");
+    // are not catalog material). The engine message is NOT trusted though: the
+    // font-leg refusals interpolate $fontPath, a confined-but-arbitrary argv
+    // path whose basename Linux lets carry ESC/CSI bytes. Every other stderr
+    // row here rides Lang::t's sanitising choke; this raw literal must sweep the
+    // interpolated message through the same untrusted-display policy or a CWD
+    // file named with CSI bytes would execute verbatim on the operator terminal.
+    fwrite(STDERR, 'candy-codeshot: rendering failed: ' . Sanitize::untrustedForDisplay($e->getMessage()) . "\n");
     exit(2);
 }
 
