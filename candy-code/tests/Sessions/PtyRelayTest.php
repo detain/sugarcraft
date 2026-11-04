@@ -475,4 +475,79 @@ final class PtyRelayTest extends TestCase
 
         return $state !== 'Z' && $state !== 'X';
     }
+
+    /**
+     * PHP-C1: {@see PtyRelay::interpretExitStatus()} is the extracted, named,
+     * tested replacement for the inline WIFSIGNALED/WTERMSIG/WIFEXITED/
+     * WEXITSTATUS calls. Those four are wait(2) C MACROS, not PHP functions
+     * (function_exists('WIFSIGNALED') is false on every build), so the previous
+     * form was an uncaught Error on the FIRST real reap — not a warning. These
+     * pins EXECUTE the repaired path across all four shapes; at base the method
+     * does not exist, so any run reaching them discriminates by construction.
+     * The integers are the kernel's own (exit_code << 8) | signal composition.
+     */
+    public function testInterpretExitStatusMirrorsEveryReapedPumpShape(): void
+    {
+        $interpret = new \ReflectionMethod(PtyRelay::class, 'interpretExitStatus');
+        $interpret->setAccessible(true);
+
+        // [status, mirrored exit code] for (a) exited-0, (b) exited-nonzero,
+        // (c) killed-by-signal (and with the core-dump bit set), (d) an
+        // uninterpretable (stopped) status -> the named sentinel.
+        $cases = [
+            'exited-0' => [0, 0],
+            'exited-3' => [3 << 8, 3],
+            'exited-255' => [255 << 8, 255],
+            'killed-by-9' => [9, 137],
+            'killed-by-9-core' => [9 | 0x80, 137],
+            'killed-by-15' => [15, 143],
+            'stopped-19-unknown' => [(19 << 8) | 0x7F, 2],
+            'stopped-21-unknown' => [(21 << 8) | 0x7F, 2],
+        ];
+        foreach ($cases as $label => [$status, $expected]) {
+            self::assertSame(
+                $expected,
+                $interpret->invoke(null, $status),
+                $label . ': the pump status interpretation must mirror the kernel composition',
+            );
+        }
+    }
+
+    /**
+     * The pcntl-free bit decode is pinned DIRECTLY against the same integer
+     * facts the pcntl accessors report, so the arithmetic holds even on a host
+     * where interpretExitStatus() would have taken the pcntl branch instead.
+     */
+    public function testDecodeRawStatusMatchesTheKernelCompositionAndPcntl(): void
+    {
+        $decode = new \ReflectionMethod(PtyRelay::class, 'decodeRawStatus');
+        $decode->setAccessible(true);
+
+        $statuses = [0, 3 << 8, 7, 9, 15, 9 | 0x80, (19 << 8) | 0x7F, (2 << 8) | 0x7F];
+
+        if (\function_exists('pcntl_wifsignaled')) {
+            foreach ($statuses as $status) {
+                $decoded = $decode->invoke(null, $status);
+                if (pcntl_wifstopped($status)) {
+                    self::assertNull($decoded, 'a stopped status decodes to null (unknown)');
+
+                    continue;
+                }
+                if (pcntl_wifsignaled($status)) {
+                    self::assertSame(128 + pcntl_wtermsig($status), $decoded, 'a signalled status decodes to 128+signal');
+
+                    continue;
+                }
+                self::assertNotNull($decoded, 'an exited status decodes');
+                self::assertSame(pcntl_wexitstatus($status), $decoded, 'an exited status decodes to the exit code');
+            }
+        }
+
+        // Named spot-check of the arithmetic against the kernel composition,
+        // independent of any pcntl answer (runs on every host).
+        self::assertSame(0, $decode->invoke(null, 0), 'exit(0)');
+        self::assertSame(3, $decode->invoke(null, 3 << 8), 'exit(3)');
+        self::assertSame(137, $decode->invoke(null, 9), 'SIGKILL (9) -> 137');
+        self::assertNull($decode->invoke(null, (19 << 8) | 0x7F), 'SIGSTOP-echoed stopped status -> null');
+    }
 }

@@ -1130,4 +1130,75 @@ final class BackgroundShellRegistryTest extends TestCase
 
         $registry->stop($liveId);
     }
+
+    /**
+     * PHP-C2: {@see BackgroundShellRegistry::pathIsFifo()} is the tested
+     * replacement for the \is_fifo() call that never existed in PHP — a
+     * guaranteed `Error: Call to undefined function is_fifo()` on the
+     * dead-launch sweep's first non-regular file (a plain file short-circuits
+     * on is_file(), which is exactly why no test ever reached it before). The
+     * predicate is asserted for a real FIFO, a plain file, and a directory;
+     * the NON-FIFO answers are the shapes the fatal path had to survive. At
+     * base the method does not exist, so this discriminates by construction.
+     */
+    public function testPathIsFifoDistinguishesFifoFromPlainFileAndDirectory(): void
+    {
+        $isFifo = new \ReflectionMethod(BackgroundShellRegistry::class, 'pathIsFifo');
+        $isFifo->setAccessible(true);
+
+        $dir = $this->root . '/fifo-' . \bin2hex(\random_bytes(3));
+        self::assertTrue(\mkdir($dir, 0o700));
+        $plain = $dir . '/plain.out';
+        self::assertNotFalse(\file_put_contents($plain, 'x'));
+
+        self::assertFalse($isFifo->invoke(null, $plain), 'a plain regular file is NOT a FIFO');
+        self::assertFalse($isFifo->invoke(null, $dir), 'a directory is NOT a FIFO');
+        self::assertFalse($isFifo->invoke(null, $dir . '/never-existed'), 'a missing path is NOT a FIFO');
+
+        if (\function_exists('posix_mkfifo')) {
+            $fifo = $dir . '/pipe.in';
+            self::assertTrue(@\posix_mkfifo($fifo, 0o600), 'posix_mkfifo could not stage a FIFO');
+            self::assertTrue($isFifo->invoke(null, $fifo), 'a named pipe IS a FIFO (is_file would say false)');
+        } else {
+            self::markTestSkipped('posix_mkfifo is unavailable to stage the positive FIFO leg');
+        }
+    }
+
+    /**
+     * Drive the REAL sweep line that once called is_fifo(): plant a live FIFO
+     * plus a plain file inside a dead `launch-<pid>` directory, run
+     * sweepDeadLaunchDirs() with a ceiling that treats both as expired, and
+     * prove the FIFO is unlinked and the directory reclaimed. At base the sweep
+     * evaluates \is_fifo() on the FIFO and dies before it can unlink, so the
+     * directory survives — the discriminating failure this fix owes a proof
+     * against. No shell is spawned; the sweep is reached through the public
+     * forSession() factory and one reflection call.
+     */
+    public function testSweepUnlinksFifoFromADeadLaunchDirectory(): void
+    {
+        if (!\function_exists('posix_mkfifo') || !\function_exists('posix_kill')) {
+            $this->markTestSkipped('the FIFO reclaim leg needs posix_mkfifo and posix_kill');
+        }
+
+        $registry = BackgroundShellRegistry::forSession('sweep-fifo', $this->root);
+        $parent = \dirname($registry->directoryPath());
+
+        $pidMax = (int) @\file_get_contents('/proc/sys/kernel/pid_max');
+        $dead = $pidMax > 4096 ? $pidMax - 4 : 2147483000;
+        self::assertFalse(@\posix_kill($dead, 0), 'the test needs a pid no process can hold on this host');
+
+        $deadDir = $parent . '/launch-' . $dead;
+        self::assertTrue(\mkdir($deadDir, 0o700));
+        self::assertNotFalse(\file_put_contents($deadDir . '/sh-deadbeef.out', 'planted'));
+        $fifo = $deadDir . '/sh-deadbeef.in';
+        self::assertTrue(@\posix_mkfifo($fifo, 0o600), 'posix_mkfifo could not stage the sweep fixture');
+
+        $sweep = new \ReflectionMethod(BackgroundShellRegistry::class, 'sweepDeadLaunchDirs');
+        $sweep->setAccessible(true);
+        // A ceiling just past now makes every freshly planted file look expired.
+        $sweep->invoke($registry, \microtime(true) + 60.0);
+
+        self::assertFalse(\file_exists($fifo), 'the sweep must unlink the relay FIFO that otherwise blocks the reclaim');
+        self::assertFalse(\is_dir($deadDir), 'a dead launch directory holding only deleted files is reclaimed');
+    }
 }
