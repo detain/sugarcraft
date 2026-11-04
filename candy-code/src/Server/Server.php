@@ -598,10 +598,22 @@ final class Server
         return new Promise(function (callable $resolve, callable $reject) use ($request, $next, $body): void {
             $settled = false;
             $timer = null;
-            $stopTimer = function () use (&$timer): void {
+            // CWPD-20: stopping the deadline must also retract the `close`
+            // listener below, from inside this same closure so no settle
+            // path can run one half of the cleanup. Without the removal a
+            // settled request leaves the closure — and through it the timer
+            // slot, the request and the promise chain — registered on the
+            // body stream for the stream's whole life. Captured by
+            // reference: the closure removes the very instance that was
+            // registered, which is the one this variable holds.
+            $stopTimer = null;
+            $stopTimer = function () use (&$timer, $body, &$stopTimer): void {
                 if ($timer !== null) {
                     $this->loop->cancelTimer($timer);
                     $timer = null;
+                }
+                if (\is_callable($stopTimer)) {
+                    $body->removeListener('close', $stopTimer);
                 }
             };
             $body->on('close', $stopTimer);
