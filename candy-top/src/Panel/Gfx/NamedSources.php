@@ -11,7 +11,7 @@ use SugarCraft\Top\Source\Source;
  * A {@see Source} over several named sources that a panel can still take
  * apart afterwards — {@see \SugarCraft\Top\Source\SourceSet} with
  * accessors. The cpu panel retunes its freq source at collect time
- * (show_core_freq) and hands its battery source to the P-D badge, so it
+ * (show_core_freq) and hands its battery source to the battery badge, so it
  * needs each member back from the `next` of a sample.
  */
 final class NamedSources implements Source

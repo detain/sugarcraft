@@ -13,7 +13,7 @@ use SugarCraft\Top\Collect\Sentinel;
 use SugarCraft\Top\Tests\Collect\Support\FixtureTree;
 
 /**
- * The P-E opt-ins on ProcList: per-core and kernel-filter toggles at
+ * The opt-ins on ProcList: per-core and kernel-filter toggles at
  * runtime, MemTotal for Mem%, and the detailed-view extras read for one
  * pid only (#1546 cwd, elapsed, io totals).
  */

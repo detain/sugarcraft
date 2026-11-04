@@ -45,7 +45,7 @@ use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Surface;
 
 /**
- * Phase P-F1 App seams: the overlay stack above the modal tier, the
+ * App seams for the menu tier: the overlay stack above the modal tier, the
  * dimmed backdrop, the menu keys, the size-error box, the App-owned click
  * map, and the runtime theme reload.
  */

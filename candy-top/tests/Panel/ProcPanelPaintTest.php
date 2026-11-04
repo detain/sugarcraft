@@ -135,7 +135,7 @@ final class ProcPanelPaintTest extends TestCase
         yield 'detailed view' => ['detail-120x40', 120, 40, [], ['down', 'down', 'enter']];
         yield 'filtering' => ['filter-120x40', 120, 40, [], ['f', 'o']];
         yield 'narrow basename' => ['narrow-80x24', 80, 24, ['proc_command_basename' => true, 'proc_cpu_graphs' => false], ['down']];
-        // Phase P-F1: the paused / following banner and the action buttons.
+        // The paused / following banner and the action buttons.
         yield 'following' => ['following-120x40', 120, 40, [], ['down', 'down', 'down', 'F']];
         yield 'paused' => ['paused-120x40', 120, 40, [], ['u']];
         yield 'detail following' => ['detail-following-180x50', 180, 50, [], ['down', 'enter', 'u']];

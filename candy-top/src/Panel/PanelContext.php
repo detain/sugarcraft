@@ -16,8 +16,9 @@ use SugarCraft\Top\View\Rect;
  * call from its own state at that moment, so it already reflects every
  * toggle, option write and resize that came before — never cache it.
  *
- * P-E uses {@see procSelectMax()} for page up/down/home/end and {@see $box}
- * for mouse hit-testing; P-C/P-E never recompute the calcSizes port.
+ * The proc panel uses {@see procSelectMax()} for page up/down/home/end and
+ * {@see $box} for mouse hit-testing; box sizes ride the single Layout
+ * derivation (no second calcSizes port).
  */
 final class PanelContext
 {

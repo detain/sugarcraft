@@ -41,8 +41,8 @@ use SugarCraft\Top\View\Region;
  * btop's cpu box: upper/lower history graphs (or per-GPU graphs), the
  * divider label row, uptime, the cores sub-box (frequency label, CPU
  * meter + package temp, per-core grid with usage graphs, temps and
- * #1785 per-core frequency, load average, GPU brief rows) and the P-D
- * battery badge seam ({@see BatteryBadge}).
+ * #1785 per-core frequency, load average, GPU brief rows) and the battery
+ * badge seam ({@see BatteryBadge}).
  *
  * Data: one Cmd per tick samples Cpu, Freq and Temp through
  * {@see NamedSources} and (unless show_gpu_info is Off, or Auto with every
@@ -163,7 +163,7 @@ final class CpuPanel implements Panel, ClockReserve, OptionChoices
         )->withBattery(BorderBattery::standard($config, $fake, $platform));
     }
 
-    /** Install (or remove) the P-D battery badge. */
+    /** Install (or remove) the battery badge. */
     public function withBattery(?BatteryBadge $battery): self
     {
         return $this->mutate(battery: $battery, batterySet: true);

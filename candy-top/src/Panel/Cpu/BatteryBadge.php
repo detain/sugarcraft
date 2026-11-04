@@ -11,10 +11,10 @@ use SugarCraft\Top\Source\Source;
 use SugarCraft\Top\View\Region;
 
 /**
- * The P-D seam in the cpu box border: btop's `BAT▲ 87% ■■■■ 1:23 12.5W`
- * badge (btop_draw.cpp:766-806, Cpu::draw "Draw battery if enabled and
- * present"). Phase P-B leaves it empty; P-D implements this interface and
- * installs it with {@see \SugarCraft\Top\Panel\CpuPanel::withBattery()}.
+ * The seam for a border badge on the cpu box: btop's `BAT▲ 87% ■■■■
+ * 1:23 12.5W` (btop_draw.cpp:766-806, Cpu::draw "Draw battery if enabled
+ * and present"). {@see \SugarCraft\Top\Panel\CpuPanel::withBattery()}
+ * installs an implementation; without one the box draws no badge.
  *
  * Lifecycle, driven by CpuPanel so the App needs no change:
  *  - {@see source()} is asked inside CpuPanel::collect() with the CURRENT

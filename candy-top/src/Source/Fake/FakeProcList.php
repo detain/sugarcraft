@@ -18,11 +18,11 @@ use SugarCraft\Top\Source\Source;
  * Deterministic {@see ProcSnapshot}s: a fixed cast of processes whose cpu
  * and memory wander on their own phases.
  *
- * {@see new()} is the frozen P-A cast the placeholder roster (and its
+ * {@see new()} is the frozen cast the placeholder roster (and its
  * chrome goldens) render; {@see demo()} is what the real proc panel shows
- * under `--fake`: the same cast plus a docker container, a KVM guest
- * (Wave U1b), io rates (#1823), basename offsets (#1859), a kernel thread
- * and — for the R4 benchmark — `$extra` synthetic processes. It honours
+ * under `--fake`: the same cast plus a docker container, a KVM guest,
+ * io rates (#1823), basename offsets (#1859), a kernel thread and — as a
+ * load knob for benchmarks — `$extra` synthetic processes. It honours
  * the same opt-ins as the live ProcList ({@see withPerCore()},
  * {@see withIo()}, {@see withFilterKernel()}, {@see withDetail()}).
  */
@@ -85,7 +85,7 @@ final class FakeProcList implements Source
     }
 
     /**
-     * The proc panel's fake host: the P-A cast plus containers, a VM, a
+     * The proc panel's fake host: the base cast plus containers, a VM, a
      * kernel thread and `$extra` synthetic busy-ish processes (benchmarks).
      */
     public static function demo(int $cores = 8, int $extra = 0): self

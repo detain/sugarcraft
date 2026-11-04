@@ -6,8 +6,7 @@ namespace SugarCraft\Top\Collect;
 
 /**
  * The container — or KVM/QEMU virtual machine — a process runs in, as
- * recognised from its cgroup path (btop #1873 Ctr::ctr_info; VMs: plan
- * Wave U1b, see Vm).
+ * recognised from its cgroup path (btop #1873 Ctr::ctr_info; VMs: see Vm).
  *
  *  - `engine`: "docker", "podman", "k8s", "containerd", "nerdctl", "crio",
  *    … (the OCI cgroup prefix, normalised), "lxc", "nspawn", or

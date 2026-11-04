@@ -41,7 +41,7 @@ use SugarCraft\Top\View\Symbols;
  * entries the proc box registers), computed from the same geometry the
  * painter uses so a click lands on what is drawn.
  *
- * Phase P-F1 adds btop's action buttons — `pause` on the title row,
+ * The view carries btop's action buttons — `pause` on the title row,
  * `terminate` / `kill` / `signals` / `nice` / `follow` on the bottom row
  * (live while a row is selected) and on the detailed view's top border
  * (live while the detailed process itself is the target) — and the

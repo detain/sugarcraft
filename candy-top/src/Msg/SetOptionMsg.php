@@ -23,7 +23,7 @@ use SugarCraft\Core\Msg;
  * when btop would reject it, and otherwise applies it through
  * {@see \SugarCraft\Top\App::applyConfig()}, so the relayout, tick re-arm
  * and colour-profile side effects all hold. A persisted change marks the
- * config for writing on exit (btop `write_new`, phase P-F2).
+ * config for writing on exit (btop `write_new`).
  */
 final class SetOptionMsg implements Msg
 {

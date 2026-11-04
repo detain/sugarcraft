@@ -14,7 +14,7 @@ use SugarCraft\Top\Config\Schema;
 /**
  * Pins the roster and defaults against aristocratos/btop
  * src/btop_config.cpp v1.4.7 (`descriptions`, `bools`, `ints`, `strings`),
- * plus the Wave U keys from open upstream PRs at the position each PR
+ * plus the keys from open upstream PRs at the position each PR
  * inserts them.
  */
 final class SchemaTest extends TestCase
@@ -27,7 +27,7 @@ final class SchemaTest extends TestCase
 
     /**
      * btop's persisted key order (descriptions, Linux + GPU_SUPPORT) with
-     * the default from the typed maps; `// #NNNN` rows are Wave U keys.
+     * the default from the typed maps; `// #NNNN` rows are the upstream-PR keys.
      *
      * @return array<string, array{string, bool|int|string}>
      */
@@ -165,7 +165,7 @@ final class SchemaTest extends TestCase
     }
 
     /**
-     * Wave U enum keys and the enum extensions: the allowed set is the PR's.
+     * Upstream-PR enum keys and the enum extensions: the allowed set is the PR's.
      *
      * @return array<string, array{string, list<string>}>
      */

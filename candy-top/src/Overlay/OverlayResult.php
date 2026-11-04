@@ -13,7 +13,7 @@ namespace SugarCraft\Top\Overlay;
  *   menu sets the Help / Options bit and stays set underneath).
  * - `$cmd`: side effects — a signal, a renice, a quit.
  * - `$set`: config writes, applied synchronously by the App with the same
- *   validation as {@see \SugarCraft\Top\Panel\PanelResult::$set} (P-F2's
+ *   validation as {@see \SugarCraft\Top\Panel\PanelResult::$set} (the
  *   options menu writes through here).
  */
 final class OverlayResult

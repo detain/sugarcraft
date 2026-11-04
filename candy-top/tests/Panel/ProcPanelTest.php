@@ -346,7 +346,7 @@ final class ProcPanelTest extends TestCase
         $this->assertSame(['proc_filter' => ''], $this->last?->set);
     }
 
-    // ---- signals / renice / pause / follow (phase P-F1) -------------------------
+    // ---- signals / renice / pause / follow ------------------------------------------
 
     public function testSignalKeysAskTheAppForMenusOnTheSelectedProcess(): void
     {

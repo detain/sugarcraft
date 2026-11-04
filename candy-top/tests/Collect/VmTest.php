@@ -16,7 +16,7 @@ use SugarCraft\Top\Collect\Vm;
 use SugarCraft\Top\Collect\VmInfo;
 
 /**
- * Wave U1b VM awareness, against tests/fixtures/linux/kvm (shaped after
+ * KVM/QEMU VM awareness, against tests/fixtures/linux/kvm (shaped after
  * prompt_kit/findings/kvm-reference.md).
  */
 final class VmTest extends TestCase

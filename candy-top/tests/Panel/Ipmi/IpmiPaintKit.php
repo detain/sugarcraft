@@ -21,11 +21,11 @@ use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Surface;
 
 /**
- * Drives the ipmi panel outside the App (phase 1: the box is not wired
- * into the layout yet): feeds it through its own collect()/update() with
- * a context whose box is a bare Rect, then paints the box outline (title
- * `ipmi`, in the `<family>_box` colour plus the BorderFlow sweep, as the
- * App will) and the panel into a Rect at the terminal's top-left.
+ * Drives the ipmi panel outside the App: feeds it through its own
+ * collect()/update() with a context whose box is a bare Rect, then paints
+ * the box outline (title `ipmi`, in the `<family>_box` colour plus the
+ * BorderFlow sweep, as the App's frame draws it) and the panel into a Rect
+ * at the terminal's top-left.
  */
 final class IpmiPaintKit
 {

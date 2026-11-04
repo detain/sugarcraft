@@ -29,7 +29,7 @@ use SugarCraft\Top\View\Logo;
 use SugarCraft\Top\View\Surface;
 
 /**
- * Whole-frame goldens of every P-F1 overlay over the deterministic
+ * Whole-frame goldens of every menu overlay over the deterministic
  * Harness frame (dimmed backdrop included). Cell grids are
  * tests/fixtures/overlays/*.txt, styled rows *.sgr. Regenerate with
  * `CANDY_TOP_UPDATE_GOLDENS=1 vendor/bin/phpunit tests/Overlay/OverlayGoldenTest.php`

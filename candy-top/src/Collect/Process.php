@@ -18,7 +18,7 @@ namespace SugarCraft\Top\Collect;
  *    when /proc/uptime is unreadable.
  *  - `mem`: resident bytes (RSS pages × page size).
  *
- * Additive fields (btop upstream PRs, Wave U1):
+ * Additive fields (btop upstream PRs):
  *  - `cmdBasenameOffset` (#1859): byte offset in `cmd` where argv[0]'s
  *    basename starts ("/usr/bin/firefox --x" → 9), recorded before the
  *    NUL→space flattening so spaces in the path and slashes in later args
@@ -31,7 +31,7 @@ namespace SugarCraft\Top\Collect;
  *    `ioReadTotal` / `ioWriteTotal` the raw counters, UNMEASURED_INT
  *    likewise;
  *  - `container` (#1873): the container recognised from the cgroup path,
- *    or the KVM/QEMU guest (engine "kvm", Wave U1b) from cgroup + cmdline;
+ *    or the KVM/QEMU guest (engine "kvm") from cgroup + cmdline;
  *    null for a host process (read once per process lifetime).
  */
 final class Process

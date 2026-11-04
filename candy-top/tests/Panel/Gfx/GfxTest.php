@@ -27,7 +27,7 @@ use SugarCraft\Top\View\Surface;
 
 final class GfxTest extends TestCase
 {
-    /** The cpu/mem views share P-C's btop floating_humanizer; the byte forms they print, digit for digit. */
+    /** The cpu/mem views share btop's floating_humanizer; the byte forms they print, digit for digit. */
     #[DataProvider('humanized')]
     public function testHumanizer(int|float $bytes, bool $shorten, bool $base10, string $expected): void
     {

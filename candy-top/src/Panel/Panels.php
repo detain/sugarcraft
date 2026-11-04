@@ -87,9 +87,9 @@ final class Panels
     }
 
     /**
-     * The P-A placeholder roster, frozen: frame-chrome goldens and App
-     * routing tests build on it so a phase swapping its box in
-     * {@see standard()} never rewrites another phase's fixtures.
+     * The placeholder roster, frozen: frame-chrome goldens and App
+     * routing tests build on it, so swapping a real box into
+     * {@see standard()} never rewrites those fixtures.
      *
      * @return array<string, Panel> keyed by box name
      */

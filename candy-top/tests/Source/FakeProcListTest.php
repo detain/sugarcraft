@@ -29,7 +29,7 @@ final class FakeProcListTest extends TestCase
         $this->assertInstanceOf(ProcSnapshot::class, $snap);
         $this->assertSame([1, 412, 880, 1203, 2210, 2290, 3105, 4410], array_map(static fn (Process $p): int => $p->pid, $snap->processes));
         $this->assertNull($snap->detail);
-        $this->assertSame(Sentinel::UNMEASURED_INT, $snap->memTotal, 'frozen P-A output: no new fields');
+        $this->assertSame(Sentinel::UNMEASURED_INT, $snap->memTotal, 'frozen placeholder output: no new fields');
     }
 
     public function testDemoAddsContainersAVmAKernelThreadAndIsDeterministic(): void

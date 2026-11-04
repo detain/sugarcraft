@@ -76,7 +76,7 @@ use SugarCraft\Top\View\Region;
  * Enter/Down keep it, Esc or a click restores the old one; `!` makes it a
  * regex), delete clears it, Enter opens / closes the detailed view. Every
  * option a key changes is written through {@see PanelResult::$set}.
- * Phase P-F1: `t` / `k` (`K` with vim_keys) ask to send SIGTERM / SIGKILL,
+ * `t` / `k` (`K` with vim_keys) ask to send SIGTERM / SIGKILL,
  * `s` opens the signal chooser and `N` the renice menu — all as overlays
  * the App opens ({@see PanelResult::$overlay}), targeting the selected row
  * or, with nothing selected, the detailed process while it is alive; the
@@ -787,7 +787,7 @@ final class ProcPanel implements Panel, ClickCapture
         return $all[(($i + $step) % $n + $n) % $n];
     }
 
-    // ---- signals / renice / follow (phase P-F1) ------------------------------
+    // ---- signals / renice / follow ------------------------------------------------
 
     /**
      * btop's s_pid: the selected row's process, or — with nothing selected —

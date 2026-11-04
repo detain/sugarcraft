@@ -98,14 +98,14 @@ use SugarCraft\Top\View\Surface;
  * panels' mapped buttons ({@see ClickCapture}: the owner gets it alone,
  * btop's mouse_mappings), and only an unmapped click is broadcast.
  *
- * Menus (phase P-F1, btop_menu.cpp): `escape`/`m` open the main menu,
+ * Menus (btop_menu.cpp): `escape`/`m` open the main menu,
  * `f1`/`?`/`h` (`H` with vim_keys) help, `f2`/`o` options; a panel asks for
  * one through {@see PanelResult::$overlay}, a Cmd through
  * {@see OpenOverlayMsg}. While a menu is open the frame is painted dimmed
  * (btop's uncolor + inactive_fg backdrop) and the menu on top. A refused
  * `1`-`4` toggle or shown_boxes write opens btop's size-error box.
  *
- * Options, presets, persistence (phase P-F2): `f2`/`o` open the options
+ * Options, presets, persistence: `f2`/`o` open the options
  * menu ({@see Overlay\OptionsMenu}); `p`/`P` cycle the layout presets
  * (btop_input.cpp:262-284) and the cpu title's `preset` button maps to
  * `p`; Shift / Alt+Shift / Ctrl+Shift + arrows resize the proc box
@@ -886,7 +886,7 @@ final class App implements Model
         return $best;
     }
 
-    /** Copy with a replaced theme (options-menu theme cycling, P-F/P-G). */
+    /** Copy with a replaced theme (options-menu theme cycling). */
     public function withPalette(Palette $palette): self
     {
         // #1849: a new palette repaints everything, the frozen backdrop too.
@@ -894,7 +894,7 @@ final class App implements Model
     }
 
     /**
-     * Swap in `$config` (options menu, presets — P-F; {@see SetOptionMsg}
+     * Swap in `$config` (options menu, presets; {@see SetOptionMsg}
      * from a panel). Layout follows it, and so does the colour profile when
      * truecolor / tty_mode change what {@see profileFor()} derives (an
      * explicit start() profile survives any change that does not). When

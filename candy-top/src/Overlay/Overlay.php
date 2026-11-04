@@ -10,7 +10,7 @@ use SugarCraft\Top\View\Surface;
 /**
  * One btop Menu (src/btop_menu.cpp) on the App-owned overlay stack: the
  * main menu, help, the signal / renice menus and every msgBox (size error,
- * signal confirm, signal failure) — and, from P-F2, the options menu.
+ * signal confirm, signal failure) — and the options menu.
  *
  * Lifecycle: something REQUESTS an overlay — a panel through
  * {@see \SugarCraft\Top\Panel\PanelResult::$overlay}, a Cmd through

@@ -44,7 +44,7 @@ use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Surface;
 
 /**
- * Phase P-F2 App seams: the options menu's live writes, layout presets,
+ * App seams for options: the options menu's live writes, layout presets,
  * the #1476 proc width keys, config persistence (save_config_on_exit) and
  * the `ctrl+r` reload with its #1849 full repaint.
  */

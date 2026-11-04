@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Collect;
 
 /**
- * KVM/QEMU guest recognition (plan Wave U1b; not a btop feature).
+ * KVM/QEMU guest recognition (candy-top addition; not a btop feature).
  *
  * A VM is recognised by its cgroup path and its cmdline, never by the
  * executable's name alone: Ubuntu's libvirt runs `/usr/bin/kvm`, RHEL

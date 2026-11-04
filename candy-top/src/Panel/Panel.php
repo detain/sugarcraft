@@ -10,7 +10,7 @@ use SugarCraft\Top\Config\Config;
 use SugarCraft\Top\View\Region;
 
 /**
- * One btop box's content — the extension seam every later phase builds on.
+ * One btop box's content — the extension seam every box type implements.
  *
  * The App owns the frame (layout, box outlines, sub-box outlines, title
  * buttons, clock) and the tick cadence; a Panel owns its data, history and
@@ -33,7 +33,7 @@ use SugarCraft\Top\View\Region;
  *   1. Behind the "terminal size too small" notice no panel is painted and
  *      only `q` and the box toggles `1`-`4` act (btop.cpp:180-198); every
  *      other key and every mouse event is dropped.
- *   1b. MENU (phase P-F1): while an App overlay is open
+ *   1b. MENU: while an App overlay is open
  *      ({@see \SugarCraft\Top\Overlay\Overlay}, btop `Menu::active`)
  *      every key and mouse event goes to it and no panel sees any.
  *   2. MODAL: the first visible panel (layout order) whose {@see modal()}

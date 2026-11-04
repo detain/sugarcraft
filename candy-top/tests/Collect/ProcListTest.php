@@ -186,7 +186,8 @@ final class ProcListTest extends TestCase
     }
 
     /**
-     * Plan §7 R4 budget is <50 ms for 500 pids; the assertion bound is 20×
+     * The proc scan budget is <50 ms for 500 pids (measured on the dev
+     * host); the assertion bound is 20×
      * that so a loaded CI box or coverage run cannot flake it, while an
      * accidental O(n²) or per-pid re-read still fails loudly.
      */

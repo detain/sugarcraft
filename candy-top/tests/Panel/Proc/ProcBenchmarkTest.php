@@ -18,7 +18,7 @@ use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Surface;
 
 /**
- * Plan §7 R4: sampling + sort + render of 500 processes under 50 ms on a
+ * Budget: sampling + sort + render of 500 processes under 50 ms on a
  * 120x40 terminal. Non-blocking: an over-budget run on a slow or busy
  * machine is reported incomplete rather than failed, and CI only checks
  * that the pipeline runs (machine speed there is not ours to promise).
@@ -59,7 +59,7 @@ final class ProcBenchmarkTest extends TestCase
         }
         $slow = array_filter($best, static fn (float $ms): bool => $ms > self::BUDGET_MS);
         if ($slow !== []) {
-            $this->markTestIncomplete(sprintf('R4 over budget on this machine: %s', json_encode($best)));
+            $this->markTestIncomplete(sprintf('proc scan over budget on this machine: %s', json_encode($best)));
         }
         $this->assertLessThanOrEqual(self::BUDGET_MS, max($best));
     }

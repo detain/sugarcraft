@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Top\Collect;
 
 /**
- * What a KVM/QEMU guest process says about its VM (plan Wave U1b), carried
+ * What a KVM/QEMU guest process says about its VM, carried
  * on a ContainerRef whose engine is Vm::ENGINE.
  *
  *  - `domainId`: libvirt's running-domain id from the cgroup scope

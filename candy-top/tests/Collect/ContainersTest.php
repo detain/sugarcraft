@@ -60,7 +60,7 @@ final class ContainersTest extends TestCase
         foreach (['init', 'session'] as $f) {
             $this->assertNull(Cgroup::fromProcFile((string) file_get_contents(self::REAL . "/{$f}.cgroup")));
         }
-        // candy-top tags the emulator as a KVM guest (Wave U1b) and lists it in the ctr box, grouped by its scope.
+        // candy-top tags the emulator as a KVM guest and lists it in the ctr box, grouped by its scope.
         $vm = Cgroup::fromProcFile($line, "/usr/bin/kvm\0-name\0guest=vps3458844,debug-threads=on\0-m\0size=2097152k\0-smp\01,sockets=1,cores=1,threads=1\0");
         $this->assertNotNull($vm);
         $this->assertTrue($vm->isVm());

@@ -21,7 +21,7 @@ use SugarCraft\Top\View\Region;
 use SugarCraft\Top\View\Symbols;
 
 /**
- * The P-D {@see BatteryBadge}: btop's `┐BAT▼ 87% ■■■■■■■■■■ 02:54 12.48W┌`
+ * The default {@see BatteryBadge}: btop's `┐BAT▼ 87% ■■■■■■■■■■ 02:54 12.48W┌`
  * on the cpu box border (btop_draw.cpp:765-806, Cpu::draw "Draw battery
  * if enabled and present").
  *

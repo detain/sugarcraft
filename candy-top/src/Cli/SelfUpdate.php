@@ -16,8 +16,8 @@ use SugarCraft\Top\Support\Version;
  * published one, verified before the swap, with the pre-swap copy kept for a
  * one-shot rollback.
  *
- * Mirrors candy-code/src/Cli/SelfUpdate.php (plan_comparison DST-3 shipped
- * there; this is the port to candy-top, kept self-contained — no cross-app
+ * Mirrors candy-code/src/Cli/SelfUpdate.php (shipped there first; this is
+ * the port to candy-top, kept self-contained — no cross-app
  * shared refactor). The one shape deviation: candy-top's bin has no
  * ParsedArgs/SUBCOMMAND_FLAGS machinery, so {@see run()} takes the raw argv
  * slice after the verb and parses the three known flags itself. Every

@@ -21,7 +21,7 @@ use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Surface;
 
 /**
- * Drives one P-B panel outside the App: lays out a terminal, samples the
+ * Drives one panel outside the App: lays out a terminal, samples the
  * panel `$n` times through its own collect()/update(), paints the frame
  * chrome plus the panel, and compares box goldens under
  * tests/fixtures/panels/<box>/. Goldens fail when missing unless

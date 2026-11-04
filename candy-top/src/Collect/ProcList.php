@@ -22,12 +22,12 @@ namespace SugarCraft\Top\Collect;
  *    is recognised as a new process, not inherited history;
  *  - proc_filter_kernel drops kthreadd (pid 2) and its children.
  *
- * Races (plan §7 R2): any per-pid file that vanishes or comes back
+ * Races: any per-pid file that vanishes or comes back
  * malformed mid-scan skips that pid silently; the next scan re-snapshots.
  * The process name comes from stat's parenthesised comm, split on the LAST
  * ')' — a name may itself contain spaces and parentheses.
  *
- * User names (plan §7 R1): posix_getpwuid behind function_exists, cached
+ * User names: posix_getpwuid behind function_exists, cached
  * per uid for the collector's lifetime; without ext-posix (or for a uid
  * with no passwd entry) the numeric uid is shown, as btop does.
  *
@@ -37,7 +37,7 @@ namespace SugarCraft\Top\Collect;
  * process lifetime here (cached with name/user), not every scan, which
  * bounds the exposure but cannot remove it from userspace.
  *
- * Wave U1 additions (btop upstream PRs):
+ * Additions from open btop upstream PRs:
  *  - #1859: argv[0]'s basename offset is computed from the first
  *    NUL-delimited cmdline segment, before flattening (basenameOffset()).
  *    Deliberate deviation: when the whole cmdline is ONE segment
@@ -60,13 +60,13 @@ namespace SugarCraft\Top\Collect;
  *    Unreadable (EACCES for other uids) → UNMEASURED, never 0;
  *  - #1873: the container from /proc/[pid]/cgroup (Cgroup::fromProcFile),
  *    cached with cmd/user — a process moved to another cgroup later keeps
- *    the first value, as in btop. Wave U1b: KVM/QEMU guests too (engine
+ *    the first value, as in btop. KVM/QEMU guests too (engine
  *    "kvm", ContainerRef::$vm), from the same cgroup read plus the cmdline
  *    already read — no extra file per process.
  */
 final class ProcList implements TunableProcList
 {
-    // P-E opt-ins (withPerCore / withFilterKernel / withDetail): the proc
+    // Opt-ins (withPerCore / withFilterKernel / withDetail): the proc
     // panel re-applies proc_per_core, proc_filter_kernel and the detailed
     // pid from the CURRENT config before every scan; withDetail reads
     // /proc/[pid]/cwd (#1546), the io counters and the start time for that

@@ -280,8 +280,8 @@ final class HelpFramedLayoutTest extends OverlayTestCase
      * 17-row hole, Panels alone on the right) and spends 3 pages; the
      * greedy revisits the short stack — page 1 holds 4 distinct sections
      * (General, Navigation, Process list down the left, Panels right) in 2
-     * pages. Both numbers come from the probe table in this campaign's
-     * evidence report; the page count is pinned against the disclosed base
+     * pages. Both numbers were measured when greedy packing landed; the
+     * page count is pinned against the disclosed base
      * constant 3.
      */
     public function testGreedyRescuesTheShortZeroWrapBand(): void
