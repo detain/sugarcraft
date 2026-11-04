@@ -513,8 +513,13 @@ final class Game implements Model
         // a spin, and gravity steps never clear the flag).
         $tspin = TSpin::detect($this->board, $this->piece, $this->lastActionWasRotation);
 
-        // B2B-eligible clear: Tetris or full T-Spin (not mini)
-        $b2bEligible = $count >= 4 || ($tspin->active && !$tspin->mini);
+        // B2B-eligible clear: Tetris, or a T-Spin that actually cleared
+        // lines. The guideline pays a 3-corner rotation bonus even without a
+        // clear, but a difficult CLEAR is what arms back-to-back — never a
+        // quiet lock. A mini shape that clears two or more lines is promoted
+        // to a full T-Spin (guideline: mini double = full difficulty).
+        $tspinFull = $tspin->active === true && ($tspin->mini === false || $count >= 2);
+        $b2bEligible = $count >= 4 || ($tspinFull && $count > 0);
         $b2bActive = $this->backToBack && $b2bEligible;
 
         // B2B bonus: 1.5× multiplier when B2B is active
@@ -523,9 +528,9 @@ final class Game implements Model
         // T-Spin scoring: mini gets 100, full T-Spin gets 400 (pre-multiplier)
         $tspinPoints = 0;
         if ($tspin->active === true) {
-            $tspinPoints = $tspin->mini
-                ? TSpin::T_SPIN_MINI_POINTS
-                : TSpin::T_SPIN_POINTS;
+            $tspinPoints = $tspinFull
+                ? TSpin::T_SPIN_POINTS
+                : TSpin::T_SPIN_MINI_POINTS;
         }
 
         // Combo bonus: consecutive line clears multiply; resets on a miss

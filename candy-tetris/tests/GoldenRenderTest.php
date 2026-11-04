@@ -65,16 +65,23 @@ final class GoldenRenderTest extends TestCase
             $rows[$y] = $row;
         }
 
-        $rows[15][4] = Tetromino::I;
-        $rows[15][8] = Tetromino::I;
-        $rows[18][4] = Tetromino::I;
-        $rows[18][8] = Tetromino::I;
+        // Guideline T-Spin Single slot (matches GameTest::tspinSlotGrid):
+        // rows 14-16 leave the T's column open, row 17 walls both bottom
+        // corners; the rot-1 T seated at (5,15) completes row 16.
+        foreach ([14, 15, 16] as $y) {
+            foreach ([0, 1, 2, 3, 4, 5, 8, 9] as $x) {
+                $rows[$y][$x] = Tetromino::I;
+            }
+        }
+        foreach ([0, 1, 2, 4, 5, 7, 8, 9] as $x) {
+            $rows[17][$x] = Tetromino::I;
+        }
 
         $board = new \SugarCraft\Tetris\Board($rows);
 
         $tspinGame = new Game(
             board:  $board,
-            piece:  $game->piece,
+            piece:  new \SugarCraft\Tetris\Piece(Tetromino::T, 1, 5, 15),
             bag:    $game->bag,
             score:  $game->score,
         );

@@ -15,14 +15,19 @@ use SugarCraft\Tetris\Tetromino;
  * the SRS guideline: a T-Spin counts iff the piece's LAST SUCCESSFUL
  * INPUT before lock was a rotation.
  *
+ * The four corner cells are the DIAGONALS OF THE T'S CENTRE — the centre
+ * cell sits at box position (1,1) in every rotation state, so the corners
+ * are (centre ±1, ±1) and travel with the piece, never with the occupied
+ * bounding box (which changes shape per rotation). Off-board cells count
+ * as filled (walls/floor), as the guideline requires.
+ *
  * A T-Spin is active when a T piece is locked AND:
  *   - $lastActionWasRotation is true (a slide, soft drop, or hard drop
  *     into the slot is NOT a spin; gravity steps never clear the flag), AND
- *   - 2 or more of the 4 diagonal "corner" cells around the T are
- *     already filled on the board (wall = filled).
- *
- * T-Spin Mini: exactly 2 front corners filled and piece entered from
- * that side (rotation 0 → top front; rotation 2 → bottom front).
+ *   - at least 3 of the 4 centre diagonals are filled → full T-Spin; or
+ *     exactly 2 are filled and at least one of them is a FRONT corner
+ *     (the nub side for the current rotation) → T-Spin Mini.
+ *   Exactly 2 filled with only BACK corners → not a spin at all.
  */
 final class TSpin
 {
@@ -58,45 +63,45 @@ final class TSpin
 
         $filled = self::filledCorners($board, $piece);
 
-        if (count($filled) < 2) {
-            return new self(false, false);
+        if (count($filled) >= 3) {
+            return new self(true, false);
         }
 
-        // T-Spin Mini: exactly 2 corners filled AND they are the front pair
-        $mini = count($filled) === 2
-            && self::isFrontCornerPair($piece->rotation, $filled);
+        if (count($filled) === 2) {
+            // Exactly two corners filled: a Mini only when at least one of
+            // them is on the FRONT (nub) side; two back corners is nothing.
+            $mini = self::touchesFrontCorner($piece->rotation, $filled);
 
-        return new self(true, $mini);
+            return new self($mini, $mini);
+        }
+
+        return new self(false, false);
     }
 
     /**
+     * The four guideline corner cells: the diagonals around the T's centre.
+     * The centre of every T rotation state is box offset (1, 1), so the
+     * corners are absolute (piece.x + 1 ± 1, piece.y + 1 ± 1).
+     *
      * @return list<string> names of corners that are filled (TL, TR, BL, BR)
      */
     private static function filledCorners(Board $board, Piece $piece): array
     {
-        $cells = $piece->cells();
-        $xs = array_column($cells, 0);
-        $ys = array_column($cells, 1);
+        $centreX = $piece->x + 1;
+        $centreY = $piece->y + 1;
 
-        $minX = min($xs);
-        $maxX = max($xs);
-        $minY = min($ys);
-        $maxY = max($ys);
-
-        // The four diagonal corner positions adjacent to the bounding box
         $cornerDefs = [
-            'TL' => [$minX - 1, $minY - 1],
-            'TR' => [$maxX + 1, $minY - 1],
-            'BL' => [$minX - 1, $maxY + 1],
-            'BR' => [$maxX + 1, $maxY + 1],
+            'TL' => [$centreX - 1, $centreY - 1],
+            'TR' => [$centreX + 1, $centreY - 1],
+            'BL' => [$centreX - 1, $centreY + 1],
+            'BR' => [$centreX + 1, $centreY + 1],
         ];
 
         $filled = [];
         foreach ($cornerDefs as $name => [$cx, $cy]) {
-            if ($cx < 0 || $cx >= Board::COLS || $cy < 0 || $cy >= Board::ROWS) {
-                // Out of bounds = wall = filled
-                $filled[] = $name;
-            } elseif ($board->isOccupied($cx, $cy) === true) {
+            // Board::isOccupied() already answers true for every
+            // off-board cell (walls + floor count as filled per guideline).
+            if ($board->isOccupied($cx, $cy) === true) {
                 $filled[] = $name;
             }
         }
@@ -105,33 +110,20 @@ final class TSpin
     }
 
     /**
-     * Whether $filled contains exactly the two "front" corners for
-     * the given rotation (the entry side for a mini-spin).
+     * Whether $filled contains at least one "front" corner — the nub side
+     * of the T for the current rotation state.
      *
      * @param list<string> $filled
      */
-    private static function isFrontCornerPair(int $rotation, array $filled): bool
+    private static function touchesFrontCorner(int $rotation, array $filled): bool
     {
         $front = match ($rotation) {
-            // Rotation 0: entered from top → front = top-left, top-right
-            0 => ['TL', 'TR'],
-            // Rotation 2: entered from bottom → front = bottom-left, bottom-right
-            2 => ['BL', 'BR'],
-            default => null,
+            0 => ['TL', 'TR'], // nub up  → front is the top pair
+            1 => ['TR', 'BR'], // nub right → front is the right pair
+            2 => ['BL', 'BR'], // nub down → front is the bottom pair
+            default => ['TL', 'BL'], // nub left → front is the left pair
         };
 
-        if ($front === null) {
-            return false;
-        }
-
-        if (count($filled) !== 2) {
-            return false;
-        }
-
-        sort($front);
-        $sorted = $filled;
-        sort($sorted);
-
-        return $front === $sorted;
+        return array_intersect($front, $filled) !== [];
     }
 }

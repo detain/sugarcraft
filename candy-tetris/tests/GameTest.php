@@ -35,21 +35,26 @@ final class GameTest extends TestCase
     }
 
     /**
-     * A T-Spin Double slot: a T piece rotating into (5,14) rotation 1 finds
-     * all four bounding corners filled — (5,13), (8,13), (5,17) and (8,17) —
-     * and the row-17 fill (cols 5-7) grounds the piece exactly at y=14.
+     * A guideline T-Spin Single slot: a T piece rotating into (5,15)
+     * rotation 1 rests on the (7,17) nub blocker with three of the four
+     * centre-diagonal corners filled — TL (5,15), BL (5,17), BR (7,17) —
+     * while the open TR (7,15) keeps it a spin rather than a plain slot.
+     * The T's body ((6,15),(6,16),(7,16),(6,17)) completes row 16, so the
+     * lock clears exactly one line: a real TSS, not a quiet 3-corner lock.
      *
      * @return array<int, array<int, ?Tetromino>>
      */
     private function tspinSlotGrid(): array
     {
         $rows = $this->emptyGrid();
-        foreach ([5, 6, 7] as $col) {
+        foreach ([14, 15, 16] as $row) {
+            foreach ([0, 1, 2, 3, 4, 5, 8, 9] as $col) {
+                $rows[$row][$col] = Tetromino::I;
+            }
+        }
+        foreach ([0, 1, 2, 4, 5, 7, 8, 9] as $col) {
             $rows[17][$col] = Tetromino::I;
         }
-        $rows[13][5] = Tetromino::I;
-        $rows[13][8] = Tetromino::I;
-        $rows[17][8] = Tetromino::I;
         return $rows;
     }
 
@@ -881,7 +886,8 @@ final class GameTest extends TestCase
     {
         // MAJ(3): rotation → settle → lock through the REAL key path. The
         // piece rotates at (5,12), gravity (not an input) settles it into the
-        // slot at (5,14) rotation 1 with all four corners filled.
+        // guideline slot at (5,15) rotation 1 with three centre-diagonal
+        // corners filled; the T body completes row 16 → a true T-Spin Single.
         $g = $this->deterministicGame()->mutate([
             'board' => new Board($this->tspinSlotGrid()),
             'piece' => new Piece(Tetromino::T, 0, 5, 12),
@@ -900,9 +906,10 @@ final class GameTest extends TestCase
                 break;
             }
         }
-        $this->assertSame(400, $state->score->points - $startPoints, 'a human T-Spin pays 400 at level 0');
-        $this->assertSame(0, $state->score->lines, 'the slot clear check is about the spin, not lines');
-        $this->assertTrue($state->backToBack, 'a full T-Spin arms back-to-back');
+        // 40 line base + 400 spin award + 10 first-clear combo, level 0.
+        $this->assertSame(450, $state->score->points - $startPoints, 'a human T-Spin Single pays 40+400+combo at level 0');
+        $this->assertSame(1, $state->score->lines, 'the slot carve makes it a real T-Spin Single');
+        $this->assertTrue($state->backToBack, 'a full T-Spin that CLEARED arms back-to-back');
     }
 
     public function testMoveAfterRotationIsNotATSpin(): void
@@ -948,25 +955,82 @@ final class GameTest extends TestCase
 
         $after = $armed->applyAiMove(0, 0);
         $this->assertFalse($after->lastActionWasRotation, 'applyAiMove clears the flag');
-        $this->assertSame(0, $after->score->points - $armed->score->points,
-            'AI placement can never claim a T-Spin through applyAiMove');
+        // The AI drop threads the 6/7 shaft and lands the T as a PLAIN single
+        // (row 16 completes): 40 line base + 10 first-clear combo = 50, and
+        // crucially NOT the 400 spin bonus — applyAiMove performs no rotating
+        // last action, so an AI lock can never be scored as spinning. Pre-fix
+        // the bbox-corner read (5,14)/(8,14)/(5,18)/(8,18) filled three of the
+        // four on this very board, so the same drop would have paid 450.
+        $this->assertSame(
+            50,
+            $after->score->points - $armed->score->points,
+            'AI placement pays only the line base, never the T-Spin bonus',
+        );
     }
 
     public function testB2BTSpinRidesTheMultiplier(): void
     {
         // MED(7) implemented: README advertises B2B × T-Spin = base × 1.5.
-        // 400 × 1.5 = 600 at level 0 (spin award rides the multiplier; the
-        // T-Spin itself does not re-trigger the line-clear B2B extra term).
+        // At level 0 in the clearing slot: 600 spin award (400 × 1.5) + 40
+        // line base + 20 line-clear B2B extra (40 × 0.5) + 10 first-clear
+        // combo = 670. The old shape never cleared a line and leaned on the
+        // farm gate this commit closes; a real TSS rides the same multiplier.
         $g = $this->deterministicGame()->mutate([
             'board' => new Board($this->tspinSlotGrid()),
-            'piece' => new Piece(Tetromino::T, 1, 5, 14), // pre-spun, grounded in the slot
+            'piece' => new Piece(Tetromino::T, 1, 5, 15), // pre-spun, grounded in the slot
             'backToBack' => true,
             'lastActionWasRotation' => true,
             'score' => new Score(),
         ]);
         [$locked] = $g->update($this->gravity());
-        $this->assertSame(600, $locked->score->points - $g->score->points,
-            'back-to-back T-Spin = (int)(400 × 1.5) × (level+1)');
+        $this->assertSame(670, $locked->score->points - $g->score->points,
+            'back-to-back T-Spin Single = 600 award + 40 base + 20 b2b extra + 10 combo');
+    }
+
+    public function testBoundingBoxCornerJunkPaysNothing(): void
+    {
+        // C-1 farm guard: under the retired bbox-expansion rule these four
+        // far blocks read as all-corners-filled and paid +400 (and armed
+        // back-to-back) on a quiet lock. Under the guideline centre-diagonal
+        // rule the T at (5,14) rot1 sees ZERO corners around its (6,15)
+        // centre — nothing is earned. This test is red on the old detector.
+        $rows = $this->emptyGrid();
+        $rows[13][5] = Tetromino::I;
+        $rows[13][8] = Tetromino::I;
+        $rows[17][5] = Tetromino::I;
+        $rows[17][6] = Tetromino::I;
+        $rows[17][8] = Tetromino::I;
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($rows),
+            'piece' => new Piece(Tetromino::T, 1, 5, 14),
+            'lastActionWasRotation' => true,
+            'score' => new Score(),
+        ]);
+        [$locked] = $g->update($this->gravity());
+        $this->assertSame(0, $locked->score->points - $g->score->points,
+            'rotation into uncredited junk earns no T-Spin award');
+        $this->assertFalse($locked->backToBack, 'a non-spin cannot arm back-to-back');
+    }
+
+    public function testTSpinBonusWithoutAClearNeverArmsBackToBack(): void
+    {
+        // The guideline pays the 3-corner bonus even on a quiet lock, so the
+        // award survives; but ONLY a difficult CLEAR arms (or keeps alive) a
+        // back-to-back chain. Under the pre-fix Game gate this lock paid 400
+        // AND armed b2b — the farming exploit this commit closes.
+        $rows = $this->tspinSlotGrid();
+        $rows[16][0] = null; // escape cell outside the T's reach: row 16 can never complete
+        $g = $this->deterministicGame()->mutate([
+            'board' => new Board($rows),
+            'piece' => new Piece(Tetromino::T, 1, 5, 15),
+            'lastActionWasRotation' => true,
+            'score' => new Score(),
+        ]);
+        [$locked] = $g->update($this->gravity());
+        $this->assertSame(400, $locked->score->points - $g->score->points,
+            'the quiet 3-corner spin still earns its 400 award');
+        $this->assertSame(0, $locked->score->lines, 'nothing cleared');
+        $this->assertFalse($locked->backToBack, 'a clear-less spin never arms the chain');
     }
 
     public function testViewReturnsRendererOutput(): void

@@ -41,18 +41,13 @@ final class TSpinTest extends TestCase
 
     public function testTPieceRotatedWithThreeCornersFilledIsTSpin(): void
     {
-        // Build a board where all 4 corners around the T are filled.
-        // T at (5,15) rotation 2 has cells with minY=16, maxY=17.
-        // Corners: TL=(4,15), TR=(8,15), BL=(4,18), BR=(8,18).
-        $rows = [];
-        for ($y = 0; $y < Board::ROWS; $y++) {
-            $row = array_fill(0, Board::COLS, null);
-            $rows[$y] = $row;
-        }
-        $rows[15][4] = Tetromino::I;  // TL corner
-        $rows[15][8] = Tetromino::I;  // TR corner
-        $rows[18][4] = Tetromino::I;  // BL corner
-        $rows[18][8] = Tetromino::I;  // BR corner
+        // T at (5,15) rotation 2: centre (6,16); corners (5,15) (7,15)
+        // (5,17) (7,17). Fill all four → full T-Spin.
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $rows[15][5] = Tetromino::I;  // TL corner
+        $rows[15][7] = Tetromino::I;  // TR corner
+        $rows[17][5] = Tetromino::I;  // BL corner
+        $rows[17][7] = Tetromino::I;  // BR corner
 
         $board = new Board($rows);
         $piece = new Piece(Tetromino::T, 2, 5, 15);
@@ -63,16 +58,12 @@ final class TSpinTest extends TestCase
 
     public function testTPieceWithTwoFrontCornersIsTSpinMini(): void
     {
-        // T rotation 0: cells have minY=15, maxY=16 → corners at rows 14 and 17.
-        // Front corners for rotation 0 = TL (4,14) and TR (8,14).
-        $rows = [];
-        for ($y = 0; $y < Board::ROWS; $y++) {
-            $row = array_fill(0, Board::COLS, null);
-            $rows[$y] = $row;
-        }
-        $rows[14][4] = Tetromino::I;  // TL corner
-        $rows[14][8] = Tetromino::I;  // TR corner
-        // BL and BR are NOT filled → only front corners = mini
+        // T rotation 0 at (5,15): centre (6,16) → corners at rows 15 and 17.
+        // Front corners for rotation 0 = TL (5,15) and TR (7,15).
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $rows[15][5] = Tetromino::I;  // TL corner
+        $rows[15][7] = Tetromino::I;  // TR corner
+        // BL and BR are NOT filled → exactly the front pair = mini
 
         $board = new Board($rows);
         // T at rotation 0, last input was the rotation
@@ -84,32 +75,100 @@ final class TSpinTest extends TestCase
 
     public function testOutOfBoundsCornerCountsAsFilled(): void
     {
-        // T at x=0, rotation 0: minX=1, maxX=2. Corners: TL=(0,14), TR=(3,14), BL=(0,17), BR=(3,17).
-        // TL corner at x=0 is in bounds (not OOB for x), but TL at y=14 is above board top? No.
-        // For T at x=0, minX=0 (one of the T cells), so minX-1=-1 → OOB (wall).
-        $rows = [];
-        for ($y = 0; $y < Board::ROWS; $y++) {
-            $row = array_fill(0, Board::COLS, null);
-            $rows[$y] = $row;
-        }
+        // T at rotation 0 with its centre diagonals one row from the floor:
+        // piece (5,22) → centre (6,23); corners (5,22) (7,22) (5,24) (7,24).
+        // Rows 24+ are off-board (Board::ROWS = 24) → floor counts filled,
+        // so BL/BR are filled; one more painted corner reaches three = full.
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $rows[22][5] = Tetromino::I;  // TL corner (in bounds, painted)
         $board = new Board($rows);
-        // T at x=0 and y=5 (not at the very top of board)
-        $piece = new Piece(Tetromino::T, 0, 0, 5);
-        // Cells at rotation 0: [[1,0],[0,1],[1,1],[2,1]] + (0,5) = (1,5),(0,6),(1,6),(2,6)
-        // minX=0, maxX=2, minY=5, maxY=6
-        // TL=(minX-1,minY-1)=(-1,4)→OOB (wall), TR=(3,4)→in bounds, BL=(-1,7)→OOB, BR=(3,7)→in bounds
-        // We fill TR at (3,4) and BR at (3,7) to get 2 corners = T-Spin
-        $rows[4][3] = Tetromino::I;
-        $rows[7][3] = Tetromino::I;
-        $board2 = new Board($rows);
-        $tspin = TSpin::detect($board2, $piece, true);
-        $this->assertTrue($tspin->active, 'OOB corners (wall) + filled internal corners should be T-Spin');
+
+        $piece = new Piece(Tetromino::T, 0, 5, 22);
+        $tspin = TSpin::detect($board, $piece, true);
+        $this->assertTrue($tspin->active, 'OOB floor corners count as filled → 3 filled = T-Spin');
+        $this->assertFalse($tspin->mini, '3 corners is full even when two come from the floor');
     }
 
     public function testPointsConstants(): void
     {
         $this->assertSame(100, TSpin::T_SPIN_MINI_POINTS);
         $this->assertSame(400, TSpin::T_SPIN_POINTS);
+    }
+
+    /**
+     * Guideline corners are the four diagonals around the T's CENTRE cell
+     * (box (1,1)), not an expansion of the occupied bounding box. Cells far
+     * outside the centre diagonals must never arm a spin — the pre-fix
+     * bbox rule read the row-14 pair as rotation 0's front corners and
+     * returned a Mini here.
+     */
+    public function testCornersOutsideTheCentreDiagonalsAreNotASpin(): void
+    {
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        // Pre-fix bbox corners for T rot 0 at (5,15): TL=(4,14), TR=(8,14)
+        $rows[14][4] = Tetromino::I;
+        $rows[14][8] = Tetromino::I;
+
+        $piece = new Piece(Tetromino::T, 0, 5, 15);
+        $tspin = TSpin::detect(new Board($rows), $piece, true);
+        $this->assertFalse($tspin->active, 'row-14 cells are not corners of the centre at (6,16)');
+    }
+
+    /**
+     * Three of four centre diagonals filled = full T-Spin (not Mini), and
+     * the check must follow the centre in EVERY rotation. The pre-fix bbox
+     * rule found zero corners for this rot-1 pocket (it watched (5,13),
+     * (8,13), (5,17), (8,17)) and refused the spin outright.
+     */
+    public function testThreeCentreCornersInSideRotationIsFullSpin(): void
+    {
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        // T rot 1 at (5,14): centre (6,15); corners (5,14) (7,14) (5,16) (7,16)
+        $rows[14][5] = Tetromino::I;  // TL
+        $rows[16][5] = Tetromino::I;  // BL
+        $rows[14][7] = Tetromino::I;  // TR
+
+        $piece = new Piece(Tetromino::T, 1, 5, 14);
+        $tspin = TSpin::detect(new Board($rows), $piece, true);
+        $this->assertTrue($tspin->active);
+        $this->assertFalse($tspin->mini, '3 corners = full T-Spin regardless of which pair');
+    }
+
+    /**
+     * Mini in a SIDE rotation: rot 3 (nub left) has front corners TL/BL.
+     * Exactly those two filled = Mini. The pre-fix isFrontCornerPair
+     * returned null for rotations 1 and 3, so a side-facing mini was
+     * structurally impossible.
+     */
+    public function testTwoFrontCornersInLeftFacingRotationIsMini(): void
+    {
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        // T rot 3 at (5,14): centre (6,15); front corners (5,14), (5,16)
+        $rows[14][5] = Tetromino::I;  // TL (front for nub-left)
+        $rows[16][5] = Tetromino::I;  // BL (front for nub-left)
+
+        $piece = new Piece(Tetromino::T, 3, 5, 14);
+        $tspin = TSpin::detect(new Board($rows), $piece, true);
+        $this->assertTrue($tspin->active);
+        $this->assertTrue($tspin->mini, 'rot 3 front pair = Mini — sides can mini too');
+    }
+
+    /**
+     * Exactly the two BACK corners filled (rot 0: bottom pair) is not a
+     * spin at all under the guideline reading of the three-corner rule.
+     * The pre-fix code had no back-pair rejection and returned a full
+     * (non-mini) spin here.
+     */
+    public function testOnlyBackCornersFilledIsNotASpin(): void
+    {
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        // T rot 0 at (5,15): centre (6,16); back corners (5,17), (7,17)
+        $rows[17][5] = Tetromino::I;  // BL
+        $rows[17][7] = Tetromino::I;  // BR
+
+        $piece = new Piece(Tetromino::T, 0, 5, 15);
+        $tspin = TSpin::detect(new Board($rows), $piece, true);
+        $this->assertFalse($tspin->active, '2 back corners only = no spin');
     }
 
     public function testTSpinDetectionHandlesAllRotationsWithoutCrash(): void
