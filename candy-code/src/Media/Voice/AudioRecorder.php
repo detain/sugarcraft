@@ -301,7 +301,7 @@ final class AudioRecorder
      * truncates the file it is handed — truncation keeps the inode and its
      * mode — so 0600 is the mode every byte is ever written under.
      *
-     * @return '' on success, or the refusal reason
+     * @return string the refusal reason, or '' on success
      */
     private static function reserveTake(string $wav): string
     {
