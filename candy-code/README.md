@@ -303,7 +303,10 @@ And if you would rather not read any of that before your first run: launch inter
 a machine with nothing chosen or configured and a **first-run wizard** opens once. Pick a
 provider with the arrows, type the API key into the masked field, press `Enter` — the key is
 stored in `~/.candy-code/config.json` and the live session switches to that provider on the
-spot, the same path `/model` takes. Leaving it without storing a key — `s`, `Tab` or `Esc` —
+spot, the same path `/model` takes. Stored there means stored plainly: the file keeps the key
+as unencrypted text — the writer settles its mode to `0600`, owner-only, but anything that
+reads files as you reads the key too (backups, a dotfile sync, another process). Leaving it
+without storing a key — `s`, `Tab` or `Esc` —
 stamps the wizard away for good; the door stays open from the CLI as `candy-code login`
 whenever you want it.
 
