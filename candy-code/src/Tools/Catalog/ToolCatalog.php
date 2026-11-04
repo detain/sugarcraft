@@ -13,7 +13,10 @@ use SugarCraft\Code\Tools\Tool;
  * The built-in tool set, discovered from `src/Tools/BuiltIn/*.php`.
  *
  * Every concrete {@see Tool} in that directory declares its wire name,
- * permission class and wire position through {@see BuiltInTool}. Three
+ * permission class and wire position — through {@see BuiltInTool}, or,
+ * for the three tools {@see EXTERNALLY_WIRED} names, through that one
+ * roster. Either way the declaration is singular: this class holds the
+ * only copy. Three
  * consumers used to keep their own copy of that knowledge and drift apart:
  * `Bootstrap::unfilteredTools()` (the constructor list),
  * `PermissionGate::isReadOnlyTool()` / `isWriteTool()` (name lists) and
@@ -33,9 +36,13 @@ final class ToolCatalog
      * Built-in tools the catalog classifies but does not construct, keyed by
      * class: `Bootstrap::tools()` appends `Task` after the
      * `allowedTools`/`disabledTools` filter, and only when the launch holds an
-     * `AgentManager`. Its declaration lives here rather than as an attribute on
-     * the class because `TaskTool.php` is owned by another work stream this
-     * wave; moving it onto the class is a one-line follow-up.
+     * `AgentManager`. Their declarations live here rather than as attributes on
+     * the classes because each class would also need BuildsFromCatalog and its
+     * construction lane re-anchored — TaskTool and the board tools are not this
+     * file's wave. TUIARCH-08 (reviews-1103) made this the ONE roster of
+     * declared positions: every row carries its own `position`, so the wire
+     * order is decided here, never an accident of file-name scandir, and the
+     * attribute migration that remains is a recorded follow-up, not a mystery.
      *
      * `BoardRead` and `BoardPost` (the pre-1.0 roadmap) are never on a launch at all:
      * `TaskTool` adds them, bound to the batch's board, to the run of a member
@@ -43,16 +50,13 @@ final class ToolCatalog
      * a member's calls to them by their class (read; no-ask), not as unknown
      * names it would put to the user.
      *
-     * @var array<class-string<Tool>, array{name: string, permission: ToolPermissionClass, gloss?: string, onLaunch?: bool}>
+     * @var array<class-string<Tool>, array{name: string, permission: ToolPermissionClass, position: int, gloss?: string, onLaunch?: bool}>
      */
     private const EXTERNALLY_WIRED = [
-        TaskTool::class => ['name' => TaskTool::NAME, 'permission' => ToolPermissionClass::Write],
-        BoardReadTool::class => ['name' => BoardReadTool::NAME, 'permission' => ToolPermissionClass::Read, 'gloss' => 'is offered only to the members of a parallel `Task` batch, to read the board they share', 'onLaunch' => false],
-        BoardPostTool::class => ['name' => BoardPostTool::NAME, 'permission' => ToolPermissionClass::NoAsk, 'gloss' => 'is offered only to the members of a parallel `Task` batch, to post to the board they share', 'onLaunch' => false],
+        TaskTool::class => ['name' => TaskTool::NAME, 'permission' => ToolPermissionClass::Write, 'position' => 1002],
+        BoardReadTool::class => ['name' => BoardReadTool::NAME, 'permission' => ToolPermissionClass::Read, 'position' => 1001, 'gloss' => 'is offered only to the members of a parallel `Task` batch, to read the board they share', 'onLaunch' => false],
+        BoardPostTool::class => ['name' => BoardPostTool::NAME, 'permission' => ToolPermissionClass::NoAsk, 'position' => 1000, 'gloss' => 'is offered only to the members of a parallel `Task` batch, to post to the board they share', 'onLaunch' => false],
     ];
-
-    /** Externally wired tools sort after every catalog-built position. */
-    private const EXTERNAL_POSITION_BASE = 1000;
 
     /** @var list<CatalogEntry>|null */
     private static ?array $entries = null;
@@ -69,7 +73,11 @@ final class ToolCatalog
      */
     public static function entries(): array
     {
-        return self::$entries ??= self::discover(__DIR__ . '/../BuiltIn', 'SugarCraft\\Code\\Tools\\BuiltIn\\');
+        return self::$entries ??= self::discover(
+            __DIR__ . '/../BuiltIn',
+            'SugarCraft\\Code\\Tools\\BuiltIn\\',
+            self::EXTERNALLY_WIRED,
+        );
     }
 
     /**
@@ -216,9 +224,14 @@ final class ToolCatalog
      * Scan one directory. Public so the catalog's own refusals can be tested
      * against a fixture tree; production reads {@see entries()}.
      *
+     * @param array<class-string<Tool>, array{name: string, permission: ToolPermissionClass, position: int, gloss?: string, onLaunch?: bool}> $externals
+     *                   the declared externally-wired rows; production passes
+     *                   {@see EXTERNALLY_WIRED}, fixtures pass [] — the roster
+     *                   is consulted ONLY through this parameter (TUIARCH-08).
+     *
      * @return list<CatalogEntry>
      */
-    public static function discover(string $dir, string $namespacePrefix): array
+    public static function discover(string $dir, string $namespacePrefix, array $externals = []): array
     {
         // scandir, not glob: glob() reads no stream wrapper, and under a phar
         // build (DST-1, tools/build-phar.php) this directory lives INSIDE the
@@ -238,6 +251,7 @@ final class ToolCatalog
 
         $built = [];
         $external = [];
+        $seenExternals = [];
         foreach ($files as $file) {
             $class = $namespacePrefix . basename($file, '.php');
             if (!class_exists($class)) {
@@ -249,13 +263,19 @@ final class ToolCatalog
                 continue;
             }
 
-            if (\array_key_exists($class, self::EXTERNALLY_WIRED)) {
-                $declared = self::EXTERNALLY_WIRED[$class];
+            if (\array_key_exists($class, $externals)) {
+                $declared = $externals[$class];
+                if (!isset($declared['position'])) {
+                    // TUIARCH-08: positions are declared, never derived.
+                    throw new \LogicException("{$class} is externally wired without a declared position");
+                }
+
+                $seenExternals[$class] = true;
                 $external[] = new CatalogEntry(
                     $class,
                     $declared['name'],
                     $declared['permission'],
-                    self::EXTERNAL_POSITION_BASE + \count($external),
+                    $declared['position'],
                     $declared['gloss'] ?? '',
                     externallyWired: true,
                     onLaunch: $declared['onLaunch'] ?? true,
@@ -283,11 +303,22 @@ final class ToolCatalog
             );
         }
 
-        usort($built, static fn (CatalogEntry $a, CatalogEntry $b): int => $a->position <=> $b->position);
+        // TUIARCH-08: ONE order for every entry, by declared position — the
+        // built set and the externally wired set no longer sort by separate
+        // rules, and the uniqueness refusal covers both halves.
         $entries = [...$built, ...$external];
+        usort($entries, static fn (CatalogEntry $a, CatalogEntry $b): int => $a->position <=> $b->position);
+
+        foreach ($externals as $class => $row) {
+            if (!isset($seenExternals[$class])) {
+                // Fail closed: a roster row for a class the walk never met is
+                // the exact drift this finding was about.
+                throw new \LogicException("{$class} is declared externally wired but the walk found no such built-in Tool");
+            }
+        }
 
         self::assertUnique(array_map(static fn (CatalogEntry $e): string => $e->name, $entries), 'name');
-        self::assertUnique(array_map(static fn (CatalogEntry $e): string => (string) $e->position, $built), 'position');
+        self::assertUnique(array_map(static fn (CatalogEntry $e): string => (string) $e->position, $entries), 'position');
 
         return $entries;
     }

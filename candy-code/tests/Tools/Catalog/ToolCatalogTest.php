@@ -275,4 +275,107 @@ final class ToolCatalogTest extends TestCase
         $this->expectExceptionMessage('the same name Same');
         ToolCatalog::discover($this->tmp, $ns . '\\');
     }
+
+    /**
+     * Write one fixture tool under a fresh namespace. A position mints the
+     * #[BuiltInTool] declaration; null writes a bare Tool implementation the
+     * catalog can only classify externally.
+     *
+     * @return class-string the fixture class
+     */
+    private function writeToolFixture(string $ns, string $class, ?int $position, string $name): string
+    {
+        if ($this->tmp === '') {
+            $this->tmp = sys_get_temp_dir() . '/catalog-' . bin2hex(random_bytes(4));
+            mkdir($this->tmp);
+        }
+
+        $declaration = $position === null ? ''
+            : "#[BuiltInTool(name: '{$name}', permission: ToolPermissionClass::Read, position: {$position})]\n";
+        $body = $position === null ? ''
+            : "public static function fromCatalog(ToolBuildContext \$c): self { return new self(); }\n";
+        file_put_contents($this->tmp . "/{$class}.php", "<?php\nnamespace {$ns};\nuse SugarCraft\\Code\\Tools\\Catalog\\{BuiltInTool, BuildsFromCatalog, ToolBuildContext, ToolPermissionClass};\n"
+            . $declaration
+            . "final class {$class} implements \\SugarCraft\\Code\\Tools\\Tool" . ($position === null ? '' : ', BuildsFromCatalog') . " {\n"
+            . $body
+            . "public function name(): string { return '{$name}'; }\npublic function description(): string { return ''; }\n"
+            . "public function inputSchema(): array { return []; }\n"
+            . "public function execute(array \$args): \\SugarCraft\\Code\\Tools\\ToolResult { return \\SugarCraft\\Code\\Tools\\ToolResult::error('x'); }\n}\n");
+        require $this->tmp . "/{$class}.php";
+
+        return "{$ns}\\{$class}";
+    }
+
+    /**
+     * TUIARCH-08 (reviews-1103): every externally wired row DECLARES its
+     * position, and the entries carry that declaration unchanged — the wire
+     * order is decided, never an accident of the file-name scandir.
+     */
+    public function testExternallyWiredEntriesCarryTheirDeclaredPositions(): void
+    {
+        $roster = (new \ReflectionClass(ToolCatalog::class))->getConstant('EXTERNALLY_WIRED');
+        self::assertIsArray($roster);
+        $declared = [];
+        foreach ($roster as $class => $row) {
+            self::assertIsInt($row['position'] ?? null, "{$class} is externally wired without a declared position");
+            $declared[$row['name']] = $row['position'];
+        }
+
+        ksort($declared);
+        $actual = [];
+        foreach (ToolCatalog::externallyWired() as $entry) {
+            $actual[$entry->name] = $entry->position;
+        }
+        ksort($actual);
+        self::assertSame($declared, $actual, 'the entries carry the declared positions, unchanged');
+    }
+
+    /**
+     * TUIARCH-08: a roster row pointing at a class the walk never meets is
+     * exactly the drift this finding is about — refused, not silently dropped.
+     */
+    public function testStaleExternallyWiredRowRefusesTheWalk(): void
+    {
+        $ns = 'CatalogProbe' . bin2hex(random_bytes(4));
+        $this->writeToolFixture($ns, 'Alpha', 7, 'alpha');
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('no such built-in Tool');
+        ToolCatalog::discover($this->tmp, $ns . '\\', [
+            "{$ns}\\Absent" => ['name' => 'ghost-row', 'permission' => ToolPermissionClass::Read, 'position' => 1000],
+        ]);
+    }
+
+    /**
+     * TUIARCH-08: positions are unique across the COMBINED set, not the built
+     * half only — an external row can no longer collide behind the census.
+     */
+    public function testExternalPositionCollidingWithABuiltRowRefuses(): void
+    {
+        $ns = 'CatalogProbe' . bin2hex(random_bytes(4));
+        $this->writeToolFixture($ns, 'Alpha', 1000, 'alpha');
+        $beta = $this->writeToolFixture($ns, 'Beta', null, 'beta');
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('the same position 1000');
+        ToolCatalog::discover($this->tmp, $ns . '\\', [
+            $beta => ['name' => 'beta-ext', 'permission' => ToolPermissionClass::Read, 'position' => 1000],
+        ]);
+    }
+
+    /**
+     * TUIARCH-08: an external row without a declared position is a derived
+     * order sneaking back in — refused at the door.
+     */
+    public function testExternalRowWithoutADeclaredPositionRefuses(): void
+    {
+        $ns = 'CatalogProbe' . bin2hex(random_bytes(4));
+        $beta = $this->writeToolFixture($ns, 'Beta', null, 'beta');
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('externally wired without a declared position');
+        ToolCatalog::discover($this->tmp, $ns . '\\', [
+            $beta => ['name' => 'beta-ext', 'permission' => ToolPermissionClass::Read],
+        ]);
+    }
 }
