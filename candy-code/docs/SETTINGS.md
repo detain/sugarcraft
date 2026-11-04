@@ -953,8 +953,8 @@ removes — is what survives, so the sentence stays and the number is corrected.
 This line once continued
 "`src/Config/LayeredSettings.php` and `Bootstrap::reportProjectTierToolRemovals()`
 still carry the old figure in their doc-blocks", and neither half is true any
-more: `LayeredSettings` was corrected in round 43 and
-`Bootstrap::reportProjectTierToolRemovals()` in round 44 — its clause about
+more: `LayeredSettings` was corrected and
+`Bootstrap::reportProjectTierToolRemovals()` with it — its clause about
 refusing negated character classes now names the glob instead of counting it —
 so both carry the retraction rather than the figure. **Across `src/` and
 `docs/` the census finds zero remaining sites.** The naming was DROPPED, and
@@ -962,13 +962,13 @@ the sentence that used to defend it is corrected here rather than deleted. It
 said: "the naming is kept rather than dropped because a list of known-stale
 copies is the only thing that makes the next one findable". What is true now:
 there is nothing left to name, and a list would be the wrong instrument even
-if there were — a list is what went stale in round 43, when a copy was fixed
+if there were — a list is what went stale once before, when a copy was fixed
 and its entry was not. Findability was the right goal; a number derived from
 the census is the instrument that reaches it, because it cannot be right about
 a tree it no longer describes. And it is asserted rather than believed:
 `Tests\Config\GlobFigureDriftTest` censuses `src/` AND `docs/` for paragraphs
 that spell the old count without retracting it — `docs/` is in scope because
-round 43's shipped defect was a stale sentence on this very page, not in
+the shipped defect was a stale sentence on this very page, not in
 source — and reds both if a new one appears and if this sentence stops
 agreeing with what the census finds. An empty census is a weaker claim than a
 census of one, because it also passes in a tree where the scanner has quietly
@@ -1054,9 +1054,9 @@ config entry is how a useful notice becomes a wall you scroll past.
 
 **What this paragraph used to say, and what changed.** The count above has read
 *fourteen*, then *fifteen*, and both were left behind by the seam it counts:
-round 42 (E78) routed `reportPrunedSessions()`'s retention summary on as the
-fifteenth, round 43 (E86) routed `mcpClient()`'s start-then-throw catch on as
-the sixteenth, and neither round came back to this page. Round 44 corrected it
+an earlier pass routed `reportPrunedSessions()`'s retention summary on as the
+fifteenth, a later one routed `mcpClient()`'s start-then-throw catch on as
+the sixteenth, and neither pass came back to this page. A third corrected it
 and then wired it: this sentence is now one of the rows in
 `BootstrapTranscriptSeamCallSiteCensusTest::PROSE_SITES`, so the next round that
 adds a call site fails a test here instead of leaving a reader to notice. The
@@ -1067,7 +1067,7 @@ the launch had **destroyed** rather than a setting it had declined to honour.
 Read against the rule the list is decided by, a prune does name something the
 session can no longer do: those conversations cannot be resumed, branched,
 renamed or rewound, and `/resume` and `candy-code session list` come back
-shorter than the user left them. So the **summary** migrated in round 42 and is
+shorter than the user left them. So the **summary** migrated and is
 now the fifteenth call site. The reason the example still earns a mention is the
 *half* of it that did not move: the **per-session ids** stay on stderr alone,
 because one row per deleted session is exactly the per-entry fan-out the cap

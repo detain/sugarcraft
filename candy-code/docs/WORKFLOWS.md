@@ -267,7 +267,7 @@ As of that fix the engine's worker pool is fed the same launch-derived provider
 spec the chat sub-agent path gets (`Bootstrap::workflowEngine()` builds the
 pool through `agentPoolConfig()`); the "engine still fails" gap that stood for
 hours between the two is gone.
-*WHAT SAID:* before round 61 a stage whose forked sub-agent had no usable
+*WHAT SAID:* before that fix a stage whose forked sub-agent had no usable
 provider could still report **Completed** — the worker script fabricated a
 plausible text answer. *WHAT TRUE NOW:* a forked worker is handed the launch's
 serializable provider spec (the same selected-provider config the hosted chat

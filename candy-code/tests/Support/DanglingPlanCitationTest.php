@@ -119,6 +119,21 @@ final class DanglingPlanCitationTest extends TestCase
      * whole job is naming the tokens the rest of the fleet must not ship.
      * The walk floor is a stated file count so a silently-broken iterator
      * cannot pass this leg vacuously.
+     *
+     * THE ARMS WIDENED 2026-11 (CCD-DOC-01): the pattern used to accuse only
+     * the hyphen spelling "round-NN" and three-digit E numbers, so the prose
+     * spellings the media and figure-fix campaigns actually shipped — "since
+     * round 42", "corrected in round 43 (E78)", "plan W0 finding 3", "the W7
+     * adapter" — walked straight through it. The round arm now takes either
+     * separator and either case, the E arm takes two or three digits, and a
+     * wave arm accuses a bare W-number with word boundaries on both sides.
+     * A sweep over the whole walked corpus with the widened arms finds
+     * exactly the fourteen standing citations below and no innocent
+     * sentence, so the arms ship alongside a named roster instead of a red
+     * page: DOC_TOKEN_SEAMS licenses each standing token per page, and the
+     * roster is self-retiring — the moment a doc edit strips a token its row
+     * goes red and must be deleted, re-arming the census on that shape. This
+     * is the WIRE_TOKEN_SEAMS design mirrored from the census below.
      */
     public function testNoShippedDocCitesACampaignIdentifier(): void
     {
@@ -132,6 +147,7 @@ final class DanglingPlanCitationTest extends TestCase
 
         $pattern = self::campaignTokenPattern();
         $offenders = [];
+        $seen = [];
         foreach ($files as $path) {
             $relative = \substr($path, \strlen($root) + 1);
             $inFence = false;
@@ -145,6 +161,10 @@ final class DanglingPlanCitationTest extends TestCase
                     continue;
                 }
                 foreach ($hits[0] as $token) {
+                    $seen[$relative][$token] = true;
+                    if (\in_array($token, self::DOC_TOKEN_SEAMS[$relative] ?? [], true)) {
+                        continue; // the named self-retiring seam row (checked below)
+                    }
                     $offenders[] = $relative . ':' . ($number + 1) . ':' . $token;
                 }
             }
@@ -153,7 +173,32 @@ final class DanglingPlanCitationTest extends TestCase
         self::assertSame([], $offenders,
             'shipped docs cite campaign item IDs — keep the sentence, drop the token '
             . '(see docs/GLOSSARY.md for the policy the 2026-11 sweep applied)');
+
+        // Fail-closed half of the exemption, same shape as the wire census:
+        // a row buys silence only while the token is still on the page. When
+        // a docs lane strips one, this leg reds and forces the row's deletion
+        // — after which the widened arm re-arms on that token with no edit to
+        // the scan above.
+        foreach (self::DOC_TOKEN_SEAMS as $relative => $listed) {
+            foreach ($listed as $token) {
+                self::assertArrayHasKey($token, $seen[$relative] ?? [],
+                    'the seam roster still licenses ' . $token . ' on ' . $relative
+                    . ' — the citation was stripped; delete the row to re-arm the census');
+            }
+        }
     }
+
+    /**
+     * The docs seam roster: page => tokens still standing in its prose.
+     * Deliberately narrow — a row buys silence for exactly one token on
+     * exactly one page, and the leg above voids the licence when the reason
+     * dies. The 2026-11 docs-cleanup lane (G3-B) strips these citations
+     * sentence-by-sentence and deletes the matching rows in the same commit;
+     * nothing else may. The roster is EMPTY now that every licensed citation
+     * was stripped — rows re-enter freely: a future seam registers here for
+     * exactly as long as its citation stands on the page.
+     */
+    private const DOC_TOKEN_SEAMS = [];
 
     /**
      * WIRE AND CATALOGUE STRINGS CARRY NO CAMPAIGN IDENTIFIERS EITHER.
@@ -296,9 +341,13 @@ final class DanglingPlanCitationTest extends TestCase
 
     /**
      * The token union: cluster IDs (letter-suffixed and dotted steps), the
-     * bare E-number family (guarded so a U+E000 codepoint mention survives),
-     * lane IDs in parentheses, and the plan-file names. The literal carries
-     * parentheses throughout, so the glob-shape corpus cannot ingest it.
+     * bare E-number family (guarded so a U+E000 codepoint mention survives,
+     * and since CCD-DOC-01 widened to the two-digit rounds-era spelling too),
+     * lane IDs in parentheses, the round counter in either separator and
+     * either case, a bare wave number with the word boundaries carried by the
+     * shared lookbehind and lookahead, and the plan-file names. The literal
+     * carries parentheses throughout, so the glob-shape corpus cannot ingest
+     * it; the one paren-free new arm (W-numbers) has no `*` or `?` either.
      */
     private static function campaignTokenPattern(): string
     {
@@ -306,12 +355,13 @@ final class DanglingPlanCitationTest extends TestCase
             . '[CR]-[A-Z]{2,10}-[0-9]+[a-z]?(?:\.[a-z][0-9a-z]*)*'
             . '|(?:CTX|AGT|EXT|TOOL|PRV|SEC|SES|MCP|VIS|AUT|DST|OBS|GIT|CMD|PLG|INT|EDT|MOD|TL|SHL)-[0-9]+(?:[a-z](?:\.[a-z][0-9a-z]*)*)?(?:-P[0-9]+)?'
             . '|ISS-[0-9]{2,3}'
-            . '|(?<!\+)E[0-9]{3}(?![0-9])'
+            . '|(?<!\+)E[0-9]{2,3}(?![0-9])'
             . '|WEB-[0-9][a-z]?'
             . '|TUI-[0-9][a-z]?(?: stage [0-9]+)?'
             . '|plan_comparison'
             . '|\((?:[a-z][0-9]+[a-z]?|R[0-9]+)\)'
-            . '|round-[0-9]+(?![0-9])'
-            . ')(?![0-9A-Za-z])/';
+            . '|[Rr]ound[- ][0-9]+(?![0-9])'
+            . '|W[0-9]+(?: wave| tier)?'
+                        . ')(?![0-9A-Za-z])/';
     }
 }

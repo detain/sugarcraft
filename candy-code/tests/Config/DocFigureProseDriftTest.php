@@ -5230,25 +5230,36 @@ final class DocFigureProseDriftTest extends TestCase
         $pages = array_values(array_filter(scandir($root . '/docs') ?: [], static fn(string $f): bool => str_ends_with($f, '.md')));
         self::assertCount(25, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
+        // CCD-DOC-06: the root README.md joins the census. It was never on any
+        // target list of this family, so a bare File.php:NNN cite planted there
+        // rolled out unchallenged; the same three shapes now resolve it too
+        // (zero hits today — the leg covers the future rot, not a present one).
+        $walk = [];
+        foreach ($pages as $page) {
+            $walk['docs/' . $page] = $root . '/docs/' . $page;
+        }
+        $walk['README.md'] = $root . '/README.md';
+
         $patterns = [
             '/[A-Za-z0-9_\/\\\\.\-]+\.php:[0-9]+(?:-[0-9]+)?/',
             '/(?:\(|\bat |\bon )lines? [0-9]+(?:-[0-9]+)?/',
             '/`lines? [0-9]+(?:-[0-9]+)?`/',
         ];
 
-        foreach ($pages as $page) {
-            $text = (string) file_get_contents($root . '/docs/' . $page);
-            self::assertNotEmpty($text, "docs/{$page} reads empty — the anchor census over it is void");
+        foreach ($walk as $label => $path) {
+            $text = (string) file_get_contents($path);
+            self::assertNotEmpty($text, "{$label} reads empty — the anchor census over it is void");
+            $exemptionKey = \basename($label);
             foreach ($patterns as $pattern) {
                 preg_match_all($pattern, $text, $hits, PREG_OFFSET_CAPTURE);
                 foreach ($hits[0] as [$hit, $offset]) {
-                    if (in_array($hit, $exemptions[$page] ?? [], true)) {
-                        $seenExemptions[$page][] = $hit;
+                    if (in_array($hit, $exemptions[$exemptionKey] ?? [], true)) {
+                        $seenExemptions[$exemptionKey][] = $hit;
                         continue;
                     }
                     $line = substr_count(substr($text, 0, $offset), "\n");
                     $context = explode("\n", $text)[$line];
-                    self::resolveBareAnchor($root, "docs/{$page}", $hit, $context, $line);
+                    self::resolveBareAnchor($root, $label, $hit, $context, $line);
                 }
             }
         }
@@ -7579,6 +7590,423 @@ final class DocFigureProseDriftTest extends TestCase
             'Provider to use: ' . $plain,
             $help,
             'the --help screen (lang/en.php) misenumerates the provider type keys'
+        );
+    }
+
+    /**
+     * CCD-DOC-02 (G3-D): the SCHEDULES.md row table restates the grammar and
+     * the floors/ceilings that src/Background/Schedule.php enforces — nothing
+     * pinned them, so a widened const would ship a silent doc lie. Each figure
+     * is derived live here: the name grammar from Schedule::NAME_PATTERN
+     * itself, the ranges from their consts, the tick pair from Chat's private
+     * cadence consts (regex'd from source, the house shape for Chat figures),
+     * the timeout default from BackgroundSession's promoted param, and the
+     * row-version from ScheduleRegistry::VERSION.
+     */
+    public function testSchedulesRowFiguresFollowTheScheduleConstants(): void
+    {
+        $page = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SCHEDULES.md');
+        self::assertStringContainsString('# ', $page, 'the page did not load');
+
+        $pattern = (string) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('NAME_PATTERN');
+        $bare = \preg_replace('#\A/|/\z#', '', $pattern);
+        self::assertSame(
+            1,
+            \preg_match('/^\^(\[[^\]]+\])(\[[^\]]+\])\{0,([0-9]+)\}\$$/', $bare, $grammar),
+            "the name grammar stopped being head-class + tail-class + quantifier — the doc's charset sentence cannot be derived from it any more (pattern: {$pattern})"
+        );
+        $maxLen = (int) $grammar[3] + 1;
+        self::assertMatchesRegularExpression(
+            '/letters, digits, `\.`, `_`, `-`[^.]*' . $maxLen . ' characters/',
+            $page,
+            "the name row's charset/length sentence drifted from Schedule::NAME_PATTERN (live cap: {$maxLen})"
+        );
+
+        $everyMin = (int) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('MIN_EVERY_SECONDS');
+        $everyMax = (int) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('MAX_EVERY_SECONDS');
+        $days = intdiv($everyMax, 86_400);
+        self::assertMatchesRegularExpression(
+            '/from ' . $everyMin . ' up to ' . \number_format($everyMax) . ' \(' . $days . ' days\)/',
+            $page,
+            "the every-row range sentence drifted from the consts (live: {$everyMin}..{$everyMax} = {$days} days)"
+        );
+
+        $timeoutMin = (int) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('MIN_TIMEOUT_SECONDS');
+        $timeoutMax = (int) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('MAX_TIMEOUT_SECONDS');
+        $sessionSource = self::sourceOf('Background/BackgroundSession.php');
+        self::assertSame(
+            1,
+            \preg_match('/timeoutSeconds = ([0-9]+)/', $sessionSource, $defaultMatch),
+            'BackgroundSession no longer carries the literal timeout default the doc points at'
+        );
+        $absentTimeout = (int) $defaultMatch[1];
+        self::assertMatchesRegularExpression(
+            '/' . $timeoutMin . ' up to ' . \number_format($timeoutMax) . ' seconds\. Absent means the background session\x27s default of ' . $absentTimeout . '/',
+            $page,
+            "the timeout row's bounds sentence drifted (live: {$timeoutMin}..{$timeoutMax}, absent = {$absentTimeout})"
+        );
+
+        $chat = self::sourceOf('Chat.php');
+        self::assertSame(1, \preg_match('/BACKGROUND_POLL_SECONDS = ([0-9.]+)/', $chat, $fastMatch), 'the fast tick const moved shape');
+        self::assertSame(1, \preg_match('/SCHEDULE_WATCH_SECONDS = ([0-9.]+)/', $chat, $slowMatch), 'the slow watch const moved shape');
+        $tickWords = ['two' => 2, 'thirty' => 30];
+        self::assertSame(1, \preg_match('/keeps the fast ([a-z]+)-second tick/u', $page, $fastWord), 'the pump sentence lost its fast-tick word');
+        self::assertArrayHasKey($fastWord[1], $tickWords, "unknown tick word '{$fastWord[1]}'");
+        self::assertSame((float) $tickWords[$fastWord[1]], (float) $fastMatch[1], 'the doc fast tick disagrees with BACKGROUND_POLL_SECONDS');
+        self::assertSame(1, \preg_match('/rides a slow ([a-z]+)-second watch/u', $page, $slowWord), 'the pump sentence lost its slow-watch word');
+        self::assertArrayHasKey($slowWord[1], $tickWords, "unknown watch word '{$slowWord[1]}'");
+        self::assertSame((float) $tickWords[$slowWord[1]], (float) $slowMatch[1], 'the doc slow watch disagrees with SCHEDULE_WATCH_SECONDS');
+
+        $version = (int) (new \ReflectionClass(\SugarCraft\Code\Background\ScheduleRegistry::class))->getConstant('VERSION');
+        self::assertMatchesRegularExpression(
+            '/"version": ' . $version . ',/',
+            $page,
+            "the example envelope no longer carries ScheduleRegistry::VERSION ({$version})"
+        );
+
+        $modelTag = (string) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('CREATED_BY_MODEL');
+        self::assertMatchesRegularExpression(
+            '/only spelling a row may carry is `' . \preg_quote($modelTag, '/') . '`/',
+            $page,
+            "the createdBy row drifted from Schedule::CREATED_BY_MODEL (live: {$modelTag})"
+        );
+        $modeList = '(`' . \implode('`, `', \array_map(static fn (PermissionMode $m): string => $m->value, PermissionMode::cases())) . '`)';
+        self::assertStringContainsString($modeList, $page, 'the permissionMode row no longer enumerates PermissionMode::cases() in enum order');
+        self::assertSame(
+            'dont-ask',
+            (string) ((new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('DEFAULT_PERMISSION_MODE')->value),
+            'the floor the page describes is no longer PermissionMode::DontAsk — the permission-floor prose needs a rewrite, not an arm edit'
+        );
+
+        $kindTask = (string) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('KIND_TASK');
+        $kindHeartbeat = (string) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('KIND_HEARTBEAT');
+        $heartbeatOk = (string) (new \ReflectionClass(\SugarCraft\Code\Background\Schedule::class))->getConstant('HEARTBEAT_OK');
+        self::assertMatchesRegularExpression(
+            '/`' . \preg_quote($kindTask, '/') . '` or `' . \preg_quote($kindHeartbeat, '/') . '`/',
+            $page,
+            'the kind row lost the two spelling names the consts carry'
+        );
+        self::assertStringContainsString('`' . $heartbeatOk . '`', $page, 'the sentinel the heartbeat reply must equal is no longer spelled on the page');
+
+        $modeSource = self::sourceOf('Background/Schedule.php');
+        self::assertSame(
+            1,
+            \preg_match('/`dont-ask` or the floor\x27s own name|a FILE row that SPELLS a bypass-class mode/u', $modeSource),
+            'the ceiling sentence that refuses the two unattended-unsafe modes moved out of the file the doc row relies on'
+        );
+    }
+
+    /**
+     * CCD-DOC-03 (G3-D): the compaction figures live in three places — the
+     * CompactorConfig constructor defaults, docs/CONTEXT.md's tier table and
+     * the prose of docs/SETTINGS.md. Only the code side was pinned, so the
+     * docs could drift silently. These arms derive every doc numeral from the
+     * live defaults (thresholds, token caps, IdleCompactionPolicy's refill
+     * limit) including the division identity the settings page spells out.
+     */
+    public function testContextCompactionProseFollowsThePolicyDefaults(): void
+    {
+        $context = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/CONTEXT.md');
+        $settings = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SETTINGS.md');
+        self::assertStringContainsString('# ', $context, 'CONTEXT.md did not load');
+        self::assertStringContainsString('# ', $settings, 'SETTINGS.md did not load');
+
+        $reminderPercent = self::promotedParamDefault(CompactorConfig::class, 'reminderThreshold');
+        $autoPercent = self::promotedParamDefault(CompactorConfig::class, 'backgroundCompactionThreshold');
+        $blockPercent = self::promotedParamDefault(CompactorConfig::class, 'foregroundBlockingThreshold');
+        $reminderCap = CompactorConfig::DEFAULT_REMINDER_TOKENS;
+        $autoCap = CompactorConfig::DEFAULT_COMPACTION_TOKENS;
+
+        $reflection = new \ReflectionClass(CompactorConfig::class);
+        $keys = [
+            'compaction.reminderPercent' => (string) $reflection->getConstant('SETTING_REMINDER_PERCENT'),
+            'compaction.autoPercent' => (string) $reflection->getConstant('SETTING_AUTO_PERCENT'),
+            'compaction.blockPercent' => (string) $reflection->getConstant('SETTING_BLOCK_PERCENT'),
+            'compaction.reminderTokens' => (string) $reflection->getConstant('SETTING_REMINDER_TOKENS'),
+            'compaction.autoTokens' => (string) $reflection->getConstant('SETTING_AUTO_TOKENS'),
+        ];
+        self::assertSame(
+            ['compaction.reminderPercent', 'compaction.autoPercent', 'compaction.blockPercent', 'compaction.reminderTokens', 'compaction.autoTokens'],
+            \array_values($keys),
+            'a compaction setting key changed its spelling on the class — the doc table rows below cite the old names'
+        );
+
+        self::assertMatchesRegularExpression(
+            '/\| Reminder \| `' . \preg_quote($keys['compaction.reminderPercent'], '/') . '` ' . $reminderPercent . ' \| `' . \preg_quote($keys['compaction.reminderTokens'], '/') . '` ' . \number_format($reminderCap) . ' \|/',
+            $context,
+            'the Reminder row of the tier table drifted from the live defaults'
+        );
+        self::assertMatchesRegularExpression(
+            '/\| Automatic \| `' . \preg_quote($keys['compaction.autoPercent'], '/') . '` ' . $autoPercent . ' \| `' . \preg_quote($keys['compaction.autoTokens'], '/') . '` ' . \number_format($autoCap) . ' \|/',
+            $context,
+            'the Automatic row of the tier table drifted from the live defaults'
+        );
+        self::assertMatchesRegularExpression(
+            '/\| Block \| `' . \preg_quote($keys['compaction.blockPercent'], '/') . '` ' . $blockPercent . ' \|/',
+            $context,
+            'the Block row percent drifted from foregroundBlockingThreshold'
+        );
+        self::assertMatchesRegularExpression(
+            '/`compaction\.blockTokens` none \|/',
+            $context,
+            'the Block cap cell no longer spells "none" — confirm the live foreground default is genuinely unset before changing this arm'
+        );
+
+        $reminderWindow = intdiv($reminderCap * 100, (int) $reminderPercent);
+        $autoWindow = intdiv($autoCap * 100, (int) $autoPercent);
+        self::assertMatchesRegularExpression(
+            '/a window up to about ' . \number_format(intdiv($reminderWindow, 1000) * 1000) . ' tokens behaves/',
+            $context,
+            "the CONTEXT rounding sentence drifted (reminder cap binds past {$reminderWindow} -> about " . \number_format(intdiv($reminderWindow, 1000) * 1000) . ')'
+        );
+        self::assertMatchesRegularExpression(
+            '/above about ' . \number_format(intdiv($autoWindow, 1000) * 1000) . ' the automatic cap/',
+            $context,
+            "the CONTEXT automatic-bound sentence drifted (auto cap binds past {$autoWindow})"
+        );
+
+        self::assertMatchesRegularExpression(
+            '/' . $reminderPercent . '% of ' . \preg_quote(\number_format($reminderWindow), '/') . ' is ' . \preg_quote(\number_format($reminderCap), '/') . '; ' . $autoPercent . '%\s+of ' . \preg_quote(\number_format($autoWindow), '/') . ' is ' . \preg_quote(\number_format($autoCap), '/') . '/',
+            $settings,
+            'the SETTINGS identity (percent of window = cap) no longer computes from the live defaults'
+        );
+        self::assertMatchesRegularExpression(
+            '/`compaction\.reminderPercent` \(' . $reminderPercent . '\)/',
+            $settings,
+            'the SETTINGS reminder figure drifted from the constructor default'
+        );
+        self::assertMatchesRegularExpression(
+            '/`compaction\.autoPercent` \(' . $autoPercent . '\)/',
+            $settings,
+            'the SETTINGS auto figure drifted from the constructor default'
+        );
+        self::assertMatchesRegularExpression(
+            '/`compaction\.keepRecent`\** \((?:' . self::promotedParamDefault(CompactorConfig::class, 'recentPreserveCount') . ')\)/',
+            $settings,
+            'the SETTINGS keepRecent figure drifted from recentPreserveCount'
+        );
+
+        $refill = \SugarCraft\Code\Context\IdleCompactionPolicy::REFILL_LIMIT;
+        $refillWords = ['two' => 2, 'three' => 3, 'four' => 4];
+        self::assertSame(
+            1,
+            \preg_match('/After ([a-z]+) automatic compactions in a row/u', $context, $refillWord),
+            'the thrash-breaker sentence lost its count word — re-pin this arm with the page'
+        );
+        self::assertArrayHasKey($refillWord[1], $refillWords, "unknown refill word '{$refillWord[1]}'");
+        self::assertSame($refill, $refillWords[$refillWord[1]], 'the thrash breaker count drifted from IdleCompactionPolicy::REFILL_LIMIT');
+        self::assertStringContainsString('default `IdleCompactionPolicy::REFILL_LIMIT`', $context, 'the page stopped citing the const by name');
+        self::assertStringContainsString((string) $reflection->getConstant('SETTING_REFILL_LIMIT'), $context, 'the refill setting key the page names is gone from the page');
+
+        $idleSeconds = \SugarCraft\Code\Context\IdleCompactionPolicy::IDLE_SECONDS;
+        self::assertStringContainsString('sat idle for an hour', $context, 'the idle-offer window stopped being an hour on the page');
+        self::assertSame(3600, $idleSeconds, 'IDLE_SECONDS is no longer one hour — the CONTEXT prose above needs a matching rewrite, not an arm edit');
+        self::assertStringContainsString((string) $reflection->getConstant('SETTING_IDLE_OFFER_SECONDS'), $context, 'the idle-offer setting key the page names is gone from the page');
+
+        self::assertTrue(\method_exists(\SugarCraft\Code\Context\ContextCompactor::class, 'absoluteTierIsFutile'), 'CONTEXT.md cites ContextCompactor::absoluteTierIsFutile() and the method is gone');
+    }
+
+    /**
+     * CCD-DOC-04 (G3-D): MEDIA.md's attachment table, canvas cap, link TTL
+     * and transcribe ceiling were the scope map's unpinned figures — every
+     * one now derives from its live const (FileMentions, EngineBackend's
+     * document budget, CanvasTool, CanvasLinks, MediaMethods), including the
+     * example arithmetic the page walks through (15+10 > 30 under a 32 wire).
+     */
+    public function testMediaAttachmentCeilingsFollowTheirConstants(): void
+    {
+        $page = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MEDIA.md');
+        self::assertStringContainsString('# ', $page, 'MEDIA.md did not load');
+
+        self::assertMatchesRegularExpression(
+            '/\| Text file \| ' . (intdiv(\SugarCraft\Code\Attachments\FileMentions::TEXT_MAX_BYTES, 1024)) . ' KiB \|/',
+            $page,
+            'the text ceiling drifted from FileMentions::TEXT_MAX_BYTES'
+        );
+        self::assertMatchesRegularExpression(
+            '/\| Image \| ' . (intdiv(\SugarCraft\Code\Attachments\FileMentions::IMAGE_MAX_BYTES, 1024 * 1024)) . ' MiB \|/',
+            $page,
+            'the image ceiling drifted from FileMentions::IMAGE_MAX_BYTES'
+        );
+        self::assertMatchesRegularExpression(
+            '/\| PDF \| ' . (intdiv(\SugarCraft\Code\Attachments\FileMentions::DOCUMENT_MAX_BYTES, 1024 * 1024)) . ' MiB \|/',
+            $page,
+            'the PDF ceiling drifted from FileMentions::DOCUMENT_MAX_BYTES'
+        );
+        self::assertMatchesRegularExpression(
+            '/\| PDF pages \| ' . \SugarCraft\Code\Attachments\FileMentions::DOCUMENT_MAX_PAGES . ',/',
+            $page,
+            'the page-count cap drifted from FileMentions::DOCUMENT_MAX_PAGES'
+        );
+        self::assertMatchesRegularExpression(
+            '/\| Documents per request \| ' . (intdiv(EngineBackend::DOCUMENT_BASE64_BUDGET, 1024 * 1024)) . ' MiB/',
+            $page,
+            'the per-request document budget drifted from EngineBackend::DOCUMENT_BASE64_BUDGET'
+        );
+
+        $budgetMebibytes = intdiv(EngineBackend::DOCUMENT_BASE64_BUDGET, 1024 * 1024);
+        self::assertMatchesRegularExpression(
+            '/a ' . ($budgetMebibytes - 15) . ' MiB PDF paired with a ' . ($budgetMebibytes - 20) . ' MiB one/u',
+            $page,
+            "the worked example's PDF pair no longer sums over the {$budgetMebibytes} MiB session budget — the page's own arithmetic is the pin"
+        );
+
+        self::assertMatchesRegularExpression(
+            '/over the wire\x27s ([0-9]+) MiB per-request ceiling/u',
+            $page,
+            'the wire-ceiling sentence the budget exists because of is gone from the page'
+        );
+        \preg_match('/over the wire\x27s ([0-9]+) MiB per-request ceiling/u', $page, $wireMatch);
+        $wireMebibytes = (int) $wireMatch[1];
+        self::assertLessThan($wireMebibytes, $budgetMebibytes, 'the session budget must stay under the wire ceiling the page cites — the whole example row depends on it');
+        $engineDoc = self::sourceOf('Backend/EngineBackend.php');
+        self::assertStringContainsString($wireMebibytes . ' MiB', $engineDoc, 'EngineBackend no longer spells the same wire ceiling the page cites beside DOCUMENT_BASE64_BUDGET');
+
+        self::assertMatchesRegularExpression(
+            '/The cap is ' . (intdiv(\SugarCraft\Code\Tools\BuiltIn\CanvasTool::MAX_BYTES, 1024)) . '\s+KiB/',
+            $page,
+            'the canvas cap drifted from CanvasTool::MAX_BYTES'
+        );
+        $ttl = (int) \SugarCraft\Code\Server\Http\CanvasLinks::TTL_SECONDS;
+        self::assertMatchesRegularExpression(
+            '/single-use ' . $ttl . '-second link/',
+            $page,
+            "the canvas link sentence drifted from CanvasLinks::TTL_SECONDS ({$ttl}s)"
+        );
+        self::assertMatchesRegularExpression(
+            '/expiresInSeconds: ' . $ttl . '\}/',
+            $page,
+            'the minted-link envelope figure drifted from CanvasLinks::TTL_SECONDS'
+        );
+        self::assertStringContainsString('`POST /api/canvas`', $page, 'the canvas route left the page — CanvasPageController still serves exactly that path');
+
+        self::assertMatchesRegularExpression(
+            '/decodes over\s+([a-z]+) MiB is refused/',
+            $page,
+            'the transcribe ceiling sentence lost its spelled count'
+        );
+        \preg_match('/decodes over\s+([a-z]+) MiB is refused/', $page, $eightWord);
+        $mebibyteWords = ['four' => 4, 'eight' => 8, 'sixteen' => 16];
+        self::assertArrayHasKey($eightWord[1], $mebibyteWords, "unknown transcribe-cap word '{$eightWord[1]}'");
+        self::assertSame(
+            $mebibyteWords[$eightWord[1]] * 1024 * 1024,
+            \SugarCraft\Code\Protocol\Methods\MediaMethods::TRANSCRIBE_MAX_AUDIO_BYTES,
+            'the transcribe ceiling word no longer names MediaMethods::TRANSCRIBE_MAX_AUDIO_BYTES'
+        );
+    }
+
+    /**
+     * CCD-DOC-02 (G3-D): PLUGINS.md's roots table and bundles verb roster
+     * mirror BundleDiscovery's class docblock (three numbered roots, one per
+     * tier) and Subcommands::bundles() dispatch arms. Both rosters are derived
+     * live and compared both directions — an added verb or root without the
+     * matching doc row reddens here, and so does a doc row nobody implements.
+     */
+    public function testPluginsRootsAndVerbsMirrorTheLoaderRosters(): void
+    {
+        $page = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/PLUGINS.md');
+        self::assertStringContainsString('# ', $page, 'PLUGINS.md did not load');
+
+        $docBlock = (string) (new \ReflectionClass(\SugarCraft\Code\Bundles\BundleDiscovery::class))->getDocComment();
+        self::assertSame(
+            1,
+            \preg_match('/Three source roots/', $docBlock),
+            'the discovery docblock stopped spelling its three roots — this arm counts them from the numbered list below'
+        );
+        \preg_match_all('/^ \* +\d\. .*?tier `([a-z]+)`/ms', $docBlock, $docBlockTiers);
+        $rootCount = \count($docBlockTiers[1]);
+        self::assertGreaterThanOrEqual(3, $rootCount, 'the discovery docblock lost a numbered root — recount the tiers it ships');
+
+        self::assertSame(1, \preg_match('/^([A-Z][a-z]+) roots are scanned/m', $page, $docCount), 'the roots sentence lost its spelled count');
+        $wordNumbers = ['Two' => 2, 'Three' => 3, 'Four' => 4];
+        self::assertArrayHasKey($docCount[1], $wordNumbers, "unknown roots count word '{$docCount[1]}'");
+        self::assertSame($rootCount, $wordNumbers[$docCount[1]], 'the roots count on the page drifted from the numbered docblock list in BundleDiscovery');
+
+        \preg_match_all('/^\| (`[^|]+`|every `pluginPaths` entry) \| `([a-z]+)` \|/m', $page, $pageTiers);
+        self::assertSame(
+            $rootCount,
+            \count($pageTiers[2]),
+            'the roots table stopped matching the numbered roots in the discovery docblock'
+        );
+        $tierSequence = ['project', 'user', 'user'];
+        self::assertSame(
+            \array_slice($tierSequence, 0, $rootCount),
+            $pageTiers[2],
+            'the table tier column drifted from the per-root tiers in the docblock (project, user, user — the third root may only ever be user)'
+        );
+        self::assertStringContainsString(
+            'every `pluginPaths` entry',
+            $page,
+            'the third root left the table — the docblock still lists the pluginPaths container'
+        );
+        self::assertSame(
+            'pluginPaths',
+            (string) (new \ReflectionClass(\SugarCraft\Code\Bundles\BundleDiscovery::class))->getConstant('SETTING_KEY'),
+            'BundleDiscovery::SETTING_KEY moved — PLUGINS.md needs the new spelling, not this arm lying about it'
+        );
+
+        $bundlesBody = self::bodyExcerpt(self::sourceOf('Cli/Subcommands.php'), 'bundles');
+        \preg_match_all("/verb === '([a-z-]+)'/", $bundlesBody, $verbArms);
+        $liveVerbs = \array_values(\array_unique($verbArms[1]));
+        self::assertCount(6, $liveVerbs, 'the bundles dispatch arm count moved — reconcile PLUGINS.md and this roster');
+        \preg_match_all('/candy-code bundles ([a-z]+)/', $page, $pageVerbs);
+        $pageVerbSet = \array_values(\array_unique($pageVerbs[1]));
+        self::assertEqualsCanonicalizing(
+            $liveVerbs,
+            $pageVerbSet,
+            'the bundles verbs on the page and in Subcommands::bundles() diverged (live: ' . \implode(', ', $liveVerbs) . ')'
+        );
+    }
+
+    public function testDocsIndexRosterMatchesDisk(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $page = (string) file_get_contents($root . '/docs/README.md');
+        self::assertNotEmpty($page, 'docs/README.md reads empty — the index census is void');
+
+        // CCD-DOC-05: the docs index listed 24 pages and disk carried 25 (minus
+        // its own README) with no guard. Every .md row and every directory row
+        // is now derived from disk and compared both directions, so a page that
+        // lands unindexed — or an index row for a deleted page — goes red here
+        // instead of staying invisible.
+        $diskPages = array_values(array_filter(
+            scandir($root . '/docs') ?: [],
+            static fn (string $f): bool => $f !== 'README.md' && str_ends_with($f, '.md')
+        ));
+        preg_match_all('/^\| \[([A-Za-z0-9_.]+\.md)\]\(\1\)/m', $page, $indexRows);
+        $indexedPages = \array_values(\array_unique($indexRows[1]));
+        self::assertSame(
+            \count($indexRows[1]),
+            \count($indexedPages),
+            'an index row appears twice in docs/README.md — the census cannot arbitrate duplicates'
+        );
+        \sort($diskPages);
+        \sort($indexedPages);
+        self::assertSame(
+            $diskPages,
+            $indexedPages,
+            'docs/README.md index no longer matches the pages on disk (disk: ' . \implode(', ', $diskPages) . ')'
+        );
+
+        // Hidden directories (dot-prefixed: '.' and '..' themselves, plus tool
+        // state such as an untracked docs/.caliber cache) are never indexable
+        // docs pages — a CI checkout never carries them, so counting them would
+        // red this leg on a locally dirty tree while the index stays truthful.
+        $diskDirs = array_values(array_filter(
+            scandir($root . '/docs') ?: [],
+            static fn (string $f): bool => !\str_starts_with($f, '.') && \is_dir($root . '/docs/' . $f)
+        ));
+        \sort($diskDirs);
+        $indexedDirs = [];
+        foreach ($diskDirs as $dir) {
+            if (\str_contains($page, '| [' . $dir . '/](' . $dir . '/)')) {
+                $indexedDirs[] = $dir;
+            }
+        }
+        self::assertSame(
+            $diskDirs,
+            $indexedDirs,
+            'a docs/ subdirectory is missing from the index (disk: ' . \implode(', ', $diskDirs) . ')'
         );
     }
 }
