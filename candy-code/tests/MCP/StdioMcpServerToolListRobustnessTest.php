@@ -65,6 +65,9 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
 
     private string $tempDir = '';
 
+    /** @var list<\SugarCraft\Code\MCP\McpClient> clients whose stdio children must die with the row */
+    private array $clients = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -75,6 +78,11 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->clients as $client) {
+            $client->stopServers();
+        }
+        $this->clients = [];
+
         foreach (glob($this->tempDir . '/*') ?: [] as $file) {
             @unlink($file);
         }
@@ -229,6 +237,103 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
         } finally {
             $server->stop();
         }
+    }
+
+    /**
+     * R-MCP: THE SKIP IS LOUD. A dropped definition must never be silently
+     * vanished — the boot proceeds, but the transport announces exactly what
+     * it skipped, named and counted, through the library's
+     * `malformedToolDefinitions()`. Reaching the library transport through
+     * the adapter's private property is deliberate: the adapter forwards no
+     * such accessor today, and this row pins the announcement's presence on
+     * the object the product actually holds (a forwarding gap is a seam the
+     * closeout can see because the reflection site names it).
+     */
+    public function testTheSkippedDefinitionsAreAnnouncedNotSilentlyVanished(): void
+    {
+        $server = $this->serverAnswering(
+            '[{"name":5},'
+            . '{"name":"grep","description":"search","inputSchema":{"type":"object"}},'
+            . '{"name":"edit","description":false},'
+            . '"not even an object"]',
+        );
+
+        try {
+            $server->start();
+
+            $transport = self::transportOf($server);
+            self::assertSame(
+                // {"name":5} has no usable string name → get_debug_type; the
+                // rest name themselves. `read`/`write`-style defaulted keys
+                // are NOT here: they registered (neighbours row above).
+                ['array', 'edit', 'string'],
+                $transport->malformedToolDefinitions(),
+            );
+            $report = $transport->malformedToolDefinitionsReport();
+            $this->assertStringContainsString('toollist', $report, 'the announcement did not name the server');
+            $this->assertStringContainsString('3 malformed tool definition', $report);
+            $this->assertStringNotContainsString('refusing to boot', $report, 'the announcement must not claim a refusal that did not happen');
+        } finally {
+            $server->stop();
+        }
+    }
+
+    /**
+     * R-MCP: THE FULL BLAST-RADIUS CONTRACT, end to end over the REAL
+     * multi-server route. One `.mcp.json` with two stdio entries: the first
+     * advertises one poisoned definition beside a valid one, the second is
+     * clean. After `startServers()`: no aggregate report (nothing failed),
+     * BOTH servers are up, the poisoned server keeps its valid sibling, and
+     * the clean server is untouched. Under the d5864c51b refusal the
+     * poisoned server would have been dropped WHOLE — its `grep` gone — and
+     * that is the leg this row reddens if the cascade ever regrows.
+     */
+    public function testAPoisonedServerKeepsItsSiblingAndNeitherDisturbsTheOther(): void
+    {
+        $poisonScript = $this->listingScript('[{"name":5},{"name":"grep","description":"search","inputSchema":{"type":"object"}}]');
+        $cleanScript = $this->listingScript('[{"name":"echo","description":"e","inputSchema":{"type":"object"}}]');
+
+        $config = $this->tempDir . '/two_stdio_servers.json';
+        file_put_contents($config, json_encode(['mcpServers' => [
+            'poisoned' => ['command' => PHP_BINARY, 'args' => [$poisonScript]],
+            'quiet' => ['command' => PHP_BINARY, 'args' => [$cleanScript]],
+        ]]));
+
+        $client = new \SugarCraft\Code\MCP\McpClient($config, new Client(), null, true);
+        $this->clients[] = $client;
+
+        $thrown = null;
+        try {
+            $client->startServers();
+        } catch (\Throwable $e) {
+            $thrown = $e;
+        }
+        $this->assertNull($thrown, 'a config with zero failed entries threw: ' . ($thrown?->getMessage() ?? ''));
+
+        $servers = (new \ReflectionProperty($client, 'servers'))->getValue($client);
+        $this->assertSame(['poisoned', 'quiet'], array_keys($servers));
+
+        $poisonedNames = array_map(static fn (McpTool $t): string => $t->name, $servers['poisoned']->listTools());
+        $cleanNames = array_map(static fn (McpTool $t): string => $t->name, $servers['quiet']->listTools());
+
+        $this->assertSame(['grep'], $poisonedNames, 'the poisoned server lost its valid sibling, or the whole server went with the malformed entry');
+        $this->assertSame(['echo'], $cleanNames, 'the clean server was collateral damage');
+        $this->assertTrue($servers['poisoned']->isUp());
+        $this->assertTrue($servers['quiet']->isUp());
+    }
+
+    /** The library transport the adapter wraps (see the announcement row for WHY by reflection). */
+    private static function transportOf(StdioMcpServer $adapter): \SugarCraft\McpClient\StdioMcpServer
+    {
+        return (new \ReflectionProperty($adapter, 'transport'))->getValue($adapter);
+    }
+
+    private function listingScript(string $toolsJson): string
+    {
+        $script = $this->tempDir . '/tools_' . md5($toolsJson) . '.php';
+        file_put_contents($script, sprintf(self::TOOL_LISTING_SERVER, $toolsJson));
+
+        return $script;
     }
 
     // =========================================================================
@@ -464,13 +569,10 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
 
     private function serverAnswering(string $toolsJson): StdioMcpServer
     {
-        $script = $this->tempDir . '/tools_' . md5($toolsJson) . '.php';
-        file_put_contents($script, sprintf(self::TOOL_LISTING_SERVER, $toolsJson));
-
         return new StdioMcpServer(
             name: 'toollist',
             command: PHP_BINARY,
-            args: [$script],
+            args: [$this->listingScript($toolsJson)],
             env: [],
             startTimeoutSeconds: 5.0,
         );

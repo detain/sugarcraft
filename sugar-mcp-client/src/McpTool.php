@@ -119,9 +119,10 @@ final class McpTool
         // server-authored: control characters (NUL, the CSI/OSC openers, the
         // C1 block) in a tool name poison every transcript, TUI frame, and
         // downstream registry that trusts the name to be displayable. The
-        // refusal rides the tools/list malformed-count refusal in
-        // StdioMcpServer, so a server advertising bad names fails the boot
-        // loudly instead of minting a roster of invisible landmines.
+        // gate's null rides StdioMcpServer's malformed-tools SKIP: the
+        // poisoned definition is counted and announced, never registered,
+        // and the rest of the roster boots — instead of minting a roster of
+        // invisible landmines.
         if (preg_match('/[\x00-\x1F\x7F-\x9F]/u', $definition['name']) === 1) {
             return false;
         }

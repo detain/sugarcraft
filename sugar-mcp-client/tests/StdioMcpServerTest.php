@@ -148,7 +148,7 @@ final class StdioMcpServerTest extends TestCase
         self::assertSame($held, $buffer->getValue($server));
     }
 
-    /** @return list<array{string, array<string,mixed>, list<string>}> */
+    /** @return list<array{string, array<string,mixed>, list<string>, list<string>}> */
     public static function toolListShapes(): array
     {
         return [
@@ -157,16 +157,19 @@ final class StdioMcpServerTest extends TestCase
                     ['name' => 'get_time', 'description' => 't', 'inputSchema' => ['type' => 'object']],
                     ['name' => 'get_date', 'description' => 'd', 'inputSchema' => ['type' => 'object']],
                 ]],
-            ], ['get_time', 'get_date']],
-            'empty tools' => ['probe', ['result' => ['tools' => []]], []],
-            'missing result' => ['probe', [], []],
-            'missing tools key' => ['probe', ['result' => []], []],
-            // Flip 2026-11-04 (fix wave, review M7): wrong-typed containers
-            // and dropped definitions are REFUSALS now — "connected, 0
-            // tools" was the defect this shape defends against. $expected
-            // null means parseTools must throw.
-            'non-array tools container refused' => ['probe', ['result' => ['tools' => 'nope']], null],
-            'malformed entries refuse the boot' => ['probe', [
+            ], ['get_time', 'get_date'], []],
+            'empty tools' => ['probe', ['result' => ['tools' => []]], [], []],
+            'missing result' => ['probe', [], [], []],
+            'missing tools key' => ['probe', ['result' => []], [], []],
+            // R-MCP reconciliation (2026-11-04): the boot refuses nothing and
+            // nobody gets the axe — the guards SKIP and COUNT. The fourth
+            // element is the exact malformed roster announced through
+            // malformedToolDefinitions(), so "skipped" can never quietly
+            // become "silently vanished" (the defect d5864c51b over-corrected
+            // by refusing whole boots) and a healthy server's well-formed
+            // siblings can never become collateral damage.
+            'non-array tools container skips to empty' => ['probe', ['result' => ['tools' => 'nope']], [], ['tools container was string']],
+            'malformed entries skip and siblings register' => ['probe', [
                 'result' => ['tools' => [
                     ['name' => 'a', 'description' => '', 'inputSchema' => []],
                     'garbage-string',
@@ -174,47 +177,31 @@ final class StdioMcpServerTest extends TestCase
                     7,
                     ['name' => 'b', 'description' => '', 'inputSchema' => []],
                 ]],
-            ], null],
-            'wrong-typed name refuses' => ['probe', [
+            ], ['a', 'b'], ['string', 'null', 'int']],
+            'wrong-typed name skips its definition' => ['probe', [
                 'result' => ['tools' => [['name' => 5], ['name' => 'ok', 'description' => '', 'inputSchema' => []]]],
-            ], null],
-            // Measured (re-graded by the fix wave): definitions with no
-            // usable name must be refused LOUDLY, not silently dropped — a
-            // vanished tool is exactly the "looks connected, exposes less"
-            // defect the tools/list gate exists to prevent.
-            'nameless and empty-named definitions refuse' => ['probe', [
+            ], ['ok'], ['array']],
+            // Measured: definitions with no usable name are dropped from the
+            // roster (a vanished tool cannot be addressed) but COUNTED in the
+            // announcement — diagnosability survives the skip.
+            'nameless and empty-named definitions skip' => ['probe', [
                 'result' => ['tools' => [
                     ['description' => 'no name at all'],
                     ['name' => '', 'description' => 'empty name'],
                     ['name' => null, 'description' => 'null name'],
                     ['name' => 'keeper', 'description' => '', 'inputSchema' => []],
                 ]],
-            ], null],
+            ], ['keeper'], ['array', '', 'array']],
         ];
     }
 
     /** @dataProvider toolListShapes */
-    public function testParseToolsGuardsEveryNestedShape(string $name, array $response, ?array $expected): void
+    public function testParseToolsGuardsEveryNestedShape(string $name, array $response, ?array $expected, array $drops): void
     {
         $server = new StdioMcpServer($name, '/bin/true');
 
         $parse = new \ReflectionMethod(StdioMcpServer::class, 'parseTools');
         $parse->setAccessible(true);
-
-        if ($expected === null) {
-            $thrown = null;
-
-            try {
-                $parse->invoke($server, $response);
-            } catch (\RuntimeException $refusal) {
-                $thrown = $refusal->getMessage();
-            }
-
-            self::assertIsString($thrown, 'a lying or half-broken tools/list booted silently');
-            self::assertStringContainsString($name, $thrown, 'the refusal did not name the server');
-
-            return;
-        }
 
         /** @var list<\SugarCraft\McpClient\McpTool> $tools */
         $tools = $parse->invoke($server, $response);
@@ -223,6 +210,21 @@ final class StdioMcpServerTest extends TestCase
         foreach ($tools as $tool) {
             self::assertSame($name, $tool->serverName);
         }
+
+        // The announcement is the other half of the guard: exactly the
+        // skipped shapes are recorded, and exactly the clean rows announce
+        // nothing.
+        self::assertSame($drops, $server->malformedToolDefinitions());
+        $report = $server->malformedToolDefinitionsReport();
+
+        if ($drops === []) {
+            self::assertSame('', $report, 'a boot that skipped nothing announced malformed definitions anyway');
+
+            return;
+        }
+
+        self::assertStringContainsString($name, $report, 'the announcement did not name the server');
+        self::assertStringContainsString((string) count($drops) . ' malformed tool definition', $report);
     }
 
     public function testParseToolsPreservesComplexInputSchemas(): void

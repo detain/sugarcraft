@@ -194,9 +194,13 @@ What you get when things go wrong, so you can branch on it knowingly:
     `tools/list`, plus the stderr tail when the server wrote one;
   - `… — protocol mismatch: this client speaks X, the server answered Y`;
   - a `tools/list` page that is not shaped like a tool list — a non-array
-    `tools`, or any definition malformed enough that the name cannot be
-    trusted — refuses the boot by name and count instead of connecting to a
-    silently half-empty roster (a legitimately EMPTY `tools: []` stays legal).
+    `tools`, or a definition malformed enough that the name cannot be
+    trusted — SKIPS and COUNTS rather than axing the boot: the poisoned
+    shapes never enter the roster, the server's well-formed definitions do,
+    and `malformedToolDefinitionsReport()` announces the count and first
+    names for whoever launches the server to surface (a legitimately EMPTY
+    `tools: []` stays legal). Server-level failures — an error reply, no
+    reply, lying pagination — still throw by name and cause.
 - `callTool()` **answers, never throws**: a failed call comes back as
   `['error' => ...]` naming its CAUSE — the server's own JSON-RPC code and
   message when it refused

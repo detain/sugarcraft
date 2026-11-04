@@ -249,6 +249,22 @@ final class StdioMcpServer implements McpServer
     private ?string $lastFailureCause = null;
 
     /**
+     * Labels of the tools/list definitions this server advertised that the
+     * well-typedness gate refused to build, during the CURRENT start. A
+     * malformed definition is never registered — but it is SKIPped and
+     * COUNTED, not fatal: one bad entry's blast radius stops at that entry,
+     * its well-formed neighbours still boot, and this list carries the
+     * announcement ({@see malformedToolDefinitionsReport()}) so the drops
+     * are diagnosable instead of silent.
+     *
+     * Post-mortem evidence like the stderr tail: cleared at every start(),
+     * deliberately kept by stop() so a failed launch's report survives.
+     *
+     * @var list<string>
+     */
+    private array $malformedToolDefs = [];
+
+    /**
      * The identity this client advertises in the initialize handshake. The
      * version literal is only the FALLBACK: an installed copy announces its
      * real package version (see {@see defaultClientInfo()}); the literal
@@ -613,6 +629,7 @@ final class StdioMcpServer implements McpServer
         $this->stderrTail = '';
         $this->stderrTruncated = false;
         $this->lastFailureCause = null;
+        $this->malformedToolDefs = [];
 
         $deadline = self::nowSeconds() + $this->startTimeoutSeconds;
 
@@ -758,7 +775,8 @@ final class StdioMcpServer implements McpServer
         // The roster belongs to the connection that just died: isUp() is
         // false while listTools() served a table of dead tools.
         $this->tools = [];
-        // stderrTail/stderrTruncated/lastFailureCause deliberately SURVIVE
+        // stderrTail/stderrTruncated/lastFailureCause/malformedToolDefs
+        // deliberately SURVIVE
         // stop() — the captured evidence is exactly what a post-mortem of
         // the server you just lost needs. start() clears them afresh.
     }
@@ -890,6 +908,40 @@ final class StdioMcpServer implements McpServer
     public function listTools(): array
     {
         return $this->tools;
+    }
+
+    /**
+     * Labels of the tools/list definitions refused by the well-typedness
+     * gate during the current start — the ones {@see parseTools()} skipped
+     * instead of registering. Post-mortem evidence: reset by every start(),
+     * kept by stop().
+     *
+     * @return list<string>
+     */
+    public function malformedToolDefinitions(): array
+    {
+        return $this->malformedToolDefs;
+    }
+
+    /**
+     * One-line announcement for the skipped definitions, '' when the last
+     * tools/list walk registered everything the server advertised. Report
+     * it wherever the server's start outcome is surfaced — the roster is
+     * already SAFE (only valid definitions were registered); this is the
+     * half of the story the user must not have to guess.
+     */
+    public function malformedToolDefinitionsReport(): string
+    {
+        if ($this->malformedToolDefs === []) {
+            return '';
+        }
+
+        return sprintf(
+            'MCP server %s advertised %d malformed tool definition(s) in tools/list (first: %s) — skipped, the rest of the roster registered',
+            $this->name,
+            count($this->malformedToolDefs),
+            implode(', ', array_slice($this->malformedToolDefs, 0, 5)),
+        );
     }
 
     /** Budget for delivering `notifications/cancelled` after a timed-out call. */
@@ -2191,6 +2243,17 @@ final class StdioMcpServer implements McpServer
      * arrays arrive in the wild), and the per-definition type check inside
      * McpTool::tryFromArray.
      *
+     * The guards SKIP and COUNT — they never abort. A definition the gate
+     * cannot build is exactly the half-trusted roster entry that must not
+     * enter dispatch, so it is dropped; but dropping it must not take the
+     * server's valid siblings, let alone every OTHER configured server,
+     * down with it. Every drop is recorded in {@see $malformedToolDefs}
+     * and announced through {@see malformedToolDefinitionsReport()}, so
+     * "advertised 3 malformed definitions" stays diagnosable. Server-level
+     * failures (error reply, no reply, lying pagination) STILL throw —
+     * those say nothing was received at all, and McpClient contains them
+     * to the one server.
+     *
      * @param array<string,mixed> $response inspection-view array
      * @return list<McpTool>
      */
@@ -2199,14 +2262,13 @@ final class StdioMcpServer implements McpServer
         $toolDefs = $response['result']['tools'] ?? [];
 
         if (!is_array($toolDefs)) {
-            // A wrong-typed tools value is a LYING roster, not an empty one.
-            // Booting "connected, 0 tools" is the exact defect the
-            // tools/list gate exists to prevent; refuse the start loudly.
-            throw new \RuntimeException(sprintf(
-                'MCP server %s answered tools/list with tools as %s, expected a list of tool definitions',
-                $this->name,
-                get_debug_type($toolDefs),
-            ));
+            // A wrong-typed tools container is recorded and answers as the
+            // empty roster this server actually delivered. Iterating a
+            // scalar is a PHP warning, so the shape is checked once here —
+            // the same family as the per-entry is_array($def) skip below.
+            $this->malformedToolDefs[] = sprintf('tools container was %s', get_debug_type($toolDefs));
+
+            return [];
         }
 
         $tools = [];
@@ -2227,14 +2289,7 @@ final class StdioMcpServer implements McpServer
             }
         }
 
-        if ($dropped !== []) {
-            throw new \RuntimeException(sprintf(
-                'MCP server %s advertised %d malformed tool definition(s) in tools/list (first: %s) — refusing to boot a half-trusted roster',
-                $this->name,
-                count($dropped),
-                implode(', ', array_slice($dropped, 0, 5)),
-            ));
-        }
+        $this->malformedToolDefs = [...$this->malformedToolDefs, ...$dropped];
 
         // A LEGAL empty roster stays legal: a server with no tools is real.
         return $tools;

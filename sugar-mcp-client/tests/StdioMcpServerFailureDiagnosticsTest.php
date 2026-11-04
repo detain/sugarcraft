@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 use ReflectionObject;
 use ReflectionProperty;
+use SugarCraft\McpClient\McpTool;
 use SugarCraft\McpClient\StdioMcpServer;
 
 /**
@@ -365,23 +366,26 @@ final class StdioMcpServerFailureDiagnosticsTest extends TestCase
     }
 
     /**
-     * Review N3 + M7 (fix wave): a server-authored tool name carrying a
-     * raw NUL is refused by the well-typedness gate, and the malformed
-     * count turns the boot into a loud failure instead of a silently
-     * shrunk roster.
+     * Review N3 + M7 (fix wave), re-scoped by R-MCP: a server-authored tool
+     * name carrying a raw NUL is refused by the well-typedness gate — and
+     * the gate SKIPS and COUNTS rather than axe-ing the boot. The poisoned
+     * name never reaches the roster, the server's well-formed `echo` tool
+     * does, the exchange works, and the announcement names the count so the
+     * shrunk roster is diagnosable instead of silent.
      */
-    public function testAToolNameCarryingControlBytesRefusesTheBoot(): void
+    public function testAToolNameCarryingControlBytesIsSkippedAndAnnounced(): void
     {
         $server = $this->spawn('hostile_handshake_server.php', ['--bad-tool-name']);
+        $server->start();
 
-        $caught = null;
-        try {
-            $server->start();
-        } catch (\RuntimeException $error) {
-            $caught = $error->getMessage();
-        }
+        $names = array_map(static fn (McpTool $tool): string => $tool->name, $server->listTools());
+        self::assertSame(['echo'], $names, 'the poisoned name reached the roster, or the whole boot was lost with it');
 
-        self::assertIsString($caught, 'the boot must refuse a half-poisoned roster');
-        self::assertStringContainsString('1 malformed tool definition', $caught);
+        $reply = $server->callTool('echo', ['raw' => 'alive']);
+        self::assertSame('alive', $reply['content'][0]['text'] ?? null, 'the surviving tool must still answer');
+
+        self::assertCount(1, $server->malformedToolDefinitions());
+        self::assertStringContainsString('1 malformed tool definition', $server->malformedToolDefinitionsReport());
+        self::assertTrue($server->isUp());
     }
 }
