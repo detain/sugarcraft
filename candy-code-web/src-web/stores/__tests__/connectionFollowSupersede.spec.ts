@@ -1,8 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
-import type { EventEnvelope } from '../../protocol/generated'
 import { Wire } from '../agents/__tests__/harness'
-import { useConnectionStore, type SessionFollower } from '../connection'
+import { useConnectionStore } from '../connection'
 
 /**
  * CW-8 (reviews-1103): follow() overwrote the map entry for a session
@@ -13,7 +12,7 @@ import { useConnectionStore, type SessionFollower } from '../connection'
  * identity-guarded unsubscribe protects the current holder.
  */
 
-function follower(): SessionFollower & { event: ReturnType<typeof vi.fn>; resumed: ReturnType<typeof vi.fn> } {
+function follower() {
   return {
     cursor: () => null,
     event: vi.fn(),
@@ -42,7 +41,7 @@ describe('follow supersession (CW-8)', () => {
     expect(newOne.resumed).not.toHaveBeenCalled()
 
     // Delivery goes to the current holder only.
-    const envelope: EventEnvelope = { sessionId: 's9', seq: 1, type: 'notice.shown', ts: 1, durable: true, data: {} } as unknown as EventEnvelope
+    const envelope = { sessionId: 's9', seq: 1, type: 'notice.shown', ts: 1, durable: true, data: {} }
     wire.socket().event(envelope)
     await Promise.resolve()
     expect(newOne.event).toHaveBeenCalledTimes(1)
@@ -58,7 +57,7 @@ describe('follow supersession (CW-8)', () => {
     connection.follow('s9', newOne)
     unsubOld()
 
-    const envelope = { sessionId: 's9', seq: 2, type: 'notice.shown', ts: 1, durable: true, data: {} } as unknown as EventEnvelope
+    const envelope = { sessionId: 's9', seq: 2, type: 'notice.shown', ts: 1, durable: true, data: {} }
     wire.socket().event(envelope)
     await Promise.resolve()
     expect(newOne.event).toHaveBeenCalledTimes(1)

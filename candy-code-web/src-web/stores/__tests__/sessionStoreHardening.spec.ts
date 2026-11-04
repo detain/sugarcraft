@@ -98,7 +98,7 @@ describe('unsubscribe detaches the tab client tools (CW-DBA-13)', () => {
   it('dropping the follow drops the registration the same session attached', async () => {
     await connect()
     const clientTools = useClientToolsStore()
-    clientTools.implement({ name: 'probe', description: 'a probe', inputSchema: {} })
+    clientTools.implement({ name: 'probe', description: 'a probe', inputSchema: {}, run: () => 'pong' })
     const session = useSessionStore('s1')
 
     const subscribing = session.subscribe()

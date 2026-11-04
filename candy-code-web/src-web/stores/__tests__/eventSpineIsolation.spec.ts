@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { EventEnvelope } from '../../protocol/generated'
 import { Wire } from '../agents/__tests__/harness'
 import { useConnectionStore, type SessionFollower } from '../connection'
@@ -21,8 +21,8 @@ beforeEach(async () => {
   await wire.connect()
 })
 
-function envelope(sessionId: string | null, type: string, data: Record<string, unknown>, seq: number): EventEnvelope {
-  return { sessionId, seq, type, ts: 1, durable: true, data } as EventEnvelope
+function envelope(sessionId: string | null, type: string, data: Record<string, unknown>, seq: number): Record<string, unknown> {
+  return { sessionId, seq, type, ts: 1, durable: true, data }
 }
 
 describe('the event spine isolates its consumers (CW-1)', () => {
