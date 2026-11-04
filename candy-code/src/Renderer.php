@@ -2135,25 +2135,22 @@ final class Renderer
                 // Chat) means its own frame-diffing never kicks in - fine here,
                 // since Chat already does its own diffing at a higher level in
                 // view() and double-diffing isn't needed for correctness.
-                // Veil clips the overlay to the background's widest line, and the
-                // frame's lines are only as wide as their own content - so a modal
-                // wider than the current transcript would lose its right border
-                // (most visibly mid-turn, which is exactly when a permission
-                // prompt appears). Widen the backdrop to fit first.
+                // Veil clips the overlay to the background's widest VISIBLE
+                // line, and the frame's lines are only as wide as their own
+                // content - so a modal wider than the current transcript would
+                // lose its right border (most visibly mid-turn, which is
+                // exactly when a permission prompt appears). Widen the backdrop
+                // to fit first.
                 //
-                // The rows the overlay covers have their zone sentinels LIFTED
-                // first and put back afterwards (audit 15b-09). Veil splits each
-                // covered row around the overlay by cell offset, and its Width
-                // calls count every sentinel codepoint (and the zone id between
-                // them) as a cell. So a covered row carrying a `toolcall:` zone,
-                // or the bar's `pane:menu` zone under a full-height palette, was
-                // cut at the wrong column: the overlay slid left by the
-                // sentinels' length on that row, id fragments leaked on screen,
-                // and the row came out wider than the terminal. With the
-                // sentinels out of the way the cut lands on visible columns; a
-                // zone lying wholly beside the overlay is restored at the same
-                // columns, and a zone the overlay overlaps is dropped, because
-                // part of it is no longer on screen.
+                // The rows the overlay covers still have their zone sentinels
+                // LIFTED first and put back afterwards (audit 15b-09). The
+                // compositing rewrite (sugar-overlay ba716c5c3) made
+                // Veil's row splits marker-safe - a sentinel no longer leaks
+                // as id fragments - but a zone left in place would keep its
+                // pair around cells the overlay now hides, so a click could
+                // land on an invisible span. With the sentinels out of the way
+                // the restored zone is clipped to the part still beside the
+                // overlay, and a zone the overlay covers wholly is dropped.
                 [$frame, $lifted] = self::liftZonesUnderOverlay($frame, $overlay);
                 $backdrop = self::padForOverlay($frame, $overlay, $chat->cols());
                 $shift = self::overlayLeftShift($backdrop, $overlay, $chat->cols());
@@ -8065,6 +8062,12 @@ final class Renderer
      * any wider overlay. Padding is applied only when an overlay is actually
      * being composited, so a plain frame keeps its existing ragged-right shape
      * (and the trailing-space-free output every other renderer test asserts on).
+     *
+     * Widths are VISIBLE widths: since the MarkedFrame compositing rewrite
+     * (sugar-overlay ba716c5c3) a zone sentinel and its id cost zero cells for
+     * Veil, so padding to the inflated `Width::string()` would build a canvas
+     * the compositor never sees and centre the overlay against phantom
+     * columns.
      */
     private static function padForOverlay(string $frame, string $overlay, int $cols): string
     {
@@ -8072,12 +8075,12 @@ final class Renderer
 
         $frameWidth = 0;
         foreach ($lines as $line) {
-            $frameWidth = max($frameWidth, Width::string($line));
+            $frameWidth = max($frameWidth, self::overlayVisibleWidth($line));
         }
 
         $overlayWidth = 0;
         foreach (explode("\n", $overlay) as $line) {
-            $overlayWidth = max($overlayWidth, Width::string($line));
+            $overlayWidth = max($overlayWidth, self::overlayVisibleWidth($line));
         }
 
         $target = min(max(1, $cols), max($frameWidth, $overlayWidth));
@@ -8086,13 +8089,34 @@ final class Renderer
         }
 
         foreach ($lines as $index => $line) {
-            $pad = $target - Width::string($line);
+            $pad = $target - self::overlayVisibleWidth($line);
             if ($pad > 0) {
                 $lines[$index] = $line . str_repeat(' ', $pad);
             }
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Cells the terminal actually advances for a frame row that may carry
+     * zone sentinels: `Width::string()` of the row with the sentinels and
+     * their ids stripped, matching what {@see MarkedFrame} measures.
+     */
+    private static function overlayVisibleWidth(string $row): int
+    {
+        return Width::string(self::stripZoneMarkers($row));
+    }
+
+    /** @param list<string> $rows */
+    private static function visibleWidestOf(array $rows): int
+    {
+        $widest = 0;
+        foreach ($rows as $row) {
+            $widest = max($widest, self::overlayVisibleWidth($row));
+        }
+
+        return $widest;
     }
 
     /**
@@ -8140,7 +8164,7 @@ final class Renderer
      * to the part of its span that lies left or right of the overlay's
      * columns and dropped when the overlay covers all of it. Those columns are
      * recomputed the way {@see Veil::composite()} placed the overlay: centred
-     * against the backdrop's widest line, plus $shift.
+     * against the backdrop's widest VISIBLE line, plus $shift.
      *
      * An open marker pairs with the next close marker in the row (zones in
      * this renderer are single-row and unnested), so a dropped zone always
@@ -8154,8 +8178,8 @@ final class Renderer
             return $frame;
         }
 
-        $overlayWidth = self::widestOf(explode("\n", $overlay));
-        $left = Position::CENTER->xOffset($overlayWidth, self::widestOf(explode("\n", $backdrop))) + $shift;
+        $overlayWidth = self::visibleWidestOf(explode("\n", $overlay));
+        $left = Position::CENTER->xOffset($overlayWidth, self::visibleWidestOf(explode("\n", $backdrop))) + $shift;
         $right = $left + $overlayWidth;
 
         $rows = explode("\n", $frame);
@@ -8245,26 +8269,29 @@ final class Renderer
      * past column `$cols`. Never positive: an overlay that already fits stays
      * exactly where {@see Veil::composite()} centred it.
      *
-     * Veil centres against `Width::string()` of the backdrop, and at this
-     * point the frame still carries the zone sentinels {@see scanRoot()} only
-     * strips later. Those sentinel cells count as columns, so a frame whose
-     * visible width is 62 measures 84 whenever the status bar advertises its
-     * `pane:menu` zone, and Veil centres the overlay as though the terminal
-     * were that wide - pushing the right edge off-screen. An over-wide row is
-     * exactly the absolute-cursorTo row collision {@see render()}'s tail clip
-     * exists to prevent (the diff renderer paints one logical line per
-     * physical row), so the centre is clamped rather than trusted.
+     * Veil centres against the VISIBLE width of the backdrop - since the
+     * MarkedFrame compositing rewrite (sugar-overlay ba716c5c3) zone
+     * sentinels and their ids cost zero cells there - and this helper must
+     * centre against the very same number or its answer describes a placement
+     * Veil will never make. At this point the frame still carries the zone
+     * sentinels {@see scanRoot()} only strips later; measuring them as cells
+     * here would shift the overlay by half their length (and made an
+     * over-narrow backdrop chop the overlay's head once the compositor
+     * stopped agreeing). An over-wide row is exactly the absolute-cursorTo
+     * row collision {@see render()}'s tail clip exists to prevent (the diff
+     * renderer paints one logical line per physical row), so the centre is
+     * clamped rather than trusted.
      */
     private static function overlayLeftShift(string $backdrop, string $overlay, int $cols): int
     {
         $backdropWidth = 0;
         foreach (explode("\n", $backdrop) as $line) {
-            $backdropWidth = max($backdropWidth, Width::string($line));
+            $backdropWidth = max($backdropWidth, self::overlayVisibleWidth($line));
         }
 
         $overlayWidth = 0;
         foreach (explode("\n", $overlay) as $line) {
-            $overlayWidth = max($overlayWidth, Width::string($line));
+            $overlayWidth = max($overlayWidth, self::overlayVisibleWidth($line));
         }
 
         $centred = Position::CENTER->xOffset($overlayWidth, $backdropWidth);
