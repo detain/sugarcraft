@@ -32,7 +32,7 @@ use SugarCraft\Tetris\Scoring\TSpin;
  *     mismatch rather than by cancellation (sugar-core ticks have
  *     no cancel API).
  *   - Game-over is detected when a freshly-spawned piece doesn't
- *     {@see Board::fits()}. After that, only `q` is honoured.
+ *     {@see Board::fits()}. After that, `q` quits and `r` restarts.
  *
  * The `Renderer` is a separate pure function that takes a Game
  * and returns the frame string — keeps `view()` tiny and the
@@ -85,6 +85,13 @@ final class Game implements Model
         public readonly int          $lockResets = 0,
         public readonly int          $combo = 0,
         public readonly bool         $backToBack = false,
+        /**
+         * Identity tag of the live gravity chain. Restarts bump it so a
+         * stale in-flight tick from the dead chain can never step the
+         * fresh board (the single-chain invariant enforced on ARRIVAL,
+         * not only at arming).
+         */
+        public readonly int          $gravityChain = 0,
     ) {}
 
     /**
@@ -119,6 +126,7 @@ final class Game implements Model
             $changes['lockResets']    ?? $this->lockResets,
             $changes['combo']         ?? $this->combo,
             $changes['backToBack']    ?? $this->backToBack,
+            $changes['gravityChain']  ?? $this->gravityChain,
         );
     }
 
@@ -155,14 +163,14 @@ final class Game implements Model
 
     public function init(): ?\Closure
     {
-        return self::scheduleGravity($this->score);
+        return self::scheduleGravity($this->score, $this->gravityChain);
     }
 
-    private static function scheduleGravity(Score $score): \Closure
+    private static function scheduleGravity(Score $score, int $chain = 0): \Closure
     {
         return Cmd::tick(
             $score->gravityIntervalUs() / 1_000_000,
-            static fn(): Msg => new GravityMsg(),
+            static fn(): Msg => new GravityMsg($chain),
         );
     }
 
@@ -186,7 +194,10 @@ final class Game implements Model
         if ($game->gravityPending === true) {
             return [$game, null];
         }
-        return [$game->mutate(['gravityPending' => true]), self::scheduleGravity($game->score)];
+        return [
+            $game->mutate(['gravityPending' => true]),
+            self::scheduleGravity($game->score, $game->gravityChain),
+        ];
     }
 
     public function update(Msg $msg): array
@@ -205,7 +216,10 @@ final class Game implements Model
                 $fresh = $this->lockDelayMs > 0
                     ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs)
                     : self::start();
-                return [$fresh, self::scheduleGravity($fresh->score)];
+                // Bump the chain tag so any tick still in flight from the
+                // dead chain lands inert on the fresh board.
+                $fresh = $fresh->mutate(['gravityChain' => $this->gravityChain + 1]);
+                return [$fresh, self::scheduleGravity($fresh->score, $fresh->gravityChain)];
             }
             return [$this, null];
         }
@@ -218,6 +232,13 @@ final class Game implements Model
             // Consume the pending slot first: every exit path below either
             // re-arms through armGravity() or deliberately ends the chain
             // (over, or a lock window taking over the timing).
+            // Enforce the single-chain invariant on ARRIVAL, not only at
+            // arming: a tick with no slot taken is stale — a doubled arm,
+            // or one in flight from before a restart whose fresh chain
+            // carries a bumped tag. It goes inert without stepping.
+            if ($msg->chain !== $this->gravityChain || $this->gravityPending === false) {
+                return [$this, null];
+            }
             $consumed = $this->mutate(['gravityPending' => false]);
             if ($this->paused) {
                 return self::armGravity($consumed);
@@ -321,6 +342,16 @@ final class Game implements Model
                 // airborne by a key path): the window owns the lock now.
                 return [$this, null];
             }
+            if ($this->lockResets >= self::LOCK_DELAY_RESET_CAP) {
+                // Forced lock: the stated cap is exhausted (or was
+                // reached through the float-and-return path, which never
+                // increments). No untimed fresh window opens here.
+                $locked = $this->lockAndSpawn();
+                if ($locked->over === true) {
+                    return [$locked, null];
+                }
+                return self::armGravity($locked);
+            }
             return $this->openLockWindow();
         }
 
@@ -363,6 +394,17 @@ final class Game implements Model
 
         if ($grounded) {
             if ($moved->lockWindowGeneration === null) {
+                if ($moved->lockResets >= self::LOCK_DELAY_RESET_CAP) {
+                    // Cap exhausted: the forced lock lands on this
+                    // successful grounded input instead of opening an
+                    // untimed fresh window (the float-jiggle bypass —
+                    // which never increments the counter — ends here).
+                    $locked = $moved->lockAndSpawn();
+                    if ($locked->over === true) {
+                        return [$locked, null];
+                    }
+                    return self::armGravity($locked);
+                }
                 // Landed on this input — open the window. The gravity
                 // chain (if still pending) self-parks on its next tick.
                 return $moved->openLockWindow();
@@ -489,7 +531,13 @@ final class Game implements Model
         // Rotate the current piece
         $piece = $this->piece;
         for ($i = 0; $i < $rotDelta; $i++) {
-            $piece = $piece->rotated(1);
+            // A rotation that does not fit is dropped, never teleported
+            // into legality (mirrors the dx-skip semantics below).
+            $rotated = $piece->rotated(1);
+            if ($this->board->fits($rotated) === false) {
+                break;
+            }
+            $piece = $rotated;
         }
         // Apply horizontal shift if it fits
         $shifted = $piece->moved($dx, 0);

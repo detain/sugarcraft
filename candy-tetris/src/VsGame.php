@@ -72,6 +72,12 @@ final class VsGame implements Model
             if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q') {
                 return [$this, Cmd::quit()];
             }
+            if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'r') {
+                // Restart the pair and arm one fresh tick chain — parity
+                // with the solo game's 'r'.
+                $fresh = self::start();
+                return [$fresh, self::scheduleTick($fresh->player)];
+            }
             return [$this, null];
         }
 
@@ -188,8 +194,15 @@ final class VsGame implements Model
         }
 
         if ($rotationsLeft > 0) {
+            $rotated = $computer->piece->rotated(1);
+            if ($computer->board->fits($rotated) === false) {
+                // Blocked rotation — abandon the rest of the plan's
+                // rotations rather than force the piece into an illegal
+                // state (mirrors the blocked-shift arm below).
+                return [$computer, true, 0, $shiftLeft];
+            }
             $stepped = $computer->mutate([
-                'piece' => $computer->piece->rotated(1),
+                'piece' => $rotated,
                 'lastActionWasRotation' => true,
             ]);
             return [$stepped, true, $rotationsLeft - 1, $shiftLeft];

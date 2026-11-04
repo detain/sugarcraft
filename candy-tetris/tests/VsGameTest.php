@@ -10,6 +10,7 @@ use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\GravityMsg;
+use SugarCraft\Tetris\Piece;
 use SugarCraft\Tetris\Tetromino;
 use SugarCraft\Tetris\VsGame;
 use PHPUnit\Framework\TestCase;
@@ -352,5 +353,73 @@ final class VsGameTest extends TestCase
         }
 
         return $game->mutate(['board' => new Board($rows)]);
+    }
+
+    /**
+     * MA-4-vs: a plan rotation that does not fit is ABANDONED, never forced.
+     * The computer's T sits at spawn with one rot1 owed; cell (4,2) is the
+     * rot1-exclusive cell (rot0 does not touch it), so the naive rotation is
+     * illegal. Pre-guard the piece was rotated blind into the blocker —
+     * an overlapping, illegal state that then dropPiece'd and locked over
+     * occupied cells. Post-guard the rotation is skipped (mirrors the
+     * blocked-shift arm) and the piece stays legal.
+     */
+    public function testComputerRotationPlanSkipsIllegalRotation(): void
+    {
+        $computer = Game::start($this->deterministicBag())
+            ->mutate(['piece' => new Piece(Tetromino::T, 0, 3, 0)]);
+        $rows = $computer->board->rows();
+        $rows[2][4] = Tetromino::I; // blocks ONLY the rot1 target; rot0 fits fine
+        $computer = $computer->mutate(['board' => new Board($rows)]);
+
+        $vs = new VsGame(
+            player: Game::start($this->deterministicBag()),
+            computer: $computer,
+            hasComputerPlan: true,
+            computerRotationsLeft: 1,
+            computerShiftLeft: 0,
+        );
+
+        [$after] = $vs->update($this->gravity());
+
+        $this->assertSame(
+            0,
+            $after->computer->piece->rotation,
+            'an impossible plan rotation must be skipped, not teleported into legality',
+        );
+        $this->assertTrue(
+            $after->computer->board->fits($after->computer->piece),
+            'the computer piece must always be in a legal state',
+        );
+    }
+
+    /**
+     * MA-11: parity restart. The versus board honours 'r' once the match is
+     * over — a fresh pair, cleared plan state, and exactly one re-armed
+     * tick chain (mirroring the solo game).
+     */
+    public function testRestartInVersusFreshensPairAndClearsPlan(): void
+    {
+        $base = VsGame::start();
+        $over = new VsGame(
+            player: $base->player->mutate(['over' => true]),
+            computer: $base->computer,
+            over: true,
+            winner: 'PLAYER',
+            hasComputerPlan: true,
+            computerRotationsLeft: 2,
+            computerShiftLeft: 3,
+        );
+
+        [$fresh, $cmd] = $over->update($this->key('r'));
+
+        $this->assertFalse($fresh->over, 'r must clear the over state');
+        $this->assertNull($fresh->winner, 'r must clear the winner');
+        $this->assertFalse($fresh->hasComputerPlan, 'r must drop the stale computer plan');
+        $this->assertSame(0, $fresh->computerRotationsLeft);
+        $this->assertInstanceOf(\Closure::class, $cmd, 'the fresh pair arms exactly one tick chain');
+
+        [$next] = $fresh->update($this->gravity());
+        $this->assertFalse($next->over, 'the restarted match keeps playing');
     }
 }

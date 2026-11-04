@@ -1062,4 +1062,115 @@ final class GameTest extends TestCase
         $result = $g->addGarbageRows(-5);
         $this->assertSame($originalRows, $result->board->rows());
     }
+
+    public function testStaleGravityTickFromADeadChainGoesInert(): void
+    {
+        $game = $this->deterministicGame();
+
+        // A tick armed under a different chain generation (e.g. the timer
+        // still in flight when hard-drop topped out, before a restart
+        // re-tagged the chain) must not consume or step the live board.
+        [$after] = $game->update(new GravityMsg(7));
+
+        $this->assertSame(
+            $game->piece->y,
+            $after->piece->y,
+            'a stale-generation tick must not step gravity',
+        );
+        $this->assertTrue(
+            $after->gravityPending,
+            'a stale tick must not consume the live chain pending slot',
+        );
+    }
+
+    public function testLockResetsCapClosesFreshWindowsOnGroundedGravity(): void
+    {
+        $game = Game::startWithLockDelay(new Bag(static fn(int $_m): int => 0));
+
+        // Grounded piece, cap exhausted, no window open: the stated rule is
+        // it locks, not that it receives another fresh window.
+        $game = $game->mutate([
+            'piece' => new Piece(Tetromino::T, 0, 3, 22), // resting on the floor (rows 22-23)
+            'lockResets' => Game::LOCK_DELAY_RESET_CAP,
+            'lockWindowGeneration' => null,
+            'lockGeneration' => 5,
+        ]);
+
+        [$after] = $game->update($this->gravity());
+
+        $this->assertSame(
+            0,
+            $after->piece->y,
+            'cap-exhausted grounded piece must lock and respawn, not open a fresh window',
+        );
+    }
+
+    public function testLockResetsCapClosesFreshWindowsOnGroundedKeyMove(): void
+    {
+        $game = Game::startWithLockDelay(new Bag(static fn(int $_m): int => 0));
+        $game = $game->mutate([
+            'piece' => new Piece(Tetromino::T, 0, 4, 22), // grounded, one slot to shuffle left
+            'lockResets' => Game::LOCK_DELAY_RESET_CAP,
+            'lockWindowGeneration' => null,
+            'lockGeneration' => 5,
+        ]);
+
+        [$after] = $game->update($this->key('left'));
+
+        $this->assertSame(
+            0,
+            $after->piece->y,
+            'a successful grounded move past the cap must lock, not reopen the window',
+        );
+    }
+
+    public function testAiRotationThatCannotFitNeverTeleportsThePiece(): void
+    {
+        // T rot0 at (0,10) fits (cells (1,10),(0,11),(1,11),(2,11)); its CW
+        // turn additionally needs (1,12) — block exactly that cell. Pre-fix
+        // applyAiMove rotated blindly, dropPiece could not move an already
+        // overlapping piece, and lockAndSpawn PLACED the illegal shape,
+        // silently overwriting the blocker. Post-fix the rotation is skipped
+        // and the naive rot0 bar locks legally.
+        $rows = $this->emptyGrid();
+        $rows[12][1] = Tetromino::I; // blocks only the rot-1 exclusive cell
+        $board = new Board($rows);
+
+        $game = $this->deterministicGame()->mutate([
+            'board' => $board,
+            'piece' => new Piece(Tetromino::T, 0, 0, 10),
+        ]);
+
+        $after = $game->applyAiMove(0, 1);
+
+        $this->assertSame(
+            Tetromino::I,
+            $after->board->cellAt(1, 12),
+            'an illegal AI rotation must never overwrite locked cells',
+        );
+    }
+
+    public function testInFlightTickFromBeforeARestartGoesInertOnTheFreshBoard(): void
+    {
+        // Hard-drop top-out returns the over state with no arm while the
+        // gravity slot stays booked by a timer still in flight; 'r' hands a
+        // fresh board over with that tick already flying. The restart bumps
+        // the chain identity: the old-generation tick goes inert and the
+        // fresh chain answers only its own generation.
+        $game = $this->deterministicGame()->mutate(['over' => true]);
+
+        [$fresh] = $game->update($this->key('r'));
+        $this->assertFalse($fresh->over, 'r restarts from the over state');
+
+        [$stale] = $fresh->update(new GravityMsg(0)); // tick armed pre-restart
+        $this->assertSame(
+            0,
+            $stale->piece->y,
+            'the stale tick must not step the fresh board',
+        );
+        $this->assertTrue($stale->gravityPending, 'nor consume the fresh slot');
+
+        [$stepped] = $fresh->update(new GravityMsg(1)); // the restart's own arm
+        $this->assertSame(1, $stepped->piece->y, 'the fresh chain steps normally');
+    }
 }
