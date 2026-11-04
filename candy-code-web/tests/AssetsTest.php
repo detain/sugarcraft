@@ -236,8 +236,14 @@ final class AssetsTest extends TestCase
         // candy-code's Serve::installedWebRoot() reaches this class through
         // a string FQCN + method_exists probe (composer `suggest`, no hard
         // dep), which is invisible to static analysis in BOTH packages:
-        // renaming the namespace or distPath() silently drops the UI to the
-        // "web_missing" fallback. This pin is the seam's only tripwire.
+        // renaming the namespace or the probed method silently drops the UI to
+        // the "web_missing" fallback. This pin is the seam's only tripwire.
+        //
+        // CW-P2: the probe must name the SOFT `tryDistPath()` (null on a
+        // half-built bundle) — pinning `distPath` here would let a future edit
+        // restore the throwing call that crashes serve at startup, the exact
+        // defect this test exists to prevent. The `is_string && is_dir` branch
+        // in installedWebRoot only does work against a non-throwing probe.
         $servePath = \dirname(__DIR__, 2) . '/candy-code/src/Cli/Serve.php';
         if (!\is_file($servePath)) {
             // Split-repo checkout of the web package alone: the sibling
@@ -247,11 +253,40 @@ final class AssetsTest extends TestCase
         }
 
         self::assertSame('SugarCraft\CodeWeb\Assets', Assets::class);
-        self::assertTrue(\method_exists(Assets::class, 'distPath'), 'Serve.php probes distPath() by name');
+        self::assertTrue(\method_exists(Assets::class, 'tryDistPath'), 'Serve.php probes tryDistPath() by name');
 
         $serve = (string) \file_get_contents($servePath);
         self::assertStringContainsString("'SugarCraft\\\\CodeWeb\\\\Assets'", $serve, 'Serve probes this exact FQCN string');
-        self::assertStringContainsString("method_exists(\$assets, 'distPath')", $serve, 'the probed method keeps its name');
+        self::assertStringContainsString("method_exists(\$assets, 'tryDistPath')", $serve, 'the probed method keeps its name');
+        self::assertStringContainsString('$assets::tryDistPath()', $serve, 'the serve path calls the soft probe');
+        self::assertStringNotContainsString('$assets::distPath()', $serve, 'the serve path never calls the throwing distPath() (CW-P2)');
+    }
+
+    /**
+     * CW-P2 load-bearing positive: a half-installed bundle — `dist/index.html`
+     * absent — is the graceful-degradation input serve branches on. The soft
+     * resolver behind `tryDistPath()` answers null there (no throw), which is
+     * what keeps `--web` alive as API-over-WebSocket-only; the throwing
+     * resolver behind `distPath()` raises, and serve never catches it.
+     */
+    public function testTryDistPathAnswersNullForAMissingBundleWithoutThrowing(): void
+    {
+        $root = $this->makeBundleRoot();
+
+        // Nothing in dist/ — not even index.html: composer registered the
+        // package, the bundle was simply never built.
+        self::assertNull(Assets::diagnose($root)['dist'], 'the empty root is not a bundle');
+
+        // Reach the same resolver the public soft probe delegates to, scoped
+        // to this synthetic half-install. It must return null, not throw.
+        $soft = new \ReflectionMethod(Assets::class, 'tryResolveDist');
+        self::assertNull($soft->invoke(null, $root), 'a missing bundle answers null, never throws');
+
+        // The hard resolver behind distPath() — the call the buggy serve used —
+        // is the one that raises on this same root, which is the whole defect.
+        $this->expectException(\RuntimeException::class);
+        $hard = new \ReflectionMethod(Assets::class, 'resolveDist');
+        $hard->invoke(null, $root);
     }
 
     private function makeBundleRoot(): string

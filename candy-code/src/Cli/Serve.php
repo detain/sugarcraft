@@ -1335,17 +1335,26 @@ final class Serve
 
     /**
      * The installed `sugarcraft/candy-code-web` build, or null when the
-     * package is absent. Looked up by name so this package carries no hard
-     * dependency on it (it is a composer `suggest`).
+     * package is absent or its bundle is not built. Looked up by name so this
+     * package carries no hard dependency on it (it is a composer `suggest`).
+     *
+     * CW-P2: this asks the SOFT probe `tryDistPath()` — which answers null for
+     * a half-installed bundle (composer registered the package, `dist/` was
+     * never built) — rather than the throwing `distPath()`. A missing bundle
+     * is the designed "serve the API without a UI" state, not a startup crash:
+     * null here routes through `StaticFiles::new(null)` to the
+     * `cli.serve.announce.web_missing` notice and API-over-WebSocket-only
+     * mode. `distPath()` would raise a `RuntimeException` the caller's catch
+     * turns into a hard `failUsage`, never reaching that graceful branch.
      */
     private static function installedWebRoot(): ?string
     {
         $assets = 'SugarCraft\\CodeWeb\\Assets';
-        if (!\class_exists($assets) || !\method_exists($assets, 'distPath')) {
+        if (!\class_exists($assets) || !\method_exists($assets, 'tryDistPath')) {
             return null;
         }
 
-        $path = $assets::distPath();
+        $path = $assets::tryDistPath();
 
         return \is_string($path) && \is_dir($path) ? $path : null;
     }

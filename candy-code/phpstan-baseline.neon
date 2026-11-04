@@ -773,7 +773,7 @@ parameters:
 			path: src/Cli/NonInteractive.php
 
 		-
-			message: '#^Call to function method_exists\(\) with ''SugarCraft\\\\CodeWeb…'' and ''distPath'' will always evaluate to false\.$#'
+			message: '#^Call to function method_exists\(\) with ''SugarCraft\\\\CodeWeb…'' and ''tryDistPath'' will always evaluate to false\.$#'
 			identifier: function.impossibleType
 			count: 1
 			path: src/Cli/Serve.php
