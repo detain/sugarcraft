@@ -98,7 +98,10 @@ final class TapeToGif
 
         $themeName = $cassette->header->theme ?? $cliTheme ?? 'TokyoNight';
         $theme = $this->resolveTheme($themeName, $strict);
-        $rasterizer = $this->themedRasterizerWithFonts($theme, $fontFamily);
+        // The resolved fontSize must reach the rasterizer too: the cell grid
+        // below is derived from it, and glyphs drawn at the rasterizer's own
+        // default would float in cells sized for a different point size.
+        $rasterizer = $this->themedRasterizerWithFonts($theme, $fontFamily, $fontSize);
 
         $terminal = Terminal::new($cassette->header->cols, $cassette->header->rows, $theme);
         $player = new Player($cassette);
@@ -127,12 +130,16 @@ final class TapeToGif
             ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
         $outputDir = dirname($output);
 
-        // Snapshot captureCursor before iteration to avoid mutation during iteration.
-        $captureCursor = $frameStream->captureCursor;
+        // `Hide`/`Show` events flip the frame stream's cursor-capture flag as
+        // the generator advances, so the current value is read per frame: at
+        // each iteration the stream is suspended just after producing that
+        // snapshot, which is exactly the state the frame was captured in.
+        // (Hoisting this read above the loop froze every frame at the
+        // pre-iteration value and made the directives inert.)
 
         try {
             foreach ($this->buildFramesWithHolds($frameStream, 1.0 / $fps) as $index => $frameInfo) {
-                $renderCursor = $captureCursor;
+                $renderCursor = $frameStream->captureCursor;
                 $image = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
 
                 $framePath = $tempDir . '/frame_' . sprintf('%05d', $index) . '.png';
@@ -159,12 +166,7 @@ final class TapeToGif
                     $confinedPath = $this->confineScreenshotPath($frameInfo['screenshotPath'], $outputDir);
                     $screenshotImage = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
                     try {
-                        $written = $screenshotImage instanceof \Imagick
-                            ? $screenshotImage->writeImage($confinedPath)
-                            : imagepng($screenshotImage, $confinedPath);
-                        if ($written === false) {
-                            throw new \RuntimeException("Failed to write screenshot: {$confinedPath}");
-                        }
+                        $this->writeImageAtomically($screenshotImage, $confinedPath);
                     } finally {
                         if ($screenshotImage instanceof \Imagick) {
                             $screenshotImage->clear();
@@ -258,6 +260,50 @@ final class TapeToGif
         } catch (\Throwable $e) {
             // E712 keep: failure-path tmp unlink must not mask $e (and the
             // exclusive-create reservation means a vanished tmp is benign).
+            @unlink($tmp);
+            throw $e;
+        }
+    }
+
+    /**
+     * Write a rendered image into place atomically, for outputs whose path was
+     * supplied by data rather than chosen by us.
+     *
+     * The bytes land in an exclusively reserved temp file (`x` =
+     * O_CREAT|O_EXCL, so a planted name is never followed) in the DESTINATION
+     * directory, then `rename()` replaces the directory ENTRY at $target.
+     * Writing straight to $target instead would follow a symlink planted there
+     * (CWE-59) and truncate a hard link to another inode — the same failure
+     * class {@see encodeAtomically()} closes for the GIF, which is why the
+     * screenshot branch must not bypass it. The temp name keeps the target's
+     * extension so an ext-imagick backend still infers the same format.
+     */
+    private function writeImageAtomically(\GdImage|\Imagick $image, string $target): void
+    {
+        $dir = dirname($target);
+        $ext = strtolower((string) pathinfo($target, PATHINFO_EXTENSION));
+        $suffix = $ext === '' ? '' : '.' . $ext;
+        $tmp = $dir . DIRECTORY_SEPARATOR . '.candyvcr-' . bin2hex(random_bytes(8)) . $suffix;
+
+        $handle = @fopen($tmp, 'x');
+        if ($handle === false) {
+            throw new \RuntimeException("Cannot create a temporary file for atomic image write in: {$dir}");
+        }
+        fclose($handle);
+
+        try {
+            $written = $image instanceof \Imagick
+                ? $image->writeImage($tmp)
+                : imagepng($image, $tmp);
+            if ($written === false) {
+                throw new \RuntimeException("Failed to write screenshot: {$target}");
+            }
+            if (!@rename($tmp, $target)) {
+                throw new \RuntimeException("Failed to move screenshot into place: {$target}");
+            }
+        } catch (\Throwable $e) {
+            // E712 keep: failure-path temp unlink must not mask $e (and the
+            // exclusive-create reservation means a vanished temp is benign).
             @unlink($tmp);
             throw $e;
         }
@@ -423,13 +469,13 @@ final class TapeToGif
      * The chained withFont()->withTheme() approach forces a cache rebuild
      * for the new font, which is correct behavior.
      */
-    private function themedRasterizerWithFonts(Theme $theme, string $fontFamily): Rasterizer
+    private function themedRasterizerWithFonts(Theme $theme, string $fontFamily, int $fontSize): Rasterizer
     {
         if ($this->rasterizer instanceof GdRasterizer) {
-            return $this->rasterizer->withFont($fontFamily)->withTheme($theme);
+            return $this->rasterizer->withFont($fontFamily, $fontSize)->withTheme($theme);
         }
         if ($this->rasterizer instanceof ImagickRasterizer) {
-            return $this->rasterizer->withFont($fontFamily)->withTheme($theme);
+            return $this->rasterizer->withFont($fontFamily, $fontSize)->withTheme($theme);
         }
         return $this->rasterizer;
     }

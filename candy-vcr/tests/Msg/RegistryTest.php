@@ -30,6 +30,80 @@ final class RegistryTest extends TestCase
         $this->assertSame($r, $returned);
     }
 
+    public function testRegisterFirstIsFluent(): void
+    {
+        $r = new Registry();
+        $returned = $r->registerFirst(new BuiltinSerializer());
+        $this->assertSame($r, $returned);
+    }
+
+    /**
+     * The order trap: `default()` already ends in the JsonableSerializer
+     * catch-all, so an appended codec for a `\JsonSerializable` Msg is
+     * never consulted. Reds if `register()` ever starts prepending.
+     */
+    public function testAppendedSerializerStaysBehindTheCatchAll(): void
+    {
+        $r = Registry::default()->register($this->customUserCodec());
+
+        $envelope = $r->encode(new UserJsonableMsg(name: 'r', count: 2));
+
+        $this->assertNotNull($envelope);
+        $this->assertSame(UserJsonableMsg::class, $envelope['@type']);
+    }
+
+    /**
+     * `registerFirst()` is the documented way to outrank the built-ins:
+     * the custom codec wins on both directions. Reds if the prepend is
+     * neutered.
+     */
+    public function testRegisterFirstOutranksTheCatchAll(): void
+    {
+        $r = Registry::default()->registerFirst($this->customUserCodec());
+
+        $envelope = $r->encode(new UserJsonableMsg(name: 'r', count: 2));
+        $this->assertNotNull($envelope);
+        $this->assertSame('CustomUser', $envelope['@type']);
+
+        $decoded = $r->decode(['@type' => 'CustomUser', 'name' => 'z', 'count' => 7]);
+        $this->assertInstanceOf(UserJsonableMsg::class, $decoded);
+        $this->assertSame('z', $decoded->name);
+        $this->assertSame(7, $decoded->count);
+    }
+
+    /**
+     * A codec for the test fixture Msg, tagged differently from
+     * JsonableSerializer's FQCN tag so the winner is identifiable.
+     */
+    private function customUserCodec(): MsgSerializer
+    {
+        return new class () implements MsgSerializer {
+            public function canEncode(Msg $msg): bool
+            {
+                return $msg instanceof UserJsonableMsg;
+            }
+
+            public function canDecode(array $envelope): bool
+            {
+                return ($envelope['@type'] ?? null) === 'CustomUser';
+            }
+
+            public function encode(Msg $msg): array
+            {
+                /** @var UserJsonableMsg $msg */
+                return ['@type' => 'CustomUser', 'name' => $msg->name, 'count' => $msg->count];
+            }
+
+            public function decode(array $envelope): Msg
+            {
+                return new UserJsonableMsg(
+                    name: (string) ($envelope['name'] ?? ''),
+                    count: (int) ($envelope['count'] ?? 0),
+                );
+            }
+        };
+    }
+
     public function testEncodeFirstMatchWins(): void
     {
         $custom = new class () implements MsgSerializer {

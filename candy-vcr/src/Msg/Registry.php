@@ -14,8 +14,11 @@ use SugarCraft\Core\Msg;
  * Use {@see default()} for a registry pre-loaded with the
  * {@see BuiltinSerializer} (sugar-core Msgs) and the
  * {@see JsonableSerializer} catch-all (user Msgs implementing
- * `\JsonSerializable`). Custom serializers can be inserted between
- * those two via {@see register()}.
+ * `\JsonSerializable`). Order is priority: the first serializer that
+ * claims a Msg / envelope wins. {@see register()} therefore lands a
+ * custom serializer *behind* the catch-all — use {@see registerFirst()}
+ * when a custom serializer has to outrank what `default()` already
+ * installed.
  *
  * Mirrors charmbracelet/x/vcr Msg/Registry.
  */
@@ -30,6 +33,21 @@ final class Registry
     public function register(MsgSerializer $serializer): self
     {
         $this->serializers[] = $serializer;
+        return $this;
+    }
+
+    /**
+     * Prepend a serializer to the list, so it is consulted before every
+     * already-registered one. Returns `$this` for chaining.
+     *
+     * This is the hook for overriding what {@see default()} installs: an
+     * appended serializer sits behind {@see JsonableSerializer}, whose
+     * `canEncode()` claims every `\JsonSerializable` Msg, so a custom
+     * codec for such a Msg has to be registered first to be seen at all.
+     */
+    public function registerFirst(MsgSerializer $serializer): self
+    {
+        array_unshift($this->serializers, $serializer);
         return $this;
     }
 
@@ -68,10 +86,10 @@ final class Registry
     /**
      * Default registry: `BuiltinSerializer` first (specific sugar-core
      * Msgs), then `JsonableSerializer` (catch-all for user Msgs
-     * implementing `\JsonSerializable`). User serializers can be slotted
-     * in between with `Registry::default()->register(new MyOne())` —
-     * but note that catch-all decode order means BuiltinSerializer wins
-     * for the sugar-core Msgs it knows.
+     * implementing `\JsonSerializable`). Order is priority, so anything
+     * {@see register()} appends lands after both — reach for
+     * {@see registerFirst()} to give a custom codec precedence over the
+     * catch-all.
      */
     public static function default(): self
     {

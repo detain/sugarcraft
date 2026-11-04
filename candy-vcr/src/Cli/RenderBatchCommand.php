@@ -106,15 +106,33 @@ final class RenderBatchCommand extends Command
         $failCount = 0;
         $startTime = microtime(true);
 
-        /** @var array<string, array{status: string, time: float}> $results */
+        /** @var array<string, array{status: string, time: float}> $results keyed by tape path */
         $results = [];
 
+        /** @var array<string, string> $claimedOutputs gif path => tape that claimed it */
+        $claimedOutputs = [];
+
         foreach ($tapeFiles as $tapeFile) {
-            $basename = basename($tapeFile);
-            $progressBar->setMessage($basename);
+            $label = $this->displayLabel($tapeFile, $dir);
+            $progressBar->setMessage($label);
 
             $targetDir = $outputDir ?? dirname($tapeFile);
-            $outputGif = $targetDir . DIRECTORY_SEPARATOR . (preg_replace('/\.tape$/', '.gif', $basename) ?: $basename . '.gif');
+            $outputGif = $targetDir . DIRECTORY_SEPARATOR . (preg_replace('/\.tape$/', '.gif', basename($tapeFile)) ?: basename($tapeFile) . '.gif');
+
+            // Two tapes named alike in different subdirectories, sent to one
+            // --output-dir, would silently overwrite each other's GIF. Refuse
+            // the second one loudly instead.
+            if (isset($claimedOutputs[$outputGif])) {
+                $results[$tapeFile] = [
+                    'status' => "FAIL: skipped — {$outputGif} already claimed by {$claimedOutputs[$outputGif]}",
+                    'time' => 0.0,
+                ];
+                $failCount++;
+                $progressBar->advance();
+                $progressBar->display();
+                continue;
+            }
+            $claimedOutputs[$outputGif] = $tapeFile;
 
             $fileStart = microtime(true);
 
@@ -122,11 +140,15 @@ final class RenderBatchCommand extends Command
                 $renderer->render($tapeFile, $outputGif, $renderOptions);
 
                 $elapsed = microtime(true) - $fileStart;
-                $results[$basename] = ['status' => 'OK', 'time' => $elapsed];
+                // Keyed by the full path: with -r two tapes may share a
+                // basename, and a basename key would let the later one
+                // overwrite the earlier verdict (and both rows then print
+                // the same status).
+                $results[$tapeFile] = ['status' => 'OK', 'time' => $elapsed];
                 $successCount++;
             } catch (\Throwable $e) {
                 $elapsed = microtime(true) - $fileStart;
-                $results[$basename] = ['status' => 'FAIL: ' . $e->getMessage(), 'time' => $elapsed];
+                $results[$tapeFile] = ['status' => 'FAIL: ' . $e->getMessage(), 'time' => $elapsed];
                 $failCount++;
             }
 
@@ -144,21 +166,21 @@ final class RenderBatchCommand extends Command
         $output->writeln(str_repeat('-', 65));
 
         foreach ($tapeFiles as $tapeFile) {
-            $basename = basename($tapeFile);
-            $r = $results[$basename] ?? ['status' => 'UNKNOWN', 'time' => 0.0];
+            $label = $this->displayLabel($tapeFile, $dir);
+            $r = $results[$tapeFile] ?? ['status' => 'UNKNOWN', 'time' => 0.0];
             $statusStr = $r['status'];
             $timeStr = sprintf('%.3fs', $r['time']);
 
             if (str_starts_with($statusStr, 'FAIL')) {
                 $output->writeln(sprintf(
                     ' <comment>%-40s</comment> <error>%-10s</error> %s — %s',
-                    $basename,
+                    $label,
                     'FAIL',
                     $timeStr,
                     substr($statusStr, 6)
                 ));
             } else {
-                $output->writeln(sprintf(' %-40s %-10s %s', $basename, 'OK', $timeStr));
+                $output->writeln(sprintf(' %-40s %-10s %s', $label, 'OK', $timeStr));
             }
         }
 
@@ -172,6 +194,20 @@ final class RenderBatchCommand extends Command
         ));
 
         return $failCount > 0 ? 1 : 0;
+    }
+
+    /**
+     * Label for the summary table: the path relative to the batch root when
+     * the tape lives under it, so two same-named tapes in different
+     * subdirectories remain distinguishable in the report.
+     */
+    private function displayLabel(string $tapeFile, string $dir): string
+    {
+        $prefix = rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (strlen($tapeFile) > strlen($prefix) && str_starts_with($tapeFile, $prefix)) {
+            return substr($tapeFile, strlen($prefix));
+        }
+        return $tapeFile;
     }
 
     /**
