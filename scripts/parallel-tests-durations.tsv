@@ -991,6 +991,7 @@ candy-code/tests/Cli/NonInteractiveMentionsTest.php	0.050	10
 candy-code/tests/Commands/CommandTableRenderingTest.php	0.050	18
 candy-code/tests/Chat/IdleAutoCompactionTest.php	0.050	20
 candy-code/tests/Hooks/HookConfigTest.php	0.050	76
+candy-code/tests/Cli/SessionTitleInjectionTest.php	0.050	7
 candy-code/tests/Backend/CompactSelfPreviewTest.php	0.049	5
 candy-code/tests/Chat/AbsoluteCapBreakerTest.php	0.049	3
 candy-code/tests/Chat/PaletteFullQueryMatchTest.php	0.048	6
