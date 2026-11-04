@@ -2538,6 +2538,13 @@ final class Renderer
         // $cols is what it left. The served-model segment ranks BELOW all of
         // them and below the `statusLine` command too: it is fitted last, at
         // the end of this method.
+        //
+        // When room runs out, the served-model segment is the piece that
+        // vanishes entirely, and silently: that is the recorded collapse order
+        // of this ladder, not an oversight (CC-UXD-11). The model stays
+        // readable elsewhere — the /status command prints it
+        // (StatusCommand, cmd.status.model.name). The collapse ladder itself
+        // is pinned by StatusBarModelAndReadOnlyTest.
         $separator = ' · ';
         $indicators = self::scrollIndicators($chat, $frame);
         $scrollReserve = $indicators === [] ? 0 : Width::of($indicators[0]);
@@ -2779,6 +2786,9 @@ final class Renderer
      * organisation prefix like `Qwen/` is the least informative part); that
      * part ellipsised, while at least {@see MODEL_SEGMENT_MIN_COLS} columns
      * are left — a stub shorter than that names no model; then nothing.
+     * That total collapse is silent by design: it is the ladder's recorded
+     * lowest-priority exit (CC-UXD-11), reached only after every higher
+     * piece has kept its room.
      */
     private static function modelIndicator(Chat $chat, int $room): string
     {
