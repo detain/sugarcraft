@@ -133,7 +133,7 @@ final class Game implements Model
     public static function start(?Bag $bag = null): self
     {
         $bag ??= new Bag();
-        $first = $bag->next();
+        [$first, $bag] = $bag->next();
         $piece = self::spawn($first);
         // init() will arm the gravity chain; the pending slot starts taken
         // so no key path can double-book it before then.
@@ -149,7 +149,7 @@ final class Game implements Model
     public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS): self
     {
         $bag ??= new Bag();
-        $first = $bag->next();
+        [$first, $bag] = $bag->next();
         $piece = self::spawn($first);
         return new self(
             new Board(),
@@ -614,11 +614,13 @@ final class Game implements Model
             $score->level,
         );
 
-        $newPiece = self::spawn($this->bag->next());
+        [$newKind, $nextBag] = $this->bag->next();
+        $newPiece = self::spawn($newKind);
         if ($cleared->fits($newPiece) === false) {
             return $this->mutate([
                 'board' => $cleared,
                 'piece' => $newPiece,
+                'bag' => $nextBag,
                 'score' => $score,
                 'over' => true,
                 'canHold' => true,
@@ -639,7 +641,7 @@ final class Game implements Model
         return $this->mutate([
             'board' => $cleared,
             'piece' => $newPiece,
-            'bag' => $this->bag,
+            'bag' => $nextBag,
             'score' => $score,
             'hold' => $this->hold,
             'canHold' => true,
@@ -672,10 +674,12 @@ final class Game implements Model
             // No held piece - spawn new piece and store current. The fresh
             // piece goes through the same fits/top-out gate a lock-spawn
             // would: a blocked spawn zone tops the game out.
-            $newPiece = self::spawn($this->bag->next());
+            [$heldKind, $nextBag] = $this->bag->next();
+            $newPiece = self::spawn($heldKind);
             if ($this->board->fits($newPiece) === false) {
                 return [$this->mutate([
                     'piece' => $newPiece,
+                    'bag' => $nextBag,
                     'hold' => $currentKind,
                     'canHold' => false,
                     'over' => true,
@@ -686,6 +690,7 @@ final class Game implements Model
             }
             $game = $this->mutate([
                 'piece' => $newPiece,
+                'bag' => $nextBag,
                 'hold' => $currentKind,
                 'canHold' => false,
                 'lastActionWasRotation' => false,

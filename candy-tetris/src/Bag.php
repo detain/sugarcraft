@@ -8,11 +8,22 @@ namespace SugarCraft\Tetris;
  * 7-bag random piece generator, the standard since Tetris '07.
  *
  * Each "bag" is a uniformly-shuffled permutation of all seven
- * Tetrominoes. Pieces are drawn from the bag in order; once it's
- * empty, a fresh bag is shuffled. Net effect: in any window of
- * 14 consecutive pieces you're guaranteed to see every kind at
- * least once and at most twice. No drought of the I-piece for
- * fifty draws straight.
+ * Tetrominoes. The queue is held a few pieces deeper than any draw so
+ * the preview panel never has to touch the RNG.
+ *
+ * VALUE semantics: next() hands back the drawn piece AND a NEW Bag
+ * with the queue advanced; the instance it was called on is untouched.
+ * A bag captured in an old game snapshot therefore keeps its own
+ * future — and peek(), used by the renderer mid-view(), is a pure
+ * slice. The pre-fix shape mutated one shared pending queue in place,
+ * so rendering a frame silently advanced (and re-shuffled) the model
+ * it was supposed to be merely looking at.
+ *
+ * Drought guarantee: consecutive bags are disjoint shuffles, so any
+ * window of 13 consecutive pieces contains a whole bag — every kind
+ * at least once. A single kind appears at most three times in such a
+ * window (tail, middle, head across a double boundary); the old
+ * docblock's "at most twice" was only true inside one bag.
  *
  * The shuffler is parameterised on a `Closure(int $max): int`
  * (defaults to `random_int(0, $max)`) so tests can inject a
@@ -21,8 +32,20 @@ namespace SugarCraft\Tetris;
  */
 final class Bag
 {
-    /** @var list<Tetromino> */
-    private array $pending = [];
+    /**
+     * Queue depth kept ready after every draw, so peek(3) is always
+     * satisfied from materialised pieces.
+     */
+    private const PREVIEW_DEPTH = 3;
+
+    /**
+     * Materialised upcoming pieces. Never mutated after construction —
+     * every advance builds a fresh instance (not `readonly` only
+     * because the clone-and-swap happens inside this class).
+     *
+     * @var list<Tetromino>
+     */
+    private array $pending;
     /** @var \Closure(int): int */
     private \Closure $rand;
 
@@ -36,33 +59,38 @@ final class Bag
         // give us `random_int($max)` — and `random_int` requires both
         // arguments — so spell the closure out instead.
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
-    }
-
-    public function next(): Tetromino
-    {
-        if ($this->pending === []) {
-            $this->pending = self::shuffle(Tetromino::cases(), $this->rand);
-        }
-        return array_shift($this->pending);
+        $this->pending = self::shuffle(Tetromino::cases(), $this->rand);
     }
 
     /**
-     * Peek `$n` pieces ahead without consuming them. Used by the
-     * "next pieces" preview panel. Refills the bag as needed but
-     * does not modify the consumption order.
+     * Draw the next piece.
+     *
+     * @return array{0: Tetromino, 1: self} the piece and the advanced bag
+     */
+    public function next(): array
+    {
+        $queue = $this->pending;
+        if (count($queue) <= self::PREVIEW_DEPTH) {
+            $queue = array_merge($queue, self::shuffle(Tetromino::cases(), $this->rand));
+        }
+
+        $kind = array_shift($queue);
+
+        $advanced = clone $this;
+        $advanced->pending = $queue;
+
+        return [$kind, $advanced];
+    }
+
+    /**
+     * Up to `$n` upcoming pieces, without consuming them or the RNG.
+     * The queue is held at least PREVIEW_DEPTH deep after every draw,
+     * so asking for three or fewer is always satisfied in full.
      *
      * @return list<Tetromino>
      */
-    public function peek(int $n): array
+    public function peek(int $n = 1): array
     {
-        $pendingCount = count($this->pending);
-        while ($pendingCount < $n) {
-            $this->pending = array_merge(
-                $this->pending,
-                self::shuffle(Tetromino::cases(), $this->rand),
-            );
-            $pendingCount = count($this->pending);
-        }
         return array_slice($this->pending, 0, $n);
     }
 
