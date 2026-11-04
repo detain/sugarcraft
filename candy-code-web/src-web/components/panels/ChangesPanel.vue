@@ -253,10 +253,10 @@ onMounted(() => void load())
   cursor: pointer;
 }
 .row:hover {
-  background: var(--panel-2, rgb(255 255 255 / 0.05));
+  background: var(--panel-2);
 }
 .row.on {
-  background: var(--accent-soft, rgb(255 255 255 / 0.08));
+  background: var(--accent-soft);
   outline: 1px solid var(--accent);
 }
 .status {
