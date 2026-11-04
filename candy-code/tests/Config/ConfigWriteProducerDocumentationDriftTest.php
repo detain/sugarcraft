@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Config;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -727,5 +728,225 @@ final class ConfigWriteProducerDocumentationDriftTest extends TestCase
 
         $this->assertStringContainsString('/theme', $m[1][0], 'the layer-4 row stopped crediting /theme');
         $this->assertStringContainsString('/model', $m[1][0], 'the layer-4 row stopped crediting /model');
+    }
+
+    /**
+     * G1-L7 (CCOPS-6, OD-29): the managed tier is READ-ONLY BY CONSTRUCTION,
+     * and this is the machinery that makes "by construction" mean something.
+     *
+     * THE PATH IS ONE LITERAL. `/etc/candy-code/config.json` is spelled exactly
+     * once across all of `src/` — the {@see LayeredSettings::SYSTEM_CONFIG_PATH}
+     * constant. A writer that "just needed" the same path would have to spell
+     * it again, and this census reddens on the second spelling before the code
+     * is even read. (The project tier's SHARED_PATH/LOCAL_PATH consts follow the
+     * same one-literal law for the same reason; `ProjectTierRefusalInventory`
+     * watches that family, this watches the new one.)
+     *
+     * THE FUNCTIONS THAT NAME THE TIER CANNOT WRITE ANYTHING. Every function in
+     * `src/` whose body mentions `systemConfigPath`, `systemLayer` or
+     * `SYSTEM_CONFIG_PATH` is scanned for writer calls — `file_put_contents(`,
+     * `rename(`, `tempnam(`, `fopen(`, `unlink(`, `mkdir(`, `chmod(`, `touch(`,
+     * `writeUserConfig(`, `SettingsWriter`. The managed seam was introduced by
+     * readers only; if a future edit drags a writer into one of those bodies,
+     * it has to pass this sentence first.
+     *
+     * AND THE DOORS THAT DO WRITE ARE BEHAVIOURALLY CONFINED. With the managed
+     * path pinned by the test seam, `Bootstrap::writeUserConfig()` lands in the
+     * user file it was always aimed at, a `--config` override moves layer 4 and
+     * not the managed path, and the one project file a writer may publish to
+     * ({@see LayeredSettings::projectLocalPath()}) stays inside the project
+     * root. Absence of a writer is proved three ways on purpose: the literal
+     * census catches a new spell, the token census catches new code in the
+     * reader family, and the behaviour test catches a repointed door.
+     */
+    public function testTheManagedConfigPathIsSpelledByExactlyOneLiteralInSrc(): void
+    {
+        $spellings = [];
+        foreach ($this->sourceFiles() as $path) {
+            foreach ($this->codeTokens($path) as $token) {
+                if (!\is_array($token) || $token[0] !== T_CONSTANT_ENCAPSED_STRING) {
+                    continue;
+                }
+                if (trim($token[1], "'\"") === '/etc/candy-code/config.json') {
+                    $spellings[] = $path;
+                }
+            }
+        }
+
+        self::assertSame(
+            [realpath(__DIR__ . '/../../src/Config/LayeredSettings.php') ?: __DIR__ . '/../../src/Config/LayeredSettings.php'],
+            $spellings,
+            'the managed path must live in exactly one src literal — the SYSTEM_CONFIG_PATH constant'
+        );
+    }
+
+    public function testTheManagedTierSeamsAreReaderOnlyFunctions(): void
+    {
+        $writers = [
+            'file_put_contents(', 'rename(', 'tempnam(', 'fopen(', 'unlink(',
+            'mkdir(', 'rmdir(', 'chmod(', 'touch(', 'symlink(', 'link(',
+            'writeUserConfig(', 'SettingsWriter',
+        ];
+
+        $seen = 0;
+        foreach ($this->sourceFiles() as $path) {
+            $tokens = $this->codeTokens($path);
+            foreach ($this->functionBodies($tokens) as $name => $body) {
+                if (!preg_match('/systemConfigPath|systemLayer|SYSTEM_CONFIG_PATH/', $body)) {
+                    continue;
+                }
+                ++$seen;
+                foreach ($writers as $writer) {
+                    self::assertStringNotContainsString(
+                        $writer,
+                        $body,
+                        sprintf('%s::%s() names the managed tier and a writer in the same body', $path, $name)
+                    );
+                }
+            }
+        }
+
+        self::assertGreaterThan(
+            0,
+            $seen,
+            'no src function body names the managed tier — the reader-only census went vacuous'
+        );
+    }
+
+    public function testNoWriterDoorResolvesIntoTheManagedTier(): void
+    {
+        $tmp = sys_get_temp_dir() . '/managed_readonly_' . uniqid('', true);
+        $managedPath = $tmp . '/etc/candy-code/config.json';
+        $userTarget = $tmp . '/home/.candy-code/config.json';
+        $root = $tmp . '/repo';
+        mkdir($tmp . '/etc/candy-code', 0o755, true);
+        mkdir($tmp . '/home/.candy-code', 0o700, true);
+        mkdir($root . '/' . LayeredSettings::dir(), 0o700, true);
+        file_put_contents($managedPath, '{"theme":"managed-pin"}');
+        $managedBytes = (string) file_get_contents($managedPath);
+
+        try {
+            Bootstrap::useSystemConfigPath($managedPath);
+            Bootstrap::useConfigPath($userTarget);
+
+            Bootstrap::writeUserConfig(['theme' => 'user-pick']);
+
+            self::assertSame(
+                'user-pick',
+                json_decode((string) file_get_contents($userTarget), true)['theme'] ?? null,
+                'the CLI write landed in its own file'
+            );
+            self::assertSame(
+                $managedBytes,
+                file_get_contents($managedPath),
+                'writeUserConfig() moved bytes that belong to the user door only — the managed file is untouched'
+            );
+
+            // A `--config` override moves layer 4 and NOT the managed path.
+            Bootstrap::useConfigPath($tmp . '/elsewhere/config.json');
+            self::assertSame($managedPath, Bootstrap::systemConfigPath());
+            self::assertNotSame(
+                Bootstrap::systemConfigPath(),
+                Bootstrap::userConfigPath(),
+                'the two doors are never the same file, whatever --config says'
+            );
+
+            // The only project file a writer may publish to stays inside the root.
+            // (projectLocalPath() answers only for an EXISTING local file — seed one.)
+            file_put_contents($root . '/' . LayeredSettings::LOCAL_PATH, '{}');
+            $localTarget = LayeredSettings::projectLocalPath($root, true);
+            self::assertIsString($localTarget);
+            self::assertStringStartsWith($root, $localTarget);
+            self::assertNotSame($managedPath, $localTarget);
+        } finally {
+            Bootstrap::useConfigPath(null);
+            Bootstrap::useSystemConfigPath(null);
+            $entries = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($tmp, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($entries as $entry) {
+                $entry->isDir() && !$entry->isLink() ? @rmdir($entry->getPathname()) : @unlink($entry->getPathname());
+            }
+            @rmdir($tmp);
+        }
+    }
+
+    /**
+     * Brace-matched bodies of every T_FUNCTION in a comment-stripped token
+     * stream, keyed by name. Openers counted three ways (`{`, T_CURLY_OPEN,
+     * T_DOLLAR_OPEN_CURLY_BRACES) so string interpolation cannot desync the
+     * walk; closers are literal `}` only, which is exactly the asymmetry PHP
+     * itself has.
+     *
+     * @param list<array{0: int, 1: string}|string> $tokens
+     * @return array<string, string>
+     */
+    private function functionBodies(array $tokens): array
+    {
+        $bodies = [];
+        $count = \count($tokens);
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_FUNCTION) {
+                continue;
+            }
+            $name = '';
+            for ($j = $i + 1; $j < $count; $j++) {
+                if (\is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
+                    $name = $tokens[$j][1];
+                    break;
+                }
+            }
+            // Walk to the body's opening brace (parameter arrays use brackets,
+            // and return types carry no braces before it).
+            $k = $j ?? $i;
+            while ($k < $count && $tokens[$k] !== '{') {
+                $k++;
+            }
+            if ($k >= $count) {
+                continue; // abstract/interface member — no body to read
+            }
+            $depth = 0;
+            $body = '';
+            for (; $k < $count; $k++) {
+                $token = $tokens[$k];
+                if (\is_array($token) && \in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                    $depth++;
+                } elseif ($token === '{') {
+                    $depth++;
+                } elseif ($token === '}') {
+                    $depth--;
+                }
+                $body .= \is_array($token) ? $token[1] : $token;
+                if ($depth === 0) {
+                    break;
+                }
+            }
+            if ($name !== '') {
+                $bodies[$name] = $body;
+            }
+        }
+
+        return $bodies;
+    }
+
+    /**
+     * G1-L7 (CCOPS-6): the docs must sell the managed tier exactly as the code
+     * enforces it — row five present in BOTH pages' layer tables, and the words
+     * "read-only" on that row in each. A row without the promise, or a promise
+     * without the row, is the drift this family exists to catch.
+     */
+    public function testTheManagedTierIsNamedReadOnlyInBothDocs(): void
+    {
+        $pattern = '/^\| 5 \| `' . preg_quote('/etc/candy-code/config.json', '/') . '` \|.*read-only.*\|/m';
+
+        foreach ([self::README, self::SETTINGS_DOC] as $doc) {
+            self::assertSame(
+                1,
+                preg_match_all($pattern, (string) file_get_contents($doc)),
+                $doc . ' must carry the row-5 managed tier naming it read-only'
+            );
+        }
     }
 }
