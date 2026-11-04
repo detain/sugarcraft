@@ -434,7 +434,8 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         // Imported into sugar-core's scan path by the candy-code merges
         // (campaign re-verify 2026-10-08). Every `->close(...)` below is a
         // method on candy-code's OWN objects — a WebSocket close code, a
-        // session release, or an LSP didClose — never the libc symbol. The
+        // session or deck-tab release, or an LSP didClose — never the libc
+        // symbol. The
         // scanner reports them because its method-sink list is derived from
         // Libc::cdef() and forms no opinion about the receiver; each row
         // states what the call really is. The four UNCLASSIFIED kinds are
@@ -547,6 +548,28 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'NOT A LIBC CALL, the overflow grace timer giving up on a slow client: $this->connection->close('
             . '1013, \'client too slow; reconnect and resubscribe\') on Ws\Connection -- a status code.',
         ],
+        // The two rows below entered the population from the candy-code side,
+        // not from anything in sugar-core: the scanner forms no opinion about
+        // receivers, so a deck-tab release and a hub release spelled `->close`
+        // land here exactly as the WebSocket rows do. Curing the standing red
+        // at gate 2026-11-05; introducing sites are published commits
+        // 2a6cd3c1f (tab decks) and 3b6c2ca12 (session.import).
+        'candy-code/src/App/App.php::->close($key)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, the deck release in handleCloseTab(): $deck->close($key) into '
+            . 'App\Tabs\SessionDeck::close(string $tabKey): array, which unparks the tab and '
+            . 'returns [deck, ?Cmd]. $key is $msg->tabKey ?? $deck->activeKey() -- a string tab '
+            . 'key already gated by $deck->has($key) above, never a descriptor.',
+        ],
+        'candy-code/src/Protocol/Methods/SessionMethods.php::->close($imported->sessionId)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, the append-path re-open churn of session.import: $call->server->hub()'
+            . '->close($imported->sessionId) into Host\SessionHub::close(string $sessionId, bool '
+            . '$force), releasing the live host before it is re-opened from the store. '
+            . '$imported->sessionId is ImportedTranscript\'s readonly string -- the same hub as '
+            . 'the ->close($sessionId) rows above, reached with the field spelling instead of a '
+            . 'local, so no ordinal applies.',
+        ],
 
         // ---- candy-code daemon/relaunch libc sites (genuine sinks) ------
         'candy-code/src/Support/Daemonize.php::->close($null)' => [
@@ -588,10 +611,12 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             DescriptorSinkScanner::STREAM_CONSTANT,
             'CORRECT, and an E368 carve-out: the resource, no cast.',
         ],
-        'sugar-markdown/src/Theme.php::posix_isatty(STDOUT)' => [
-            DescriptorSinkScanner::STREAM_CONSTANT,
-            'CORRECT, and an E368 carve-out: the resource, no cast.',
-        ],
+        // (sugar-markdown/src/Theme.php::posix_isatty(STDOUT) used to be rostered
+        // here: b3a48bd6b replaced that tty check's posix arm with
+        // @stream_isatty(STDOUT) -- core PHP, not a census sink -- so the site
+        // left the population; retiring this row at gate 2026-11-05. The
+        // staleness was masked in the red run by the unjudged-site assert
+        // failing first in the same method.)
         'candy-vcr/src/Cli/RecordCommand.php::posix_ttyname(\STDIN)' => [
             DescriptorSinkScanner::STREAM_CONSTANT,
             'CORRECT. The resource, not a cast. Not named in E368\'s carve-out list, which '
