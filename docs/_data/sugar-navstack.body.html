@@ -12,7 +12,7 @@ $nav = NavStack::new()
     -&gt;push('Settings', '/settings')
     -&gt;push('Display', '/settings/display');
 
-echo $nav-&gt;view();          // Home &gt; Settings &gt; Display
+echo $nav-&gt;view();          // Home › Settings › Display
 echo $nav-&gt;view(' / ');     // Home / Settings / Display
 
 $top = $nav-&gt;pop();         // NavigationItem: title 'Display', data '/settings/display'
@@ -42,11 +42,11 @@ $nav-&gt;depth();              // 2</code></pre>
 <tr><td>NavStack</td><td>new()</td><td>Create navigation stack</td></tr>
 <tr><td>NavStack</td><td>push(string $title, mixed $data = null): self</td><td>Push a navigation item (mutates; returns the stack)</td></tr>
 <tr><td>NavStack</td><td>pop(): ?NavigationItem / popTo(int) / current() / parent() / depth()</td><td>Pop and inspect the stack</td></tr>
-<tr><td>NavStack</td><td>view(string $separator = ' &gt; ') / viewHtml()</td><td>Render breadcrumbs</td></tr>
+<tr><td>NavStack</td><td>view(string $separator = ' › ') / viewHtml()</td><td>Render breadcrumbs</td></tr>
 <tr><td>NavStack</td><td>filter(query)</td><td>Filter breadcrumbs</td></tr>
 <tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry</td></tr>
 <tr><td>Breadcrumb</td><td>withScanner(?Scanner)</td><td>Attach mouse-click zones per crumb (sugar-mouse Scanner; copied in, never aliased — read it back via scanner()). Zone ids carry the STACK index, so click routing survives truncation.</td></tr>
-<tr><td>Breadcrumb</td><td>scan(string) / hit(col, row)</td><td>Feed the rendered string to the owned scanner, then resolve which crumb zone a cell falls in</td></tr>
+<tr><td>Breadcrumb</td><td>scan($rendered, $viewportWidth, $row) / hit(col, row) / hitItem(stack, col, row)</td><td>Feed the rendered string to the owned scanner (optionally clamped to the viewport width, for a row other than 1), then resolve which crumb a terminal cell falls in — hitItem() is the one-call dispatcher returning the clicked NavigationItem</td></tr>
 <tr><td>Breadcrumb</td><td>setSeparator(string)</td><td>Set separator between crumbs</td></tr>
 <tr><td>Breadcrumb</td><td>setMaxWidth(int)</td><td>Truncate if total width exceeds limit</td></tr>
 <tr><td>Breadcrumb</td><td>render(NavStack)</td><td>Render NavStack as breadcrumb string</td></tr>
@@ -68,7 +68,7 @@ $nav-&gt;depth();              // 2</code></pre>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-navstack/.vhs/basic.gif" alt="Basic crumb trail">
                 <h3>Basic crumb trail</h3>
-                <span class="demo-caption">Render a `/Home > Settings > Account` crumb trail.</span>
+                <span class="demo-caption">Render a `Home › Settings › Display` crumb trail — default and custom separators, and width-capped left-elision.</span>
             </div>
         </div>
     </div>
