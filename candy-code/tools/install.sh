@@ -25,7 +25,8 @@
 #      when HOME is unset) as `candy-code` with mode 0755, staged and moved
 #      so a running binary is never truncated in place.
 #
-# Options: --channel stable|dev, --dir DIR, --base-url URL, -h|--help.
+# Options: --channel stable|dev, --version X.Y.Z, --dir DIR, --base-url URL,
+# -h|--help.
 # No environment variables are read: flags only.
 #
 # Verify order follows SelfUpdate: a .sha256.sig verifies the sidecar before
@@ -53,16 +54,20 @@ BIN_NAME="candy-code"
 CHANNEL="stable"
 BIN_DIR=""
 BASE_URL=""
+PIN_VERSION=""
 TMP=""
 
 usage() {
 	cat <<'USAGE'
-Usage: install.sh [--channel stable|dev] [--dir DIR] [--base-url URL]
+Usage: install.sh [--channel stable|dev] [--version X.Y.Z]
+                  [--dir DIR] [--base-url URL]
 
 Installs the signed candy-code phar as DIR/candy-code (mode 0755).
 
   --channel stable   Install the newest candy-code/vX.Y.Z release (default).
   --channel dev      Install the rolling candy-code/dev prerelease.
+  --version X.Y.Z    Install exactly that candy-code/vX.Y.Z release instead
+                     of the newest (stable channel; a leading v is accepted).
   --dir DIR          Install destination directory (default $HOME/.local/bin,
                      /usr/local/bin when HOME is unset).
   --base-url URL     Read releases.json from URL instead of the GitHub API;
@@ -88,6 +93,17 @@ set_channel() {
 	esac
 }
 
+set_version() {
+	# Cheap shell-side shape check (CCOPS-8); select.php repeats the exact
+	# admission regex and stays the authority.
+	case "$1" in
+	'' | *[!Vv0-9.]*)
+		die "--version expects X.Y.Z (digits and dots, optional leading v)"
+		;;
+	esac
+	PIN_VERSION="$1"
+}
+
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 	-h | --help)
@@ -101,6 +117,14 @@ while [ "$#" -gt 0 ]; do
 		;;
 	--channel=*)
 		set_channel "${1#--channel=}"
+		;;
+	--version)
+		need_arg "$@"
+		set_version "$2"
+		shift
+		;;
+	--version=*)
+		set_version "${1#--version=}"
 		;;
 	--dir)
 		need_arg "$@"
@@ -132,6 +156,10 @@ done
 case "$BASE_URL" in
 -*) die "--base-url must not start with '-'" ;;
 esac
+
+if [ -n "$PIN_VERSION" ] && [ "$CHANNEL" = "dev" ]; then
+	die "--version pins a stable release; the dev channel carries only the rolling tag"
+fi
 
 # ---------------------------------------------------------------- 1. tools ---
 
@@ -173,6 +201,7 @@ cat >"$TMP/select.php" <<'PHPSELECTION'
 // X.Y.Z wins on the stable channel.
 //
 // argv: selection-out-file  channel  tag-prefix  dev-tag  pages-list-file
+//       pinned-version (empty string = newest, the default)
 // The pages-list file names one fetched JSON page per line. Messages go to
 // stderr WITHOUT a shell prefix; the caller stamps them.
 
@@ -183,6 +212,17 @@ $devTag = $argv[4];
 $pageList = @file($argv[5], FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 if ($pageList === false) {
 	fwrite(STDERR, "could not read the page list\n");
+	exit(1);
+}
+
+// CCOPS-8: --version pins an exact stable release. An empty pin keeps the
+// historic newest-wins behavior byte-for-byte.
+$pin = isset($argv[6]) ? (string) $argv[6] : '';
+$want = strtolower(ltrim($pin, 'v'));
+if ($pin !== '' && preg_match('/^\d+\.\d+\.\d+$/', $want) !== 1) {
+	// A bare "v" ltrims to '' — that is a malformed pin, not "no pin":
+	// refuse loudly instead of silently installing the newest release.
+	fwrite(STDERR, "--version expects X.Y.Z (digits and dots): '$pin'\n");
 	exit(1);
 }
 
@@ -215,7 +255,7 @@ foreach ($pageList as $page) {
 	}
 }
 
-$pickTag = static function (array $release) use ($channel, $tagPrefix, $devTag): ?string {
+$pickTag = static function (array $release) use ($channel, $tagPrefix, $devTag, $want): ?string {
 	$tag = isset($release['tag_name']) ? (string) $release['tag_name'] : '';
 	if ($tag === '' || ($release['draft'] ?? false) === true) {
 		return null;
@@ -230,7 +270,13 @@ $pickTag = static function (array $release) use ($channel, $tagPrefix, $devTag):
 		return null;
 	}
 	$version = substr($tag, strlen($tagPrefix));
-	return preg_match('/^v?\d+\.\d+\.\d+$/', $version) === 1 ? $version : null;
+	if (preg_match('/^v?\d+\.\d+\.\d+$/', $version) !== 1) {
+		return null;
+	}
+	if ($want !== '' && strtolower(ltrim($version, 'v')) !== $want) {
+		return null; // --version pins one exact release (CCOPS-8)
+	}
+	return $version;
 };
 
 // The same tuple order SelfUpdate applies via Version::compare (parse strips
@@ -276,8 +322,9 @@ foreach ($releases as $release) {
 }
 
 if ($best === null) {
-	fwrite(STDERR, 'no candy-code release carrying its phar and sidecar assets was found on the '
-		. ($channel === 'dev' ? 'dev channel' : 'stable channel') . "\n");
+	fwrite(STDERR, 'no candy-code release carrying its phar and sidecar assets'
+		. ($want !== '' ? " matching --version $want" : '')
+		. ' was found on the ' . ($channel === 'dev' ? 'dev channel' : 'stable channel') . "\n");
 	exit(1);
 }
 
@@ -313,7 +360,8 @@ else
 	done
 fi
 
-php "$TMP/select.php" "$TMP/selection" "$CHANNEL" "$TAG_PREFIX" "$DEV_TAG" "$TMP/pages" 2>"$TMP/err" || {
+php "$TMP/select.php" "$TMP/selection" "$CHANNEL" "$TAG_PREFIX" "$DEV_TAG" \
+	"$TMP/pages" "$PIN_VERSION" 2>"$TMP/err" || {
 	sed 's/^/install.sh: /' "$TMP/err" >&2
 	exit 1
 }

@@ -316,6 +316,80 @@ final class InstallScriptTest extends TestCase
         $this->assertSame($stableBytes, (string) \file_get_contents($this->root . '/bin/candy-code'));
     }
 
+    public function testTheVersionFlagSelectsExactlyThatReleaseAndIgnoresNewer(): void
+    {
+        // CCOPS-8: before --version existed, the only way below the current
+        // tip was a self-update rollback, which reaches exactly one step.
+        $winnerBytes = 'CANDY-PHAR-NEWEST-' . \uniqid('', true);
+        $winner = $this->fixtureReleaseEntry('candy-code/v9.8.7', $winnerBytes, $this->sidecarFor($winnerBytes), true);
+
+        $pinnedBytes = 'CANDY-PHAR-PINNED-' . \uniqid('', true);
+        $pinned = $this->fixtureReleaseEntry('candy-code/v8.0.0', $pinnedBytes, $this->sidecarFor($pinnedBytes), true);
+
+        \file_put_contents(
+            $this->fixtureRoot . '/releases.json',
+            \json_encode([$winner, $pinned])
+        );
+
+        // Both spellings select v8.0.0: the plain triple and the tag-style
+        // leading v that the stable tags themselves carry.
+        foreach (['8.0.0', 'v8.0.0'] as $spelling) {
+            $this->purgeFixtureTree($this->root . '/bin');
+            [$status, $output] = $this->runSwappedInstaller([
+                '--base-url', $this->fixtureFileUrl($this->fixtureRoot),
+                '--dir', $this->root . '/bin',
+                '--version', $spelling,
+            ]);
+
+            $this->assertSame(0, $status, $output);
+            $this->assertStringContainsString('selected candy-code/v8.0.0', $output);
+            $this->assertStringNotContainsString('selected candy-code/v9.8.7', $output);
+            $this->assertSame($pinnedBytes, (string) \file_get_contents($this->root . '/bin/candy-code'));
+        }
+    }
+
+    public function testAPinnedVersionThatCarriesNoInstallableReleaseIsRefusedByName(): void
+    {
+        // The refusal must name the pin: quietly installing the newest
+        // release instead would be the same lie in a different mask.
+        $winnerBytes = 'CANDY-PHAR-HIGHER-' . \uniqid('', true);
+        $winner = $this->fixtureReleaseEntry('candy-code/v9.8.7', $winnerBytes, $this->sidecarFor($winnerBytes), true);
+
+        \file_put_contents(
+            $this->fixtureRoot . '/releases.json',
+            \json_encode([$winner])
+        );
+
+        [$status, $output] = $this->runSwappedInstaller([
+            '--base-url', $this->fixtureFileUrl($this->fixtureRoot),
+            '--dir', $this->root . '/bin',
+            '--version=1.2.3',
+        ]);
+
+        $this->assertNotSame(0, $status);
+        $this->assertStringContainsString('matching --version 1.2.3', $output);
+        $this->assertFileDoesNotExist($this->root . '/bin/candy-code');
+    }
+
+    public function testTheVersionFlagRefusesMalformedPinsAndTheDevChannel(): void
+    {
+        // Flag-side guards run against the raw script — every refusal names
+        // --version so a user sees which knob said no.
+        [$status, $output] = $this->runBoundedSh(['sh', $this->scriptPath, '--version=latest']);
+        $this->assertNotSame(0, $status);
+        $this->assertStringContainsString('--version expects', $output);
+
+        [$status, $output] = $this->runBoundedSh(['sh', $this->scriptPath, '--version']);
+        $this->assertNotSame(0, $status);
+        $this->assertStringContainsString('--version requires a value', $output);
+
+        [$status, $output] = $this->runBoundedSh([
+            'sh', $this->scriptPath, '--channel', 'dev', '--version', '1.2.3',
+        ]);
+        $this->assertNotSame(0, $status);
+        $this->assertStringContainsString('dev channel', $output);
+    }
+
     public function testUrlsAndPathsCarryingSpacesSurviveTheQuoting(): void
     {
         // A directory name with a space is the classic quoting hazard: the
