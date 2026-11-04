@@ -66,6 +66,21 @@
      --fs-small. */
   --chrome-height: 3.4rem;
   --chrome-reserve: 7rem;
+  /* CW-UX-17: the eleven context-breakdown swatch hues (dark set — the
+     values the panel shipped as literals). Dracula and tokyoNight are dark
+     surfaces and inherit these; the light blocks below carry a legible
+     darker set (all ≥ 4.2:1 on the light --bg). */
+  --ctx-system-prompt: #8e6cd8;
+  --ctx-system-tools: #4b8bd0;
+  --ctx-mcp-tools: #3fa796;
+  --ctx-custom-agents: #c2793b;
+  --ctx-memory-files: #99a83f;
+  --ctx-project-memory: #c25b7e;
+  --ctx-repo-map: #5f6fd0;
+  --ctx-skills: #3e9bb5;
+  --ctx-messages: #c9a13b;
+  --ctx-autocompact-buffer: #8a8f98;
+  --ctx-free-space: #3f7f52;
 }
 
 @media (prefers-color-scheme: light) {
@@ -107,6 +122,21 @@
     --ansi-15: #ffffff;
     --ansi-black-fg: #6a737d;
     --danger: var(--error);
+    /* CW-UX-17: light-theme breakdown hues — same eleven roles, darkened
+       to ≥ 4.2:1 against the light surface. Keep byte-identical with the
+       [data-theme='light'] block (contrast.spec.ts asserts the two light
+       blocks agree). */
+    --ctx-system-prompt: #6b3fb8;
+    --ctx-system-tools: #2f6cb3;
+    --ctx-mcp-tools: #1f7f6f;
+    --ctx-custom-agents: #9c5a1f;
+    --ctx-memory-files: #6f7d1f;
+    --ctx-project-memory: #a63a60;
+    --ctx-repo-map: #4050b8;
+    --ctx-skills: #1f7d96;
+    --ctx-messages: #8f6d12;
+    --ctx-autocompact-buffer: #5e646e;
+    --ctx-free-space: #2f6b40;
   }
 }
 
@@ -145,6 +175,19 @@
   --ansi-15: #ffffff;
   --ansi-black-fg: #6a737d;
   --danger: var(--error);
+  /* CW-UX-17: mirror of the prefers-color-scheme light block above —
+     keep the two byte-identical (contrast.spec.ts compares them). */
+  --ctx-system-prompt: #6b3fb8;
+  --ctx-system-tools: #2f6cb3;
+  --ctx-mcp-tools: #1f7f6f;
+  --ctx-custom-agents: #9c5a1f;
+  --ctx-memory-files: #6f7d1f;
+  --ctx-project-memory: #a63a60;
+  --ctx-repo-map: #4050b8;
+  --ctx-skills: #1f7d96;
+  --ctx-messages: #8f6d12;
+  --ctx-autocompact-buffer: #5e646e;
+  --ctx-free-space: #2f6b40;
 }
 
 /* C-TUI-4.b: the two named TUI palettes, mirroring candy-code's own themes —

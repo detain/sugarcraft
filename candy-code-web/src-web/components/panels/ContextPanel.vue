@@ -141,19 +141,21 @@ const share = computed(() => {
 type CategoryRow = NonNullable<NonNullable<ContextSourcesResult['breakdown']>['categories']>[number]
 type CategorySub = CategoryRow['sub'][number]
 
-/** The TUI's eleven glyphs become eleven swatch hues; unknown keys stay neutral. */
+/** The TUI's eleven glyphs become eleven swatch hues; unknown keys stay
+ *  neutral. CW-UX-17: hues are theme tokens (--ctx-*) so the light themes
+ *  get legible variants instead of the dark palette pasted on white. */
 const CATEGORY_COLORS: Record<string, string> = {
-  'system-prompt': '#8e6cd8',
-  'system-tools': '#4b8bd0',
-  'mcp-tools': '#3fa796',
-  'custom-agents': '#c2793b',
-  'memory-files': '#99a83f',
-  'project-memory': '#c25b7e',
-  'repo-map': '#5f6fd0',
-  skills: '#3e9bb5',
-  messages: '#c9a13b',
-  'autocompact-buffer': '#8a8f98',
-  'free-space': '#3f7f52',
+  'system-prompt': 'var(--ctx-system-prompt)',
+  'system-tools': 'var(--ctx-system-tools)',
+  'mcp-tools': 'var(--ctx-mcp-tools)',
+  'custom-agents': 'var(--ctx-custom-agents)',
+  'memory-files': 'var(--ctx-memory-files)',
+  'project-memory': 'var(--ctx-project-memory)',
+  'repo-map': 'var(--ctx-repo-map)',
+  skills: 'var(--ctx-skills)',
+  messages: 'var(--ctx-messages)',
+  'autocompact-buffer': 'var(--ctx-autocompact-buffer)',
+  'free-space': 'var(--ctx-free-space)',
 }
 
 const categories = computed<CategoryRow[] | null>(() => context.sources?.breakdown?.categories ?? null)
@@ -475,7 +477,9 @@ h4 {
   background: var(--muted);
 }
 .liveness.up {
-  background: #3fa796;
+  /* CW-UX-17: the mcp-tools hue — the liveness dot marks reachable MCP
+     servers, so it shares that swatch token rather than pasting a hex. */
+  background: var(--ctx-mcp-tools);
 }
 .liveness.down {
   background: var(--error);
