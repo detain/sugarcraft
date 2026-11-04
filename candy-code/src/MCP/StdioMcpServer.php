@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\MCP;
 
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProcessContainment;
 
 /**
@@ -209,12 +210,49 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
     }
 
     /**
+     * The tool definitions the library's `parseTools()` gate refused on the
+     * last start, named as the server advertised them — the forwarding of
+     * {@see \SugarCraft\McpClient\StdioMcpServer::malformedToolDefinitions()}.
+     * The names are the server's own bytes, so they are NOT interpolated into
+     * any message this process emits; they ride here as data for whoever
+     * formats them. Empty before start().
+     *
+     * @return list<string>
+     */
+    public function malformedToolDefinitions(): array
+    {
+        return $this->transport->malformedToolDefinitions();
+    }
+
+    /**
+     * The library's formatted one-line announcement (server name, count, the
+     * first few labels) — empty string when nothing was skipped.
+     */
+    public function malformedToolDefinitionsReport(): string
+    {
+        return $this->transport->malformedToolDefinitionsReport();
+    }
+
+    /**
      * @throws \RuntimeException when the program is refused by the pre-check,
      *         cannot be spawned, or the handshake does not complete in budget
      */
     public function start(): void
     {
         $this->transport->start();
+
+        // The skip is only half the announcement: the library records WHAT it
+        // dropped, but a transport nobody queries keeps that record to itself.
+        // Drain it here, on the path that starts the server, so the operator
+        // sees one log line per poisoned tools/list — the same channel and
+        // byte-shape as the config-level partial-start warning in Bootstrap
+        // (`candy-code: MCP ...`), and the sibling of the launch notices that
+        // name withheld secret variables. Without it a server silently loses
+        // tools and nothing anywhere says so.
+        $report = $this->transport->malformedToolDefinitionsReport();
+        if ($report !== '') {
+            Log::channel(Log::APP, $report);
+        }
     }
 
     public function stop(): void

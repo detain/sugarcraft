@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\MCP\HttpMcpServer;
 use SugarCraft\Code\MCP\McpTool;
 use SugarCraft\Code\MCP\StdioMcpServer;
+use SugarCraft\Code\Tests\Support\DiscardsErrorLogTrait;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 
 /**
@@ -61,6 +62,7 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  */
 final class StdioMcpServerToolListRobustnessTest extends TestCase
 {
+    use DiscardsErrorLogTrait;
     use SlicesDeclaredMethodsTrait;
 
     private string $tempDir = '';
@@ -240,14 +242,15 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
     }
 
     /**
-     * R-MCP: THE SKIP IS LOUD. A dropped definition must never be silently
-     * vanished — the boot proceeds, but the transport announces exactly what
-     * it skipped, named and counted, through the library's
-     * `malformedToolDefinitions()`. Reaching the library transport through
-     * the adapter's private property is deliberate: the adapter forwards no
-     * such accessor today, and this row pins the announcement's presence on
-     * the object the product actually holds (a forwarding gap is a seam the
-     * closeout can see because the reflection site names it).
+     * R-MCP: THE SKIP IS LOUD — AND NOW LOUDER THAN THE LIBRARY'S OWN RECORD.
+     *
+     * A dropped definition must never be silently vanished: the boot proceeds,
+     * the transport announces exactly what it skipped, named and counted, and
+     * the adapter FORWARDS that record (`malformedToolDefinitions()` /
+     * `malformedToolDefinitionsReport()`) so the product — and the drain row
+     * below — can act on it without reflection. The labels are the server's
+     * own bytes; this roster pins the FORWARD carries them through unchanged,
+     * in the library's order.
      */
     public function testTheSkippedDefinitionsAreAnnouncedNotSilentlyVanished(): void
     {
@@ -258,24 +261,102 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
             . '"not even an object"]',
         );
 
+        // The forward's other polarity first, on the pre-start object: an
+        // unstarted adapter reports nothing (the library resets on every
+        // start, so the record can only be born from a real exchange).
+        $this->assertSame([], $server->malformedToolDefinitions());
+        $this->assertSame('', $server->malformedToolDefinitionsReport());
+
         try {
             $server->start();
 
-            $transport = self::transportOf($server);
             self::assertSame(
                 // {"name":5} has no usable string name → get_debug_type; the
                 // rest name themselves. `read`/`write`-style defaulted keys
                 // are NOT here: they registered (neighbours row above).
                 ['array', 'edit', 'string'],
-                $transport->malformedToolDefinitions(),
+                $server->malformedToolDefinitions(),
             );
-            $report = $transport->malformedToolDefinitionsReport();
+            $report = $server->malformedToolDefinitionsReport();
             $this->assertStringContainsString('toollist', $report, 'the announcement did not name the server');
             $this->assertStringContainsString('3 malformed tool definition', $report);
             $this->assertStringNotContainsString('refusing to boot', $report, 'the announcement must not claim a refusal that did not happen');
+
+            // The forward IS the transport's record, byte for byte — the one
+            // diff that distinguishes "forwards" from "re-implements".
+            $transport = self::transportOf($server);
+            $this->assertSame($transport->malformedToolDefinitions(), $server->malformedToolDefinitions());
+            $this->assertSame($transport->malformedToolDefinitionsReport(), $report);
+
+            // The adapter's OWN view of the roster still carries the sibling:
+            // the malformed entry is skipped, the valid neighbour registered.
+            $this->assertSame(
+                ['grep'],
+                array_map(static fn (McpTool $t): string => $t->name, $server->listTools()),
+            );
         } finally {
             $server->stop();
         }
+    }
+
+    /**
+     * THE ADAPTER DRAINS THE RECORD ONTO THE OPERATOR'S LOG CHANNEL — once per
+     * start, on the same `Log::channel(Log::APP, …)` surface the config-level
+     * partial-start warning uses, with the server name and the count legible
+     * in the line. This is the seam the lib-side record was missing: a
+     * transport nobody queries keeps its announcement to itself.
+     *
+     * The warning goes to the log sink and NOT into the refusal/notice text,
+     * so the row diverts `error_log` via the shared trait and reads what the
+     * start() wrote — a known-positive (the poisoned list) paired with the
+     * clean-list control below it, because `assertStringNotContainsString`
+     * against an empty capture is satisfied by a dead instrument.
+     */
+    public function testTheMalformedDefinitionWarningLandsOnTheLogSurfaceOnce(): void
+    {
+        $server = $this->serverAnswering(
+            '[{"name":5},'
+            . '{"name":"grep","description":"search","inputSchema":{"type":"object"}},'
+            . '{"name":"edit","description":false},'
+            . '"not even an object"]',
+        );
+
+        $logged = self::withErrorLogDiscarded(static function () use ($server): void {
+            try {
+                $server->start();
+            } finally {
+                $server->stop();
+            }
+        });
+
+        $this->assertSame(
+            1,
+            substr_count($logged, 'malformed tool definition'),
+            'the drain wrote the announcement a number of times other than once — or not at all. '
+            . 'Captured log: ' . var_export($logged, true),
+        );
+        $this->assertStringContainsString('candy-code: MCP server toollist advertised 3', $logged, 'the line lost the envelope, the server name, or the count');
+    }
+
+    /**
+     * THE CLEAN POLARITY OF THE DRAIN: a fully well-formed `tools/list` costs
+     * the operator zero warning lines — a drain that announced on every boot
+     * would train nobody to read it.
+     */
+    public function testAWellFormedToolListWritesNoMalformedDefinitionWarning(): void
+    {
+        $server = $this->serverAnswering('[{"name":"grep","description":"search","inputSchema":{"type":"object"}}]');
+
+        $logged = self::withErrorLogDiscarded(static function () use ($server): void {
+            try {
+                $server->start();
+            } finally {
+                $server->stop();
+            }
+        });
+
+        $this->assertStringNotContainsString('malformed tool definition', $logged);
+        $this->assertSame('', $server->malformedToolDefinitionsReport(), 'the clean server grew a report out of nothing');
     }
 
     /**
@@ -322,7 +403,12 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
         $this->assertTrue($servers['quiet']->isUp());
     }
 
-    /** The library transport the adapter wraps (see the announcement row for WHY by reflection). */
+    /**
+     * The library transport the adapter wraps. Used by the announcement row to
+     * diff the adapter's public forward against the transport's own record —
+     * reflection onto the private collaborator is the honest way to prove the
+     * forward forwards, and it reddens first if the wrapping ever changes.
+     */
     private static function transportOf(StdioMcpServer $adapter): \SugarCraft\McpClient\StdioMcpServer
     {
         return (new \ReflectionProperty($adapter, 'transport'))->getValue($adapter);

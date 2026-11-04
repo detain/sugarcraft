@@ -512,6 +512,14 @@ before. `McpClient::strippedSecretEnv()` records, per server, the names it
 was started without (never the values), so a server that then fails to
 authenticate can be told apart from a broken one.
 
+A server whose start-time `tools/list` advertises **malformed definitions**
+costs the operator one warning line on the log channel: the library's parser
+skips the unusable entries, registers the rest of the roster, and the adapter
+drains that record — server name, count, the first labels — through the same
+launch-warning log the partial-start message uses. The skipped labels are also
+readable programmatically (`StdioMcpServer::malformedToolDefinitions()`);
+what reaches the session is the registered remainder.
+
 ### Adding servers
 
 The `/mcp` panel opens empty in a fresh project and both hint lines there point
