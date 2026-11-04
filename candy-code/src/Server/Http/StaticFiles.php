@@ -115,11 +115,6 @@ final class StaticFiles
             return Responses::error(404, 'not_found', 'not found');
         }
 
-        $body = @\file_get_contents($file);
-        if ($body === false) {
-            return Responses::error(404, 'not_found', 'not found');
-        }
-
         $extension = \strtolower(\pathinfo($file, \PATHINFO_EXTENSION));
         // Only Vite-fingerprinted paths may ride the immutable cache. The
         // push service worker (sw.js, C-WEB-5.e) lives at the dist ROOT and
@@ -129,6 +124,24 @@ final class StaticFiles
         // hashed rule catching it, would stale the worker for a year;
         // StaticFilesTest pins /sw.js at no-cache to catch that.
         $hashed = \str_starts_with($relative, 'assets/');
+        $cacheControl = $hashed ? 'public, max-age=31536000, immutable' : 'no-cache';
+
+        // CWPD-5: a weak validator over (mtime, size), so the no-cache and
+        // max-age clients that must revalidate can be answered with a 304
+        // INSTEAD of a full re-read and re-transfer of the file. Weak is the
+        // right flavor — byte equality across an edit is not promised, only
+        // "same representation version", and mtime+size is exactly that.
+        $etag = \sprintf('W/"%x-%x"', (int) (@\filemtime($file) ?: 0), $size);
+        if (self::etagMatches($request->getHeaderLine('If-None-Match'), $etag)) {
+            // RFC 9110: a 304 carries the headers a 200 for the same
+            // representation would, and never a body.
+            return new Response(304, ['Cache-Control' => $cacheControl, 'ETag' => $etag]);
+        }
+
+        $body = @\file_get_contents($file);
+        if ($body === false) {
+            return Responses::error(404, 'not_found', 'not found');
+        }
 
         // A HEAD answer keeps its Content-Length and loses the body in
         // react/http itself, so one response serves both methods.
@@ -138,10 +151,44 @@ final class StaticFiles
                 'Content-Type' => self::TYPES[$extension] ?? 'application/octet-stream',
                 // Vite fingerprints everything under assets/; the shell page
                 // must be re-fetched so a new build is picked up.
-                'Cache-Control' => $hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
+                'Cache-Control' => $cacheControl,
+                'ETag' => $etag,
             ],
             $body,
         );
+    }
+
+    /**
+     * RFC 9110 weak comparison: the W/ prefix and any quotes are
+     * ignored on both sides, {@code *} matches everything, and a list
+     * matches if any member does.
+     */
+    private static function etagMatches(string $header, string $etag): bool
+    {
+        if ($header === '') {
+            return false;
+        }
+        $target = self::bareEtag($etag);
+        foreach (\explode(',', $header) as $candidate) {
+            $candidate = \trim($candidate);
+            if ($candidate === '*') {
+                return true;
+            }
+            $bare = self::bareEtag($candidate);
+            if ($bare !== '' && $bare === $target) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** The $tag with its weak prefix and surrounding quotes removed. */
+    private static function bareEtag(string $tag): string
+    {
+        $tag = \str_starts_with($tag, 'W/') ? \substr($tag, 2) : $tag;
+
+        return \trim($tag, '"');
     }
 
     /**

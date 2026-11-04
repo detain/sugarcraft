@@ -11,7 +11,8 @@ use SugarCraft\Code\Server\Http\StaticFiles;
 
 /**
  * The web UI's files, served from one directory with the URL held to it —
- * after symlinks — and the SPA fallback for extensionless routes.
+ * after symlinks — the SPA fallback for extensionless routes, and the weak
+ * ETag/304 revalidation that spare a re-reading the disk (CWPD-5).
  */
 final class StaticFilesTest extends TestCase
 {
@@ -43,6 +44,70 @@ final class StaticFilesTest extends TestCase
         @\rmdir($this->webRoot . '/assets');
         @\rmdir($this->webRoot);
         @\rmdir($base);
+    }
+
+    /**
+     * CWPD-5: a weak (mtime, size) validator answers revalidations with a
+     * 304 instead of a full re-read and re-transfer, for the no-cache shell
+     * and the immutable assets alike.
+     */
+    public function testA200CarriesAStableWeakValidator(): void
+    {
+        $files = StaticFiles::new($this->webRoot);
+
+        $first = $this->fetch($files, '/');
+        $second = $this->fetch($files, '/');
+        $etag = $first->getHeaderLine('ETag');
+        self::assertNotSame('', $etag, 'a served file carries a validator');
+        self::assertStringStartsWith('W/"', $etag, 'weak: byte equality across an edit is not promised');
+        self::assertSame($etag, $second->getHeaderLine('ETag'), 'mtime+size is stable between reads');
+    }
+
+    public function testARevalidationWithTheCurrentValidatorGetsAnEmpty304WithTheSameCachePolicy(): void
+    {
+        $files = StaticFiles::new($this->webRoot);
+
+        foreach (['/' => 'no-cache', '/assets/app-1a2b.js' => 'public, max-age=31536000, immutable', '/sw.js' => 'no-cache'] as $path => $cacheControl) {
+            $etag = $this->fetch($files, $path)->getHeaderLine('ETag');
+            self::assertNotSame('', $etag, $path);
+
+            $revalidated = $files(new ServerRequest('GET', 'http://127.0.0.1:7420' . $path, ['If-None-Match' => $etag]));
+            self::assertSame(304, $revalidated->getStatusCode(), $path);
+            self::assertSame('', (string) $revalidated->getBody(), 'a 304 never carries a body');
+            self::assertSame($cacheControl, $revalidated->getHeaderLine('Cache-Control'), "the 304 repeats the representation's cache policy for $path");
+            self::assertSame($etag, $revalidated->getHeaderLine('ETag'));
+        }
+    }
+
+    public function testAWeakPrefixQuotedListAndStarAllCompareForRevalidation(): void
+    {
+        $files = StaticFiles::new($this->webRoot);
+        $etag = $this->fetch($files, '/')->getHeaderLine('ETag');
+        $bare = \trim(\substr($etag, 2), '"');
+
+        foreach ([$etag, '"' . $bare . '"', $bare, 'garbage, ' . $etag, '*'] as $sent) {
+            $response = $files(new ServerRequest('GET', 'http://127.0.0.1:7420/', ['If-None-Match' => $sent]));
+            self::assertSame(304, $response->getStatusCode(), $sent);
+        }
+    }
+
+    public function testAStaleValidatorStillGetsTheFullBody(): void
+    {
+        $files = StaticFiles::new($this->webRoot);
+
+        $response = $files(new ServerRequest('GET', 'http://127.0.0.1:7420/', ['If-None-Match' => 'W/"0-0"']));
+        self::assertSame(200, $response->getStatusCode());
+        self::assertStringContainsString('<title>app</title>', (string) $response->getBody());
+    }
+
+    public function testTheWebRootNoticeKeepsNoStoreAndGainsNoValidator(): void
+    {
+        $files = StaticFiles::new(null);
+
+        $notice = $this->fetch($files, '/');
+        self::assertSame(200, $notice->getStatusCode());
+        self::assertSame('no-store', $notice->getHeaderLine('Cache-Control'), 'the notice is never cacheable — it is the state, not a file');
+        self::assertSame('', $notice->getHeaderLine('ETag'), 'no validator on a generated page');
     }
 
     private function fetch(StaticFiles $files, string $path, string $method = 'GET'): ResponseInterface
