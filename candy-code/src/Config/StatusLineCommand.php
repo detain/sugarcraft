@@ -10,6 +10,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Code\App\StatusLineResultMsg;
+use SugarCraft\Code\Support\DrainsStreamedChild;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
@@ -243,15 +244,6 @@ final class StatusLineCommand
      */
     private const DRAIN_SLICE_SECONDS = 0.2;
 
-    /**
-     * Consecutive `stream_select()` failures tolerated before the drain gives
-     * up — {@see \SugarCraft\Code\Hooks\ScriptHook::DRAIN_SELECT_RETRIES}'
-     * figure and reason. PHP's select is not installed with `SA_RESTART`, and
-     * `Program` runs with `pcntl_async_signals()` on and a SIGWINCH handler
-     * installed, so a terminal resize during a run returns false with EINTR
-     * and must be retried rather than read as end-of-output.
-     */
-    private const DRAIN_SELECT_RETRIES = 128;
 
     /** {@see \SugarCraft\Code\Hooks\ScriptHook::EXIT_POLL_MICROSECONDS}. */
     private const EXIT_POLL_MICROSECONDS = 10_000;
@@ -852,23 +844,34 @@ final class StatusLineCommand
      * Read both pipes without letting either wedge the other, bounded by
      * $deadline and capped at {@see MAX_OUTPUT_BYTES} of stdout.
      *
-     * {@see \SugarCraft\Code\Hooks\ScriptHook::drain()}'s method, kept
-     * property for property — `stream_select()` over both pipes so a chatty
-     * stderr cannot deadlock a parent blocked on stdout, non-blocking pipes so
-     * a partial-buffer wake cannot block inside the `fread()`, a retried
-     * `false` so an EINTR from SIGWINCH is not read as end-of-output, and the
-     * slice so the deadline is reachable while the command is silent.
+     * The PUMP is {@see \SugarCraft\Code\Support\DrainsStreamedChild::walk()}
+     * now, the same one {@see \SugarCraft\Code\Hooks\ScriptHook::drain()} uses —
+     * `stream_select()` over both pipes so a chatty stderr cannot deadlock a
+     * parent blocked on stdout, non-blocking pipes so a partial-buffer wake
+     * cannot block inside the `fread()`, a retried `false` so an EINTR from
+     * SIGWINCH is not read as end-of-output, and the
+     * {@see DRAIN_SLICE_SECONDS} slice so the deadline is reachable while the
+     * command is silent. The retry budget is the walker's default; this class
+     * no longer carries a copy of the figure.
      *
-     * ONE DEPARTURE: stderr is read and DISCARDED rather than returned. It is
-     * drained because not draining it is the deadlock; it is discarded because
+     * TWO DEPARTURES from the hook, both policy rather than plumbing:
+     *
+     * ONE: stderr is read and DISCARDED rather than returned. It is drained
+     * because not draining it is the deadlock; it is discarded because
      * {@see run()} has no use for it (a failing command paints nothing at all,
      * see there). The second element is the timed-out flag rather than the
      * stderr buffer, because {@see run()} has to KILL the child on that path
      * and cannot infer it from what it read.
      *
-     * THE CAP ENDS THE DRAIN. Once stdout has {@see MAX_OUTPUT_BYTES}, there is
-     * nothing more a one-row readout can use, so the loop stops and the caller
-     * kills the child rather than reading a runaway to EOF on the TUI's thread.
+     * TWO: THE CAP ENDS THE DRAIN. Once stdout has {@see MAX_OUTPUT_BYTES},
+     * there is nothing more a one-row readout can use, so the loop stops and
+     * the caller kills the child rather than reading a runaway to EOF on the
+     * TUI's thread. The hook's ceiling is the opposite shape — it TRIMS each
+     * stream, keeps reading, and stamps a marker saying what it dropped,
+     * because a truncated deny reason is still a reason. Hence `keepGoing()`
+     * below and the cap-stop reason mapped to true: the child is still writing
+     * into a pipe nobody will read again, and leaving it to `proc_close()` is
+     * the unbounded wait this whole method exists to remove.
      *
      * @param resource $stdout
      * @param resource $stderr
@@ -876,89 +879,33 @@ final class StatusLineCommand
      */
     private static function drain($stdout, $stderr, float $deadline): array
     {
-        stream_set_blocking($stdout, false);
-        stream_set_blocking($stderr, false);
-
         $buffer = '';
-        $open = [0 => $stdout, 1 => $stderr];
-        $failures = 0;
 
-        while ($open !== []) {
-            if (\strlen($buffer) >= self::MAX_OUTPUT_BYTES) {
-                // Reported as "timed out" so run() takes the kill path: the
-                // child is still writing into a pipe nobody will read again,
-                // and leaving it to proc_close() is the unbounded wait this
-                // whole method exists to remove.
-                return [substr($buffer, 0, self::MAX_OUTPUT_BYTES), true];
-            }
-
-            $remaining = $deadline - microtime(true);
-            if ($remaining <= 0.0) {
-                return [substr($buffer, 0, self::MAX_OUTPUT_BYTES), true];
-            }
-
-            $read = array_values($open);
-            $write = null;
-            $except = null;
-
-            $slice = min($remaining, self::DRAIN_SLICE_SECONDS);
-            $seconds = (int) $slice;
-            $micros = (int) round(($slice - $seconds) * 1_000_000);
-
-            if (@stream_select($read, $write, $except, $seconds, $micros) === false) {
-                if (++$failures > self::DRAIN_SELECT_RETRIES) {
-                    // Not a signal, then: something is wrong with the
-                    // descriptors themselves, and retrying forever would wedge
-                    // the CLI harder than the deadlock this method replaced.
-                    break;
-                }
-
-                continue;
-            }
-
-            $failures = 0;
-
-            foreach ($open as $slot => $pipe) {
-                if (!\in_array($pipe, $read, true)) {
-                    continue;
-                }
-
-                $chunk = fread($pipe, 8192);
-                if ($chunk === false || $chunk === '') {
-                    // feof() is the EOF test, not the empty read: a
-                    // non-blocking pipe legitimately returns '' when the child
-                    // has written nothing YET.
-                    //
-                    // AN HONEST GAP: nothing pins this guard, and replacing the
-                    // whole block with a bare `unset($open[$slot]);` keeps this
-                    // lib green. That is not an oversight that a fixture would
-                    // close. For a real pipe the two forms only diverge when
-                    // `stream_select()` reports the descriptor readable and the
-                    // read then yields no bytes WITHOUT the peer having closed
-                    // — a spurious or EINTR wake, which cannot be provoked from
-                    // inside this process; every reachable empty read here is
-                    // an EOF, where both forms unset. The guard is kept because
-                    // the divergent case, though unforceable, is the one that
-                    // costs the tail of a command's output, and because the
-                    // retried-`false` branch above documents that this drain
-                    // does run under a SIGWINCH handler with
-                    // `pcntl_async_signals()` on.
-                    if (feof($pipe)) {
-                        unset($open[$slot]);
-                    }
-
-                    continue;
-                }
-
-                // Slot 1 is stderr, drained to keep the child unblocked and
-                // then dropped on the floor. See the docblock.
+        $reason = DrainsStreamedChild::walk(
+            $stdout,
+            $stderr,
+            $deadline,
+            self::DRAIN_SLICE_SECONDS,
+            static fn (): float => microtime(true),
+            // Slot 1 is stderr, drained to keep the child unblocked and then
+            // dropped on the floor. See the docblock.
+            static function (int $slot, string $bytes) use (&$buffer): void {
                 if ($slot === 0) {
-                    $buffer .= $chunk;
+                    $buffer .= $bytes;
                 }
-            }
-        }
+            },
+            // A closure with $buffer bound BY REFERENCE, not an arrow function:
+            // `fn() =>` copies at definition time, so it would answer about the
+            // empty buffer forever and the cap would never stop anything.
+            keepGoing: static function () use (&$buffer): bool {
+                return \strlen($buffer) < self::MAX_OUTPUT_BYTES;
+            },
+        );
 
-        return [substr($buffer, 0, self::MAX_OUTPUT_BYTES), false];
+        return [
+            substr($buffer, 0, self::MAX_OUTPUT_BYTES),
+            $reason === DrainsStreamedChild::EXPIRED || $reason === DrainsStreamedChild::STOPPED,
+        ];
     }
 
     /**

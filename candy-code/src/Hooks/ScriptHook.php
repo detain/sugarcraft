@@ -8,6 +8,7 @@ use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Share\JsonlTranscriptWriter;
+use SugarCraft\Code\Support\DrainsStreamedChild;
 use SugarCraft\Code\Support\HookContextFiles;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
@@ -129,13 +130,19 @@ final readonly class ScriptHook implements BoundedHookInterface
      * How many CONSECUTIVE `stream_select()` failures {@see drain()} rides out
      * before it gives up on a pipe.
      *
-     * A signal is the expected cause and it is not an error, so the budget has
-     * to be generous; a genuinely broken descriptor fails instantly and
-     * forever, so it has to be finite. Any successful select resets it, which
-     * means 128 is 128 signals with no readable byte in between rather than
-     * 128 signals per hook.
+     * The figure is {@see \SugarCraft\Code\Support\DrainsStreamedChild::SELECT_RETRIES}
+     * — ONE copy now that the pump itself is shared. It is spelled out again
+     * here because this is the class whose page rosters it: docs/HOOKS.md states
+     * the budget in prose, and
+     * `DocFigureProseDriftTest::testHookDrainSweepAndMarkerSentencesSurviveTheirSources()`
+     * derives that sentence from this constant. WHY the number is what it is —
+     * a signal is the expected cause and it is not an error, so the budget has
+     * to be generous; a genuinely broken descriptor fails instantly and forever,
+     * so it has to be finite; any successful select resets it, which makes 128
+     * "128 signals with no readable byte in between" rather than 128 per hook —
+     * lives with the walker.
      */
-    private const DRAIN_SELECT_RETRIES = 128;
+    private const DRAIN_SELECT_RETRIES = DrainsStreamedChild::SELECT_RETRIES;
 
     /**
      * Wall-clock budget for ONE hook run when the entry names no `timeout:`.
@@ -1436,233 +1443,105 @@ final readonly class ScriptHook implements BoundedHookInterface
     /**
      * Read both pipes to EOF without letting either one wedge the other.
      *
-     * `stream_get_contents($stdout)` followed by `stream_get_contents($stderr)`
-     * deadlocks the moment a hook writes more than one pipe buffer (64 KiB on
-     * Linux) to stderr: the parent is blocked reading stdout, the child is
-     * blocked writing a full stderr pipe nobody is draining, and neither ever
-     * moves. That hangs the whole CLI on a hook that did nothing worse than be
-     * chatty about why it denied something — the exact case a security gate is
-     * most likely to be verbose in.
+     * The PUMP is {@see \SugarCraft\Code\Support\DrainsStreamedChild::walk()}
+     * now — the `stream_select()` over both pipes, the non-blocking reads, the
+     * retried `false`, the {@see DRAIN_SLICE_SECONDS} slice that makes the
+     * deadline reachable, the interleaved stdin write and the EOF it owns on
+     * every way out. WHY that shape is forced lives with the walker; what lives
+     * here is the hook's own policy, the part a shared pump must not decide.
      *
-     * `stream_select()` over both, reading only what is ready, has no such
-     * ordering. The pipes are switched to non-blocking so a select that wakes
-     * on a partial buffer cannot block inside the `fread()` that follows it.
+     * VOLUME IS BOUNDED PER STREAM — ISS-090(d). Reads go through a capture
+     * that stops at {@see MAX_DRAIN_BYTES} in EACH buffer and counts the refused
+     * bytes, and every way out stamps a constant-size marker naming both
+     * figures. A hook's words are the operator's: a truncated deny reason still
+     * says why the call stopped, and a truncated rewrite fails closed, because
+     * JSON cut at the cap does not decode and {@see envelope()} answers such an
+     * output with null — the same existing path as a partial write from an
+     * interrupted select. The verdict still comes from the exit code.
      *
-     * A `false` from the select is RETRIED, not treated as end-of-output.
-     * PHP's `stream_select()` is not installed with `SA_RESTART`, so any
-     * signal delivered while it is parked returns false with EINTR — and
-     * {@see \SugarCraft\Core\Program} turns on `pcntl_async_signals()` and
-     * installs SIGWINCH/SIGINT handlers for the whole TUI, which makes a
-     * terminal RESIZE during a hook a routine occurrence. Breaking on that
-     * abandoned everything the hook had not written yet: a truncated deny
-     * reason, a half an `exit 3` question, and — worst — a partial `exit 4`
-     * rewrite, which is invalid JSON and so becomes a DENY of a call the hook
-     * meant to permit with different arguments. The verdict itself always
-     * survived (it comes from `proc_close()`), but the words did not.
+     * A GIVE-UP SWEEPS WHAT IS ALREADY BUFFERED before the markers are stamped
+     * (the pipes are non-blocking, so the sweep cannot park): a partial deny
+     * reason beats none.
      *
-     * WHAT THE DOCBLOCK ABOVE NEVER ADDRESSED, and what $deadline adds: none
-     * of that reasoning bounds the wait. Both properties are kept — the
-     * select is still over both pipes, and a `false` is still retried rather
-     * than read as end-of-output — but the wait is now sliced at
-     * {@see DRAIN_SLICE_SECONDS} against a caller-supplied deadline, so a hook
-     * that never closes its stdout ends the drain instead of ending the
-     * session. A deadline expiry is reported as the third element rather than
-     * by returning short, because {@see execute()} has to KILL the child on
-     * that path and cannot infer it from the buffers.
-     *
-     * AND VOLUME IS BOUNDED TOO — ISS-090(d): reads go through a capture that
-     * stops at {@see MAX_DRAIN_BYTES} per stream and counts the refused bytes;
-     * every way out of this method stamps a constant-size marker naming both
-     * figures when anything was dropped. Returning short on the cut is
-     * deliberate and safe the same way a deadline expiry is: the verdict comes
-     * from the exit code, and a truncated envelope fails closed.
+     * A deadline expiry is reported as the third element rather than by
+     * returning short, because {@see execute()} has to KILL the child on that
+     * path and cannot infer it from the buffers. The retry give-up is NOT: the
+     * descriptors failed, not the budget, and what the hook wrote is a finished
+     * read. There is no `keepGoing` below — this ceiling is a trim, not a stop,
+     * so the walker's STOPPED reason is unreachable on this path.
      *
      * @param resource $stdout
      * @param resource $stderr
      * @param float $deadline instant on this hook's clock (see {@see self::$clock})
      *        past which the drain gives up on whatever the hook has not written yet
      * @param resource|null $stdin the child's stdin, flushed from inside the
-     *        pump when given — see {@see stdinPayload()} for WHAT rides it and
-     *        this method's loop for why the write has to be interleaved
+     *        pump when given — see {@see stdinPayload()} for WHAT rides it
      * @return array{0: string, 1: string, 2: bool} stdout, stderr, timed-out
      */
     private function drain($stdout, $stderr, float $deadline, $stdin = null, string $stdinData = ''): array
     {
-        stream_set_blocking($stdout, false);
-        stream_set_blocking($stderr, false);
+        $buffers = ['', ''];
+        // Bytes refused for the slot because the cap was reached — the marker
+        // counts them so the user learns the buffer is a window, not the whole
+        // file.
+        $dropped = [0, 0];
 
-        $pending = $stdinData;
-        $stdinOpen = $stdin !== null;
+        $capture = static function (int $slot, string $bytes) use (&$buffers, &$dropped): void {
+            $room = self::MAX_DRAIN_BYTES - strlen($buffers[$slot]);
 
-        if ($stdinOpen) {
-            stream_set_blocking($stdin, false);
-        }
+            if ($room >= strlen($bytes)) {
+                $buffers[$slot] .= $bytes;
 
-        try {
-            $buffers = ['', ''];
-            // Bytes refused for the slot because the cap was reached — the
-            // marker counts them so the user learns the buffer is a window,
-            // not the whole file.
-            $dropped = [0, 0];
+                return;
+            }
 
-            $capture = static function (int $slot, string $bytes) use (&$buffers, &$dropped): void {
-                $room = self::MAX_DRAIN_BYTES - strlen($buffers[$slot]);
+            if ($room > 0) {
+                $buffers[$slot] .= substr($bytes, 0, $room);
+            }
 
-                if ($room >= strlen($bytes)) {
-                    $buffers[$slot] .= $bytes;
+            $dropped[$slot] += strlen($bytes) - max(0, $room);
+        };
 
-                    return;
+        // The marker is constant-size and stamped once per stream, so a sealed
+        // buffer is bounded by cap + marker and the stamp itself cannot reopen
+        // the cap.
+        $seal = static function () use (&$buffers, &$dropped): void {
+            foreach ($dropped as $slot => $count) {
+                if ($count > 0) {
+                    $buffers[$slot] .= sprintf(
+                        ' … [hook output capped at %d bytes; %d further bytes dropped]',
+                        self::MAX_DRAIN_BYTES,
+                        $count,
+                    );
+                    $dropped[$slot] = 0;
                 }
+            }
+        };
 
-                if ($room > 0) {
-                    $buffers[$slot] .= substr($bytes, 0, $room);
-                }
-
-                $dropped[$slot] += strlen($bytes) - max(0, $room);
-            };
-
-            // The marker is constant-size and stamped once per stream, so a
-            // sealed buffer is bounded by cap + marker and the loop below
-            // cannot be re-entered past the cap by the stamp itself.
-            $seal = static function () use (&$buffers, &$dropped): void {
-                foreach ($dropped as $slot => $count) {
-                    if ($count > 0) {
-                        $buffers[$slot] .= sprintf(
-                            ' … [hook output capped at %d bytes; %d further bytes dropped]',
-                            self::MAX_DRAIN_BYTES,
-                            $count,
-                        );
-                        $dropped[$slot] = 0;
-                    }
-                }
-            };
-
-            $open = [0 => $stdout, 1 => $stderr];
-            $failures = 0;
-
-            // The read set IS the child's lifetime, and that is load-bearing
-            // for the write branch below: spawnSpec wraps the command in
-            // `setsid -w sh -c`, so the WRAPPER keeps both output pipes' write
-            // ends open until the whole run exits — a child hanging up its own
-            // STDOUT/STDERR cannot empty this set early. The loop therefore
-            // stays alive exactly as long as the child can still take stdin,
-            // and the finally below owns the EOF on every exit path.
-            while ($open !== []) {
-                $remaining = $deadline - ($this->clock)();
-                if ($remaining <= 0.0) {
-                    // Sweep what is already buffered on the way out, the same as
-                    // the give-up branch below: the pipes are non-blocking, so
-                    // this cannot park, and a partial deny reason beats none.
-                    foreach ($open as $slot => $pipe) {
-                        $rest = @stream_get_contents($pipe);
-                        if (is_string($rest)) {
-                            $capture($slot, $rest);
-                        }
-                    }
-
-                    $seal();
-
-                    return [$buffers[0], $buffers[1], true];
-                }
-
-                $read = array_values($open);
-                $write = $pending !== '' && $stdinOpen ? [$stdin] : null;
-                $except = null;
-
-                // Waits for one of the pipes to become readable — which includes
-                // the readable-at-EOF a closing child produces — or, while the
-                // payload still has bytes to give, for stdin to become writable
-                // — or for the slice to run out, whichever is first. The slice is
-                // what makes the deadline above reachable: nothing wakes a
-                // select when the only thing that has changed is the clock.
-                $slice = min($remaining, self::DRAIN_SLICE_SECONDS);
-                $seconds = (int) $slice;
-                $micros = (int) round(($slice - $seconds) * 1_000_000);
-
-                if (@stream_select($read, $write, $except, $seconds, $micros) === false) {
-                    if (++$failures > self::DRAIN_SELECT_RETRIES) {
-                        // Not a signal, then: something is wrong with the
-                        // descriptors themselves and retrying forever would wedge
-                        // the CLI harder than the deadlock this method replaced.
-                        // Sweep whatever is already buffered before letting go —
-                        // the pipes are non-blocking, so this cannot park.
-                        foreach ($open as $slot => $pipe) {
-                            $rest = @stream_get_contents($pipe);
-                            if (is_string($rest)) {
-                                $capture($slot, $rest);
-                            }
-                        }
-
-                        break;
-                    }
-
-                    continue;
-                }
-
-                $failures = 0;
-
-                // THE WRITE BRANCH RUNS BEFORE THE READS: bytes the child takes
-                // this round free the buffer it reads into, so feeding first
-                // keeps a talk-then-read hook moving in one iteration instead of
-                // alternating two.
-                //
-                // `@` because a child that never reads stdin and exits (the
-                // ordinary `exit 0` of a one-line permissive hook) turns the
-                // next write into EPIPE — a diagnostic this pump EXPECTS, and
-                // one that would otherwise trip `failOnWarning="true"`. The
-                // payload had one offer; the child declined; the CRUSH_* env
-                // still carries everything the hook could have read here.
-                if ($pending !== '' && \is_array($write) && \in_array($stdin, $write, true)) {
-                    $written = @fwrite($stdin, substr($pending, 0, 65536));
-
-                    if ($written === false) {
-                        $pending = '';
-                    } elseif ($written > 0) {
-                        $pending = substr($pending, $written);
-                    }
-
-                    if ($pending === '') {
-                        // THE CLOSE IS THE CONTRACT: a hook that reads stdin to
-                        // EOF hangs forever without it, and the deadline would
-                        // answer it with a DENY it never earned.
-                        fclose($stdin);
-                        $stdinOpen = false;
-                    }
-                }
-
+        $reason = DrainsStreamedChild::walk(
+            $stdout,
+            $stderr,
+            $deadline,
+            self::DRAIN_SLICE_SECONDS,
+            $this->clock,
+            $capture,
+            onGiveUp: static function (string $why, array $open) use ($capture): void {
                 foreach ($open as $slot => $pipe) {
-                    if (!\in_array($pipe, $read, true)) {
-                        continue;
+                    $rest = @stream_get_contents($pipe);
+
+                    if (is_string($rest)) {
+                        $capture($slot, $rest);
                     }
-
-                    $chunk = fread($pipe, 8192);
-                    if ($chunk === false || $chunk === '') {
-                        // feof() is the EOF test, not the empty read: a
-                        // non-blocking pipe legitimately returns '' when the
-                        // child has written nothing YET.
-                        if (feof($pipe)) {
-                            unset($open[$slot]);
-                        }
-
-                        continue;
-                    }
-
-                    $capture($slot, $chunk);
                 }
-            }
+            },
+            stdin: $stdin,
+            stdinData: $stdinData,
+            selectRetries: self::DRAIN_SELECT_RETRIES,
+        );
 
-            $seal();
+        $seal();
 
-            return [$buffers[0], $buffers[1], false];
-        } finally {
-            // Every way out of this method — the deadline sweep, the retry
-            // give-up, the normal fall-through, a throw — leaves the child's
-            // stdin CLOSED. The pump owns that EOF; nothing downstream may
-            // assume the pipe is still theirs to touch.
-            if ($stdinOpen && $stdin !== null && \is_resource($stdin)) {
-                fclose($stdin);
-            }
-        }
+        return [$buffers[0], $buffers[1], $reason === DrainsStreamedChild::EXPIRED];
     }
 
     /**
