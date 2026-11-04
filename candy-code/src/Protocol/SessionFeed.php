@@ -78,7 +78,7 @@ final class SessionFeed
     private const DELTA_TYPES = [SessionEvent::ASSISTANT_DELTA, SessionEvent::REASONING_DELTA];
 
     /**
-     * @var array<string, array{client: Client, mode: string, live: bool, buffer: list<EventEnvelope>, lastSent: int}>
+     * @var array<string, array{client: Client, mode: string, live: bool, buffer: list<EventEnvelope>, lastSent: int, stale: bool}>
      */
     private array $subscribers = [];
 
@@ -120,6 +120,17 @@ final class SessionFeed
      * large — a session permanently unopenable. Trimmed in first-seen order.
      */
     private const MAX_SUBAGENT_ROWS = 256;
+
+    /**
+     * CWPD-8: how many envelopes a subscriber may accumulate while its
+     * catch-up is still in flight. Past this the client is too slow to ever
+     * catch up honestly — it is sent a `server.overflow` naming the drop
+     * (the Gateway outbox watermark and the dispatcher's pending-notice
+     * overflow use the same shape), the subscription is marked stale, and
+     * it ends when catch-up completes. A resubscribe (fresh snapshot) is the
+     * only way back; no gap repair is attempted, by design.
+     */
+    private const MAX_PRELIVE_BUFFER = 2048;
 
     /** @var array<string, int> delta type => bytes streamed into the current part */
     private array $offsets = [];
@@ -250,7 +261,7 @@ final class SessionFeed
 
         // Registered before anything is read: what happens from here on is
         // buffered, and flushed after the catch-up.
-        $this->subscribers[$client->id()] = ['client' => $client, 'mode' => $mode, 'live' => false, 'buffer' => [], 'lastSent' => 0];
+        $this->subscribers[$client->id()] = ['client' => $client, 'mode' => $mode, 'live' => false, 'buffer' => [], 'lastSent' => 0, 'stale' => false];
 
         $log = $this->host->events();
         $through = $log?->latestSeq($this->sessionId()) ?? 0;
@@ -469,7 +480,13 @@ final class SessionFeed
                 continue;
             }
             if (!$this->subscribers[$clientId]['live']) {
+                if ($this->subscribers[$clientId]['stale']) {
+                    continue; // already told to resubscribe — nothing left to hoard
+                }
                 $this->subscribers[$clientId]['buffer'][] = $envelope;
+                if (\count($this->subscribers[$clientId]['buffer']) > self::MAX_PRELIVE_BUFFER) {
+                    $this->markStale($clientId);
+                }
 
                 continue;
             }
@@ -749,10 +766,34 @@ final class SessionFeed
         $this->goLive($clientId);
     }
 
+    /**
+     * CWPD-8: the pre-live buffer ran past its cap. Tell the client what it
+     * missed and that only a resubscribe repairs the gap, empty the hoard,
+     * and let {@see goLive()} end the subscription once catch-up completes.
+     */
+    private function markStale(string $clientId): void
+    {
+        $dropped = \count($this->subscribers[$clientId]['buffer']);
+        $this->subscribers[$clientId]['buffer'] = [];
+        $this->subscribers[$clientId]['stale'] = true;
+        $this->subscribers[$clientId]['client']->send(JsonRpc::encode(EventEnvelope::server(
+            EventType::SERVER_OVERFLOW,
+            ['sessionId' => $this->sessionId(), 'dropped' => $dropped, 'action' => 'resubscribe'],
+        )->notification()));
+    }
+
     /** §6.8 steps 5–6: flush what was heard meanwhile, deduped by seq, and go live. */
     private function goLive(string $clientId): void
     {
         if (!isset($this->subscribers[$clientId])) {
+            return;
+        }
+        if ($this->subscribers[$clientId]['stale']) {
+            // The buffer blew past the cap during catch-up: the client was
+            // told to resubscribe, so this subscription ends here instead of
+            // flushing a tail it can no longer trust.
+            unset($this->subscribers[$clientId]);
+
             return;
         }
         $buffer = $this->subscribers[$clientId]['buffer'];
