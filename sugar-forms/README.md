@@ -118,7 +118,7 @@ $form = Form::new(
 | `Slider`      | Numeric range slider (keyboard drag, snapping step)         | `withMin` / `withMax` / `withStep`, `withValue(int|float)`, `withValidator` |
 | `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)` |
 | `NumberField` | Bounded numeric input — draft + committed int64-safe value on a step lattice | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withoutValue()` (never-set ≠ 0), `withPlaceholder`, `withWidth` |
-| `RadioPills`  | Horizontal pill row, single choice by arrows or mouse      | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc` |
+| `RadioPills`  | Horizontal pill row, single choice by arrows or mouse; windows the roster around the selection when a width is set | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc`, `withWidth` |
 
 All fields share a common navigation contract: `Tab` / `↓` advances,
 `Shift+Tab` / `↑` retreats, `Enter` on the last interactive field submits,

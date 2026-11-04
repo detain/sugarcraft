@@ -14,9 +14,11 @@ use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Forms\CarriesNonCtorState;
 use SugarCraft\Forms\Field;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\HasReadonly;
+use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Util\RenderSafe;
 
 /**
@@ -42,6 +44,14 @@ use SugarCraft\Forms\Util\RenderSafe;
  *
  * Cell widths are codepoint counts of the clean labels plus one pad cell on
  * each side — single-width labels assumed, exactly like Confirm's pills.
+ *
+ * Horizontal window (opt-in via {@see withWidth()}): when the roster is
+ * wider than the budget the row becomes a tab strip — a window of pills
+ * that always contains the selection, carrying a plain ellipsis marker on
+ * each side where pills were left behind (no marker on a side with nothing
+ * clipped). Without a width the row stays the full unwindowed line, byte
+ * for byte as it always was. Mouse clicks hit-test the windowed layout the
+ * row actually renders, markers and gaps alike.
  */
 final class RadioPills implements Field
 {
@@ -53,8 +63,12 @@ final class RadioPills implements Field
     /** Cells of separator between pills. */
     private const GAP = 3;
 
+    /** Continuation marker on the side where pills were windowed out. */
+    private const ELLIPSIS = '…';
+
     /**
      * @param list<string> $options
+     * @param ?int         $width available cells for the pill row, null = unbounded
      */
     private function __construct(
         public readonly string $key,
@@ -63,6 +77,7 @@ final class RadioPills implements Field
         public readonly bool $focused,
         public readonly string $title,
         public readonly string $description,
+        public readonly ?int $width = null,
     ) {
     }
 
@@ -82,6 +97,21 @@ final class RadioPills implements Field
 
     public function withTitle(string $t): self       { return $this->mutate(title: $t); }
     public function withDescription(string $d): self { return $this->mutate(description: $d); }
+
+    /**
+     * Budget in cells available to the pill row (minimum 1). A roster that
+     * fits renders whole; one that does not is windowed around the
+     * selection with ellipsis markers on the clipped sides. Null (the
+     * default) keeps the full unwindowed line.
+     */
+    public function withWidth(int $w): self
+    {
+        if ($w < 1) {
+            throw new \InvalidArgumentException(Lang::t('radio_pills.width_positive'));
+        }
+
+        return $this->mutate(width: $w);
+    }
 
     /**
      * Replace the option list. The current selection survives by LABEL when
@@ -105,6 +135,9 @@ final class RadioPills implements Field
 
     /** Alias of {@see withOptions()}, family shape (Select::options()). */
     public function options(string ...$options): self { return $this->withOptions(...$options); }
+
+    /** Alias of {@see withWidth()}, family shape (Slider::width()). */
+    public function width(int $w): self { return $this->withWidth($w); }
 
     /** Jump the selection to a label; an unknown label is a refusal (same instance). */
     public function withValue(mixed $label): self
@@ -178,17 +211,30 @@ final class RadioPills implements Field
         if ($column < 1) {
             return null;
         }
+        [$first, $last, $head, $tail] = $this->pillWindow();
+        $cells = [];
+        if ($head) {
+            $cells[] = [1, null];
+        }
+        for ($index = $first; $index <= $last; ++$index) {
+            $cells[] = [mb_strlen($this->options[$index], 'UTF-8') + 2, $index];
+        }
+        if ($tail) {
+            $cells[] = [1, null];
+        }
         $offset = 0;
-        foreach ($this->options as $index => $label) {
-            $width = mb_strlen($label, 'UTF-8') + 2;
+        foreach ($cells as [$width, $index]) {
             if ($column <= $offset + $width) {
-                // Inside this pill's padded cell — a click selects (the
-                // right pad cell belongs to the pill, matching what the eye
-                // sees around the label).
+                // Inside this cell — a pill selects (its right pad cell
+                // belongs to the pill, matching what the eye sees around the
+                // label); an ellipsis marker is decorative, inert.
+                if ($index === null) {
+                    return null;
+                }
                 return $index === $this->cursor ? $this : $this->mutate(cursor: $index);
             }
             if ($column <= $offset + $width + self::GAP) {
-                return null; // three-cell dead zone between pills — inert
+                return null; // three-cell dead zone between cells — inert
             }
             $offset += $width + self::GAP;
         }
@@ -232,14 +278,7 @@ final class RadioPills implements Field
         if ($title !== '') { $lines[] = $title . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = $desc; }
 
-        $cells = [];
-        foreach ($this->options as $index => $label) {
-            $pill = ' ' . RenderSafe::clean($label) . ' ';
-            $cells[] = $index === $this->cursor
-                ? Ansi::sgr(Ansi::REVERSE) . $pill . Ansi::reset()
-                : $pill;
-        }
-        $lines[] = implode(str_repeat(' ', self::GAP), $cells);
+        $lines[] = $this->buildPillRow();
         return implode("\n", $lines);
     }
 
@@ -281,6 +320,104 @@ final class RadioPills implements Field
     // Internals
     // ------------------------------------------------------------------
 
+    /**
+     * The pill row as rendered: the selected pill in raw reverse video, the
+     * rest plain, cells joined by three dead cells. With no width set (or a
+     * roster that fits it) this is the whole roster; otherwise the window
+     * from {@see pillWindow()} plus an ellipsis on each clipped side, cut to
+     * the budget as a final guarantee.
+     */
+    private function buildPillRow(): string
+    {
+        $gap = str_repeat(' ', self::GAP);
+        [$first, $last, $head, $tail] = $this->pillWindow();
+        if ($first === 0 && $last === count($this->options) - 1 && !$head && !$tail) {
+            $cells = [];
+            foreach ($this->options as $index => $label) {
+                $pill = ' ' . RenderSafe::clean($label) . ' ';
+                $cells[] = $index === $this->cursor
+                    ? Ansi::sgr(Ansi::REVERSE) . $pill . Ansi::reset()
+                    : $pill;
+            }
+            return implode($gap, $cells);
+        }
+
+        $parts = [];
+        if ($head) {
+            $parts[] = self::ELLIPSIS;
+        }
+        for ($index = $first; $index <= $last; ++$index) {
+            $pill = ' ' . RenderSafe::clean($this->options[$index]) . ' ';
+            $parts[] = $index === $this->cursor
+                ? Ansi::sgr(Ansi::REVERSE) . $pill . Ansi::reset()
+                : $pill;
+        }
+        if ($tail) {
+            $parts[] = self::ELLIPSIS;
+        }
+        return Width::truncateAnsi(implode($gap, $parts), (int) $this->width);
+    }
+
+    /**
+     * The horizontal window: [first, last, head marker, tail marker] pill
+     * indices into {@see $options}. Deterministic tab-strip rule — when the
+     * row exceeds the budget, the widest window of pills that still fits
+     * TOGETHER WITH an ellipsis on every side it clips wins; equal sizes
+     * prefer the leftmost window. The selection is always inside the window.
+     * Degenerate case: if the selected pill cannot fit even without
+     * markers, the window collapses to the selection alone with the markers
+     * dropped (buildPillRow then truncates the pill to the budget, so the
+     * selection stays the one thing on screen). An empty row or a roster
+     * that fits reports the whole roster with no markers; a null width
+     * always reports the whole roster.
+     *
+     * @return array{0:int,1:int,2:bool,3:bool}
+     */
+    private function pillWindow(): array
+    {
+        $n = count($this->options);
+        if ($this->width === null || $n === 0) {
+            return [0, $n - 1, false, false];
+        }
+        $cost = [];
+        foreach ($this->options as $label) {
+            $cost[] = mb_strlen($label, 'UTF-8') + 2;
+        }
+        $marker = self::GAP + 1; // the ellipsis cell plus its joining gap
+        $budget = $this->width;
+
+        // Whole roster with no markers first (the unwindowed shape).
+        $total = array_sum($cost) + self::GAP * ($n - 1);
+        if ($total <= $budget) {
+            return [0, $n - 1, false, false];
+        }
+
+        $bestSpan = 0;
+        $best = null;
+        for ($s = 0; $s <= $this->cursor && $s < $n; ++$s) {
+            $run = $cost[$s] + ($s > 0 ? $marker : 0);
+            for ($e = $s; $e < $n; ++$e) {
+                if ($e > $s) {
+                    $run += self::GAP + $cost[$e];
+                }
+                $candidate = $run + ($e < $n - 1 ? $marker : 0);
+                if ($candidate > $budget) {
+                    break; // run + tail cost is strictly increasing in e
+                }
+                $span = $e - $s + 1;
+                if ($e >= $this->cursor && $span > $bestSpan) {
+                    $bestSpan = $span;
+                    $best = [$s, $e];
+                }
+            }
+        }
+        if ($best !== null) {
+            [$s, $e] = $best;
+            return [$s, $e, $s > 0, $e < $n - 1];
+        }
+        return [$this->cursor, $this->cursor, false, false];
+    }
+
     /** Move the selection, saturating at both ends of the row. */
     private function stepBy(int $delta): self
     {
@@ -302,6 +439,7 @@ final class RadioPills implements Field
         ?bool $focused = null,
         ?string $title = null,
         ?string $description = null,
+        ?int $width = null,
     ): self {
         return $this->carryNonCtorState(new self(
             key:         $this->key,
@@ -310,6 +448,7 @@ final class RadioPills implements Field
             focused:     $focused  ?? $this->focused,
             title:       $title    ?? $this->title,
             description: $description ?? $this->description,
+            width:       $width    ?? $this->width,
         ));
     }
 }

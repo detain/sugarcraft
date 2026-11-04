@@ -49,6 +49,7 @@ return [
     'slider.min_below_max' => 'Slider minimum must be less than its maximum',
     'slider.step_positive' => 'Slider step must be greater than zero',
     'slider.width_positive' => 'Slider width must be at least 1',
+    'radio_pills.width_positive' => 'RadioPills width must be at least 1',
     'color.invalid_hex' => 'Color must be a six-digit hex string like #rrggbb',
     'color.channel_range' => 'Color cube axis must be between 0 and 5',
     'number.min_below_max' => 'Number field minimum must be less than its maximum',
