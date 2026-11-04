@@ -402,6 +402,7 @@ candy-code/tests/Chat/ChildSessionCreatedOnFinishTest.php	1.075	6
 candy-code/tests/Support/ReadPathCensusTest.php	1.070	19
 candy-code/tests/Providers/RuntimeUsageFoldTest.php	1.063	6
 candy-code/tests/Sessions/ForkCarriesHistoryTest.php	1.058	8
+candy-code/tests/Protocol/ClientTest.php	1.050	5
 candy-code/tests/Backend/StructuredReplayTest.php	1.048	11
 candy-code/tests/Chat/LiveStepWiringTest.php	1.044	3
 candy-code/tests/Server/SessionImportMethodTest.php	1.040	9
@@ -995,6 +996,9 @@ candy-code/tests/Hooks/HookConfigTest.php	0.050	76
 candy-code/tests/Cli/SessionTitleInjectionTest.php	0.050	7
 candy-code/tests/Support/ClustersTest.php	0.050	4
 candy-code/tests/Support/SourceSizeRatchetTest.php	0.050	2
+candy-code/tests/Protocol/ParamsTest.php	0.050	4
+candy-code/tests/Server/Http/ResponsesTest.php	0.050	2
+candy-code/tests/Server/ReadDeadlineHygieneTest.php	0.050	1
 candy-code/tests/Backend/CompactSelfPreviewTest.php	0.049	5
 candy-code/tests/Chat/AbsoluteCapBreakerTest.php	0.049	3
 candy-code/tests/Chat/PaletteFullQueryMatchTest.php	0.048	6
