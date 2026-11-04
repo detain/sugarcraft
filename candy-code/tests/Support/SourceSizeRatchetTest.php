@@ -16,7 +16,8 @@ use PHPUnit\Framework\TestCase;
  * may never exceed its ratchet line, and the moment a change would cross it,
  * the right answer is another extraction — after which the author lowers the
  * ratchet to the new smaller measurement, because this ceiling only ever
- * ratchets DOWNWARD (the test refuses a ceiling above the live count).
+ * ratchets DOWNWARD (a ceiling may sit at most a few hundred lines over its
+ * file — the second test fails stale generosity, and a breach fails the first).
  */
 final class SourceSizeRatchetTest extends TestCase
 {
@@ -64,6 +65,6 @@ final class SourceSizeRatchetTest extends TestCase
             }
         }
 
-        $this->assertSame([], $slack, 'Ratchet ceilings drifted above their files:\n' . \implode("\n", $slack));
+        $this->assertSame([], $slack, "Ratchet ceilings drifted above their files:\n" . \implode("\n", $slack));
     }
 }

@@ -172,7 +172,7 @@
                 },
                 "interactive": {
                     "type": "boolean",
-                    "description": "True when the row is an interactive (pty) shell — the C-TOOL-6.l tail pane and `shells.input` door apply; plain rows keep the read-only tail."
+                    "description": "True when the row is an interactive (pty) shell — the tail pane and `shells.input` door apply; plain rows keep the read-only tail."
                 }
             },
             "required": [
@@ -216,7 +216,7 @@
                             "tier"
                         ]
                     },
-                    "description": "The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them."
+                    "description": "The documents the system prompt splices — names and sizes, bodies never (on the roadmap); null when this server could not price them."
                 },
                 "memorySections": {
                     "type": "array",
@@ -271,7 +271,7 @@
                         },
                         "userStatus": {
                             "type": "string",
-                            "description": "C-MCP-4.a: the USER tier's verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator's own file (MCP-3)."
+                            "description": "The USER tier's verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator's own file."
                         },
                         "userError": {
                             "type": [
@@ -309,7 +309,7 @@
                                             "project",
                                             "user"
                                         ],
-                                        "description": "C-MCP-4.a: which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch's precedence."
+                                        "description": "Which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch's precedence."
                                     },
                                     "liveness": {
                                         "type": [
@@ -334,7 +334,7 @@
                                             "up",
                                             "tools"
                                         ],
-                                        "description": "C-MCP-4.a: read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked."
+                                        "description": "Read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked."
                                     }
                                 },
                                 "required": [
@@ -383,7 +383,7 @@
                     "items": {
                         "$ref": "#/$defs/TrustPrompt"
                     },
-                    "description": "C-SEC-5.b: this root's trust prompts — the 5.a launch census' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant."
+                    "description": "This root's trust prompts — the launch census' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant."
                 },
                 "breakdown": {
                     "type": "object",
@@ -1040,7 +1040,7 @@
                 },
                 "diff": {
                     "type": "string",
-                    "description": "C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff."
+                    "description": "The server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff."
                 },
                 "origin": {
                     "type": "object",
@@ -1438,7 +1438,7 @@
                         "commands",
                         "settings"
                     ],
-                    "description": "C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`)."
+                    "description": "Which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`)."
                 },
                 "root": {
                     "type": "string",
@@ -3729,7 +3729,7 @@
                                         "user",
                                         "config"
                                     ],
-                                    "description": "C-SEC-6.c: `user` for a rule the user saved through `p` / `remember: \"user\"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row."
+                                    "description": "`user` for a rule the user saved through `p` / `remember: \"user\"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row."
                                 },
                                 "savedIndex": {
                                     "type": [
@@ -6147,7 +6147,7 @@
                             7,
                             30
                         ],
-                        "description": "OBS-3: trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history."
+                        "description": "Trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history."
                     }
                 },
                 "required": [
@@ -6189,7 +6189,7 @@
                                 },
                                 "unpriced": {
                                     "type": "boolean",
-                                    "description": "The group's rows include an unpriced call — its costUsd is a lower bound (the SES-1 `≥` law)."
+                                    "description": "The group's rows include an unpriced call — its costUsd is a lower bound (the `≥` law)."
                                 }
                             },
                             "required": [
@@ -7013,7 +7013,7 @@
                             },
                             "diff": {
                                 "type": "string",
-                                "description": "C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff."
+                                "description": "The server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff."
                             },
                             "origin": {
                                 "type": "object",
@@ -7067,7 +7067,7 @@
                                     "commands",
                                     "settings"
                                 ],
-                                "description": "C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`)."
+                                "description": "Which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door's `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`)."
                             },
                             "root": {
                                 "type": "string",

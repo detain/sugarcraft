@@ -337,7 +337,7 @@ final class MethodSchemas
                     'rules' => Schema::arrayOf(Schema::object([
                         'pattern' => Schema::string(),
                         'action' => Schema::string(),
-                        'tier' => Schema::enum(['user', 'config'])->describe('C-SEC-6.c: `user` for a rule the user saved through `p` / `remember: "user"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row.'),
+                        'tier' => Schema::enum(['user', 'config'])->describe('`user` for a rule the user saved through `p` / `remember: "user"` (numbered by savedIndex, the same count permission.forget and `/permissions saved` address by); `config` for every other configured row.'),
                         'savedIndex' => Schema::integer(1)->nullable(),
                     ], ['pattern', 'action', 'tier'])),
                     'sessionGrants' => Schema::arrayOf(Schema::string()),
@@ -921,7 +921,7 @@ final class MethodSchemas
                 Schema::object([
                     'sessionId' => Schema::ref(D::SESSION_ID)->describe('Required when scope is "session" (the ledger half of the answer is that session\'s rows); ignored for scope "all".'),
                     'scope' => Schema::enum(['session', 'all'])->describe('"session" folds one session\'s rows; "all" spans every session the durable ledger holds — the same pair `/usage` and `/usage all` answer.'),
-                    'days' => Schema::enum([7, 30])->describe('OBS-3: trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history.'),
+                    'days' => Schema::enum([7, 30])->describe('Trim to the last N whole UTC days inclusive of today; omitted spans the whole ledger. Anything but 7 or 30 is refused, never folded into the whole history.'),
                 ], ['scope']),
                 Schema::object([
                     'days' => Schema::arrayOf(Schema::object([
@@ -930,7 +930,7 @@ final class MethodSchemas
                         'calls' => Schema::integer(0),
                         'totalTokens' => Schema::integer(0),
                         'costUsd' => Schema::number(0),
-                        'unpriced' => Schema::boolean()->describe('The group\'s rows include an unpriced call — its costUsd is a lower bound (the SES-1 `≥` law).'),
+                        'unpriced' => Schema::boolean()->describe('The group\'s rows include an unpriced call — its costUsd is a lower bound (the `≥` law).'),
                     ], ['day', 'model', 'calls', 'totalTokens', 'costUsd', 'unpriced'], open: false)),
                     'models' => Schema::arrayOf(Schema::object([
                         'model' => Schema::string(256)->nullable(),

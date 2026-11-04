@@ -109,7 +109,7 @@ final class Definitions
             // list above — one name each so a client never confuses them.
             'choices' => Schema::arrayOf(Schema::string(AskUserTool::MAX_OPTION_CHARS), AskUserTool::MAX_OPTIONS)->describe('AskUser\'s own choices, in order, the first recommended; answer one with `permission.respond` reply `once` and the choice as the note. Absent for every other ask.'),
                 'alwaysScope' => Schema::map(Schema::string()),
-                'diff' => Schema::string()->describe('C-SEC-2.b: server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff.'),
+                'diff' => Schema::string()->describe('The server-computed unified diff of the proposed call, confined to the session root and capped at 32 KiB (beyond it, an omitted note naming the change size, never silence); absent when the call has no previewable outcome. Has real file line numbers, unlike a client-minted snippet diff.'),
                 'origin' => Schema::object([
                     'agentId' => Schema::string(),
                     'agentName' => Schema::string(),
@@ -119,7 +119,7 @@ final class Definitions
             self::TRUST_PROMPT => Schema::object([
                 'askId' => Schema::string(16),
                 'kind' => Schema::enum(['trust'])->describe('The marker that makes a `permission.asked` payload a project-trust prompt — answered by `context.trust`; `permission.respond` never sees these (they are not in the turn\'s question registry).'),
-                'target' => Schema::enum(['mcp', 'mcp-pin', 'hooks', 'commands', 'settings'])->describe('C-SEC-5.b: which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door\'s `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`).'),
+                'target' => Schema::enum(['mcp', 'mcp-pin', 'hooks', 'commands', 'settings'])->describe('Which grant door this prompt is about — the project `.mcp.json` census verdict (`mcp`), a drifted MCP command needing re-approval (`mcp-pin`, which answers through the same list), lifecycle hooks, `` !`cmd` `` command shell forms, or the project settings layer. A grant lands the root in that door\'s `trustedProject*` list (see the census in `Bootstrap::pendingProjectTrust`).'),
                 'root' => Schema::string(4096)->describe('The project root the prompt is about — the exact string the grant writes into that door\'s trusted list.'),
                 'reason' => Schema::string()->describe('Why the prompt was put, for the panel line.'),
                 'status' => Schema::enum(['asked', 'granted', 'rejected'])->describe('`asked` while open; one answer settles it for the process (the once-per-(root, target) law — the other targets\' prompts stay open beside it).'),
@@ -232,7 +232,7 @@ final class Definitions
                 'exitNote' => Schema::string()->nullable()->describe('Set when the shell settled without an ordinary exit code — its output sink hit the cap, the lifetime wall stopped it, or the exit record was unreadable.'),
                 'expired' => Schema::boolean()->describe('True when the lifetime wall stopped the shell.'),
                 'ageSeconds' => Schema::number(0),
-                'interactive' => Schema::boolean()->describe('True when the row is an interactive (pty) shell — the C-TOOL-6.l tail pane and `shells.input` door apply; plain rows keep the read-only tail.'),
+                'interactive' => Schema::boolean()->describe('True when the row is an interactive (pty) shell — the tail pane and `shells.input` door apply; plain rows keep the read-only tail.'),
             ], ['shellId', 'label', 'state', 'expired', 'ageSeconds'])->describe('A background shell row from the launch\'s shell table, as the Shell tool started it; never its output — `shells.output` reads that.'),
             self::USAGE => Schema::object([
                 'totalTokens' => Schema::integer(0),
@@ -263,7 +263,7 @@ final class Definitions
                     'path' => Schema::string(4096),
                     'bytes' => Schema::integer(0),
                     'tier' => Schema::enum(['project', 'personal']),
-                ], ['path', 'bytes', 'tier']))->nullable()->describe('The documents the system prompt splices — names and sizes, bodies never (roadmap VIS-2a); null when this server could not price them.'),
+                ], ['path', 'bytes', 'tier']))->nullable()->describe('The documents the system prompt splices — names and sizes, bodies never (on the roadmap); null when this server could not price them.'),
                 'memorySections' => Schema::arrayOf(Schema::ref(self::MEMORY_ENTRY))->describe('Every note of both stores across all scopes, the `memory.list` grouping rule (repo rows first).'),
                 'skills' => Schema::arrayOf(Schema::object([
                     'name' => Schema::string(),
@@ -274,25 +274,25 @@ final class Definitions
                     'status' => Schema::string()->describe('The config-level verdict of the read-never-run census (`Bootstrap::mcpServerInventory`): trusted, refused, or absent. Nothing is started to answer this.'),
                     'error' => Schema::string()->nullable(),
                     'skipped' => Schema::arrayOf(Schema::string()),
-                    'userStatus' => Schema::string()->describe('C-MCP-4.a: the USER tier\'s verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator\'s own file (MCP-3).'),
+                    'userStatus' => Schema::string()->describe('The USER tier\'s verdict from the same census — trusted, absent, or disabled; no containment or trust-list verdicts apply to the operator\'s own file.'),
                     'userError' => Schema::string()->nullable()->describe('Why the user file could not be read, in the same sentence the project tier uses; null when there was nothing to report.'),
                     'userSkipped' => Schema::arrayOf(Schema::string())->describe('Malformed entries the user file declared, mirrored from the project tier\'s `skipped`.'),
                     'servers' => Schema::arrayOf(Schema::object([
                         'name' => Schema::string(),
                         'transport' => Schema::string(),
                         'trust' => Schema::enum(['trusted'])->describe('Rows exist only while the file is trusted; the http entry\'s URL stays off the wire (the `server.hello` media restraint, restated).'),
-                        'tier' => Schema::enum(['project', 'user'])->describe('C-MCP-4.a: which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch\'s precedence.'),
+                        'tier' => Schema::enum(['project', 'user'])->describe('Which file declared the row. A name the project tier declares never appears as a user row — the census shadows it, mirroring the launch\'s precedence.'),
                         'liveness' => Schema::object([
                             'up' => Schema::boolean()->nullable()->describe('Whether the started server reports its handshake complete; null only for a transport the client cannot answer for.'),
                             'tools' => Schema::integer(0)->describe('Tool count the client last saw — a remembered figure, never a fresh exchange.'),
-                        ], ['up', 'tools'])->nullable()->describe('C-MCP-4.a: read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked.'),
+                        ], ['up', 'tools'])->nullable()->describe('Read from the launch memo only (`Bootstrap::mcpLivenessSnapshot`), NEVER a probe — a process holding no client answers null on every row; a declared server that was never started stays null rather than being launched to be asked.'),
                     ], ['name', 'transport', 'trust', 'tier', 'liveness'])),
                 ], ['status', 'error', 'skipped', 'userStatus', 'userError', 'userSkipped', 'servers'])->describe('The `.mcp.json` declarations as `candy-code mcp list` reads them — both tiers, minus per-entry details.'),
                 'untrusted' => Schema::arrayOf(Schema::object([
                     'path' => Schema::string(4096),
                     'reason' => Schema::string(),
                 ], ['path', 'reason']))->describe('Instruction paths the loader refused and why.'),
-                'trusts' => Schema::arrayOf(Schema::ref(self::TRUST_PROMPT))->describe('C-SEC-5.b: this root\'s trust prompts — the 5.a launch census\' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant.'),
+                'trusts' => Schema::arrayOf(Schema::ref(self::TRUST_PROMPT))->describe('This root\'s trust prompts — the launch census\' pending targets, measured here is where they are DISCOVERED: each one mints a row (once per root and target) and server-scopes it as `permission.asked`; the list also re-states rows this process already settled (a session grant that expires at next launch, a rejection that must not nag), so an empty list means nothing of this project is pending a grant.'),
                 'breakdown' => Schema::object([
                     'window' => Schema::integer(0),
                     'sections' => Schema::arrayOf(Schema::object([

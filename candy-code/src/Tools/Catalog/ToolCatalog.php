@@ -37,7 +37,7 @@ final class ToolCatalog
      * the class because `TaskTool.php` is owned by another work stream this
      * wave; moving it onto the class is a one-line follow-up.
      *
-     * `BoardRead` and `BoardPost` (roadmap 4.5) are never on a launch at all:
+     * `BoardRead` and `BoardPost` (the pre-1.0 roadmap) are never on a launch at all:
      * `TaskTool` adds them, bound to the batch's board, to the run of a member
      * of a parallel `Task` batch. They are classified here so the gate judges
      * a member's calls to them by their class (read; no-ask), not as unknown

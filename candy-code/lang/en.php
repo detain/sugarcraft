@@ -32,8 +32,12 @@ declare(strict_types=1);
  *   types — and a running second instance — is "candy-code"; "candy-code"
  *   is only ever a path or directory name (~/.candy-code, the monorepo dir).
  * - Error labels: transcript-rendered error rows use the bold family
- *   '**Error:** {error}'. The one exception is 'chat.picker.error', an
- *   overlay notice that is not markdown-parsed, which stays plain 'Error: '.
+ *   '**Error:** {error}'. The plain exceptions are 'chat.picker.error' — an
+ *   overlay notice that is not markdown-parsed, which stays plain 'Error: ' —
+ *   and the four 'host.*.error' transcript rows ('host.checkpoint.error',
+ *   'host.diff.error', 'host.redo.error', 'host.undo.error'), which spell
+ *   'Error during X:' because the context word has no home inside the bold
+ *   family's shape.
  * - Placeholders: `{named}` tokens substituted with strtr are the default
  *   everywhere; printf `%s`/`%d` tokens appear only in the `cli.launch.*`
  *   launch-warning family, which renders through sprintf.

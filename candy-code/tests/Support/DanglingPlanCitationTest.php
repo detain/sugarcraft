@@ -156,6 +156,145 @@ final class DanglingPlanCitationTest extends TestCase
     }
 
     /**
+     * WIRE AND CATALOGUE STRINGS CARRY NO CAMPAIGN IDENTIFIERS EITHER.
+     *
+     * The docs census above polices prose; this one polices the two surfaces
+     * that reach a machine or a translation catalogue verbatim: the protocol
+     * schema's `describe()` strings (published into
+     * docs/protocol/candy-code.v1.schema.json, where a client developer reads
+     * them as the contract) and every single-quoted value in `lang/` (the
+     * strings manual, shipped to users in twelve locales). Campaign tokens
+     * slipped into either — the 2026-11 fix review caught nine live in the
+     * wire descriptions — are dangling pointers no consumer can resolve.
+     *
+     * SCOPE: only string literals are walked (PhpToken's
+     * T_CONSTANT_ENCAPSED_STRING), so the GLOSSARY-sanctioned campaign IDs
+     * in code COMMENTS stay untouched, and the E-number arm additionally
+     * refuses to accuse a brace-delimited codepoint (the private-use-area
+     * regex `"\x{E000}-\x{F8FF}"` is protocol vocabulary, not a campaign).
+     *
+     * THE ONE EXEMPTION IS SELF-RETIRING. `web.composer.queue_reload_title`
+     * in lang/en.php still carries its `(WEB-1a)` tail because the value
+     * mirrors byte-exactly into the web package's generated English strings
+     * file, which lives in a lane this census cannot regen. The exemption is
+     * not a licence: it is only admitted while that literal still contains
+     * the token, so the day the web lane strips it the row itself goes red
+     * and the census re-arms. An exemption that cannot outlive its reason
+     * cannot rot into a hole.
+     */
+    public function testNoShippedWireStringCarriesACampaignToken(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $files = \array_map(
+            static fn (string $path): string => \substr($path, \strlen($root) + 1),
+            \array_merge(\glob($root . '/lang/*.php') ?: [], self::protocolSourceFiles($root))
+        );
+        self::assertGreaterThanOrEqual(14, \count($files),
+            'the wire walk lost files — the census would pass vacuously');
+
+        $pattern = self::wireTokenPattern();
+        // Vacuity control: the arm must bite the exact shapes this lane just
+        // swept out of the wire, and must spare the codepoint vocabulary.
+        self::assertSame(1, \preg_match($pattern, "'C-SEC-5.b: which grant door'"), 'the wire arm must accuse a cluster ID');
+        self::assertSame(0, \preg_match($pattern, "'\\x{E000}-\\x{F8FF}'"), 'the wire arm must spare a brace-delimited codepoint');
+        $offenders = [];
+        foreach ($files as $relative) {
+            $seamKeys = \array_keys(self::WIRE_TOKEN_SEAMS[$relative] ?? []);
+            foreach (\explode("\n", (string) \file_get_contents($root . '/' . $relative)) as $number => $line) {
+                foreach ($seamKeys as $seamKey) {
+                    if (\str_contains($line, "'" . $seamKey . "'")) {
+                        continue 2; // the named self-retiring seam row (checked below)
+                    }
+                }
+                foreach (\PhpToken::tokenize('<?php ' . $line) as $token) {
+                    if ($token->id !== \T_CONSTANT_ENCAPSED_STRING) {
+                        continue;
+                    }
+                    if (\preg_match_all($pattern, $token->text, $hits) < 1) {
+                        continue;
+                    }
+                    foreach ($hits[0] as $token2) {
+                        $offenders[] = $relative . ':' . ($number + 1) . ':' . $token2;
+                    }
+                }
+            }
+        }
+
+        self::assertSame([], $offenders,
+            'a shipped wire description or catalogue value carries a campaign ID — '
+            . 'keep the sentence, drop the token, and regen the schema '
+            . '(php scripts/gen-protocol-schema.php --write) in the same commit; '
+            . 'see docs/GLOSSARY.md for the policy');
+
+        // Fail-closed half of the exemption: the row above only buys silence
+        // while the token is actually still there. When the web lane strips
+        // it, this leg reds and forces the row's deletion — after which the
+        // census re-arms on the value with no edit to the scan above.
+        $en = (string) \file_get_contents($root . '/lang/en.php');
+        foreach (self::WIRE_TOKEN_SEAMS['lang/en.php'] ?? [] as $key => $token) {
+            $line = '';
+            foreach (\explode("\n", $en) as $candidate) {
+                if (\str_contains($candidate, "'" . $key . "'")) {
+                    $line = $candidate;
+                    break;
+                }
+            }
+            self::assertNotSame('', $line, 'seam row names a key that no longer exists: lang/en.php ' . $key . ' — retire the row');
+            self::assertStringContainsString($token, $line,
+                'the exempted token is gone from lang/en.php ' . $key
+                . ' — the web mirror no longer needs the seam; delete the row to re-arm the census');
+        }
+    }
+
+    /**
+     * The seam roster: file => [lang key => token still living in its value].
+     * Deliberately narrow — a row buys silence for exactly one key in exactly
+     * one file, and the check above voids the licence when the reason dies.
+     */
+    private const WIRE_TOKEN_SEAMS = [
+        // The value mirrors byte-exactly into candy-code-web's generated
+        // strings file; flipping it here without regenerating that mirror
+        // (and its dist) breaks the web lane's own drift guard.
+        'lang/en.php' => ['web.composer.queue_reload_title' => '(WEB-1a)'],
+    ];
+
+    /**
+     * @return list<string> every PHP file under src/Protocol, absolute
+     */
+    private static function protocolSourceFiles(string $root): array
+    {
+        $paths = [];
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src/Protocol', \FilesystemIterator::SKIP_DOTS));
+        foreach ($walk as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $paths[] = $file->getPathname();
+            }
+        }
+        \sort($paths);
+
+        return $paths;
+    }
+
+    /**
+     * The docs union with the one wire-specific refinement: an E-number
+     * inside braces is a Unicode codepoint, not a campaign (the lookbehind
+     * eats `{`, the lookahead eats `}`, so the private-use-range literals in
+     * the protocol's sanitizer descriptions speak freely).
+     */
+    private static function wireTokenPattern(): string
+    {
+        return '/(?<![0-9A-Za-z{])(?:'
+            . '[CR]-[A-Z]{2,10}-[0-9]+[a-z]?(?:\.[a-z][0-9a-z]*)*'
+            . '|(?:CTX|AGT|EXT|TOOL|PRV|SEC|SES|MCP|VIS|AUT|DST|OBS|GIT|CMD|PLG|INT|EDT|MOD|TL|SHL)-[0-9]+(?:[a-z](?:\.[a-z][0-9a-z]*)*)?(?:-P[0-9]+)?'
+            . '|ISS-[0-9]{2,3}'
+            . '|(?<!\+)E[0-9]{3}(?![0-9}])'
+            . '|WEB-[0-9][a-z]?'
+            . '|TUI-[0-9][a-z]?(?: stage [0-9]+)?'
+            . '|plan_comparison'
+            . ')(?![0-9A-Za-z}])/';
+    }
+
+    /**
      * The token union: cluster IDs (letter-suffixed and dotted steps), the
      * bare E-number family (guarded so a U+E000 codepoint mention survives),
      * lane IDs in parentheses, and the plan-file names. The literal carries
