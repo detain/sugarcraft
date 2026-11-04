@@ -1,0 +1,383 @@
+<script setup lang="ts">
+/**
+ * Viewer-token management — the web plane of the G4-G store (X-DESIGN1 §D-2).
+ *
+ * Grants are minted read-only (owner ruling §7 item 2: viewer grants are a
+ * read-only allowlist in v1 — the scopes field is fixed server-side shape,
+ * never pickable here). The raw token crosses the wire EXACTLY ONCE, inside
+ * the token.grant answer; token.list rows never carry it and this component
+ * drops it from state the moment the mint dialog closes. Revoking is
+ * confirm-gated, mirroring the sidebar's close-confirm pattern, and the
+ * answer is uniform for unknown ids — so "already gone" is honest copy, never
+ * a re-query. A viewer-kind hello (principal.kind === 'viewer') and a
+ * uniform-401 answer each hide every management affordance.
+ *
+ * State is component-local on purpose: no store, no socket reducer — the
+ * shared regions belong to other lanes (CW-DBA-1 owns the connection/store
+ * files; this lane's contract is src-web/components/tokens/** plus the
+ * minimal router/menu insertion).
+ *
+ * SEAM (G4-E): all three RPC calls route through wire.ts's tokenRpc() cast;
+ * once generated.ts carries the token.* defs, they call
+ * connection.request('token.*', …) typed. Copy is raw English rostered in
+ * src-web/__tests__/rawCopyCensus.spec.ts pending the lang window
+ * (## LANG REQUEST in the lane report) — the 448f8dd1b 'Import' precedent.
+ */
+import { computed, onMounted, ref } from 'vue'
+
+import { t } from '../../lib/i18n'
+import { useConnectionStore } from '../../stores/connection'
+import { describe } from '../../stores/session'
+import { tokenRpc } from './wire'
+import type { TokenGrantResult, TokenGrantRow, TokenListResult, TokenRevokeResult } from './wire'
+
+const connection = useConnectionStore()
+
+const grants = ref<TokenGrantRow[]>([])
+const loading = ref(false)
+const error = ref('')
+const notice = ref('')
+/** The mint answer — the ONLY holder of the raw token anywhere in the app. */
+const minted = ref<TokenGrantResult | null>(null)
+const copied = ref(false)
+/** True once any call answers the uniform 401 — management is dead over this connection. */
+const locked = ref(false)
+
+/** Grant form. The scope is NOT a field: read-only in v1, fixed at submit. */
+const label = ref('')
+const days = ref('30')
+const pinSessions = ref(false)
+const pinIds = ref('')
+
+/** A viewer-kind principal never manages tokens; the panel states its peace. */
+const isViewer = computed(() => connection.hello?.principal.kind === 'viewer')
+const canManage = computed(() => connection.scopes.includes('admin') && !isViewer.value)
+
+onMounted(() => {
+  if (canManage.value) void reload()
+})
+
+function expiryLabel(expiresAt: number): string {
+  return new Date(expiresAt * 1000).toISOString().slice(0, 16).replace('T', ' ')
+}
+
+function sessionsLabel(row: TokenGrantRow): string {
+  return row.sessionIds === null ? 'all sessions' : `pinned to ${String(row.sessionIds.length)} sessions`
+}
+
+/** The uniform-401 discriminator: kind travels in the error envelope (HANDOFFS). */
+function isUnauthorized(failure: unknown): boolean {
+  return (failure as { kind?: string } | null)?.kind === 'unauthorized'
+}
+
+function refuse(failure: unknown): void {
+  if (isUnauthorized(failure)) {
+    locked.value = true
+    error.value = 'Not authorized to manage viewer tokens over this connection.'
+    return
+  }
+  error.value = describe(failure)
+}
+
+async function reload(): Promise<void> {
+  if (!canManage.value || loading.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await tokenRpc<TokenListResult>(connection, 'token.list', {})
+    grants.value = [...result.tokens].sort((a, b) => b.createdAt - a.createdAt)
+  } catch (failure) {
+    refuse(failure)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function submitGrant(): Promise<void> {
+  const name = label.value.trim().slice(0, 64)
+  if (name === '' || !canManage.value || loading.value) return
+  loading.value = true
+  error.value = ''
+  notice.value = ''
+  try {
+    const daysAsked = Number(days.value)
+    const bounded = Number.isFinite(daysAsked) ? Math.min(365, Math.max(1, Math.round(daysAsked))) : 30
+    const ids = pinSessions.value
+      ? pinIds.value.split(/\s+/u).map((id) => id.trim()).filter((id) => id !== '')
+      : undefined
+    const result = await tokenRpc<TokenGrantResult>(connection, 'token.grant', {
+      label: name,
+      scopes: ['read'],
+      days: bounded,
+      ...(ids === undefined || ids.length === 0 ? {} : { sessionIds: ids }),
+    })
+    minted.value = result
+    copied.value = false
+    label.value = ''
+    pinIds.value = ''
+    pinSessions.value = false
+  } catch (failure) {
+    refuse(failure)
+  } finally {
+    loading.value = false
+  }
+}
+
+/** Closing the mint dialog drops the raw token from state — nothing re-displays it. */
+function closeMint(): void {
+  minted.value = null
+  copied.value = false
+  void reload()
+}
+
+async function copyMinted(): Promise<void> {
+  const token = minted.value?.token
+  if (!token || !navigator.clipboard) return
+  try {
+    await navigator.clipboard.writeText(token)
+    copied.value = true
+  } catch {
+    // Clipboard refusal keeps the text selectable — the token itself remains visible.
+  }
+}
+
+async function revokeGrant(row: TokenGrantRow): Promise<void> {
+  if (!canManage.value || loading.value) return
+  if (!window.confirm(`Revoke viewer grant "${row.label}"? The holder loses access immediately.`)) return
+  loading.value = true
+  error.value = ''
+  notice.value = ''
+  try {
+    await tokenRpc<TokenRevokeResult>(connection, 'token.revoke', { id: row.id })
+    grants.value = grants.value.filter((grant) => grant.id !== row.id)
+    notice.value = 'Grant revoked.'
+  } catch (failure) {
+    refuse(failure)
+    void reload()
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<template>
+  <section class="tokens" aria-labelledby="tokens-heading">
+    <header class="head">
+      <h2 id="tokens-heading" class="heading">Viewer tokens</h2>
+      <button v-if="canManage && !locked" class="reload" type="button" data-testid="tokens-reload" :disabled="loading" @click="reload()">Refresh</button>
+    </header>
+
+    <p v-if="isViewer" class="banner" role="status" data-testid="tokens-viewer-banner">
+      This connection is a viewer grant; token management is owner-only.
+    </p>
+    <p v-if="error" class="error" role="alert" data-testid="tokens-error">{{ error }}</p>
+    <p v-if="notice" class="notice" role="status" data-testid="tokens-notice">{{ notice }}</p>
+
+    <div v-if="minted" class="mint" role="dialog" aria-labelledby="mint-heading" data-testid="tokens-mint-dialog">
+      <h3 id="mint-heading" class="mint-heading">Grant created</h3>
+      <p class="mint-copy">The token is shown once, now. Copy it — after this dialog closes it cannot be retrieved.</p>
+      <code class="mint-token" data-testid="tokens-mint-token">{{ minted.token }}</code>
+      <p class="mint-meta">{{ t('web.chrome.sidebar.share_expiry', { when: expiryLabel(minted.expiresAt) }) }}</p>
+      <p class="mint-meta">Rotating the owner token revokes every viewer grant.</p>
+      <div class="mint-actions">
+        <button class="reload" type="button" data-testid="tokens-mint-copy" @click="copyMinted()">{{ copied ? t('web.chrome.sidebar.revoked') : 'Copy token' }}</button>
+        <button class="reload" type="button" data-testid="tokens-mint-close" @click="closeMint()">{{ t('web.chrome.sidebar.close') }}</button>
+      </div>
+    </div>
+
+    <form v-if="canManage && !locked" class="grant" data-testid="tokens-grant-form" @submit.prevent="submitGrant">
+      <label class="field">
+        <span class="field-label">Label</span>
+        <input v-model="label" type="text" maxlength="64" required data-testid="tokens-label" />
+      </label>
+      <label class="field">
+        <span class="field-label">Days until expiry</span>
+        <input v-model="days" type="number" min="1" max="365" data-testid="tokens-days" />
+      </label>
+      <label class="field check">
+        <input v-model="pinSessions" type="checkbox" data-testid="tokens-pin" />
+        <span class="field-label">Limit to sessions</span>
+      </label>
+      <label v-if="pinSessions" class="field">
+        <span class="field-label">Sessions</span>
+        <input v-model="pinIds" type="text" placeholder="session ids, space-separated" data-testid="tokens-pin-ids" />
+      </label>
+      <p class="field-note" data-testid="tokens-scopes-note">Viewer grants are read-only in v1.</p>
+      <button class="grant-submit" type="submit" data-testid="tokens-grant-submit" :disabled="loading || label.trim() === ''">Grant</button>
+    </form>
+
+    <ul v-if="canManage && !locked" class="list" data-testid="tokens-list">
+      <li v-if="grants.length === 0 && !loading" class="empty" data-testid="tokens-empty">No viewer grants.</li>
+      <li v-for="grant in grants" :key="grant.id" class="row" :data-testid="`tokens-row-${grant.id}`">
+        <span class="row-label">{{ grant.label }}</span>
+        <span class="row-meta" data-testid="tokens-meta">{{ grant.scopes.join(' ') }} · {{ sessionsLabel(grant) }} · {{ t('web.chrome.sidebar.share_expiry', { when: expiryLabel(grant.expiresAt) }) }}</span>
+        <button class="revoke" type="button" :data-testid="`tokens-revoke-${grant.id}`" :disabled="loading" @click="revokeGrant(grant)">Revoke</button>
+      </li>
+    </ul>
+    <p v-if="canManage && !locked" class="cap">64 grants maximum</p>
+  </section>
+</template>
+
+<style scoped>
+.tokens {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line, #333);
+  border-radius: 10px;
+  background: var(--bg, #101014);
+}
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.heading {
+  margin: 0;
+  font-size: 15px;
+}
+.reload {
+  border: 1px solid var(--line, #333);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--accent, #9fc7ff);
+  padding: 2px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.banner {
+  margin: 0;
+  color: var(--muted, #9a9aa2);
+}
+.error {
+  margin: 0;
+  color: var(--error, #ff7a7a);
+}
+.notice {
+  margin: 0;
+  color: var(--accent, #9fc7ff);
+}
+.mint {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--warn, #d7b45a);
+  border-radius: 9px;
+}
+.mint-heading {
+  margin: 0;
+  font-size: 14px;
+}
+.mint-copy {
+  margin: 0;
+  color: var(--warn, #d7b45a);
+}
+.mint-token {
+  display: block;
+  padding: 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.mint-meta {
+  margin: 0;
+  color: var(--muted, #9a9aa2);
+  font-size: 12px;
+}
+.mint-actions {
+  display: flex;
+  gap: 8px;
+}
+.grant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.field.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.field-label {
+  color: var(--muted, #9a9aa2);
+  font-size: 12px;
+}
+.field input[type='text'],
+.field input[type='number'] {
+  border: 1px solid var(--line, #333);
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  padding: 4px 8px;
+  font: inherit;
+}
+.field-note {
+  margin: 0;
+  flex-basis: 100%;
+  color: var(--muted, #9a9aa2);
+  font-size: 12px;
+}
+.grant-submit {
+  border: 1px solid var(--accent, #9fc7ff);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--accent, #9fc7ff);
+  padding: 4px 14px;
+  cursor: pointer;
+  font: inherit;
+}
+.grant-submit[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid var(--line, #333);
+  border-radius: 8px;
+}
+.row-label {
+  flex: 1;
+}
+.row-meta {
+  color: var(--muted, #9a9aa2);
+  font-size: 12px;
+}
+.revoke {
+  border: 1px solid var(--error, #ff7a7a);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--error, #ff7a7a);
+  padding: 2px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.empty {
+  color: var(--muted, #9a9aa2);
+}
+.cap {
+  margin: 0;
+  color: var(--muted, #9a9aa2);
+  font-size: 11px;
+}
+</style>
