@@ -10,6 +10,7 @@ use Ratchet\Client\WebSocket;
 use Ratchet\RFC6455\Messaging\MessageInterface;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
+use React\Stream\ThroughStream;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Message;
@@ -22,6 +23,7 @@ use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\Http\StaticFiles;
 use SugarCraft\Code\Server\Server;
 use SugarCraft\Code\Server\ServerConfig;
+use SugarCraft\Code\Server\Ws\Connection;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
 use SugarCraft\Code\Tools\ToolResult as EngineToolResult;
@@ -504,6 +506,31 @@ final class ConformanceTest extends TestCase
             self::assertSame('rate_limited', $received[0]['error']['data']['kind'] ?? null);
             self::assertArrayHasKey('id', $received[0]);
             self::assertNull($received[0]['id'], 'an undecoded frame has no id to echo');
+        } finally {
+            $fixture->tearDown();
+        }
+    }
+
+    public function testWireFromAnUnregisteredConnectionIsDroppedButNamedInTheLog(): void
+    {
+        // CWPD-16: a message whose connection the dispatcher never opened
+        // (a close raced the open, a handoff dropped the client) used to
+        // vanish without a trace — the drop is right, the silence is not.
+        // One log line naming the connection id and the byte count, and
+        // NOTHING of the payload: unregistered wire is exactly the bytes a
+        // log must not echo.
+        $lines = [];
+        $fixture = ProtocolFixture::new(log: static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        });
+        try {
+            $foreign = new Connection('g4b-ghost', 'bearer', new ThroughStream(), new ThroughStream(), $fixture->dispatcher, ServerConfig::MAX_CLIENT_FRAME_BYTES);
+            $fixture->dispatcher->onMessage($foreign, '{"jsonrpc":"2.0","method":"never/registered","params":{"secret":"do-not-log-this"}}');
+
+            self::assertCount(1, $lines, 'the drop is announced exactly once');
+            self::assertStringContainsString('g4b-ghost', $lines[0]);
+            self::assertStringNotContainsString('do-not-log-this', $lines[0], 'the dropped payload itself stays off the log');
+            self::assertStringNotContainsString('never/registered', $lines[0]);
         } finally {
             $fixture->tearDown();
         }

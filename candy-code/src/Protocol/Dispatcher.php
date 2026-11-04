@@ -289,6 +289,12 @@ final class Dispatcher implements MessageHandler
     {
         $client = $this->clients[$connection->id()] ?? null;
         if ($client === null) {
+            // CWPD-16: the drop stays (a client that is gone has nothing to
+            // answer), but it is no longer silent — one line naming the
+            // connection and the size. The payload is deliberately NOT in
+            // it: unregistered wire is precisely what a log must echo least.
+            $this->context->logLine(\sprintf('wire from unregistered connection %s dropped (%d bytes)', $connection->id(), \strlen($payload)));
+
             return;
         }
 
