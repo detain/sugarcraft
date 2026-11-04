@@ -241,6 +241,29 @@ final class RendererGeometryTest extends TestCase
         $this->assertLessThanOrEqual(24, $rowsAt(80, $many));
     }
 
+    public function testTheFrameFitsTheScreenItWasSizedFor(): void
+    {
+        // M18: sugar-core paints the frame top-down, so a stacked frame
+        // taller than the viewport scrolls its own header away. The height
+        // budget from WindowSizeMsg must trim ranking entries until the
+        // frame fits, and clip as the last resort.
+        $render = static function (int $width, ?int $height, array $beats): string {
+            $end = new \DateTimeImmutable(self::END);
+            $stats = Stats::compute($beats, $end->modify('-6 days'), $end);
+            return Renderer::render(new Dashboard(
+                new Store(sys_get_temp_dir()), $end, 7, $stats, $width, null, $height
+            ));
+        };
+
+        $packed = explode("\n", rtrim($render(40, 24, self::busy()), "\n"));
+        $this->assertLessThanOrEqual(24, count($packed), 'a 24-row screen gets a 24-row frame');
+        $this->assertStringContainsString('Top projects', implode("\n", $packed), 'the header survives a packed window');
+
+        $tiny = explode("\n", rtrim($render(40, 10, self::busy()), "\n"));
+        $this->assertLessThanOrEqual(10, count($tiny), 'an absurdly short screen is clipped, not scrolled');
+        $this->assertStringStartsWith('CandyCodetime', ltrim(\SugarCraft\Core\Util\Ansi::strip($tiny[0])), 'the header keeps row 1 — the whole point of the ladder');
+    }
+
     private static function timelineRows(string $frame): array
     {
         $rows = self::plain($frame);

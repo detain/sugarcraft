@@ -360,6 +360,7 @@ final class DashboardTest extends TestCase
         [$next, ] = $d->update($msg);
 
         $this->assertSame(40, $next->width);
+        $this->assertSame(24, $next->height, 'WindowSizeMsg->rows must reach the model');
         $out = $next->view();
 
         // When narrow, the view should stack panes (contains newline between projects and languages)

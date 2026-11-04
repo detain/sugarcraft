@@ -383,7 +383,7 @@ if ($cmd === 'backup') {
     // M1: the archive only clones `*.jsonl`. A sqlite user who believes they
     // are covered must be told otherwise on every run, not by a footnote.
     if (is_file($dbPath)) {
-        fwrite(STDERR, Lang::t('cli.backup_sqlite_notice', ['db' => $dbPath]) . "\n");
+        fwrite(STDERR, Lang::t('cli.backup_sqlite_notice', ['db' => Sanitize::untrusted($dbPath)]) . "\n");
     }
     $autoBackup = new AutoBackup($backupDir, [$dataDir]);
     try {
@@ -391,7 +391,7 @@ if ($cmd === 'backup') {
     } catch (\RuntimeException $e) {
         // rotate() now throws on mkdir/copy failure rather than losing data
         // silently — surface it to the user with a non-zero exit.
-        fwrite(STDERR, $e->getMessage() . "\n");
+        fwrite(STDERR, Sanitize::untrusted($e->getMessage()) . "\n");
         exit(1);
     }
     if ($count > 0) {

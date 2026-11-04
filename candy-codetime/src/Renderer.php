@@ -44,20 +44,67 @@ final class Renderer
      */
     private const FRAME_CHROME = 4;
 
+    /** Columns the side-by-side join needs: two pane frames plus the gutter. */
+    private const SIDE_BY_SIDE = (self::PANE_TEXT + self::FRAME_CHROME) * 2 + self::PANE_GAP;
+
+    /** Default ranking entries per pane; the height ladder trims this. */
+    private const MAX_ENTRIES = 6;
+
     public static function render(Dashboard $d): string
+    {
+        $frame = self::assemble($d, self::MAX_ENTRIES);
+        if ($d->height === null || self::rows($frame) <= $d->height) {
+            return $frame;
+        }
+        // M18: the frame is written top-down, so anything taller than the
+        // viewport scrolls its own header away. Drop ranking entries first —
+        // each one removes two stacked rows.
+        for ($entries = self::MAX_ENTRIES - 1; $entries >= 0; --$entries) {
+            $frame = self::assemble($d, $entries);
+            if (self::rows($frame) <= $d->height) {
+                return $frame;
+            }
+        }
+        // Still short? Join the panes side by side at the narrowest legal
+        // width — the join shares the panes' body lines — and clip whatever
+        // still overhangs, so row 1 stays the top border.
+        $joined = self::assemble(new Dashboard(
+            $d->source,
+            $d->endDay,
+            $d->days,
+            $d->stats,
+            max((int) $d->width, self::SIDE_BY_SIDE),
+            $d->colorProfile,
+            $d->height,
+        ), 0);
+        $lines = array_slice(explode("\n", rtrim($joined, "\n")), 0, max(1, $d->height));
+        return self::clipRows(implode("\n", $lines), $d->width) . "\n";
+    }
+
+    /** Rows a rendered frame occupies, excluding its trailing newline. */
+    private static function rows(string $frame): int
+    {
+        return count(explode("\n", rtrim($frame, "\n")));
+    }
+
+    /**
+     * The frame body: header + ranking panes + timeline + help, clipped to
+     * the terminal width. $entries caps each ranking pane.
+     */
+    private static function assemble(Dashboard $d, int $entries): string
     {
         $stats = $d->stats;
 
         $header = self::clip(self::header($d), $d->width);
-        $projects = self::ranking('Top projects', $stats->perProject(), '#fde68a', $d->width, $d->colorProfile);
-        $languages = self::ranking('By language', $stats->perLanguage(), '#7dd3fc', $d->width, $d->colorProfile);
+        $projects = self::ranking('Top projects', $stats->perProject(), '#fde68a', $d->width, $d->colorProfile, $entries);
+        $languages = self::ranking('By language', $stats->perLanguage(), '#7dd3fc', $d->width, $d->colorProfile, $entries);
 
         // Side by side only once two frames plus the gutter actually fit. The
         // threshold is derived from the numbers above, because the old literal
         // 56 was 6 cells short of the geometry it was guarding — the join
         // landed on terminals that could not hold it and the right pane lost
         // its border.
-        $sideBySide = (self::PANE_TEXT + self::FRAME_CHROME) * 2 + self::PANE_GAP;
+        $sideBySide = self::SIDE_BY_SIDE;
         $stacked = $d->width !== null && $d->width < $sideBySide;
         $top = $stacked
             ? $projects . "\n" . $languages
@@ -152,7 +199,7 @@ final class Renderer
      *
      * @param array<string,int> $rows
      */
-    private static function ranking(string $title, array $rows, string $colour, ?int $terminal, ?ColorProfile $profile): string
+    private static function ranking(string $title, array $rows, string $colour, ?int $terminal, ?ColorProfile $profile, int $entries = 6): string
     {
         // The frame is 4 cells wider than the text box, so shrinking the text
         // is what keeps a narrow terminal inside itself.
@@ -162,7 +209,7 @@ final class Renderer
 
         $shown = [];
         foreach ($rows as $name => $secs) {
-            if (count($shown) >= 6) {
+            if (count($shown) >= $entries) {
                 break;
             }
             $clean = self::clean(Ansi::strip((string) $name));
@@ -188,10 +235,10 @@ final class Renderer
                     Style::new()->bold()->render(Width::padLeft($duration, $durationWidth)),
                 );
             }
-            if (count($rows) > 6) {
+            if (count($rows) > $entries) {
                 // The hard cap used to hide projects silently; say how many are missing.
                 $lines[] = self::tint(Style::new(), '#7d6e98', $profile)
-                    ->render(Width::truncate('  +' . (count($rows) - 6) . ' more', $text));
+                    ->render(Width::truncate('  +' . (count($rows) - $entries) . ' more', $text));
             }
         }
         return Style::new()

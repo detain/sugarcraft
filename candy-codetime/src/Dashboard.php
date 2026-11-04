@@ -32,6 +32,7 @@ final class Dashboard implements Model
         public readonly Stats $stats = new Stats([], []),
         public readonly ?int $width = null,
         public readonly ?ColorProfile $colorProfile = null,
+        public readonly ?int $height = null,
     ) {}
 
     public static function start(HeartbeatReader $source, ?\DateTimeImmutable $endDay = null, int $days = 7): self
@@ -55,6 +56,7 @@ final class Dashboard implements Model
                 $this->stats,
                 $msg->cols,
                 $this->colorProfile,
+                $msg->rows,
             ), null];
         }
         if ($msg instanceof ColorProfileMsg) {
@@ -68,6 +70,7 @@ final class Dashboard implements Model
                 $this->stats,
                 $this->width,
                 $msg->profile,
+                $this->height,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -112,6 +115,7 @@ final class Dashboard implements Model
             Stats::compute($beats, $from, $this->endDay),
             $this->width,
             $this->colorProfile,
+            $this->height,
         );
     }
 
@@ -125,7 +129,7 @@ final class Dashboard implements Model
         // The width has to ride the shift: without it the next frame is laid
         // out for an unknown terminal and the rows we sized to the window
         // (panes, timeline) silently stop being clipped.
-        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile))->recompute();
+        return (new self($this->source, $next, $this->days, $this->stats, $this->width, $this->colorProfile, $this->height))->recompute();
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

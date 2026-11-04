@@ -396,4 +396,38 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString(chr(27), $res['stderr'], 'unknown-command echo must carry no ESC byte');
         $this->assertStringContainsString('wake', $res['stderr'], 'the swept name must stay legible');
     }
+
+    public function testBackupFailureCannotPaintTheTerminal(): void
+    {
+        // The backup arm prints the database path and rotate() failures
+        // verbatim; a data directory planted with escape bytes in its name
+        // (attacker-controlled CANDY_CODETIME_DIR) must still not emit them.
+        $dir = $this->dataDir . '/w' . chr(27) . 'd';
+        mkdir($dir, 0o700);
+        file_put_contents(
+            $dir . '/2024-05-01.jsonl',
+            json_encode(['time' => 1714536000, 'project' => 'p', 'language' => 'php', 'file' => '/x/a.php', 'duration' => 60, 'tags' => []]) . "\n",
+        );
+        // Two ESC carriers at once: the sqlite notice prints the database
+        // path, and a plain file standing where <dir>-backups must be makes
+        // rotate() throw with that same poisoned path in its message.
+        touch($dir . '/2024-05-01.jsonl', time() - 90 * 86400); // age it past the 30-day window
+        file_put_contents($dir . '/candy-codetime.db', 'not a database');
+        file_put_contents($dir . '-backups', 'blocking file');
+
+        try {
+            $res = $this->runCli(['backup'], null, ['CANDY_CODETIME_DIR' => $dir]);
+        } finally {
+            // The escape in the directory name would trip a glob-based
+            // tearDown; sweep the planted paths explicitly.
+            foreach (glob($dir . '/*') ?: [] as $f) {
+                @unlink($f);
+            }
+            @unlink($dir . '-backups');
+            @rmdir($dir);
+        }
+        $this->assertSame(1, $res['exit'], $res['stdout'] . $res['stderr']);
+        $this->assertStringContainsString('backup', $res['stderr']);
+        $this->assertStringNotContainsString(chr(27), $res['stderr'], 'backup failure lines must not carry raw ESC bytes');
+    }
 }
