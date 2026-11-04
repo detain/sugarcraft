@@ -14,7 +14,7 @@ use SugarCraft\Style\Style;
 /**
  * Split-screen renderer for VS Computer mode.
  *
- * Renders two boards side by side:
+ * Renders two boards side by side over one full-width match strip:
  *
  *   ┌─────────────┐    ┌─────────────┐
  *   │   PLAYER    │ VS │  COMPUTER   │
@@ -22,7 +22,8 @@ use SugarCraft\Style\Style;
  *   │   (board)   │    │   (board)   │
  *   │             │    │             │
  *   └─────────────┘    └─────────────┘
- *     score/lines        score/lines
+ *   ┌ both scores · next · hold · keys ┐   (match strip)
+ *   └──────────────────────────────────┘
  *
  * Player pieces are rendered normally.
  * Computer pieces are rendered with a different hue (more magenta).
@@ -34,15 +35,16 @@ final class VsRenderer
      * by the viewport tests; see {@see self::MIN_*} for the floor law.
      */
     public const NATURAL_COLS = 54;
-    public const NATURAL_ROWS = 28;
+    public const NATURAL_ROWS = 29;
 
     /**
-     * Hard floor for the split screen: both framed boards (22 rows),
-     * their titles, both score cards and every overlay banner fact must
-     * stay ON-frame. Below it a resize notice replaces the frame (C-2).
+     * Hard floor for the split screen: both framed boards with their
+     * titles (23 rows) plus the match strip, and every overlay banner
+     * fact must stay ON-frame. Below it a resize notice replaces the
+     * frame (C-2).
      */
     public const MIN_COLS = 54;
-    public const MIN_ROWS = 28;
+    public const MIN_ROWS = 29;
 
     public static function render(VsGame $game): string
     {
@@ -63,17 +65,12 @@ final class VsRenderer
         $playerBoard = self::renderBoard($game->player, false, $plain);
         $computerBoard = self::renderBoard($game->computer, true, $plain);
 
-        $playerSidebar = self::renderSidebar($game->player, false);
-        $computerSidebar = self::renderSidebar($game->computer, true);
-
-        $playerPanel = Layout::joinVertical(0.0, $playerBoard, $playerSidebar);
-        $computerPanel = Layout::joinVertical(0.0, $computerBoard, $computerSidebar);
-
         $vsDivider = $plain === true
             ? "  VS  "
             : Style::new()->bold(true)->render("  VS  ");
 
-        $body = Layout::joinHorizontal(0.0, $playerPanel, $vsDivider, $computerPanel);
+        $boards = Layout::joinHorizontal(0.0, $playerBoard, $vsDivider, $computerBoard);
+        $body   = Layout::joinVertical(0.0, $boards, self::renderStrip($game->player, $game->computer));
 
         if ($game->over === true) {
             return self::paintBanner($body, self::overLines($game));
@@ -229,22 +226,53 @@ final class VsRenderer
         );
     }
 
-    private static function renderSidebar(Game $game, bool $isComputer): string
+    /**
+     * The match strip: one full-width card under both boards carrying the
+     * facts MA-9 said VS never showed — both scores, the player's three-
+     * piece next preview, the player's hold state (with the exhausted
+     * cue), and the key list. Deliberately ONE card: per-panel cards under
+     * 23-row boards would overshoot the height budget far worse, and the
+     * computer's queue is kept private on purpose. Plain-text rows (no
+     * SGR) so the card is identical in both colour postures.
+     */
+    private static function renderStrip(Game $player, Game $computer): string
     {
-        $score = sprintf(
-            "score:  %d\nlines:  %d\nlevel:  %d",
-            $game->score->points,
-            $game->score->lines,
-            $game->score->level,
-        );
+        $line = static fn(string $row): string => Width::of($row) > 50
+            ? Width::truncateAnsi($row, 50)
+            : $row;
 
-        $card = static fn(string $body): string => Style::new()
+        $nextLetters = implode('  ', array_map(
+            static fn(Tetromino $kind): string => $kind->value,
+            $player->bag->peek(3),
+        ));
+
+        $holdText = $player->hold === null
+            ? '-'
+            : $player->hold->value . ($player->canHold === false ? ' ' . Lang::t('hold_used') : '');
+
+        $body = implode("\n", [
+            $line(sprintf(
+                'you       score: %-7d lines: %-3d level: %d',
+                $player->score->points,
+                $player->score->lines,
+                $player->score->level,
+            )),
+            $line(sprintf(
+                'computer  score: %-7d lines: %-3d level: %d',
+                $computer->score->points,
+                $computer->score->lines,
+                $computer->score->level,
+            )),
+            $line(sprintf('%s %s        %s %s', Lang::t('next_label'), $nextLetters, Lang::t('hold_label'), $holdText)),
+            $line(Lang::t('vs_keys')),
+        ]);
+
+        $card = Style::new()
             ->border(Border::normal())
             ->padding(0, 1)
-            ->width(16)
-            ->render($body);
+            ->width(50);
 
-        return $card($score);
+        return $card->render($body);
     }
 
     /**

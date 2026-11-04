@@ -37,6 +37,8 @@ return [
     'win.player'     => 'YOU WIN!',
     'win.computer'   => 'COMPUTER WINS!',
     'over.quit_hint' => 'press q to quit',
+    // MA-9: the VS match strip names the bindings the old frame never showed.
+    'vs_keys'        => 'spc hard  c hold  p pause  r restart  q quit',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: unknown mode "{flag}"',
