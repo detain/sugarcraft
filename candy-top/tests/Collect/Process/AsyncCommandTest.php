@@ -88,6 +88,59 @@ final class AsyncCommandTest extends TestCase
         $this->assertSame(0, AsyncCommand::liveCount());
     }
 
+    /**
+     * The child of a collector is not the user's shell: a planted credential
+     * must not cross the fork, and the roster the sensor actually needs
+     * (PATH, HOME, the GPU visibility keys) must.
+     */
+    public function testTheChildGetsARebuiltEnvironmentNotTheParentOne(): void
+    {
+        $token = getenv('CANDY_TOP_PLANTED_TOKEN');
+        $device = getenv('CUDA_VISIBLE_DEVICES');
+        putenv('CANDY_TOP_PLANTED_TOKEN=sk-not-for-the-child');
+        putenv('CUDA_VISIBLE_DEVICES=GPU-deadbeef');
+        try {
+            $script = $this->script(
+                'printf \'path=%s\\nhome=%s\\ndevice=%s\\ntoken=[%s]\' "$PATH" "$HOME" "$CUDA_VISIBLE_DEVICES" "${CANDY_TOP_PLANTED_TOKEN-}"'
+            );
+            $result = AsyncCommand::run([$script]);
+            $this->assertSame(CommandOutcome::Ok, $result->outcome, $result->stdout);
+            $this->assertStringNotContainsString('sk-not-for-the-child', $result->stdout, 'a credential reached a sensor child');
+            $this->assertStringContainsString('token=[]', $result->stdout);
+            $lines = [];
+            foreach (explode("\n", $result->stdout) as $line) {
+                [$k, $v] = array_pad(explode('=', $line, 2), 2, '');
+                $lines[$k] = (string) $v;
+            }
+            $this->assertNotSame('', $lines['path'] ?? '', 'PATH must survive: the tool finds its own helpers with it');
+            $this->assertSame('GPU-deadbeef', $lines['device'] ?? '', 'the GPU visibility key is part of the roster');
+        } finally {
+            self::restoreEnv('CANDY_TOP_PLANTED_TOKEN', $token);
+            self::restoreEnv('CUDA_VISIBLE_DEVICES', $device);
+        }
+    }
+
+    /**
+     * The narrowing is the 5th proc_open argument. Omitting it re-enables the
+     * whole-environment inheritance silently, so the call shape is pinned too.
+     */
+    public function testTheSpawnRebuildsTheEnvironmentRatherThanOmittingIt(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__, 3) . '/src/Collect/Process/AsyncCommand.php');
+        $this->assertMatchesRegularExpression(
+            '/proc_open\(\$argv,.*?\$pipes, null, self::childEnv\(\)\)/s',
+            $source,
+            'proc_open without an environment inherits every parent variable',
+        );
+        $this->assertStringContainsString("'PATH'", $source);
+        $this->assertStringNotContainsString("API_KEY", $source, 'the roster is allow-listed, not exhaustive');
+    }
+
+    private static function restoreEnv(string $key, string|false $value): void
+    {
+        $value === false ? putenv($key) : putenv($key . '=' . $value);
+    }
+
     public function testLaunchResolvesTheSameOutcomesOnTheLoop(): void
     {
         $loop = new StreamSelectLoop();

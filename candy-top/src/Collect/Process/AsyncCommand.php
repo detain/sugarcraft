@@ -253,6 +253,42 @@ final class AsyncCommand
     /**
      * @param list<string> $argv
      */
+    /**
+     * The only parent-environment variables a sensor child is given.
+     *
+     * argv[0] is an absolute path, so PATH is not how the tool is found — it is
+     * what the tool uses to find ITS helpers. HOME and the XDG trio are the
+     * cache the vendor SMIs write; TERM, LANG, the LC_ family and TZ are the
+     * locale a monitor must not override; and the three visibility keys are how
+     * a host pins which GPUs nvidia-smi, rocm-smi or HIP enumerate. Nothing here
+     * is a credential, and nothing a collector runs needs one — which is the
+     * point: the parent of a TUI is the user's shell, and PHP hands a child the
+     * WHOLE environment whenever proc_open is called without the argument.
+     */
+    private const ENV_KEYS = [
+        'PATH', 'HOME', 'TERM', 'LANG', 'TZ',
+        'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME',
+        'CUDA_VISIBLE_DEVICES', 'HIP_VISIBLE_DEVICES', 'ROCR_VISIBLE_DEVICES',
+        'LD_LIBRARY_PATH',
+    ];
+
+    /**
+     * @return array<string,string> the child environment, rebuilt from {@see ENV_KEYS}
+     */
+    private static function childEnv(): array
+    {
+        $env = [];
+        foreach (\getenv() as $key => $value) {
+            if (\in_array((string) $key, self::ENV_KEYS, true) || \str_starts_with((string) $key, 'LC_')) {
+                $env[(string) $key] = (string) $value;
+            }
+        }
+        // A host with no PATH must not birth a child that can find no helper.
+        $env['PATH'] ??= '/usr/bin:/bin';
+
+        return $env;
+    }
+
     private static function spawn(array $argv, int $maxBytes = self::MAX_OUTPUT): ?self
     {
         self::reapExited();
@@ -262,7 +298,7 @@ final class AsyncCommand
         }
         $pipes = [];
         try {
-            $process = @proc_open($argv, [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+            $process = @proc_open($argv, [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes, null, self::childEnv());
         } catch (\Error) {
             return null; // proc_open listed in disable_functions
         }

@@ -382,15 +382,37 @@ final class IpmiTest extends TestCase
         $this->assertSame($snapshot, $ipmi->last());
     }
 
-    public function testFindLooksOnPathThenInSbin(): void
+    public function testTheAbsoluteRosterIsSearchedBeforePath(): void
     {
         file_put_contents($this->dir . '/fake-tool', "#!/bin/sh\n");
         chmod($this->dir . '/fake-tool', 0755);
         $saved = getenv('PATH');
-        putenv('PATH=' . $this->dir);
         try {
+            putenv('PATH=' . $this->dir);
             $this->assertSame($this->dir . '/fake-tool', Ipmi::find('fake-tool'));
             $this->assertNull(Ipmi::find('surely-not-a-tool-' . bin2hex(random_bytes(3))));
+
+            // A name the base roster carries is never taken from PATH: /bin/sh
+            // wins over the planted impostor in the temp directory.
+            file_put_contents($this->dir . '/sh', "#!/bin/sh\necho impostor\n");
+            chmod($this->dir . '/sh', 0755);
+            $found = Ipmi::find('sh');
+            $this->assertNotNull($found, 'a host without /bin/sh is not a host candy-top runs on');
+            $this->assertStringStartsWith(DIRECTORY_SEPARATOR, (string) $found);
+            $this->assertStringNotContainsString($this->dir, (string) $found, 'PATH must not shadow the absolute roster');
+
+            // A relative PATH entry resolves against the caller's CWD, which for
+            // a long-running monitor is not the shell that launched it: refused.
+            putenv('PATH=.' . PATH_SEPARATOR . $this->dir);
+            $this->assertSame($this->dir . '/fake-tool', Ipmi::find('fake-tool'), 'the absolute entry is still searched');
+            putenv('PATH=.');
+            $previous = getcwd();
+            chdir($this->dir);
+            try {
+                $this->assertNull(Ipmi::find('fake-tool'), 'a relative entry is not searched at all');
+            } finally {
+                chdir((string) $previous);
+            }
         } finally {
             putenv('PATH=' . $saved);
         }

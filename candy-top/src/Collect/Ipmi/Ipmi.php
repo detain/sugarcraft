@@ -146,7 +146,7 @@ final class Ipmi implements IpmiReader
     /**
      * @param ?\Closure(list<string>, float): PromiseInterface<CommandResult> $runner default {@see AsyncCommand::launch()}
      * @param ?\Closure(): float $clock monotonic seconds (default hrtime)
-     * @param ?string $binary the ipmitool path (default: searched once on PATH + {@see SEARCH})
+     * @param ?string $binary the ipmitool path (default: searched once in {@see SEARCH} then on PATH)
      * @param ?list<string> $devices device nodes to check (default {@see DEVICES})
      * @param ?\Closure(string): bool $access whether this process may open a device node (default readable and writable)
      * @param ?\Closure(string): bool $stuck whether an earlier child of this binary is still alive
@@ -298,11 +298,29 @@ final class Ipmi implements IpmiReader
         return $this->binary;
     }
 
-    /** First executable `$name` on PATH, then in {@see SEARCH}. */
+    /**
+     * First executable `$name` in the absolute {@see SEARCH} roster, then on PATH.
+     *
+     * Roster first, for the reason {@see LiveProbe} gives: the base locations are
+     * a property of this host's package layout, while PATH is whatever launched
+     * the TUI happened to export — and a sanitised PATH is exactly what drops
+     * /sbin, where ipmitool lives. Relative PATH entries are refused outright:
+     * they would resolve against the working directory of a long-running
+     * monitor, not the shell that started it.
+     */
     public static function find(string $name): ?string
     {
-        $dirs = array_filter(explode(PATH_SEPARATOR, (string) getenv('PATH')), static fn (string $d): bool => $d !== '');
-        foreach (array_unique([...$dirs, ...self::SEARCH]) as $dir) {
+        $dirs = [];
+        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $dir) {
+            if ($dir === '' || !\str_starts_with($dir, DIRECTORY_SEPARATOR)) {
+                continue;
+            }
+            $real = \realpath($dir);
+            if ($real !== false && is_dir($real)) {
+                $dirs[] = $real;
+            }
+        }
+        foreach (array_unique([...self::SEARCH, ...$dirs]) as $dir) {
             $path = rtrim($dir, '/') . '/' . $name;
             if (is_file($path) && is_executable($path)) {
                 return $path;
