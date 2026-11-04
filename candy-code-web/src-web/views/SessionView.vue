@@ -411,4 +411,23 @@ h1 {
 .dock .error {
   padding: 0;
 }
+/* CW-UX-08: on short viewports the chrome stack (queue strip, error line, composer,
+   status bar) is the loudest consumer — compact its paddings, cap the dock at a
+   scrollable fraction of the viewport, and floor the transcript's flex area so the
+   conversation keeps visible rows. happy-dom measures nothing, so the geometry is
+   pinned by source scan in sessionViewShortViewport.spec.ts. The overlay files of
+   this register row were capped by lane G5-UXB. */
+@media (max-height: 600px) {
+  .head {
+    padding: 0.25rem 1rem;
+  }
+  .dock {
+    padding: 0.25rem 0.75rem 0.15rem;
+    max-height: 55vh;
+    overflow-y: auto;
+  }
+  .scroller {
+    min-height: 6rem;
+  }
+}
 </style>
