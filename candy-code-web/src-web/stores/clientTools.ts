@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { ProtocolError } from '../protocol/jsonrpc'
+import type { MethodParams } from '../protocol/generated'
 import { browserContext } from '../lib/clientTools/browserContext'
 import { useConnectionStore } from './connection'
 
@@ -21,14 +22,14 @@ export const DEFAULT_CLIENT_TOOLS: ClientToolImplementation[] = [browserContext]
 const PROXY_PREFIX = 'client__'
 
 /**
- * C-TOOL-6.i: `tools.client.*` joins the generated method-name union only
- * when the protocol trio regen lands with this step's weld (the lane never
- * carries the trio). Until then these two names cannot cross the typed
- * `request` boundary as {@link import('../protocol/generated').MethodName},
- * so the store's calls go through this one narrowed escape hatch — string
- * names, plain param objects — instead of a second untyped client.
+ * One row of the `tools.client.register` announcement list, derived from the
+ * generated params so the schema stays the single source of truth. C-TOOL-6.i
+ * shipped with a `ClientToolMethod` escape hatch while `tools.client.*` were
+ * still missing from the generated method union; CW-2 retired it once the
+ * protocol regen (CW-P1) landed them — the store calls the typed
+ * {@link useConnectionStore} boundary directly.
  */
-type ClientToolMethod = 'tools.client.register' | 'tools.client.result'
+type ToolAnnouncement = MethodParams<'tools.client.register'>['tools'][number]
 
 /**
  * Client-hosted tools for the tab (C-TOOL-6.i): the web half of the
@@ -55,16 +56,13 @@ export const useClientToolsStore = defineStore('clientTools', () => {
   /** True while the server has refused the whole family for this connection. */
   const disabled = ref(false)
   const lastError = ref<string | null>(null)
-  // Name matters: the dormant-roster guard derives browser callers by looking
-  // for `request('method'` call sites, so this narrowed alias stays `request`.
-  const request = connection.request as unknown as (method: ClientToolMethod, params: Record<string, unknown>) => Promise<Record<string, unknown>>
 
   function implement(tool: ClientToolImplementation): void {
     implementations.set(PROXY_PREFIX + tool.name, tool)
   }
 
   /** The announcement list the registration sends, in stable order. */
-  function announcements(): Record<string, unknown>[] {
+  function announcements(): ToolAnnouncement[] {
     return [...implementations.values()]
       .sort((left, right) => (left.name < right.name ? -1 : 1))
       .map((tool) => ({
@@ -79,7 +77,7 @@ export const useClientToolsStore = defineStore('clientTools', () => {
   async function attach(sessionId: string): Promise<void> {
     if (disabled.value || !connection.connected) return
     try {
-      const result = await request('tools.client.register', { sessionId, tools: announcements() })
+      const result = await connection.request('tools.client.register', { sessionId, tools: announcements() })
       // CW-14: an answer without a string id must not become the literal
       // 'undefined' in the map — every call that followed would answer
       // under a registration nobody issued. Same law as the deadline guard.
@@ -105,7 +103,7 @@ export const useClientToolsStore = defineStore('clientTools', () => {
 
   function answer(sessionId: string, callId: string, registrationId: string, content: string, isError: boolean): void {
     if (!connection.connected) return
-    void request('tools.client.result', { sessionId, callId, registrationId, content, isError }).catch(() => {
+    void connection.request('tools.client.result', { sessionId, callId, registrationId, content, isError }).catch(() => {
       // The engine already settled the call another way (another client
       // answered, or the deadline passed server-side). Nothing left to do.
     })

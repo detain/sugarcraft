@@ -286,9 +286,10 @@ export function applySnapshot(state: SessionState, snapshot: SessionSnapshot): v
   state.turnId = snapshot.turnId ?? null
   state.spentUsd = snapshot.spentUsd ?? 0
   // The wire key is `spendUnpriced` and the server sends it only when set
-  // (generated.ts does not type it yet — the schema predates SES-1; seam
-  // filed docs-fix-1023 N1). Any other payload value means priced.
-  state.unpriced = (snapshot as unknown as { spendUnpriced?: unknown }).spendUnpriced === true
+  // (typed in the generated SessionSnapshot since the protocol regen; CW-2
+  // dropped the `unknown` widening seam). Any other payload value means
+  // priced — the strict `=== true` is the boundary guard and stays.
+  state.unpriced = snapshot.spendUnpriced === true
   state.permissionMode = snapshot.permissionMode ?? null
   state.queue = [...snapshot.queue]
   state.asks = [...snapshot.pendingAsks]
