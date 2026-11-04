@@ -171,12 +171,19 @@ final class ImageSource
             throw new \RuntimeException(Lang::t('image_source.no_gd'));
         }
 
-        $bytes = file_get_contents($path);
-        if ($bytes === false) {
-            throw new \InvalidArgumentException(Lang::t('image_source.cannot_read', ['path' => $path]));
-        }
+        // ONE descriptor for the whole read, stat checked on that same handle —
+        // the shape fromAnimatedFile() already uses. The previous `file_get_contents`
+        // slurped a path of ANY size (a 2 GB junk file was fully read into memory
+        // before GD was even asked about it) and then `getimagesize($path)` plus the
+        // format-specific `imagecreatefrom*($path)` call opened the same path two
+        // more times, so the bytes GD decoded need not be the bytes measured.
+        // Routing the decode through the captured string closes both holes: the
+        // MAX_BYTES ceiling refuses an oversized read up front (README's Limits row
+        // — "oversized files are refused before GD ever sees them" — is now true of
+        // this route too), and every check below sees one immutable byte string.
+        $bytes = self::readBoundedRegularFile($path);
 
-        $info = @getimagesize($path);
+        $info = @getimagesizefromstring($bytes);
         if ($info === false) {
             throw new \InvalidArgumentException(Lang::t('image_source.unsupported_format', ['path' => $path]));
         }
@@ -196,15 +203,15 @@ final class ImageSource
         };
 
         // Read dimensions from GD so palette PNGs are already converted. Suppressed
-        // (like `@getimagesize` above): a corrupt PNG/JPEG/GIF makes libpng emit
-        // "fatal libpng error" warnings that a TUI would spray across the user's
+        // (like `@getimagesizefromstring` above): a corrupt PNG/JPEG/GIF makes libpng
+        // emit "fatal libpng error" warnings that a TUI would spray across the user's
         // screen — and this repo runs PHPUnit with failOnWarning=true. The `=== false`
         // guard below turns the suppressed failure into a clean, translated throw.
-        $img = match ($format) {
-            'image/png'  => @imagecreatefrompng($path),
-            'image/jpeg' => @imagecreatefromjpeg($path),
-            'image/gif'  => @imagecreatefromgif($path),
-        };
+        // Dispatch is on the captured bytes rather than the path, so GD decodes
+        // exactly what the size guard measured; the mime match above already picked
+        // between these three formats, and imagecreatefromstring sniffs the same
+        // signatures.
+        $img = @imagecreatefromstring($bytes);
 
         if ($img === false) {
             throw new \RuntimeException(Lang::t('image_source.gd_load_failed', ['path' => $path]));
@@ -1653,7 +1660,17 @@ final class ImageSource
                     );
                 }
 
-                return self::fromString((string) $response->getBody(), $maxPixels);
+                // Same byte ceiling as the sync route. Note the honest limit of
+                // this guard: react/stream buffers the response body before we
+                // see it, so the ceiling bounds what the lib ACCEPTS (and what
+                // ever reaches GD), not what the socket delivered. A transport
+                // cap would mean configuring the injected Browser's sender —
+                // left to the caller, since this class must not rebuild a
+                // caller-supplied client.
+                return self::fromString(
+                    self::guardFetchedBytes((string) $response->getBody(), $url),
+                    $maxPixels,
+                );
             },
         );
     }
@@ -1730,7 +1747,11 @@ final class ImageSource
             // it untouched — clearing it stops a prior hop's status/headers
             // from leaking into this one.
             $http_response_header = null;
-            $bytes = @file_get_contents($current, false, $context);
+            // Hard byte ceiling on the download itself: the read stops after
+            // MAX_BYTES+1 bytes, so an oversized body never lands in memory, and
+            // the surplus byte is the discriminator (see guardFetchedBytes). This
+            // is the same 64 MiB law fromFile() enforces, applied to the wire.
+            $bytes = @file_get_contents($current, false, $context, 0, self::MAX_BYTES + 1);
             // $http_response_header is populated in local scope by the HTTP
             // wrapper; stays null for non-HTTP schemes (file://, data://).
             $responseHeaders = $http_response_header;
@@ -1754,7 +1775,7 @@ final class ImageSource
                     );
                 }
 
-                return $bytes;
+                return self::guardFetchedBytes($bytes, $current);
             }
 
             if ($status >= 300 && $status < 400) {
@@ -1780,12 +1801,30 @@ final class ImageSource
                 );
             }
 
-            return $bytes;
+            return self::guardFetchedBytes($bytes, $current);
         }
 
         throw new \InvalidArgumentException(
             Lang::t('image_source.too_many_redirects', ['url' => $url]),
         );
+    }
+
+    /**
+     * Refuse a download that ran past the byte ceiling, and hand back the payload.
+     *
+     * The fetch caps each read at {@see MAX_BYTES} + 1 bytes, so a body longer
+     * than the ceiling is detected by the surplus byte rather than by trusting a
+     * server-supplied Content-Length (which a hostile host can under-report).
+     */
+    private static function guardFetchedBytes(string $bytes, string $url): string
+    {
+        if (strlen($bytes) > self::MAX_BYTES) {
+            throw new \InvalidArgumentException(
+                Lang::t('image_source.url_too_large', ['url' => $url, 'max' => self::MAX_BYTES]),
+            );
+        }
+
+        return $bytes;
     }
 
     /**
