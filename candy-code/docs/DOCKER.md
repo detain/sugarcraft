@@ -147,9 +147,25 @@ services:
       - candy-data:/data
     ports:
       - "127.0.0.1:7420:7420"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 volumes:
   candy-data:
 ```
+
+Without the `logging:` block, Docker's default json-file driver caps at
+unlimited size: a long-lived container accumulates log bytes until the disk
+fills. The sketch above keeps a rolling ~30 MB ceiling per container, which is
+generous for the startup notices and serve diagnostics the image emits.
+
+The operator log channel for this image is stdout/stderr — read it with
+`docker logs candy-code` (or your compose tooling's equivalent). The JSON files
+under `/var/lib/docker/containers/` are the same stream behind the driver; the
+rotation options above exist so that path stays bounded without a host-level
+cron.
 
 ## Publishing wide
 
