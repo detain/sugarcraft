@@ -136,7 +136,10 @@ stamp, so an install from one cannot self-update — download
 `candy-code/v0.1.1` manually instead. `self-update` keeps the phar current
 from then on; a CI dev build stamped `dev-<shortsha>` rides the rolling
 `candy-code/dev` release instead (current iff that release's target commit
-matches the stamp — `--channel=stable|dev` overrides the default).
+matches the stamp — `--channel=stable|dev` overrides the default). That dev
+archive is rebuilt and re-stamped on every push to `master`, so the phar on
+that channel is always a master tip — the `dev-<shortsha>` it prints is the
+commit it was packed from.
 
 Or let the bundled `tools/install.sh` run those legs in one command: it
 resolves the newest `candy-code/v*` release (or `candy-code/dev` with
