@@ -71,15 +71,26 @@ export const useApprovalsStore = defineStore('approvals', () => {
   }
 
   async function refresh(): Promise<void> {
+    const before = byAsk.value
     try {
       const result = await connection.request('permission.pending', {})
       const next: Record<string, SessionAsk> = {}
       for (const item of result.items as SessionAsk[]) {
         if (typeof item.sessionId === 'string') next[item.askId] = item
       }
-      const fresh = Object.values(next).filter((ask) => byAsk.value[ask.askId] === undefined)
-      byAsk.value = next
-      order.value = [...order.value.filter((id) => next[id] !== undefined), ...fresh.map((ask) => ask.askId)]
+      // CW-DBA-12: a permission.asked that landed while this read was in
+      // flight (its own row notified on arrival) must not blink out under
+      // the older answer — the before-keys law, same as the sessions
+      // index: rows that appeared during the request survive, pre-existing
+      // rows the server omits are retired.
+      const current = byAsk.value
+      const merged = { ...next }
+      for (const [askId, row] of Object.entries(current)) {
+        if (next[askId] === undefined && before[askId] === undefined) merged[askId] = row
+      }
+      const fresh = Object.values(merged).filter((ask) => current[ask.askId] === undefined)
+      byAsk.value = merged
+      order.value = [...order.value.filter((id) => merged[id] !== undefined), ...fresh.map((ask) => ask.askId)]
       for (const ask of fresh) for (const listener of listeners) listener(ask)
     } catch {
       // keep what is known; the next tick retries

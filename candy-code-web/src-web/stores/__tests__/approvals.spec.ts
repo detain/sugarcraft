@@ -135,3 +135,49 @@ describe('remembering a verdict (C-SEC-6.c)', () => {
     await plain
   })
 })
+
+/**
+ * CW-DBA-12 (reviews-1103): refresh() swapped the whole map for the server's
+ * answer, so a permission.asked that arrived WHILE the pending read was in
+ * flight blinked out until the next tick backstop. The before-keys law from
+ * the sessions index applies: a row that appeared during the request
+ * survives the refresh, and a pre-existing row the server omits is still
+ * retired.
+ */
+describe('approvals refresh preserves in-flight asks (CW-DBA-12)', () => {
+  it('keeps a question that arrived while the pending read was in flight', async () => {
+    const wire = await connected()
+    const approvals = useApprovalsStore()
+    const seen: string[] = []
+    approvals.onNew((item) => seen.push(item.askId))
+
+    const pending = approvals.refresh()
+    wire.serverEvent('permission.asked', ask('k9', 'midflight'))
+    wire.answer('permission.pending', { items: [] })
+    await pending
+
+    expect(approvals.total).toBe(1)
+    expect(approvals.countFor('midflight')).toBe(1)
+    // The arrival was notified once by its event; the refresh must not
+    // re-notify the survivor as fresh.
+    expect(seen).toEqual(['k9'])
+
+    // The tick backstop confirms it from the server and it stays exactly once.
+    const second = approvals.refresh()
+    wire.answer('permission.pending', { items: [ask('k9', 'midflight')] })
+    await second
+    expect(approvals.total).toBe(1)
+    expect(seen).toEqual(['k9'])
+  })
+
+  it('still retires a pre-existing question the server omits', async () => {
+    const wire = await connected()
+    const approvals = useApprovalsStore()
+    wire.serverEvent('permission.asked', ask('gone', 's1'))
+
+    const pending = approvals.refresh()
+    wire.answer('permission.pending', { items: [] })
+    await pending
+    expect(approvals.total).toBe(0)
+  })
+})
