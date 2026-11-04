@@ -2066,7 +2066,7 @@ final class Bootstrap
         self::reportSkillSkips();
         self::reportMemorySkips($root);
         self::reportPromptBudgetDeferrals($root, $skills);
-        self::reportNonsenseLimits();
+        self::reportNonsenseLimits($root);
         self::reportTuiErrorLogFallback();
 
         // ONE gate for the whole launch, for the reason the registry above is
@@ -6050,7 +6050,7 @@ public static function useMaxCost(?string $maxCost): void
      * set-but-empty value arrives in, which this lib reads as unset
      * everywhere) raise nothing. One row per bad key, so at most two.
      */
-    public static function reportNonsenseLimits(): void
+    public static function reportNonsenseLimits(?string $root = null): void
     {
         $config = self::readUserConfig();
         $verdicts = [
@@ -6081,12 +6081,13 @@ public static function useMaxCost(?string $maxCost): void
 
         // ISS-029: the top-level key audit rides the same rows — a misspelled
         // or refused setting is named at launch instead of left to the
-        // tolerant reader's silence. User files only here: this notice fires
-        // before any project root is in scope, and `doctor` covers the
-        // project tier.
+        // tolerant reader's silence. CC-UXD-07 (reviews-1103): the project
+        // tier rides too — the launch passes the root it already holds, and
+        // reading an untrusted file names keys without applying anything
+        // (`doctor` covers the tier as well).
         self::warnLaunchRows([
             ...$rows,
-            ...LayeredSettings::keyAuditRows(self::configDir()),
+            ...LayeredSettings::keyAuditRows(self::configDir(), $root),
         ]);
     }
 

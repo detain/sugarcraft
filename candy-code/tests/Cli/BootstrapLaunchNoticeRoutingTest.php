@@ -422,6 +422,38 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
     }
 
     /**
+     * CC-UXD-07 (reviews-1103): the project tier rides the same launch audit.
+     * A key the project settings file was never allowed to carry is named at
+     * launch — the old notice audited user files only and left the tier to
+     * `doctor`, while the launch already holds the root. Reading names keys;
+     * it applies nothing.
+     */
+    public function testTheProjectTierKeyAuditRidesTheLaunchNotice(): void
+    {
+        file_put_contents(
+            $this->projectRoot . '/' . LayeredSettings::SHARED_PATH,
+            json_encode(['bogusKeyNoMatchQz' => true]),
+        );
+
+        [, $notices] = $this->launch(
+            '\\SugarCraft\\Code\\Cli\\Bootstrap::reportNonsenseLimits('
+                . var_export($this->projectRoot, true) . ");\n",
+        );
+
+        $rows = implode("\n", $notices);
+        self::assertStringContainsString(
+            'bogusKeyNoMatchQz',
+            $rows,
+            'CC-UXD-07: the unknown key in the project file must be named at launch',
+        );
+        self::assertStringContainsString(
+            $this->projectRoot . '/' . LayeredSettings::SHARED_PATH,
+            $rows,
+            'CC-UXD-07: the row says which file carries the unknown key',
+        );
+    }
+
+    /**
      * The R16 follow-up: `TuiErrorLog::install()` falls back from the home log
      * to a private temp-dir log and then to the null device, silently by
      * design. The launch now says which — and says nothing when the home log

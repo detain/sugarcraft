@@ -709,11 +709,11 @@ final class LayeredSettingsTest extends TestCase
     public function testTheLaunchNoticeFeedsTheAuditRows(): void
     {
         $source = (string) file_get_contents(__DIR__ . '/../../src/Cli/Bootstrap.php');
-        $start = strpos($source, 'public static function reportNonsenseLimits(): void');
+        $start = strpos($source, 'public static function reportNonsenseLimits(?string $root = null): void');
         self::assertIsInt($start);
         $body = substr($source, $start, (int) strpos(substr($source, $start), 'public static function', 10));
 
-        self::assertStringContainsString('LayeredSettings::keyAuditRows(self::configDir())', $body);
+        self::assertStringContainsString('LayeredSettings::keyAuditRows(self::configDir(), $root)', $body);
     }
 
     /**
