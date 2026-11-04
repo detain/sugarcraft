@@ -416,13 +416,16 @@ final class BoardTest extends TestCase
 
     public function testUnserializeRejectsShortRow(): void
     {
-        // Row 0 has only 2 cells instead of the declared width 3.
+        // Row 0 has only 2 cells instead of the declared width 3. The cells
+        // ride the WIRE shape (positional [mine, revealed, flagged, adjacent]):
+        // json_encode'ing Cell objects instead would die on the per-cell shape
+        // guard first and never exercise the row-count arm this test names.
         $payload = json_encode([
             'v' => 1, 'w' => 3, 'h' => 2, 'm' => 1,
             'p' => true, 'e' => false, 'r' => 0,
             'c' => [
-                [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
-                [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+                [[false, false, false, 0], [false, false, false, 0]],
+                [[false, false, false, 0], [false, false, false, 0]],
             ],
         ]);
         $this->expectException(\InvalidArgumentException::class);
@@ -431,13 +434,14 @@ final class BoardTest extends TestCase
 
     public function testUnserializeRejectsWrongRowCount(): void
     {
-        // Declares h=3 but only provides 2 rows.
+        // Declares h=3 but only provides 2 rows — wire-shape cells, same
+        // reason as the short-row refusal above.
         $payload = json_encode([
             'v' => 1, 'w' => 3, 'h' => 3, 'm' => 1,
             'p' => true, 'e' => false, 'r' => 0,
             'c' => [
-                [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
-                [new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0), new \SugarCraft\Minesweeper\Cell(false, false, false, 0)],
+                [[false, false, false, 0], [false, false, false, 0], [false, false, false, 0]],
+                [[false, false, false, 0], [false, false, false, 0], [false, false, false, 0]],
             ],
         ]);
         $this->expectException(\InvalidArgumentException::class);

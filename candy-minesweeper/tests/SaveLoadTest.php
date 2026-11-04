@@ -267,4 +267,39 @@ final class SaveLoadTest extends TestCase
         $this->assertSame(0, proc_close($proc), "child load exited non-zero: $err");
         $this->assertSame($parentHash, $out, 'a fresh process restores the exact saved board');
     }
+
+    public function testXdgConfigHomeRedirectsTheSlot(): void
+    {
+        // m02: XDG_CONFIG_HOME replaces the ~/.config leg wholesale, and the
+        // slot under it round-trips exactly like the default location.
+        $savedXdg = getenv('XDG_CONFIG_HOME');
+        $xdgDir = sys_get_temp_dir() . '/candy-minesweeper-xdg-' . bin2hex(random_bytes(6));
+        mkdir($xdgDir, 0700, true);
+        putenv('XDG_CONFIG_HOME=' . $xdgDir);
+        $slot = $xdgDir . '/candy-minesweeper/savegame.json';
+        try {
+            $this->assertSame($slot, Game::savePath(), 'XDG_CONFIG_HOME replaces the ~/.config leg');
+
+            [$g, ] = self::liveGame()->update(self::press(KeyType::Char, 'S'));
+            $this->assertFileExists($slot, 'the save lands in the XDG slot');
+            $this->assertFileDoesNotExist($this->homeDir . '/.config/candy-minesweeper/savegame.json', 'the HOME fallback is not written when XDG wins');
+
+            [$h, ] = self::liveGame()->update(self::press(KeyType::Char, 'L'));
+            $this->assertSame($g->board->serialize(), $h->board->serialize(), 'the XDG slot round-trips');
+        } finally {
+            if ($savedXdg === false) {
+                putenv('XDG_CONFIG_HOME');
+            } else {
+                putenv('XDG_CONFIG_HOME=' . $savedXdg);
+            }
+            $dir = $xdgDir . '/candy-minesweeper';
+            if (is_dir($dir)) {
+                foreach (new \FilesystemIterator($dir, \FilesystemIterator::SKIP_DOTS) as $leftover) {
+                    @unlink((string) $leftover);
+                }
+                @rmdir($dir);
+            }
+            @rmdir($xdgDir);
+        }
+    }
 }

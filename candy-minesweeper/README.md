@@ -33,7 +33,7 @@ The two shapes are mutually exclusive: a preset flag together with positional di
 
 Custom board arguments are validated through `CustomDifficulty::fromInput()`: each side must be 2–50 and the mine count must leave a safe 3×3 first-click area (`1 ≤ mines ≤ width × height − 9`). Out-of-range values exit with an error rather than starting a broken game.
 
-The board renders in full — there is no scrolling viewport — and the help footer is about 70 columns wide. `EXPERT` (30×16) fits a standard 80×24 terminal comfortably; wide-square custom boards (towards the 50×50 bound) clip in short terminals. Resize-aware viewport fitting is open product work.
+The board renders in full — there is no scrolling viewport — and the help footer fits 80 columns in every shipped locale (guarded by `FooterWidthGuardTest`). `EXPERT` (30×16) fits a standard 80×24 terminal comfortably; wide-square custom boards (towards the 50×50 bound) clip in short terminals. Resize-aware viewport fitting is open product work.
 
 **Stats persistence** is opt-in. Set `CANDY_MINESWEEPER_STATS=/path/to/stats.json` and each completed game's outcome (games, wins, best time per preset) is recorded there via `DifficultyStats`, surviving across sessions. The default 10×10/12 board is the `STANDARD` preset, so default games tally too. Boards whose shape matches no preset (explicit custom dimensions) are played without recording — best-times are per-preset, and a mixed-size bucket would make them meaningless (custom games still freeze the end-of-game clock so `elapsed()` reports the real time). Without the env var the game stays entirely in-memory. Concurrent instances sharing one file resolve last-writer-wins: each save is flock-guarded and whole, but an earlier instance's tally can be overwritten — point parallel sessions at separate paths. The pre-rename variable `CANDY_MINES_STATS` is still read, with a deprecation warning. <!-- @rename-keep -->
 
@@ -45,19 +45,22 @@ The board renders in full — there is no scrolling viewport — and the help fo
 | `Space` / `Enter`  | Reveal cell                      |
 | `f`                | Toggle flag                      |
 | Right-click        | Toggle flag (mouse)              |
-| `c` / middle-click | Chord — reveal safe neighbors    |
+| `c` / middle-click | Open around flags (chord)      |
 | `S`                | Save the live game to the slot   |
 | `L`                | Load the saved game              |
 | `r`                | Restart with new mines           |
 | `q` / `Esc` / `Ctrl+C` | Quit                         |
 
-Flagged cells render as a bright `F` and the cursor as reverse video, so board semantics survive even when adjacent-count colors are hard to distinguish — the number palette leans on hue differences.
+Ctrl- and Alt-modified letters are inert (only Ctrl+C quits), so editor
+muscle-memory cannot restart or save the game by accident.
+
+Flagged cells render as a bright `F` (a wrong flag is revealed as `✗` once the board is blown, and missed mines light up in red), and the cursor as reverse video, so board semantics survive even when adjacent-count colors are hard to distinguish — the number palette leans on hue differences.
 
 ## Save / resume
 
 `S` writes the live game to a single save slot; `L` restores it, at any point — including after a win or loss, so you can replay the exact board you saved. Saving is refused once the board is over (the last live position keeps the slot).
 
-The slot is `~/.config/candy-minesweeper/savegame.json`, written mode `0600` through sugar-core's `AtomicJsonFile` (flock sidecar, temp + `fsync` + rename — a crash never yields a half-written save). The payload wraps `Board::serialize()`'s versioned JSON with cursor position and elapsed time; `Board::unserialize()` re-validates every shape and refuses tampered or foreign-version payloads, so a hand-edited slot degrades to "load refused, game untouched" instead of a corrupt board. With `HOME` unset, or an unreadable slot, save and load are quiet no-ops — the game never dies over its save file.
+The slot is `$XDG_CONFIG_HOME/candy-minesweeper/savegame.json` when `XDG_CONFIG_HOME` is set and `~/.config/candy-minesweeper/savegame.json` otherwise, written mode `0600` through sugar-core's `AtomicJsonFile` (flock sidecar, temp + `fsync` + rename — a crash never yields a half-written save). The payload wraps `Board::serialize()`'s versioned JSON with cursor position and elapsed time; `Board::unserialize()` re-validates every shape and refuses tampered or foreign-version payloads, so a hand-edited slot degrades to "load refused, game untouched" instead of a corrupt board. With `HOME` unset, or an unreadable slot, save and load are quiet no-ops — the game never dies over its save file.
 
 ## Language
 

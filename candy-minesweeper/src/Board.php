@@ -128,7 +128,13 @@ final class Board
         );
     }
 
-    /** @param \Closure(int):int $rand */
+    /**
+     * @param \Closure(int):int $rand  The shuffle's sole source of randomness:
+     *        called once per Knuth step with the current index as the INCLUSIVE
+     *        upper bound (n-1 down to 1) and expected to answer an int in
+     *        [0, $max]. A deterministic closure therefore yields a
+     *        deterministic layout — tests rely on exactly that contract.
+     */
     private function placeMines(int $sx, int $sy, \Closure $rand): self
     {
         // Collect every (x, y) outside the safe 3×3 around (sx, sy).
