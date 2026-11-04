@@ -3127,10 +3127,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // the destructor chain, and Bootstrap's MCP-server stop hook runs
             // as a register_shutdown_function callback. The DEC private-mode
             // releases (kitty keyboard pop, mouse off, alt-screen leave,
-            // cursor show) are NOT sugar-core's — they are written by
-            // bin/candy-code's own $terminalWasRun shutdown guard, which is
-            // the layer that owns them. See installInterruptHandlers()'s
-            // doc-block.
+            // cursor show) are sugar-core's own: bin arms the library's
+            // shutdown backstop before run() (armTerminalRelease — X-CORE1 /
+            // OD-17 retired bin's hand-rolled $terminalWasRun guard, which
+            // this comment used to credit), so this exit() still restores
+            // through the single authoritative release path. See
+            // installInterruptHandlers()'s doc-block.
             exit($signo === \SIGINT ? 130 : 143);
         };
 
