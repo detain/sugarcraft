@@ -357,7 +357,7 @@ final class SessionSubcommandsTest extends TestCase
         $decoded = json_decode(trim($out), true);
         self::assertIsArray($decoded, "stdout was not a JSON envelope: {$out}");
         self::assertFalse($decoded['result']['opened'] ?? 'unset', $out);
-        self::assertStringContainsString('session store cannot open its database', $out);
+        self::assertStringContainsString('cannot open the session store', $out);
 
         file_put_contents($this->home . '/transcript.jsonl', "{\n");
 

@@ -967,13 +967,14 @@ final class Subcommands
      * (not-a-database, unwritable directory, locked past the busy timeout)
      * surfaces as one; anything else is a bug and stays loud.
      *
-     * The notice reuses the shipped `cli.doctor.pdo_unusable` line, the one
-     * rostered string whose subject is exactly this failure; this wave does
-     * not open lang/, so a dedicated session-verb key is a LANG REQUEST, not
-     * an inline invention. The JSON arm carries a degraded RESULT document
-     * (the `usage` shape) rather than a new `error.type`, because that
-     * promotion would owe README.md's error-contract lines — the same law
-     * {@see self::refuseLiveLockedSession()} records as a DOC-ROW. Under the
+     * The notice reads its own catalogue line, `cli.session.store_unavailable`
+     * — the CC-QA-1 wave's LANG REQUEST, minted when the closeout lang window
+     * opened: this failure stated plainly plus the hint to run
+     * `candy-code doctor` for the diagnosis. The JSON arm carries a degraded
+     * RESULT document (the `usage` shape) rather than a new `error.type`,
+     * because that promotion would owe README.md's error-contract lines —
+     * the same law {@see self::refuseLiveLockedSession()} records as a
+     * DOC-ROW. Under the
      * text format stdout is left for the answer that will not come; the
      * notice rides stderr like every sibling failure here.
      *
@@ -985,7 +986,7 @@ final class Subcommands
         try {
             return Bootstrap::sessionStore();
         } catch (\PDOException $e) {
-            $notice = Lang::t('cli.doctor.pdo_unusable', ['error' => $e->getMessage()]);
+            $notice = Lang::t('cli.session.store_unavailable', ['error' => $e->getMessage()]);
 
             \fwrite(\STDERR, 'candy-code: ' . $notice . "\n");
             if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
