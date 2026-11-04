@@ -941,6 +941,26 @@ final class Message implements \JsonSerializable
     }
 
     /**
+     * A copy of this row with $content swapped in and every other field —
+     * the row-identity token included — carried through {@see mutate()}.
+     *
+     * PHPD-02 (reviews-1103): the compaction rescue used to enumerate this
+     * row's fields by hand inside CompactionService::messageWithContent(),
+     * and the list silently re-defaulted whatever field it had not yet
+     * learned — recorded twice (O-2 thinking rows; C-CTX-6.e recall titles),
+     * and 1.B-1/1.B-2 dropped five fields outright before 1.B-3. Riding the
+     * single mutate() carrier makes a field added to the constructor carry
+     * by construction; {@see
+     * \SugarCraft\Code\Tests\MessageWithContentFieldCensusTest} reflects
+     * every public field and refuses one that stops surviving the swap, so
+     * the carrier list itself cannot rot quietly either.
+     */
+    public function withContent(string $content): self
+    {
+        return $this->mutate(['content' => $content]);
+    }
+
+    /**
      * Fold a settled engine reply's {@see $turnTranscript} into the history
      * the turn ran over (roadmap 1.B-2), so the next request replays the turn
      * as it happened - each step's assistant row with its `tool_calls`, its

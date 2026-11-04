@@ -388,6 +388,9 @@ final class UsageWiringTest extends TestCase
             // CTX-2 (w2a): the document attachment row — the file it names was
             // billed for the turn that grew it.
             'attachDocument' => $base->attachDocument('/tmp/x.pdf'),
+            // PHPD-02 (reviews-1103): the compaction rescue's carrier is this
+            // wither now — a truncated copy of a billed row must keep its bill.
+            'withContent' => $base->withContent('rescued body'),
         ];
 
         $reflected = [];

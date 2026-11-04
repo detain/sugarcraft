@@ -2434,18 +2434,23 @@ final class CompactionService
      * A copy of $message with $content swapped in and EVERY other field carried
      * across verbatim.
      *
-     * {@see Message} is immutable and exposes no withContent() — adding one
-     * would touch Message.php, which is outside this step's scope — so the
-     * intra-exchange rescue's field-preserving copy lives here, mirroring the
-     * withReasoning()/withImage()/withUsage() copies in {@see Message} itself.
-     * THE FIELD LIST IS SPOKEN OUT IN FULL ON PURPOSE AND IS A MAINTENANCE
-     * CONTRACT: if Message ever gains a field, this method must gain it in the
-     * same change, or the rescue silently drops that field — the exact class of
-     * metadata loss (review cycle 4, finding 2) this helper exists to prevent,
-     * just one field at a time. It happened once: 1.B-1 added id, ref, stepId
-     * and userVisible and 1.B-2 turnTranscript, and the copy dropped all five
-     * until 1.B-3; `CompactionHidesNotDeletesTest` now compares this list with
-     * Message's constructor, so the next field cannot slip by.
+     * THE FIELD LIST IS GONE (PHPD-02, reviews-1103). This used to be a
+     * hand-enumerated ~30-field `new Message(...)` restatement of
+     * {@see Message::mutate()}'s carrier, kept here only because adding a
+     * withContent() to Message "would touch Message.php, which is outside
+     * this step's scope" — a step-scoped excuse that outlived its step. The
+     * list was a maintenance contract, and it went stale twice anyway (O-2
+     * thinking rows; C-CTX-6.e recall titles), exactly the class of metadata
+     * loss it existed to prevent — 1.B-1/1.B-2 had dropped id, ref, stepId,
+     * userVisible and turnTranscript outright before 1.B-3. The copy is
+     * {@see Message::withContent()} now: one wither, one carrier, so a
+     * field added tomorrow rides automatically. The law that keeps the
+     * carrier honest is `MessageWithContentFieldCensusTest`, which derives
+     * every public field from Message's constructor by reflection and
+     * refuses any that stops surviving a content swap;
+     * `CompactionHidesNotDeletesTest` still walks the full non-default
+     * fixture through this entry point (via Chat's delegating twin), so the
+     * rescue path end to end stays pinned.
      *
      * Since ISS-016 the caller does NOT put this copy in the original's place:
      * the rescue hides instead of rewriting in place, so the full original stays
@@ -2460,51 +2465,7 @@ final class CompactionService
      */
     public static function messageWithContent(Message $message, string $content): Message
     {
-        return new Message(
-            role: $message->role,
-            content: $content,
-            createdAt: $message->createdAt,
-            attachments: $message->attachments,
-            toolCalls: $message->toolCalls,
-            toolResults: $message->toolResults,
-            pendingToolCallId: $message->pendingToolCallId,
-            reasoning: $message->reasoning,
-            imageBytes: $message->imageBytes,
-            imageProtocol: $message->imageProtocol,
-            usage: $message->usage,
-            lengthStopped: $message->lengthStopped,
-            // F2: the harness's own ceiling verdict rides the same seam.
-            stepsTruncated: $message->stepsTruncated,
-            pendingToolArguments: $message->pendingToolArguments,
-            pendingToolName: $message->pendingToolName,
-            uiOnly: $message->uiOnly,
-            loopGuardStoppedBy: $message->loopGuardStoppedBy,
-            attachmentNotice: $message->attachmentNotice,
-            // Roadmap 1.B-1/1.B-2: the row is the same row with shorter
-            // content, so it keeps its storage identity, the engine step that
-            // produced it (without which the next request replays a truncated
-            // tool result as prose, unpaired from its call) and whether the
-            // transcript paints it.
-            id: $message->id,
-            ref: $message->ref,
-            stepId: $message->stepId,
-            userVisible: $message->userVisible,
-            turnTranscript: $message->turnTranscript,
-            contextLedger: $message->contextLedger,
-            // ISS-097: the failure paint is a property of the row, not of its
-            // length - truncating the content must not re-label an error.
-            error: $message->error,
-            // §7 closeout: the two later additive columns were left out of
-            // this field list when they landed (O-2 thinking rows; C-CTX-6.e
-            // recall titles), which the old all-empty fixtures could not
-            // see. A truncated copy of a thinking row lost its blocks and a
-            // truncated recall notice silently lost its expand affordance.
-            thinkingBlocks: $message->thinkingBlocks,
-            recallTitles: $message->recallTitles,
-            // O-2b: the live-row identity token, so the store sees the same
-            // row and does not spend a fresh ref on the truncated copy.
-            rowKey: $message->rowKey(),
-        );
+        return $message->withContent($content);
     }
 
     /** Rows at the end of a refused conversation the overflow retry keeps verbatim. */
