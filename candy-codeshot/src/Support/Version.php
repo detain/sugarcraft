@@ -25,6 +25,11 @@ final class Version
     /** A bare, comparable release once TAG_PREFIX and `v` are removed. */
     private const COMPARABLE = '/^\d+\.\d+\.\d+$/';
 
+    /**
+     * CI rolling-build stamps: 'dev-' + 7..40 hex commit characters.
+     */
+    private const DEV = '/^dev-[0-9a-f]{7,40}$/';
+
     private function __construct()
     {
     }
@@ -45,8 +50,9 @@ final class Version
     /**
      * Read and normalize the version stamp inside an archive, or null when the
      * path is empty, is not a file, is not a readable phar, or its stamp does
-     * not parse as a comparable release. Every failure mode falls back to null
-     * rather than throwing — a corrupt archive must not crash --version.
+     * not parse as a comparable release or a dev-<sha> build stamp. Every
+     * failure mode falls back to null rather than throwing — a corrupt archive
+     * must not crash --version.
      */
     public static function fromPharMetadata(string $archivePath): ?string
     {
@@ -65,7 +71,17 @@ final class Version
             return null;
         }
 
-        $stamped = $metadata['version'];
+        return self::normalizeVersion($metadata['version']);
+    }
+
+    /**
+     * Shared normalization for release and CI-dev build stamps: strips the
+     * release-tag prefix and an optional 'v', then accepts either a comparable
+     * release or a dev-<sha> stamp. Describe forms and 'dev-build' stay
+     * unreportable and render as {@see CURRENT}.
+     */
+    private static function normalizeVersion(string $stamped): ?string
+    {
         if (str_starts_with($stamped, self::TAG_PREFIX)) {
             $stamped = substr($stamped, strlen(self::TAG_PREFIX));
         }
@@ -73,6 +89,7 @@ final class Version
             $stamped = substr($stamped, 1);
         }
 
-        return preg_match(self::COMPARABLE, $stamped) === 1 ? $stamped : null;
+        return preg_match(self::COMPARABLE, $stamped) === 1
+            || preg_match(self::DEV, $stamped) === 1 ? $stamped : null;
     }
 }

@@ -9,7 +9,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * Lockstep guard: the argv parser, the English usage text and the README
  * flag section must list exactly the same set of flag spellings. Adding a
- * flag to one surface without the other two is a documentation lie.
+ * flag to the CLI without documenting it (or documenting one that does not
+ * exist) reddens this file rather than shipping the drift.
  */
 final class OptionsRosterTest extends TestCase
 {
@@ -61,12 +62,10 @@ final class OptionsRosterTest extends TestCase
         $readme = file_get_contents(__DIR__ . '/../README.md');
         self::assertIsString($readme);
         $parts = preg_split('/^### Flags$/m', $readme);
+        self::assertIsArray($parts);
         self::assertCount(2, $parts, 'README must carry exactly one "### Flags" heading');
-        $body = $parts[1];
-        $end  = strpos($body, "\n### ");
-        if ($end !== false) {
-            $body = substr($body, 0, $end);
-        }
+        $end = strpos($parts[1], "\n### ");
+        $body = $end === false ? $parts[1] : substr($parts[1], 0, $end);
         preg_match_all('/`(-{1,2}[A-Za-z][A-Za-z0-9-]*)/', $body, $m);
         $flags = array_values(array_unique($m[1]));
         sort($flags);
@@ -76,11 +75,19 @@ final class OptionsRosterTest extends TestCase
 
     public function testUsageListsEveryParserFlagAndNothingMore(): void
     {
-        $this->assertSame(self::binFlags(), self::usageFlags());
+        $this->assertSame(
+            self::binFlags(),
+            self::usageFlags(),
+            'cli.usage and the argv parser disagree on the flag roster',
+        );
     }
 
     public function testReadmeListsEveryParserFlagAndNothingMore(): void
     {
-        $this->assertSame(self::binFlags(), self::readmeFlags());
+        $this->assertSame(
+            self::binFlags(),
+            self::readmeFlags(),
+            'README "### Flags" and the argv parser disagree on the flag roster',
+        );
     }
 }
