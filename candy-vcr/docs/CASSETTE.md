@@ -37,7 +37,7 @@ cassette.
 | `cols` | `int` | Initial terminal columns. Overridden by the first `resize` event if present. |
 | `rows` | `int` | Initial terminal rows. Overridden by the first `resize` event if present. |
 | `runtime` | `string` | Identifier of the recording runtime — e.g. `sugarcraft/candy-vcr@record`. |
-| `timestampMode` | `string` | Optional. `absolute` (default) or `relative` (interval-since-previous-event, asciinema v3 style). |
+| `timestampMode` | `string` | Optional. `absolute` (default) or `relative` (interval-since-previous-event, the delta style asciinema casts use). |
 | `env` | `object` | Optional. Captured host environment, filtered through the secret regex (`/(SECRET\|TOKEN\|KEY\|PASSWORD\|API\|CRED\|AUTH\|PRIV)/i` by default). `record --env-all` captures the full host environment unfiltered — cassette files are written `0600` (owner only) for precisely this reason, by every writer including `migrate`. |
 | `typingSpeed` | `number` | Optional. Milliseconds between typed keystrokes, carried from a `.tape`'s `Set TypingSpeed`. Absent on cassettes recorded from a live PTY. |
 | `theme` | `string` | Optional. VHS theme name carried from a `.tape`'s `Set Theme`. Absent on cassettes recorded from a live PTY. |
@@ -59,7 +59,7 @@ The full set of kinds is the `EventKind` enum: `output`, `input`,
 Every event line contains at least one timestamp and `k` (event kind).
 Absolute-mode cassettes carry `t` (seconds since cassette start, ms
 precision); relative-mode cassettes (`"timestampMode":"relative"`,
-asciinema v3 style) carry `dt` (interval since the previous event)
+asciinema-cast style) carry `dt` (interval since the previous event)
 instead:
 
 ```jsonl

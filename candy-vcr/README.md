@@ -2,14 +2,14 @@
 
 Cassette recorder / replayer for sugar-core `Program`s **and** a
 `.tape` → `.gif` terminal-demo renderer for PHP 8.3+. Pairs with
-[sugar-vterm](../sugar-vterm/) — every frame
+[sugar-vterm](https://github.com/detain/sugar-vterm) — every frame
 fed to the GIF encoder is a `SugarCraft\Vterm\Snapshot` taken off
 sugar-vterm's `Terminal`.
 
 Records every Msg fed into a sugar-core `Program` and every frame emitted by
 `view()`, with timing, into a cassette file. Replays cassettes by feeding the
 recorded Msgs back at recorded cadence and asserting frames match (cell-grid
-equality via [sugar-vterm](../sugar-vterm/), with byte-equality fallback).
+equality via [sugar-vterm](https://github.com/detain/sugar-vterm), with byte-equality fallback).
 
 ## Contents
 
@@ -71,10 +71,13 @@ composer require sugarcraft/candy-vcr
 
 ### Cassette formats
 
-candy-vcr ships five cassette serializers, each tuned for a different
+candy-vcr ships five cassette codecs, each tuned for a different
 trade-off between human-readability, file size, and toolchain interop.
-All five share the same `Cassette` value-object model and are
-interchangeable via the `Format` interface.
+All five produce the same `Cassette` value object, but only four of them
+implement the `Format` interface (`JsonlFormat`, `CompressedJsonlFormat`,
+`RelativeFormat`, `YamlFormat`) and can be dropped into a `Format` slot.
+`AsciinemaFormat` is an importer: it exposes `read()` only, never
+`write()`/`encode()`, and is not a `Format`.
 
 | Format | File extension | When to pick it | Trade-offs |
 |--------|----------------|-----------------|-----------|
@@ -82,7 +85,7 @@ interchangeable via the `Format` interface.
 | **`CompressedJsonlFormat`** | `.cas.gz` | Long recordings, CI artifact storage. | Gzipped JSONL. 5–10× smaller on disk; still streams (per-line flush). Loses git-diff friendliness. |
 | **`RelativeFormat`** | `.cas` (with `dt` field) | Deterministic replay; cassettes meant to be edited by hand. | Delta timestamps (interval since previous event). Easier to reason about edits — no need to re-shift downstream `t` values. |
 | **`YamlFormat`** | `.yaml`, `.yml` | Test fixtures where the cassette is hand-authored. | Human-editable, indented. Largest on disk; slowest to parse. Lowest priority for production recordings. |
-| **`AsciinemaFormat`** | `.cast` | Importing existing asciinema v3 recordings. | Read-only interop with `asciinema cat`/`asciinema play`. Stdin events become raw-byte inputs (no Msg envelope round-trip). |
+| **`AsciinemaFormat`** | `.cast` | Importing existing asciinema recordings. | Read-only importer (not a `Format`): accepts cast v2 (asciinema's own output, top-level `width`/`height`) and the v3 header that nests them under `term`. Stdin events become raw-byte inputs; unknown event types are skipped. Never writes `.cast`. |
 
 **Auto-detection.** `Player::loadAny()` and the CLI commands
 (`inspect`, `replay`, `diff`, `stats`) accept either a cassette or a
@@ -169,7 +172,9 @@ for large cassettes.
 
 ### Asciinema import
 
-Import asciinema v3 cast files as candy-vcr Cassettes for replay:
+Import asciinema cast files as candy-vcr Cassettes for replay. Both cast
+shapes are accepted: v2 (what `asciinema rec` writes, with the terminal size
+at the top level) and the v3 header that nests it under `term`:
 
 ```php
 use SugarCraft\Vcr\Format\AsciinemaFormat;
@@ -195,7 +200,7 @@ The core types in `SugarCraft\Vcr\`:
 | `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`, `Snapshot`, `Hide`, `Show`. |
 | `Recorder` | Record-side. Construct via `Recorder::open($path)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets. Methods: `withFormat(Format)`, `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`. Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry`. Env filtering is `RecordCommand::filteredHostEnv()` — see the record options below. |
 | `Player` | Replay-side. Factories: `Player::open($path)` (content-sniffs the second line — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`; the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
-| `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`, `AsciinemaFormat` (read-only). |
+| `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`. `AsciinemaFormat` is a read-only importer with `read()` only and implements nothing. |
 | `Format\CassetteLoader` | `load($path): Cassette` — auto-detects cassette vs tape source. `isTape($path): bool` — exposes the sniff. |
 | `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `$diff: string` (empty when `ok`; the assertion diff otherwise), `$eventCount`, `$inputCount`, `$resizeCount`, `$outputCount`, `$quitCount`, `$programQuitCleanly: bool`; helper `diffSummary(): string`. |
 
@@ -966,7 +971,7 @@ renderer-only REP, and the explicit `CSI 0 L/M` count no-op that sugar-ansi-pars
 explicit tripwire case with a fix pointer rather than left to surface as a
 mystery assertion failure.
 
-`ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [sugar-vterm](../sugar-vterm/)) is the recommended choice for round-trip tests:
+`ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [sugar-vterm](https://github.com/detain/sugar-vterm)) is the recommended choice for round-trip tests:
 
 ```php
 use SugarCraft\Vcr\Assert\ScreenAssertion;
@@ -1056,7 +1061,10 @@ $envelope = $registry->encode($msg);  // ['@type' => 'KeyMsg', …] or null
 $decoded  = $registry->decode($envelope);  // Msg|null
 ```
 
-Custom serializers slot in via `$registry->register(new MyOne())`.
+Custom serializers slot in via `$registry->register(new MyOne())`, which
+appends them at the lowest priority. Because `JsonableSerializer` is a
+catch-all, a codec that must handle a `\JsonSerializable` Msg instead
+goes in with `$registry->registerFirst(new MyOne())`.
 
 ## Visual regression goldens
 

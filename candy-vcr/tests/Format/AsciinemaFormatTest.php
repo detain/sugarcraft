@@ -78,14 +78,48 @@ final class AsciinemaFormatTest extends TestCase
         }
     }
 
-    public function testInvalidVersionThrows(): void
+    /**
+     * Cast v2 — the shape asciinema itself writes — must import. Pinning the
+     * old refusal here would document a promise the README cannot keep, so
+     * this test now asserts the acceptance and the top-level dimensions.
+     */
+    public function testReadRealWorldV2CastWithTopLevelDims(): void
     {
         $path = $this->writeCastFile([
-            '{"version": 2, "term": {"width": 80, "height": 24}}',
+            '{"version": 2, "width": 100, "height": 30, "timestamp": 1700000000, "idle_time_limit": 1.5, "title": "demo"}',
+            '[0.0, "o", "$ "]',
+            '[1.25, "i", "ls\r"]',
+            '[0.5, "r", "ignored-by-design"]',
+            '[2.0, "x", 0]',
+        ]);
+
+        try {
+            $cassette = $this->format->read($path);
+
+            $this->assertSame(100, $cassette->header->cols);
+            $this->assertSame(30, $cassette->header->rows);
+            $this->assertSame('asciinema/v2', $cassette->header->runtime);
+            $this->assertSame('2023-11-14T22:13:20Z', $cassette->header->createdAt);
+
+            // The unknown `r` arm is skipped; the three known kinds survive.
+            $this->assertSame(3, $cassette->eventCount());
+            $this->assertSame(EventKind::Output, $cassette->events[0]->kind);
+            $this->assertSame(EventKind::Input, $cassette->events[1]->kind);
+            $this->assertSame(EventKind::Quit, $cassette->events[2]->kind);
+            $this->assertEqualsWithDelta(1.25, $cassette->events[1]->t, 0.001);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testUnsupportedVersionThrows(): void
+    {
+        $path = $this->writeCastFile([
+            '{"version": 1, "width": 80, "height": 24}',
         ]);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('asciinema format version 2 not supported');
+        $this->expectExceptionMessage('asciinema format version 1 not supported (only v2 and v3)');
 
         try {
             $this->format->read($path);

@@ -59,7 +59,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Cassette format</strong><span>JSONL (absolute <code>t</code>) or RelativeFormat (delta <code>dt</code>, asciinema v3 style), YAML secondary (hand-written test fixtures). Both round-trip through the same <code>Cassette</code> value object; <code>Player::open()</code> auto-detects format.</span></div>
+      <div class="feature"><strong>Cassette format</strong><span>JSONL (absolute <code>t</code>) or RelativeFormat (delta <code>dt</code>, asciinema-cast style), YAML secondary (hand-written test fixtures). Both round-trip through the same <code>Cassette</code> value object; <code>Player::open()</code> auto-detects format.</span></div>
       <div class="feature"><strong>Recorder hook</strong><span><code>Program::withRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
       <div class="feature"><strong>Msg serializers</strong><span>17 builtin Msg types (KeyMsg, MouseMsg×4, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are sugar-vterm CSI I/O focus events that round-trip through VCR.</span></div>
       <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
@@ -96,7 +96,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
 <tr><td>Player</td><td>play(factory, assertion)</td><td>Replay session with assertion</td></tr>
 <tr><td>ByteAssertion</td><td>new()</td><td>Strict byte-equality assertion</td></tr>
 <tr><td>ScreenAssertion</td><td>new(cols, rows)</td><td>Cell-grid equality assertion</td></tr>
-<tr><td>RelativeFormat</td><td>new()</td><td>Delta-time (<code>dt</code>) format — asciinema v3 compatible; easier manual editing</td></tr>
+<tr><td>RelativeFormat</td><td>new()</td><td>Delta-time (<code>dt</code>) format — the style asciinema casts use; easier manual editing</td></tr>
 <tr><td>Cassette</td><td>eventCount()</td><td>Number of recorded events; the events themselves ride the readonly <code>$events</code> property</td></tr>
 </table>
   </div>

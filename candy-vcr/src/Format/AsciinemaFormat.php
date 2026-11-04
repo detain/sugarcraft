@@ -11,12 +11,21 @@ use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Support\Scalars;
 
 /**
- * Import asciinema v3 cast files as candy-vcr Cassette objects.
+ * Import asciinema cast files (`.cast`) as candy-vcr Cassette objects.
  *
- * Supports the asciinema v3 format which uses:
- * - Header with version, terminal dimensions, timestamp
- * - Event lines: [relative_time, event_type, data]
- * - Event types: 'o' (stdout), 'i' (stdin), 'x' (exit)
+ * Both cast shapes on the wire are accepted:
+ * - **v2** — what asciinema itself writes: `version: 2` with the terminal
+ *   size at the top level (`width` / `height`), plus optional `idle_time_limit`.
+ * - **v3** — the nested `term: {width, height}` header variant.
+ *
+ * Event lines are `[relative_time, event_type, data]` in both versions;
+ * `o` (stdout) becomes an Output event, `i` (stdin) an Input event and `x`
+ * a Quit. Any other event type is skipped, so a cast carrying resize or
+ * marker lines imports the session bytes without those extras.
+ *
+ * Import is one-way: candy-vcr never writes `.cast`, and the Msg envelopes
+ * a cassette can carry (`@type`-tagged key/mouse/paste events) have no
+ * asciinema counterpart — an imported cast replays as raw bytes only.
  *
  * Usage:
  * ```php
@@ -24,18 +33,15 @@ use SugarCraft\Vcr\Support\Scalars;
  * $player = new Player($cassette);
  * // replay with candy-vcr
  * ```
- *
- * Note: asciinema stdin events ('i') are stored as raw byte input events.
- * The asciinema format does not preserve message type information.
  */
 final class AsciinemaFormat
 {
     /**
-     * Read an asciinema v3 cast file and return a Cassette.
+     * Read an asciinema cast file and return a Cassette.
      *
      * @param string $path Path to .cast file (optionally gzipped)
      * @return Cassette
-     * @throws \InvalidArgumentException If the file is not valid asciinema v3
+     * @throws \InvalidArgumentException If the file is not a valid asciinema v2/v3 cast
      */
     public function read(string $path): Cassette
     {
@@ -55,19 +61,23 @@ final class AsciinemaFormat
         }
 
         $version = $headerData['version'] ?? null;
-        if ($version !== 3) {
+        // Cast v2 is what asciinema actually ships; v3 nests the size under
+        // `term`. Accepting only v3 rejected every real .cast file.
+        if ($version !== 2 && $version !== 3) {
             fclose($handle);
             // Non-scalar versions cannot interpolate to text — name their type instead.
             $label = is_scalar($version) || $version === null ? (string) $version : get_debug_type($version);
             throw new \InvalidArgumentException(
-                "asciinema format version {$label} not supported (only v3): {$path}",
+                "asciinema format version {$label} not supported (only v2 and v3): {$path}",
             );
         }
 
-        // Malformed `term` shapes degrade to defaults exactly as nested `?? 80`/`?? 24` did.
+        // v2 carries width/height at the top level; v3 nests them under `term`.
+        // Malformed shapes in either arm degrade to the 80x24 defaults exactly
+        // as the previous nested `?? 80`/`?? 24` did.
         $term = is_array($headerData['term'] ?? null) ? $headerData['term'] : [];
-        $cols = Scalars::int($term['width'] ?? 80, 'asciinema term.width');
-        $rows = Scalars::int($term['height'] ?? 24, 'asciinema term.height');
+        $cols = Scalars::int($headerData['width'] ?? $term['width'] ?? 80, 'asciinema terminal width');
+        $rows = Scalars::int($headerData['height'] ?? $term['height'] ?? 24, 'asciinema terminal height');
         $createdAt = isset($headerData['timestamp'])
             ? gmdate('Y-m-d\TH:i:s\Z', Scalars::int($headerData['timestamp'], 'asciinema timestamp'))
             : gmdate('Y-m-d\TH:i:s\Z');
@@ -92,7 +102,7 @@ final class AsciinemaFormat
                 createdAt: $createdAt,
                 cols: $cols,
                 rows: $rows,
-                runtime: 'asciinema/v3',
+                runtime: 'asciinema/v' . (string) $version,
             ),
             $events,
         );
