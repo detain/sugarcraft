@@ -33,6 +33,19 @@ const canAnswer = computed(() => connection.scopes.includes('approve'))
 const liveText = computed(() => state.value.live?.text ?? '')
 const liveReasoning = computed(() => state.value.reasoning?.text ?? '')
 /**
+ * CW-EN-EU02: the newest steer-notice key the transcript holds (null before
+ * the first steer ever). QueueStrip keys its one-shot fade on this, so each
+ * new steer remounts the flash; an old steer riding in from history replay
+ * fades once on open — harmless, attention-grabbing, self-clearing.
+ */
+const lastSteerKey = computed<string | null>(() => {
+  for (let index = state.value.items.length - 1; index >= 0; index = index - 1) {
+    const item = state.value.items[index]
+    if (item?.kind === 'notice' && item.key.startsWith('steered:')) return item.key
+  }
+  return null
+})
+/**
  * ISS-108: the streaming tail is plain pre-wrap text, not markdown re-parsed
  * per token, and nothing with `aria-live` watches it — a polite region fed
  * every delta spams screen readers. The announcement fires once, when the
@@ -327,7 +340,7 @@ async function fetchOlderTranscript(): Promise<string | null> {
     </Transcript>
     <p class="sr-only" role="status" aria-live="polite" data-testid="reply-announcement">{{ finishedReply }}</p>
     <div class="dock">
-      <QueueStrip :queue="state.queue" @remove="dequeue" @refresh="refreshQueue" />
+      <QueueStrip :queue="state.queue" :flash-key="lastSteerKey" @remove="dequeue" @refresh="refreshQueue" />
       <p v-if="error" class="error" role="alert" data-testid="session-error">{{ error }}</p>
       <Composer
         v-model="draft"

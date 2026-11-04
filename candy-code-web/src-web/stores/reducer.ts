@@ -654,6 +654,18 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
       break
     }
 
+    case 'turn.steered': {
+      // CW-EN-EU02: a mid-turn steer arrives as a durable frame whose payload
+      // carries only {steerId, turnId} — the steered text never crosses the
+      // wire. Until the web i18n chain opens a key for prose (filed as
+      // LANG REQUEST web.transcript.steered), the fold is the tab-arrow glyph
+      // alone: presence without untranslated English, idempotent by steerId
+      // so a replay replaces its own row instead of stacking copies.
+      const { data } = envelope as unknown as Ev<'turn.steered'>
+      upsert(state, { kind: 'notice', key: `steered:${data.steerId}`, level: 'info', content: '⇥' })
+      break
+    }
+
     case 'usage.updated': {
       const { data } = envelope as unknown as Ev<'usage.updated'>
       if (data.turnUsage) {

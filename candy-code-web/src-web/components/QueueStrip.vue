@@ -3,11 +3,18 @@ import { oneLine } from '../lib/format'
 import { t } from '../lib/i18n'
 import type { QueueEntry } from '../protocol/generated'
 
-defineProps<{ queue: QueueEntry[] }>()
+/**
+ * CW-EN-EU02: `flashKey` is the newest steer-notice key SessionView has
+ * seen. Each change remounts the flash node (:key below), restarting the
+ * one-shot fade; it rides beside the queue strip, not inside its v-if, so an
+ * already-drained queue still shows the steer landing.
+ */
+defineProps<{ queue: QueueEntry[]; flashKey?: string | null }>()
 const emit = defineEmits<{ remove: [queueId: string]; refresh: [] }>()
 </script>
 
 <template>
+  <p v-if="flashKey" :key="flashKey" class="steer-flash" data-testid="steer-flash" aria-hidden="true">⇥</p>
   <section v-if="queue.length > 0" class="strip">
     <div class="head">
       <span class="count">{{ t('web.composer.queue_count', { n: queue.length }) }}</span>
@@ -24,6 +31,17 @@ const emit = defineEmits<{ remove: [queueId: string]; refresh: [] }>()
 </template>
 
 <style scoped>
+.steer-flash {
+  margin: 0 0 0.25rem;
+  text-align: right;
+  font-size: 0.875rem;
+  color: var(--accent);
+  animation: steer-fade 2.4s ease-out forwards;
+}
+@keyframes steer-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
 .head {
   display: flex;
   gap: 0.5rem;
