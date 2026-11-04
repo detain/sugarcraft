@@ -85,7 +85,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 - `Buffer::toAnsi(): string` — full-repaint ANSI for the whole grid.
 - `Buffer::text(?Region $region = null): string` — plain-text extraction (continuations skipped).
 - `Buffer::fromString(?string $ansi, int $width, int $height): self` — **test-support** ANSI parser (lossy; see Security); all three arguments are required and non-positive dimensions are refused.
-- `Buffer::fromGrid(int $width, int $height, array $flatGrid): self` — wrap a flat cell list (index = `row*width + col`); positive dimensions and exactly `width*height` cells are enforced, pair law is not.
+- `Buffer::fromGrid(int $width, int $height, array $grid): self` — wrap a flat cell list (index = `row*width + col`); positive dimensions and exactly `width*height` cells are enforced, pair law is not.
 - `Buffer::width(): int`, `Buffer::height(): int`, `Buffer::region(): Region`.
 
 ### Cell
