@@ -101,10 +101,25 @@ function onPageShow(event: PageTransitionEvent): void {
   if (event.persisted) connection.start()
 }
 
+/**
+ * CW-6: a notification click that found this window already open arrives as
+ * a client message from the service worker (see sw.ts `notificationclick`).
+ * The href was validated once in the worker; it is re-validated here because
+ * a message is data, not authority — anything on the page can post one, and
+ * only the session-route shape earns a navigation.
+ */
+function onPushNavigate(event: MessageEvent): void {
+  const data = event.data as { type?: unknown; href?: unknown } | null
+  if (data === null || typeof data !== 'object' || data.type !== 'navigate') return
+  if (typeof data.href !== 'string' || !/^#\/s\/[A-Za-z0-9_-]{1,64}$/.test(data.href)) return
+  void router.push(data.href.slice(1))
+}
+
 onMounted(async () => {
   window.addEventListener('pagehide', onPageHide)
   window.addEventListener('pageshow', onPageShow)
   window.addEventListener('keydown', onHelpKey, true)
+  window.addEventListener('message', onPushNavigate)
   if (code !== null) {
     try {
       await connection.signIn({ code })
@@ -121,6 +136,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pagehide', onPageHide)
   window.removeEventListener('pageshow', onPageShow)
   window.removeEventListener('keydown', onHelpKey, true)
+  window.removeEventListener('message', onPushNavigate)
   stopAttention()
   stopPasteNotice()
 })

@@ -87,3 +87,29 @@ describe('push service worker registration (C-WEB-5.e)', () => {
     expect(read('../App.vue')).not.toContain('serviceWorker.register')
   })
 })
+
+/**
+ * CW-6 (reviews-1103): the focused-window click must reach the page, not just
+ * the window manager. The behaviour lives in push.spec.ts / app.spec.ts (real
+ * dispatched events); these are the structural legs — the branch that posts,
+ * and the page channel that receives, attach, AND detaches. A respell of any
+ * pinned literal is intentional: the paired behaviour tests carry the semantics,
+ * these carry the wiring's presence at its exact seats.
+ */
+describe('notification-click route handoff (CW-6)', () => {
+  it('the worker posts the validated fragment to the focused client', () => {
+    const worker = read('../sw.ts')
+    expect(worker).toContain("if (href !== './') focused.postMessage({ type: 'navigate', href })")
+  })
+
+  it('the app shell answers the worker channel and unbinds it on teardown', () => {
+    const app = read('../App.vue')
+    expect(app).toMatch(/window\.addEventListener\('message', onPushNavigate\)/)
+    expect(app).toMatch(/window\.removeEventListener\('message', onPushNavigate\)/)
+    // The receive-side re-validation is pinned as the exact source literal —
+    // the ^ and $ anchors ride inside the matched text, so a respell (or a
+    // dropped anchor) on either side of the pattern reddens this leg. The
+    // forgery-refusal behaviour is carried live by app.spec.ts.
+    expect(app).toContain("!/^#\\/s\\/[A-Za-z0-9_-]{1,64}$/.test(data.href)")
+  })
+})

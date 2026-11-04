@@ -50,6 +50,7 @@ interface NotificationClickEventLike extends WaitableEventLike {
 interface WindowClientLike {
   focused: boolean
   focus(): Promise<unknown>
+  postMessage(message: unknown): void
 }
 
 interface ClientsLike {
@@ -153,6 +154,13 @@ scope.addEventListener('notificationclick', (event) => {
     const focused = (await clients.matchAll({ type: 'window' })).find((client) => client.focused)
     if (focused !== undefined) {
       await focused.focus()
+      // CW-6: focus alone leaves the app standing wherever it was, so a click
+      // on a "question in session X" card could land on an unrelated view.
+      // Hand the already-validated fragment to the page over the client
+      // channel — the same route a fresh window gets through the URL. './'
+      // means "the app is already in front of you": its current route wins
+      // and no message is posted.
+      if (href !== './') focused.postMessage({ type: 'navigate', href })
       return
     }
     await clients.openWindow(new URL(href, scope.location.href).href)

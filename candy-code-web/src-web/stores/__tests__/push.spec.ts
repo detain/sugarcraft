@@ -340,7 +340,8 @@ describe('push service worker payload handling (C-WEB-5.e)', () => {
   interface Shown { title: string; options?: ShownOptions }
   let shown: Shown[] = []
   let opened: string[] = []
-  let focusedWindow: { focused: boolean; focus: () => Promise<unknown> } | null = null
+  let focusedWindow: { focused: boolean; focus: () => Promise<unknown>; postMessage: (message: unknown) => void } | null = null
+  let posted: unknown[] = []
   let closedCount = 0
 
   async function loadWorker(): Promise<void> {
@@ -348,6 +349,7 @@ describe('push service worker payload handling (C-WEB-5.e)', () => {
     shown = []
     opened = []
     focusedWindow = null
+    posted = []
     closedCount = 0
     Object.defineProperty(window, 'registration', {
       configurable: true,
@@ -490,9 +492,43 @@ describe('push service worker payload handling (C-WEB-5.e)', () => {
     focusedWindow = {
       focused: true,
       focus: async () => { focusedCalls += 1 },
+      postMessage: (message: unknown) => { posted.push(message) },
     }
     await dispatchClick({ href: '#/s/s-42_x' })
     expect(focusedCalls).toBe(1)
     expect(opened.length).toBe(0)
+  })
+
+  it('hands the session route to the focused page instead of only focusing it (CW-6)', async () => {
+    // The defect: the focused branch focused and returned, so a click on a
+    // "question in session X" card left the app standing on whatever route
+    // it happened to hold. The validated fragment must cross to the page.
+    await loadWorker()
+    let focusedCalls = 0
+    focusedWindow = {
+      focused: true,
+      focus: async () => { focusedCalls += 1 },
+      postMessage: (message: unknown) => { posted.push(message) },
+    }
+    await dispatchClick({ href: '#/s/s-42_x' })
+    expect(focusedCalls).toBe(1)
+    expect(posted).toEqual([{ type: 'navigate', href: '#/s/s-42_x' }])
+    expect(opened.length).toBe(0)
+  })
+
+  it('posts nothing when the card says "the app is already in front" (CW-6)', async () => {
+    // './' is the generic/forged-href landing: the page's current route wins,
+    // focus is the whole answer, and a stray navigate would yank a viewer
+    // out of a session they deliberately opened.
+    await loadWorker()
+    focusedWindow = {
+      focused: true,
+      focus: async () => {},
+      postMessage: (message: unknown) => { posted.push(message) },
+    }
+    await dispatchClick({ href: './' })
+    expect(posted).toEqual([])
+    await dispatchClick({ href: 'javascript:alert(1)' })
+    expect(posted).toEqual([])
   })
 })
