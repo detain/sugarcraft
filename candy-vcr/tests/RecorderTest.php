@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Format\RelativeFormat;
 use SugarCraft\Vcr\Recorder;
 use SugarCraft\Vcr\Tests\Support\Stream;
 use SugarCraft\Vcr\Support\ObjectMap;
@@ -354,5 +355,105 @@ final class RecorderTest extends TestCase
             $events[] = ObjectMap::of($data, 'recorded event line');
         }
         return $events;
+    }
+
+    // ----- C3: write errors are counted, never discarded --------------
+
+    /**
+     * A read-only stream resource is the cheapest in-process ENOSPC
+     * stand-in: is_resource() stays true (so the recorder keeps recording
+     * — the E712 best-effort ruling) while every fwrite returns false.
+     * Pre-fix, those false returns were dropped on the floor and the CLI
+     * still announced success; now they are tallied.
+     */
+    public function testFailedWritesAreCountedNotDiscarded(): void
+    {
+        $fh = Stream::memory('rb');
+        $this->assertNotFalse($fh);
+
+        $r = new Recorder($fh, $this->stubHeader());
+        $afterHeader = $r->captureWriteErrors();
+        $this->assertGreaterThanOrEqual(1, $afterHeader, 'failed header line must be counted');
+
+        $r->recordOutput('this write cannot land');
+        $this->assertGreaterThan($afterHeader, $r->captureWriteErrors(), 'each failed event write must count');
+
+        $r->close();
+        $this->assertGreaterThan(0, $r->captureWriteErrors(), 'teardown must not erase the tally');
+        $this->assertNotFalse($fh); // close() consumed it, but the counter survives
+    }
+
+    public function testHealthyCaptureReportsZeroWriteErrors(): void
+    {
+        $fh = $this->memory();
+        $r = new Recorder($fh, $this->stubHeader());
+        $r->recordOutput('fine');
+        $r->recordResize(100, 30);
+        $r->close();
+        $this->assertSame(0, $r->captureWriteErrors());
+    }
+
+    // ----- M5: withFormat confirms the header, never flips it ----------
+
+    public function testHeaderSeedsRelativeLineEncodingWithoutWithFormat(): void
+    {
+        $fh = $this->memory();
+        $header = new CassetteHeader(
+            version: 1,
+            createdAt: '2026-05-08T12:00:00Z',
+            cols: 80,
+            rows: 24,
+            runtime: 'sugarcraft/candy-vcr@dev',
+            timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+        );
+        $r = new Recorder($fh, $header);
+        $r->recordOutput('dt lines from the header contract');
+
+        $events = $this->readEvents($fh);
+        $this->assertArrayHasKey('dt', $events[0], 'relative header must seed dt line encoding');
+        $this->assertArrayNotHasKey('t', $events[0]);
+    }
+
+    public function testRelativeFormatConfirmsRelativeHeader(): void
+    {
+        $fh = $this->memory();
+        $header = new CassetteHeader(
+            version: 1,
+            createdAt: '2026-05-08T12:00:00Z',
+            cols: 80,
+            rows: 24,
+            runtime: 'sugarcraft/candy-vcr@dev',
+            timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+        );
+        $r = new Recorder($fh, $header);
+        $this->assertSame($r, $r->withFormat(new RelativeFormat()));
+    }
+
+    public function testRelativeFormatAgainstAbsoluteHeaderIsRefused(): void
+    {
+        $fh = $this->memory();
+        $r = new Recorder($fh, $this->stubHeader());
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('absolute-timestamp cassette');
+        $r->withFormat(new RelativeFormat());
+    }
+
+    public function testAbsoluteFormatAgainstRelativeHeaderIsRefused(): void
+    {
+        $fh = $this->memory();
+        $header = new CassetteHeader(
+            version: 1,
+            createdAt: '2026-05-08T12:00:00Z',
+            cols: 80,
+            rows: 24,
+            runtime: 'sugarcraft/candy-vcr@dev',
+            timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+        );
+        $r = new Recorder($fh, $header);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('relative-timestamp cassette');
+        $r->withFormat(new JsonlFormat());
     }
 }

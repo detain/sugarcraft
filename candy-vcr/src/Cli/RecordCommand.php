@@ -102,6 +102,13 @@ final class RecordCommand implements Command
         }
 
         $outputPath = $opts['output'] ?? \sprintf(self::DEFAULT_OUTPUT_PATTERN, \date('Ymd-His'));
+        // M10: recording is destructive (fopen 'wb' truncates). Silently
+        // annihilating an existing cassette — possibly the ONLY copy of a
+        // session — was the default behavior; it now requires --force.
+        if (!$opts['force'] && \file_exists($outputPath)) {
+            \fwrite($stderr, "candy-vcr record: refusing to overwrite existing cassette {$outputPath} — pass --force to replace\n");
+            return 2;
+        }
         $cols = $opts['cols'];
         $rows = $opts['rows'];
         $ctty = $opts['ctty'];
@@ -115,8 +122,10 @@ final class RecordCommand implements Command
 
         $savedTermios = null;
         $pair = null;
+        $child = null;
         $recorder = null;
         $exitCode = 1;
+        $frameworkFailed = false;
 
         try {
             $savedTermios = $this->captureHostTermios($stderr);
@@ -172,7 +181,16 @@ final class RecordCommand implements Command
         } catch (\Throwable $e) {
             \fwrite($stderr, "candy-vcr record: {$e->getMessage()}\n");
             $exitCode = 1;
+            $frameworkFailed = true;
         } finally {
+            // M11: the child was spawned BEFORE the recorder opened, so any
+            // failure between spawn and the pump (bad output path, header
+            // rejection, pump construction) used to leave the session
+            // running orphaned. Reap it here with the house bounded ladder
+            // — happy path sees exited() already true and no-ops.
+            if ($child !== null) {
+                self::reapBounded($child);
+            }
             if ($recorder !== null) {
                 $recorder->close();
             }
@@ -192,12 +210,61 @@ final class RecordCommand implements Command
             self::rescueClear();
         }
 
-        \fwrite($stderr, \sprintf(
-            "candy-vcr: recorded %s (exit %d)\n",
-            $outputPath,
-            $exitCode,
-        ));
-        return $exitCode;
+        // mi8 + C3: the unconditional "recorded ... (exit N)" line used to
+        // fire even when the recorder never opened (an error message plus a
+        // fake success notice) or when the tape itself lost writes. Only
+        // announce success when neither happened; force a non-zero status
+        // over an incomplete capture.
+        $captureErrors = $recorder?->captureWriteErrors() ?? 0;
+        if ($captureErrors > 0) {
+            \fwrite($stderr, \sprintf(
+                "candy-vcr record: cassette capture INCOMPLETE (%d failed write(s)) at %s\n",
+                $captureErrors,
+                $outputPath,
+            ));
+        }
+        if (!$frameworkFailed && $captureErrors === 0) {
+            \fwrite($stderr, \sprintf(
+                "candy-vcr: recorded %s (exit %d)\n",
+                $outputPath,
+                $exitCode,
+            ));
+            return $exitCode;
+        }
+        return $exitCode === 0 ? 1 : $exitCode;
+    }
+
+    /**
+     * Bounded reap of the recorded child (M11). If it is still alive —
+     * the failure paths that skip PosixPump entirely, or a pump that died
+     * mid-run — send SIGTERM, poll in 10 ms ticks for up to 2 s, escalate
+     * to SIGKILL, then reap. Never blocks longer than the grace window:
+     * a wedged child must not wedge the recorder too.
+     *
+     * @param \SugarCraft\Pty\Contract\Child $child
+     */
+    private static function reapBounded($child): void
+    {
+        if ($child->exited()) {
+            return;
+        }
+        if (\defined('SIGTERM')) {
+            $child->kill(\SIGTERM);
+            $deadline = \microtime(true) + 2.0;
+            while (!$child->exited() && \microtime(true) < $deadline) {
+                \usleep(10_000);
+            }
+            if (!$child->exited() && \defined('SIGKILL')) {
+                $child->kill(\SIGKILL);
+            }
+        }
+        try {
+            $child->wait();
+        } catch (\Throwable) {
+            // Reap is best-effort; the OS collects once the pty master
+            // closed below. A throw here must not mask the original error
+            // message already printed from catch/finally.
+        }
     }
 
     /**
@@ -205,7 +272,7 @@ final class RecordCommand implements Command
      * when usage was printed and the caller should exit 2.
      *
      * @param list<string> $args
-     * @return array{output: ?string, cols: int, rows: int, ctty: bool, cmd: list<string>, captureEnv: bool, envRegex: ?string, captureAll: bool, idleTrim: ?float}|null
+     * @return array{output: ?string, cols: int, rows: int, ctty: bool, cmd: list<string>, captureEnv: bool, envRegex: ?string, captureAll: bool, idleTrim: ?float, force: bool}|null
      * @param resource $stderr
      */
     private function parseArgs(array $args, $stderr): ?array
@@ -219,6 +286,7 @@ final class RecordCommand implements Command
         $envRegex = null;   // null means "use default SECRET_KEY_REGEX"
         $captureAll = false; // --env-all / --env-allow-secrets: capture full env incl. secrets
         $idleTrim = null;
+        $force = false;
         $cmd = [];
         $inOpts = true;
 
@@ -287,6 +355,10 @@ final class RecordCommand implements Command
                     if ($idleTrim <= 0.0) {
                         throw new \InvalidArgumentException('--idle-trim must be > 0 seconds');
                     }
+                } elseif ($a === '--force') {
+                    // Overwrite an existing --output target (M10); without
+                    // it the run() gate refuses and exits 2.
+                    $force = true;
                 } elseif (\str_starts_with($a, '--')) {
                     throw new \InvalidArgumentException("unknown option {$a}");
                 } else {
@@ -324,6 +396,7 @@ final class RecordCommand implements Command
             'envRegex'   => $envRegex,
             'captureAll' => $captureAll,
             'idleTrim'   => $idleTrim,
+            'force'      => $force,
         ];
     }
 
@@ -487,11 +560,23 @@ final class RecordCommand implements Command
         if ($ttyPath === null) {
             return;
         }
-        $path = \sys_get_temp_dir() . '/candy-vcr-rescue.' . \getmypid();
+        $path = \sys_get_temp_dir() . '/candy-vcr-rescue.' . \getmypid() . '.' . \bin2hex(\random_bytes(8));
         $payload = "tty={$ttyPath}\npid=" . \getmypid() . "\nstarted=" . \date('c') . "\n";
-        if (@\file_put_contents($path, $payload) !== false) {
-            self::$rescueMarkerPath = $path;
+        // 'xb' (O_CREAT|O_EXCL, no truncate): a pre-existing path — including
+        // a symlink planted on a shared /tmp, the old pid-only name invited —
+        // is refused instead of followed/overwritten. The random suffix makes
+        // the name unguessable; two recorders never collide on one marker.
+        $fh = @\fopen($path, 'xb');
+        if ($fh === false) {
+            return;
         }
+        if (@\fwrite($fh, $payload) === false) {
+            @\fclose($fh);
+            @\unlink($path);
+            return;
+        }
+        @\fclose($fh);
+        self::$rescueMarkerPath = $path;
     }
 
     /**
@@ -593,11 +678,14 @@ final class RecordCommand implements Command
     {
         \fwrite(
             $stream,
-            "usage: candy-vcr record [--output PATH] [--cols N] [--rows N] [--no-ctty]\n"
+            "usage: candy-vcr record [--output PATH] [--force] [--cols N] [--rows N] [--no-ctty]\n"
             . "                        [--shell] [--env] [--env-regex=PATTERN]\n"
             . "                        [--env-all] [--idle-trim N] -- <cmd> [args...]\n"
             . "\n"
             . "  --output PATH    Cassette file to write (default: session-<timestamp>.cas)\n"
+            . "  --force          Replace an existing --output target. Without it, record\n"
+            . "                   refuses (exit 2) rather than silently truncating a\n"
+            . "                   cassette that is already on disk.\n"
             . "  --cols N         Initial terminal columns (default: 80)\n"
             . "  --rows N         Initial terminal rows (default: 24)\n"
             . "  --no-ctty        Spawn without a controlling terminal (Ctrl+C will not\n"

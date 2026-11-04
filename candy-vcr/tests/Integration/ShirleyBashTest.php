@@ -54,7 +54,7 @@ final class ShirleyBashTest extends TestCase
         try {
             $start = \microtime(true);
             $rc = $cmd->run([
-                '--output', $cassette,
+                '--force', '--output', $cassette,
                 '--',
                 '/bin/bash', '-c',
                 "echo hello; sleep 0.2; echo world",

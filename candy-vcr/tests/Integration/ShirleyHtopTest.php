@@ -94,7 +94,7 @@ final class ShirleyHtopTest extends TestCase
             // handling does not send SIGINT to htop itself (which can
             // cause it to SIGABRT on some htop builds).
             $rc = $cmd->run([
-                '--output', $cassette,
+                '--force', '--output', $cassette,
                 '--no-ctty',
                 '--cols', '80',
                 '--rows', '24',

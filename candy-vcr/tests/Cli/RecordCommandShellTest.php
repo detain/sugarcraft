@@ -80,7 +80,7 @@ final class RecordCommandShellTest extends TestCase
             // for input. /bin/sh honours `-c` as a non-shell-option,
             // so we just exec exit(0).
             $rc = $cmd->run(
-                ['--shell', '--output', $cassette, '--no-ctty', '--', 'placeholder'],
+                ['--shell', '--force', '--output', $cassette, '--no-ctty', '--', 'placeholder'],
                 $stdout,
                 $stderr,
             );
@@ -125,7 +125,7 @@ final class RecordCommandShellTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--shell', '--output', $cassette],
+                ['--shell', '--force', '--output', $cassette],
                 $stdout,
                 $stderr,
             );

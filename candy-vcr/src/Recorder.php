@@ -74,9 +74,21 @@ final class Recorder implements RecorderInterface
 
     /**
      * When true, events are written with `dt` (delta since previous event)
-     * instead of `t` (absolute timestamp). Set via {@see withFormat()}.
+     * instead of `t` (absolute timestamp). Seeded from the CassetteHeader's
+     * timestampMode at construction — the header on disk is the authority,
+     * {@see withFormat()} can only confirm, never flip it.
      */
     private bool $useRelativeTimestamps = false;
+
+    /**
+     * Count of failed stream writes + flushes (C3). The recorder never
+     * aborts a live session over I/O errors (E712 best-effort ruling: the
+     * child program outranks the tape), but the losses are NO LONGER
+     * invisible — {@see captureWriteErrors()} surfaces them so the CLI
+     * can refuse to call an incomplete capture a success.
+     */
+    private int $writeErrors = 0;
+    private int $flushErrors = 0;
 
     /**
      * Cumulative absolute timestamp used to calculate deltas for relative mode.
@@ -118,6 +130,12 @@ final class Recorder implements RecorderInterface
         $this->fh = $fh;
         $this->startTime = $startTime ?? microtime(true);
         $this->hooks = $hooks ?? new HookRegistry();
+        // The header is being written by this very call, so its
+        // timestampMode is the cassette's permanent contract: seed the
+        // line encoder from it (a relative-mode header with absolute `t`
+        // lines — the pre-fix shape — minted a file the reader could
+        // never decode).
+        $this->useRelativeTimestamps = $header->timestampMode === CassetteHeader::TIMESTAMP_MODE_RELATIVE;
         $this->writeLine($header->toWireArray());
     }
 
@@ -161,6 +179,13 @@ final class Recorder implements RecorderInterface
 
     /**
      * Add a hook to be called during recording.
+     *
+     * NOTE (M14, deliberate deviation from the house fluent-clone idiom):
+     * the Recorder owns an OPEN STREAM resource — cloning it would fork
+     * two writers onto one file handle, so `with*()` here are in-place
+     * configurators that return `$this` for chaining, NOT immutable
+     * derivations. Reconfiguring a shared recorder through an alias is
+     * visible to every holder of the instance.
      *
      * @return $this
      */
@@ -207,16 +232,46 @@ final class Recorder implements RecorderInterface
     }
 
     /**
-     * Select the cassette format for timestamp encoding. Currently only
-     * {@see RelativeFormat} is supported for relative timestamps; all other
-     * formats produce absolute `t` values.
+     * Confirm the timestamp format against the cassette's header.
+     *
+     * The Recorder is a streaming writer: its header line was already on
+     * disk before this call ever ran, so the header's `timestampMode` is
+     * the permanent contract for the file (seeded into the line encoder by
+     * the constructor). Passing {@see RelativeFormat} selects `dt` lines
+     * ONLY for a relative-mode header; passing any absolute-timestamp
+     * format ({@see JsonlFormat}, {@see CompressedJsonlFormat} — which
+     * delegates to Jsonl) confirms `t` lines. A contradiction throws
+     * instead of minting a tape whose event lines disagree with its own
+     * header (pre-fix, `withFormat()` silently flipped the line encoder
+     * under an absolute header — every reader then choked on the file).
+     *
+     * Note the recorder's on-disk layout is newline-delimited JSON in
+     * both modes: absolute-side formats (Jsonl, Compressed — the
+     * container choice belongs to batch writing, not the stream) only
+     * confirm the mode, so a YamlFormat passed here behaves as the
+     * absolute encoder it is checked against. What is NEVER tolerated is
+     * a mode contradiction against the header.
      *
      * @return $this
      */
     public function withFormat(Format $f): self
     {
-        $this->useRelativeTimestamps = $f instanceof RelativeFormat;
-        return $this;
+        $wantsRelative = $f instanceof RelativeFormat;
+        if ($wantsRelative === $this->useRelativeTimestamps) {
+            return $this;
+        }
+        if ($wantsRelative) {
+            throw new \RuntimeException(
+                'candy-vcr: RelativeFormat requested against an absolute-timestamp cassette — '
+                . 'pass a CassetteHeader with timestampMode "relative" when opening the recorder'
+            );
+        }
+        throw new \RuntimeException(sprintf(
+            'candy-vcr: %s requested against a relative-timestamp cassette — the header was '
+            . 'written with timestampMode "relative"; use RelativeFormat (or open with an '
+            . 'absolute header)',
+            $f::class
+        ));
     }
 
     public function recordResize(int $cols, int $rows): void
@@ -328,8 +383,11 @@ final class Recorder implements RecorderInterface
             // E712 keep: close() is teardown and runs from finally on EVERY
             // failure path; a double-close/EBADF warning raised here would
             // mask the exception actually unwinding. The is_resource guard
-            // above already handles the meaningful case.
-            @fclose($this->fh);
+            // above already handles the meaningful case. A failed close is
+            // still counted (C3) — buffered tail data may never reach disk.
+            if (@fclose($this->fh) === false) {
+                $this->writeErrors++;
+            }
         }
         $this->fh = null;
     }
@@ -399,10 +457,32 @@ final class Recorder implements RecorderInterface
         if (!is_resource($this->fh)) {
             throw new \LogicException('candy-vcr: recorder stream is not open');
         }
-        fwrite($this->fh, $json . "\n");
+        $payload = $json . "\n";
+        $written = @fwrite($this->fh, $payload);
+        // E712 keep (upgraded, C3): never ABORT the session over tape I/O —
+        // but a lost write is now COUNTED, not discarded. Disk-full /
+        // broken-device short writes previously vanished (fwrite's return
+        // dropped entirely), and the CLI still announced success.
+        if ($written === false || $written < \strlen($payload)) {
+            $this->writeErrors++;
+        }
         // E712 keep: per-event flush is best-effort — fclose() in close()
         // (and the OS) backstops the buffer; refusing the flush mid
-        // recording must not abort the session.
-        @fflush($this->fh);
+        // recording must not abort the session. Failures are counted (C3).
+        if (@fflush($this->fh) === false) {
+            $this->flushErrors++;
+        }
+    }
+
+    /**
+     * Total tape-writing failures this recorder has absorbed (C3): short
+     * or failed writes plus failed flushes, including the final close().
+     * Zero means every event the recorder accepted reached the stream.
+     * Non-zero means the cassette at this path is INCOMPLETE — callers
+     * (the record CLI) must not report an unconditional success over it.
+     */
+    public function captureWriteErrors(): int
+    {
+        return $this->writeErrors + $this->flushErrors;
     }
 }

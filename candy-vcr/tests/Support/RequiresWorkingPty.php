@@ -116,7 +116,7 @@ trait RequiresWorkingPty
         try {
             $cmd = new RecordCommand($devNullIn);
             $rc = $cmd->run(
-                ['--output', $cassette, '--', '/bin/echo', 'ok'],
+                ['--force', '--output', $cassette, '--', '/bin/echo', 'ok'],
                 $stdout,
                 $stderr,
             );
@@ -137,14 +137,10 @@ trait RequiresWorkingPty
             \rewind($stderr);
             $errText = (string) \stream_get_contents($stderr);
             \fclose($stderr);
-            // Make sure cassette is cleaned up even if assertions later
-            // skip the test.
-            if (\file_exists($cassette)) {
-                @\unlink($cassette);
-            }
         }
 
         if ($rc !== 0) {
+            @\unlink($cassette); // the verdict is computed — the probe temp is spent
             return self::$ptyProbeCache = [
                 'ok' => false,
                 'reason' => "pty-shim smoke spawn exited {$rc} (expected 0); "
@@ -158,16 +154,22 @@ trait RequiresWorkingPty
         // cleanly — also indicates a broken setup.
         try {
             $loaded = (new JsonlFormat())->read($cassette);
-            if ($loaded->eventCount() === 0) {
-                return self::$ptyProbeCache = [
-                    'ok' => false,
-                    'reason' => 'pty probe produced an empty cassette; recorder front-end is broken.',
-                ];
-            }
+            $emptyCassette = $loaded->eventCount() === 0;
         } catch (\Throwable $e) {
+            @\unlink($cassette);
             return self::$ptyProbeCache = [
                 'ok' => false,
                 'reason' => 'pty probe cassette could not be read: ' . $e->getMessage(),
+            ];
+        }
+        // Cleanup happens only now — the read above is the probe's ground
+        // truth and ran against this exact file (an earlier finally-unlink
+        // deleted it first and made every pty test skip).
+        @\unlink($cassette);
+        if ($emptyCassette) {
+            return self::$ptyProbeCache = [
+                'ok' => false,
+                'reason' => 'pty probe produced an empty cassette; recorder front-end is broken.',
             ];
         }
 

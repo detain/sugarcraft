@@ -72,7 +72,7 @@ final class ShirleyVimTest extends TestCase
         try {
             $start = \microtime(true);
             $rc = $cmd->run([
-                '--output', $cassette,
+                '--force', '--output', $cassette,
                 '--cols', '80',
                 '--rows', '24',
                 '--',

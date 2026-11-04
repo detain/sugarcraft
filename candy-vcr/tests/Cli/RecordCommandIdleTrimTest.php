@@ -180,7 +180,7 @@ final class RecordCommandIdleTrimTest extends TestCase
             // With --idle-trim 0.4, the 'post' event should land with
             // tRaw ≈ 1.2 while its compressed t < 0.6.
             $rc = $cmd->run([
-                '--output', $cassette,
+                '--force', '--output', $cassette,
                 '--idle-trim', '0.4',
                 '--',
                 '/bin/bash', '-c',
@@ -252,7 +252,7 @@ final class RecordCommandIdleTrimTest extends TestCase
 
         try {
             $rc = $rec->run([
-                '--output', $cassette,
+                '--force', '--output', $cassette,
                 '--idle-trim', '0.4',
                 '--',
                 '/bin/bash', '-c',

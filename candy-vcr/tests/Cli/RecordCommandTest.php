@@ -114,7 +114,7 @@ final class RecordCommandTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--output', $cassette, '--', '/bin/echo', 'hello-record'],
+                ['--force', '--output', $cassette, '--', '/bin/echo', 'hello-record'],
                 $stdout,
                 $stderr,
             );
@@ -179,7 +179,7 @@ final class RecordCommandTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--output', $cassette, '--cols', '132', '--rows', '40', '--', '/bin/echo', 'ok'],
+                ['--force', '--output', $cassette, '--cols', '132', '--rows', '40', '--', '/bin/echo', 'ok'],
                 $stdout,
                 $stderr,
             );
@@ -225,7 +225,7 @@ final class RecordCommandTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--output', $cassette, '--', '/bin/sh', '-c', 'exit 7'],
+                ['--force', '--output', $cassette, '--', '/bin/sh', '-c', 'exit 7'],
                 $stdout,
                 $stderr,
             );

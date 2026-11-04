@@ -243,7 +243,7 @@ final class RecordCommandEnvFilterTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--env', '--output', $cassette, '--', '/bin/echo', 'env-test'],
+                ['--env', '--force', '--output', $cassette, '--', '/bin/echo', 'env-test'],
                 $stdout,
                 $stderr,
             );
@@ -276,7 +276,7 @@ final class RecordCommandEnvFilterTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--output', $cassette, '--', '/bin/echo', 'no-env'],
+                ['--force', '--output', $cassette, '--', '/bin/echo', 'no-env'],
                 $stdout,
                 $stderr,
             );
@@ -308,7 +308,7 @@ final class RecordCommandEnvFilterTest extends TestCase
 
         try {
             $rc = $cmd->run(
-                ['--env-all', '--output', $cassette, '--', '/bin/echo', 'env-all-test'],
+                ['--env-all', '--force', '--output', $cassette, '--', '/bin/echo', 'env-all-test'],
                 $stdout,
                 $stderr,
             );
