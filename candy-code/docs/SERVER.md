@@ -246,7 +246,8 @@ says so.
    **`HttpOnly`, `SameSite=Strict`** cookie plus the `loginSecret` body field.
    The cookie is port-scoped — `candy_code_session_<port>` — so two `serve`
    instances on one host never share ambient sign-ins (7-day sliding lifetime;
-   `Secure` when the browser arrives over TLS — the built-in listener with
+   the horizon is a fixed constant, not a configuration knob — changing it is
+   a code change. `Secure` when the browser arrives over TLS — the built-in listener with
    `--tls-cert`/`--tls-key`, or a trusted proxy reporting HTTPS). Under that
    same TLS condition the name carries the `__Host-` prefix
    (`__Host-candy_code_session_<port>`), pinning it to this exact origin; a
@@ -477,7 +478,10 @@ second turn. Answers are kept five minutes, at most 1,000.
 ### Methods
 
 Scope `read` is enough for everything that only looks; the owner holds all four
-scopes (`read`, `write`, `approve`, `admin`). "Idempotent" marks the methods
+scopes (`read`, `write`, `approve`, `admin`) — but the declared scopes are
+not enforced per connection today: the split that bites is owner vs
+non-owner on the principal, and per-connection scope narrowing owes a
+product ruling (CW-PAR-06). "Idempotent" marks the methods
 that accept an `idempotencyKey`. Every request's params are checked against
 the method's schema before it runs — a field of the wrong type, or a missing
 required one, is `-32602` naming the field. The full schema of every params,
@@ -1589,6 +1593,13 @@ location / {
     proxy_read_timeout 3600s;
 }
 ```
+
+`/ws?ticket=…` carries its ticket in the query string, so a proxy access log
+for that location records it (CW-SEC-04) — sign-in codes and share URLs ride
+query strings the same way. Tickets are single-use and expire in 30 s and the
+codes are single-use, but the log is still the loosest copy of them: prefer
+`access_log off;` for the `/ws` location, or account for the exposure when
+choosing where logs go.
 
 and in `~/.candy-code/config.json`:
 

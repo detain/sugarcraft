@@ -11,7 +11,11 @@ namespace SugarCraft\Code\Server;
  * here for the log. The class name, a flattened and clipped message, and the
  * throw site — enough to find the bug, and the raw message may still name a
  * path or quote a prompt, which is precisely why it goes to the 0600
- * `server.log` and never onto the wire.
+ * `server.log` and never into the answer. (CW-PAR-05 truth-flip: "never onto
+ * the wire" overstated it — an owner-authenticated Admin-scoped `server.logs`
+ * read ({@see LogTail}) surfaces these very lines, capped and flattened, on
+ * purpose. The line stays off the ANSWER; the operator's own log read is the
+ * authorized exit.)
  */
 final class ErrorLog
 {

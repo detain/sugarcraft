@@ -65,7 +65,13 @@ export function isResponse(frame: unknown): frame is RpcResponse {
   return 'id' in f && ('result' in f || 'error' in f)
 }
 
-/** The number of UTF-8 bytes in $text: delta offsets are byte offsets. */
+/**
+ * The number of UTF-8 bytes in `text`: delta offsets are byte offsets. A
+ * LONE surrogate counts one here, but `TextEncoder` would emit it as three
+ * replacement bytes; JS strings cannot carry a lone surrogate over the wire
+ * anyway, so the divergence needs no fix (CW-N2). The server's byte budget
+ * is the authority on every boundary.
+ */
 export function utf8Length(text: string): number {
   let bytes = 0
   for (let i = 0; i < text.length; i++) {

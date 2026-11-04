@@ -4,7 +4,8 @@ import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, type Plugin } from 'vite'
 
-// The server port `candy-code serve` binds by default (user decision, Appendix O).
+// The server port `candy-code serve` binds by default — the fixed,
+// documented default.
 const SERVER = 'http://127.0.0.1:7420'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
