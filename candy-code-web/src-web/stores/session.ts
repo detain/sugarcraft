@@ -101,12 +101,17 @@ function setup(sessionId: string) {
   }
 
   /** Follow the session: a snapshot the first time (or when $fresh), a replay from the cursor after. */
-  async function subscribe(fresh = false): Promise<void> {
+  async function subscribe(fresh = false, force = false): Promise<void> {
     // CW-7: one request in flight per store, period. Retry paths, a resumed
     // error, a retain during load and the resync alarm can all pile calls
     // onto the same unfollowed session; each duplicate answer re-applies a
     // snapshot and re-announces the client tools.
-    if (phase.value === 'subscribing') return
+    // The overflow resubscribe is the one caller that forces its way past:
+    // the server just declared the in-flight subscription dead (ISS-052), so
+    // the pending answer is a corpse, not a duplicate — suppressing the fresh
+    // request would leave the pane stale forever (CW-7 dedup vs a dead
+    // subscription, resolved by weld census in favour of the resync).
+    if (phase.value === 'subscribing' && !force) return
     unfollow ??= connection.follow(sessionId, {
       cursor: () => (phase.value === 'live' ? cursor.value : null),
       event: handle,
@@ -130,7 +135,7 @@ function setup(sessionId: string) {
         overflowCount += 1
         overflow = { key: `overflow:${overflowCount}`, dropped }
         noteOverflow(state, dropped, overflow.key)
-        void subscribe(true)
+        void subscribe(true, true)
       },
     })
     phase.value = 'subscribing'
