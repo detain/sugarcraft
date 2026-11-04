@@ -3103,7 +3103,7 @@
                     "limit": {
                         "type": "integer",
                         "minimum": 1,
-                        "maximum": 4194304
+                        "maximum": 3096576
                     }
                 },
                 "required": [
