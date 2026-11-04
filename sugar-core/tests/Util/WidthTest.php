@@ -747,7 +747,10 @@ final class WidthTest extends TestCase
      * the other Mn members now agree, and the U+FF00 leg-head off-by-one is
      * fixed, so two roster entries deleted themselves exactly as the BOTH-ways
      * assertion intends. The remaining three are the block-leg endpoint/
-     * head-creep cases, each justified below.
+     * head-creep cases, each justified below; the SC-1 review refresh of the
+     * endpoint mirror (2026-11-04) added eleven further entries, all of one
+     * class — codepoints Unicode 16.0.0 made Wide or assigned that this
+     * box's ICU 74.2 (Unicode 15.1 data) still scores 1.
      */
     public function testEverySingleCodepointWidthAgreesWithIcusOwnCharacterProperties(): void
     {
@@ -762,7 +765,20 @@ final class WidthTest extends TestCase
         //   U+1F900 CIRCLED CROSS FORMEE WITH FOUR DOTS — assigned, and ICU
         //           calls it Neutral, but it is the first codepoint of the
         //           block-shaped 0x1F900..0x1F9FF range, so it scores 2.
-        $knownDepartures = [0xA4CF, 0x1F6FF, 0x1F900];
+        //   SC-1 REVIEW FIX (2026-11-04, mirror refresh): the eleven points
+        //   after these three are Unicode-16.0 codepoints this machine's ICU
+        //   (74.2 = Unicode 15.1 data) has not caught up with — EAW-W
+        //   recategorisations of So/No symbols (trigrams U+2630/2637, dice
+        //   U+268A/268F, hexagrams U+4DC0/4DFF, Tai Xuan Jing U+1D300/1D356,
+        //   counting rod U+1D360/1D376) and the U+18CFF leg head (unassigned
+        //   to ICU, assigned W by 16.0.0's Tangut Supplement). The shipped 2
+        //   is the data-correct side; each entry disappears the moment ICU
+        //   learns the truth and the both-ways arm below says "delete it".
+        $knownDepartures = [
+            0xA4CF, 0x1F6FF, 0x1F900,
+            0x2630, 0x2637, 0x268A, 0x268F, 0x4DC0, 0x4DFF,
+            0x18CFF, 0x1D300, 0x1D356, 0x1D360, 0x1D376,
+        ];
 
         $mismatches = [];
         $departuresStillReal = [];
@@ -790,8 +806,10 @@ final class WidthTest extends TestCase
         $this->assertSame([], $mismatches, 'a per-codepoint width disagrees with ICU character properties');
         $this->assertSame([], $departuresStillReal, 'a documented departure is stale');
         // The corpus must not silently shrink to nothing — 34 alphabet
-        // symbols, 32 isWide() range endpoints and 3 C1 controls, deduplicated.
-        $this->assertGreaterThanOrEqual(60, \count($codepoints));
+        // symbols, 82 wide-leg endpoints (all 41 isWide() legs, the two
+        // singles deduping to one codepoint each), and 3 C1 controls:
+        // 115 distinct codepoints after deduplication (SC-1 review refresh).
+        $this->assertGreaterThanOrEqual(115, \count($codepoints));
     }
 
     /**
@@ -829,6 +847,11 @@ final class WidthTest extends TestCase
      * enough to discover the boundary on its own would also surface the 1,256
      * documented block-shape disagreements and prove nothing.
      *
+     * SC-1 REVIEW FIX (2026-11-04): refreshed from the stale 16-pair pre-SC-1
+     * list to the full post-census roster — all 39 ranged legs (with the
+     * head-leg correction U+FF00→U+FF01) and the two single-codepoint legs
+     * written as [cp, cp], which the endpoint loop naturally dedupes.
+     *
      * @return list<int>
      */
     private static function oracleCodepoints(): array
@@ -844,10 +867,17 @@ final class WidthTest extends TestCase
         }
         foreach (
             [
-                [0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf],
-                [0x4e00, 0x9fff], [0xa000, 0xa4cf], [0xac00, 0xd7a3], [0xf900, 0xfaff],
-                [0xfe30, 0xfe4f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f300, 0x1f64f],
-                [0x1f680, 0x1f6ff], [0x1f900, 0x1f9ff], [0x20000, 0x2fffd], [0x30000, 0x3fffd],
+                [0x1100, 0x115f], [0x2329, 0x232a], [0x2630, 0x2637], [0x268a, 0x268f],
+                [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4dc0, 0x4dff],
+                [0x4e00, 0x9fff], [0xa000, 0xa4cf], [0xa960, 0xa97c], [0xac00, 0xd7a3],
+                [0xf900, 0xfaff], [0xfe10, 0xfe19], [0xfe30, 0xfe4f], [0xfe50, 0xfe52],
+                [0xfe54, 0xfe66], [0xfe68, 0xfe6b], [0xff01, 0xff60], [0xffe0, 0xffe6],
+                [0x16fe0, 0x16fe3], [0x16ff0, 0x16ff1], [0x17000, 0x187f7], [0x18800, 0x18cd5],
+                [0x18cff, 0x18d08], [0x1aff0, 0x1aff3], [0x1aff5, 0x1affb], [0x1affd, 0x1affe],
+                [0x1b000, 0x1b122], [0x1b132, 0x1b132], [0x1b150, 0x1b152], [0x1b155, 0x1b155],
+                [0x1b164, 0x1b167], [0x1b170, 0x1b2fb], [0x1d300, 0x1d356], [0x1d360, 0x1d376],
+                [0x1f300, 0x1f64f], [0x1f680, 0x1f6ff], [0x1f900, 0x1f9ff], [0x20000, 0x2fffd],
+                [0x30000, 0x3fffd],
             ] as [$lo, $hi]
         ) {
             $cps[] = $lo;
