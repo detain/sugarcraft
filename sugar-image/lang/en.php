@@ -72,6 +72,7 @@ return [
     'sixel.intensity_out_of_range'  => 'dither intensity must be a finite non-negative number, got {intensity}',
     'sixel.alpha_threshold_out_of_range' => 'alphaThreshold must be 0-127 (GD alpha scale), got {alphaThreshold}',
     'sixel.canvas_too_large'        => 'Sixel canvas {width}×{height} px for a {cols}×{rows}-cell box exceeds the {max}-pixel ceiling',
+    'sixel.cell_size_out_of_range'  => 'cell size must be positive, got {cellWidth}×{cellHeight}',
 
     // Paced async rendering
     'paced.slice_ms'       => 'sliceMs must be >= 1, got {ms}',

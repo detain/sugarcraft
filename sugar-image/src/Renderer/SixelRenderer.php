@@ -681,6 +681,47 @@ final class SixelRenderer implements Renderer, ConfigFingerprintProvider
     }
 
     /**
+     * Copy sized to a probed terminal cell rather than the constructor's
+     * conventional 10×20.
+     *
+     * A sixel canvas is `width·cellWidth` by `rows·cellHeight` pixels, so the
+     * pair decides how many source pixels land in each graphics cell. Every
+     * {@see Capability} that came from a real DECtST/term-echo probe carries
+     * the terminal's answer, yet the selection path used to build the renderer
+     * with the defaults regardless — on a terminal reporting 8×16, say, that
+     * painted a 25% oversized canvas for its own cell grid. The default stays
+     * 10×20 so a never-probed {@see Capability::universal()} renders exactly
+     * the bytes it always did.
+     *
+     * @param int $cellWidth  Pixel width of one terminal cell (must be > 0)
+     * @param int $cellHeight Pixel height of one terminal cell (must be > 0)
+     */
+    public function withCellSize(int $cellWidth, int $cellHeight): self
+    {
+        if ($cellWidth <= 0 || $cellHeight <= 0) {
+            throw new \InvalidArgumentException(Lang::t('sixel.cell_size_out_of_range', [
+                'cellWidth'  => $cellWidth,
+                'cellHeight' => $cellHeight,
+            ]));
+        }
+
+        return new self(
+            $this->dither,
+            $this->maxColors,
+            $cellWidth,
+            $cellHeight,
+            $this->intensity,
+            $this->alphaThreshold,
+            $this->flattenBackground,
+            $this->serpentine,
+            $this->mltermEdgeRows,
+            $this->quality,
+            $this->autoLevels,
+            $this->quirks,
+        );
+    }
+
+    /**
      * Copy armed from a terminal-database quirks bitmask
      * ({@see TermInfo::QUIRK_*}). Two chicle consumers re-home here:
      * QUIRK_MLTERM_EDGE_ROWS arms the full-width edge-band forcing

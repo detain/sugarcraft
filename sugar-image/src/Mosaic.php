@@ -832,10 +832,21 @@ final class Mosaic
             return new Iterm2Renderer();
         }
         if ($cap->sixel) {
+            // The pixel canvas is a whole multiple of the cell size, so a
+            // snapshot that carries a probed answer has to hand it over: on a
+            // terminal reporting 8×16, the constructor's conventional 10×20
+            // paints a 25% oversized frame for that grid. A never-probed
+            // snapshot (null) keeps the defaults, and its bytes with them.
+            $sixel = $cap->cellSize === null
+                ? new SixelRenderer()
+                : (new SixelRenderer())->withCellSize(
+                    $cap->cellSize->cellWidth,
+                    $cap->cellSize->cellHeight,
+                );
+
             // Hand the renderer the quirks verdict whenever the
             // terminal chain was consulted (null = never probed = frozen
             // original behaviour, no parking newline decision taken).
-            $sixel = new SixelRenderer();
             return $cap->quirks === null ? $sixel : $sixel->withQuirks($cap->quirks);
         }
         if ($cap->chafa) {

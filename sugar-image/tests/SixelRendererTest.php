@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Image\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Image\Capability;
+use SugarCraft\Image\CellSize;
 use SugarCraft\Image\Dither;
 use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\SixelRenderer;
+use SugarCraft\Image\TermInfo;
 
 final class SixelRendererTest extends TestCase
 {
@@ -433,5 +437,92 @@ final class SixelRendererTest extends TestCase
         $this->assertStringContainsString('#0;2;P', $out);
         $this->assertStringContainsString('#255;', $out, 'the palette must saturate the reduced budget');
         $this->assertStringNotContainsString('#256', $out);
+    }
+
+    public function testWithCellSizeIsImmutableAndLeavesTheOriginalCanvasAlone(): void
+    {
+        $probe = $this->renderer->withCellSize(12, 24);
+
+        $this->assertNotSame($this->renderer, $probe);
+        $this->assertStringContainsString('|cellWidth=10|cellHeight=20', $this->renderer->configFingerprint());
+        $this->assertStringContainsString('|cellWidth=12|cellHeight=24', $probe->configFingerprint());
+    }
+
+    public function testTheCellSizeDecidesThePixelCanvasTheEncoderEmits(): void
+    {
+        // The header carries the PIXEL extent, so the pair is observable:
+        // 3 columns × 12 px and 1 row × 24 px. The same box on the default
+        // renderer is 30×20 — the conventional guess, not a measurement.
+        $probe = $this->renderer->withCellSize(12, 24);
+
+        $this->assertStringContainsString('"1;1;36;24', $probe->render($this->red(), 3, 1));
+        $this->assertStringContainsString('"1;1;30;20', $this->renderer->render($this->red(), 3, 1));
+    }
+
+    /**
+     * @dataProvider degenerateCellSizes
+     */
+    public function testADegenerateCellSizeIsRefused(int $w, int $h): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('cell size must be positive');
+
+        $this->renderer->withCellSize($w, $h);
+    }
+
+    /**
+     * @return array<string, array{int, int}>
+     */
+    public static function degenerateCellSizes(): array
+    {
+        return [
+            'zero width'   => [0, 20],
+            'zero height'  => [10, 0],
+            'negative column' => [-1, 20],
+            'negative row'    => [10, -20],
+        ];
+    }
+
+    /**
+     * The wiring claim: a probe that answered the terminal's DECtST query has
+     * to reach the renderer the selection path builds. Before this, the pixel
+     * canvas on a terminal reporting 12×24 was built from the 10×20 guess,
+     * painting a frame 20% wider than the grid it was sized for.
+     */
+    public function testTheSelectionPathHandsTheProbedCellSizeToTheSixelRenderer(): void
+    {
+        $bestBackend = new \ReflectionMethod(Mosaic::class, 'bestBackend');
+        $bestBackend->setAccessible(true);
+
+        /** @var SixelRenderer $measured */
+        $measured = $bestBackend->invoke(null, Capability::sixel(new CellSize(12, 24)));
+        $this->assertInstanceOf(SixelRenderer::class, $measured);
+        $this->assertStringContainsString('|cellWidth=12|cellHeight=24', $measured->configFingerprint());
+
+        // Negative control: a never-probed snapshot keeps the defaults, and
+        // with them every byte pinned by the frozen sixel family.
+        /** @var SixelRenderer $unprobed */
+        $unprobed = $bestBackend->invoke(null, Capability::sixel());
+        $this->assertStringContainsString('|cellWidth=10|cellHeight=20', $unprobed->configFingerprint());
+    }
+
+    public function testTheProbedCellSizeComposesWithTheProbedQuirks(): void
+    {
+        $bestBackend = new \ReflectionMethod(Mosaic::class, 'bestBackend');
+        $bestBackend->setAccessible(true);
+
+        $cap = Capability::sixel(new CellSize(8, 16))
+            ->withTerminalFacts(TermInfo::QUIRK_SIXEL_OVERSHOOT, TermInfo::PASSTHROUGH_NONE);
+
+        /** @var SixelRenderer $renderer */
+        $renderer = $bestBackend->invoke(null, $cap);
+        $fingerprint = $renderer->configFingerprint();
+
+        $this->assertStringContainsString('|cellWidth=8|cellHeight=16', $fingerprint);
+        $this->assertStringContainsString(
+            '|quirks=' . TermInfo::QUIRK_SIXEL_OVERSHOOT,
+            $fingerprint,
+            'the quirks verdict must survive the cell-size leg (and vice versa)',
+        );
     }
 }
