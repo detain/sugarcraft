@@ -1398,9 +1398,12 @@ Open the sign-in URL and the page signs in, connects and shows:
   slash command, open a panel, start a session, change the theme.
 
 The page keeps one WebSocket. When it drops, the page retries — after 0.5 s,
-then doubling to at most 15 s, each wait jittered — with a fresh ticket, and
-resumes every session it follows from the last event it holds, so nothing that
-happened meanwhile is missed or shown twice; a reload is never needed. A
+then doubling to at most 15 s, each wait jittered, six tries in all — with a
+fresh ticket, and resumes every session it follows from the last event it
+holds, so nothing that happened meanwhile is missed or shown twice; while the
+ladder holds, a reload is never needed. When it runs out, the tab says the
+server is gone and offers *Try again*, which spends a fresh ladder (the
+candy-code-web README has the banner's words). A
 restarted server keeps signed-in browsers signed in (sign-in rows persist, hash-only) and the page
 resumes where it left off; rotating the owner token is what sends it back to the
 login prompt. A server that comes back as a different version offers a reload.
