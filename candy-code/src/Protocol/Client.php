@@ -97,10 +97,22 @@ final class Client
         return $this->outbox;
     }
 
-    /** How the socket authenticated (`cookie`, `ticket`, `bearer`, `subprotocol`). */
+    /** How the socket authenticated (`cookie`, `ticket`, `bearer`, `subprotocol`, `viewer`). */
     public function principal(): string
     {
         return $this->connection->principal();
+    }
+
+    /** The viewer grant's public id on the socket's credential; null for every other door. */
+    public function tokenId(): ?string
+    {
+        return $this->connection->tokenId();
+    }
+
+    /** The viewer grant's session pin list riding the socket; null when unpinned. */
+    public function viewerSessions(): ?array
+    {
+        return $this->connection->viewerSessions();
     }
 
     /** @return list<string> */

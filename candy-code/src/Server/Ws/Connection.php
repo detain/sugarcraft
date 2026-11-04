@@ -55,6 +55,9 @@ final class Connection
      * @param \Closure(self): void|null   $onGone        the server's bookkeeping, after the handler's onClose
      * @param string|null                 $cookieSession the cookie session that minted this socket's ticket, if any (ISS-009)
      * @param (\Closure(string): void)|null $log         the server's log sink: what a thrown handler cost (ISS-057), never the wire
+     * @param list<string>|null           $scopes        the viewer grant's scope names (D-5); null for every non-viewer socket
+     * @param string|null                 $tokenId       the minting viewer grant's public id (D-12 audit trail, D-9 bucket key); null otherwise
+     * @param list<string>|null           $viewerSessions the sessions a pinned viewer grant covers (D-13); null means unpinned
      */
     public function __construct(
         private readonly string $id,
@@ -66,6 +69,15 @@ final class Connection
         private readonly ?\Closure $onGone = null,
         private readonly ?string $cookieSession = null,
         private readonly ?\Closure $log = null,
+        // Viewer threading (X-DESIGN1 D-5, reviews-1103 G4-G): the AuthMiddleware
+        // grant this socket authenticated with, carried through so the protocol
+        // layer can scope calls and keep idempotency answers apart. All three are
+        // null for every non-viewer principal — an owner socket's scopes list is
+        // applied by the Dispatcher as the full owner set, so existing callers
+        // churn for free.
+        private readonly ?array $scopes = null,
+        private readonly ?string $tokenId = null,
+        private readonly ?array $viewerSessions = null,
     ) {
         $this->buffer = new MessageBuffer(
             new CloseFrameChecker(),
@@ -118,7 +130,7 @@ final class Connection
         return $this->id;
     }
 
-    /** How the upgrade authenticated: `cookie`, `ticket`, `bearer` or `subprotocol`. */
+    /** How the upgrade authenticated: `cookie`, `ticket`, `bearer`, `subprotocol` or `viewer`. */
     public function principal(): string
     {
         return $this->principal;
@@ -128,6 +140,34 @@ final class Connection
     public function cookieSession(): ?string
     {
         return $this->cookieSession;
+    }
+
+    /**
+     * The viewer grant's scope names threaded from admission (D-5); null on
+     * every non-viewer socket — the Dispatcher reads null as the owner set.
+     *
+     * @return list<string>|null
+     */
+    public function scopes(): ?array
+    {
+        return $this->scopes;
+    }
+
+    /** The minting viewer grant's public id (D-12); null for every non-viewer socket. */
+    public function tokenId(): ?string
+    {
+        return $this->tokenId;
+    }
+
+    /**
+     * The sessions a pinned viewer grant covers (D-13); null means the grant
+     * was minted unpinned and reaches every session its scopes allow.
+     *
+     * @return list<string>|null
+     */
+    public function viewerSessions(): ?array
+    {
+        return $this->viewerSessions;
     }
 
     public function isOpen(): bool

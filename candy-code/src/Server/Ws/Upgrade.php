@@ -88,6 +88,14 @@ final class Upgrade
         // only a token rotation ends those.
         $session = $request->getAttribute(AuthMiddleware::ATTR_SESSION);
 
+        // X-DESIGN1 D-5 (G4-G): the viewer grant attributes admitted by the
+        // middleware ride onto the socket so the protocol layer can scope
+        // calls, bucket idempotency per grant, and pin session reach. For
+        // every other principal all three arrive null.
+        $scopes = $request->getAttribute(AuthMiddleware::ATTR_SCOPES);
+        $tokenId = $request->getAttribute(AuthMiddleware::ATTR_TOKEN_ID);
+        $viewerSessions = $request->getAttribute(AuthMiddleware::ATTR_VIEWER_SESSIONS);
+
         $connection = new Connection(
             \sprintf('c%d-%s', ++$this->sequence, \bin2hex(\random_bytes(4))),
             (string) $request->getAttribute(AuthMiddleware::ATTR_PRINCIPAL, ''),
@@ -98,6 +106,9 @@ final class Upgrade
             $this->onGone,
             \is_string($session) ? $session : null,
             $this->log,
+            \is_array($scopes) ? $scopes : null,
+            \is_string($tokenId) ? $tokenId : null,
+            \is_array($viewerSessions) ? $viewerSessions : null,
         );
         ($this->onOpen)($connection);
         // Next tick, not now: the 101 has not been written yet, so anything

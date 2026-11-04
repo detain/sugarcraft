@@ -284,7 +284,7 @@ final class Dispatcher implements MessageHandler
                 'action' => 'resubscribe',
             ])->notification()),
         );
-        $client = new Client($connection, $outbox, Scope::owner(), $this->context->clock());
+        $client = new Client($connection, $outbox, $connection->scopes() ?? Scope::owner(), $this->context->clock());
         $this->clients[$connection->id()] = $client;
         $this->context->addClient($client);
         $this->start();

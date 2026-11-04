@@ -35,8 +35,14 @@ final class WireClient
 
     private int $nextId = 0;
 
-    private function __construct(private readonly MessageHandler $handler, string $id)
-    {
+    private function __construct(
+        private readonly MessageHandler $handler,
+        string $id,
+        string $principal = 'bearer',
+        ?array $scopes = null,
+        ?string $tokenId = null,
+        ?array $viewerSessions = null,
+    ) {
         $this->toClient = new ThroughStream();
         $fromClient = new ThroughStream();
         // A browser's view of close codes: ratchet's checker predates the
@@ -63,13 +69,26 @@ final class WireClient
             false,
         );
         $this->toClient->on('data', static fn (string $bytes) => $buffer->onData($bytes));
-        $this->connection = new Connection($id, 'bearer', $this->toClient, $fromClient, $handler, ServerConfig::MAX_CLIENT_FRAME_BYTES);
+        $this->connection = new Connection($id, $principal, $this->toClient, $fromClient, $handler, ServerConfig::MAX_CLIENT_FRAME_BYTES, scopes: $scopes, tokenId: $tokenId, viewerSessions: $viewerSessions);
     }
 
-    /** Open a client on $handler (what the upgrade does). */
-    public static function open(MessageHandler $handler, string $id = 'c1'): self
-    {
-        $client = new self($handler, $id);
+    /**
+     * Open a client on $handler (what the upgrade does). The trailing
+     * arguments let a test ride a non-owner grant: the same principal/scopes/
+     * token shape AuthMiddleware stamps for a cv1_ viewer bearer (G4-G D-5).
+     *
+     * @param null|list<string> $scopes
+     * @param null|list<string> $viewerSessions
+     */
+    public static function open(
+        MessageHandler $handler,
+        string $id = 'c1',
+        string $principal = 'bearer',
+        ?array $scopes = null,
+        ?string $tokenId = null,
+        ?array $viewerSessions = null,
+    ): self {
+        $client = new self($handler, $id, $principal, $scopes, $tokenId, $viewerSessions);
         $handler->onOpen($client->connection);
 
         return $client;
