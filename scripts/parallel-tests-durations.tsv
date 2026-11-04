@@ -725,6 +725,7 @@ candy-code/tests/Server/HookWebhooksSignatureTest.php	0.211	10
 candy-code/tests/Tui/SessionPickerActionsTest.php	0.210	25
 candy-code/tests/Renderer/SlashMenuSourceBadgeTest.php	0.209	5
 candy-code/tests/Tui/AgentStripTest.php	0.209	16
+candy-code/tests/Renderer/PermissionModalHeightTest.php	0.209	8
 candy-code/tests/Backend/EngineBackendServedModelTest.php	0.208	5
 candy-code/tests/Tools/Sandbox/ServerJailTest.php	0.204	9
 candy-code/tests/Renderer/CarriageReturnFrameTest.php	0.198	82
