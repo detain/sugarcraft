@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, onUnmounted, watch } from 'vue'
 import { t } from '../../lib/i18n'
 import { useAgentsStore } from '../../stores/agents/agents'
 import { usePanelsStore } from '../../stores/agents/panels'
 import { activeCount, buildTree, foldRuns } from '../../stores/agents/tree'
+import { STALL_TICK_MS } from '../../stores/agents/stall'
 import { useSessionStore } from '../../stores/session'
 import AgentView from './AgentView.vue'
 import SubAgentTree from './SubAgentTree.vue'
@@ -27,6 +28,23 @@ const running = computed(() => activeCount(tree.value))
 const picked = computed(() => (panels.agentId === null ? null : runs.value[panels.agentId] ?? null))
 
 watch(() => props.sessionId, (id) => void agents.refresh(id), { immediate: true })
+
+/**
+ * CWP-03 (PTV-P01 parity): feed the store's stall detector from this panel's
+ * own fold — every beat that lands re-observes at once, and the tick keeps the
+ * badge honest through silence, which (unlike the server's per-tick pump) never
+ * arrives as an event of its own.
+ */
+watch(runs, (current) => agents.observeStalls(props.sessionId, current, Date.now()), { immediate: true })
+const stallClock = setInterval(() => agents.observeStalls(props.sessionId, runs.value, Date.now()), STALL_TICK_MS)
+onUnmounted(() => clearInterval(stallClock))
+const stalled = computed(() =>
+  Object.entries(agents.stalledRuns[props.sessionId] ?? {}).map(([agentId, seconds]) => ({
+    agentId,
+    name: runs.value[agentId]?.name || agentId,
+    seconds,
+  })),
+)
 </script>
 
 <template>
@@ -39,6 +57,9 @@ watch(() => props.sessionId, (id) => void agents.refresh(id), { immediate: true 
         <button type="button" class="link" @click="agents.refresh(sessionId)">{{ t('web.agents.refresh') }}</button>
       </p>
       <p v-if="agents.errors[sessionId]" class="error" role="alert">{{ agents.errors[sessionId] }}</p>
+      <p v-if="stalled.length" class="stalled" role="status" data-testid="agent-stall-badges">
+        <span v-for="s in stalled" :key="s.agentId" class="stall-chip" data-testid="agent-stall" :title="'⚠ ' + s.name + ' · ' + s.seconds + 's'">⚠ {{ s.name }} · {{ s.seconds }}s</span>
+      </p>
       <SubAgentTree :nodes="tree" :selected="panels.agentId" @open="(id: string) => panels.openAgent(id)" />
     </template>
   </div>
@@ -62,5 +83,18 @@ watch(() => props.sessionId, (id) => void agents.refresh(id), { immediate: true 
   margin: 0;
   color: var(--error);
   font-size: 0.875rem;
+}
+.stalled {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+}
+.stall-chip {
+  color: var(--error);
+  border: 1px solid var(--error);
+  border-radius: 999px;
+  padding: 0 0.45rem;
 }
 </style>

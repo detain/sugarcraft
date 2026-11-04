@@ -1,12 +1,15 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { useAgentsStore } from '../../../stores/agents/agents'
 import { usePanelsStore } from '../../../stores/agents/panels'
 import { Wire } from '../../../stores/agents/__tests__/harness'
-import { buildTree, normalizeRun, type AgentRun } from '../../../stores/agents/tree'
+import { buildTree, foldRuns, normalizeRun, type AgentRun } from '../../../stores/agents/tree'
+import { useSessionStore } from '../../../stores/session'
 import ToolCard from '../../ToolCard.vue'
 import AgentTranscript from '../AgentTranscript.vue'
 import AgentView from '../AgentView.vue'
+import AgentsPanel from '../AgentsPanel.vue'
 import SubAgentTree from '../SubAgentTree.vue'
 
 function run(overrides: Record<string, unknown>): AgentRun {
@@ -130,5 +133,66 @@ describe('ToolCard with delegated runs', () => {
     await rows[0]?.trigger('click')
     expect(usePanelsStore().agentId).toBe('a1')
     expect(usePanelsStore().active).toBe('agents')
+  })
+})
+
+describe('AgentsPanel stall badges (CWP-03)', () => {
+  it('badges a live run that falls silent, and clears the badge when its beats resume', async () => {
+    const wire = new Wire()
+    await wire.connect()
+    // Beats only reach a session store that follows its session (the
+    // connection dispatches to registered followers), so subscribe first.
+    const session = useSessionStore('s1')
+    const subscribed = session.subscribe()
+    await wire.answer('session.subscribe', {
+      reset: true,
+      throughSeq: 1,
+      pendingAsks: [],
+      snapshot: { sessionId: 's1', status: 'idle', lastSeq: 1, pendingAsks: [], queue: [], messages: [] },
+    })
+    await subscribed
+    const agents = useAgentsStore()
+    const refreshing = agents.refresh('s1')
+    await flushPromises()
+    await wire.answer('agents.subtree', { items: [] })
+    await refreshing
+    const wrapper = mount(AgentsPanel, { props: { sessionId: 's1' }, global: { plugins: [pinia] } })
+    await flushPromises()
+    await wire.answer('agents.subtree', { items: [] })
+
+    const foldNow = (): Record<string, AgentRun> =>
+      foldRuns(agents.seed('s1'), Object.values(useSessionStore('s1').state.subagents))
+
+    wire.event('s1', 'subagent.progress', { id: 'a1', name: 'reviewer', op: 'progress', seq: 1, tail: 'reading', tokens: 40 }, false)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="agent-stall"]').exists()).toBe(false)
+
+    // The panel ticks once a second on its own clock; the spec advances the
+    // store with the same fold the panel renders, 31s of beat-less silence on.
+    agents.observeStalls('s1', foldNow(), Date.now() + 31_000)
+    await wrapper.vm.$nextTick()
+    const chip = wrapper.find('[data-testid="agent-stall"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toContain('reviewer')
+
+    // A resumed beat clears the badge through the panel's own watch: real
+    // activity, at wall-clock-adjacent time, above the token floor.
+    wire.event('s1', 'subagent.progress', { id: 'a1', op: 'progress', seq: 2, tail: 'thinking hard', tokens: 3000 }, false)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="agent-stall"]').exists()).toBe(false)
+
+    // Silence again: another minute without a beat badges it once more.
+    agents.observeStalls('s1', foldNow(), Date.now() + 61_000)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="agent-stall"]').exists()).toBe(true)
+
+    // A finished run is never badge-able: the terminal beat clears it at once.
+    wire.event('s1', 'subagent.finished', { id: 'a1', op: 'finished', outcome: 'complete', seq: 3, tail: '', tokens: 3000 }, false)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="agent-stall"]').exists()).toBe(false)
+    agents.observeStalls('s1', foldNow(), Date.now() + 92_000)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="agent-stall"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 })

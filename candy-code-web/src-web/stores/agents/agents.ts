@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 import type { MethodResult } from '../../protocol/generated'
 import { describe } from '../session'
 import { useConnectionStore } from '../connection'
+import type { AgentRun } from './tree'
+import { isStalled, observeStall, stallSeconds, type StallTrack } from './stall'
 
 export type TranscriptEntry = MethodResult<'agents.transcript'>['items'][number]
 export type ControlVerb = 'cancel' | 'pause' | 'resume' | 'background'
@@ -81,6 +83,51 @@ export const useAgentsStore = defineStore('agents', () => {
   /** Each seed's own `color` hex, keyed by run id — the live preset colour. */
   const runColours = ref<Record<string, string>>({})
   let catalogueLoaded = false
+
+  /**
+   * CWP-03 (PTV-P01 parity): the live stall detector's per-run threads, keyed
+   * `${sessionId}/${agentId}` in the same shape transcripts use, and the badge
+   * state derived from them — per session, the running agents whose output has
+   * sat under the char-proxy floor for the whole window, mapped to their whole
+   * stalled seconds. The arithmetic is the pure port in `./stall`; the Agents
+   * panel re-observes its fold on every change and on its own tick, since
+   * silence — unlike the server's per-tick pump — brings no arrival of its own.
+   */
+  const stallTracks = ref<Record<string, StallTrack>>({})
+  const stalledRuns = ref<Record<string, Record<string, number>>>({})
+
+  /**
+   * Fold this instant's run rows of $sessionId into the stall detector at
+   * $nowMs (the local wall clock; specs pass a synthetic one): a first-sighted
+   * live run records a baseline, a newer beat resets or accrues its window, a
+   * terminal or departed run loses its thread, and {@see stalledRuns} carries
+   * the verdict for the badge.
+   */
+  function observeStalls(sessionId: string, runs: Record<string, AgentRun>, nowMs: number): void {
+    const tracks: Record<string, StallTrack> = { ...stallTracks.value }
+    const stalled: Record<string, number> = {}
+    for (const [agentId, run] of Object.entries(runs)) {
+      const trackKey = key(sessionId, agentId)
+      const track = observeStall(tracks[trackKey], run, nowMs)
+      if (track === undefined) {
+        delete tracks[trackKey]
+        continue
+      }
+      tracks[trackKey] = track
+      if (isStalled(track, run, nowMs)) stalled[agentId] = Math.floor(stallSeconds(track, run, nowMs))
+    }
+    const prefix = `${sessionId}/`
+    for (const trackKey of Object.keys(tracks)) {
+      if (trackKey.startsWith(prefix) && runs[trackKey.slice(prefix.length)] === undefined) delete tracks[trackKey]
+    }
+    stallTracks.value = tracks
+    const next: Record<string, Record<string, number>> = {}
+    for (const [id, seconds] of Object.entries(stalledRuns.value)) {
+      if (id !== sessionId) next[id] = seconds
+    }
+    if (Object.keys(stalled).length > 0) next[sessionId] = stalled
+    stalledRuns.value = next
+  }
 
   /**
    * C-AGT-4.c: the agents a browser may offer as the session's primary —
@@ -223,5 +270,5 @@ export const useAgentsStore = defineStore('agents', () => {
     setPending(sessionId, agentId, (pending) => pending.filter((_, i) => i !== index))
   }
 
-  return { seeds, errors, transcripts, catalogue, roster, primaryRoster, runColours, seed, colourFor, refresh, refreshCatalogue, transcript, loadTranscript, message, control, dismissPending }
+  return { seeds, errors, transcripts, catalogue, roster, primaryRoster, runColours, seed, colourFor, refresh, refreshCatalogue, transcript, loadTranscript, message, control, dismissPending, stallTracks, stalledRuns, observeStalls }
 })
