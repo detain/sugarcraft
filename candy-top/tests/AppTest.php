@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMotionMsg;
@@ -277,6 +278,24 @@ final class AppTest extends TestCase
         $this->assertCount(20, $plain);
         $this->assertStringContainsString('Terminal size too small:', $plain[7]);
         $this->assertStringContainsString('Width = 80 Height = 24', $plain[11]);
+    }
+
+    /**
+     * The notice is painted before any layout exists, so it is the one frame
+     * that answers a colourless terminal alone: the ink profile the ambient
+     * veto installed must reach it (M5).
+     */
+    public function testTheSizeNoticeFollowsTheAmbientColourProfile(): void
+    {
+        [$mono] = self::booted(70, 20)->update(new ColorProfileMsg(ColorProfile::Ascii));
+        $this->assertSame(ColorProfile::Ascii, $mono->ink->profile());
+        $this->assertSame(SizeError::render(70, 20, 80, 24, ColorProfile::Ascii), $mono->view());
+        $this->assertStringNotContainsString(SizeError::RED, $mono->view());
+        $this->assertStringContainsString(
+            SizeError::RED,
+            self::booted(70, 20)->view(),
+            'a capable profile still gets the red verdict',
+        );
     }
 
     public function testResizeReflowsTheLayoutAndSeams(): void

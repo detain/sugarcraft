@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Tests\View;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\SizeError;
@@ -50,6 +51,34 @@ final class MiscViewTest extends TestCase
         foreach ($lines as $line) {
             $this->assertSame(10, Width::string($line));
         }
+    }
+
+    /**
+     * A terminal that declares it cannot carry colour (NO_COLOR resolves to
+     * Ascii, TERM=dumb to NoTty) gets the notice without btop's red/green
+     * verdict — the decoration is the only thing it cannot render, and the
+     * message is the numbers and the geometry, which survive untouched.
+     */
+    public function testTheSizeNoticeDropsTheColourVerdictOnAColourlessProfile(): void
+    {
+        $coloured = SizeError::surface(90, 20, 80, 24);
+
+        foreach ([ColorProfile::Ascii, ColorProfile::NoTty] as $profile) {
+            $mono = SizeError::surface(90, 20, 80, 24, $profile);
+            $this->assertSame($coloured->plainLines(), $mono->plainLines(), $profile->name . ' keeps btop geometry');
+            $this->assertStringContainsString('Width = 90 Height = 20', $mono->plainLines()[8]);
+
+            foreach ($mono->lines() as $line) {
+                $this->assertStringNotContainsString(SizeError::WHITE, $line, $profile->name . ' emits no white verdict');
+                $this->assertStringNotContainsString(SizeError::GREEN, $line, $profile->name . ' emits no green verdict');
+                $this->assertStringNotContainsString(SizeError::RED, $line, $profile->name . ' emits no red verdict');
+            }
+        }
+
+        // The default — every caller with no ink to consult — stays btop's bytes.
+        $this->assertStringContainsString(SizeError::GREEN . '9', $coloured->lines()[8]);
+        $this->assertStringContainsString(SizeError::RED . '2', $coloured->lines()[8]);
+        $this->assertSame(SizeError::render(90, 20, 80, 24), $coloured->render());
     }
 
     public function testUnits(): void

@@ -608,7 +608,7 @@ final class App implements Model
         if ($this->layout === null || !$this->framed()) {
             [$w, $h] = FrameBuilder::minSize($boxes, $this->cols, $this->roster(), $this->config->gpuBoxColumns(), $this->config->string('show_gpu_info'));
 
-            return SizeError::surface($this->cols, $this->rows, $w, $h);
+            return SizeError::surface($this->cols, $this->rows, $w, $h, $this->ink->profile());
         }
 
         $top = $this->overlays->top();
