@@ -114,8 +114,9 @@ final class MyCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $format = $input->getOption('format');
-        // The scanner registers the option but does not enforce `enum:`;
-        // for runtime checking call ValueEnum::validate() on the value.
+        // Scans into a ScriptUi application enforce `enum:` before the
+        // command runs (invalid values exit 2); custom runners such as
+        // CommandTester validate the value themselves via ValueEnum::validate().
         // ...
         return self::SUCCESS;
     }
