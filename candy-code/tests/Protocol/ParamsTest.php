@@ -47,4 +47,20 @@ final class ParamsTest extends TestCase
         $this->expectExceptionMessage('caps has an item longer than 8 bytes');
         $overCap->strings('caps', 1000, 8);
     }
+
+    /**
+     * CWPD-18 was REFUTED at review: the claim that `has()` reports an
+     * explicit null as present does not hold. This pins the refuted state
+     * so the contract stays visible.
+     */
+    public function testAnExplicitNullReadsAsAbsentOnEveryLeg(): void
+    {
+        $params = Params::of(['label' => null, 'count' => null, 'tags' => null]);
+
+        $this->assertFalse($params->has('label'));
+        $this->assertNull($params->optionalString('label'));
+        $this->assertSame(7, $params->int('count', 7));
+        $this->assertTrue($params->bool('count', true));
+        $this->assertSame([], $params->strings('tags'));
+    }
 }

@@ -7,6 +7,11 @@ namespace SugarCraft\Code\Protocol;
 /**
  * Typed reads of a request's `params`, each refusing with `-32602` and the
  * parameter's name — never with what the client sent, which is not echoed.
+ *
+ * A null-valued key reads as ABSENT, uniformly: `has()` refuses null, and
+ * every typed leg's `?? $default` agrees, so `{"tags": null}` is the same
+ * request as `{}` (CWPD-18 — the scope claim that `has()` reports a null
+ * as present does not hold at any commit we can find).
  */
 final class Params
 {
