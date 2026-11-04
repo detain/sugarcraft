@@ -58,6 +58,10 @@ return [
 재시작
 종료',
     'vs.record' => '전적: {wins}승 {losses}패',
+    'intro.title' => 'candy-tetris에 오신 것을 환영합니다',
+    'intro.goal' => '줄을 지우세요 - 위에 닿으면 끝',
+    'intro.press' => '{keys} 눌러 시작',
+    'intro.vs' => '대전 모드: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 알 수 없는 모드 "{flag}"',

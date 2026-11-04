@@ -58,6 +58,10 @@ pauze
 opnieuw
 afsluiten',
     'vs.record' => 'balans: {wins} gewonnen, {losses} verloren',
+    'intro.title' => 'welkom bij candy-tetris',
+    'intro.goal' => 'verwijder regels - bereik de top niet',
+    'intro.press' => 'druk op {keys} om te spelen',
+    'intro.vs' => 'versusmodus: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: onbekende modus "{flag}"',

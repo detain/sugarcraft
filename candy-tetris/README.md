@@ -137,6 +137,19 @@ The edges, honestly:
 - One token may serve two actions (by default `space` is both `hard-drop`
   and `begin`): each screen dispatches in one context.
 
+### First run
+
+A solo launch whose record has never seen the on-ramp opens on a card over
+the fresh board: what to do (clear lines), what loses (reaching the top),
+which keys start play, and the versus affordance (`candy-tetris -v`). The
+start tokens on the card are the **live** ones — remap `begin` and the card
+says so. **Space** or **Enter** (the defaults) dismisses the card and marks
+the record onboarded through the same `scores.json`; **q** quits without
+marking, so a game closed unseen shows the card again next launch. Versus
+mode never opens the card (it is advertised on it instead). A machine with
+no resolvable HOME cannot write the mark, so the card honestly re-shows
+every launch rather than pretending the visit was remembered.
+
 ### Game over
 
 The game ends when the next piece has no room to spawn, the stack reaches the

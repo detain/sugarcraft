@@ -58,6 +58,10 @@ return [
 заново
 выход',
     'vs.record' => 'счёт: {wins} выиграно, {losses} проиграно',
+    'intro.title' => 'добро пожаловать в candy-tetris',
+    'intro.goal' => 'удаляйте линии - не достигайте верха',
+    'intro.press' => 'нажмите {keys} чтобы играть',
+    'intro.vs' => 'дуэльный режим: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: неизвестный режим "{flag}"',

@@ -96,6 +96,10 @@ final class Renderer
         $sidebar  = self::renderSidebar($game, $game->frameRows < self::NATURAL_ROWS, $plain);
         $body = Layout::joinHorizontal(0.0, $playfield, '  ', $sidebar);
 
+        if ($game->introPending === true) {
+            // MA-24: the on-ramp card overlays the fresh board it teaches.
+            return self::paintBanner($body, self::introLines($game));
+        }
         if ($game->over === true) {
             return self::paintBanner($body, self::overLines($game));
         }
@@ -103,6 +107,24 @@ final class Renderer
             return self::paintBanner($body, [Lang::t('paused')]);
         }
         return $body;
+    }
+
+    /**
+     * The first-run on-ramp as plain text lines (MA-24): what to do, the
+     * losing condition, how to start — with the LIVE begin tokens so a
+     * remapped table remaps the card too — and the versus affordance the
+     * CLI-only mode selection lacked.
+     *
+     * @return list<string>
+     */
+    private static function introLines(Game $game): array
+    {
+        return [
+            Lang::t('intro.title'),
+            Lang::t('intro.goal'),
+            Lang::t('intro.press', ['keys' => $game->introBeginLabel()]),
+            Lang::t('intro.vs'),
+        ];
     }
 
     /**

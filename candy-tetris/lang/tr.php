@@ -58,6 +58,10 @@ duraklat
 yeniden
 çık',
     'vs.record' => 'rekor: {wins} galibiyet, {losses} mağlubiyet',
+    'intro.title' => 'candy-tetris oyununa hoş geldin',
+    'intro.goal' => 'satırları temizle - tepeye ulaşma',
+    'intro.press' => 'oynamak için {keys} tuşuna bas',
+    'intro.vs' => 'dövüş modu: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: bilinmeyen mod "{flag}"',

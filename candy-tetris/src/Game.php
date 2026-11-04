@@ -150,6 +150,12 @@ final class Game implements Model
          * board (a restart never inherits the shout).
          */
         public readonly bool $newBest = false,
+        /**
+         * MA-24: the first-run on-ramp card is up. True only when the
+         * launcher seeds it (solo mode, record never onboarded); the
+         * default false keeps every existing construction byte-identical.
+         */
+        public readonly bool $introPending = false,
     ) {}
 
     /** Death by spawn-block: the freshly spawned piece does not fit. */
@@ -207,6 +213,7 @@ final class Game implements Model
             $changes['scores']         ?? $this->scores,
             $changes['scoresPath']     ?? $this->scoresPath,
             $changes['newBest']        ?? $this->newBest,
+            $changes['introPending']  ?? $this->introPending,
         );
     }
 
@@ -221,14 +228,14 @@ final class Game implements Model
         return $this->frameCols < Renderer::MIN_COLS || $this->frameRows < Renderer::MIN_ROWS;
     }
 
-    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null): self
+    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false): self
     {
         $bag ??= new Bag();
         [$first, $bag] = $bag->next();
         $piece = self::spawn($first);
         // init() will arm the gravity chain; the pending slot starts taken
         // so no key path can double-book it before then.
-        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings, scores: $scores, scoresPath: $scoresPath);
+        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings, scores: $scores, scoresPath: $scoresPath, introPending: $introPending);
     }
 
     /**
@@ -237,7 +244,7 @@ final class Game implements Model
      * @param int $lockDelayMs Grounded window length in milliseconds
      *                         (SRS-style: ~0.5 s, independent of gravity).
      */
-    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null): self
+    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null, bool $introPending = false): self
     {
         $bag ??= new Bag();
         [$first, $bag] = $bag->next();
@@ -252,6 +259,7 @@ final class Game implements Model
             bindings: $bindings,
             scores: $scores,
             scoresPath: $scoresPath,
+            introPending: $introPending,
         );
     }
 
@@ -377,6 +385,61 @@ final class Game implements Model
      * The pre-MA-23 dispatch body, unchanged: posture, notice screen,
      * banner screen, live keys, gravity, lock window.
      */
+    /**
+     * MA-24: the on-ramp screen. The board freezes the way pause freezes
+     * it (the gravity chain keeps its heartbeat, nothing steps); 'begin'
+     * starts play and marks the record onboarded, and 'quit' leaves
+     * UNMARKED — closing the game unseen must not count as having seen
+     * it, so the card comes back next launch. A save refusal is announced
+     * on stderr exactly like the settle path's, never silent.
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function handleIntro(Msg $msg): array
+    {
+        if ($msg instanceof KeyMsg) {
+            if ($this->keys()->matches($msg, 'quit')) {
+                return [$this, Cmd::quit()];
+            }
+            if ($this->keys()->matches($msg, 'begin')) {
+                $closed = $this->mutate(['introPending' => false]);
+                if ($closed->scoresPath !== null) {
+                    $next = ($closed->scores ?? new Scores())->withOnboarded();
+                    $closed = $closed->mutate(['scores' => $next]);
+                    try {
+                        $next->save($closed->scoresPath);
+                    } catch (\Throwable $problem) {
+                        fwrite(STDERR, 'candy-tetris: could not save scores (' . self::cliVisible($problem->getMessage()) . ")\n");
+                    }
+                }
+                return [$closed, null];
+            }
+            return [$this, null];
+        }
+        if ($msg instanceof GravityMsg) {
+            if ($msg->chain !== $this->gravityChain || $this->gravityPending === false) {
+                return [$this, null];
+            }
+            return self::armGravity($this->mutate(['gravityPending' => false]));
+        }
+        if ($msg instanceof LockDelayMsg) {
+            if ($msg->generation !== $this->lockWindowGeneration) {
+                return [$this, null];
+            }
+            return [$this, $this->scheduleLockDelay($msg->generation)];
+        }
+        return [$this, null];
+    }
+
+    /**
+     * The live token labels the on-ramp card prints for the start action
+     * (m27: a remapped begin shows remapped on the card).
+     */
+    public function introBeginLabel(): string
+    {
+        return $this->keys()->label('begin');
+    }
+
     private function stepGame(Msg $msg): array
     {
         // Terminal posture first (C-2): a resize or capability report is
@@ -417,6 +480,13 @@ final class Game implements Model
                 return [$this, $this->scheduleLockDelay($msg->generation)];
             }
             return [$this, null];
+        }
+
+        if ($this->introPending === true) {
+            // MA-24: the on-ramp card sits after the too-small notice — a
+            // frame that cannot show the board cannot honestly show the
+            // card either — and before the over screen it can never reach.
+            return $this->handleIntro($msg);
         }
 
         if ($this->over === true) {

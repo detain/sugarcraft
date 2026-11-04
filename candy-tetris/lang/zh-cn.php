@@ -58,6 +58,10 @@ return [
 重开
 退出',
     'vs.record' => '战绩: {wins} 胜, {losses} 负',
+    'intro.title' => '欢迎游玩 candy-tetris',
+    'intro.goal' => '消除行 - 别堆到顶部',
+    'intro.press' => '按 {keys} 开始',
+    'intro.vs' => '对战模式: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 未知模式 "{flag}"',

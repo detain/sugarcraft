@@ -58,6 +58,10 @@ return [
 再開
 終了',
     'vs.record' => '通算: {wins}勝 {losses}敗',
+    'intro.title' => 'candy-tetris へようこそ',
+    'intro.goal' => '行を消す - 上まで積んだら終わり',
+    'intro.press' => '{keys} で開始',
+    'intro.vs' => '対戦モード: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 不明なモード "{flag}"',

@@ -58,6 +58,10 @@ return [
 إعادة
 خروج',
     'vs.record' => 'السجل: {wins} فوز، {losses} خسارة',
+    'intro.title' => 'مرحبًا بك في candy-tetris',
+    'intro.goal' => 'امسح الأسطر - لا تصل إلى القمة',
+    'intro.press' => 'اضغط {keys} للعب',
+    'intro.vs' => 'وضع المبارزة: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: وضع غير معروف "{flag}"',

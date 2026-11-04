@@ -58,6 +58,10 @@ pausar
 reiniciar
 sair',
     'vs.record' => 'placar: {wins} vitórias, {losses} derrotas',
+    'intro.title' => 'bem-vindo ao candy-tetris',
+    'intro.goal' => 'elimine linhas - não chegue ao topo',
+    'intro.press' => 'pressione {keys} para jogar',
+    'intro.vs' => 'modo versus: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: modo desconhecido "{flag}"',

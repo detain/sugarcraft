@@ -58,6 +58,10 @@ pauza
 restart
 konec',
     'vs.record' => 'zápas: {wins} vyhráno, {losses} prohráno',
+    'intro.title' => 'vítejte v candy-tetris',
+    'intro.goal' => 'maž řádky - nedosáhni na vrchol',
+    'intro.press' => 'pro hraní stiskni {keys}',
+    'intro.vs' => 'režim proti sobě: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: neznámý režim "{flag}"',

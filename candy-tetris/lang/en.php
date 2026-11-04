@@ -52,6 +52,10 @@ pause
 restart
 quit',
     'vs.record' => 'record: {wins} won, {losses} lost',
+    'intro.title' => 'welcome to candy-tetris',
+    'intro.goal' => 'clear lines - do not reach the top',
+    'intro.press' => 'press {keys} to play',
+    'intro.vs' => 'versus mode: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: unknown mode "{flag}"',

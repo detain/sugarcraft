@@ -138,7 +138,9 @@ final class LocaleParityTest extends TestCase
             'hold_used', 'combo_line', 'b2b_line',
             'over.best', 'over.new_best',
             'label.player', 'label.computer', 'win.player', 'win.computer',
-            'over.quit_hint', 'vs_keys', 'vs.record', 'mode.unknown', 'help_text',
+            'over.quit_hint', 'vs_keys', 'vs.record',
+            'intro.title', 'intro.goal', 'intro.press', 'intro.vs',
+            'mode.unknown', 'help_text',
         ] as $key) {
             $this->assertArrayHasKey($key, $en, "en.php must own '$key' — visible strings never live inline");
         }

@@ -113,7 +113,15 @@ $game = match ($mode) {
     LaunchMode::VS => VsGame::start($bindings, $scores, $scoresPath),
     // Single-player enables lock delay so a grounded piece can still be
     // nudged/rotated for a short window before it locks (W15 / SRS QoL).
-    default => Game::startWithLockDelay(bindings: $bindings, scores: $scores, scoresPath: $scoresPath),
+    // MA-24: a solo launch whose record has never seen the on-ramp opens
+    // on the card. Without a resolvable HOME the mark cannot be written,
+    // so the card honestly re-shows every launch rather than lying once.
+    default => Game::startWithLockDelay(
+        bindings: $bindings,
+        scores: $scores,
+        scoresPath: $scoresPath,
+        introPending: $scores === null || $scores->onboarded === false,
+    ),
 };
 
 // MA-12: one capability profile, probed once at launch, drives BOTH the

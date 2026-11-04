@@ -58,6 +58,10 @@ pausa
 ricomincia
 esci',
     'vs.record' => 'bilancio: {wins} vinte, {losses} perse',
+    'intro.title' => 'benvenuto in candy-tetris',
+    'intro.goal' => 'elimina le righe - non arrivare in cima',
+    'intro.press' => 'premi {keys} per giocare',
+    'intro.vs' => 'modalita versus: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: modalità sconosciuta "{flag}"',

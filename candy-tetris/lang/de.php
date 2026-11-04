@@ -58,6 +58,10 @@ Pause
 Neustart
 beenden',
     'vs.record' => 'Bilanz: {wins} gewonnen, {losses} verloren',
+    'intro.title' => 'willkommen bei candy-tetris',
+    'intro.goal' => 'Linien löschen - nicht oben ankommen',
+    'intro.press' => 'drücke {keys} zum Spielen',
+    'intro.vs' => 'Versus-Modus: candy-tetris -v',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: unbekannter Modus "{flag}"',
