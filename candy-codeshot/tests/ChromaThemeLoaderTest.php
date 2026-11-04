@@ -156,4 +156,29 @@ final class ChromaThemeLoaderTest extends TestCase
         $this->assertSame('#9ece6a', $theme->windowGreen);
         $this->assertSame('#ff9e64', $theme->windowYellow);
     }
+
+    public function testChromaTopLevelFontFamilyPassesThroughTheSameCharsetDoor(): void
+    {
+        // chroma carries fontFamily as a top-level key (VsCode reads it from a
+        // tokenColor's settings), but both loaders hand it to the identical
+        // sanitizeFontFamily charset door before it can reach an SVG attribute.
+        $load = static fn (mixed $family): \SugarCraft\CodeShot\Theme => ChromaThemeLoader::fromArray([
+            'background'  => '#0d1117',
+            'foreground'  => '#c9d1d9',
+            'colors'      => [],
+            'fontFamily'  => $family,
+        ]);
+
+        $this->assertSame(
+            'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
+            $load('"/></style><circle onload="x"/>')->fontFamily,
+            'markup in a theme fontFamily must never reach the renderer',
+        );
+        $this->assertSame(
+            'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
+            $load("Iosevka\x07term")->fontFamily,
+            'a control byte is outside the admitted charset',
+        );
+        $this->assertSame('Iosevka Term, monospace', $load('Iosevka Term, monospace')->fontFamily);
+    }
 }

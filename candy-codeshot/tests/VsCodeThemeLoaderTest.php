@@ -189,4 +189,37 @@ final class VsCodeThemeLoaderTest extends TestCase
         $this->assertSame('#9ece6a', $theme->windowGreen);
         $this->assertSame('#ff9e64', $theme->windowYellow);
     }
+
+    public function testFontFamilyWhitelistRefusesMarkupAndKeepsPlainNames(): void
+    {
+        // The loader echoes fontFamily straight into SVG attributes and CSS, so a
+        // theme file cannot smuggle markup through it. sanitizeFontFamily is a
+        // charset door: anything outside [A-Za-z0-9 ,"'-] falls back to the house
+        // default (ThemeTest only ever asserted the default, leaving the door
+        // itself unpinned — removing sanitizeFontFamily reddened nothing).
+        $with = static fn (string $family): \SugarCraft\CodeShot\Theme => VsCodeThemeLoader::fromArray([
+            'colors'      => ['editor.background' => '#0d1117', 'editor.foreground' => '#c9d1d9'],
+            'tokenColors' => [['scope' => 'comment', 'settings' => ['fontFamily' => $family]]],
+        ]);
+
+        // Hostile: closing a style block and opening a script tag.
+        $this->assertSame(
+            'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
+            $with('</style><script>')->fontFamily,
+            'markup in a theme fontFamily must never reach the renderer',
+        );
+        // Hostile edge actually shipped: an ESC byte is outside the charset.
+        $this->assertSame(
+            'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
+            $with("Fira\x1b[31mCode")->fontFamily,
+        );
+        // Empty is refused by the '+' quantifier, not accepted as a blank family.
+        $this->assertSame(
+            'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
+            $with('')->fontFamily,
+        );
+        // Positive polarity: the door is a whitelist, not a blanket reject — a
+        // plainly-named family with its house punctuation rides through untouched.
+        $this->assertSame("Fira Code, 'Menlo', monospace", $with("Fira Code, 'Menlo', monospace")->fontFamily);
+    }
 }
