@@ -10,6 +10,7 @@
 │          [0m │
 ╰───────────╯
   [1m[38;2;110;231;183m★ cleared — press r to play again · 0:00 · NEW BEST[0m
-  [38;2;125;110;152m↑ ↓ ← → / hjkl  move  ·  space / enter  reveal                         [0m
+  [38;2;125;110;152ma number counts nearby mines                                           [0m
+[38;2;125;110;152m  ↑ ↓ ← → / hjkl  move  ·  space / enter  reveal                       [0m
 [38;2;125;110;152m  f  flag  ·  c / middle-click  open around flags  ·  right-click  flag[0m
 [38;2;125;110;152m  r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit        [0m

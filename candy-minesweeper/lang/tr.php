@@ -21,6 +21,7 @@ return [
     'ui.status' => 'mayın: {mines}  ·  bayrak: {flags}  ·  kalan: {remaining}  ·  süre: {time}',
     'ui.boom' => '💥 bum — yeniden başlatmak için r tuşuna basın',
     'ui.cleared' => '★ tamamlandı — tekrar oynamak için r tuşuna basın',
+    'ui.help_rules' => 'sayı yakındaki mayınları sayar',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  hareket  ·  space / enter  aç',
     'ui.help_board' => 'f  bayrak  ·  c / orta tık  çevreyi aç  ·  sağ tık  bayrak',
     'ui.help_session' => 'r  yeniden  ·  S  kaydet  ·  L  yükle  ·  q / Esc / Ctrl+C  çık',

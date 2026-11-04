@@ -80,6 +80,8 @@ Five pure-state classes plus the runtime Model, renderer, UI helper, and persist
 | `Ui/CustomDifficulty`   | Validated custom board dimensions — rows (2–50), cols (2–50), mines (1 to rows×cols−9). The mine cap means boards smaller than 10 cells (e.g. 2×2, 3×3) pass the side checks but can never validate; error messages name the violated bound. Throws i18n-aware `InvalidArgumentException` on constraint violation. |
 | `Renderer`              | Pure view function. SugarStyle `Style` + `Border::rounded()`                                   |
 
+**Numbers are the clue**: a revealed cell shows how many of its eight neighbours hide mines — the same rule the in-game help footer teaches on the first line (M13), so a first-timer never has to guess what the digits mean.
+
 The first reveal is always safe — mines are placed only after click 1, with the clicked cell's 3×3 neighbourhood excluded so the player gets a non-trivial flood-fill on every game.
 
 **Chord click** (`c` / middle-click): when a revealed number has exactly the right number of flagged neighbours, chord-clicking it safely reveals all remaining neighbours. This mirrors the standard left+right simultaneous press in classic minesweeper.

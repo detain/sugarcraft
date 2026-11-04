@@ -21,6 +21,7 @@ return [
     'ui.status' => 'minas: {mines}  ·  bandeiras: {flags}  ·  restantes: {remaining}  ·  tempo: {time}',
     'ui.boom' => '💥 boom — pressione r para reiniciar',
     'ui.cleared' => '★ vencido — pressione r para jogar novamente',
+    'ui.help_rules' => 'um número conta as minas próximas',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  mover  ·  espaço / enter  revelar',
     'ui.help_board' => 'f  bandeira  ·  c / clique do meio  ao redor  ·  clique direito  bandeira',
     'ui.help_session' => 'r  reiniciar  ·  S  salvar  ·  L  carregar  ·  q / Esc / Ctrl+C  sair',

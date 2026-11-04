@@ -21,6 +21,7 @@ return [
     'ui.status' => 'ألغام: {mines}  ·  أعلام: {flags}  ·  متبقٍ: {remaining}  ·  وقت: {time}',
     'ui.boom' => '💥 بوم — اضغط r لإعادة البدء',
     'ui.cleared' => '★ تمّ التنقية — اضغط r للعب مجدداً',
+    'ui.help_rules' => 'الرقم يحسب الألغام المجاورة',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  تحريك  ·  مسافة / enter  كشف',
     'ui.help_board' => 'f  علم  ·  c / الزر الأوسط  ما حول  ·  النقر الأيمن  علم',
     'ui.help_session' => 'r  إعادة  ·  S  حفظ  ·  L  تحميل  ·  q / Esc / Ctrl+C  خروج',

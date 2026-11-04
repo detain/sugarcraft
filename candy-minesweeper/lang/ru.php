@@ -21,6 +21,7 @@ return [
     'ui.status' => 'мины: {mines}  ·  флаги: {flags}  ·  осталось: {remaining}  ·  время: {time}',
     'ui.boom' => '💥 бум — нажмите r для новой игры',
     'ui.cleared' => '★ поле раскрыто — нажмите r, чтобы сыграть снова',
+    'ui.help_rules' => 'цифра — число мин рядом',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  движение  ·  space / enter  открыть',
     'ui.help_board' => 'f  флаг  ·  c / средняя кнопка  вокруг  ·  правая кнопка  флаг',
     'ui.help_session' => 'r  заново  ·  S  сохранить  ·  L  загрузить  ·  q / Esc / Ctrl+C  выход',

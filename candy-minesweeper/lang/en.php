@@ -21,6 +21,7 @@ return [
     'ui.status' => 'mines: {mines}  ·  flags: {flags}  ·  remaining: {remaining}  ·  time: {time}',
     'ui.boom' => '💥 boom — press r to restart',
     'ui.cleared' => '★ cleared — press r to play again',
+    'ui.help_rules' => 'a number counts nearby mines',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  move  ·  space / enter  reveal',
     'ui.help_board' => 'f  flag  ·  c / middle-click  open around flags  ·  right-click  flag',
     'ui.help_session' => 'r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit',

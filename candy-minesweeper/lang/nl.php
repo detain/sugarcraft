@@ -21,6 +21,7 @@ return [
     'ui.status' => 'mijnen: {mines}  ·  vlaggen: {flags}  ·  over: {remaining}  ·  tijd: {time}',
     'ui.boom' => '💥 boem — druk op r om opnieuw te starten',
     'ui.cleared' => '★ gewonnen — druk op r om opnieuw te spelen',
+    'ui.help_rules' => 'een getal telt de mijnen eromheen',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  spatie / enter  onthullen',
     'ui.help_board' => 'f  vlaggen  ·  c / middelste muisknop  rondom  ·  rechtermuisknop  vlaggen',
     'ui.help_session' => 'r  herstart  ·  S  opslaan  ·  L  laden  ·  q / Esc / Ctrl+C  afsluiten',

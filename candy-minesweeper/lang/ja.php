@@ -21,6 +21,7 @@ return [
     'ui.status' => '地雷: {mines}  ·  フラグ: {flags}  ·  残り: {remaining}  ·  時間: {time}',
     'ui.boom' => '💥 ドカン — r で再スタート',
     'ui.cleared' => '★ クリア — r でもう一度',
+    'ui.help_rules' => '数字は周囲の地雷の数',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  移動  ·  space / enter  開く',
     'ui.help_board' => 'f  旗  ·  c / 中クリック  周囲を公開  ·  右クリック  旗',
     'ui.help_session' => 'r  リスタート  ·  S  保存  ·  L  読込  ·  q / Esc / Ctrl+C  終了',

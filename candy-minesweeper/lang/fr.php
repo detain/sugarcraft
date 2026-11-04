@@ -21,6 +21,7 @@ return [
     'ui.status' => 'mines : {mines}  ·  drapeaux : {flags}  ·  restants : {remaining}  ·  temps : {time}',
     'ui.boom' => '💥 boum — appuyez sur r pour recommencer',
     'ui.cleared' => '★ gagné — appuyez sur r pour rejouer',
+    'ui.help_rules' => 'un chiffre compte les mines voisines',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  déplacer  ·  espace / entrée  révéler',
     'ui.help_board' => 'f  drapeau  ·  c / clic du milieu  groupée  ·  clic droit  drapeau',
     'ui.help_session' => 'r  rejouer  ·  S  sauvegarder  ·  L  charger  ·  q / Esc / Ctrl+C  quitter',

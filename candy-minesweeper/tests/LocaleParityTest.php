@@ -57,8 +57,25 @@ final class LocaleParityTest extends TestCase
         }
         // The ui.* family is what makes MAJOR-2 (i18n dormant) stay fixed:
         // every visible game string must live here, never inline in code.
-        foreach (['status', 'boom', 'cleared', 'help_moves', 'help_board', 'help_session'] as $suffix) {
+        foreach (['status', 'boom', 'cleared', 'help_rules', 'help_moves', 'help_board', 'help_session'] as $suffix) {
             $this->assertArrayHasKey("ui.$suffix", $en);
         }
+    }
+
+    /**
+     * Roster-count arm (review R1 §3): the data provider above can only
+     * compare files that exist — deleting a whole locale would silently
+     * shrink the shipped set to 15 and every leg would stay green. The
+     * shipped count is pinned HERE so a removed (or added) locale file goes
+     * red on its own, and the provider roster below names the expected codes.
+     */
+    public function testTheShippedLocaleRosterIsExactlySixteenFiles(): void
+    {
+        $codes = array_keys(self::localeFiles());
+        sort($codes);
+        $this->assertSame([
+            'ar', 'cs', 'de', 'en', 'es', 'fr', 'it', 'ja',
+            'ko', 'nl', 'pl', 'pt', 'pt-br', 'ru', 'tr', 'zh-cn',
+        ], $codes, 'shipped locale roster changed — a count change must be a deliberate edit here');
     }
 }

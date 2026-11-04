@@ -21,6 +21,7 @@ return [
     'ui.status' => 'miny: {mines}  ·  flagi: {flags}  ·  pozostało: {remaining}  ·  czas: {time}',
     'ui.boom' => '💥 bum — naciśnij r, aby zacząć od nowa',
     'ui.cleared' => '★ wygrane — naciśnij r, aby zagrać ponownie',
+    'ui.help_rules' => 'liczba oznacza miny w pobliżu',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  ruch  ·  spacja / enter  odkryj',
     'ui.help_board' => 'f  flaga  ·  c / środkowy przycisk  dookólne  ·  prawy przycisk  flaga',
     'ui.help_session' => 'r  restart  ·  S  zapisz  ·  L  wczytaj  ·  q / Esc / Ctrl+C  wyjdź',

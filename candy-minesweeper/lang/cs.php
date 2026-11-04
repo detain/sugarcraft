@@ -21,6 +21,7 @@ return [
     'ui.status' => 'miny: {mines}  ·  vlajky: {flags}  ·  zbývá: {remaining}  ·  čas: {time}',
     'ui.boom' => '💥 bouch — stiskněte r pro restart',
     'ui.cleared' => '★ vyčištěno — stiskněte r pro novou hru',
+    'ui.help_rules' => 'číslo udává počet min v okolí',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  pohyb  ·  mezerník / enter  odkrytí',
     'ui.help_board' => 'f  vlajka · c / prostřední tlačítko  odkrytí okolí · pravé tlačítko  vlajka',
     'ui.help_session' => 'r  restart  ·  S  uložit  ·  L  načíst  ·  q / Esc / Ctrl+C  konec',

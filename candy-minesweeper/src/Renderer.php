@@ -135,7 +135,11 @@ final class Renderer
         // an 80-column terminal — FooterWidthGuardTest enforces that budget
         // across the whole set so a translation can never silently overflow
         // it again (the M16 finding: fr sat at 78-79 BEFORE this indent).
+        // M13: the rules line leads the footer so a first-timer reads the
+        // win condition before the key legend — TeachToPlayTest pins that
+        // this copy reaches every frame via this call site.
         $help = implode("\n" . $indent, [
+            Lang::t('ui.help_rules'),
             Lang::t('ui.help_moves'),
             Lang::t('ui.help_board'),
             Lang::t('ui.help_session'),
