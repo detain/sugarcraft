@@ -18,6 +18,7 @@ use SugarCraft\Code\Media\Voice\VoiceConfig;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Protocol\CallContext;
+use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\MethodRegistry;
 use SugarCraft\Code\Protocol\MethodSpec;
@@ -77,8 +78,23 @@ final class MediaMethods
     /** Default slice for `media.fetch` when the client names no limit. */
     public const FETCH_DEFAULT_BYTES = 524_288;
 
-    /** Hard ceiling on one `media.fetch` slice, matching the schema bound. */
-    public const FETCH_MAX_BYTES = 4_194_304;
+    /**
+     * Headroom the JSON-RPC envelope around a `media.fetch` answer costs
+     * inside the server frame cap — same value as SessionMethods' export
+     * headroom, and it covers id/method/JSON framing with margin.
+     */
+    public const FETCH_ANSWER_HEADROOM_BYTES = 65_536;
+
+    /**
+     * Hard ceiling on one `media.fetch` slice, matching the schema bound
+     * (the schema derives it from this constant). Bounded by the frame, not
+     * just the byte wish: the answer base64-encodes the slice, and
+     * Dispatcher would refuse a frame over MAX_SERVER_FRAME_BYTES — a
+     * client asking for the full 4 MiB would get a too-large error and an
+     * unanswerable request. Raw bytes must fit four-thirds down from the
+     * cap minus envelope headroom: 3/4 of (4 MiB − 64 KiB) = 3,096,576.
+     */
+    public const FETCH_MAX_BYTES = (Dispatcher::MAX_SERVER_FRAME_BYTES - self::FETCH_ANSWER_HEADROOM_BYTES) * 3 / 4;
 
     /** Ledger directory inside the session's media folder. */
     public const LEDGER_DIR = 'jobs';

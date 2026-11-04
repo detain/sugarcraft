@@ -12,6 +12,7 @@ use SugarCraft\Code\Media\MediaRequest;
 use SugarCraft\Code\Permissions\PermissionDecision;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\Methods\MediaMethods;
 use SugarCraft\Code\Protocol\Schema\MethodSchemas;
@@ -467,6 +468,31 @@ final class MediaMethodsTest extends TestCase
             'artifactId' => $artifactId,
         ]);
         self::assertSame(base64_encode('bytes'), $defaulted['bytes'], 'the 512 KiB default answers a small artifact whole');
+    }
+
+    /**
+     * CWPD-3: the cap existed inside the wrong bound — media.fetch answers
+     * base64-encode their slice inside the response, and the server framer
+     * refuses a frame over Dispatcher::MAX_SERVER_FRAME_BYTES. A client
+     * asking for the old full-4MiB slice could never be answered. The cap
+     * is now 3/4 of the frame minus envelope headroom, so the answer to the
+     * largest allowed slice still fits the frame that carries it.
+     */
+    public function testTheMaximumSliceIsAnswerableInsideTheFrameThatCarriesIt(): void
+    {
+        self::assertIsInt(MediaMethods::FETCH_MAX_BYTES, 'the headroom math divides evenly — no float drift into the schema bound');
+        $encoded = \strlen(\base64_encode(\str_repeat('x', MediaMethods::FETCH_MAX_BYTES)));
+        self::assertLessThanOrEqual(
+            Dispatcher::MAX_SERVER_FRAME_BYTES - MediaMethods::FETCH_ANSWER_HEADROOM_BYTES,
+            $encoded,
+            'a slice at the cap, encoded, must fit the frame minus the envelope that wraps it',
+        );
+
+        self::assertGreaterThan(
+            Dispatcher::MAX_SERVER_FRAME_BYTES,
+            \strlen(\base64_encode(\str_repeat('x', Dispatcher::MAX_SERVER_FRAME_BYTES))),
+            'fixture: the old cap (raw = frame) encoded well past the frame — that is the CWPD-3 unanswerable request',
+        );
     }
 
     // ── one vocabulary, three doors ────────────────────────────────────
