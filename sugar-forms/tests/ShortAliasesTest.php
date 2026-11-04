@@ -152,6 +152,10 @@ final class ShortAliasesTest extends TestCase
             ->title('T')->desc('D')
             ->options('a', 'b', 'c')->view();
         $this->assertSame($long, $short);
+
+        $windowedLong  = RadioPills::new('k')->withOptions('alpha', 'beta', 'gamma')->withWidth(12)->view();
+        $windowedShort = RadioPills::new('k')->options('alpha', 'beta', 'gamma')->width(12)->view();
+        $this->assertSame($windowedLong, $windowedShort);
     }
 
     public function testFilePickerKnobsRoundTripViaAccessors(): void

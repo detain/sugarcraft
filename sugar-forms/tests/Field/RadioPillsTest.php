@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\Field\RadioPills;
 
 /**
@@ -197,5 +198,165 @@ final class RadioPillsTest extends TestCase
         self::assertSame($p, $p->revalidate());
         self::assertNull($p->getError());
         self::assertFalse($p->skippable());
+    }
+
+    // ------------------------------------------------------------------
+    // Horizontal window (withWidth)
+    // ------------------------------------------------------------------
+
+    /**
+     * The provider-wizard roster that motivated the window: eleven pills,
+     * full row 123 cells, a terminal strip that used to silently cut the
+     * tail off-grid.
+     */
+    private function nnRoster(): RadioPills
+    {
+        return $this->pillsAt(
+            'openai', 'azure', 'anthropic', 'claude-code', 'codex', 'sglang',
+            'bedrock', 'vertex', 'gemini', 'openrouter', 'custom',
+        );
+    }
+
+    private function firstRow(RadioPills $p): string
+    {
+        return explode("\n", $p->view())[0];
+    }
+
+    private function highlight(string $label): string
+    {
+        return Ansi::sgr(Ansi::REVERSE) . ' ' . $label . ' ' . Ansi::reset();
+    }
+
+    public function testNoWidthKeepsTheFullRowByteIdentical(): void
+    {
+        // The BC law: with no budget the row is today's unwindowed line —
+        // every pill present, no ellipsis anywhere.
+        $row = $this->firstRow($this->nnRoster());
+        self::assertStringNotContainsString('…', $row);
+        self::assertStringContainsString(' custom ', $row, 'the tail pill is still emitted whole');
+        self::assertGreaterThanOrEqual(120, Width::string($row));
+        // A generous budget that the roster fits inside is byte-identical
+        // to no budget at all.
+        self::assertSame($row, $this->firstRow($this->nnRoster()->withWidth(500)));
+    }
+
+    public function testWindowFollowsSelectionAtStartMiddleAndEnd(): void
+    {
+        // The exact over-clip case: eleven pills against a 40-cell strip.
+        $at = $this->nnRoster()->withWidth(40);
+
+        $start = $this->firstRow($at->withValue('openai'));
+        self::assertSame(
+            $this->highlight('openai') . '   ' . ' azure ' . '   ' . ' anthropic ' . '   ' . '…',
+            $start,
+            'start window is deterministic: no head marker, tail marker for the hidden eight',
+        );
+
+        $middle = $this->firstRow($at->withValue('sglang'));
+        self::assertStringContainsString($this->highlight('sglang'), $middle);
+        self::assertStringStartsWith('…', $middle);
+        self::assertStringEndsWith('…', $middle);
+
+        $end = $this->firstRow($at->withValue('custom'));
+        self::assertStringContainsString($this->highlight('custom'), $end, 'the selected last pill is ON the visible grid');
+        self::assertStringStartsWith('…', $end);
+        self::assertStringNotContainsString('openai', $end, 'the head of the roster is paged out');
+    }
+
+    public function testMarkersAppearExactlyOnClippedSides(): void
+    {
+        $at = $this->nnRoster()->withWidth(40);
+        self::assertSame(1, substr_count($this->firstRow($at->withValue('openai')), '…'), 'nothing clipped before the first pill');
+        self::assertSame(1, substr_count($this->firstRow($at->withValue('custom')), '…'), 'nothing clipped after the last pill');
+        self::assertSame(2, substr_count($this->firstRow($at->withValue('sglang')), '…'));
+        self::assertSame(0, substr_count($this->firstRow($at->withWidth(500)->withValue('sglang')), '…'), 'a fitting roster carries no markers');
+    }
+
+    public function testEmittedRowNeverExceedsTheBudget(): void
+    {
+        $labels = ['openai', 'azure', 'anthropic', 'claude-code', 'codex', 'sglang',
+            'bedrock', 'vertex', 'gemini', 'openrouter', 'custom'];
+        foreach ([13, 14, 20, 30, 40, 55, 64, 123] as $budget) {
+            $at = $this->nnRoster()->withWidth($budget);
+            foreach ($labels as $label) {
+                $row = $this->firstRow($at->withValue($label));
+                $visible = Width::string($row);
+                self::assertLessThanOrEqual($budget, $visible, "row exceeds budget {$budget} at {$label}");
+                // Independent oracle: strip the SGR runs, count cells.
+                $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $row);
+                self::assertLessThanOrEqual($budget, mb_strwidth($stripped, 'UTF-8'));
+                if ($budget >= 13) {
+                    // Every pill costs at most 13 cells padded, so from
+                    // that budget up the SELECTED pill must be fully on
+                    // the grid — never off-window, never truncated away.
+                    self::assertStringContainsString($this->highlight($label), $row);
+                }
+            }
+        }
+    }
+
+    public function testTightBudgetDegradesToTheSelectedPill(): void
+    {
+        // No window can carry markers at five cells; the rule collapses to
+        // the selection alone with the markers dropped.
+        $p = $this->pillsAt('a', 'b', 'c')->withWidth(5)->withValue('b');
+        self::assertSame($this->highlight('b'), $this->firstRow($p));
+        // Even the pill itself cannot fit: truncated to the budget, loud
+        // but bounded, never an over-wide row.
+        $tight = $this->pillsAt('a', 'b', 'c')->withWidth(2)->withValue('b');
+        self::assertLessThanOrEqual(2, Width::string($this->firstRow($tight)));
+    }
+
+    public function testWindowBudgetSurvivesEveryMutatePath(): void
+    {
+        // The carrier regression that bit Confirm: windowed state must
+        // ride focus, blur, title, description and option swaps.
+        $at = $this->nnRoster()->withWidth(40);
+        [$focused, ] = $at->focus();
+        self::assertSame(40, $focused->width);
+        self::assertSame(40, $focused->blur()->width);
+        self::assertSame(40, $at->withTitle('Provider')->width);
+        self::assertSame(40, $at->withDescription('pick one')->width);
+        self::assertSame(40, $at->withOptions('x', 'y')->width);
+        self::assertSame(40, $at->withReadonly(true)->width);
+        self::assertLessThanOrEqual(40, Width::string($this->firstRow($at->withTitle('Provider'))), 'the windowed row still respects the budget after a title mutate');
+    }
+
+    public function testClicksFollowTheWindowedRow(): void
+    {
+        $at = $this->nnRoster()->withWidth(40)->withValue('custom');
+        // window: marker(1) gap(3) ' gemini '(8) gap ' openrouter '(12) gap ' custom '(8)
+        // cols:     1     2-4     5-12        13-15    16-27      28-30   31-38
+        $click = fn (int $x): ?string => $at->handleZoneMouse(new MouseMsg($x, 1, MouseButton::Left, MouseAction::Press), 1)?->value();
+        self::assertNull($click(1), 'the head marker is decorative');
+        self::assertNull($click(2), 'its gap is a dead zone');
+        self::assertSame('gemini', $click(5));
+        self::assertSame('openrouter', $click(16));
+        self::assertSame('custom', $click(31), 'the selected pill answers its own cell');
+        self::assertNull($click(39), 'past the windowed row is inert');
+
+        // Pills outside the window are unreachable while hidden — the same
+        // columns now answer whatever the window moved onto them.
+        $scrolled = $at->withValue('openai');
+        self::assertSame('anthropic', $scrolled->handleZoneMouse(new MouseMsg(31, 1, MouseButton::Left, MouseAction::Press), 1)?->value(), 'col 31 now sits inside the windowed-in anthropic pill, not custom');
+    }
+
+    public function testNarrowWidthIsRefused(): void
+    {
+        foreach ([0, -1] as $bad) {
+            try {
+                $this->nnRoster()->withWidth($bad);
+                self::fail("width {$bad} must be refused");
+            } catch (\InvalidArgumentException $e) {
+                self::assertSame('RadioPills width must be at least 1', $e->getMessage());
+            }
+        }
+    }
+
+    public function testEmptyRowUnderABudgetStaysEmpty(): void
+    {
+        $p = $this->pillsAt()->withWidth(10);
+        self::assertSame('', $this->firstRow($p));
+        self::assertNull($p->handleZoneMouse(new MouseMsg(1, 1, MouseButton::Left, MouseAction::Press), 1));
     }
 }
