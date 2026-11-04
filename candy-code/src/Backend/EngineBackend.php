@@ -4391,7 +4391,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // settles, because a dead child has nobody to deliver an answer.
         /** @var array<string, PendingClientCall> $pendingClientCalls */
         $pendingClientCalls = [];
-        /** @var array<string, \React\EventLoop\Timer\TimerInterface> $clientDeadlineTimers */
+        /** @var array<string, \React\EventLoop\TimerInterface> $clientDeadlineTimers */
         $clientDeadlineTimers = [];
         $cancelPendingClientCalls = static function (string $reason) use (&$pendingClientCalls, &$clientDeadlineTimers, $loop): void {
             foreach ($clientDeadlineTimers as $timer) {
