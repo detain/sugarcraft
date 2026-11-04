@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { t } from '../../lib/i18n'
+import { useDialog } from '../../lib/useDialog'
 import { useConnectionStore } from '../../stores/connection'
 import { useContextSourcesStore, type ContextSourcesResult } from '../../stores/contextSources'
 import { ProtocolError } from '../../protocol/jsonrpc'
@@ -76,6 +77,7 @@ const editing = ref<InstructionRow | null>(null)
 const editText = ref('')
 const editError = ref<string | null>(null)
 const saving = ref(false)
+const editModal = ref<HTMLElement | null>(null)
 
 function openEdit(file: InstructionRow): void {
   editing.value = file
@@ -87,6 +89,16 @@ function cancelEdit(): void {
   editing.value = null
   editError.value = null
 }
+
+// CW-UX-07: the edit modal is inline in the panel, so it has no backdrop
+// element; the pointerdown-outside dismissal stands in for one, and Escape —
+// which this modal never answered at all — closes it.
+const dialog = useDialog({
+  panel: editModal,
+  open: () => editing.value !== null,
+  onClose: cancelEdit,
+  outsidePointerClose: true,
+})
 
 async function saveEdit(): Promise<void> {
   const file = editing.value
@@ -382,7 +394,7 @@ onMounted(() => void context.load(props.sessionId))
       </section>
     </template>
 
-    <div v-if="editing !== null" class="edit-modal" role="dialog" :aria-label="t('web.panels.ctx_edit_aria')" data-testid="instruction-edit-modal">
+    <div v-if="editing !== null" ref="editModal" class="edit-modal" role="dialog" aria-modal="true" :aria-label="t('web.panels.ctx_edit_aria')" data-testid="instruction-edit-modal" @keydown="dialog.onKeydown">
       <h3>{{ editing.tier === 'personal' ? t('web.panels.ctx_personal_file') : t('web.panels.ctx_edit_modal_title') }}</h3>
       <p class="meta path">{{ editing.path }}</p>
       <p class="meta">{{ t('web.panels.ctx_edit_note', {bytes: editing.bytes.toLocaleString()}) }}</p>

@@ -150,3 +150,35 @@ describe('ContextPanel instruction editing (C-CTX-3.c)', () => {
     expect(wire.sent('context.instructionWrite')).toHaveLength(0)
   })
 })
+
+describe('ContextPanel edit modal dialog spine (CW-UX-07)', () => {
+  it('the edit modal declares itself modal', async () => {
+    const wrapper = await openPanel()
+    await wrapper.find(`[data-testid="context-edit-${PROJECT}"]`).trigger('click')
+    expect(wrapper.find(MODAL).attributes('aria-modal')).toBe('true')
+  })
+
+  it('Escape closes the edit modal without a write', async () => {
+    const wrapper = await openPanel()
+    await wrapper.find(`[data-testid="context-edit-${PROJECT}"]`).trigger('click')
+    await wrapper.find(MODAL).trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find(MODAL).exists()).toBe(false)
+    expect(wire.sent('context.instructionWrite')).toHaveLength(0)
+  })
+
+  it('a pointerdown outside the modal dismisses it — the inline backdrop equivalent', async () => {
+    const wrapper = await openPanel()
+    await wrapper.find(`[data-testid="context-edit-${PROJECT}"]`).trigger('click')
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await flushPromises()
+    expect(wrapper.find(MODAL).exists()).toBe(false)
+  })
+
+  it('a pointerdown inside the modal keeps it open', async () => {
+    const wrapper = await openPanel()
+    await wrapper.find(`[data-testid="context-edit-${PROJECT}"]`).trigger('click')
+    wrapper.find(MODAL).element.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await flushPromises()
+    expect(wrapper.find(MODAL).exists()).toBe(true)
+  })
+})

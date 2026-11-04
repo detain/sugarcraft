@@ -5,6 +5,7 @@ import type { MediaRef } from '../protocol/generated'
 import { useConnectionStore } from '../stores/connection'
 import { describe } from '../stores/session'
 import { t } from '../lib/i18n'
+import { useDialog } from '../lib/useDialog'
 
 /**
  * One artifact a finished tool produced (W6.4, Appendix C-7): the event
@@ -30,6 +31,11 @@ const mime = ref(props.media.mime)
 const unsupported = ref(false)
 const broken = ref(false)
 const expanded = ref(false)
+const lightboxEl = ref<HTMLElement | null>(null)
+// CW-UX-07: Escape stays on the window listener (the lightbox had no tabbable
+// focus target before the spine); focus-on-open lands on the close button,
+// Tab is trapped inside, and closing restores focus to the thumbnail.
+const dialog = useDialog({ panel: lightboxEl, open: () => expanded.value, handleEscape: false })
 
 let stopped = false
 let token = 0
@@ -149,7 +155,7 @@ onBeforeUnmount(() => {
       <code>{{ media.infotextDigest }}</code>
     </details>
 
-    <div v-if="expanded" class="lightbox" role="dialog" aria-modal="true" :aria-label="t('web.media.lightbox_aria')" data-testid="media-lightbox" @click.self="expanded = false">
+    <div v-if="expanded" ref="lightboxEl" class="lightbox" role="dialog" aria-modal="true" :aria-label="t('web.media.lightbox_aria')" data-testid="media-lightbox" @click.self="expanded = false" @keydown="dialog.onKeydown">
       <img :src="url" :alt="altText" class="full" />
       <button type="button" class="close" data-testid="lightbox-close" @click="expanded = false">{{ t('web.media.lightbox_close') }}</button>
     </div>

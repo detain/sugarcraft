@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { searchPromptHistory } from '../stores/promptHistory'
 import { t } from '../lib/i18n'
+import { useDialog } from '../lib/useDialog'
 
 /**
  * C-WEB-4.a: the Ctrl+G history search, the web shape of the TUI's
@@ -22,6 +23,12 @@ const emit = defineEmits<{ accept: [text: string]; close: [] }>()
 const query = ref('')
 const selected = ref(0)
 const input = ref<HTMLInputElement | null>(null)
+const searchEl = ref<HTMLElement | null>(null)
+// CW-UX-07: the parent v-ifs this overlay, so mount IS open — the spine
+// captures the opener (the composer field) at setup and restores focus when
+// the overlay is torn down on accept/close. Escape stays on the input's own
+// handler, which also answers arrows and the Ctrl+G cycle.
+const dialog = useDialog({ panel: searchEl, open: () => true, handleEscape: false })
 
 const matches = computed(() => searchPromptHistory(props.entries, query.value))
 
@@ -67,7 +74,7 @@ onMounted(async () => {
 
 <template>
   <div class="backdrop" data-testid="history-search-backdrop" @click.self="emit('close')">
-    <div class="search" role="dialog" aria-modal="true" :aria-label="t('web.composer.history_aria')" data-testid="history-search">
+    <div ref="searchEl" class="search" role="dialog" aria-modal="true" :aria-label="t('web.composer.history_aria')" data-testid="history-search" @keydown="dialog.onKeydown">
       <input
         ref="input"
         v-model="query"

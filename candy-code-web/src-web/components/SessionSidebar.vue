@@ -6,6 +6,7 @@ import { t } from '../lib/i18n'
 import type { SessionSummary } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
 import { useSlowPending } from '../lib/slowPending'
+import { useDialog } from '../lib/useDialog'
 import { useApprovalsStore } from '../stores/approvals'
 import { useConnectionStore } from '../stores/connection'
 import { useLayoutStore } from '../stores/layout'
@@ -111,6 +112,16 @@ const shareCopied = ref(false)
 /** MA-33: the dialog itself and its copy button, for the reveal after publishing. */
 const sharePanel = ref<HTMLElement | null>(null)
 const shareCopyButton = ref<HTMLElement | null>(null)
+// CW-UX-07: the share dialog carries the modal spine now — Tab trap, opener
+// restore on close, focus-on-open matching MA-33's copy-button landing.
+// Escape stays owned by the sidebar's own onKey (the nav-level handler the
+// pinned menu/share flows already answer).
+const dialog = useDialog({
+  panel: sharePanel,
+  open: () => shareDialog.value !== null,
+  handleEscape: false,
+  focusOn: () => shareCopyButton.value ?? undefined,
+})
 
 const EXPORT_EXTENSIONS: Record<'markdown' | 'json' | 'text', string> = { markdown: 'md', json: 'json', text: 'txt' }
 
@@ -461,7 +472,7 @@ function onKey(event: KeyboardEvent): void {
         </ul>
       </li>
     </ul>
-    <div v-if="shareDialog" ref="sharePanel" class="share" role="dialog" :aria-label="t('web.chrome.sidebar.share_dialog_aria')" data-testid="share-dialog">
+    <div v-if="shareDialog" ref="sharePanel" class="share" role="dialog" aria-modal="true" :aria-label="t('web.chrome.sidebar.share_dialog_aria')" data-testid="share-dialog" @keydown="dialog.onKeydown">
       <p>{{ t('web.chrome.sidebar.share_published') }}</p>
       <code class="share-url" data-testid="share-url">{{ shareDialog.url }}</code>
       <p class="share-expiry" data-testid="share-expiry">{{ t('web.chrome.sidebar.share_expiry', { when: expiryLabel(shareDialog.expiresAt) }) }}</p>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { t } from '../lib/i18n'
+import { useDialog } from '../lib/useDialog'
 import type { CommandInfo } from '../stores/session'
 import { bindingLabel, KEY_ACTIONS, loadKeymap, type KeyAction } from '../lib/keymap'
 
@@ -12,8 +13,14 @@ import { bindingLabel, KEY_ACTIONS, loadKeymap, type KeyAction } from '../lib/ke
  * marker, so a terminal-UI-only command is visible as one instead of
  * failing on send.
  */
-defineProps<{ open: boolean; commands: CommandInfo[] }>()
+const props = defineProps<{ open: boolean; commands: CommandInfo[] }>()
 const emit = defineEmits<{ close: [] }>()
+
+const dialogEl = ref<HTMLElement | null>(null)
+// CW-UX-07: Escape already closes from App.vue's global listener (not this
+// component's to own); the spine adds focus-on-open, the Tab trap, and the
+// restore to whatever opened the help.
+const dialog = useDialog({ panel: dialogEl, open: () => props.open, handleEscape: false })
 
 const ACTION_LABELS: Record<KeyAction, string> = {
   palette: 'web.chrome.help.action_palette',
@@ -41,7 +48,7 @@ function displayName(command: CommandInfo): string {
 
 <template>
   <div v-if="open" class="backdrop" data-testid="help-backdrop" @click.self="emit('close')">
-    <div class="dialog" role="dialog" aria-modal="true" :aria-label="t('web.chrome.help.aria')" tabindex="-1" data-testid="help-overlay">
+    <div ref="dialogEl" class="dialog" role="dialog" aria-modal="true" :aria-label="t('web.chrome.help.aria')" tabindex="-1" data-testid="help-overlay" @keydown="dialog.onKeydown">
       <header>
         <h2>{{ t('web.chrome.help.title') }}</h2>
         <button type="button" class="link" :aria-label="t('web.chrome.help.close_aria')" data-testid="help-close" @click="emit('close')">&#10005;</button>

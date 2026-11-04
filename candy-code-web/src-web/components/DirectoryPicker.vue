@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { describe } from '../stores/session'
 import { useNewSessionStore, type DirListing } from '../stores/newSession'
 import { t } from '../lib/i18n'
+import { useDialog } from '../lib/useDialog'
 
 /**
  * The new-session directory picker (`serve --allow-dir-browse`): browse the
@@ -27,6 +28,17 @@ const showHidden = ref(false)
 const typed = ref('')
 const selected = ref(0)
 const list = ref<HTMLElement | null>(null)
+const pickerEl = ref<HTMLElement | null>(null)
+// CW-UX-07: Escape stays on the window listener below (a real key lands on
+// the body when nothing else holds focus — the backdrop handler alone missed
+// it) and open() keeps focusing the list; the spine adds the Tab trap and the
+// restore to the composer on cancel or start.
+const dialog = useDialog({
+  panel: pickerEl,
+  open: () => picker.pickerOpen,
+  handleEscape: false,
+  focusOn: () => list.value ?? undefined,
+})
 
 const entries = computed(() => listing.value?.entries ?? [])
 const atRoot = computed(() => listing.value !== null && listing.value.parent === null)
@@ -170,7 +182,7 @@ watch(selected, async () => {
 
 <template>
   <div v-if="picker.pickerOpen" class="backdrop" data-testid="dir-picker-backdrop" @click.self="picker.cancel()" @keydown="onKey">
-    <div class="picker" role="dialog" aria-modal="true" aria-labelledby="dir-picker-title" data-testid="dir-picker">
+    <div ref="pickerEl" class="picker" role="dialog" aria-modal="true" aria-labelledby="dir-picker-title" data-testid="dir-picker" @keydown="dialog.onKeydown">
       <h2 id="dir-picker-title">{{ t('web.composer.picker_title') }}</h2>
 
       <nav class="crumbs" :aria-label="t('web.composer.picker_crumb_aria')" data-testid="picker-crumbs">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { t } from '../../lib/i18n'
+import { useDialog } from '../../lib/useDialog'
 import { useRouter } from 'vue-router'
 import { oneLine } from '../../lib/format'
 import { bindingFor, captureActive, matchesBinding } from '../../lib/keymap'
@@ -42,6 +43,17 @@ const query = ref('')
 const selected = ref(0)
 const error = ref<string | null>(null)
 const input = ref<HTMLInputElement | null>(null)
+const paletteEl = ref<HTMLElement | null>(null)
+// CW-UX-07: the palette keeps its own Escape (the input's handler) and its
+// open-focus on the filter field; the spine adds the Tab trap that stops the
+// keyboard walking into the page behind a modal dialog, and the restore on
+// close.
+const dialog = useDialog({
+  panel: paletteEl,
+  open: () => panels.paletteOpen,
+  handleEscape: false,
+  focusOn: () => input.value ?? undefined,
+})
 
 const entries = computed<Entry[]>(() => {
   const list: Entry[] = []
@@ -170,7 +182,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 
 <template>
   <div v-if="panels.paletteOpen" class="backdrop" data-testid="palette-backdrop" @click.self="panels.togglePalette(false)">
-    <div class="palette" role="dialog" aria-modal="true" :aria-label="t('web.panels.palette_aria')" data-testid="command-palette">
+    <div ref="paletteEl" class="palette" role="dialog" aria-modal="true" :aria-label="t('web.panels.palette_aria')" data-testid="command-palette" @keydown="dialog.onKeydown">
       <input
         ref="input"
         v-model="query"

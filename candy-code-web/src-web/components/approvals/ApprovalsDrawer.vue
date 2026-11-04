@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { t } from '../../lib/i18n'
+import { useDialog } from '../../lib/useDialog'
 import { useRouter } from 'vue-router'
 import PermissionCard, { type Reply } from '../PermissionCard.vue'
 import { useApprovalsStore, type SessionAsk } from '../../stores/approvals'
@@ -56,12 +57,16 @@ function onKey(event: KeyboardEvent): void {
   if (event.key === 'Escape' && layout.approvalsOpen) close()
 }
 
-// Opening the drawer puts the keyboard on the first question.
-watch(() => layout.approvalsOpen, async (opened) => {
-  if (!opened) return
-  await nextTick()
-  const first = panel.value?.querySelector<HTMLElement>('[data-testid="permission-card"]')
-  ;(first ?? panel.value)?.focus()
+// CW-UX-07: the drawer shares the dialog spine now. Opening puts the keyboard
+// on the first question (the pre-spine rule, kept as the focus target), Tab
+// cannot walk out of a dialog that claims aria-modal, and closing hands focus
+// back to whatever opened the drawer. Escape stays on the window listener
+// above — it must answer even while focus sits outside the aside.
+const dialog = useDialog({
+  panel,
+  open: () => layout.approvalsOpen,
+  handleEscape: false,
+  focusOn: () => panel.value?.querySelector<HTMLElement>('[data-testid="permission-card"]') ?? panel.value ?? undefined,
 })
 
 onMounted(() => window.addEventListener('keydown', onKey))
@@ -75,9 +80,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     ref="panel"
     class="drawer"
     role="dialog"
+    aria-modal="true"
     :aria-label="t('web.approvals.drawer_title')"
     tabindex="-1"
     data-testid="approvals-drawer"
+    @keydown="dialog.onKeydown"
   >
     <header>
       <h2>{{ t('web.approvals.drawer_title') }} <span class="count">{{ approvals.total }}</span></h2>

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import type { MethodResult } from '../protocol/generated'
 import { t } from '../lib/i18n'
+import { useDialog } from '../lib/useDialog'
 import { useConnectionStore } from '../stores/connection'
 import { describe } from '../stores/session'
 
@@ -113,9 +114,11 @@ watch(() => props.open, (open) => {
   if (open) void load()
 }, { immediate: true })
 
-function onKey(event: KeyboardEvent): void {
-  if (event.key === 'Escape') emit('close')
-}
+const dialogEl = ref<HTMLElement | null>(null)
+// CW-UX-07: Escape behavior is unchanged (it lives on the dialog keydown now);
+// the spine adds focus-on-open, the Tab trap this modal never had, and the
+// restore to whatever opened About.
+const dialog = useDialog({ panel: dialogEl, open: () => props.open, onClose: () => emit('close') })
 
 /** Seconds the server has been up, in the coarsest unit that still reads. */
 function uptime(seconds: number): string {
@@ -163,7 +166,7 @@ async function stopServer(): Promise<void> {
 
 <template>
   <div v-if="open" class="backdrop" data-testid="about-backdrop" @click.self="emit('close')">
-    <div class="dialog" role="dialog" aria-modal="true" :aria-label="t('web.chrome.about.title')" tabindex="-1" data-testid="about-modal" @keydown="onKey">
+    <div ref="dialogEl" class="dialog" role="dialog" aria-modal="true" :aria-label="t('web.chrome.about.title')" tabindex="-1" data-testid="about-modal" @keydown="dialog.onKeydown">
       <header>
         <h2>{{ t('web.chrome.about.title') }}</h2>
         <button type="button" class="link" :aria-label="t('web.chrome.about.close_aria')" data-testid="about-close" @click="emit('close')">✕</button>
