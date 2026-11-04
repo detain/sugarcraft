@@ -142,11 +142,18 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (connection.hello?.features.dirBrowse?.enabled !== true) return
     try {
       const workspaces = await connection.request('workspace.list', {})
-      for (const workspace of workspaces.items) {
-        if (workspace.primary || !workspace.running) continue
-        const result = await connection.request('session.list', { limit: PAGE, root: workspace.root })
-        for (const summary of result.items) into[summary.id] = { ...summary, root: summary.root ?? workspace.root }
-      }
+      const others = workspaces.items.filter((workspace) => !workspace.primary && workspace.running)
+      // CW-DBA-11: the roots are independent reads, not a chain — one
+      // flight instead of N+1 round trips behind every handshake, each
+      // answer still merged into the same index.
+      await Promise.all(others.map(async (workspace) => {
+        try {
+          const result = await connection.request('session.list', { limit: PAGE, root: workspace.root })
+          for (const summary of result.items) into[summary.id] = { ...summary, root: summary.root ?? workspace.root }
+        } catch {
+          // Best effort: a root that cannot answer simply lists nothing.
+        }
+      }))
     } catch {
       // The server's own sessions are listed either way.
     }

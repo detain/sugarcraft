@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 import type { SessionSummary } from '../../protocol/generated'
+import { flush } from '../../__tests__/fakes'
 import { Wire } from '../agents/__tests__/harness'
 import { useSessionsStore } from '../sessions'
 
@@ -109,5 +110,69 @@ describe('sessions listing reports its page budget (CW-DBA-7)', () => {
     await pending
 
     expect(sessions.capped).toBe(false)
+  })
+})
+
+/**
+ * CW-DBA-11 (reviews-1103): the other-roots listing was N+1 — every open
+ * workspace root's `session.list` waited for the previous one's answer on
+ * every handshake. The roots are independent reads: they now ride one
+ * flight, each still best-effort (a root that cannot answer lists nothing).
+ */
+describe('sessions lists other roots in one flight (CW-DBA-11)', () => {
+  it('has every non-primary running root in flight before any is answered', async () => {
+    setActivePinia(createPinia())
+    const wire = new Wire()
+    await wire.connect(() => useSessionsStore(), { features: { dirBrowse: { enabled: true } } })
+    // Settle the primary page of the handshake walk; the other-roots pass
+    // then asks for the workspace roster.
+    await wire.answer('session.list', { items: [], nextCursor: null })
+    await wire.answer('workspace.list', {
+      items: [
+        { root: '/main', primary: true, running: true },
+        { root: '/b', primary: false, running: true },
+        { root: '/c', primary: false, running: true },
+        { root: '/d', primary: false, running: false },
+      ],
+    })
+
+    // Primary page + BOTH other roots are out at once; the stopped '/d'
+    // root lists nothing. Sequential code has only the first root sent.
+    const pages = wire.sent('session.list')
+    expect(pages).toHaveLength(3)
+
+    // The flight is concurrent, so wire.answer (newest frame only) would
+    // double-answer the tail; each frame gets its own id.
+    wire.socket().answer({ items: [row('b1', { root: '/b' })] }, pages[1]?.id as string)
+    wire.socket().answer({ items: [row('c1', { root: '/c' })] }, pages[2]?.id as string)
+    await flush()
+
+    const sessions = useSessionsStore()
+    expect(sessions.byId.b1?.root).toBe('/b')
+    expect(sessions.byId.c1?.root).toBe('/c')
+  })
+
+  it('a root that refuses the listing still lists the others', async () => {
+    setActivePinia(createPinia())
+    const wire = new Wire()
+    await wire.connect(() => useSessionsStore(), { features: { dirBrowse: { enabled: true } } })
+    await wire.answer('session.list', { items: [], nextCursor: null })
+    await wire.answer('workspace.list', {
+      items: [
+        { root: '/main', primary: true, running: true },
+        { root: '/b', primary: false, running: true },
+        { root: '/c', primary: false, running: true },
+      ],
+    })
+    const pages = wire.sent('session.list')
+    expect(pages).toHaveLength(3)
+
+    wire.socket().answer({ items: [row('c1', { root: '/c' })] }, pages[2]?.id as string)
+    wire.socket().fail(-32001, 'refused', 'root does not answer', pages[1]?.id as string)
+    await flush()
+
+    const sessions = useSessionsStore()
+    expect(sessions.byId.c1?.id).toBe('c1')
+    expect(sessions.loaded).toBe(true)
   })
 })
