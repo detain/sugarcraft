@@ -128,11 +128,12 @@ final class CodeHighlighter
 
     /**
      * Wrap `$text` in a truecolor SGR foreground + reset. Each newline-delimited
-     * fragment is wrapped independently because {@see SvgRenderer} parses ANSI
-     * one line at a time (SGR state does not carry across its line split), so a
-     * multi-line token (block comment, backtick string) would otherwise lose its
-     * colour on every line but the first. Empty fragments stay bare to preserve
-     * the exact newline structure.
+     * fragment is wrapped independently so a token keeps its colour without
+     * relying on the renderer's own SGR carry ({@see SvgRenderer} now threads the
+     * parsed SGR state across its line split) — the highlight is self-contained
+     * per line, so a multi-line token (block comment, backtick string) stays
+     * coloured on every fragment. Empty fragments stay bare to preserve the exact
+     * newline structure.
      */
     private function wrap(string $hex, string $text): string
     {
