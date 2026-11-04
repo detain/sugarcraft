@@ -101,36 +101,54 @@ final class SessionSendDocumentsTest extends TestCase
 
     public function testTheCountIsRefusedAtIngressAndTheSharedBudgetAtTheHandler(): void
     {
-        $client = $this->fixture->client();
-        $sessionId = $this->fixture->session($client);
-        $entry = ['mime' => 'application/pdf', 'data' => \base64_encode($this->pdf(8))];
+        // CWPD-1 follow-up: the send-byte meter paces this wire (burst one
+        // full transport ceiling, 8 MiB/s refill), so the two big frames ride
+        // on a scripted clock and time advances between them, the way seconds
+        // pass for a real browser between uploads.
+        $now = 0.0;
+        $fixture = ProtocolFixture::new(clock: static function () use (&$now): float {
+            return $now;
+        });
+        try {
+            $client = $fixture->client();
+            $sessionId = $fixture->session($client);
+            $entry = ['mime' => 'application/pdf', 'data' => \base64_encode($this->pdf(8))];
 
-        $tooMany = $client->request('session.send', [
-            'sessionId' => $sessionId, 'text' => 'x',
-            'documents' => \array_fill(0, TurnMethods::MAX_DOCUMENTS + 1, $entry),
-        ]);
-        self::assertSame(-32602, $tooMany['error']['code'] ?? null, 'a third document never passes the params schema');
+            $tooMany = $client->request('session.send', [
+                'sessionId' => $sessionId, 'text' => 'x',
+                'documents' => \array_fill(0, TurnMethods::MAX_DOCUMENTS + 1, $entry),
+            ]);
+            self::assertSame(-32602, $tooMany['error']['code'] ?? null, 'a third document never passes the params schema');
 
-        // Two PDFs and one PNG each under their own ceilings, together over
-        // the SHARED 11 MiB decoded budget: the leg that did not exist before
-        // documents could ride, so it is pinned across both kinds.
-        $five = \base64_encode($this->pdf(5 * 1024 * 1024));
-        $png = \base64_encode($this->png(3 * 1024 * 1024));
-        $overBudget = $client->request('session.send', [
-            'sessionId' => $sessionId, 'text' => 'x',
-            'images' => [['mime' => 'image/png', 'data' => $png]],
-            'documents' => [['mime' => 'application/pdf', 'data' => $five], ['mime' => 'application/pdf', 'data' => $five]],
-        ]);
-        self::assertSame('attachment_budget_exceeded', $overBudget['error']['data']['kind']);
+            // Two PDFs and one PNG each under their own ceilings, together over
+            // the SHARED 11 MiB decoded budget: the leg that did not exist before
+            // documents could ride, so it is pinned across both kinds.
+            // (This leg used to feed 5 MiB PDFs and a 3 MiB PNG: 18,175,356
+            // base64 bytes, over the transport ceiling itself — they could only
+            // reach the handler because the harness writes the dispatcher
+            // directly, and the dispatcher now answers that shape the way the
+            // Connection would: closed, undecoded.)
+            $pdf = \base64_encode($this->pdf(4456448));
+            $png = \base64_encode($this->png(3145728));
+            $overBudget = $client->request('session.send', [
+                'sessionId' => $sessionId, 'text' => 'x',
+                'images' => [['mime' => 'image/png', 'data' => $png]],
+                'documents' => [['mime' => 'application/pdf', 'data' => $pdf], ['mime' => 'application/pdf', 'data' => $pdf]],
+            ]);
+            self::assertSame('attachment_budget_exceeded', $overBudget['error']['data']['kind']);
 
-        // One document at the wire cap decodes to at most budget + 1 byte
-        // (the cap is the exact base64 length of the full budget), so the
-        // largest lone upload always names the budget at the handler.
-        $single = $client->request('session.send', [
-            'sessionId' => $sessionId, 'text' => 'x',
-            'documents' => [['mime' => 'application/pdf', 'data' => \base64_encode($this->pdf(TurnMethods::MAX_ATTACHMENT_TOTAL_BYTES + 1 - 8))]]],
-        );
-        self::assertSame('attachment_budget_exceeded', $single['error']['data']['kind']);
+            // One document at the wire cap decodes to at most budget + 1 byte
+            // (the cap is the exact base64 length of the full budget), so the
+            // largest lone upload always names the budget at the handler.
+            $now += 2.0; // refill the meter past the frame's 14.7 MiB
+            $single = $client->request('session.send', [
+                'sessionId' => $sessionId, 'text' => 'x',
+                'documents' => [['mime' => 'application/pdf', 'data' => \base64_encode($this->pdf(TurnMethods::MAX_ATTACHMENT_TOTAL_BYTES + 1 - 8))]]],
+            );
+            self::assertSame('attachment_budget_exceeded', $single['error']['data']['kind']);
+        } finally {
+            $fixture->tearDown();
+        }
     }
 
     public function testDocumentsWhileATurnRunsWaitForTheTurnTheyStart(): void

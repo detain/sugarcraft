@@ -100,33 +100,52 @@ final class SendImagesTest extends TestCase
 
     public function testTheCountIsRefusedAtIngressAndTheBytesAtTheHandler(): void
     {
-        $client = $this->fixture->client();
-        $sessionId = $this->fixture->session($client);
-        $entry = ['mime' => 'image/png', 'data' => \base64_encode($this->png(8))];
+        // CWPD-1 follow-up: these are the two biggest legal-shaped frames a
+        // client can dial, and the send-byte meter paces that wire (burst one
+        // full transport ceiling, 8 MiB/s refill) — so this ride runs on a
+        // scripted clock and advances time between the two large sends, the
+        // way seconds pass for a real browser between uploads.
+        $now = 0.0;
+        $fixture = ProtocolFixture::new(clock: static function () use (&$now): float {
+            return $now;
+        });
+        try {
+            $client = $fixture->client();
+            $sessionId = $fixture->session($client);
+            $entry = ['mime' => 'image/png', 'data' => \base64_encode($this->png(8))];
 
-        $tooMany = $client->request('session.send', [
-            'sessionId' => $sessionId, 'text' => 'x',
-            'images' => \array_fill(0, TurnMethods::MAX_IMAGES + 1, $entry),
-        ]);
-        self::assertSame(-32602, $tooMany['error']['code'] ?? null, 'a fifth image never passes the params schema');
+            $tooMany = $client->request('session.send', [
+                'sessionId' => $sessionId, 'text' => 'x',
+                'images' => \array_fill(0, TurnMethods::MAX_IMAGES + 1, $entry),
+            ]);
+            self::assertSame(-32602, $tooMany['error']['code'] ?? null, 'a fifth image never passes the params schema');
 
-        // Four images of 3 MiB each are individually under the per-image
-        // ceiling and together over the 10 MiB total the send carries.
-        $big = \base64_encode($this->png(3 * 1024 * 1024));
-        $overBudget = $client->request('session.send', [
-            'sessionId' => $sessionId, 'text' => 'x',
-            'images' => \array_fill(0, TurnMethods::MAX_IMAGES, ['mime' => 'image/png', 'data' => $big]),
-        ]);
-        self::assertSame('image_budget_exceeded', $overBudget['error']['data']['kind']);
+            // Four images of 2.75 MiB each are individually under the per-image
+            // ceiling and together over the 10 MiB total the send carries.
+            // (This leg used to feed 3 MiB each: four of those are 16,777,264
+            // base64 bytes, over the transport ceiling itself — they could only
+            // reach the handler because the harness writes the dispatcher
+            // directly, and the dispatcher now answers that shape the way the
+            // Connection would: closed, undecoded.)
+            $big = \base64_encode($this->png(2883584)); // 2.75 MiB of padding
+            $overBudget = $client->request('session.send', [
+                'sessionId' => $sessionId, 'text' => 'x',
+                'images' => \array_fill(0, TurnMethods::MAX_IMAGES, ['mime' => 'image/png', 'data' => $big]),
+            ]);
+            self::assertSame('image_budget_exceeded', $overBudget['error']['data']['kind']);
 
-        // One image over the per-image ceiling names that ceiling: the
-        // ingress string cap is the exact base64 length of a full 5 MiB
-        // decode, so ONE byte more still fits the wire but not the handler.
-        $single = $client->request('session.send', [
-            'sessionId' => $sessionId, 'text' => 'x',
-            'images' => [['mime' => 'image/png', 'data' => \base64_encode($this->png(FileMentions::IMAGE_MAX_BYTES + 1 - 8))]],
-        ]);
-        self::assertSame('image_too_large', $single['error']['data']['kind']);
+            // One image over the per-image ceiling names that ceiling: the
+            // ingress string cap is the exact base64 length of a full 5 MiB
+            // decode, so ONE byte more still fits the wire but not the handler.
+            $now += 1.0; // refill the meter past the frame's 6.99 MiB
+            $single = $client->request('session.send', [
+                'sessionId' => $sessionId, 'text' => 'x',
+                'images' => [['mime' => 'image/png', 'data' => \base64_encode($this->png(FileMentions::IMAGE_MAX_BYTES + 1 - 8))]],
+            ]);
+            self::assertSame('image_too_large', $single['error']['data']['kind']);
+        } finally {
+            $fixture->tearDown();
+        }
     }
 
     public function testImagesWhileATurnRunsWaitForTheTurnTheyStart(): void

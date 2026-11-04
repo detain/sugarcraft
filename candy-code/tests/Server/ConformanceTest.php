@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tests\Server;
 use PHPUnit\Framework\TestCase;
 use Ratchet\Client\Connector as WsConnector;
 use Ratchet\Client\WebSocket;
+use Ratchet\RFC6455\Messaging\Frame;
 use Ratchet\RFC6455\Messaging\MessageInterface;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
@@ -534,6 +535,25 @@ final class ConformanceTest extends TestCase
         } finally {
             $fixture->tearDown();
         }
+    }
+
+    public function testTheDispatcherClosesFramesTheTransportCouldNeverDeliver(): void
+    {
+        // CWPD-1 follow-up: the byte meter paces legal-sized traffic, but a
+        // frame over ServerConfig::MAX_CLIENT_FRAME_BYTES could never arrive
+        // through a real Connection at all — its framing layer closes the
+        // socket with 1009 before the handler sees a byte. A direct dispatcher
+        // write (the fixture shape, and the only route by which such bytes
+        // exist) must be answered the same way the transport would answer it:
+        // refused BEFORE any decode — a meter refusal that echoes a parseable
+        // error envelope proves the bytes were still being parsed around.
+        $client = WireClient::open($this->fixture->dispatcher, 'oversize');
+        $client->hello();
+        $client->clear();
+        $client->raw(\str_repeat('A', ServerConfig::MAX_CLIENT_FRAME_BYTES + 1));
+
+        self::assertSame([Frame::CLOSE_TOO_BIG], $client->closeCodes(), 'the over-ceiling frame meets the transport close, not a decoded reply');
+        self::assertSame([], $client->received(), 'nothing is answered over a closing socket');
     }
 
     /** @return array<string, mixed> */

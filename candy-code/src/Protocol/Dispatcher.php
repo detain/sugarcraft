@@ -43,13 +43,18 @@ use SugarCraft\Code\Server\Ws\Outbox;
  *  1. before `server.hello`, a message over {@see MAX_PRE_HELLO_BYTES} closes
  *     the socket (1009), and any request other than the hello is answered
  *     `-32002 not_initialized` and closed with {@see CLOSE_NOT_INITIALIZED};
- *  2. the JSON-RPC 2.0 decode ({@see JsonRpc}): depth-capped, id kept as sent;
- *  3. the client's request budget (50/s, burst 200) — `-32011 rate_limited`;
- *  4. the method's existence (`-32601`), the scope it needs (`-32003`), and
+ *  2. a message over `ServerConfig::MAX_CLIENT_FRAME_BYTES` closes the socket
+ *     (1009) — no real Connection can even deliver one (CWPD-1);
+ *  3. the client's send-byte meter (burst = one ceiling frame, 8 MiB/s refill)
+ *     refuses over-budget wire with `-32011 rate_limited` BEFORE the decode,
+ *     so undecoded bytes never reach the parser (CWPD-1);
+ *  4. the JSON-RPC 2.0 decode ({@see JsonRpc}): depth-capped, id kept as sent;
+ *  5. the client's request budget (50/s, burst 200) — `-32011 rate_limited`;
+ *  6. the method's existence (`-32601`), the scope it needs (`-32003`), and
  *     its params against the published schema (`-32602`, naming the field);
- *  5. an `idempotencyKey` on a side-effecting method: a retry gets the
+ *  7. an `idempotencyKey` on a side-effecting method: a retry gets the
  *     original answer (5 min, 1,000 per principal — {@see IdempotencyCache});
- *  6. the method, whose {@see RpcError} becomes the error object and whose
+ *  8. the method, whose {@see RpcError} becomes the error object and whose
  *     any other failure becomes `-32099 internal` without its message.
  * A notification (no `id`) runs the same way and is never answered.
  *
@@ -300,6 +305,17 @@ final class Dispatcher implements MessageHandler
 
         if (!$client->isInitialized() && \strlen($payload) > self::MAX_PRE_HELLO_BYTES) {
             $connection->close(Frame::CLOSE_TOO_BIG, 'send server.hello first');
+
+            return;
+        }
+
+        if (\strlen($payload) > ServerConfig::MAX_CLIENT_FRAME_BYTES) {
+            // CWPD-1: a frame this big could never arrive through a real
+            // Connection (its framing layer closes the socket on the same
+            // ceiling first), so anything handing us one directly is refused
+            // the same way — before a single byte is decoded, and before the
+            // meter spends budget on bytes the transport itself rejects.
+            $connection->close(Frame::CLOSE_TOO_BIG, 'the frame exceeds the transport ceiling');
 
             return;
         }
