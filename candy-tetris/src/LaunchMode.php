@@ -65,7 +65,7 @@ final class LaunchMode
             return self::HELP;
         }
 
-        throw new InvalidArgumentException(sprintf('candy-tetris: unknown mode "%s"', (string) $flag));
+        throw new InvalidArgumentException(Lang::t('mode.unknown', ['flag' => (string) $flag]));
     }
 
     /**
@@ -74,11 +74,6 @@ final class LaunchMode
      */
     public static function helpText(): string
     {
-        return "candy-tetris - Tetris clone\n\n"
-            . "Usage: candy-tetris [options]\n"
-            . "  (no args)    Start single player game\n"
-            . "  -v, --vs     Start VS Computer mode\n"
-            . "  -h, --help   Show this help\n"
-            . "  --version    Print the version\n";
+        return Lang::t('help_text');
     }
 }

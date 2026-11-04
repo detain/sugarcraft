@@ -52,11 +52,11 @@ final class Renderer
             $banner = SugarStyle::new()
                 ->border(Border::rounded())
                 ->padding(1, 3)
-                ->render("GAME OVER\nfinal score: {$game->score->points}\npress r to restart — press q to quit");
+                ->render(Lang::t('over.title') . "\n" . Lang::t('over.final_score', ['points' => $game->score->points]) . "\n" . Lang::t('over.restart_hint'));
             return $body . "\n\n" . $banner;
         }
         if ($game->paused === true) {
-            return $body . "\n\n[ paused — press p to resume ]";
+            return $body . "\n\n" . Lang::t('paused');
         }
         return $body;
     }
@@ -113,23 +113,23 @@ final class Renderer
             $previews[] = self::renderMini($kind);
         }
         $score = sprintf(
-            "score:  %d\nlines:  %d\nlevel:  %d",
+            Lang::t('score_card'),
             $game->score->points,
             $game->score->lines,
             $game->score->level,
         );
-        $help = "← →  move\n↑ x  rotate cw\nz    rotate ccw\n↓    soft drop\nspc  hard drop\nc    hold\np    pause\nr    restart\nq    quit";
+        $help = Lang::t('help_card');
 
-        $nextStr = "next:\n" . implode("\n\n", $previews);
+        $nextStr = Lang::t('next_label') . "\n" . implode("\n\n", $previews);
 
         $hold = '';
         if ($game->hold !== null) {
-            $hold = "hold:\n" . self::renderMini($game->hold);
+            $hold = Lang::t('hold_label') . "\n" . self::renderMini($game->hold);
             if ($game->canHold === false) {
                 $hold = SugarStyle::new()->dim(true)->render($hold);
             }
         } else {
-            $hold = "hold:\n" . self::renderMiniPlaceholder();
+            $hold = Lang::t('hold_label') . "\n" . self::renderMiniPlaceholder();
         }
 
         $card = static fn(string $body): string => SugarStyle::new()

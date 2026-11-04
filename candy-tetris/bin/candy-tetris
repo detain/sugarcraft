@@ -40,6 +40,10 @@ use SugarCraft\Tetris\VsGame;
     exit(1);
 })();
 
+// UI language from $LANG / $LC_ALL (matters only once non-en catalogues
+// exist; 'en' values are byte-identical to the literals they replaced).
+\SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
+
 // The version line answers before the argv contract: `--version` is not a
 // game flag and must not reach the unknown-mode refusal in LaunchMode.
 if (in_array('--version', array_slice($argv ?? [], 1), true)) {

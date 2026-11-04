@@ -45,11 +45,17 @@ final class VsRenderer
         $body = Layout::joinHorizontal(0.0, $playerPanel, $vsDivider, $computerPanel);
 
         if ($game->over === true) {
-            $winnerText = $game->winner === 'PLAYER' ? 'YOU WIN!' : 'COMPUTER WINS!';
+            $winnerText = $game->winner === 'PLAYER'
+                ? Lang::t('win.player')
+                : Lang::t('win.computer');
             $banner = Style::new()
                 ->border(Border::rounded())
                 ->padding(1, 3)
-                ->render("GAME OVER\n{$winnerText}\nfinal score: {$game->player->score->points}\npress q to quit");
+                ->render(
+                    Lang::t('over.title') . "\n" . $winnerText . "\n"
+                    . Lang::t('over.final_score', ['points' => $game->player->score->points])
+                    . "\n" . Lang::t('over.quit_hint'),
+                );
             return $body . "\n\n" . $banner;
         }
 
@@ -93,7 +99,7 @@ final class VsRenderer
             $lines[] = $line;
         }
 
-        $title = $isComputer === true ? 'COMPUTER' : 'PLAYER';
+        $title = $isComputer === true ? Lang::t('label.computer') : Lang::t('label.player');
         $titleBlock = Style::new()
             ->bold(true)
             ->render($title);
