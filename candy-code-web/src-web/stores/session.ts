@@ -336,16 +336,23 @@ function setup(sessionId: string) {
   async function loadFullOutput(item: ToolItem): Promise<void> {
     let content = ''
     let offset = 0
+    let complete = false
     for (let page = 0; page < 64; page++) {
       const chunk = await connection.request('tool.output', { sessionId, toolCallId: item.toolCallId, offset, limit: 1_048_576 })
       content += chunk.content
       offset = chunk.offset + new TextEncoder().encode(chunk.content).length
-      if (!chunk.more) break
+      if (!chunk.more) {
+        complete = true
+        break
+      }
     }
     const target = state.items.find((candidate) => candidate.key === item.key)
     if (target && target.kind === 'tool') {
       target.content = content
-      target.truncated = false
+      // CW-DBA-6: the 64-page budget ending without a final page is NOT
+      // reaching the end. The card keeps its truncation truth (and its
+      // re-load affordance) when the walk ran out of budget.
+      target.truncated = !complete
     }
   }
 
