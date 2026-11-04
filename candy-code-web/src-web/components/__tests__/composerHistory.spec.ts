@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearPromptHistory, loadPromptHistory } from '../../stores/promptHistory'
-import { writeJson } from '../../stores/storage'
+import { removeJson, writeJson } from '../../stores/storage'
 import Composer from '../Composer.vue'
 
 function mountComposer(props: Record<string, unknown> = {}) {
@@ -86,6 +86,10 @@ describe('Composer prompt-history clear propagation (WEB-6-P1)', () => {
   it('a cross-tab storage event empties the mounted ring: the next send persists only the new prompt', async () => {
     writeJson('promptHistory', ['one', 'two'])
     const wrapper = mountComposer({ modelValue: 'draft' })
+    // The browser fires the null-newValue event AFTER the other tab really
+    // removed the key; a read-merge-write ring (CW-DBA-3) reads storage, so
+    // the simulation must delete too, not only announce.
+    removeJson('promptHistory')
     window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:promptHistory', newValue: null }))
     await wrapper.setProps({ modelValue: 'ship it' })
     await press(wrapper, 'Enter')
@@ -111,6 +115,9 @@ describe('Composer prompt-history clear propagation (WEB-6-P1)', () => {
   it('a whole-storage clear event (key null) empties the mounted ring', async () => {
     writeJson('promptHistory', ['one', 'two'])
     const wrapper = mountComposer({ modelValue: 'draft' })
+    // A whole-storage wipe removes the rows before the key-null event fires;
+    // keep the simulated world consistent with that order (CW-DBA-3 read side).
+    localStorage.clear()
     window.dispatchEvent(new StorageEvent('storage', { key: null, newValue: null }))
     await wrapper.setProps({ modelValue: 'only me' })
     await press(wrapper, 'Enter')
