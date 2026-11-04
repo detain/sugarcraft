@@ -11,16 +11,20 @@ use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
+use SugarCraft\Code\Message as TranscriptMessage;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
+use SugarCraft\Code\Role;
 use SugarCraft\Code\Skills\ActiveSkillEffects;
 use SugarCraft\Code\Skills\Skill;
 use SugarCraft\Code\Skills\SkillOrigin;
 use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\ToolCall as RootToolCall;
 use SugarCraft\Code\Tools\ToolCall as ProviderToolCall;
+use SugarCraft\Code\ToolResult as RootToolResult;
 
 /**
  * C-EXT-1/C-EXT-2.b (R-EXT-1): what a skill declares for the turn is derived
@@ -142,6 +146,43 @@ final class ActiveSkillEffectsTest extends TestCase
         }
 
         return $messages;
+    }
+
+    /**
+     * The same invocations expressed as the rows the Chat permission gate
+     * actually holds: {@see \SugarCraft\Code\Chat::gateToolCall()} passes
+     * Chat::$history — ROOT {@see TranscriptMessage} rows — straight into
+     * {@see ActiveSkillEffects::apply()} (PHP-M2).
+     *
+     * @param list<array{name: string, args?: string}> $calls
+     *
+     * @return list<TranscriptMessage>
+     */
+    private static function rootInvocation(array $calls, bool $failLast = false): array
+    {
+        $rows = [TranscriptMessage::user('do the thing')];
+        foreach ($calls as $i => $call) {
+            $arguments = ['name' => $call['name']];
+            if (isset($call['args'])) {
+                $arguments['args'] = $call['args'];
+            }
+            $id = 'call-' . $i;
+            $failed = $failLast && $i === count($calls) - 1;
+            $rows[] = new TranscriptMessage(
+                Role::Assistant,
+                '',
+                time(),
+                toolCalls: [new RootToolCall('Skill', $arguments, $id)],
+            );
+            $rows[] = new TranscriptMessage(
+                Role::System,
+                '',
+                time(),
+                toolResults: [new RootToolResult('Skill', $failed ? '' : 'loaded', $failed ? 'boom' : null, $id)],
+            );
+        }
+
+        return $rows;
     }
 
     public function testAnInvokedSkillFeedsItsToolListsModelAndEffort(): void
@@ -620,6 +661,71 @@ final class ActiveSkillEffectsTest extends TestCase
             'this lane took the existing `commands` grant rather than minting a fifth key; '
                 . 'a real fifth grant means the trust dialog, the docs table and '
                 . 'TrustKeyDocumentationDriftTest walk together',
+        );
+    }
+
+    /**
+     * PHP-M2: Chat's permission gate hands this class its OWN root transcript
+     * rows, and at the base of this fix the walk recognised only the engine's
+     * typed hierarchy — every row was invisible, derive() answered "nothing
+     * active", and a skill's pre-approvals never reached the gate on the Chat
+     * path. The same invocation must feed the same grants whichever shape it
+     * arrives in: the two callers describe one transcript.
+     */
+    public function testRootTranscriptRowsStillFeedTheGrants(): void
+    {
+        $effects = ActiveSkillEffects::derive(
+            self::rootInvocation([['name' => 'php-wizard', 'args' => 'audit this']]),
+            self::registry(self::wizard()),
+            projectTierTrusted: true,
+        );
+
+        $this->assertFalse($effects->isEmpty());
+        $this->assertSame('opus-x', $effects->model);
+        $this->assertSame(['Read', 'Grep'], self::patterns($effects->allowRules));
+        $this->assertSame(['WebFetch'], self::patterns($effects->denyRules));
+    }
+
+    /**
+     * PHP-M2, the user-visible half: gateToolCall()'s
+     * `isEmpty() && !$gate->hasTurnGrants()` short-circuit made the Chat-path
+     * call a statement with no consequence — the gate stayed the launch's own,
+     * byte-identical. Driving apply() with the rows Chat::$history holds must
+     * swap the chain's gate exactly as the engine-path tests above do.
+     */
+    public function testApplyScopesTheGateFromTheChatShapeTranscript(): void
+    {
+        $hooks = new HookManager(new HookRegistry());
+        $base = new PermissionGate(PermissionMode::Default);
+        $hooks->register(new PermissionGateHook($base));
+
+        ActiveSkillEffects::apply(
+            $hooks,
+            self::rootInvocation([['name' => 'php-wizard', 'args' => 'audit this']]),
+            self::registry(self::wizard()),
+            projectTierTrusted: true,
+        );
+
+        $gate = $this->chain($hooks);
+        $this->assertNotSame($base, $gate);
+        $this->assertTrue($gate->hasTurnGrants());
+        $this->assertCount(2, $gate->turnAllowRules());
+        $this->assertCount(1, $gate->turnDenyRules());
+    }
+
+    /**
+     * The tolerant read has a boundary: root rows ending the turn — a fresh
+     * real user prompt — must NOT carry the previous turn's grants forward.
+     * A normalize that ignored the boundary would satisfy every pin above by
+     * granting forever; this keeps the scope a scope.
+     */
+    public function testARootUserPromptEndsTheRootTurn(): void
+    {
+        $rows = self::rootInvocation([['name' => 'php-wizard']]);
+        $rows[] = TranscriptMessage::user('now do something else');
+
+        $this->assertTrue(
+            ActiveSkillEffects::derive($rows, self::registry(self::wizard()), projectTierTrusted: true)->isEmpty()
         );
     }
 }

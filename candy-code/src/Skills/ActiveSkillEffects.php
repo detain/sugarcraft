@@ -7,11 +7,18 @@ namespace SugarCraft\Code\Skills;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookManager;
+use SugarCraft\Code\Message as TranscriptMessage;
+use SugarCraft\Code\Messages\AssistantMessage;
+use SugarCraft\Code\Messages\Message;
+use SugarCraft\Code\Messages\ToolResultMessage;
 use SugarCraft\Code\Messages\UserMessage;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Context\TurnContextBlock;
+use SugarCraft\Code\Role;
+use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\BuiltIn\SkillTool;
+use SugarCraft\Code\ToolResult;
 
 /**
  * What the skills invoked THIS turn ask for: tool grants, a model and a
@@ -120,7 +127,7 @@ final readonly class ActiveSkillEffects
      * REQUIRED with no default so that a new call site cannot silently widen
      * the grant: the argument is the audit trail.
      *
-     * @param iterable<\SugarCraft\Code\Messages\Message> $messages the turn's messages, oldest first
+     * @param iterable<\SugarCraft\Code\Messages\Message|\SugarCraft\Code\Message> $messages the turn's messages, oldest first — either transcript shape; the Chat gate passes root rows, {@see normalizeTranscript()} reads them
      */
     public static function derive(iterable $messages, ?SkillRegistry $registry, bool $projectTierTrusted): self
     {
@@ -128,7 +135,7 @@ final readonly class ActiveSkillEffects
             return self::none();
         }
 
-        $turn = self::turnMessages($messages);
+        $turn = self::turnMessages(self::normalizeTranscript($messages));
 
         // The two channels the tree already has for "which skills ran",
         // merged in the order ReinjectionPlan merges them: the tool-call
@@ -186,7 +193,7 @@ final readonly class ActiveSkillEffects
      * to before this class existed. When something WAS active and no longer
      * is, the grants are cleared rather than left behind.
      *
-     * @param iterable<\SugarCraft\Code\Messages\Message> $messages
+     * @param iterable<\SugarCraft\Code\Messages\Message|\SugarCraft\Code\Message> $messages
      */
     public static function apply(HookManager $hooks, iterable $messages, ?SkillRegistry $registry, bool $projectTierTrusted): self
     {
@@ -218,6 +225,73 @@ final readonly class ActiveSkillEffects
     {
         return $this->allowRules === [] && $this->denyRules === []
             && $this->model === null && $this->effort === null;
+    }
+
+    /**
+     * One read across both transcript shapes.
+     *
+     * The engine's step loop hands the walk typed {@see Message} rows;
+     * {@see \SugarCraft\Code\Chat::gateToolCall()} hands it Chat's own
+     * history — ROOT {@see TranscriptMessage} rows — and the walk recognised
+     * only the typed shape, so every root row was invisible, derive()
+     * answered "nothing active", and apply()'s short-circuit left the gate
+     * exactly as launched: PHP-M2, skill pre-approvals as a silent no-op on
+     * the Chat permission path. Normalising here, not at that one call site,
+     * is the honest contract: both callers describe the same transcript, and
+     * a future call site cannot reintroduce the silent miss by shape alone.
+     *
+     * Row by row: typed rows pass through untouched. A uiOnly row is text
+     * the model never saw, so it carries nothing and cannot end a turn. An
+     * assistant row becomes the AssistantMessage its call trail lives in;
+     * rows carrying tool results become one ToolResultMessage per result —
+     * keyed on the payload, not the role, because Chat's result rows are
+     * the harness fold of a step, whatever role they were stamped with. A
+     * user row becomes a UserMessage, turn-context fence included, so the
+     * boundary rule is identical for both shapes. Anything else (plain
+     * system notices) has no counterpart in the derivation and drops out,
+     * exactly as the engine path's SystemMessage rows are already ignored.
+     *
+     * @param iterable<mixed> $messages
+     *
+     * @return list<Message>
+     */
+    private static function normalizeTranscript(iterable $messages): array
+    {
+        $normalized = [];
+        foreach ($messages as $message) {
+            if ($message instanceof Message) {
+                $normalized[] = $message;
+                continue;
+            }
+            if (!$message instanceof TranscriptMessage || $message->uiOnly) {
+                continue;
+            }
+            if ($message->role === Role::Assistant) {
+                $normalized[] = new AssistantMessage(
+                    $message->content,
+                    $message->toolCalls === [] ? null : array_map(
+                        static fn (ToolCall $call): \SugarCraft\Code\Tools\ToolCall => $call->toEngineCall(),
+                        $message->toolCalls,
+                    ),
+                    $message->reasoning,
+                );
+            }
+            if ($message->role === Role::User) {
+                $normalized[] = new UserMessage($message->content);
+            }
+            foreach ($message->toolResults as $result) {
+                if (!$result instanceof ToolResult) {
+                    continue;
+                }
+                $normalized[] = new ToolResultMessage(
+                    (string) ($result->id ?? $result->name),
+                    $result->isError() ? (string) $result->error : $result->result,
+                    $result->isError(),
+                );
+            }
+        }
+
+        return $normalized;
     }
 
     /**
