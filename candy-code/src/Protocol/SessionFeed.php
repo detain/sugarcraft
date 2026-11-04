@@ -37,7 +37,9 @@ use SugarCraft\Code\Permissions\PermissionReply;
  *
  * Also here: the per-question answer timeout (`server.askTimeoutSeconds`),
  * a delta's `partId` / `offset` (so a client can spot a dropped one), the
- * narration tail, and the live sub-agent tree (`agents.subtree`).
+ * narration tail, and the live sub-agent tree (`agents.subtree`) — a bounded
+ * window: finished runs retire and the cap trims the rest, with the snapshot
+ * naming how many rows the trim dropped.
  *
  * NARRATION (Appendix O §6.9, roadmap O-6a). A subscriber hears an
  * `assistant.narration` tail at most every 2 s instead of the deltas when it
@@ -92,11 +94,32 @@ final class SessionFeed
     /** @var array<string, TimerInterface> */
     private array $askTimers = [];
 
-    /** @var array<string, array<string, mixed>> sub-agent id => its latest activity */
+    /**
+     * The live sub-agent tree, keyed by run id.
+     *
+     * A row retires when its terminal beat arrives; runs that never report
+     * one (a worker lost to a crash) are bounded by {@see MAX_SUBAGENT_ROWS}.
+     * The Agents tab does not read this map — {@see AgentsMethods} folds the
+     * durable started/finished pair from the log itself — so retiring a row
+     * here costs a client nothing it could not still learn.
+     *
+     * @var array<string, array<string, mixed>> sub-agent id => its latest activity
+     */
     private array $subagents = [];
+
+    /** Live rows the cap evicted; a snapshot names them once the cap fires. */
+    private int $subagentsDropped = 0;
 
     /** A run's identity fields a later beat leaves empty, kept from an earlier one. */
     private const SUBAGENT_STICKY_FIELDS = ['task', 'description', 'name', 'parentCallId', 'model'];
+
+    /**
+     * CWPD-2: the ceiling on live rows the tree keeps. Every row rides every
+     * snapshot, so runs that never report a terminal beat would otherwise
+     * grow the snapshot until `Dispatcher::answer()` refuses it as too
+     * large — a session permanently unopenable. Trimmed in first-seen order.
+     */
+    private const MAX_SUBAGENT_ROWS = 256;
 
     /** @var array<string, int> delta type => bytes streamed into the current part */
     private array $offsets = [];
@@ -272,6 +295,11 @@ final class SessionFeed
         $snapshot['pendingAsks'] = \array_map(self::askSummary(...), $this->host->pendingAsks());
         $snapshot['queue'] = $this->queueEntries();
         $snapshot['subagents'] = \array_values($this->subagents);
+        if ($this->subagentsDropped > 0) {
+            // Named only once the cap has fired: an untrimmed snapshot stays
+            // byte-identical to the one every client holds today.
+            $snapshot['subagentsDropped'] = $this->subagentsDropped;
+        }
 
         return $snapshot;
     }
@@ -353,6 +381,12 @@ final class SessionFeed
     public function subagents(): array
     {
         return \array_values($this->subagents);
+    }
+
+    /** Live rows the cap evicted; 0 while the cap has never fired. */
+    public function subagentsDropped(): int
+    {
+        return $this->subagentsDropped;
     }
 
     /**
@@ -507,18 +541,30 @@ final class SessionFeed
             case SessionEvent::SUBAGENT_FINISHED:
                 $id = $event->data['id'] ?? null;
                 if (\is_string($id) || \is_int($id)) {
+                    $key = (string) $id;
+                    if ($event->type === SessionEvent::SUBAGENT_FINISHED) {
+                        // CWPD-2: a terminal beat retires the live row. The
+                        // run's story stays durable — the Agents tab folds
+                        // it from the log, a path that never reads this map.
+                        unset($this->subagents[$key]);
+                        break;
+                    }
                     // A progress beat names no task (only `started` carries
                     // it) and may leave the other identity fields empty, so
                     // the run keeps what its earlier beats said: a snapshot's
                     // tree then shows what each run was asked to do.
                     $data = $event->data;
-                    $previous = $this->subagents[(string) $id] ?? [];
+                    $previous = $this->subagents[$key] ?? [];
                     foreach (self::SUBAGENT_STICKY_FIELDS as $field) {
                         if (($data[$field] ?? '') === '' && \is_string($previous[$field] ?? null) && $previous[$field] !== '') {
                             $data[$field] = $previous[$field];
                         }
                     }
-                    $this->subagents[(string) $id] = $data;
+                    $this->subagents[$key] = $data;
+                    while (\count($this->subagents) > self::MAX_SUBAGENT_ROWS) {
+                        unset($this->subagents[(string) \array_key_first($this->subagents)]);
+                        ++$this->subagentsDropped;
+                    }
                 }
                 break;
 
