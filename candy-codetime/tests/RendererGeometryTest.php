@@ -283,8 +283,12 @@ final class RendererGeometryTest extends TestCase
         }
 
         // A starved pane discloses what it hid — it never calls a busy
-        // account idle (R3 NIT-1). 16 rows still affords two entries; a
-        // 10-row budget starves the ladder into the side-by-side fallback.
+        // account idle (R3 NIT-1). The saturated frame stands 27 rows by
+        // nature (15-row stacked floor + two rows per entry at MAX_ENTRIES
+        // = 6): 19-20 rows affords two entries, 16 rows starves the ladder
+        // to zero - only the honest +25-more disclosure survives - and a
+        // 10-row budget falls through even the starved frame into the
+        // side-by-side fallback.
         foreach ([16, 10] as $h) {
             $starved = Ansi::strip($render(40, $h, $deep));
             $this->assertStringNotContainsString('(no activity)', $starved, "a busy account is never labelled idle (h=$h)");
