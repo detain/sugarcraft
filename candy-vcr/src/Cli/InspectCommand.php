@@ -99,12 +99,14 @@ final class InspectCommand implements Command
             return 2;
         }
 
+        $loader = new CassetteLoader();
         try {
-            $cassette = (new CassetteLoader())->load($path);
+            $cassette = $loader->load($path);
         } catch (\Throwable $e) {
             fwrite($stderr, "candy-vcr inspect: {$e->getMessage()}\n");
             return 1;
         }
+        CassetteLoader::writeTapeWarnings($loader, $stderr, 'inspect');
 
         $this->renderHeader($stdout, $cassette);
 

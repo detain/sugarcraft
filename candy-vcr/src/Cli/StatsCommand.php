@@ -51,12 +51,14 @@ final class StatsCommand implements Command
         }
         $path = $paths[0];
 
+        $loader = new CassetteLoader();
         try {
-            $cassette = (new CassetteLoader())->load($path);
+            $cassette = $loader->load($path);
         } catch (\Throwable $e) {
             fwrite($stderr, "candy-vcr stats: {$e->getMessage()}\n");
             return 1;
         }
+        CassetteLoader::writeTapeWarnings($loader, $stderr, 'stats');
 
         $this->renderStats($stdout, $cassette);
         return 0;

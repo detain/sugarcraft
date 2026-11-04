@@ -64,6 +64,7 @@ final class DiffCommand implements Command
             fwrite($stderr, "candy-vcr diff: {$e->getMessage()}\n");
             return 1;
         }
+        CassetteLoader::writeTapeWarnings($loader, $stderr, 'diff');
 
         $diffs = $this->collectDiffs($a, $b, $strict);
         if ($diffs === []) {

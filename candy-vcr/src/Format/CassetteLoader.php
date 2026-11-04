@@ -45,10 +45,56 @@ final class CassetteLoader
     ];
 
     /**
+     * Non-fatal tape-compile diagnostics accumulated across every
+     * {@see loadTape()} this loader performed, in load order.
+     *
+     * @var list<string>
+     */
+    private array $tapeWarnings = [];
+
+    /** True once any load through this instance went down the tape pipeline. */
+    private bool $compiledTape = false;
+
+    /**
+     * Tape-compile warnings from prior {@see load()} calls (empty for pure
+     * cassette loads). The CLI verbs are obliged to surface these on stderr
+     * — a swallowed warning is how a half-compiled tape played "clean".
+     *
+     * @return list<string>
+     */
+    public function tapeWarnings(): array
+    {
+        return $this->tapeWarnings;
+    }
+
+    /** Whether the most recent {@see load()} compiled a tape instead of reading a cassette. */
+    public function compiledTape(): bool
+    {
+        return $this->compiledTape;
+    }
+
+    /**
+     * Report accumulated tape warnings on a CLI stderr stream, verb-labelled.
+     *
+     * One implementation shared by every verb so a `.tape` problem can never
+     * be surfaced by one command and swallowed by another.
+     *
+     * @param resource $stderr
+     */
+    public static function writeTapeWarnings(CassetteLoader $loader, $stderr, string $verb): void
+    {
+        foreach ($loader->tapeWarnings() as $warning) {
+            \fwrite($stderr, "candy-vcr {$verb}: tape warning: {$warning}\n");
+        }
+    }
+
+    /**
      * Load a cassette from disk, sniffing the format automatically.
      */
     public function load(string $path): Cassette
     {
+        $this->compiledTape = false;
+
         if (!is_file($path)) {
             throw new \InvalidArgumentException("candy-vcr: cassette/tape not found: {$path}");
         }
@@ -90,7 +136,16 @@ final class CassetteLoader
         }
         $tokens = (new Lexer())->tokenize($source);
         $ast = (new Parser())->parse($tokens);
-        return (new Compiler())->compile($ast, $path);
+        $compiler = new Compiler();
+        $cassette = $compiler->compile($ast, $path);
+        $this->compiledTape = true;
+        // Non-strict compile: problems are collected, never thrown. Keep them
+        // for the verb to surface (M7) — dropping them here is what made a
+        // half-compiled tape look like a clean one.
+        foreach ($compiler->warnings() as $warning) {
+            $this->tapeWarnings[] = $warning;
+        }
+        return $cassette;
     }
 
     /**
