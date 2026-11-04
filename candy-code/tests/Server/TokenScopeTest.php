@@ -21,6 +21,7 @@ use SugarCraft\Code\Server\Auth\AuthContext;
 use SugarCraft\Code\Server\Auth\RateLimiter;
 use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\Auth\ViewerTokens;
+use SugarCraft\Code\Server\Http\ApiController;
 use SugarCraft\Code\Server\Http\AuthMiddleware;
 use SugarCraft\Code\Server\Http\HostAndOriginGuard;
 use SugarCraft\Code\Server\ServerConfig;
@@ -541,9 +542,8 @@ final class TokenScopeTest extends TestCase
 
         // The door's job on a public path is only to ride the attrs through;
         // /api/login then refuses the cv1_ exchange itself, body-side, because
-        // its credential check is the owner tokens->matches() (D-3 — the
-        // controller is outside this lane's file-set; that leg is pinned by
-        // its own hash-equality law, not here).
+        // its credential check is the owner tokens->matches() (D-3 — pinned
+        // end-to-end by testTheLoginDoorRefusesAViewerTokenEndToEnd below).
         $response = $this->dial($this->middleware($auth), 'POST', '/api/login', ['Authorization' => 'Bearer ' . $grant['token']]);
 
         self::assertSame(204, $response->getStatusCode());
@@ -572,6 +572,41 @@ final class TokenScopeTest extends TestCase
 
         self::assertSame('owner', $hello['principal']['kind']);
         self::assertSame('bearer', $hello['principal']['via']);
+    }
+
+    /** m1 (D-3 keystone): a viewer cv1_ token traded in at /api/login is refused — it is neither the owner hash nor a consumable code. */
+    public function testTheLoginDoorRefusesAViewerTokenEndToEnd(): void
+    {
+        $auth = AuthContext::new($this->tokens(), fn (): float => $this->now);
+        $grant = $auth->viewerTokens->grant('phone watch');
+        $request = new ServerRequest(
+            'POST',
+            'http://127.0.0.1:7420/api/login',
+            ['Authorization' => 'Bearer ' . $grant['token'], 'Content-Type' => 'application/json', 'Host' => '127.0.0.1:7420'],
+            \json_encode(['token' => $grant['token']]),
+            '1.1',
+            ['REMOTE_ADDR' => '127.0.0.1'],
+        );
+        $request = $request->withAttribute(HostAndOriginGuard::ATTR_ORIGIN, HostAndOriginGuard::ORIGIN_SAME);
+        $controller = new ApiController($auth, ServerConfig::new('/nonexistent'), $this->middleware($auth));
+
+        $response = $controller($request);
+
+        self::assertSame(401, $response->getStatusCode());
+        self::assertStringContainsString('"kind":"unauthorized"', (string) $response->getBody());
+        self::assertStringNotContainsString($grant['token'], (string) $response->getBody());
+
+        // Control: the same door accepts the owner token in the same place,
+        // so the refusal above is specific to the viewer credential.
+        $control = $controller(new ServerRequest(
+            'POST',
+            'http://127.0.0.1:7420/api/login',
+            ['Content-Type' => 'application/json', 'Host' => '127.0.0.1:7420'],
+            \json_encode(['token' => $this->tokens()->token()]),
+            '1.1',
+            ['REMOTE_ADDR' => '127.0.0.1'],
+        ));
+        self::assertSame(200, $control->getStatusCode());
     }
 
     /**
