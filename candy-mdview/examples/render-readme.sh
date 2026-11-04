@@ -22,7 +22,7 @@ export CANDY_MDVIEW_BIN
 run_mdview() { "$CANDY_MDVIEW_BIN" "$@"; }
 export -f run_mdview
 
-README="${1:-../README.md}"
+README="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/README.md}"
 
 for theme in dark dracula tokyo-night pink; do
     echo "═══ $theme ═══"
