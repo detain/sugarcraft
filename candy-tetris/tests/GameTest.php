@@ -287,6 +287,32 @@ final class GameTest extends TestCase
         $this->assertFalse($swapped->canHold);
     }
 
+    public function testHeldPieceReEntersAtTheSpawnColumn(): void
+    {
+        // Bag order with rand=0 is: O, T, S, Z, J, L, I
+        $g = $this->deterministicGame();
+        [$held] = $g->update($this->key('c'));          // O stashed, T spawns
+        [$dropped] = $held->update($this->key(' '));    // T locks, S spawns
+        $this->assertTrue($dropped->canHold);
+
+        // Walk S to the left wall, so the piece being replaced sits well away
+        // from the spawn column.
+        $atWall = $dropped;
+        for ($i = 0; $i < Board::COLS; $i++) {
+            [$atWall] = $atWall->update($this->key('left'));
+        }
+        $this->assertSame(0, $atWall->piece->x, 'fixture should park the live piece on the wall');
+
+        [$swapped] = $atWall->update($this->key('c'));
+        $this->assertSame(Tetromino::O, $swapped->piece->kind);
+        $this->assertSame(
+            (int) ((Board::COLS - 4) / 2),
+            $swapped->piece->x,
+            'a swapped-in piece re-enters centred like a fresh spawn, not on the column the replaced piece had walked to',
+        );
+        $this->assertSame(Tetromino::S, $swapped->hold, 'the displaced piece goes back into hold');
+    }
+
     public function testHoldDisabledAfterHoldUntilLock(): void
     {
         $g = $this->deterministicGame();

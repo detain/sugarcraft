@@ -850,8 +850,12 @@ final class Game implements Model
                 'lockResets' => 0,
             ]);
         } else {
-            // Swap current piece with held piece
-            $swappedPiece = new Piece($this->hold, 0, $this->piece->x, Board::HIDDEN_ROWS - 4);
+            // Swap current piece with held piece. The held piece re-enters
+            // through the same centred spawn a fresh piece gets: carrying the
+            // replaced piece's column would drop a returned piece wherever the
+            // piece it replaces had walked to, so a hold swap would land in a
+            // different place depending on input history.
+            $swappedPiece = self::spawn($this->hold);
             if ($this->board->fits($swappedPiece) === false) {
                 // Can't place held piece - don't hold
                 return [$this, null];
