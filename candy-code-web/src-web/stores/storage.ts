@@ -8,6 +8,38 @@
  */
 const PREFIX = 'candy-code-web:'
 
+/**
+ * The versioned namespace (CW-DBA-16). Keys the helpers own will be re-read
+ * under this prefix once every raw `candy-code-web:` literal in the tree is
+ * either routed through `storageKey()` or added to its sweep list, so the
+ * flip and the sweep land together rather than stranding a reader.
+ */
+const VERSIONED_PREFIX = 'candy-code-web:v1:'
+
+/**
+ * One-time migration sweep (CW-DBA-16): move each listed bare key from the
+ * unversioned prefix to the versioned one. A destination that already exists
+ * is never clobbered, and the unlisted keys stay put for their owners to claim
+ * — a partial sweep is safe by construction. Blocked or absent storage skips
+ * the whole sweep silently: boot does not depend on a convenience move.
+ */
+export function migrateUnversionedKeys(movable: readonly string[]): void {
+  try {
+    const store = globalThis.localStorage
+    if (!store) return
+    for (const key of movable) {
+      const unversioned = PREFIX + key
+      const raw = store.getItem(unversioned)
+      if (raw === null) continue
+      const versioned = VERSIONED_PREFIX + key
+      if (store.getItem(versioned) === null) store.setItem(versioned, raw)
+      store.removeItem(unversioned)
+    }
+  } catch {
+    // storage blocked: every key simply stays where it is
+  }
+}
+
 export function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = globalThis.localStorage?.getItem(PREFIX + key)

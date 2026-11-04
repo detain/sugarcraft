@@ -7,7 +7,7 @@
  * nothing else in the UI changes.
  */
 import { ref } from 'vue'
-import { readJson, removeJson, writeJson } from './storage'
+import { readJson, removeJson, storageKey, writeJson } from './storage'
 
 /** How far back the ring reaches; the oldest entry falls off the tail. */
 export const PROMPT_HISTORY_CAP = 50
@@ -37,10 +37,13 @@ const KEY = 'promptHistory'
 
 /**
  * WEB-6-P1: the fully-prefixed localStorage key as `stores/storage.ts` writes
- * it (`PREFIX + KEY`). The `storage` event reports the prefixed name, and the
- * cross-tab clear watch has to recognise exactly this one.
+ * it. The `storage` event reports the prefixed name, and the cross-tab clear
+ * watch has to recognise exactly this one — so it is DERIVED through
+ * `storageKey()` (CW-DBA-16): the day the namespace flips to its versioned
+ * prefix, this watch follows it by construction instead of stranding a
+ * hardcoded literal behind.
  */
-const STORAGE_KEY = 'candy-code-web:promptHistory'
+const STORAGE_KEY = storageKey(KEY)
 
 /** The stored ring, sanitised: only non-empty strings, never more than the cap. */
 export function loadPromptHistory(): string[] {
