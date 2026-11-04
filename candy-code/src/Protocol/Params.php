@@ -88,11 +88,13 @@ final class Params
     }
 
     /**
-     * A list of strings.
+     * A list of strings, each bounded like every other read on this class
+     * (CWPD-19): the count was capped and the element type checked, but a
+     * single item inside a legal frame could still be arbitrarily large.
      *
      * @return list<string>
      */
-    public function strings(string $name, int $maxItems = 1000): array
+    public function strings(string $name, int $maxItems = 1000, int $maxLength = 4096): array
     {
         $value = $this->params[$name] ?? [];
         if (!\is_array($value) || !\array_is_list($value) || \count($value) > $maxItems) {
@@ -101,6 +103,9 @@ final class Params
         foreach ($value as $item) {
             if (!\is_string($item)) {
                 throw RpcError::invalidParams(\sprintf('%s must be a list of strings', $name));
+            }
+            if (\strlen($item) > $maxLength) {
+                throw RpcError::invalidParams(\sprintf('%s has an item longer than %d bytes', $name, $maxLength));
             }
         }
 
