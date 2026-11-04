@@ -4,25 +4,29 @@ declare(strict_types=1);
 
 /*
  * M1 (lib-fixes-1103): Veil's SGR-to-RGB conversion must agree with
- * sugar-cellbuffer's Buffer for every palette index, bright and normal.
+ * sugar-cellbuffer's Style/Buffer for every palette index, bright and
+ * normal.
  *
- * Buffer special-cases bright black (SGR 90 / 38;5;8-bright) to
- * 0x7F7F7F — the xterm "grey" convention — while the overlay's private
- * copy applied only the +40% channel lift, turning index 0 bright into
- * pure 0x000000. A modal dimmed with SGR 90 over a buffer painted with
- * the grey convention produced a false diff: the cell model and the
- * emitted frame disagreed, so every later frame re-Emitted the row.
+ * The cellbuffer convention special-cases bright black (SGR 90 /
+ * 38;5;8-bright) to 0x7F7F7F — the xterm "grey" convention — while the
+ * overlay's private copy applied only the +40% channel lift, turning
+ * index 0 bright into pure 0x000000. A modal dimmed with SGR 90 over a
+ * buffer painted with the grey convention produced a false diff: the
+ * cell model and the emitted frame disagreed, so every later frame
+ * re-Emitted the row.
  *
- * These pins invoke BOTH private implementations by reflection and
- * require identical results across the whole 16-color table — a silent
- * fork in either lib's table now reddens here.
+ * The conversion lives in {@see Style::ansiColorToHex()} (private, reached
+ * through Style::fromSgr) — these pins invoke BOTH
+ * private implementations by reflection and require identical results
+ * across the whole 16-color table, so a silent fork in either lib's
+ * table now reddens here.
  */
 
 namespace SugarCraft\Overlay\Tests;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
-use SugarCraft\CellBuffer\Buffer;
+use SugarCraft\CellBuffer\Style;
 use SugarCraft\Overlay\Veil;
 
 final class GrayPenParityTest extends TestCase
@@ -30,7 +34,7 @@ final class GrayPenParityTest extends TestCase
     public function testBrightBlackIsTheGreyConventionInBothLibraries(): void
     {
         $this->assertSame(0x7f7f7f, $this->veilHex(0, true), 'Veil must paint bright black as xterm grey');
-        $this->assertSame(0x7f7f7f, $this->bufferHex(0, true), 'Buffer paints bright black as xterm grey (oracle)');
+        $this->assertSame(0x7f7f7f, $this->styleHex(0, true), 'Cellbuffer paints bright black as xterm grey (oracle)');
     }
 
     public function testTheFullSixteenColorTableAgreesBetweenVeilAndBuffer(): void
@@ -38,7 +42,7 @@ final class GrayPenParityTest extends TestCase
         foreach ([false, true] as $bright) {
             for ($idx = 0; $idx <= 7; $idx++) {
                 $this->assertSame(
-                    $this->bufferHex($idx, $bright),
+                    $this->styleHex($idx, $bright),
                     $this->veilHex($idx, $bright),
                     sprintf('SGR %s index %d must resolve to the same RGB in Veil and Buffer', $bright ? 'bright' : 'normal', $idx)
                 );
@@ -54,10 +58,10 @@ final class GrayPenParityTest extends TestCase
         return $method->invoke(null, $idx, $bright);
     }
 
-    private function bufferHex(int $idx, bool $bright): int
+    private function styleHex(int $idx, bool $bright): int
     {
         static $method = null;
-        $method ??= new ReflectionMethod(Buffer::class, 'ansiColorToHex');
+        $method ??= new ReflectionMethod(Style::class, 'ansiColorToHex');
 
         return $method->invoke(null, $idx, $bright);
     }
