@@ -599,6 +599,46 @@ final class SelfUpdateTest extends TestCase
         self::assertStringContainsString('v9.9.9', $text);
     }
 
+    /**
+     * M4: the swap publishes the temp file the sink wrote, and that file
+     * carries the process umask — not an executable bit. Nothing else on this
+     * path sets one (build-time chmod lives in tools/build-phar.php), so
+     * without the mode step `candy-top self-update` could replace a runnable
+     * phar with bytes the shell refuses to exec. The law pinned here is
+     * two-sided: the live file's own bits are carried across, and owner-execute
+     * is forced even when the install being replaced was never runnable.
+     */
+    public function testTheSwapPublishesAnExecutableMode(): void
+    {
+        foreach ([
+            'a runnable install stays runnable' => 0o755,
+            'an install nobody could exec is lifted' => 0o644,
+        ] as $case => $mode) {
+            self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+            self::assertTrue(\chmod($this->livePharPath(), $mode), $case);
+
+            $exit = SelfUpdate::run(
+                [],
+                $this->fakeServerClient(),
+                $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'UPDATED')]),
+                $this->livePharPath(),
+                'v0.1.0',
+                '',
+            );
+            self::assertSame(SelfUpdate::EXIT_OK, $exit, $case);
+            self::assertSame('UPDATED', \file_get_contents($this->livePharPath()), $case);
+            self::assertSame(
+                ($mode & 0o777) | 0o100,
+                \fileperms($this->livePharPath()) & 0o777,
+                $case . ': live bits carried, owner-execute forced',
+            );
+
+            self::deleteTree($this->dir . '/live');
+            self::assertTrue(\mkdir($this->dir . '/live', 0o700, true), $case);
+            $this->resetErrorStream();
+        }
+    }
+
     public function testAHashMismatchRefusesBeforeAnythingIsRenamed(): void
     {
         self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL-PHAR-BYTES'));

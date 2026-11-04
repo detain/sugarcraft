@@ -536,6 +536,18 @@ final class SelfUpdate
             return self::EXIT_FAILURE;
         }
 
+        // The temp carries the umask's mode, not a runnable one: the sink wrote
+        // a brand-new file, and only tools/build-phar.php ever chmods 0755 (at
+        // build time, on the archive that ships). Renamed as-is, a self-update
+        // could replace a working binary with bytes no shell can execute. Take
+        // the live file's own permission bits and force owner-execute, so the
+        // swap is never less runnable than what it replaces; a stat that cannot
+        // answer (the live slot vanished mid-verb) falls back to 0755. A failed
+        // chmod is not worth discarding a verified download over — the rename
+        // still publishes the bytes.
+        $liveMode = @\fileperms($phar);
+        @\chmod($temp, $liveMode === false ? 0o755 : ($liveMode & 0o777) | 0o100);
+
         if (!\rename($temp, $phar)) {
             self::forget($temp);
             self::stderr(Lang::t('cli.selfupdate.rename_failed', ['old' => $old, 'path' => $phar]));
