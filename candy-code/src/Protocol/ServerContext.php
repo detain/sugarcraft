@@ -728,6 +728,11 @@ final class ServerContext
         // there is no subscriber to ask, and the engine's own deadline is the
         // answer path again (the pending call settles as an error on expiry).
         $this->hub->get($sessionId)?->onClientCall(null);
+        // CWPD-10: same lifetime for the C-AGT-5.f outbound webhook turn
+        // stamp. TURN_COMPLETED is the only other place the row clears, and a
+        // host dropped mid-turn never emits one — without this unset the
+        // ledger grows one row per dropped-mid-turn session, forever.
+        unset($this->webhookTurns[$sessionId]);
     }
 
     /** Detach every feed (the server is stopping). */
