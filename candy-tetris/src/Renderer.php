@@ -81,8 +81,15 @@ final class Renderer
             return self::tooSmallNotice($game->frameCols, $game->frameRows);
         }
 
-        $playfield = self::renderBoard($game);
-        $sidebar  = self::renderSidebar($game, $game->frameRows < self::NATURAL_ROWS);
+        // MA-12 colour posture: Ascii (NO_COLOR / CLICOLOR=0 / plain ANSI)
+        // gets a zero-SGR frame where SHAPE carries every fact colour used
+        // to carry alone — the old colored-space previews rendered as blank
+        // nothing without colour. Null (profile not yet reported) renders
+        // the full-colour path, byte-identical to the frozen pins.
+        $plain = $game->colorProfile === ColorProfile::Ascii;
+
+        $playfield = self::renderBoard($game, $plain);
+        $sidebar  = self::renderSidebar($game, $game->frameRows < self::NATURAL_ROWS, $plain);
         $body = Layout::joinHorizontal(0.0, $playfield, '  ', $sidebar);
 
         if ($game->over === true) {
@@ -203,7 +210,7 @@ final class Renderer
         return implode("\n", $out) . "\n";
     }
 
-    private static function renderBoard(Game $game): string
+    private static function renderBoard(Game $game, bool $plain = false): string
     {
         $rows = $game->board->rows();
         $piece = $game->piece;
@@ -226,13 +233,13 @@ final class Renderer
 
                 if ($cellKind !== null) {
                     $rune = '█';
-                    $style = self::blockStyle($cellKind);
+                    $style = $plain ? null : self::blockStyle($cellKind);
                 } elseif (isset($pieceCells[$key]) === true) {
                     $rune = '█';
-                    $style = self::blockStyle($piece->kind);
+                    $style = $plain ? null : self::blockStyle($piece->kind);
                 } elseif (isset($ghostCells[$key]) === true) {
                     $rune = '▒';
-                    $style = self::ghostStyle($piece->kind);
+                    $style = $plain ? null : self::ghostStyle($piece->kind);
                 }
 
                 $boardBuf = $boardBuf->withCellAt($dx, $dy, Cell::new($rune, $style));
@@ -257,12 +264,12 @@ final class Renderer
      * frame's height becomes max(board 22, remaining sidebar) and still
      * fits a MIN_ROWS terminal.
      */
-    private static function renderSidebar(Game $game, bool $compact = false): string
+    private static function renderSidebar(Game $game, bool $compact = false, bool $plain = false): string
     {
         $next = $game->bag->peek(3);
         $previews = [];
         foreach ($next as $kind) {
-            $previews[] = self::renderMini($kind);
+            $previews[] = self::renderMini($kind, $plain);
         }
         $score = sprintf(
             Lang::t('score_card'),
@@ -276,9 +283,18 @@ final class Renderer
 
         $hold = '';
         if ($game->hold !== null) {
-            $hold = Lang::t('hold_label') . "\n" . self::renderMini($game->hold);
             if ($game->canHold === false) {
-                $hold = SugarStyle::new()->dim(true)->render($hold);
+                // MA-12/m35: the exhausted state gets an ON-FRAME TEXT cue
+                // riding the LABEL row — an extra body line would resize the
+                // card mid-play (the very reflow m35 complains of), and the
+                // dim SGR alone was a visible no-op where style does not
+                // land. Colour posture keeps the dim over the whole card.
+                $hold = Lang::t('hold_label') . ' ' . Lang::t('hold_used') . "\n" . self::renderMini($game->hold, $plain);
+                if ($plain === false) {
+                    $hold = SugarStyle::new()->dim(true)->render($hold);
+                }
+            } else {
+                $hold = Lang::t('hold_label') . "\n" . self::renderMini($game->hold, $plain);
             }
         } else {
             $hold = Lang::t('hold_label') . "\n" . self::renderMiniPlaceholder();
@@ -298,20 +314,27 @@ final class Renderer
         return Layout::joinVertical(0.0, ...$cards);
     }
 
-    private static function renderMini(Tetromino $kind): string
+    private static function renderMini(Tetromino $kind, bool $plain = false): string
     {
         $cells = self::cellMap($kind->cells(0));
 
         // 4×2 preview grid, two Buffer columns per tetromino cell so the
         // mini blocks keep the playfield's width. Rendered through a Buffer
         // (same path as renderBoard) instead of hand-rolled SGR strings.
+        //
+        // MA-12: the plain posture carries the shape in the GLYPH ('█')
+        // with no style — the colour posture's styled SPACE is invisible
+        // once colour is off, which is exactly how a no-colour preview used
+        // to read as an empty card.
         $buf = Buffer::new(8, 2);
         for ($y = 0; $y < 2; $y++) {
             for ($x = 0; $x < 4; $x++) {
                 if (isset($cells["$x,$y"]) === false) {
                     continue;
                 }
-                $cell = Cell::new(' ', self::blockStyle($kind));
+                $cell = $plain === true
+                    ? Cell::new('█')
+                    : Cell::new(' ', self::blockStyle($kind));
                 $buf = $buf
                     ->withCellAt($x * 2, $y, $cell)
                     ->withCellAt($x * 2 + 1, $y, $cell);
@@ -321,9 +344,16 @@ final class Renderer
         return $buf->toAnsi();
     }
 
+    /**
+     * m35: eight box-rule cells at the SAME 8-column width the occupied
+     * previews carry — the old 5-space body was neither the preview's width
+     * nor an 'empty' anyone could see, so the card changed shape on the
+     * first hold. Deliberately not '·': the dot belongs to the playfield's
+     * empty-cell vocabulary and the rune census pins it there.
+     */
     private static function renderMiniPlaceholder(): string
     {
-        return "     \n     ";
+        return "────────\n────────";
     }
 
     /**

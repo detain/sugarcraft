@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris\Tests;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
@@ -172,14 +173,20 @@ final class RendererTest extends TestCase
         $this->assertSame(2, count($lines), 'renderMini must return 2 lines');
     }
 
-    public function testRenderMiniPlaceholderReturnsFourSpacesOnTwoLines(): void
+    public function testRenderMiniPlaceholderCarriesThePreviewWidth(): void
     {
         $reflector = new \ReflectionClass(Renderer::class);
         $method = $reflector->getMethod('renderMiniPlaceholder');
         $method->setAccessible(true);
 
         $placeholder = $method->invoke(null);
-        $this->assertSame("     \n     ", $placeholder, 'placeholder must be 5 spaces on 2 lines');
+        // m35: same 8-cell width (and 2-row height) an occupied preview
+        // carries, so the hold card never changes shape on the first hold.
+        $this->assertSame("────────\n────────", $placeholder, 'placeholder must be 8 rule cells on 2 lines');
+        $lines = explode("\n", $placeholder);
+        foreach ($lines as $line) {
+            $this->assertSame(8, Width::of($line));
+        }
     }
 
     public function testEveryVisibleCellRendersExactlyOneRune(): void

@@ -27,6 +27,9 @@ return [
     'over.reason.spawn_blocked' => 'no room for next piece',
     'over.reason.top_out'       => 'stack reached the ceiling',
     'over.reason.crushed'       => 'crushed by garbage',
+    // m35/MA-12: on-frame text cue for an exhausted hold (the dim SGR alone
+    // was a no-op where style does not land).
+    'hold_used'                 => '(used)',
 
     // Versus renderer
     'label.player'   => 'PLAYER',

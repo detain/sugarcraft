@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\LaunchMode;
 use SugarCraft\Tetris\Support\Version;
@@ -70,5 +71,15 @@ $game = match ($mode) {
     default => Game::startWithLockDelay(),
 };
 
-$options = new ProgramOptions(useAltScreen: true);
+// MA-12: one capability profile, probed once at launch, drives BOTH the
+// alt-screen contract and the model's colour posture. A NoTty terminal
+// (pipe, TERM=dumb) never gets raw alt-screen/SGR bytes it cannot parse —
+// the renderer answers with a plain refusal instead — and ColorProfile::detect()
+// already folds NO_COLOR/CLICOLOR into Ascii, which Program delivers to the
+// model as ColorProfileMsg so the view drops every escape as well.
+$profile = ColorProfile::detect();
+$options = new ProgramOptions(
+    useAltScreen: $profile !== ColorProfile::NoTty,
+    colorProfile: $profile,
+);
 (new Program($game, $options))->run();

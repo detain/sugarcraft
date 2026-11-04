@@ -57,8 +57,11 @@ final class VsRenderer
             return self::tooSmallNotice($game->frameCols, $game->frameRows);
         }
 
-        $playerBoard = self::renderBoard($game->player, false);
-        $computerBoard = self::renderBoard($game->computer, true);
+        // MA-12 colour posture, mirror of Renderer (see its comment).
+        $plain = $game->colorProfile === ColorProfile::Ascii;
+
+        $playerBoard = self::renderBoard($game->player, false, $plain);
+        $computerBoard = self::renderBoard($game->computer, true, $plain);
 
         $playerSidebar = self::renderSidebar($game->player, false);
         $computerSidebar = self::renderSidebar($game->computer, true);
@@ -66,9 +69,9 @@ final class VsRenderer
         $playerPanel = Layout::joinVertical(0.0, $playerBoard, $playerSidebar);
         $computerPanel = Layout::joinVertical(0.0, $computerBoard, $computerSidebar);
 
-        $vsDivider = Style::new()
-            ->bold(true)
-            ->render("  VS  ");
+        $vsDivider = $plain === true
+            ? "  VS  "
+            : Style::new()->bold(true)->render("  VS  ");
 
         $body = Layout::joinHorizontal(0.0, $playerPanel, $vsDivider, $computerPanel);
 
@@ -179,8 +182,9 @@ final class VsRenderer
      *
      * @param Game $game The game to render
      * @param bool $isComputer Whether this is the computer's board (different hue)
+     * @param bool $plain Zero-SGR posture (MA-12): shape-carrying glyphs only.
      */
-    private static function renderBoard(Game $game, bool $isComputer): string
+    private static function renderBoard(Game $game, bool $isComputer, bool $plain = false): string
     {
         $rows = $game->board->rows();
         $piece = $game->piece;
@@ -195,15 +199,15 @@ final class VsRenderer
                 $key = "$x,$y";
                 $cellKind = $rows[$y][$x] ?? null;
                 if ($cellKind !== null) {
-                    $line .= $isComputer === true ? self::blockComputer($cellKind) : self::block($cellKind);
+                    $line .= $isComputer === true ? self::blockComputer($cellKind, $plain) : self::block($cellKind, $plain);
                     continue;
                 }
                 if (isset($pieceCells[$key]) === true) {
-                    $line .= $isComputer === true ? self::blockComputer($piece->kind) : self::block($piece->kind);
+                    $line .= $isComputer === true ? self::blockComputer($piece->kind, $plain) : self::block($piece->kind, $plain);
                     continue;
                 }
                 if (isset($ghostCells[$key]) === true) {
-                    $line .= $isComputer === true ? self::ghostComputer($piece->kind) : self::ghost($piece->kind);
+                    $line .= $isComputer === true ? self::ghostComputer($piece->kind, $plain) : self::ghost($piece->kind, $plain);
                     continue;
                 }
                 $line .= '··';
@@ -212,9 +216,9 @@ final class VsRenderer
         }
 
         $title = $isComputer === true ? Lang::t('label.computer') : Lang::t('label.player');
-        $titleBlock = Style::new()
-            ->bold(true)
-            ->render($title);
+        $titleBlock = $plain === true
+            ? $title
+            : Style::new()->bold(true)->render($title);
 
         return Layout::joinVertical(0.0,
             $titleBlock,
@@ -256,14 +260,24 @@ final class VsRenderer
         return $out;
     }
 
-    private static function block(Tetromino $kind): string
+    /**
+     * Filled cell. MA-12: the block carries the '█' GLYPH as well as the
+     * colour — the old two styled spaces made every locked cell (and the
+     * falling piece) disappear wherever the background SGR did not land,
+     * inverting the board so holes looked like blocks.
+     */
+    private static function block(Tetromino $kind, bool $plain = false): string
     {
-        return Ansi::bg256($kind->color()) . '  ' . Ansi::reset();
+        return $plain === true
+            ? '██'
+            : Ansi::bg256($kind->color()) . '██' . Ansi::reset();
     }
 
-    private static function ghost(Tetromino $kind): string
+    private static function ghost(Tetromino $kind, bool $plain = false): string
     {
-        return Ansi::sgr(38, 5, $kind->color(), 2) . '▒▒' . Ansi::reset();
+        return $plain === true
+            ? '▒▒'
+            : Ansi::sgr(38, 5, $kind->color(), 2) . '▒▒' . Ansi::reset();
     }
 
     /**
@@ -288,13 +302,17 @@ final class VsRenderer
         'L' => 215,
     ];
 
-    private static function blockComputer(Tetromino $kind): string
+    private static function blockComputer(Tetromino $kind, bool $plain = false): string
     {
-        return Ansi::bg256(self::COMPUTER_COLORS[$kind->value]) . '  ' . Ansi::reset();
+        return $plain === true
+            ? '██'
+            : Ansi::bg256(self::COMPUTER_COLORS[$kind->value]) . '██' . Ansi::reset();
     }
 
-    private static function ghostComputer(Tetromino $kind): string
+    private static function ghostComputer(Tetromino $kind, bool $plain = false): string
     {
-        return Ansi::sgr(38, 5, self::COMPUTER_COLORS[$kind->value], 2) . '▒▒' . Ansi::reset();
+        return $plain === true
+            ? '▒▒'
+            : Ansi::sgr(38, 5, self::COMPUTER_COLORS[$kind->value], 2) . '▒▒' . Ansi::reset();
     }
 }
