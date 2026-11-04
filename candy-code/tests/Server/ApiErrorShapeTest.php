@@ -14,14 +14,11 @@ use SugarCraft\Code\Server\Http\Router;
  * The HTTP answer's error SHAPE (CWPD-13(d) of reviews-1103): what a client
  * can parse when something under `/api/` goes wrong. A handled refusal is
  * pinned here at the envelope the API already commits to — `{error:
- * {kind, message}}` JSON with the security headers merged — and an
- * UNHANDLED throw is pinned at its CURRENT observed behavior: the Router
- * does not catch, so the exception escapes toward whoever mounted it.
- *
- * The bounded-500 half is CWPD-4, owned by lane G4-D (their
- * tests/Server/RouterThrowableTest.php will pin the catch-all responder
- * once it lands). If that weld makes the escape test below red, the escape
- * is gone by design — delete that test then, not before.
+ * {kind, message}}` JSON with the security headers merged. The UNHANDLED
+ * throw is no longer pinned here: CWPD-4 (lane G4-D, welded at this commit's
+ * side) replaced the old escape-with-no-answer with a bounded JSON 500 at
+ * the router boundary — that behavior is pinned in
+ * tests/Server/RouterThrowableTest.php.
  */
 final class ApiErrorShapeTest extends TestCase
 {
@@ -47,25 +44,6 @@ final class ApiErrorShapeTest extends TestCase
         ));
 
         self::assertStringNotContainsString($secret, (string) $response->getBody(), 'what a handler keeps to itself stays kept');
-    }
-
-    /**
-     * CURRENT behavior, deliberately pinned so a later change is a
-     * disclosed change: the Router has no catch-all, so a throwing handler
-     * propagates to the HTTP layer above (react/http answers its own
-     * unparsable 500 there). The shared contract lives in this class docblock — CWPD-4 (G4-D)
-     * replaces this with a bounded JSON 500.
-     */
-    public function testAnUnhandledThrowCurrentlyEscapesTheRouterUncaught(): void
-    {
-        $router = $this->router(static function (): ResponseInterface {
-            throw new \RuntimeException('handler blew up');
-        });
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('handler blew up');
-
-        $this->dispatchApi($router);
     }
 
     /** @param \Closure(ServerRequest):ResponseInterface $api */

@@ -117,7 +117,10 @@ final class AuthMiddleware
         }
 
         $retry = $this->auth->limiter->retryAfter($address);
-        if ($retry > 0 && self::isProtected($path) && $path !== '/api/health' && $path !== '/api/login' && !self::isHookRoute($path)) {
+        // CWPD-15: the exemption list is ONE roster with the pass-through
+        // below — an inline restatement could drift and turn a public route
+        // into a 429 the health check never sees.
+        if ($retry > 0 && self::isProtected($path) && !\in_array($path, self::PUBLIC_API, true) && !self::isHookRoute($path)) {
             return Responses::error(429, 'rate_limited', 'too many failed sign-ins from this address', ['Retry-After' => (string) $retry]);
         }
 

@@ -163,10 +163,10 @@ final class CookieSessions
      * fail LOUD: the next boot would resurrect the rows, and a promise that
      * silently became false is the one state authentication may not ship.
      * The throw escapes outward: {@see AuthContext::reloadToken()}'s control
-     * socket caller already guards it into an `ok:false` answer, while the
-     * logout route has no error responder in `src/Server` — there the failed
-     * revocation kills the request's connection unanswered, loud by absence
-     * of a lie, which is the point.
+     * socket caller already guards it into an `ok:false` answer, and the
+     * logout route rides the router's boundary responder (CWPD-4) — a failed
+     * revocation answers the JSON 500 `internal_error` envelope with the
+     * cause in the server log, never a connection killed unanswered.
      */
     private function revocationStands(): void
     {

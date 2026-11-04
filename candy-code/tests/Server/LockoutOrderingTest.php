@@ -116,4 +116,33 @@ final class LockoutOrderingTest extends TestCase
             'exactly the trip is announced — the strikes around it and the lockout itself are not',
         );
     }
+
+    public function testTheLockoutExemptionsReadTheSinglePublicRoster(): void
+    {
+        // CWPD-15: the lockout brake exempted the health probe and the login
+        // route by RESTATING both literals inline. One roster, one source —
+        // pinned structurally (the inline spelling may not come back) and
+        // behaviorally (public routes ride a live lockout; protected ones
+        // wait it out).
+        self::assertSame(['/api/health', '/api/login'], AuthMiddleware::PUBLIC_API);
+
+        $source = (string) \file_get_contents((new \ReflectionClass(AuthMiddleware::class))->getFileName());
+        $start = \strpos($source, 'retryAfter($address);');
+        self::assertIsInt($start, 'the lockout arm still opens on the limiter read');
+        $window = \substr($source, (int) $start, 700);
+        self::assertSame(0, \substr_count($window, "!== '/api/health'"), 'the inline restatement is gone (CWPD-15)');
+        self::assertSame(0, \substr_count($window, "!== '/api/login'"), 'the inline restatement is gone (CWPD-15)');
+        self::assertGreaterThan(0, \substr_count($window, 'self::PUBLIC_API'), 'the lockout consults the roster');
+
+        for ($i = 0; $i < RateLimiter::MAX_FAILURES; ++$i) {
+            $this->call('GET', '/ws', self::UPGRADE + ['Authorization' => 'Bearer ' . \str_repeat('a', 64)]);
+        }
+        self::assertGreaterThan(0, $this->auth->limiter->retryAfter('127.0.0.1'));
+
+        self::assertSame(204, $this->call('GET', '/api/health')->getStatusCode(), 'the health probe answers through a lockout');
+        self::assertSame(204, $this->call('POST', '/api/login')->getStatusCode(), 'the login route is not the brake\'s target');
+        $locked = $this->call('POST', '/api/ticket');
+        self::assertSame(429, $locked->getStatusCode(), 'protected routes still wait the lockout out');
+        self::assertSame((string) RateLimiter::LOCKOUT_SECONDS, $locked->getHeaderLine('Retry-After'));
+    }
 }
