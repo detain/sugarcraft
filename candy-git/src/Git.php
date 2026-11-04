@@ -39,8 +39,8 @@ final class Git implements GitDriver
     /** Hard mode: refuse (typed) instead of announce (sticky) filter-capable commands. */
     public readonly bool $strictFilters;
 
-    /** @var bool one-shot latch for FILTER_NOTICE_FORMAT (per instance) */
-    private bool $filterNoticeEmitted = false;
+    /** @var string lane-set key of the last emitted notice ('' = never) — re-announces when the set changes (m1) */
+    private string $filterNoticeKey = '';
 
     public function __construct(
         public readonly string $cwd,
@@ -609,105 +609,149 @@ final class Git implements GitDriver
     /**
      * Detect the repository's filter drivers on every filter-capable command
      * and apply the posture: in strict filter mode the command is REFUSED
-     * (typed refusal) when at least one driver exists; in default mode a
-     * one-shot stderr notice names the drivers, and the command proceeds —
-     * the drivers still run (git-lfs-class tooling must keep working).
+     * (typed refusal) when the repository defines at least one filter lane;
+     * in default mode a stderr notice names the current lane set, and the
+     * command proceeds — the drivers still run (git-lfs-class tooling must
+     * keep working).
      *
      * This method NEVER mutates the argv that argvWithDisarms() returns: with
      * zero drivers defined (the common case) nothing at all changes — no
-     * extra flags, no notice. The enumeration is a fresh read-only spawn on
-     * EVERY filter-capable invocation, never memoized: a repo that mutates
-     * its own config between two commands must not be able to run under a
-     * stale detection result (symmetric with the merge-disarm posture).
+     * extra flags, no notice. The scan is a fresh read-only spawn on EVERY
+     * filter-capable invocation, never memoized: a repo that mutates its own
+     * config between two commands must not be able to run under a stale
+     * detection result (symmetric with the merge-disarm posture). The notice
+     * is one-shot PER LANE SET: it repeats only when the repo-defined set
+     * changes underneath the instance (a repo growing a second driver
+     * mid-session must not stay silent behind a stale latch).
      */
     private function guardFilterChannel(): void
     {
-        $lanes = $this->filterDriverLanes();
-        if ($lanes === []) {
+        $scan = $this->filterChannelScan();
+        if ($scan['strict'] === []) {
             return;
         }
         if ($this->strictFilters) {
             throw new \RuntimeException(Lang::t('git.unsafe_filter_driver'));
         }
-        if ($this->filterNoticeEmitted) {
+        // Disclosed carve-out: a repo row byte-identical to the operator's
+        // own global/system value keeps the NOTICE silent (it runs the
+        // operator's own command string) — but it still counts strictly
+        // above. An all-carve-out set therefore announces nothing.
+        $noticeKey = implode('|', $scan['notice']);
+        if ($noticeKey === '' || $noticeKey === $this->filterNoticeKey) {
             return;
         }
-        $this->filterNoticeEmitted = true;
-        \fwrite(STDERR, \sprintf(self::FILTER_NOTICE_FORMAT, self::summarizeLanes($lanes), self::STRICT_FILTERS_ENV));
+        $this->filterNoticeKey = $noticeKey;
+        \fwrite(STDERR, \sprintf(self::FILTER_NOTICE_FORMAT, self::summarizeLanes($scan['notice']), self::STRICT_FILTERS_ENV));
     }
 
     /**
-     * Enumerate the filter lanes THIS REPOSITORY defines — `filter.<name>.
-     * clean|smudge|process` keys visible to git for this cwd, minus the
-     * user's own baseline.
+     * VALUE-GRANULAR filter-channel scan (round-2 review C1): the detection
+     * works on WHOLE config values from `git config --list -z --show-origin`,
+     * never on printed lines — a multi-line (embedded-newline) value that
+     * merely STARTS like the operator's own driver is the shadow-attack
+     * shape, and line-granular subtraction handed the payload lines straight
+     * past it. A value lives in exactly one NUL-terminated record, so real
+     * newlines inside it cannot forge extra entries.
      *
-     * The merged config scope is what git would actually consult (repo
-     * `.git/config`, `config.worktree`, and files included from either —
-     * `--local` alone is blind to include.path, the same lesson the
-     * merge-driver enumeration learned on git 2.43). But merged scope also
-     * carries `filter.lfs.*` from the USER's global/system gitconfig, and
-     * nagging (or refusing) for the operator's own git-lfs would be exactly
-     * the git-lfs-class breakage the disarm ruling rejected. So: lanes whose
-     * key AND value byte-match the global or system chain are the user's own
-     * trusted baseline and drop out; anything else — a new key, a repo-side
-     * OVERRIDE of a global key (shadow attack), or an include reachable only
-     * through the repo — counts as a lane. A repo re-defining a driver with
-     * the byte-identical global value runs the user's own binary: nothing new
-     * executes, nothing to announce.
+     * A lane is REPO-DEFINED when its record's origin is not one of the
+     * files the operator's own --global/--system chains report (repo
+     * `.git/config`, `config.worktree`, and anything included only through
+     * the repo all count; the operator's global include-chain does not).
+     * STRICT mode refuses any repo-defined lane — even one whose value is
+     * byte-identical to the global one (git's last-wins means the repo row
+     * is what executes; strict is the "never execute a repo-defined filter"
+     * posture the ruling asked for). Default mode ANNOUCES repo-defined
+     * lanes, with one disclosed carve-out: a repo row that byte-matches a
+     * full global/system value runs the operator's own command string, so
+     * it stays notice-silent (that is the git-lfs-class breakage the disarm
+     * ruling rejected).
      *
-     * An unnamed key shape (subsection the parser cannot name) lands as the
-     * '<unnamed>' lane: its driver still executes at git's side, so it must
-     * not stay silent. @return list<string>
+     * Keys are matched client-side; the effective driver lanes are
+     * `name.kind` (name case-preserved, kind lowercased) plus '<unnamed>'
+     * for a filter.<*>.clean|smudge|process key whose subsection the parser
+     * cannot name — fail closed rather than go silent about a lane git will
+     * happily execute.
+     *
+     * @return array{strict: list<string>, notice: list<string>}
      */
-    private function filterDriverLanes(): array
+    private function filterChannelScan(): array
     {
-        $merged = $this->filterConfigProbe();
+        $merged = $this->filterConfigProbe('');
         if ($merged === []) {
-            return [];
+            return ['strict' => [], 'notice' => []];
         }
 
-        $baseline = [];
+        $trustedOrigins = [];
+        $trustedValues  = [];
         foreach ([
             $this->filterConfigProbe('--global'),
             $this->filterConfigProbe('--system'),
-        ] as $scopeLines) {
-            foreach ($scopeLines as $line) {
-                $baseline[$line] = true;
+        ] as $baseline) {
+            foreach ($baseline as [$origin, $key, $value]) {
+                $trustedOrigins[$origin]      = true;
+                $trustedValues[$key . "\n" . $value] = true;
             }
         }
 
-        $lanes = [];
-        foreach ($merged as $line) {
-            if (isset($baseline[$line])) {
-                continue; // the operator's own driver, byte-identical
+        $strict = [];
+        $notice = [];
+        foreach ($merged as [$origin, $key, $value]) {
+            $lane = self::laneForKey($key);
+            if ($lane === null || isset($trustedOrigins[$origin])) {
+                continue; // not a lane, or the operator's own definition
             }
-            if (preg_match('/^filter\.([A-Za-z0-9._-]+)\.(clean|smudge|process)(?= |$)/i', $line, $m) === 1) {
-                $lanes[$m[1] . '.' . strtolower($m[2])] = true;
-                continue;
-            }
-            if (preg_match('/^filter\./i', $line) === 1
-                && preg_match('/\.(clean|smudge|process)(?= |$)/i', $line) === 1) {
-                // A key git printed that we cannot cleanly name (subsection
-                // carrying spaces/odd bytes, or a key-shaped value
-                // continuation). Its driver still EXECUTES at git's side, so
-                // it counts: announce says '<unnamed>', strict refuses —
-                // fail closed rather than stay silent about a lane we saw.
-                $lanes['<unnamed>'] = true;
+            $strict[$lane] = true;
+            if (!isset($trustedValues[$key . "\n" . $value])) {
+                $notice[$lane] = true; // differs from the global value — or is a multi-line shadow
             }
         }
 
-        return array_keys($lanes);
+        return ['strict' => array_keys($strict), 'notice' => array_keys($notice)];
     }
 
     /**
-     * One read-only `git config --get-regexp` for the filter lanes, optionally
-     * restricted to a scope flag (--global/--system) for the trusted
-     * baseline. Timeout fails closed (strict mode must not wave an unknown
-     * repo through); exit 1 means no lanes; other non-zero (128-class,
-     * corrupt config) yields [] and lets the real git command surface its own
-     * more specific error.
+     * Lane grammar for one config KEY (never the value): the notice prints
+     * lane names only, so nothing a repo wrote into a value can ever reach
+     * the terminal.
+     */
+    private static function laneForKey(string $key): ?string
+    {
+        if (preg_match('/^filter\.([A-Za-z0-9._-]+)\.(clean|smudge|process)$/i', $key, $m) === 1) {
+            return $m[1] . '.' . strtolower($m[2]);
+        }
+        if (preg_match('/^filter\./i', $key) === 1
+            && preg_match('/\.(clean|smudge|process)$/i', $key) === 1) {
+            // Unnameable subsection shape (spaces/odd bytes): its driver
+            // still executes at git's side, so it counts — announce says
+            // '<unnamed>', strict refuses.
+            return '<unnamed>';
+        }
+
+        return null;
+    }
+
+    /**
+     * Repo-relative view of the repo-defined lanes (reflection-pinned by the
+     * hardening tests): strict-set == every lane git could run that the
+     * operator did not define themselves.
      *
-     * @return list<string> matched "key value" lines
+     * @return list<string>
+     */
+    private function filterDriverLanes(): array
+    {
+        return $this->filterChannelScan()['strict'];
+    }
+
+    /**
+     * One read-only `git config --list -z --show-origin`, optionally scoped
+     * (--global/--system) to build the operator's trusted baseline. Timeout
+     * fails closed (strict mode must not wave an unknown repo through).
+     * Exit 1 means no config file/matches; other non-zero (128-class,
+     * corrupt config) yields [] and lets the real git command surface its
+     * own more specific error — same posture as mergeDriverDisarms().
+     *
+     * @return list<array{0: string, 1: string, 2: string}> [origin, key, value]
      */
     private function filterConfigProbe(string $scope = ''): array
     {
@@ -715,19 +759,56 @@ final class Git implements GitDriver
             self::gitBase($this->cwd),
             ['config'],
             $scope === '' ? [] : [$scope],
-            ['--get-regexp', '^filter\\..*\\.(clean|smudge|process)$'],
+            ['--list', '-z', '--show-origin'],
         ), null, $this->timeout);
         if ($probe['timedOut']) {
             throw new \RuntimeException(Lang::t('git.timeout', ['seconds' => $this->timeout]));
         }
+        if ($probe['exit'] === 1) {
+            return []; // scope has no config file at all
+        }
         if ($probe['exit'] !== 0) {
-            return [];
+            return []; // corrupt/unreadable: git's own command will explain it
         }
 
-        return array_values(array_filter(
-            explode("\n", rtrim($probe['stdout'], "\n")),
-            static fn(string $line): bool => $line !== '',
-        ));
+        $entries = [];
+        $records = explode("\0", $probe['stdout']);
+        $pending = null; // origin field awaiting its key/value partner
+        foreach ($records as $record) {
+            if ($record === '') {
+                continue; // trailing empty piece after the final NUL
+            }
+            $tab = strpos($record, "\t");
+            if ($tab !== false && stripos($record, 'filter.') === false && str_starts_with($record, 'file:')) {
+                // Single-field shape "file:ORIGIN\tkey\nvalue" (one possible
+                // emitter layout): parse origin and entry together.
+                $origin = substr($record, 0, $tab);
+                $record = substr($record, $tab + 1);
+                $nl     = strpos($record, "\n");
+                $key    = $nl === false ? $record : substr($record, 0, $nl);
+                if (stripos($key, 'filter.') !== 0) {
+                    continue;
+                }
+                $entries[] = [$origin, $key, $nl === false ? '' : substr($record, $nl + 1)];
+                continue;
+            }
+            if ($pending === null && !str_contains($record, "\n")) {
+                // Measured git 2.43 shape: the --show-origin field is its OWN
+                // NUL-terminated record ("file:/path" / "command line:"-style
+                // markers), followed by the entry record "key\nvalue". Values
+                // may carry further newlines; the FIRST one is the separator.
+                $pending = $record;
+                continue;
+            }
+            $nl  = strpos($record, "\n");
+            $key = $nl === false ? $record : substr($record, 0, $nl);
+            if (stripos($key, 'filter.') === 0) {
+                $entries[] = [$pending ?? '', $key, $nl === false ? '' : substr($record, $nl + 1)];
+            }
+            $pending = null;
+        }
+
+        return $entries;
     }
 
     /**

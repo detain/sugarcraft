@@ -654,6 +654,181 @@ final class GitHardeningTest extends TestCase
         }
     }
 
+    /**
+     * Sandbox for the baseline-subtraction discriminator (round-2 review
+     * M1): a synthetic OPERATOR config with filter.lfs.clean|smudge = `cat`,
+     * wired via GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM (honored by git >= 2.32)
+     * so no test ever reads — or risks — the machine's real ~/.gitconfig.
+     * Must be called between putenv-scope try/finally pairs that restore
+     * both vars; builds a repo whose *.txt attrs route to filter=lfs and a
+     * diverging `other-r3` branch (branch switches therefore smudge).
+     *
+     * @return array{0: string, 1: string} [repoDir, baseBranch]
+     */
+    private function makeGlobalShadowRepo(): array
+    {
+        $file = $this->cwd() . '/r3-global-' . bin2hex(random_bytes(4)) . '.gitconfig';
+        $this->trash[] = $file;
+        file_put_contents($file, "[filter \"lfs\"]\n\tclean = cat\n\tsmudge = cat\n");
+        putenv('GIT_CONFIG_GLOBAL=' . $file);
+        putenv('GIT_CONFIG_SYSTEM=/dev/null');
+
+        $repo = $this->makeRepo();
+        file_put_contents($repo . '/.gitattributes', chr(42) . '.txt filter=lfs' . "\n");
+        exec('git -C ' . escapeshellarg($repo) . ' add .gitattributes 2>/dev/null');
+        exec('git -C ' . escapeshellarg($repo) . ' commit -m attrs 2>/dev/null');
+
+        $base = trim((string) shell_exec('git -C ' . escapeshellarg($repo) . ' rev-parse --abbrev-ref HEAD'));
+        exec('git -C ' . escapeshellarg($repo) . ' checkout -b other-r3 2>/dev/null');
+        file_put_contents($repo . '/file.txt', "line 1\npayload branch\nline 3\n");
+        exec('git -C ' . escapeshellarg($repo) . ' commit -aqm other 2>/dev/null');
+        exec('git -C ' . escapeshellarg($repo) . ' checkout ' . escapeshellarg($base) . ' 2>/dev/null');
+
+        return [$repo, $base];
+    }
+
+    private function restoreGlobalConfigSandbox(): void
+    {
+        putenv('GIT_CONFIG_GLOBAL');
+        putenv('GIT_CONFIG_SYSTEM');
+    }
+
+    public function testByteIdenticalGlobalShadowStillRefusesStrictlyAndStaysNoticeSilent(): void
+    {
+        $this->requireGit();
+        [$repo, $base] = $this->makeGlobalShadowRepo();
+        exec('git -C ' . escapeshellarg($repo) . ' config filter.lfs.smudge cat 2>/dev/null');
+
+        try {
+            // git's last-wins makes the repo row the EFFECTIVE smudge
+            // definition, so strict mode must see the lane even when the
+            // bytes equal the global value (the ruling: byte-identical is
+            // NOT grounds for strict silence). Line-granular FIX-2 logic
+            // returned [] here — this assert reddens that pre-fix.
+            self::assertSame(['lfs.smudge'], $this->callFilterLanes($repo));
+
+            // Default posture keeps the DISCLOSED carve-out: an identical
+            // value runs the operator's own command string, so no notice.
+            $r = Process::run(['php', $this->filterNoticeChild(), $repo, 'checkout', 'other-r3', $base], null, 30.0);
+            self::assertSame(0, $r['exit'], $r['stderr']);
+            self::assertSame(
+                0,
+                substr_count($r['stderr'], 'candy-git: notice:'),
+                'byte-identical full-value shadow is the documented notice-silent carve-out; stderr: ' . $r['stderr'],
+            );
+
+            putenv(Git::STRICT_FILTERS_ENV . '=1');
+            try {
+                (new Git($repo))->checkout('other-r3');
+                self::fail('strict mode must refuse a byte-identical repo shadow of a global filter');
+            } catch (\RuntimeException $e) {
+                self::assertSame(\SugarCraft\Git\Lang::t('git.unsafe_filter_driver'), $e->getMessage());
+            } finally {
+                putenv(Git::STRICT_FILTERS_ENV);
+            }
+        } finally {
+            $this->restoreGlobalConfigSandbox();
+        }
+    }
+
+    public function testMultiLineShadowIsDetectedNamedInNoticeAndStillExecutes(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/r3payload_' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        [$repo, $base] = $this->makeGlobalShadowRepo();
+        // The C1 attack: first line byte-equals the operator's global value,
+        // the payload rides the SECOND line of the same value. A
+        // line-granular subtraction dropped the first line as baseline and
+        // never accused the payload line; the effective driver (last-wins)
+        // then shell-executes the WHOLE value while STRICT stays quiet.
+        exec('git -C ' . escapeshellarg($repo) . ' config filter.lfs.smudge '
+            . escapeshellarg("cat\ntouch " . $sentinel) . ' 2>/dev/null');
+
+        try {
+            self::assertSame(
+                ['lfs.smudge'],
+                $this->callFilterLanes($repo),
+                'a global-matching FIRST LINE must not hide a multi-line value (value-granular C1 fix)',
+            );
+            self::assertFalse(file_exists($sentinel), 'detection itself must not run anything');
+
+            putenv(Git::STRICT_FILTERS_ENV . '=1');
+            try {
+                (new Git($repo))->checkout('other-r3');
+                self::fail('strict mode must refuse the payload shadow');
+            } catch (\RuntimeException $e) {
+                self::assertSame(\SugarCraft\Git\Lang::t('git.unsafe_filter_driver'), $e->getMessage());
+            } finally {
+                putenv(Git::STRICT_FILTERS_ENV);
+            }
+            self::assertFalse(file_exists($sentinel), 'refusal must happen BEFORE the filters run');
+
+            // Announce posture: the lane is NAMED and the command proceeds —
+            // the driver executes exactly like plain git (honest sticky
+            // posture; the notice is what tells the operator).
+            $r = Process::run(['php', $this->filterNoticeChild(), $repo, 'checkout', 'other-r3', $base], null, 30.0);
+            self::assertSame(0, $r['exit'], $r['stderr']);
+            self::assertSame(1, substr_count($r['stderr'], 'candy-git: notice:'), 'stderr: ' . $r['stderr']);
+            self::assertStringContainsString('lfs.smudge', $r['stderr']);
+            self::assertFileExists($sentinel, 'announce mode names the lane and still runs it (drivers execute — pin discriminates)');
+        } finally {
+            $this->restoreGlobalConfigSandbox();
+        }
+    }
+
+    public function testNoticeReAnnouncesWhenTheRepoGrowsANewLaneMidSession(): void
+    {
+        $this->requireGit();
+
+        $sentinel = $this->cwd() . '/r3latch_' . bin2hex(random_bytes(4));
+        $this->trash[] = $sentinel;
+        [$repo, $base] = $this->makeGlobalShadowRepo();
+        exec('git -C ' . escapeshellarg($repo) . ' config filter.lfs.smudge '
+            . escapeshellarg("cat\ntouch " . $sentinel) . ' 2>/dev/null');
+
+        try {
+            // One instance, TWO different lane sets: the smudge lane is
+            // announced, then the repo defines a SECOND lane (clean) and the
+            // next filter-capable command must re-announce (m1: a bool latch
+            // would let the mid-session addition stay silent).
+            $r = Process::run(['php', $this->filterNoticeChild(), $repo, 'checkout-mutate', 'other-r3', $base], null, 30.0);
+            self::assertSame(0, $r['exit'], $r['stderr']);
+            self::assertSame(2, substr_count($r['stderr'], 'candy-git: notice:'), 'stderr: ' . $r['stderr']);
+            self::assertStringContainsString('lfs.smudge', $r['stderr']);
+            self::assertStringContainsString('lfs.clean', $r['stderr']);
+        } finally {
+            $this->restoreGlobalConfigSandbox();
+        }
+    }
+
+    public function testRepoCleanDifferingFromGlobalCountsAsLaneAndRefusesStrictly(): void
+    {
+        $this->requireGit();
+        [$repo, $base] = $this->makeGlobalShadowRepo();
+        exec('git -C ' . escapeshellarg($repo) . ' config filter.lfs.clean "tr a-z A-Z" 2>/dev/null');
+
+        try {
+            // Different VALUE under the same key: a lane; smudge stays a
+            // pure global entry and must NOT be flagged (that is the
+            // git-lfs-class nagging the ruling rejected).
+            self::assertSame(['lfs.clean'], $this->callFilterLanes($repo));
+
+            putenv(Git::STRICT_FILTERS_ENV . '=1');
+            try {
+                (new Git($repo))->checkout('other-r3');
+                self::fail('strict mode must refuse a differing repo value');
+            } catch (\RuntimeException $e) {
+                self::assertSame(\SugarCraft\Git\Lang::t('git.unsafe_filter_driver'), $e->getMessage());
+            } finally {
+                putenv(Git::STRICT_FILTERS_ENV);
+            }
+        } finally {
+            $this->restoreGlobalConfigSandbox();
+        }
+    }
+
     // ------------------------------------------- A6: honest failure detail (real git)
 
     public function testMergeConflictFailureCarriesGitsOwnExplanation(): void

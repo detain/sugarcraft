@@ -211,15 +211,27 @@ what it cannot disarm safely, it detects and discloses:
   purpose: git-lfs and other real filter users depend on their drivers
   *working*, and silently forcing every filter to `false` would corrupt the
   files those tools manage — a worse defect than the disclosed trust gap.
-  So: on every filter-capable command CandyGit enumerates the merged config
-  scope; if any user-defined filter driver exists, it prints a one-shot
-  notice to stderr naming the drivers and continues (the drivers run, exactly
-  as plain `git` would). Set `CANDY_GIT_STRICT_FILTERS=1` (env) or
-  `withStrictFilters()` (API) to switch that posture to a hard refusal of any
-  command that could execute a repo filter. Threat model: a hostile clone
-  that ships `.gitattributes` + filter config gets code execution the moment
-  you stage or check out — clone, open, and operate only what you trust, and
-  use strict mode if you script CandyGit over untrusted directories.
+  Detection is value-granular over the merged config (`--list -z
+  --show-origin`, so multi-line driver values cannot forge their way past a
+  line-matching baseline) minus the origins and values the *operator's own*
+  global/system chains define: what remains are the lanes **the repository
+  itself defines**. On every filter-capable command CandyGit prints a stderr
+  notice naming those lanes (re-announcing when the set changes) and
+  proceeds — the drivers run, exactly as plain `git` would; only lane names
+  are printed, never config values. Two disclosures: (1) a repo row whose
+  full value byte-matches your global/system value runs *your own* command
+  string and stays notice-silent by design — the git-lfs-class nagging the
+  disarm ruling rejected — but it still counts in strict mode; (2) strict
+  refuses repo *definitions*, not filters per se: a repo with no filter
+  config whose `.gitattributes` still routes paths to your own global
+  git-lfs runs that trusted driver in every mode. Set
+  `CANDY_GIT_STRICT_FILTERS=1` (env) or `withStrictFilters()` (API) to turn
+  the posture into a refusal of every filter-capable command on which the
+  repository defines at least one lane — including the identical-value
+  shadow above. Threat model: a hostile clone that ships `.gitattributes` +
+  filter config gets code execution the moment you stage or check out —
+  clone, open, and operate only what you trust, and use strict mode if you
+  script CandyGit over untrusted directories.
 - Child environment is pinned: `GIT_TERMINAL_PROMPT=0`, `GIT_PAGER=cat`,
   `GIT_EDITOR`/`GIT_SEQUENCE_EDITOR=true` (no credential, pager, or editor
   can hijack the TUI's terminal), and `LC_ALL=C`/`LANG=C` because the

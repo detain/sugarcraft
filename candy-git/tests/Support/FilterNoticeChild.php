@@ -29,13 +29,34 @@ if (!is_dir($repo)) {
 $git = new Git($repo);
 
 try {
-    // Both verbs sit in FILTER_CAPABLE_DISPATCH ('add', 'diff'). Two calls on
-    // ONE instance pin the per-instance one-shot latch.
-    $git->stageAll();
-    $git->diff('file.txt');
-    if ($mode === 'zero') {
-        // A non-filter-capable verb must stay silent in every mode.
-        $git->status();
+    if ($mode === 'checkout') {
+        // Two branch switches on ONE instance: both are filter-capable, the
+        // second one writes file.txt back (smudge fires again) and must NOT
+        // re-announce — unless the lane SET changed underneath (m1 latch).
+        $git->checkout($argv[3] ?? 'other-r3');
+        $git->checkout($argv[4] ?? 'master');
+    } elseif ($mode === 'checkout-mutate') {
+        // Announce, repo grows a SECOND lane (clean), announce again; a
+        // third command in the unchanged set must stay silent again (the
+        // m1 latch is per lane SET, not per command). The clean value must
+        // be CONTENT-NEUTRAL (a mangling filter would make the worktree
+        // look dirty and git would refuse the checkout outright) yet byte-
+        // DISTINCT from the sandbox global's `cat` (an identical value is
+        // the disclosed notice-silent shadow and would never re-announce).
+        $git->checkout($argv[3] ?? 'other-r3');
+        exec('git -C ' . escapeshellarg($repo) . ' config filter.lfs.clean "cat -" 2>/dev/null');
+        $git->checkout($argv[4] ?? 'master');
+        $git->checkout($argv[3] ?? 'other-r3');
+        $git->checkout($argv[4] ?? 'master');
+    } else {
+        // Both verbs sit in FILTER_CAPABLE_DISPATCH ('add', 'diff'). Two calls
+        // on ONE instance pin the per-instance one-shot latch.
+        $git->stageAll();
+        $git->diff('file.txt');
+        if ($mode === 'zero') {
+            // A non-filter-capable verb must stay silent in every mode.
+            $git->status();
+        }
     }
 } catch (\Throwable $e) {
     fwrite(STDOUT, 'REFUSED:' . $e->getMessage() . "\n");

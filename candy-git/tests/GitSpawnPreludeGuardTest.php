@@ -173,23 +173,33 @@ final class GitSpawnPreludeGuardTest extends TestCase
         self::assertStringNotContainsString("'-c'", $guard, 'guardFilterChannel must never add argv overrides');
         self::assertStringNotContainsString('array_merge', $guard);
 
-        // Detection uses the merged config scope (a --local probe would miss
-        // include.path/config.worktree lanes) MINUS the user's global/system
-        // baseline (the operator's own git-lfs must never be nagged or
-        // refused), and the lanes parse the same key shape.
-        $lanes = $this->functionBody($src, 'filterDriverLanes');
-        self::assertStringContainsString('filterConfigProbe(', $lanes);
-        self::assertStringContainsString("'--global'", $lanes);
-        self::assertStringContainsString("'--system'", $lanes);
-        self::assertStringNotContainsString("'--local'", $lanes);
+        // Detection is VALUE-granular (C1): merged --list -z entries minus
+        // the origins/values the operator's own scopes report; lane NAMES
+        // come only from laneForKey's anchored key grammar, so config values
+        // (attacker text) can never reach the notice.
+        $scan = $this->functionBody($src, 'filterChannelScan');
+        self::assertStringContainsString('filterConfigProbe(', $scan);
+        self::assertStringContainsString("'--global'", $scan);
+        self::assertStringContainsString("'--system'", $scan);
+        self::assertStringContainsString('trustedOrigins', $scan);
+        self::assertStringContainsString('trustedValues', $scan);
+        self::assertStringContainsString('laneForKey(', $scan);
+        self::assertStringNotContainsString("'--local'", $scan);
+        $grammar = $this->functionBody($src, 'laneForKey');
+        self::assertStringContainsString('[A-Za-z0-9._-]', $grammar);
+        self::assertStringContainsString('.(clean|smudge|process)$', $grammar);
         $probe = $this->functionBody($src, 'filterConfigProbe');
         self::assertStringContainsString("'config'", $probe);
-        self::assertStringContainsString("'--get-regexp'", $probe);
-        self::assertStringContainsString('.(clean|smudge|process)', $probe);
+        self::assertStringContainsString("'--list'", $probe);
+        self::assertStringContainsString("'-z'", $probe);
+        self::assertStringContainsString("'--show-origin'", $probe);
         self::assertStringNotContainsString("'--local'", $probe);
+        self::assertStringNotContainsString('--get-regexp', $probe, 'line-granular enumeration was the C1 bypass vector');
 
-        // One-shot latch: the notice has an emitted-flag gate (per instance).
-        self::assertStringContainsString('filterNoticeEmitted', $guard);
+        // Latch keyed on the announced lane SET (m1): a repo growing another
+        // driver mid-session must re-announce, not stay silent behind a bool.
+        self::assertStringContainsString('filterNoticeKey', $guard);
+        self::assertStringNotContainsString('filterNoticeEmitted', $src);
     }
 
     public function testRunAndRunPatchRouteThroughTheDisarmingAssembler(): void    {
