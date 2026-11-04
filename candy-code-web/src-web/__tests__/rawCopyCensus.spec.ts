@@ -83,6 +83,7 @@ const KNOWN_RAWS = [
   "src-web/stores/clientTools.ts|ts|the call had already reached its deadline when it arrived here",
   "src-web/stores/clientTools.ts|ts|the tool did not finish before its deadline",
   "src-web/stores/clientTools.ts|ts|this tab no longer implements that tool",
+  "src-web/stores/reducer.ts|ts|Events dropped while this tab fell behind ( ) — resynchronising from a fresh snapshot.",
   "src-web/stores/reducer.ts|ts|Spend cap reached: $ of $",
   "src-web/stores/reducer.ts|ts|Turn stopped: it reached its step limit.",
   "src-web/stores/reducer.ts|ts|Turn stopped: the loop guard cut a repeating tool call.",

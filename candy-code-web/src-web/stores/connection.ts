@@ -18,14 +18,15 @@ const LABELS: Record<ClientStatus, string> = {
 /**
  * What a followed session hands the connection: its cursor for `resume`,
  * its events, what the handshake said about it after a reconnect, and the
- * way back when the server drops this client's queue (ISS-052): `resubscribe`
- * re-follows from the cursor the session already holds.
+ * way back when the server tells this client it fell behind (ISS-052, G4-C
+ * client contract): `resubscribe` re-issues the full-snapshot subscription —
+ * a replay cannot heal the dropped ephemerals. `dropped` says how many.
  */
 export interface SessionFollower {
   cursor(): number | null
   event(envelope: EventEnvelope): void
   resumed(result: Subscription | { error: string } | undefined): void
-  resubscribe(): void
+  resubscribe(dropped: number): void
 }
 
 type Scheduler = (flush: () => void) => void
@@ -129,16 +130,19 @@ export const useConnectionStore = defineStore('connection', () => {
 
   /**
    * The two server-scope events no session owns (ISS-052). An overflow means
-   * this client's queue was dropped for one session (`data.sessionId`) or for
-   * the whole socket: follow again from every held cursor before the silence
-   * reads as a dead pane. A shutdown is named and counted for the banner.
+   * this client fell behind for one session (`data.sessionId` — the feed
+   * buffer and the dead workspace host name it; the per-socket queue drop
+   * does not and so costs every followed session a resync): re-subscribe
+   * fresh for the named sessions before the silence reads as a dead pane.
+   * A shutdown is named and counted for the banner.
    */
   function handleServerEvent(envelope: EventEnvelope): void {
     switch (envelope.type) {
       case 'server.overflow': {
         const sessionId = envelope.data.sessionId
-        if (typeof sessionId === 'string') followers.get(sessionId)?.resubscribe()
-        else for (const follower of followers.values()) follower.resubscribe()
+        const dropped = typeof envelope.data.dropped === 'number' ? envelope.data.dropped : 0
+        if (typeof sessionId === 'string') followers.get(sessionId)?.resubscribe(dropped)
+        else for (const follower of followers.values()) follower.resubscribe(dropped)
         return
       }
       case 'server.shutdown': {

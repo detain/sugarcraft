@@ -309,6 +309,21 @@ export function applyPendingAsks(state: SessionState, asks: PendingAsk[]): void 
   if (asks.length > 0 && state.status === 'idle') state.status = 'waiting_permission'
 }
 
+/**
+ * G4-C client contract (CW-DBA-1): the server answered `server.overflow` —
+ * this tab fell behind and its ephemeral feed for the session was dropped.
+ * The line records how much fell behind; like the spend, compaction and
+ * stop notices it is server-event data-text, not chrome copy.
+ */
+export function noteOverflow(state: SessionState, dropped: number, key: string): void {
+  upsert(state, {
+    kind: 'notice',
+    key,
+    level: 'warn',
+    content: `Events dropped while this tab fell behind (${dropped}) — resynchronising from a fresh snapshot.`,
+  })
+}
+
 // ── paging (ISS-058, client consumer) ─────────────────────────────────
 
 /**

@@ -73,8 +73,8 @@ beforeEach(() => {
   seq = 0
 })
 
-describe('server.overflow resubscribes (ISS-052)', () => {
-  it('resubscribes the named session from its cursor', async () => {
+describe('server.overflow resubscribes (ISS-052, G4-C client contract)', () => {
+  it('resubscribes the named session with a fresh full snapshot, scoped to it', async () => {
     await connect()
     await followLive('s1')
     await followLive('s2')
@@ -83,8 +83,13 @@ describe('server.overflow resubscribes (ISS-052)', () => {
     event(null, 'server.overflow', { dropped: 41, action: 'resubscribe', sessionId: 's1' })
     connectionFlush()
 
+    // G4-C contract: the only repair is a NEW subscription — the request
+    // carries no afterSeq, so the server answers reset:true with a full
+    // snapshot. A replay cannot heal the dropped ephemerals, and s2 (not
+    // named) must stay untouched: the array is exactly one frame.
     const after = sent('session.subscribe').slice(before)
-    expect(after).toEqual([expect.objectContaining({ params: { sessionId: 's1', afterSeq: 7 } })])
+    expect(after).toHaveLength(1)
+    expect(after[0]?.params).toEqual({ sessionId: 's1' })
   })
 
   it('resubscribes every followed session when no session is named', async () => {
@@ -97,26 +102,85 @@ describe('server.overflow resubscribes (ISS-052)', () => {
     connectionFlush()
 
     const after = sent('session.subscribe').slice(before)
-    expect(after.map((f) => f.params)).toEqual([
-      { sessionId: 's1', afterSeq: 7 },
-      { sessionId: 's2', afterSeq: 7 },
-    ])
+    expect(after.map((f) => f.params)).toEqual([{ sessionId: 's1' }, { sessionId: 's2' }])
   })
 
-  it('the resubscribed session lands its replay and stays live', async () => {
+  it('ignores an overflow for a session this client does not follow', async () => {
     await connect()
     await followLive('s1')
+    const before = sent('session.subscribe').length
 
-    event(null, 'server.overflow', { dropped: 1, action: 'resubscribe', sessionId: 's1' })
-    connectionFlush()
-    seq = 7
-    answer('session.subscribe', { fromSeq: 8, throughSeq: 8, pendingAsks: [] })
-    await flush()
-    event('s1', 'message.created', { messageId: 'm8', role: 'user', kind: 'user', content: 'after the drop' }, true)
+    event(null, 'server.overflow', { dropped: 9, action: 'resubscribe', sessionId: 'other' })
     connectionFlush()
 
+    expect(sent('session.subscribe')).toHaveLength(before)
+  })
+
+  it('does nothing once the named session has unfollowed', async () => {
+    await connect()
+    await followLive('s1')
     const session = useSessionStore('s1')
+    session.unsubscribe()
+    const before = sent('session.subscribe').length
+
+    event(null, 'server.overflow', { dropped: 4, action: 'resubscribe', sessionId: 's1' })
+    connectionFlush()
+
+    expect(sent('session.subscribe')).toHaveLength(before)
+    expect(session.stale).toBe(false)
+  })
+
+  it('marks stale mid-subscribe: a server-side drop never leaves a dead pane', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    const subscribed = session.subscribe()
+    event(null, 'server.overflow', { dropped: 5, action: 'resubscribe', sessionId: 's1' })
+    connectionFlush()
+
+    expect(session.stale).toBe(true)
+    const frames = sent('session.subscribe')
+    expect(frames).toHaveLength(2)
+    expect(frames[1]?.params).toEqual({ sessionId: 's1' })
+
+    answer('session.subscribe', { ...SNAPSHOT, snapshot: { ...SNAPSHOT.snapshot, sessionId: 's1' } })
+    await flush()
     expect(session.phase).toBe('live')
+    expect(session.stale).toBe(false)
+    // The superseded in-flight request finally answers too — the second
+    // snapshot lands on an already-live session without injury.
+    const first = sent('session.subscribe')[0]
+    if (first) socket().answer({ ...SNAPSHOT, throughSeq: 8, snapshot: { ...SNAPSHOT.snapshot, sessionId: 's1', lastSeq: 8 } }, first.id)
+    await subscribed
+    expect(session.phase).toBe('live')
+    expect(session.stale).toBe(false)
+  })
+
+  it('the fresh snapshot replaces the transcript, the drop notice survives it', async () => {
+    await connect()
+    await followLive('s1')
+    const session = useSessionStore('s1')
+    seq = 7
+    event('s1', 'message.created', { messageId: 'm8', role: 'user', kind: 'user', content: 'held row' }, true)
+    connectionFlush()
+    expect(session.state.items.some((item) => item.kind === 'user' && item.content === 'held row')).toBe(true)
+
+    event(null, 'server.overflow', { dropped: 3, action: 'resubscribe', sessionId: 's1' })
+    connectionFlush()
+    expect(session.state.items.some((item) => item.kind === 'notice' && item.level === 'warn' && String(item.content).includes('3'))).toBe(true)
+
+    answer('session.subscribe', { ...SNAPSHOT, throughSeq: 9, snapshot: { ...SNAPSHOT.snapshot, sessionId: 's1', lastSeq: 9, messages: [] } })
+    await flush()
+
+    expect(session.phase).toBe('live')
+    expect(session.stale).toBe(false)
+    // Replaced: the held row is gone…
+    expect(session.state.items.some((item) => item.kind === 'user')).toBe(false)
+    // …but the audit line records what fell behind (re-appended after the swap).
+    expect(session.state.items.some((item) => item.kind === 'notice' && item.level === 'warn' && String(item.content).includes('3'))).toBe(true)
+
+    seq = 9
+    event('s1', 'message.created', { messageId: 'm10', role: 'user', kind: 'user', content: 'after the drop' }, true)
+    connectionFlush()
     expect(session.state.items.some((item) => item.kind === 'user' && item.content === 'after the drop')).toBe(true)
   })
 })

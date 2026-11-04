@@ -7,7 +7,7 @@ import type { PastedDocument, PastedImage } from '../lib/paste'
 import { useConnectionStore } from './connection'
 import { useClientToolsStore } from './clientTools'
 import { useLayoutStore } from './layout'
-import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, type ToolItem } from './reducer'
+import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, noteOverflow, type ToolItem } from './reducer'
 
 export type Delivery = 'queue' | 'steer' | 'interrupt'
 export type Phase = 'idle' | 'subscribing' | 'live'
@@ -31,12 +31,19 @@ function setup(sessionId: string) {
   const state = reactive(createState(sessionId))
   const phase = ref<Phase>('idle')
   const error = ref<string | null>(null)
+  /** G4-C contract: the server dropped this session's ephemeral feed; live
+   *  again once the fresh subscription's snapshot has replaced the store. */
+  const stale = ref(false)
   const commands = ref<CommandInfo[]>([])
   /** ISS-058: paging state — busy flag, last page refusal, and the row offset
    *  that keeps fallback keys unique across pages. */
   const loadingOlder = ref(false)
   const olderError = ref<string | null>(null)
   let olderOrdinal = 0
+  /** G4-C contract: the drop the pending fresh resubscribe must report — the
+   *  notice is re-appended after a snapshot replaces the transcript. */
+  let overflow: { key: string; dropped: number } | null = null
+  let overflowCount = 0
   let cursor = new SeqCursor<EventEnvelope>(0)
   let early: EventEnvelope[] = []
   let unfollow: (() => void) | null = null
@@ -66,10 +73,15 @@ function setup(sessionId: string) {
     if ('reset' in subscription) {
       applySnapshot(state, subscription.snapshot)
       cursor = new SeqCursor(subscription.throughSeq)
+      // G4-C contract: the drop line is audit copy — it stays above the
+      // replaced transcript so the user can see what was lost.
+      if (overflow) noteOverflow(state, overflow.dropped, overflow.key)
     }
     // A replay ({fromSeq, throughSeq}) follows as events; the cursor drops
     // whatever of it this client already holds.
+    overflow = null
     applyPendingAsks(state, subscription.pendingAsks)
+    stale.value = false
     phase.value = 'live'
     const held = early
     early = []
@@ -88,11 +100,20 @@ function setup(sessionId: string) {
           void subscribe()
         }
       },
-      // ISS-052: the server dropped this client's queue for the session
-      // (dead host, overflow). Follow again from the held cursor; the
-      // answer is a replay or a fresh snapshot, never a silent freeze.
-      resubscribe: () => {
-        if (phase.value === 'live') void subscribe()
+      // ISS-052 + G4-C client contract: the server dropped this session's
+      // feed for us (queue overflow, dead host). A replay from the cursor
+      // cannot heal dropped EPHEMERALS — torn live parts would stay torn —
+      // so the way back is a NEW subscription: fresh=true asks without
+      // afterSeq, the server answers reset:true with a full snapshot, and
+      // applySubscription replaces the transcript. Mid-subscribe counts too:
+      // the in-flight answer's subscription is already dead server-side.
+      resubscribe: (dropped: number) => {
+        if (phase.value === 'idle') return
+        stale.value = true
+        overflowCount += 1
+        overflow = { key: `overflow:${overflowCount}`, dropped }
+        noteOverflow(state, dropped, overflow.key)
+        void subscribe(true)
       },
     })
     phase.value = 'subscribing'
@@ -323,6 +344,7 @@ function setup(sessionId: string) {
     state,
     phase,
     error,
+    stale,
     commands,
     busy,
     contextPct,
