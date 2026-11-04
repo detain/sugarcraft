@@ -203,6 +203,7 @@ if ($cmd === 'push') {
     // Honour a `.sugartrackignore` (from the current dir or the tracked file's
     // dir) so opted-out paths never make it into the activity log.
     $ignore = new SugarTrackIgnore([]);
+    $ignorePath = '';
     $cwd = getcwd();
     $candidates = [];
     if ($cwd !== false) {
@@ -212,11 +213,28 @@ if ($cmd === 'push') {
     foreach ($candidates as $candidate) {
         if (is_file($candidate)) {
             $ignore = SugarTrackIgnore::load($candidate);
+            $ignorePath = $candidate;
             break;
         }
     }
     if ($ignore->isIgnored($file)) {
-        fwrite(STDOUT, Lang::t('cli.push_ignored', ['file' => Sanitize::untrusted($file)]) . "\n");
+        // A repo can ship its own ".sugartrackignore", so its patterns are
+        // untrusted input to the tracking tool. When the loaded file carries
+        // a wildcard-only pattern it zeroes the project's ENTIRE recorded
+        // time, and a skip that erases a whole repo must not hide in the
+        // success stream — shout it on STDERR with the path, pattern count
+        // and project. The opt-out itself still works (exit 0, nothing
+        // stored): this is disclosure, not refusal.
+        if ($ignore->hasWholesalePattern()) {
+            fwrite(STDERR, Lang::t('cli.push_ignored_wholesale', [
+                'file'        => Sanitize::untrusted($file),
+                'ignore_file' => Sanitize::untrusted($ignorePath),
+                'patterns'    => $ignore->patternCount(),
+                'project'     => Sanitize::untrusted($project),
+            ]) . "\n");
+        } else {
+            fwrite(STDOUT, Lang::t('cli.push_ignored', ['file' => Sanitize::untrusted($file)]) . "\n");
+        }
         exit(0);
     }
 

@@ -83,6 +83,17 @@ stored. A bare pattern (`secret.log`) matches by file name at any depth; a
 path pattern (`vendor/*`) matches below any `vendor` directory, whether the
 tracked path is relative or absolute.
 
+Trust boundary: ignore files usually live *inside* tracked repositories, so
+their patterns are untrusted input to the tracking tool. A wildcard-only
+pattern (a bare `*`) matches every file name and silently zeroes that
+project's entire recorded time. When the loaded file carries such a pattern,
+the skip is no longer a quiet stdout line: `push` reports it on **stderr**
+with the ignore file's path, its pattern count, and the affected project —
+then still exits 0, because the opt-out is honored, not refused. To undo a
+repo-supplied plant, delete or narrow the file the notice names; to shadow a
+directory-level plant, run `push` from a working directory whose own
+`.sugartrackignore` (checked first) holds only honest patterns.
+
 ## Data layout
 
 ```

@@ -14,6 +14,7 @@ return [
     'cli.push_usage' => "Uso: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: argomenti obbligatori mancanti (project, language, file)",
     'cli.push_ignored' => "push: {file} corrispondeva a .sugartrackignore — saltato",
+    'cli.push_ignored_wholesale' => 'push: {file} saltato per un pattern GLOBALE in {ignore_file} ({patterns} pattern) — corrisponde a ogni nome di file, il progetto "{project}" non registra NIENTE; elimina o restringi il file',
     'cli.push_invalid_duration' => "push: la durata deve essere un intero non negativo di secondi, ricevuto \"{value}\"",
     'cli.backend_invalid' => "backend non valido (usare file o sqlite)",
     'cli.backend_unavailable' => "backend sqlite non disponibile: l'estensione PHP sqlite3 non è caricata",

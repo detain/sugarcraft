@@ -14,6 +14,7 @@ return [
     'cli.push_usage' => "使用法: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: 必須引数が不足しています (project, language, file)",
     'cli.push_ignored' => "push: {file} は .sugartrackignore に一致したためスキップしました",
+    'cli.push_ignored_wholesale' => 'push: {ignore_file} 内の全一致パターン（{patterns} 件）により {file} をスキップ — すべてのファイル名に一致するため、プロジェクト「{project}」は何も記録されません。ファイルを削除するか範囲を狭めてください',
     'cli.push_invalid_duration' => "push: 持続時間は秒単位の非負整数である必要があります。受け取った値: \"{value}\"",
     'cli.backend_invalid' => "無効なバックエンド (file または sqlite を使用)",
     'cli.backend_unavailable' => "sqlite バックエンドは利用できません: PHP 拡張機能 sqlite3 が読み込まれていません",

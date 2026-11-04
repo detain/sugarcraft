@@ -14,6 +14,7 @@ return [
     'cli.push_usage' => "用法: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: 缺少必需参数 (project, language, file)",
     'cli.push_ignored' => "push: {file} 匹配 .sugartrackignore — 已跳过",
+    'cli.push_ignored_wholesale' => 'push：{file} 被 {ignore_file} 中的全匹配模式跳过（共 {patterns} 个模式）——它匹配所有文件名，因此项目"{project}"没有记录任何内容；请删除该文件或缩小其范围',
     'cli.push_invalid_duration' => "push: 时长必须为非负整数秒，收到 \"{value}\"",
     'cli.backend_invalid' => "无效的后端 (请使用 file 或 sqlite)",
     'cli.backend_unavailable' => "sqlite 后端不可用: 未加载 PHP 扩展 sqlite3",

@@ -177,4 +177,53 @@ final class SugarTrackIgnoreTest extends TestCase
         $this->expectExceptionMessage('over the');
         SugarTrackIgnore::load($this->tmpFile);
     }
+
+    /**
+     * Security review m4 (owner-lane fix): a repo can ship its own
+     * ".sugartrackignore", so its patterns are untrusted input to the
+     * tracking tool — and a wildcard-only pattern silently zeroes the whole
+     * project's recorded time. The matcher must be able to NAME that shape
+     * so the CLI can escalate the notice to stderr.
+     */
+    public function testAWildcardOnlyPatternIsFlaggedAsWholesale(): void
+    {
+        file_put_contents($this->tmpFile, chr(42) . "\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertTrue($ignore->hasWholesalePattern());
+        $this->assertSame(1, $ignore->patternCount());
+
+        file_put_contents($this->tmpFile, "# comment\n" . chr(42) . chr(42) . "\nsrc/" . chr(42) . "\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertTrue($ignore->hasWholesalePattern(), '** matches everything just like *');
+        $this->assertSame(2, $ignore->patternCount(), 'comments never count as patterns');
+    }
+
+    /**
+     * The behavior-preserving half of the fix: honest opt-out patterns —
+     * suffix globs, directory globs, plain names — must stay silent on the
+     * normal channel, so the disclosure upgrade cannot cry wolf.
+     */
+    public function testHonestPatternsAreNotWholesale(): void
+    {
+        file_put_contents(
+            $this->tmpFile,
+            chr(42) . ".log\nvendor/" . chr(42) . "\nsecret.php\n",
+        );
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+        $this->assertTrue($ignore->isIgnored('any/debug.log'));
+        $this->assertFalse($ignore->hasWholesalePattern());
+    }
+
+    /**
+     * Disclosed narrowness, pinned on purpose: "?*" ignores every non-empty
+     * file name yet fails the empty-name canary, so it stays on the honest
+     * channel. A future widening of the trigger must flip this pin
+     * deliberately, not drift into it.
+     */
+    public function testTheQuestionMarkStarNearMissStaysOnTheHonestChannel(): void
+    {
+        $ignore = new SugarTrackIgnore(['?' . chr(42)]);
+        $this->assertTrue($ignore->isIgnored('anything.php'));
+        $this->assertFalse($ignore->hasWholesalePattern());
+    }
 }

@@ -14,6 +14,7 @@ return [
     'cli.push_usage' => "Použití: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: chybí povinné argumenty (project, language, file)",
     'cli.push_ignored' => "push: {file} odpovídá .sugartrackignore — přeskočeno",
+    'cli.push_ignored_wholesale' => 'push: {file} přeskočen ZCELA OBUJNÝM vzorem v {ignore_file} ({patterns} vzorů) — odpovídá každému názvu souboru, projekt "{project}" tedy nezaznamenává NIC; soubor smažte nebo zúžte',
     'cli.push_invalid_duration' => "push: doba trvání musí být nezáporné celé číslo v sekundách, obdrženo \"{value}\"",
     'cli.backend_invalid' => "neplatný backend (použijte file nebo sqlite)",
     'cli.backend_unavailable' => "backend sqlite není dostupný: rozšíření PHP sqlite3 není načteno",

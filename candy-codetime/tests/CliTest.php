@@ -118,6 +118,45 @@ final class CliTest extends TestCase
         $this->assertCount(1, $beats);
     }
 
+    /**
+     * Security review m4 (owner-lane fix): an ignore file checked into a repo
+     * is untrusted input, and a wildcard-only pattern in it zeroes the whole
+     * project's recorded time. Such a skip must shout on STDERR — naming the
+     * file, its pattern count and the project — instead of hiding in the
+     * success stream. The opt-out itself still works: exit 0, nothing stored.
+     */
+    public function testAWholesaleIgnoreFileIsReportedOnStderr(): void
+    {
+        file_put_contents($this->workDir . '/.sugartrackignore', chr(42) . "\n");
+
+        $res = $this->runCli(['push', 'victim', 'php', 'main.php']);
+        $this->assertSame(0, $res['exit']);
+        $this->assertStringContainsString('.sugartrackignore', $res['stderr'], 'the notice names the file');
+        $this->assertStringContainsString($this->workDir, $res['stderr'], 'with its full path');
+        $this->assertStringContainsString('victim', $res['stderr'], 'and the affected project');
+        $this->assertStringContainsString('WHOLESALE', $res['stderr'], 'the notice is loud, not a routine skip');
+        $this->assertStringContainsString('(1 patterns)', $res['stderr'], 'and discloses the pattern count');
+        $this->assertSame('', $res['stdout'], 'the wholesale skip leaves nothing in the success stream');
+
+        // The feature is honored, not refused: the heartbeat never landed.
+        $export = $this->runCli(['export', 'json', '1']);
+        $this->assertSame('[]', trim($export['stdout']));
+    }
+
+    /**
+     * Behavior-preserving half: an honest opt-out pattern keeps the
+     * historical stdout notice and a silent stderr.
+     */
+    public function testAnHonestIgnoreFileSkipsQuietlyOnStdout(): void
+    {
+        file_put_contents($this->workDir . '/.sugartrackignore', chr(42) . ".log\n");
+
+        $res = $this->runCli(['push', 'proj', 'php', 'debug.log']);
+        $this->assertSame(0, $res['exit']);
+        $this->assertStringContainsString('skipped', $res['stdout']);
+        $this->assertSame('', $res['stderr'], 'honest patterns never trip the wholesale channel');
+    }
+
     // --- SqliteBackend / --backend=sqlite wiring ----------------------------
 
     public function testSqliteBackendPersistsAndReads(): void

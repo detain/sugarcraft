@@ -14,6 +14,7 @@ return [
     'cli.push_usage' => "الاستخدام: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: الوسائط المطلوبة مفقودة (project, language, file)",
     'cli.push_ignored' => "push: تطابق {file} مع .sugartrackignore — تم تخطيه",
+    'cli.push_ignored_wholesale' => 'push: تم تخطي {file} بسبب نمط شامل في {ignore_file} ({patterns} أنماط) — يطابق كل أسماء الملفات، لذا لا يسجل المشروع "{project}" شيئًا؛ احذف هذا الملف أو قيّده',
     'cli.push_invalid_duration' => "push: يجب أن تكون المدة عددًا صحيحًا غير سالب بالثواني، الوارد: \"{value}\"",
     'cli.backend_invalid' => "واجهة تخزين غير صالحة (استخدم file أو sqlite)",
     'cli.backend_unavailable' => "واجهة تخزين sqlite غير متاحة: امتداد sqlite3 لـ PHP غير محمّل",

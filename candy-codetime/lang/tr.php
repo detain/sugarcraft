@@ -14,6 +14,7 @@ return [
     'cli.push_usage' => "Kullanım: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: zorunlu argümanlar eksik (project, language, file)",
     'cli.push_ignored' => "push: {file} .sugartrackignore ile eşleşti — atlandı",
+    'cli.push_ignored_wholesale' => 'push: {ignore_file} içindeki TOPTEN bir desen nedeniyle {file} atlandı ({patterns} desen) — her dosya adıyla eşleşir, bu yüzden "{project}" projesi hiçbir şey kaydetmiyor; dosyayı silin veya daraltın',
     'cli.push_invalid_duration' => "push: süre, saniye cinsinden negatif olmayan bir tam sayı olmalı, alınan: \"{value}\"",
     'cli.backend_invalid' => "geçersiz arka uç (file veya sqlite kullanın)",
     'cli.backend_unavailable' => "sqlite arka ucu kullanılamıyor: PHP sqlite3 uzantısı yüklü değil",

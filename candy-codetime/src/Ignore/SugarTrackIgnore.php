@@ -72,6 +72,45 @@ final class SugarTrackIgnore
         return new self(array_values($patterns));
     }
 
+    /** Number of active patterns (comments and blank lines excluded). */
+    public function patternCount(): int
+    {
+        return count($this->patterns);
+    }
+
+    /**
+     * True when some pattern is wildcard-only — it ignores EVERY path the
+     * matcher is ever consulted about.
+     *
+     * Why the empty-string canary is exact: a POSIX-glob pattern matches ""
+     * only if every token in it can consume nothing, i.e. the pattern is
+     * made solely of star runs ("*", "**"). Such a pattern also matches
+     * every non-empty string, so it zeroes every push of the project it was
+     * planted in. Honest patterns fail the canary by construction: "*.log"
+     * demands a suffix, "?*" demands one character.
+     *
+     * The file lives inside tracked repositories, so this is the shape of
+     * "repo content as untrusted input to the tracking tool": a checked-in
+     * ".sugartrackignore" containing a bare "*" silently erases the whole
+     * project's recorded time. The CLI routes that skip to STDERR with the
+     * file path, pattern count and project so the notice is hard to miss.
+     *
+     * Disclosed gap: a crafted "?*" ignores every real (non-empty) file name
+     * yet fails the empty canary, so it stays on the honest channel. The
+     * realistic plant is the bare "*"; over-flagging honest patterns that
+     * merely LOOK broad would be the worse trade.
+     */
+    public function hasWholesalePattern(): bool
+    {
+        foreach ($this->patterns as $pat) {
+            if (fnmatch($pat, '')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Returns true if the file path should be ignored.
      */
