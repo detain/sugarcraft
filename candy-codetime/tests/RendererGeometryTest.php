@@ -209,6 +209,38 @@ final class RendererGeometryTest extends TestCase
     /**
      * @return array{0:string,1:string} the bars row and the weekday row
      */
+    public function testTheFrameHeightIsStructurallyBounded(): void
+    {
+        // The M18 no-reproduce was a measurement, not a pin. Both ranking
+        // panes cap at six rows plus a more-line, so frame height saturates:
+        // more projects cannot grow it. Measured truth: the side-by-side
+        // layout fits a 24-row screen everywhere; the worst stacked layout
+        // (40 cols) needs 27 — locked here so a future change that lets the
+        // panes grow with row count goes red instead of scrolling.
+        $end = new \DateTimeImmutable(self::END);
+        $many = [];
+        for ($i = 0; $i < 25; $i++) {
+            $many[] = new Heartbeat(
+                $end->getTimestamp(),
+                'project-' . $i,
+                'lang' . $i,
+                '/home/user/p' . $i . '.php',
+                600 * ($i + 1),
+            );
+        }
+        $rowsAt = static function (int $width, array $beats): int {
+            return count(explode("\n", rtrim(self::frame($width, $beats), "\n")));
+        };
+        $this->assertSame(
+            $rowsAt(40, $many),
+            $rowsAt(40, array_slice($many, 0, 9)),
+            'row count must saturate, not grow with projects',
+        );
+        $this->assertLessThanOrEqual(27, $rowsAt(40, $many));
+        $this->assertLessThanOrEqual(24, $rowsAt(62, $many), 'side-by-side must fit 24 rows');
+        $this->assertLessThanOrEqual(24, $rowsAt(80, $many));
+    }
+
     private static function timelineRows(string $frame): array
     {
         $rows = self::plain($frame);

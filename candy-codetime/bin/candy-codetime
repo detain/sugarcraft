@@ -404,7 +404,7 @@ if ($cmd === 'backup') {
 
 // Unknown command - show usage
 if ($cmd !== 'dashboard') {
-    fwrite(STDERR, Lang::t('cli.unknown_command', ['command' => $cmd]) . "\n");
+    fwrite(STDERR, Lang::t('cli.unknown_command', ['command' => Sanitize::untrusted($cmd)]) . "\n");
     fwrite(STDERR, Lang::t('cli.usage') . "\n");
     exit(1);
 }

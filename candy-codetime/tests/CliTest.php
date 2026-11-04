@@ -384,4 +384,16 @@ final class CliTest extends TestCase
         $this->assertSame(0, $list['exit'], $list['stderr']);
         $this->assertStringNotContainsString(chr(27), $list['stdout'], 'stored milestone names must not carry escapes');
     }
+
+    public function testAnUnknownCommandCannotPaintTheTerminal(): void
+    {
+        // The command token is argv — attacker-influenced whenever a wrapper
+        // forwards a repo name. It reaches stderr on the unknown-command
+        // route, so it must ride the same sweep as every other echo.
+        $dirty = 'w' . chr(27) . ']0;PWNED' . chr(7) . 'ake';
+        $res = $this->runCli([$dirty]);
+        $this->assertSame(1, $res['exit']);
+        $this->assertStringNotContainsString(chr(27), $res['stderr'], 'unknown-command echo must carry no ESC byte');
+        $this->assertStringContainsString('wake', $res['stderr'], 'the swept name must stay legible');
+    }
 }
