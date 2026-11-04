@@ -1618,6 +1618,16 @@ location / {
 }
 ```
 
+Mount at the host's root, as sketched. The server has no base-path setting:
+it matches `/ws` exactly and `/api/` by prefix, and the links it mints are
+root-absolute — a canvas view answers with a `/canvas/<id>` URL, and sign-in
+URLs ride the root too. The built page resolves its own API and WebSocket
+URLs against the document base, so a proxy that strips a prefix can carry the
+page's assets; but server-minted links land at the host root regardless. If a
+sub-path mount is unavoidable, the proxy must also pass `/ws`, `/api/*` and
+`/canvas/*` un-renamed at the root, or those links break. A true base-path
+install is not supported server-side.
+
 `/ws?ticket=…` carries its ticket in the query string, so a proxy access log
 for that location records it — sign-in codes and share URLs ride
 query strings the same way. Tickets are single-use and expire in 30 s and the
