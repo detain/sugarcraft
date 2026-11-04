@@ -163,6 +163,11 @@ function setup(sessionId: string) {
   async function unsubscribe(): Promise<void> {
     unfollow?.()
     unfollow = null
+    // CW-DBA-13: the registration the subscribe attached belongs to this
+    // follow — dropping the follow must drop it too, or a stale id sits in
+    // the registrations map (and a re-attach of the same session is skipped
+    // by the already-registered law while the server forgot it long ago).
+    useClientToolsStore().detach(sessionId)
     phase.value = 'idle'
     early = []
     try {

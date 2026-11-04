@@ -1,0 +1,229 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { createPinia, getActivePinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { FakeSocket, FakeTimers, flush, helloResult } from '../../__tests__/fakes'
+import { Backoff } from '../../protocol/reconnect'
+import { useClientToolsStore } from '../clientTools'
+import { useConnectionStore } from '../connection'
+import { liveSessionStoreCount, useSessionStore } from '../session'
+
+/**
+ * CW-DBA-6, CW-DBA-13, CW-7 and CW-5 (reviews-1103 G5-D): the session
+ * store's subscription lifecycle, output-walk honesty, client-tool detach,
+ * and the pinia-internal cast in disposal. Harness is the plain
+ * FakeSocket/Backoff one every session spec already speaks.
+ */
+
+let sockets: FakeSocket[]
+let timers: FakeTimers
+
+function socket(): FakeSocket {
+  const last = sockets[sockets.length - 1]
+  if (!last) throw new Error('no socket')
+  return last
+}
+
+function sent(method: string): Record<string, unknown>[] {
+  return socket().sent.filter((frame) => frame.method === method)
+}
+
+async function connect(): Promise<void> {
+  const store = useConnectionStore()
+  store.configure(
+    {
+      connectUrl: async () => 'ws://x/ws?ticket=t',
+      socket: (url, protocols) => {
+        const created = new FakeSocket(url, protocols)
+        sockets.push(created)
+        return created
+      },
+      timers,
+      backoff: new Backoff({ random: () => 0.5 }),
+    },
+    (fn) => fn(),
+  )
+  store.start()
+  await flush()
+  socket().open()
+  socket().answer(helloResult(), 'hello')
+  await flush()
+}
+
+function answer(method: string, result: unknown): void {
+  const frame = sent(method).pop()
+  if (!frame) throw new Error(`no ${method} sent`)
+  socket().answer(result, frame.id)
+}
+
+let seq = 7
+function event(type: string, data: Record<string, unknown>): void {
+  socket().event({ sessionId: 's1', seq: ++seq, type, ts: 1, durable: true, turnId: 't1', data })
+}
+
+const SNAPSHOT = {
+  reset: true,
+  throughSeq: 7,
+  pendingAsks: [],
+  snapshot: { sessionId: 's1', status: 'idle', lastSeq: 7, pendingAsks: [], queue: [], messages: [] },
+} as const
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+  localStorage.clear()
+  sockets = []
+  timers = new FakeTimers()
+  seq = 7
+})
+
+describe('subscribe dedupes an in-flight request (CW-7)', () => {
+  it('a second subscribe while one is in flight sends nothing new', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+
+    const first = session.subscribe()
+    const second = session.subscribe()
+    await flush()
+
+    // Base re-entered: two session.subscribe frames are in flight.
+    expect(sent('session.subscribe')).toHaveLength(1)
+
+    answer('session.subscribe', SNAPSHOT)
+    await Promise.all([first, second])
+    expect(session.phase).toBe('live')
+  })
+})
+
+describe('unsubscribe detaches the tab client tools (CW-DBA-13)', () => {
+  it('dropping the follow drops the registration the same session attached', async () => {
+    await connect()
+    const clientTools = useClientToolsStore()
+    clientTools.implement({ name: 'probe', description: 'a probe', inputSchema: {} })
+    const session = useSessionStore('s1')
+
+    const subscribing = session.subscribe()
+    answer('session.subscribe', SNAPSHOT)
+    await subscribing
+    // The post-subscribe attach announced the local tools and registered.
+    await flush()
+    expect(sent('tools.client.register')).toHaveLength(1)
+    answer('tools.client.register', { registrationId: 'r-1' })
+    await flush()
+    expect(clientTools.registrations.get('s1')).toBe('r-1')
+
+    const dropping = session.unsubscribe()
+    answer('session.unsubscribe', { ok: true })
+    await dropping
+    // Base leaked: the registration outlived the follow it was announced on.
+    expect(clientTools.registrations.has('s1')).toBe(false)
+  })
+})
+
+describe('the full-output walk keeps its truncation truth (CW-DBA-6)', () => {
+  async function truncatedTool(): Promise<ReturnType<typeof useSessionStore>> {
+    await connect()
+    const session = useSessionStore('s1')
+    const subscribing = session.subscribe()
+    answer('session.subscribe', SNAPSHOT)
+    await subscribing
+    event('tool.started', { toolCallId: 'c9', name: 'Bash', arguments: {} })
+    event('tool.finished', { toolCallId: 'c9', name: 'Bash', content: 'head...', isError: false, truncated: true })
+    await flush()
+    return session
+  }
+
+  it('keeps truncated when the 64-page budget runs out with more still to read', async () => {
+    const session = await truncatedTool()
+    const item = session.state.items.find((candidate) => candidate.kind === 'tool')
+    expect(item?.kind).toBe('tool')
+    if (item?.kind !== 'tool') throw new Error('no tool item')
+
+    const walk = session.loadFullOutput(item)
+    for (let page = 0; page < 64; page++) {
+      const params = sent('tool.output').at(-1)?.params as { offset: number }
+      answer('tool.output', { content: 'x', offset: params.offset, more: true })
+      await flush()
+    }
+    await walk
+
+    expect(item.content).toHaveLength(64)
+    // Base flipped it false anyway: the budget died, not the output.
+    expect(item.truncated).toBe(true)
+  })
+
+  it('clears truncated when a walk really reaches the end', async () => {
+    const session = await truncatedTool()
+    const item = session.state.items.find((candidate) => candidate.kind === 'tool')
+    if (item?.kind !== 'tool') throw new Error('no tool item')
+
+    const walk = session.loadFullOutput(item)
+    answer('tool.output', { content: 'the whole tail', offset: 0, more: false })
+    await walk
+
+    expect(item.content).toBe('the whole tail')
+    expect(item.truncated).toBe(false)
+  })
+})
+
+describe('disposal reaches pinia through the public path (CW-5)', () => {
+  /**
+   * manualAlarms: the release grace is an ambient setTimeout — the exact
+   * shape sessionDispose.spec.ts already runs, copied for the same reason.
+   */
+  function manualAlarms(): { fire: () => void } {
+    const originals = { set: globalThis.setTimeout, clear: globalThis.clearTimeout }
+    const armed = new Map<number, () => void>()
+    let next = 1
+    globalThis.setTimeout = ((fn: () => void) => {
+      const id = next++
+      armed.set(id, fn)
+      return id
+    }) as unknown as typeof setTimeout
+    globalThis.clearTimeout = ((id: number) => {
+      armed.delete(id)
+    }) as unknown as typeof clearTimeout
+    return {
+      fire() {
+        const fns = [...armed.values()]
+        armed.clear()
+        globalThis.setTimeout = originals.set
+        globalThis.clearTimeout = originals.clear
+        for (const fn of fns) fn()
+      },
+    }
+  }
+
+  it('the store source no longer reaches into the private pinia registry', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src-web/stores/session.ts'), 'utf8')
+    expect(source).not.toContain('as unknown as { _s:')
+    expect(source).toContain('store?.$dispose()')
+  })
+
+  it('grace disposal still frees the instance, the state entry, and the registry', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    session.retain()
+    await flush()
+    answer('session.subscribe', SNAPSHOT)
+    await flush()
+    expect(liveSessionStoreCount()).toBe(1)
+
+    // flush() rides the real setTimeout, so the manual queue is armed only
+    // for the release itself — the sessionDispose.spec order, copied.
+    const alarms = manualAlarms()
+    session.release()
+    alarms.fire()
+    await flush()
+
+    expect(liveSessionStoreCount()).toBe(0)
+    const pinia = getActivePinia()
+    expect(pinia).toBeDefined()
+    if (pinia === undefined) throw new Error('no pinia')
+    // The public $dispose() path must have removed BOTH registries — the
+    // instance map and the state entry (the cast used to do the latter's
+    // work, and $dispose alone leaves state.value holding the transcript).
+    expect(pinia.state.value['session/s1']).toBeUndefined()
+    const registry = (pinia as unknown as { _s: Map<string, unknown> })._s
+    expect(registry.has('session/s1')).toBe(false)
+  })
+})
