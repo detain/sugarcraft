@@ -8,7 +8,7 @@ use SugarCraft\Tetris\Rotation\SrsKickTable;
 
 /**
  * A live (falling) Tetris piece. Immutable: every transform —
- * `withX()`, `rotated()`, `dropped()` — returns a fresh instance,
+ * `withX()`, `withY()`, `rotated()`, `moved()` — returns a fresh instance,
  * which keeps the {@see Game} update loop pure and trivially
  * testable.
  *

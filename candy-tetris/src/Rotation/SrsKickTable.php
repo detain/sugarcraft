@@ -43,7 +43,8 @@ final class SrsKickTable
         '0→L' => [[0, 0], [+1, 0], [+1, +1], [0, -2], [+1, -2]],
         'L→2' => [[0, 0], [-1, 0], [-1, -1], [0, +2], [-1, +2]],
         '2→R' => [[0, 0], [-1, 0], [-1, +1], [0, -2], [-1, -2]],
-        // 180-degree (no spec entry — falls back to naive via kicks())
+        // 180-degree: the guideline defines no 180 kicks, so the table
+        // carries the naive [0,0] trial alone (an entry EXISTS here).
         '0→2' => [[0, 0]],
         'R→L' => [[0, 0]],
         '2→0' => [[0, 0]],
@@ -62,7 +63,8 @@ final class SrsKickTable
         '0→L' => [[0, 0], [-1, 0], [+2, 0], [-1, +2], [+2, -1]],
         'L→2' => [[0, 0], [-2, 0], [+1, 0], [-2, -1], [+1, +2]],
         '2→R' => [[0, 0], [+1, 0], [-2, 0], [+1, -2], [-2, +1]],
-        // 180-degree (no spec entry — falls back to naive via kicks())
+        // 180-degree: the guideline defines no 180 kicks, so the table
+        // carries the naive [0,0] trial alone (an entry EXISTS here).
         '0→2' => [[0, 0]],
         'R→L' => [[0, 0]],
         '2→0' => [[0, 0]],
@@ -78,9 +80,9 @@ final class SrsKickTable
     {
         $key = self::transitionKey($from, $to);
 
-        // Defensive: if the computed key is absent (e.g. a direct 0↔2 180
-        // with no spec entry), return naive-only so the caller still gets
-        // the rotated piece without throwing.
+        // Defensive: every transition key exists in both tables today, so
+        // the ?? arm only guards future table drift — an absent key would
+        // degrade to naive-only rather than throw mid-game.
         return match ($piece) {
             Tetromino::I => self::I_KICKS[$key] ?? [[0, 0]],
             default => self::JLSTZ_KICKS[$key] ?? [[0, 0]],

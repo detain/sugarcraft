@@ -6,8 +6,6 @@ namespace SugarCraft\Tetris;
 
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
-use SugarCraft\CellBuffer\Region;
-use SugarCraft\CellBuffer\Position;
 use SugarCraft\CellBuffer\Style;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Layout;
@@ -120,7 +118,7 @@ final class Renderer
             $game->score->lines,
             $game->score->level,
         );
-        $help = "← →  move\n↑ x  rotate cw\nz    rotate ccw\n↓    soft drop\nspc  hard drop\nc    hold\np    pause\nq    quit";
+        $help = "← →  move\n↑ x  rotate cw\nz    rotate ccw\n↓    soft drop\nspc  hard drop\nc    hold\np    pause\nr    restart\nq    quit";
 
         $nextStr = "next:\n" . implode("\n\n", $previews);
 
