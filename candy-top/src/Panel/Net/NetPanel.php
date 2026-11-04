@@ -275,7 +275,9 @@ final class NetPanel implements Panel, ClickCapture
     /** The interface name as the title button prints it: control-free, at most 15 columns. */
     public static function ifaceLabel(string $name): string
     {
-        return Width::truncate((string) preg_replace('/[\x00-\x1f\x7f]/', '', $name), NetButtons::MAX_IFNAMSIZ);
+        // The same strip Surface::put() applies (C0, DEL, and the C1 pair that
+        // shares a lead byte with UTF-8), so a name is clean before it is cut.
+        return Width::truncate((string) preg_replace('/[\x00-\x1f\x7f]|\xc2[\x80-\x9f]/', '', $name), NetButtons::MAX_IFNAMSIZ);
     }
 
     /** btop `i_size`. */

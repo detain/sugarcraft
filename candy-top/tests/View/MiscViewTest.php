@@ -108,4 +108,17 @@ final class MiscViewTest extends TestCase
         $this->assertTrue(Rect::new(3, 4, 3, 4)->equals($r->intersect(Rect::new(3, 4, 10, 10))));
         $this->assertSame(0, Rect::new(0, 0, -3, 1)->width);
     }
+
+
+    /** The gpu selector arrows are ASCII under force_tty, like every other decoration. */
+    public function testTheSelectorArrowsFollowTtyMode(): void
+    {
+        $this->assertSame(Symbols::LEFT, Symbols::arrow(right: false, tty: false));
+        $this->assertSame(Symbols::RIGHT, Symbols::arrow(right: true, tty: false));
+        $this->assertSame(Symbols::LEFT_TTY, Symbols::arrow(right: false, tty: true));
+        $this->assertSame(Symbols::RIGHT_TTY, Symbols::arrow(right: true, tty: true));
+        foreach ([true, false] as $tty) {
+            $this->assertSame(1, Width::string(Symbols::arrow(right: true, tty: $tty)), 'an arrow is always one column');
+        }
+    }
 }

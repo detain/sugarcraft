@@ -86,7 +86,10 @@ final class Surface
      * (default: the whole surface). Control characters are dropped — a
      * process name or hostname must never smuggle an escape into the frame.
      *
-     * @return int columns advanced (clipped cells count as advanced only while inside the clip)
+     * @return int columns the write cursor advanced. Clipped clusters still
+     *     advance on the left (the cursor is where the text WOULD have ended);
+     *     only the right edge stops the walk, and a wide cluster with one
+     *     column left advances after blanking that column.
      */
     public function put(int $x, int $y, string $text, string $sgr = '', ?Rect $clip = null): int
     {

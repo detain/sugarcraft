@@ -119,7 +119,7 @@ final class NetView
      */
     public static function displayIp(string $ip): string
     {
-        return (string) preg_replace('/[\x00-\x1f\x7f]/', '', explode('%', $ip, 2)[0]);
+        return (string) preg_replace('/[\x00-\x1f\x7f]|\xc2[\x80-\x9f]/', '', explode('%', $ip, 2)[0]);
     }
 
     private static function paintTitle(Region $region, PanelFrame $frame, NetPanel $panel): void

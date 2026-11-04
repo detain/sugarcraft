@@ -548,7 +548,7 @@ final class FrameBuilder
                 $surface,
                 $gpu->selector[0] - 1,
                 $gpu->rect->y,
-                Symbols::BOLD . $ink->fg('title') . Symbols::LEFT . ' ' . $gpu->label . ' ' . Symbols::RIGHT,
+                Symbols::BOLD . $ink->fg('title') . Symbols::arrow(false, $tty) . ' ' . $gpu->label . ' ' . Symbols::arrow(true, $tty),
                 $line,
                 $border,
                 clip: $gpu->rect,
@@ -903,7 +903,8 @@ final class FrameBuilder
             BoxChrome::embed($surface, $cpu->x + 26, $y, Symbols::BOLD . self::hotkey(Lang::t('button.ctr'), 'x', $ink), $line, $border, $bottom, $cpu);
         }
         $update = $config->updateMs() . 'ms';
-        $len = strlen($update);
+        // Cells, not bytes: the embed advances in cells like every other draw.
+        $len = Width::string($update);
         BoxChrome::embed(
             $surface,
             $cpu->x + $cpu->width - $len - 8,

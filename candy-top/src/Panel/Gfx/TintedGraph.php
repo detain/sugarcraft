@@ -24,6 +24,12 @@ use SugarCraft\Top\View\Ink;
  * swapped for `Ink::gradient($name, i)` / `Ink::fg('inactive_fg')`. The
  * glyph and colour-index law stays the library's, the bytes stay the
  * theme's.
+ *
+ * The swap is a pattern over the library's TrueColor spelling, so the marker
+ * colours below are part of the contract: a change there (colon
+ * subparameters, a 48;2 underlay, a different marker channel) must redden
+ * tests/Panel/Gfx/GfxTest.php, never silently ship 24-bit bytes into a
+ * 16-colour or TTY frame.
  */
 final class TintedGraph
 {

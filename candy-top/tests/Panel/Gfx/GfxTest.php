@@ -235,4 +235,29 @@ final class GfxTest extends TestCase
         $this->assertSame(100.0, $temp->cpuCrit());
         $this->assertEquals($temp, FakeTemp::new(4)->sample()[0]);
     }
+
+
+    /**
+     * Self-coverage for the marker swap: the pattern sits over the library's
+     * TrueColor spelling, so a row carrying both active and blank cells must
+     * come back with theme escapes in place of every marker. A spelling change
+     * there (colon subparameters, a 48;2 underlay, another marker channel)
+     * reddens here instead of shipping 24-bit bytes into a low-colour frame.
+     */
+    public function testTheMarkerSwapMatchesTheLibrarySpelling(): void
+    {
+        $graph = DualSampleGraph::new(12, 3, 'braille')->withData(0, 15, 40, 90, 100, 60, 33, 5, 72, 18);
+        foreach ([ColorProfile::Ansi, ColorProfile::Ansi256] as $profile) {
+            $ink = Ink::new(TtyTheme::new(), $profile);
+            $frame = implode("\n", TintedGraph::lines($graph, $ink, 'cpu'));
+            self::assertStringNotContainsString('38;2;', $frame, $profile->name . ': a marker survived the swap');
+            $hits = 0;
+            foreach (range(0, 100) as $stop) {
+                if ($ink->gradient('cpu', $stop) !== '' && str_contains($frame, $ink->gradient('cpu', $stop))) {
+                    ++$hits;
+                }
+            }
+            self::assertGreaterThan(0, $hits, $profile->name . ': the swap substituted no gradient at all');
+        }
+    }
 }

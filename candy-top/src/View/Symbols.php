@@ -24,6 +24,11 @@ final class Symbols
 
     public const RIGHT = '→';
 
+    /** The selector arrows when `force_tty` is on: no line glyph is trusted. */
+    public const LEFT_TTY = '<';
+
+    public const RIGHT_TTY = '>';
+
     /** Bold on / off, btop Fx::b / Fx::ub. */
     public const BOLD = "\x1b[1m";
 
@@ -39,5 +44,19 @@ final class Symbols
         $num = max(0, min(9, $num));
 
         return $tty ? (string) $num : self::SUPERSCRIPT[$num];
+    }
+
+    /**
+     * One target-selector arrow, ASCII under `force_tty` like every other
+     * decoration the frame draws. `$tty` is the resolved tty mode, not the
+     * colour profile: a 16-colour session still gets the line arrows.
+     */
+    public static function arrow(bool $right, bool $tty): string
+    {
+        if ($tty) {
+            return $right ? self::RIGHT_TTY : self::LEFT_TTY;
+        }
+
+        return $right ? self::RIGHT : self::LEFT;
     }
 }
