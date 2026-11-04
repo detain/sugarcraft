@@ -137,9 +137,9 @@ stamp, so an install from one cannot self-update — download
 from then on; a CI dev build stamped `dev-<shortsha>` rides the rolling
 `candy-code/dev` release instead (current iff that release's target commit
 matches the stamp — `--channel=stable|dev` overrides the default). That dev
-archive is rebuilt and re-stamped on every push to `master`, so the phar on
-that channel is always a master tip — the `dev-<shortsha>` it prints is the
-commit it was packed from.
+archive is rebuilt and re-stamped on every push to `master` that touches it,
+so the phar on that channel carries the newest master commit that did — the
+`dev-<shortsha>` it prints is the commit it was packed from.
 
 Or let the bundled `tools/install.sh` run those legs in one command: it
 resolves the newest `candy-code/v*` release (or `candy-code/dev` with
@@ -2353,9 +2353,9 @@ subcommands, which build their own documents through
 `Subcommands::emitDocument()`: `session delete <id>` on an id the store does
 not hold, `mcp list` on a **trusted** `.mcp.json` that could not be read or
 decoded, `session import` on a transcript the importer refused, and
-`lsp install` when the probe produced no server. All four exit `1` — the store
-and the file were opened, so
-something was attempted; an absent, disabled, out-of-tree or untrusted
+`lsp install` when the probe produced no server. All four exit `1` — the
+store, the file or the probe was reached, so something was
+attempted; an absent, disabled, out-of-tree or untrusted
 `.mcp.json` is an answer rather than a failure and exits `0` with a `status`
 field saying so (a disabled project config owns its own status, and so does
 trust).
