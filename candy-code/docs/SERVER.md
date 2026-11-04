@@ -1307,6 +1307,9 @@ and checkpoints), image and audio prompt blocks, and the unstable
 
 ## Web UI
 
+Feature-level detail of the page is owned by the candy-code-web README; this
+chapter is the shape and the trust story.
+
 The browser UI is the [`candy-code-web`](https://github.com/sugarcraft/candy-code-web)
 package: a pre-built Vue bundle that `serve` hands out on the same port as the
 API and the WebSocket, so there is nothing else to run. The server looks for it
