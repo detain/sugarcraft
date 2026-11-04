@@ -43,6 +43,8 @@ return [
     'hold_used'  => '(사용함)',
     'combo_line' => '콤보 x%d',
     'b2b_line'   => 'B2B 대기',
+    'over.best'    => '최고 점수: {points}',
+    'over.new_best' => '신기록!',
 
     // Versus renderer
     'label.player'   => '플레이어',
@@ -55,6 +57,7 @@ return [
 정지
 재시작
 종료',
+    'vs.record' => '전적: {wins}승 {losses}패',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 알 수 없는 모드 "{flag}"',

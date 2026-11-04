@@ -43,6 +43,8 @@ return [
     'hold_used'  => '(已用)',
     'combo_line' => '连击 x%d',
     'b2b_line'   => 'B2B 就绪',
+    'over.best'    => '最佳: {points}',
+    'over.new_best' => '新纪录！',
 
     // Versus renderer
     'label.player'   => '玩家',
@@ -55,6 +57,7 @@ return [
 暂停
 重开
 退出',
+    'vs.record' => '战绩: {wins} 胜, {losses} 负',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 未知模式 "{flag}"',

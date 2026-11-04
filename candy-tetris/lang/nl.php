@@ -43,6 +43,8 @@ afsluiten',
     'hold_used'  => '(gebruikt)',
     'combo_line' => 'combo x%d',
     'b2b_line'   => 'B2B klaar',
+    'over.best'    => 'beste: {points}',
+    'over.new_best' => 'nieuw record!',
 
     // Versus renderer
     'label.player'   => 'SPELER',
@@ -55,6 +57,7 @@ opslag
 pauze
 opnieuw
 afsluiten',
+    'vs.record' => 'balans: {wins} gewonnen, {losses} verloren',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: onbekende modus "{flag}"',

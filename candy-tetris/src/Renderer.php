@@ -118,6 +118,14 @@ final class Renderer
             Lang::t('over.title'),
             Lang::t('over.final_score', ['points' => $game->score->points]),
         ];
+        // MA-23: the record finally gives the final score something to be
+        // read against. soloBest is null only when no game ever finished.
+        if ($game->scores !== null && $game->scores->soloBest !== null) {
+            $lines[] = Lang::t('over.best', ['points' => $game->scores->soloBest]);
+        }
+        if ($game->newBest === true) {
+            $lines[] = Lang::t('over.new_best');
+        }
         if ($game->overReason !== null) {
             $lines[] = Lang::t('over.reason', ['reason' => self::reasonText($game->overReason)]);
         }

@@ -110,6 +110,14 @@ final class VsRenderer
                 default                  => $loser->overReason,
             }]);
         }
+        // MA-23: the versus record is a win/loss tally, not a best —
+        // a race between two boards has no single-player score to keep.
+        if ($game->scores !== null) {
+            $lines[] = Lang::t('vs.record', [
+                'wins' => $game->scores->versusWins,
+                'losses' => $game->scores->versusLosses,
+            ]);
+        }
         $lines[] = Lang::t('over.quit_hint');
         return $lines;
     }

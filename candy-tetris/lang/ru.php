@@ -43,6 +43,8 @@ return [
     'hold_used'  => '(использован)',
     'combo_line' => 'комбо x%d',
     'b2b_line'   => 'B2B готов',
+    'over.best'    => 'рекорд: {points}',
+    'over.new_best' => 'новый рекорд!',
 
     // Versus renderer
     'label.player'   => 'ИГРОК',
@@ -55,6 +57,7 @@ return [
 пауза
 заново
 выход',
+    'vs.record' => 'счёт: {wins} выиграно, {losses} проиграно',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: неизвестный режим "{flag}"',

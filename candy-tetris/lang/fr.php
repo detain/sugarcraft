@@ -43,6 +43,8 @@ quitter',
     'hold_used'  => '(utilisée)',
     'combo_line' => 'combo x%d',
     'b2b_line'   => 'B2B armé',
+    'over.best'    => 'record : {points}',
+    'over.new_best' => 'nouveau record !',
 
     // Versus renderer
     'label.player'   => 'JOUEUR',
@@ -55,6 +57,7 @@ réserve
 pause
 relance
 quitter',
+    'vs.record' => 'bilan : {wins} gagnés, {losses} perdus',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris : mode inconnu "{flag}"',

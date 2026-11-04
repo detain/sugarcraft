@@ -36,6 +36,8 @@ return [
     // gameplay vocabulary rendered verbatim, like the score numbers.
     'combo_line' => 'combo x%d',
     'b2b_line'   => 'B2B armed',
+    'over.best'    => 'best: {points}',
+    'over.new_best' => 'new best!',
 
     // Versus renderer
     'label.player'   => 'PLAYER',
@@ -49,6 +51,7 @@ hold
 pause
 restart
 quit',
+    'vs.record' => 'record: {wins} won, {losses} lost',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: unknown mode "{flag}"',

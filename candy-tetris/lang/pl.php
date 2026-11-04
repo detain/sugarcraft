@@ -43,6 +43,8 @@ wyjście',
     'hold_used'  => '(użyty)',
     'combo_line' => 'combo x%d',
     'b2b_line'   => 'B2B gotowe',
+    'over.best'    => 'rekord: {points}',
+    'over.new_best' => 'nowy rekord!',
 
     // Versus renderer
     'label.player'   => 'GRACZ',
@@ -55,6 +57,7 @@ bufor
 pauza
 restart
 wyjście',
+    'vs.record' => 'bilans: {wins} wygrane, {losses} przegrane',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: nieznany tryb "{flag}"',

@@ -43,6 +43,8 @@ konec',
     'hold_used'  => '(použito)',
     'combo_line' => 'combo x%d',
     'b2b_line'   => 'B2B připraveno',
+    'over.best'    => 'nejlépe: {points}',
+    'over.new_best' => 'nový rekord!',
 
     // Versus renderer
     'label.player'   => 'HRÁČ',
@@ -55,6 +57,7 @@ hold
 pauza
 restart
 konec',
+    'vs.record' => 'zápas: {wins} vyhráno, {losses} prohráno',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: neznámý režim "{flag}"',

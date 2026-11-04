@@ -43,6 +43,8 @@ return [
     'hold_used'  => '(مستخدم)',
     'combo_line' => 'تتابع x%d',
     'b2b_line'   => 'B2B جاهز',
+    'over.best'    => 'أفضل: {points}',
+    'over.new_best' => 'رقم قياسي جديد!',
 
     // Versus renderer
     'label.player'   => 'اللاعب',
@@ -55,6 +57,7 @@ return [
 إيقاف
 إعادة
 خروج',
+    'vs.record' => 'السجل: {wins} فوز، {losses} خسارة',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: وضع غير معروف "{flag}"',

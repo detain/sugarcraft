@@ -145,10 +145,21 @@ the playfield names the reason and the final score. Press **r** to
 start a completely new game — the score does not carry over (it embeds the
 level, so a restarted board falls at level-0 gravity again). **q** quits.
 
-Nothing survives the exit. There is no high-score table and no saved state:
-the game writes no file, so a finished run's score exists only in the frame
-that showed it, and the next launch starts with an empty record — scoring is
-scoped to one session.
+The record survives the exit. A finished game settles into
+`$XDG_CONFIG_HOME/candy-tetris/scores.json` (falling back to
+`~/.config/candy-tetris/scores.json`): the solo best score, how many solo
+games ended, and a win/loss tally for versus matches. The banner reads the
+best against your final score and flags `new best!` when the table top was
+beat. Versus games never touch the solo best — the two player boards run
+unwired by design. The file is written atomically at mode 0600; a corrupt or
+unwritable record is announced loudly on stderr and the game starts fresh
+without zeroing the old file, and a refused save is announced while the
+in-memory record stays honest. A launch with no resolvable HOME writes no
+file and shows no best — byte-identical to the pre-record game.
+
+There is still no saved state: only the record persists, so **r** restarts
+from a clean board and quitting mid-drop loses the run (only the record of
+*finished* games survives).
 
 ### Hold
 

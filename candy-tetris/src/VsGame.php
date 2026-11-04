@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Tetris\Support\Scores;
 
 /**
  * VS Computer mode model - combines two independent Game instances.
@@ -56,6 +57,16 @@ final class VsGame implements Model
          * {@see Game::$bindings}).
          */
         public readonly ?KeyBindings $bindings = null,
+        /**
+         * MA-23 versus tally (wins/losses only — no best makes sense across
+         * the two-board race). Null = no record wired. The inner games are
+         * deliberately UNwired: a versus death must never pollute the solo
+         * best, so the match result is recorded here, at the winner
+         * chokepoints, exactly once per match.
+         */
+        public readonly ?Scores $scores = null,
+        /** Where {@see self::$scores} persists to at the settle. */
+        public readonly ?string $scoresPath = null,
     ) {}
 
     /**
@@ -67,11 +78,6 @@ final class VsGame implements Model
         return $this->frameCols < VsRenderer::MIN_COLS || $this->frameRows < VsRenderer::MIN_ROWS;
     }
 
-    /**
-     * Key-actuation gates shared with Game's (m11 press-only, m26
-     * case-insensitive) — copied rather than exposed because they are
-     * per-model dispatch policy, not a public contract.
-     */
     /**
      * m27: the live action table for the q/r/p gates this class owns
      * (the pause toggle stays owned here, not delegated — the gate is
@@ -87,9 +93,15 @@ final class VsGame implements Model
     /**
      * Start a new VS Computer game.
      */
-    public static function start(?KeyBindings $bindings = null): self
+    public static function start(?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null): self
     {
-        return new self(Game::start(bindings: $bindings), Game::start(bindings: $bindings), bindings: $bindings);
+        return new self(
+            Game::start(bindings: $bindings),
+            Game::start(bindings: $bindings),
+            bindings: $bindings,
+            scores: $scores,
+            scoresPath: $scoresPath,
+        );
     }
 
     public function init(): ?\Closure
@@ -146,7 +158,7 @@ final class VsGame implements Model
             if ($msg instanceof KeyMsg && $this->keys()->matches($msg, 'restart')) {
                 // Restart the pair and arm one fresh tick chain — parity
                 // with the solo game's 'r'.
-                $fresh = self::start($this->bindings)->mutate([
+                $fresh = self::start($this->bindings, $this->scores, $this->scoresPath)->mutate([
                     // The live terminal size survives the restart: the
                     // Program only re-reports on the next SIGWINCH.
                     'frameCols' => $this->frameCols,
@@ -320,11 +332,43 @@ final class VsGame implements Model
      */
     private function withComputerWinner(Game $player): array
     {
+        // MA-23 settle point: this match is decided; fold it into the
+        // versus record before the banner frame exists.
         $overPlayer = $player->mutate(['over' => true, 'canHold' => false]);
-        return [
-            $this->mutate(['player' => $overPlayer, 'over' => true, 'winner' => 'COMPUTER']),
-            null,
-        ];
+
+        return [$this->settleRecord(['player' => $overPlayer, 'over' => true, 'winner' => 'COMPUTER'], false), null];
+    }
+
+    /**
+     * MA-23: fold the finished match into the versus tally and persist.
+     * Same disclosure law as the solo path — a refused save is announced
+     * on stderr, the on-disk record survives untouched, and the frame
+     * still reports what this match actually did.
+     *
+     * @param array<string,mixed> $changes
+     */
+    private function settleRecord(array $changes, bool $playerWon): self
+    {
+        if ($this->scoresPath === null) {
+            return $this->mutate($changes);
+        }
+        $next = ($this->scores ?? new Scores())->withVersusResult($playerWon);
+        $changes['scores'] = $next;
+        try {
+            $next->save($this->scoresPath);
+        } catch (\Throwable $problem) {
+            fwrite(STDERR, 'candy-tetris: could not save scores (' . self::cliVisible($problem->getMessage()) . ")\n");
+        }
+
+        return $this->mutate($changes);
+    }
+
+    /** Trim a failure message to one visible, control-character-free line. */
+    private static function cliVisible(string $raw): string
+    {
+        $clean = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
+
+        return strlen($clean) > 40 ? substr($clean, 0, 39) . '…' : $clean;
     }
 
     /**
@@ -333,10 +377,8 @@ final class VsGame implements Model
     private function withPlayerWinner(Game $player, Game $computer): array
     {
         $overComputer = $computer->mutate(['over' => true, 'canHold' => false]);
-        return [
-            $this->mutate(['player' => $player, 'computer' => $overComputer, 'over' => true, 'winner' => 'PLAYER']),
-            null,
-        ];
+
+        return [$this->settleRecord(['player' => $player, 'computer' => $overComputer, 'over' => true, 'winner' => 'PLAYER'], true), null];
     }
 
     public function view(): string
@@ -369,6 +411,8 @@ final class VsGame implements Model
             // Game::mutate's lockWindowGeneration/colorProfile legs).
             array_key_exists('colorProfile', $changes) ? $changes['colorProfile'] : $this->colorProfile,
             $changes['bindings'] ?? $this->bindings,
+            $changes['scores'] ?? $this->scores,
+            $changes['scoresPath'] ?? $this->scoresPath,
         );
     }
 }

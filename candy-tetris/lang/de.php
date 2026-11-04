@@ -43,6 +43,8 @@ beenden',
     'hold_used'  => '(verbraucht)',
     'combo_line' => 'Combo x%d',
     'b2b_line'   => 'B2B bereit',
+    'over.best'    => 'Bestwert: {points}',
+    'over.new_best' => 'neuer Bestwert!',
 
     // Versus renderer
     'label.player'   => 'SPIELER',
@@ -55,6 +57,7 @@ Lager
 Pause
 Neustart
 beenden',
+    'vs.record' => 'Bilanz: {wins} gewonnen, {losses} verloren',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: unbekannter Modus "{flag}"',

@@ -15,16 +15,20 @@ use SugarCraft\Core\Msg\KeyRepeatMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Tetris\Scoring\TSpin;
+use SugarCraft\Tetris\Support\Scores;
 
 /**
  * Tetris as a SugarCraft {@see Model}.
  *
  * Architecture:
  *
- *   - Pure state machine. Every transition (`update()`) returns
- *     `[nextGame, ?Cmd]` with no I/O. The Cmd here is always
- *     either `Cmd::quit()` (on `q`), a gravity `tick()`, or a
- *     lock-delay `tick()`.
+ *   - State machine. Every transition (`update()`) returns
+ *     `[nextGame, ?Cmd]` and emits no Cmd of its own beyond
+ *     `Cmd::quit()`, a gravity `tick()`, or a lock-delay `tick()`.
+ *     The one exception is deliberate (MA-23): when a wired solo game
+ *     crosses alive→over, the record save happens right there, in-model,
+ *     because the death is only knowable at that transition — a failure
+ *     is announced on stderr, never swallowed into a silent zero.
  *   - Gravity is a single chain: exactly one gravity tick is ever
  *     in flight. `init()` arms it; each gravity tick consumes the
  *     pending slot and re-arms it 1:1. Key paths (hard drop, hold)
@@ -132,6 +136,20 @@ final class Game implements Model
          * overrides; tests may inject any registry directly.
          */
         public readonly ?KeyBindings $bindings = null,
+        /**
+         * MA-23 cross-session record (null = no record wired; a test or a
+         * HOME-less launch runs exactly the pre-MA-23 game). Carries the
+         * best as of the last settle, so the game-over banner can show it.
+         */
+        public readonly ?Scores $scores = null,
+        /** Where {@see self::$scores} persists to on settle (null = nowhere). */
+        public readonly ?string $scoresPath = null,
+        /**
+         * True only on the frame the death produced it: this run's score
+         * beat every solo game settled before it. Resets with the fresh
+         * board (a restart never inherits the shout).
+         */
+        public readonly bool $newBest = false,
     ) {}
 
     /** Death by spawn-block: the freshly spawned piece does not fit. */
@@ -186,6 +204,9 @@ final class Game implements Model
                 ? $changes['lastAward']
                 : $this->lastAward,
             $changes['bindings']      ?? $this->bindings,
+            $changes['scores']         ?? $this->scores,
+            $changes['scoresPath']     ?? $this->scoresPath,
+            $changes['newBest']        ?? $this->newBest,
         );
     }
 
@@ -200,14 +221,14 @@ final class Game implements Model
         return $this->frameCols < Renderer::MIN_COLS || $this->frameRows < Renderer::MIN_ROWS;
     }
 
-    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null): self
+    public static function start(?Bag $bag = null, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null): self
     {
         $bag ??= new Bag();
         [$first, $bag] = $bag->next();
         $piece = self::spawn($first);
         // init() will arm the gravity chain; the pending slot starts taken
         // so no key path can double-book it before then.
-        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings);
+        return new self(new Board(), $piece, $bag, new Score(), gravityPending: true, bindings: $bindings, scores: $scores, scoresPath: $scoresPath);
     }
 
     /**
@@ -216,7 +237,7 @@ final class Game implements Model
      * @param int $lockDelayMs Grounded window length in milliseconds
      *                         (SRS-style: ~0.5 s, independent of gravity).
      */
-    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null): self
+    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayMs = self::DEFAULT_LOCK_DELAY_MS, ?KeyBindings $bindings = null, ?Scores $scores = null, ?string $scoresPath = null): self
     {
         $bag ??= new Bag();
         [$first, $bag] = $bag->next();
@@ -229,6 +250,8 @@ final class Game implements Model
             lockDelayMs: $lockDelayMs,
             gravityPending: true,
             bindings: $bindings,
+            scores: $scores,
+            scoresPath: $scoresPath,
         );
     }
 
@@ -299,6 +322,63 @@ final class Game implements Model
 
     public function update(Msg $msg): array
     {
+        $wasOver = $this->over;
+        $result = $this->stepGame($msg);
+        if ($wasOver === false && $result[0]->over === true) {
+            $result = $this->settled($result);
+        }
+
+        return $result;
+    }
+
+    /**
+     * MA-23: the alive→over transition is where the record learns about a
+     * finished game. Exactly once per death: the wrapper only fires on the
+     * crossing, so every later keystroke on the banner and the fresh board
+     * after a restart are both safe. The save mutates nothing the failure
+     * path needs — an unwritable file leaves the on-disk record untouched
+     * (never zeroed) and the in-memory best still banners this frame.
+     *
+     * @param array{0:self,1:?\Closure} $pair
+     *
+     * @return array{0:self,1:?\Closure}
+     */
+    private function settled(array $pair): array
+    {
+        if ($this->scoresPath === null) {
+            return $pair;
+        }
+        $game = $pair[0];
+        $previous = $this->scores ?? new Scores();
+        $next = $previous->withSolo($game->score->points);
+        $game = $game->mutate(['scores' => $next, 'newBest' => $previous->beatsSoloBest($game->score->points)]);
+        $pair[0] = $game;
+
+        try {
+            $next->save($this->scoresPath);
+        } catch (\Throwable $problem) {
+            // Loud, and only loud: the session keeps its honest banner and
+            // the untouched old file still holds the true record.
+            fwrite(STDERR, 'candy-tetris: could not save scores (' . self::cliVisible($problem->getMessage()) . ")\n");
+        }
+
+        return $pair;
+    }
+
+    /** Trim a failure message to one visible, control-character-free line. */
+    private static function cliVisible(string $raw): string
+    {
+        $clean = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
+
+        return strlen($clean) > 40 ? substr($clean, 0, 39) . '…' : $clean;
+    }
+
+    /**
+     * The pre-MA-23 dispatch body, unchanged: posture, notice screen,
+     * banner screen, live keys, gravity, lock window.
+     */
+    private function stepGame(Msg $msg): array
+    {
         // Terminal posture first (C-2): a resize or capability report is
         // never gameplay, must land even on the game-over screen, and must
         // not churn state when nothing changed (identity short-circuit).
@@ -351,8 +431,8 @@ final class Game implements Model
                 // chain is armed right here — init() ran once at boot and
                 // will not re-run.
                 $fresh = $this->lockDelayMs > 0
-                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings)
-                    : self::start(bindings: $this->bindings);
+                    ? self::startWithLockDelay(lockDelayMs: $this->lockDelayMs, bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath)
+                    : self::start(bindings: $this->bindings, scores: $this->scores, scoresPath: $this->scoresPath);
                 // Bump the chain tag so any tick still in flight from the
                 // dead chain lands inert on the fresh board.
                 $fresh = $fresh->mutate([

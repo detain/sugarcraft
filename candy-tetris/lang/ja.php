@@ -43,6 +43,8 @@ return [
     'hold_used'  => '(使用済)',
     'combo_line' => 'コンボ x%d',
     'b2b_line'   => 'B2B 準備完了',
+    'over.best'    => 'ベスト: {points}',
+    'over.new_best' => '新記録！',
 
     // Versus renderer
     'label.player'   => 'プレイヤー',
@@ -55,6 +57,7 @@ return [
 停止
 再開
 終了',
+    'vs.record' => '通算: {wins}勝 {losses}敗',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: 不明なモード "{flag}"',

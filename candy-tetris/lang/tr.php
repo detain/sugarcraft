@@ -43,6 +43,8 @@ yeniden
     'hold_used'  => '(kullanıldı)',
     'combo_line' => 'kombo x%d',
     'b2b_line'   => 'B2B hazır',
+    'over.best'    => 'en iyi: {points}',
+    'over.new_best' => 'yeni rekor!',
 
     // Versus renderer
     'label.player'   => 'OYUNCU',
@@ -55,6 +57,7 @@ bekleme
 duraklat
 yeniden
 çık',
+    'vs.record' => 'rekor: {wins} galibiyet, {losses} mağlubiyet',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris: bilinmeyen mod "{flag}"',
