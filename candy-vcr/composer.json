@@ -32,6 +32,7 @@
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-ansi-parser": "dev-master",
         "sugarcraft/sugar-pty": "dev-master",
+        "sugarcraft/sugar-vterm": "dev-master",
         "symfony/console": "^6.4 || ^7.0",
         "symfony/process": "^6.4 || ^7.0"
     },
@@ -40,14 +41,12 @@
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-phpunit": "^2.0",
         "friendsofphp/php-cs-fixer": "^3.65",
-        "sugarcraft/sugar-vterm": "dev-master",
         "sugarcraft/sugar-testing": "dev-master",
         "symfony/yaml": "^6.4 || ^7.0"
     },
     "suggest": {
         "ext-gd": "Required by the default gd rasterizer backend (render-tape / render-batch GIF output); TapeToGif::create() fails loud when it is absent.",
         "ext-imagick": "Enables --backend=imagick for the ImageMagick rasterizer path in place of gd.",
-        "sugarcraft/sugar-vterm": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise.",
         "symfony/yaml": "Enables YamlFormat for human-readable cassettes (test fixtures, hand-written replays); JsonlFormat is the primary format."
     },
     "autoload": {
