@@ -13,10 +13,10 @@ equality via [sugar-vterm](https://github.com/detain/sugar-vterm), with byte-equ
 
 ## Contents
 
-- [Status](#status) · [Use cases](#use-cases) · [Install](#install)
+- [Status](#status) · [Use cases](#use-cases) · [Install](#install) · [Quickstart](#quickstart)
 - [Cassette formats](#cassette-formats) — Jsonl / CompressedJsonl / Relative / Yaml / Asciinema
 - [PHP API](#php-api) — `Cassette`, `Recorder`, `Player`, `Player::loadAny()`
-- [Assertion classes](#replay) — Byte / Screen / Contains / Regex
+- [Assertion classes](#engine-parity-tests) — Byte / Screen / Contains / Regex
 - [Matcher classes](#matcher-classes--replay-side-flexibility) — Passthrough / Content / TimingTolerant
 - [Hook system](#hook-system) · [Migration system](#cassette-migration)
 - [CLI commands](#cli) — `record` · `inspect` · `replay` · `diff` · `stats` · `migrate` · `render-tape` · `render-batch`
@@ -24,13 +24,17 @@ equality via [sugar-vterm](https://github.com/detain/sugar-vterm), with byte-equ
 - [Renderer pipeline](#frame-renderer) — Renderer / FrameStream / FrameDedup
 - [Rasterizer](#frame-rasterizer) — GdRasterizer / ImagickRasterizer / Glyphs / FontLoader
 - [GIF encoder](#gif-encoder) — FfmpegGifEncoder / PhpGifEncoder / TapeToGif
-- [Visual regression goldens](#visual-regression-goldens)
-- [Development](#development) · [CI integration](#ci-integration)
+- [Examples](#examples) — record / replay / mouse encodings / Msg serializers
+- [Visual regression goldens](#visual-regression-goldens) · [Snapshot tests](#snapshot-tests)
+- [Development](#development) · [CI integration](#ci-integration) · [License](#license) · [Credits](#credits--inspiration)
 
 ## Status
 
 🟢 **v1 ready** — cassette recording, replay assertions, tape compilation,
 frame rendering, rasterization and GIF encoding all ship in the library.
+
+Start with [Quickstart](#quickstart) for the shortest end-to-end path, or jump straight to
+[CLI commands](#cli) if you only want the `candy-vcr` binary.
 
 ## Use cases
 
@@ -38,7 +42,7 @@ frame rendering, rasterization and GIF encoding all ship in the library.
   ships the cassette, maintainer replays locally with `candy-vcr replay bug.cas`.
 - **Regression tests** — record a known-good session, replay in CI, diff
   against expected screen state.
-- **Demo capture** — alternative to VHS for headless / scriptable
+- **Demo capture** — alternative to [VHS](https://github.com/charmbracelet/vhs) (the Go terminal-GIF recorder) for headless / scriptable
   recordings (no docker, runs in PHP unit-test process).
 - **Fuzzing seeds** — mutate recorded Msgs slightly, replay to find edge
   cases.
@@ -48,6 +52,12 @@ frame rendering, rasterization and GIF encoding all ship in the library.
 ```sh
 composer require sugarcraft/candy-vcr
 ```
+
+Examples in this README invoke the binary as `vendor/bin/candy-vcr`; with a phar install or a
+composer global install it answers to plain `candy-vcr`. Rendering needs **ext-gd** (or
+`--backend=imagick` with **ext-imagick**) and, for the default encoder, **ffmpeg** on `PATH`;
+`PhpGifEncoder` is the pure-PHP fallback that needs no external binaries. `YamlFormat`
+additionally suggests `symfony/yaml`.
 
 ## Cassette format (JSONL)
 
@@ -165,7 +175,7 @@ $format->write($cassette, '/tmp/session.cas.gz');
 $cassette = $format->read('/tmp/session.cas.gz');
 ```
 
-Compressed cassettes are typically 5-10x smaller than plain JSONL,
+Compressed cassettes are typically 5–10× smaller than plain JSONL,
 making them suitable for CI storage and git repositories. The format
 uses streaming gzip with per-line flush to maintain memory efficiency
 for large cassettes.
@@ -301,7 +311,7 @@ Captured env lands on the cassette header as a JSON object:
 
 #### `--idle-trim N` and `replay --no-trim`
 
-Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller).
+Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller). Both `--idle-trim=N` and `--idle-trim N` are accepted, like every value-taking flag on `replay`.
 
 ```jsonl
 {"v":1,"created":"...","cols":80,"rows":24,"runtime":"sugarcraft/candy-vcr@record"}
@@ -335,7 +345,7 @@ Benchmark (`tests/Integration/ShirleyOverheadTest.php`: one warmup iteration, th
 | Pump WITH recorder | ~40 ms |
 | Measured overhead | **within noise** |
 
-The assertion budget is 8 % to absorb shared-runner jitter while still catching the regression class this test exists to flag (a real serialization-per-chunk regression would land at dozens of percent). The plan's 2 % acceptance target is reported by the test but not asserted.
+The assertion budget is 8 % to absorb shared-runner jitter while still catching the regression class this test exists to flag (a real serialization-per-chunk regression would land at dozens of percent). The original performance survey's 2 % acceptance target is reported by the test but not asserted.
 
 ### Hook system
 
@@ -835,7 +845,7 @@ $tapeToGif->render('demo.tape', 'demo.gif');
 | Encoder | Description |
 |--------|-------------|
 | `FfmpegGifEncoder` | Default; uses ffmpeg with two-pass palette generation. CFR via `-framerate`; VFR via concat demuxer with process substitution. |
-| `PhpGifEncoder` | Pure-PHP fallback: rasterizes frames with GD and hand-assembles the animated GIF byte stream (header, NETSCAPE looping extension, per-frame LZW) in PHP. Slower than ffmpeg (~5-10×) but requires no external binaries. |
+| `PhpGifEncoder` | Pure-PHP fallback: rasterizes frames with GD and hand-assembles the animated GIF byte stream (header, NETSCAPE looping extension, per-frame LZW) in PHP. Roughly 5–10× slower than ffmpeg, but requires no external binaries. |
 
 **TapeToGif options:**
 
@@ -865,7 +875,7 @@ file 'frame00004.png'
 
 The last frame is listed twice to give it a display duration (the entry before it carries the duration). This produces accurate per-frame timing without re-encoding artifacts.
 
-**Two-pass palette:** `palettegen=stats_mode=diff` computes an optimal 256-color palette by analyzing frame-to-frame pixel differences. `paletteuse=dither=bayer:bayer_scale=5` applies the palette with ordered dithering. This produces significantly better quality than single-pass GIF encoding.
+**Two-pass palette:** `palettegen=stats_mode=diff` computes an optimal 256-color palette by analysing frame-to-frame pixel differences. `paletteuse=dither=bayer:bayer_scale=5` applies the palette with ordered dithering. This produces significantly better quality than single-pass GIF encoding.
 
 **Requirements:** `ffmpeg` must be in `$PATH` for `FfmpegGifEncoder`. The `symfony/process` package is required as a runtime dependency.
 
@@ -971,7 +981,7 @@ tooling elsewhere uses the full emulator (`SugarCraft\Vterm\Terminal\Terminal`).
 candy-vcr surfaces cannot drift silently. The renderer-path parity pass
 (deferred `DECAWM` wrap, absolute CUP clamping, IL/DL cursor homing, correct
 DECTCEM, `4;3` vs `4:3` via `Parser::subparams()`, SGR 29/58/59 + triplet
-consumption) and #1417's emulator fixes graduated the former divergences
+consumption) and sugar-vterm's PR #1417 emulator fixes graduated the former divergences
 into parity assertions. What remains catalogued are representation/adapter
 limits — truecolor VALUES (the renderer `Cell` has no RGB slot), the stored
 underline colour, emulator ED/EL erasing with the active background (BCE),
@@ -1168,6 +1178,9 @@ php candy-vcr/scripts/refresh-goldens.php   # safe — warns + exits 2 if >3 tap
 ## License
 
 MIT
+
+Support: [issue tracker](https://github.com/detain/sugarcraft/issues) · trust-boundary
+notes and disclosure policy: [SECURITY.md](https://github.com/detain/sugarcraft/blob/master/SECURITY.md).
 
 ## Credits & inspiration
 

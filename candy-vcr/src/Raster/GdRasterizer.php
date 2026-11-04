@@ -91,7 +91,9 @@ final class GdRasterizer implements Rasterizer
     }
 
     /**
-     * @return array{hits:int, misses:int}
+     * @return array{hits: int, misses: int, evictions?: int} Counter triple from
+     *         Glyphs::cacheStats(); the cache-disabled fallback reports only
+     *         hits/misses, hence the optional evictions key.
      */
     public function cacheStats(): array
     {
