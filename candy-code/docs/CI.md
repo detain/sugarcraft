@@ -334,6 +334,36 @@ The note body is model output and GitLab renders it as Markdown — the same for
 hazard named above for step summaries and PR comments. No auto-merge on a review verdict, either
 side of the bridge.
 
+## Cutting a release
+
+A stable candy-code release is published by `.github/workflows/release-phar.yml`: pushing a
+tag spelled `candy-code/v*` — or dispatching the workflow manually with that tag as input —
+builds the phar and publishes it, with its checksum and signature assets, as a GitHub Release.
+Nothing else mints a stable artifact.
+
+As of this writing the workflow carries **no CI gate**: no `needs:`, no concurrency block, and
+no check that the tagged commit is on `master` or that `ci.yml`'s test matrix is green for it.
+The pipeline will happily publish a tag cut from an unmerged branch. Adding such a gate is an
+open owner decision, not an oversight a tagger should assume away.
+
+So the compensating control is the human cutting the tag. The procedure:
+
+1. Confirm the commit you are about to tag is on `origin/master` — a tag on a commit master
+   never contained is against policy even though nothing in CI says so.
+2. Open the Actions run for the master push of that exact commit and confirm the suite is
+   green there. Green on a neighbouring commit is not green on yours; nothing verifies it for
+   you, because the tag-triggered workflow does not consult CI at all.
+3. Tag that commit and push: `git tag candy-code/vX.Y.Z <sha> && git push origin
+   candy-code/vX.Y.Z`. Publication begins the moment the tag reaches the remote — there is no
+   second chance before it ships.
+4. Verify the finished release page: the phar assets with their `.sha256` sidecars and
+   signatures, and — once merged to master — a `self-update` run against the new tag.
+
+The reproducibility caveat the workflow header itself records applies to every release cut this
+way: per-lib `composer.lock` files are forbidden by house rule and the `sugarcraft/*` siblings
+resolve from Packagist's moving `dev-master`, so two builds of the same tag need not be
+byte-identical. A published `.sha256` names the bytes that job produced, not a rebuild promise.
+
 ## Linting this action
 
 `.github/` workflows are guarded by the monorepo CI; `action.yml` itself is a plain composite and
