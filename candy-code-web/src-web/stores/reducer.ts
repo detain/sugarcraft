@@ -346,16 +346,23 @@ export function readPaging(snapshot: SessionSnapshot): { hasMoreOlder: boolean; 
 
 /**
  * Prepend one older page below what the client holds (ISS-058). Rows are
- * taken in transcript order like any snapshot; a row whose id the client
- * already shows is skipped, so a server whose page boundary shifts (hidden
- * rows, compaction) cannot duplicate a card. Rows without an id get negative
+ * taken in transcript order like any snapshot; a row every one of whose
+ * item keys the client already shows is skipped (plain rows by id, tool
+ * rows by the full `<rowId>:…` card keys), so a server whose page boundary
+ * shifts (hidden rows, compaction) cannot duplicate a card. Rows without an
+ * id get negative
  * fallback keys, `startOrdinal` steps across pages, and the page's own
  * paging fields replace the held ones — a page that names no further cursor
  * ends the walk even if the flag still promises more, because there is
  * nothing left to ask with.
  */
 export function applyOlderPage(state: SessionState, page: SessionSnapshot, startOrdinal: number): number {
-  const present = new Set(state.items.map((item) => item.key.split(':')[0] ?? ''))
+  // CW-DBA-17: dedupe compares FULL item keys against the keys
+  // itemsFromRow mints — one place derives them, the check consumes them.
+  // The old first-segment view collapsed every event-minted tool card
+  // toward the literal 'tool' (key `tool:<turn>:<callId>`), so a page row
+  // whose id equalled such a prefix was falsely marked as already shown.
+  const present = new Set(state.items.map((item) => item.key))
   const older: TranscriptItem[] = []
   let skipped = 0
   page.messages.forEach((row, i) => {
@@ -364,7 +371,16 @@ export function applyOlderPage(state: SessionState, page: SessionSnapshot, start
       skipped++
       return
     }
-    for (const item of itemsFromRow(row, -(startOrdinal + i) - 1)) older.push(item)
+    const items = itemsFromRow(row, -(startOrdinal + i) - 1)
+    const fresh = items.filter((item) => !present.has(item.key))
+    if (items.length > 0 && fresh.length === 0) {
+      skipped++
+      return
+    }
+    for (const item of fresh) {
+      present.add(item.key)
+      older.push(item)
+    }
   })
   state.items = [...older, ...state.items]
   const paging = readPaging(page)

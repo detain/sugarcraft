@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EventEnvelope, SessionSnapshot } from '../../protocol/generated'
-import { applyEvent, applyPendingAsks, applySnapshot, createState, itemsFromRow, stopText, type SessionState, type ToolItem } from '../reducer'
+import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, itemsFromRow, stopText, type SessionState, type ToolItem } from '../reducer'
 
 let seq = 0
 function ev(type: string, data: Record<string, unknown>, extra: Partial<EventEnvelope> = {}): EventEnvelope {
@@ -341,5 +341,43 @@ describe('reducer: stopText', () => {
 
   it('keeps the generic row only for unrecognised reasons', () => {
     expect(stopText('mystery_reason')).toBe('Turn ended (mystery_reason).')
+  })
+})
+
+/**
+ * CW-DBA-17 (reviews-1103): applyOlderPage deduped by taking the FIRST
+ * key segment of every held item — but tool cards minted by events are
+ * keyed `tool:<turn>:<callId>`, so the set collapsed toward literal
+ * prefixes ('tool') and any page row whose id equalled one of those
+ * prefixes was falsely reported as already shown. The law is now: one
+ * place derives keys (itemsFromRow) and dedupe compares FULL keys.
+ */
+describe('older-page dedupe compares full item keys (CW-DBA-17)', () => {
+  const page = (rows: Record<string, unknown>[]): SessionSnapshot =>
+    ({ sessionId: 's1', status: 'idle', lastSeq: 9, pendingAsks: [], queue: [], messages: rows } as unknown as SessionSnapshot)
+
+  it('a row whose id collides with a tool-card first segment still pages in', () => {
+    const state = run(createState('s1'), [ev('tool.started', { toolCallId: 'c1', name: 'Bash', arguments: {} })])
+    expect(state.items.map((item) => item.key)).toEqual(['tool:t1:c1'])
+
+    const fetched = applyOlderPage(state, page([{ id: 'tool', role: 'assistant', content: 'a row literally named tool' }]), 0)
+    expect(fetched).toBe(1)
+    expect(state.items.map((item) => item.key)).toContain('tool')
+  })
+
+  it('the same tool row across a shifted page boundary adds no second card', () => {
+    const state = createState('s1')
+    const row = { id: 'abc', role: 'assistant', toolResults: [{ id: 'c1', name: 'Bash', result: 'ok', arguments: {} }] }
+    expect(applyOlderPage(state, page([row]), 0)).toBe(1)
+    expect(applyOlderPage(state, page([row]), 0)).toBe(0)
+    expect(state.items).toHaveLength(1)
+  })
+
+  it('a plain row already present by id is still skipped, both ways', () => {
+    const state = createState('s1')
+    const row = { id: 'n7', role: 'system', content: 'note' }
+    expect(applyOlderPage(state, page([row]), 0)).toBe(1)
+    expect(applyOlderPage(state, page([row]), 0)).toBe(0)
+    expect(state.items).toHaveLength(1)
   })
 })
