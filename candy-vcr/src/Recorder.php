@@ -118,20 +118,7 @@ final class Recorder implements RecorderInterface
         $this->fh = $fh;
         $this->startTime = $startTime ?? microtime(true);
         $this->hooks = $hooks ?? new HookRegistry();
-        $headerLine = [
-            'v' => $header->version,
-            'created' => $header->createdAt,
-            'cols' => $header->cols,
-            'rows' => $header->rows,
-            'runtime' => $header->runtime,
-        ];
-        if ($header->timestampMode !== CassetteHeader::TIMESTAMP_MODE_ABSOLUTE) {
-            $headerLine['timestampMode'] = $header->timestampMode;
-        }
-        if ($header->env !== []) {
-            $headerLine['env'] = $header->env;
-        }
-        $this->writeLine($headerLine);
+        $this->writeLine($header->toWireArray());
     }
 
     /**
@@ -378,7 +365,10 @@ final class Recorder implements RecorderInterface
             return;
         }
 
-        $line = ['t' => $event->t, 'k' => $event->kind->value, ...$event->payload];
+        // Reserved keys lead and win: `+` (not spread) means a payload entry
+        // literally named `t`/`k` can never clobber the event's timing or
+        // kind on the wire (JsonlFormat documents the contract).
+        $line = ['t' => $event->t, 'k' => $event->kind->value] + $event->payload;
         if ($this->useRelativeTimestamps) {
             $delta = round($event->t - $this->cumulativeEffectiveT, 3);
             unset($line['t']);

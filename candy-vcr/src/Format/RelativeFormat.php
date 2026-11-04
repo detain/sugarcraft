@@ -25,6 +25,7 @@ use SugarCraft\Vcr\Support\Scalars;
  */
 final class RelativeFormat implements Format
 {
+    use RestrictsCassettePermissions;
     private const T_PRECISION = 3;
 
     public function write(Cassette $cassette, string $path): void
@@ -33,6 +34,7 @@ final class RelativeFormat implements Format
         if (@file_put_contents($path, $contents) === false) {
             throw new \RuntimeException("candy-vcr: cannot write cassette to {$path}");
         }
+        self::restrictToOwner($path);
     }
 
     public function read(string $path): Cassette
@@ -58,6 +60,11 @@ final class RelativeFormat implements Format
         $lines = preg_split('/\r?\n/', $contents) ?: [];
         $header = null;
         $eventsText = [];
+        // Torn-tail contract identical to JsonlFormat: a final line cut by
+        // a kill -9 (file has no trailing newline) is dropped, everything
+        // before it decodes; malformed anywhere else still throws.
+        $lastLineIsTorn = $contents !== '' && !str_ends_with($contents, "\n");
+        $lastIndex = count($lines) - 1;
 
         foreach ($lines as $i => $line) {
             if ($line === '') {
@@ -66,6 +73,9 @@ final class RelativeFormat implements Format
             $data = json_decode($line, true);
             if (!is_array($data)) {
                 $lineNo = $i + 1;
+                if ($lastLineIsTorn && $i === $lastIndex && $header !== null) {
+                    continue;
+                }
                 throw new \RuntimeException("candy-vcr: invalid JSON on line {$lineNo}");
             }
             if ($header === null) {
@@ -101,12 +111,9 @@ final class RelativeFormat implements Format
 
         foreach ($events as $event) {
             $dt = round($event->t - $prevT, self::T_PRECISION);
-            $line = [
-                'dt' => $dt,
-                'k' => $event->kind->value,
-                ...$event->payload,
-            ];
-            $lines[] = $this->jsonEncode($line);
+            // Reserved keys win and stay first (see JsonlFormat's contract);
+            // a payload carrying literal `dt`/`k` entries is shadowed.
+            $lines[] = $this->jsonEncode(['dt' => $dt, 'k' => $event->kind->value] + $event->payload);
             $prevT = $event->t;
         }
 
@@ -140,17 +147,10 @@ final class RelativeFormat implements Format
 
     private function encodeHeader(CassetteHeader $h): string
     {
-        $data = [
-            'v' => $h->version,
-            'created' => $h->createdAt,
-            'cols' => $h->cols,
-            'rows' => $h->rows,
-            'runtime' => $h->runtime,
-            'timestampMode' => CassetteHeader::TIMESTAMP_MODE_RELATIVE,
-        ];
-        if ($h->env !== []) {
-            $data['env'] = $h->env;
-        }
+        $data = $h->toWireArray();
+        // The relative encoder always stamps relative mode; the wire shape
+        // otherwise mirrors CassetteHeader's full field set.
+        $data['timestampMode'] = CassetteHeader::TIMESTAMP_MODE_RELATIVE;
         return $this->jsonEncode($data);
     }
 
@@ -173,14 +173,51 @@ final class RelativeFormat implements Format
                 }
             }
         }
+        $typingSpeed = null;
+        if (isset($data['typingSpeed']) && (is_int($data['typingSpeed']) || is_float($data['typingSpeed']))) {
+            $typingSpeed = (float) $data['typingSpeed'];
+        }
+        $theme = null;
+        if (isset($data['theme']) && \is_string($data['theme']) && $data['theme'] !== '') {
+            $theme = $data['theme'];
+        }
+        $playbackSpeed = null;
+        if (isset($data['playbackSpeed']) && (is_int($data['playbackSpeed']) || is_float($data['playbackSpeed']))) {
+            $playbackSpeed = (float) $data['playbackSpeed'];
+        }
+        $fontSize = null;
+        if (isset($data['fontSize']) && (is_int($data['fontSize']) || is_float($data['fontSize']))) {
+            $fontSize = (int) $data['fontSize'];
+        }
+        $fontFamily = null;
+        if (isset($data['fontFamily']) && \is_string($data['fontFamily']) && $data['fontFamily'] !== '') {
+            $fontFamily = $data['fontFamily'];
+        }
+        $widthPx = null;
+        if (isset($data['widthPx']) && (is_int($data['widthPx']) || is_float($data['widthPx']))) {
+            $widthPx = (int) $data['widthPx'];
+        }
+        $heightPx = null;
+        if (isset($data['heightPx']) && (is_int($data['heightPx']) || is_float($data['heightPx']))) {
+            $heightPx = (int) $data['heightPx'];
+        }
         return new CassetteHeader(
             version: Scalars::int($data['v'], 'header v'),
             createdAt: Scalars::string($data['created'], 'header created'),
             cols: Scalars::int($data['cols'], 'header cols'),
             rows: Scalars::int($data['rows'], 'header rows'),
             runtime: Scalars::string($data['runtime'], 'header runtime'),
+            // This reader IS the relative mode: whatever the header says,
+            // events are decoded dt-cumulative, so the model must match.
             timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
             env: $env,
+            typingSpeed: $typingSpeed,
+            theme: $theme,
+            playbackSpeed: $playbackSpeed,
+            fontSize: $fontSize,
+            fontFamily: $fontFamily,
+            widthPx: $widthPx,
+            heightPx: $heightPx,
         );
     }
 

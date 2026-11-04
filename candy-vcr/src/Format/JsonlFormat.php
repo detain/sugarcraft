@@ -37,6 +37,16 @@ use SugarCraft\Vcr\Support\Scalars;
  * Should that case ever matter, it belongs in a versioned format, not in a
  * silent encoder change.
  *
+ * Two decode-side contracts, both deliberate:
+ * - Reserved keys: `t` and `k` on an event line always mean the event's
+ *   timestamp and kind. A payload entry using one of those names is
+ *   shadowed on write and does not survive a round-trip as payload data.
+ * - Torn tail: if the file ends WITHOUT a trailing newline and the final
+ *   line is not valid JSON, that line is dropped (a kill -9 mid-write cut
+ *   it) and everything before it still decodes. A malformed line anywhere
+ *   else — or a malformed header — still throws; silent tolerance there
+ *   would hide real corruption.
+ *
  * Supports two timestamp modes:
  * - `absolute` (default): timestamps are seconds since cassette start.
  * - `relative`: timestamps are intervals since the previous event, making
@@ -46,6 +56,8 @@ use SugarCraft\Vcr\Support\Scalars;
  */
 final class JsonlFormat implements Format
 {
+    use RestrictsCassettePermissions;
+
     private const T_PRECISION = 3;
 
     public function write(Cassette $cassette, string $path): void
@@ -54,6 +66,10 @@ final class JsonlFormat implements Format
         if (@file_put_contents($path, $contents) === false) {
             throw new \RuntimeException("candy-vcr: cannot write cassette to {$path}");
         }
+        // Cassettes hold everything that was typed; land them owner-readable
+        // only instead of at the ambient umask (Recorder's streaming path
+        // enforces the same 0600).
+        self::restrictToOwner($path);
     }
 
     public function read(string $path): Cassette
@@ -83,6 +99,12 @@ final class JsonlFormat implements Format
         $lines = preg_split('/\r?\n/', $contents) ?: [];
         $header = null;
         $events = [];
+        // A file whose last byte is not a newline was cut mid-write (the
+        // kill -9 / disk-full shape). Its trailing partial line is a torn
+        // event, not corruption of recorded data — drop it so the session
+        // before it stays replayable. Anything else stays strict.
+        $lastLineIsTorn = $contents !== '' && !str_ends_with($contents, "\n");
+        $lastIndex = count($lines) - 1;
 
         foreach ($lines as $i => $line) {
             if ($line === '') {
@@ -91,6 +113,9 @@ final class JsonlFormat implements Format
             $data = json_decode($line, true);
             if (!is_array($data)) {
                 $lineNo = $i + 1;
+                if ($lastLineIsTorn && $i === $lastIndex && $header !== null) {
+                    continue;
+                }
                 throw new \RuntimeException("candy-vcr: invalid JSON on line {$lineNo}");
             }
             if ($header === null) {
@@ -155,36 +180,16 @@ final class JsonlFormat implements Format
 
     private function encodeHeader(CassetteHeader $h): string
     {
-        $data = [
-            'v' => $h->version,
-            'created' => $h->createdAt,
-            'cols' => $h->cols,
-            'rows' => $h->rows,
-            'runtime' => $h->runtime,
-        ];
-        if ($h->timestampMode !== CassetteHeader::TIMESTAMP_MODE_ABSOLUTE) {
-            $data['timestampMode'] = $h->timestampMode;
-        }
-        if ($h->env !== []) {
-            $data['env'] = $h->env;
-        }
-        if ($h->typingSpeed !== null) {
-            $data['typingSpeed'] = $h->typingSpeed;
-        }
-        if ($h->theme !== null) {
-            $data['theme'] = $h->theme;
-        }
-        return $this->jsonEncode($data);
+        return $this->jsonEncode($h->toWireArray());
     }
 
     private function encodeEvent(Event $event): string
     {
-        $payload = $this->jsonEncode([
-            't' => round($event->t, self::T_PRECISION),
-            'k' => $event->kind->value,
-            ...$event->payload,
-        ]);
-        return $payload;
+        // The `+` keeps the reserved keys first in the emitted line AND
+        // authoritative: a hand-edited payload carrying a literal `t`/`k`
+        // key cannot clobber the event's timing or kind (those entries are
+        // shadowed and lost on round-trip; the timing contract wins).
+        return $this->jsonEncode(['t' => round($event->t, self::T_PRECISION), 'k' => $event->kind->value] + $event->payload);
     }
 
     /** @param array<array-key, mixed> $data */
@@ -214,6 +219,26 @@ final class JsonlFormat implements Format
         if (isset($data['theme']) && \is_string($data['theme']) && $data['theme'] !== '') {
             $theme = $data['theme'];
         }
+        $playbackSpeed = null;
+        if (isset($data['playbackSpeed']) && (is_int($data['playbackSpeed']) || is_float($data['playbackSpeed']))) {
+            $playbackSpeed = (float) $data['playbackSpeed'];
+        }
+        $fontSize = null;
+        if (isset($data['fontSize']) && (is_int($data['fontSize']) || is_float($data['fontSize']))) {
+            $fontSize = (int) $data['fontSize'];
+        }
+        $fontFamily = null;
+        if (isset($data['fontFamily']) && \is_string($data['fontFamily']) && $data['fontFamily'] !== '') {
+            $fontFamily = $data['fontFamily'];
+        }
+        $widthPx = null;
+        if (isset($data['widthPx']) && (is_int($data['widthPx']) || is_float($data['widthPx']))) {
+            $widthPx = (int) $data['widthPx'];
+        }
+        $heightPx = null;
+        if (isset($data['heightPx']) && (is_int($data['heightPx']) || is_float($data['heightPx']))) {
+            $heightPx = (int) $data['heightPx'];
+        }
 
         return new CassetteHeader(
             version: Scalars::int($data['v'], 'header v'),
@@ -225,6 +250,11 @@ final class JsonlFormat implements Format
             env: $env,
             typingSpeed: $typingSpeed,
             theme: $theme,
+            playbackSpeed: $playbackSpeed,
+            fontSize: $fontSize,
+            fontFamily: $fontFamily,
+            widthPx: $widthPx,
+            heightPx: $heightPx,
         );
     }
 

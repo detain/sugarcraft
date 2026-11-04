@@ -89,4 +89,53 @@ final readonly class CassetteHeader
             }
         }
     }
+
+    /**
+     * Canonical wire representation of every header field, defaults omitted.
+     *
+     * Single source of truth for all encoders (Recorder streaming path,
+     * JsonlFormat, RelativeFormat, YamlFormat) so a field added to this class
+     * cannot be silently dropped by one format while another carries it —
+     * the defect class that made `diff` blind to font/theme/env drift.
+     *
+     * @return array<string, mixed>
+     */
+    public function toWireArray(): array
+    {
+        $data = [
+            'v' => $this->version,
+            'created' => $this->createdAt,
+            'cols' => $this->cols,
+            'rows' => $this->rows,
+            'runtime' => $this->runtime,
+        ];
+        if ($this->timestampMode !== self::TIMESTAMP_MODE_ABSOLUTE) {
+            $data['timestampMode'] = $this->timestampMode;
+        }
+        if ($this->env !== []) {
+            $data['env'] = $this->env;
+        }
+        if ($this->typingSpeed !== null) {
+            $data['typingSpeed'] = $this->typingSpeed;
+        }
+        if ($this->theme !== null) {
+            $data['theme'] = $this->theme;
+        }
+        if ($this->playbackSpeed !== null) {
+            $data['playbackSpeed'] = $this->playbackSpeed;
+        }
+        if ($this->fontSize !== null) {
+            $data['fontSize'] = $this->fontSize;
+        }
+        if ($this->fontFamily !== null) {
+            $data['fontFamily'] = $this->fontFamily;
+        }
+        if ($this->widthPx !== null) {
+            $data['widthPx'] = $this->widthPx;
+        }
+        if ($this->heightPx !== null) {
+            $data['heightPx'] = $this->heightPx;
+        }
+        return $data;
+    }
 }

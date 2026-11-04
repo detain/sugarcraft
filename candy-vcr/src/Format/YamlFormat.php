@@ -41,6 +41,7 @@ use SugarCraft\Vcr\Support\Scalars;
  */
 final class YamlFormat implements Format
 {
+    use RestrictsCassettePermissions;
     private const T_PRECISION = 3;
 
     public function __construct()
@@ -58,6 +59,7 @@ final class YamlFormat implements Format
         if (@file_put_contents($path, $yaml) === false) {
             throw new \RuntimeException("candy-vcr: cannot write cassette to {$path}");
         }
+        self::restrictToOwner($path);
     }
 
     public function read(string $path): Cassette
@@ -73,46 +75,14 @@ final class YamlFormat implements Format
     {
         $eventsArray = [];
         foreach ($cassette->events as $event) {
-            $row = ['t' => round($event->t, self::T_PRECISION), 'k' => $event->kind->value];
-            foreach ($event->payload as $key => $value) {
-                $row[$key] = $value;
-            }
+            // Reserved keys win and stay first (JsonlFormat contract): a
+            // payload carrying literal `t`/`k` entries is shadowed.
+            $row = ['t' => round($event->t, self::T_PRECISION), 'k' => $event->kind->value] + $event->payload;
             $eventsArray[] = $row;
         }
 
-        $header = [
-            'v' => $cassette->header->version,
-            'created' => $cassette->header->createdAt,
-            'cols' => $cassette->header->cols,
-            'rows' => $cassette->header->rows,
-            'runtime' => $cassette->header->runtime,
-        ];
-
-        // Include optional fields when they differ from defaults
-        if ($cassette->header->timestampMode !== CassetteHeader::TIMESTAMP_MODE_ABSOLUTE) {
-            $header['timestampMode'] = $cassette->header->timestampMode;
-        }
-        if ($cassette->header->env !== []) {
-            $header['env'] = $cassette->header->env;
-        }
-        if ($cassette->header->typingSpeed !== null) {
-            $header['typingSpeed'] = $cassette->header->typingSpeed;
-        }
-        if ($cassette->header->theme !== null) {
-            $header['theme'] = $cassette->header->theme;
-        }
-        if ($cassette->header->playbackSpeed !== null) {
-            $header['playbackSpeed'] = $cassette->header->playbackSpeed;
-        }
-        if ($cassette->header->fontSize !== null) {
-            $header['fontSize'] = $cassette->header->fontSize;
-        }
-        if ($cassette->header->fontFamily !== null) {
-            $header['fontFamily'] = $cassette->header->fontFamily;
-        }
-
         $tree = [
-            'header' => $header,
+            'header' => $cassette->header->toWireArray(),
             'events' => $eventsArray,
         ];
         // Inline level 3 keeps the per-event maps on one line each
@@ -186,6 +156,8 @@ final class YamlFormat implements Format
             playbackSpeed: isset($data['playbackSpeed']) ? Scalars::float($data['playbackSpeed'], 'YAML header playbackSpeed') : null,
             fontSize: isset($data['fontSize']) ? Scalars::int($data['fontSize'], 'YAML header fontSize') : null,
             fontFamily: isset($data['fontFamily']) ? Scalars::string($data['fontFamily'], 'YAML header fontFamily') : null,
+            widthPx: isset($data['widthPx']) ? Scalars::int($data['widthPx'], 'YAML header widthPx') : null,
+            heightPx: isset($data['heightPx']) ? Scalars::int($data['heightPx'], 'YAML header heightPx') : null,
         );
     }
 

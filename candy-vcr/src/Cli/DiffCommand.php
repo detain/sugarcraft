@@ -5,16 +5,33 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Cli;
 
 use SugarCraft\Vcr\Cassette;
+use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Format\CassetteLoader;
 
 /**
- * `candy-vcr diff <a.cas> <b.cas>`
+ * `candy-vcr diff [--strict] <a.cas> <b.cas>`
  *
- * Compare two cassettes structurally — header fields, event count,
- * and per-event kind/payload. Exits 0 if identical, 1 if they differ.
+ * Compare two cassettes structurally — EVERY header field (version,
+ * dimensions, runtime, timestamp mode, env, typing speed, theme, playback
+ * speed, font and pixel geometry) and, per event, the kind, the payload and
+ * the timestamp. Timestamps compare within 2 ms so the different formats'
+ * rounding (absolute `t` at 3 decimals, relative `dt` accumulation) does
+ * not read as drift. Exit 0 if identical, 1 if they differ, 2 on a bad
+ * invocation.
+ *
+ * Migration metadata: V1ToV2Migrator injects `_id` (every event) and `_enc`
+ * (output events) into payloads. Those keys mark the migration, not the
+ * session, so by default a migrated cassette compares equal to its source.
+ * Pass --strict to include them in the payload comparison.
  */
 final class DiffCommand implements Command
 {
+    /** Seconds of slack tolerated on event timestamps (format-rounding noise). */
+    private const T_TOLERANCE_SECONDS = 0.002;
+
+    /** Payload keys minted by migration, ignored unless --strict. */
+    private const MIGRATION_METADATA_KEYS = ['_id', '_enc'];
+
     public function summary(): string
     {
         return 'Compare two cassettes event-by-event';
@@ -22,9 +39,21 @@ final class DiffCommand implements Command
 
     public function run(array $args, $stdout, $stderr): int
     {
-        $paths = array_values(array_filter($args, static fn ($a) => !str_starts_with($a, '--')));
+        $paths = [];
+        $strict = false;
+        foreach ($args as $arg) {
+            if ($arg === '--strict') {
+                $strict = true;
+                continue;
+            }
+            if (str_starts_with($arg, '--')) {
+                fwrite($stderr, "candy-vcr diff: unknown option {$arg}\n");
+                return 2;
+            }
+            $paths[] = $arg;
+        }
         if (count($paths) !== 2) {
-            fwrite($stderr, "usage: candy-vcr diff <a.cas> <b.cas>\n");
+            fwrite($stderr, "usage: candy-vcr diff [--strict] <a.cas> <b.cas>\n");
             return 2;
         }
         try {
@@ -36,9 +65,9 @@ final class DiffCommand implements Command
             return 1;
         }
 
-        $diffs = $this->collectDiffs($a, $b);
+        $diffs = $this->collectDiffs($a, $b, $strict);
         if ($diffs === []) {
-            fwrite($stdout, "cassettes are identical (modulo `t` rounding)\n");
+            fwrite($stdout, "cassettes are identical (header fields match; events match kind, payload, and timestamps within 2 ms)\n");
             return 0;
         }
         foreach ($diffs as $line) {
@@ -49,7 +78,7 @@ final class DiffCommand implements Command
     }
 
     /** @return list<string> */
-    private function collectDiffs(Cassette $a, Cassette $b): array
+    private function collectDiffs(Cassette $a, Cassette $b, bool $strict): array
     {
         $diffs = [];
 
@@ -65,8 +94,36 @@ final class DiffCommand implements Command
                 $b->header->rows,
             );
         }
-        if ($a->header->runtime !== $b->header->runtime) {
-            $diffs[] = sprintf('header.runtime: %s != %s', $a->header->runtime, $b->header->runtime);
+
+        // Every remaining scalar header field, compared strictly. cols/rows
+        // were handled as one combined "dimensions" row above and `v` as
+        // "header.v" for stable historical needles.
+        $scalarFields = [
+            'created' => static fn (CassetteHeader $h): string => $h->createdAt,
+            'runtime' => static fn (CassetteHeader $h): string => $h->runtime,
+            'timestampMode' => static fn (CassetteHeader $h): string => $h->timestampMode,
+            'typingSpeed' => static fn (CassetteHeader $h): ?float => $h->typingSpeed,
+            'theme' => static fn (CassetteHeader $h): ?string => $h->theme,
+            'playbackSpeed' => static fn (CassetteHeader $h): ?float => $h->playbackSpeed,
+            'fontSize' => static fn (CassetteHeader $h): ?int => $h->fontSize,
+            'fontFamily' => static fn (CassetteHeader $h): ?string => $h->fontFamily,
+            'widthPx' => static fn (CassetteHeader $h): ?int => $h->widthPx,
+            'heightPx' => static fn (CassetteHeader $h): ?int => $h->heightPx,
+        ];
+        foreach ($scalarFields as $label => $read) {
+            $av = $read($a->header);
+            $bv = $read($b->header);
+            if ($av !== $bv) {
+                $diffs[] = sprintf('header.%s: %s != %s', $label, self::render($av), self::render($bv));
+            }
+        }
+
+        if ($a->header->env !== $b->header->env) {
+            $diffs[] = sprintf(
+                'header.env: %s != %s',
+                self::render($a->header->env),
+                self::render($b->header->env),
+            );
         }
 
         $aCount = $a->eventCount();
@@ -101,11 +158,40 @@ final class DiffCommand implements Command
                     $bKind,
                 );
             }
-            if ($aEvent->payload !== $bEvent->payload) {
+            if (abs($aEvent->t - $bEvent->t) > self::T_TOLERANCE_SECONDS) {
+                $diffs[] = sprintf(
+                    'event[%d]: t differs (%s != %s)',
+                    $i,
+                    number_format($aEvent->t, 3, '.', ''),
+                    number_format($bEvent->t, 3, '.', ''),
+                );
+            }
+            $aPayload = $strict ? $aEvent->payload : self::stripMigrationMetadata($aEvent->payload);
+            $bPayload = $strict ? $bEvent->payload : self::stripMigrationMetadata($bEvent->payload);
+            if ($aPayload !== $bPayload) {
                 $diffs[] = sprintf('event[%d] payload differs (%s)', $i, $aKind);
             }
         }
 
         return $diffs;
+    }
+
+    /** @param array<array-key, mixed> $payload @return array<array-key, mixed> */
+    private static function stripMigrationMetadata(array $payload): array
+    {
+        return array_diff_key($payload, array_flip(self::MIGRATION_METADATA_KEYS));
+    }
+
+    /** @param mixed $value */
+    private static function render($value): string
+    {
+        if ($value === null) {
+            return '∅';
+        }
+        if (\is_array($value)) {
+            $json = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
+            return $json === false ? '{…}' : $json;
+        }
+        return (string) $value;
     }
 }

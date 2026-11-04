@@ -310,4 +310,252 @@ final class DiffCommandTest extends TestCase
         $cmd = new DiffCommand();
         $this->assertSame('Compare two cassettes event-by-event', $cmd->summary());
     }
+
+    /**
+     * @param list<Event> $events
+     */
+    private function writeHeaderCassette(string $path, CassetteHeader $header, array $events = []): string
+    {
+        (new JsonlFormat())->write(new Cassette($header, $events), $path);
+        return $path;
+    }
+
+    private function baseHeader(): CassetteHeader
+    {
+        return new CassetteHeader(
+            version: 1,
+            createdAt: '2026-05-07T10:00:00Z',
+            cols: 80,
+            rows: 24,
+            runtime: 'test',
+        );
+    }
+
+    /** @param callable(CassetteHeader): CassetteHeader $mutate */
+    private function assertHeaderFieldDiffers(callable $mutate, string $needle): void
+    {
+        $a = $this->writeHeaderCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $this->baseHeader());
+        $b = $this->writeHeaderCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), $mutate($this->baseHeader()));
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
+            rewind($stdout);
+            $out = (string) stream_get_contents($stdout);
+
+            $this->assertSame(1, $exit, "expected diff for {$needle}, got: {$out}");
+            $this->assertStringContainsString($needle, $out);
+        } finally {
+            @unlink($a);
+            @unlink($b);
+        }
+    }
+
+    public function testDiffTimestampModeMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, timestampMode: 'relative',
+            ),
+            'header.timestampMode:',
+        );
+    }
+
+    public function testDiffCreatedAtMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: '2026-05-08T10:00:00Z', cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime,
+            ),
+            'header.created:',
+        );
+    }
+
+    public function testDiffEnvMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, env: ['TERM' => 'xterm-256color'],
+            ),
+            'header.env:',
+        );
+    }
+
+    public function testDiffThemeMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, theme: 'tokyo-night',
+            ),
+            'header.theme:',
+        );
+    }
+
+    public function testDiffTypingSpeedMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, typingSpeed: 7.5,
+            ),
+            'header.typingSpeed:',
+        );
+    }
+
+    public function testDiffPlaybackSpeedMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, playbackSpeed: 2.0,
+            ),
+            'header.playbackSpeed:',
+        );
+    }
+
+    public function testDiffFontMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, fontSize: 16, fontFamily: 'JetBrains Mono',
+            ),
+            'header.fontSize:',
+        );
+    }
+
+    public function testDiffFontFamilyMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, fontFamily: 'DejaVu Sans Mono',
+            ),
+            'header.fontFamily:',
+        );
+    }
+
+    public function testDiffPixelGeometryMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, widthPx: 1234, heightPx: 567,
+            ),
+            'header.widthPx:',
+        );
+    }
+
+    public function testDiffHeightMismatch(): void
+    {
+        $this->assertHeaderFieldDiffers(
+            fn (CassetteHeader $h): CassetteHeader => new CassetteHeader(
+                version: $h->version, createdAt: $h->createdAt, cols: $h->cols, rows: $h->rows,
+                runtime: $h->runtime, heightPx: 567,
+            ),
+            'header.heightPx:',
+        );
+    }
+
+    public function testDiffTimestampsDifferBeyondTolerance(): void
+    {
+        $a = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'x']),
+        ]);
+        $b = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), [
+            new Event(t: 0.5, kind: EventKind::Output, payload: ['b' => 'x']),
+        ]);
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
+            rewind($stdout);
+            $out = (string) stream_get_contents($stdout);
+
+            $this->assertSame(1, $exit);
+            $this->assertStringContainsString('event[0]: t differs', $out);
+        } finally {
+            @unlink($a);
+            @unlink($b);
+        }
+    }
+
+    public function testDiffTimestampsWithinToleranceAreIdentical(): void
+    {
+        $a = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'x']),
+        ]);
+        $b = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), [
+            new Event(t: 0.001, kind: EventKind::Output, payload: ['b' => 'x']),
+        ]);
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
+
+            $this->assertSame(0, $exit);
+        } finally {
+            @unlink($a);
+            @unlink($b);
+        }
+    }
+
+    public function testDiffIgnoresMigrationMetadataByDefault(): void
+    {
+        $a = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'x']),
+        ]);
+        $b = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'x', '_id' => 0, '_enc' => 'utf-8']),
+        ]);
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
+
+            $this->assertSame(0, $exit);
+        } finally {
+            @unlink($a);
+            @unlink($b);
+        }
+    }
+
+    public function testDiffStrictIncludesMigrationMetadata(): void
+    {
+        $a = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'x']),
+        ]);
+        $b = $this->writeCassette(tempnam(sys_get_temp_dir(), 'cv-diff-'), [
+            new Event(t: 0.0, kind: EventKind::Output, payload: ['b' => 'x', '_id' => 0, '_enc' => 'utf-8']),
+        ]);
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new DiffCommand())->run(['--strict', $a, $b], $stdout, $stderr);
+            rewind($stdout);
+            $out = (string) stream_get_contents($stdout);
+
+            $this->assertSame(1, $exit);
+            $this->assertStringContainsString('payload differs', $out);
+        } finally {
+            @unlink($a);
+            @unlink($b);
+        }
+    }
+
+    public function testDiffUnknownOptionExitsTwo(): void
+    {
+        $stdout = Stream::memory('w+');
+        $stderr = Stream::memory('w+');
+        $exit = (new DiffCommand())->run(['--bogus', '/no/such/a.cas', '/no/such/b.cas'], $stdout, $stderr);
+        rewind($stderr);
+        $err = (string) stream_get_contents($stderr);
+
+        $this->assertSame(2, $exit);
+        $this->assertStringContainsString('candy-vcr diff: unknown option --bogus', $err);
+    }
 }

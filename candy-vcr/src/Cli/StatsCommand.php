@@ -19,7 +19,7 @@ use SugarCraft\Vcr\Support\Scalars;
  * Exit codes:
  * - 0: success
  * - 1: file read error
- * - 2: usage error (missing positional arg)
+ * - 2: usage error (missing positional arg or unknown option)
  */
 final class StatsCommand implements Command
 {
@@ -30,12 +30,26 @@ final class StatsCommand implements Command
 
     public function run(array $args, $stdout, $stderr): int
     {
-        $path = array_values(array_filter($args, static fn ($a) => !str_starts_with($a, '--')))[0] ?? null;
-
-        if ($path === null) {
+        // Sibling verbs (record/replay/inspect/migrate) refuse unknown
+        // options loudly; stats used to swallow every '--…' argument, so a
+        // mistyped flag silently changed nothing.
+        $paths = [];
+        foreach ($args as $arg) {
+            if (str_starts_with($arg, '--')) {
+                fwrite($stderr, "candy-vcr stats: unknown option {$arg}\n");
+                return 2;
+            }
+            $paths[] = $arg;
+        }
+        if ($paths === []) {
             fwrite($stderr, "usage: candy-vcr stats <cassette>\n");
             return 2;
         }
+        if (count($paths) > 1) {
+            fwrite($stderr, "candy-vcr stats: unexpected argument {$paths[1]}\n");
+            return 2;
+        }
+        $path = $paths[0];
 
         try {
             $cassette = (new CassetteLoader())->load($path);
@@ -83,7 +97,9 @@ final class StatsCommand implements Command
      */
     private function renderEventTallies($stdout, Cassette $cassette): void
     {
-        $tallies = ['input' => 0, 'output' => 0, 'resize' => 0, 'quit' => 0];
+        // Every EventKind tallies; zero-count kinds stay unprinted, but a
+        // snapshot/hide/show event must never be silently invisible.
+        $tallies = ['input' => 0, 'output' => 0, 'resize' => 0, 'snapshot' => 0, 'hide' => 0, 'show' => 0, 'quit' => 0];
         foreach ($cassette->events as $event) {
             $key = $event->kind->value;
             if (isset($tallies[$key])) {

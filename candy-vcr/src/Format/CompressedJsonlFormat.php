@@ -19,6 +19,7 @@ use SugarCraft\Vcr\Cassette;
  */
 final class CompressedJsonlFormat implements Format
 {
+    use RestrictsCassettePermissions;
     private const DEFAULT_COMPRESSION_LEVEL = 6;
 
     public function __construct(
@@ -36,6 +37,7 @@ final class CompressedJsonlFormat implements Format
             if (@file_put_contents($path, $contents) === false) {
                 throw new \RuntimeException("candy-vcr: cannot write cassette to {$path}");
             }
+            self::restrictToOwner($path);
             return;
         }
 
@@ -60,6 +62,8 @@ final class CompressedJsonlFormat implements Format
         } finally {
             gzclose($gz);
         }
+        // .gz cassettes are cassettes too: owner-readable only (see write()).
+        self::restrictToOwner($path);
     }
 
     public function read(string $path): Cassette

@@ -128,6 +128,49 @@ final class StatsCommandTest extends TestCase
         $this->assertStringContainsString('usage:', $stderr);
     }
 
+    public function testStatsUnknownOptionExitsTwo(): void
+    {
+        $cassette = $this->buildCassette([new Event(t: 0.0, kind: EventKind::Quit, payload: [])]);
+        try {
+            [$exit, , $stderr] = $this->exec(new StatsCommand(), ['--nope', $cassette]);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString('candy-vcr stats: unknown option --nope', $stderr);
+        } finally {
+            @unlink($cassette);
+        }
+    }
+
+    public function testStatsSecondPositionalExitsTwo(): void
+    {
+        $cassette = $this->buildCassette([new Event(t: 0.0, kind: EventKind::Quit, payload: [])]);
+        try {
+            [$exit, , $stderr] = $this->exec(new StatsCommand(), [$cassette, 'extra']);
+            $this->assertSame(2, $exit);
+            $this->assertStringContainsString('unexpected argument extra', $stderr);
+        } finally {
+            @unlink($cassette);
+        }
+    }
+
+    public function testStatsTalliesEveryEventKind(): void
+    {
+        $cassette = $this->buildCassette([
+            new Event(t: 0.0, kind: EventKind::Snapshot, payload: ['snap' => 1]),
+            new Event(t: 0.1, kind: EventKind::Hide, payload: []),
+            new Event(t: 0.2, kind: EventKind::Show, payload: []),
+            new Event(t: 0.3, kind: EventKind::Quit, payload: []),
+        ]);
+        try {
+            [$exit, $stdout] = $this->exec(new StatsCommand(), [$cassette]);
+            $this->assertSame(0, $exit);
+            $this->assertStringContainsString('snapshot: 1', $stdout);
+            $this->assertStringContainsString('hide: 1', $stdout);
+            $this->assertStringContainsString('show: 1', $stdout);
+        } finally {
+            @unlink($cassette);
+        }
+    }
+
     public function testStatsMissingFileExitsOne(): void
     {
         [$exit, , $stderr] = $this->exec(new StatsCommand(), ['/no/such/cassette.cas']);
