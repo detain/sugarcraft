@@ -133,4 +133,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 # URL. Defaults are the serve action's own flags; anything after the image
 # name replaces them (`docker run … candy-code serve status` works).
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# The 0.0.0.0 --allow-remote default is deliberate packaging (the bridge is not loopback inside the container); publishing the port on the host is the security-relevant half — see docs/DOCKER.md, "Publishing wide".
 CMD ["serve", "--host", "0.0.0.0", "--allow-remote"]

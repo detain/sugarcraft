@@ -80,22 +80,31 @@ current) would stay invisible in the row.
   `7420` — the one public endpoint that answers without any credential (the
   other public route, `/api/login`, only exists to redeem the one-time code).
   If you re-port the server, redefine the check in a derived image.
-- **Web UI included.** The image additionally requires
-  `sugarcraft/candy-code-web`, so `/` serves the browser UI rather than the
-  install notice.
+- **Web UI served when the web package ships its built bundle.** The image
+  additionally requires `sugarcraft/candy-code-web`, whose published package
+  carries the built browser bundle, so `/` serves the UI rather than the
+  install notice. That pairing is conditional by design, not a guarantee of
+  the image: `serve` looks the package up by name and uses only a bundle that
+  is actually built, so an install that drops the web package — or carries it
+  unbuilt — still runs the full server and API and reports the absence in the
+  startup announce (`web UI: not installed`) while `/` serves the no-UI
+  notice instead.
 
 ## Starting a server
 
 ```
 docker run -d --name candy-code \
   -v candy-data:/data \
-  -p 7420:7420 \
+  -p 127.0.0.1:7420:7420 \
   ghcr.io/detain/sugarcraft-candy-code:latest
 ```
 
 The default command is `candy-code serve --host 0.0.0.0 --allow-remote`.
 The `--allow-remote` half is not a shortcut: the preflight refuses any
 non-loopback bind without it because the container binds outward by design.
+The reachability decision is the publish line, which is why every example in
+this page binds the HOST side to loopback — see "Publishing wide" below
+before dropping the `127.0.0.1:` half.
 
 Startup prints its facts to **stderr** per the serve WHAT-IT-PRINTS contract:
 the address, the served root, the session permission mode, and a sign-in URL
@@ -115,7 +124,7 @@ operand, with `-w` matching:
 docker run -d --name candy-code \
   -v "$PWD:/data/workspace/my-project:ro" \
   -v candy-data:/data \
-  -p 7420:7420 \
+  -p 127.0.0.1:7420:7420 \
   ghcr.io/detain/sugarcraft-candy-code:latest \
   serve /data/workspace/my-project --host 0.0.0.0 --allow-remote --no-web
 ```
@@ -137,10 +146,42 @@ services:
     volumes:
       - candy-data:/data
     ports:
-      - "7420:7420"
+      - "127.0.0.1:7420:7420"
 volumes:
   candy-data:
 ```
+
+## Publishing wide
+
+Every example above publishes `-p 127.0.0.1:7420:7420`: only processes on the
+Docker host can reach the port. Dropping the address (`-p 7420:7420`)
+publishes the server on every address of the host — and on a
+network-exposed host, on the network. Do that only if you accept what
+`--allow-remote` announces on every non-loopback bind, because publishing
+wide is exactly that decision made at the port layer:
+
+- **Credentials stay mandatory either way.** The invariant `--allow-remote`
+  exists to guard, not to waive: every bind, loopback or wide, answers
+  nothing beyond the two public routes without a token, a one-time sign-in
+  code, or a session cookie. `--allow-remote` widens WHO MAY KNOCK; it never
+  opens an unauthenticated mode.
+- **Cleartext is yours to manage.** Plain HTTP past the loopback boundary
+  carries the token, the sign-in code and the session cookie in the clear.
+  Terminate TLS in front of the published port (a reverse proxy whose
+  forwarded-proto header the server trusts — see `docs/SERVER.md`, "Remote
+  access" and the proxy chapter), or pass `--tls-cert`/`--tls-key` to the
+  serve command so the listener itself speaks TLS.
+- **The container's own `--allow-remote` is deliberate packaging.** Inside
+  the container the bind is `0.0.0.0` because the bridge interface is not
+  loopback from the container's side; NAT and the publish line are what
+  decide reachability. That is why the publish line — not the image — is the
+  security-relevant half, and why re-porting or re-publishing means re-reading
+  this section.
+- **Pin who may connect if you must be wide.** `--allowed-ips` restricts
+  sign-in attempts to named addresses or CIDRs (everything else is refused at
+  the edge); with it unset, any address that can route to the published port
+  may attempt sign-in (rate-limited, but attempted). Full rule in
+  `docs/SERVER.md`, "Remote access".
 
 ## Building locally
 
