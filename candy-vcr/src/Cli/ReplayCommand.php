@@ -13,7 +13,11 @@ use SugarCraft\Vcr\Support\Scalars;
  *
  * Stream the cassette's recorded output bytes to stdout. With
  * `--speed=realtime`, sleeps between events so playback matches the
- * recorded cadence (useful for visual inspection and demos).
+ * recorded cadence (useful for visual inspection and demos); when the
+ * flag is absent the default is `instant` — the whole stream is flushed
+ * as fast as the kernel accepts it. The header's `playbackSpeed`
+ * multiplier is a RENDER-side concept (honoured by `render-tape` /
+ * `render-batch` through FrameStream); live replay does not scale by it.
  *
  * `--idle-trim=N` clamps inter-event gaps longer than N seconds to N,
  * so long pauses in the recording don't produce long pauses in replay.
@@ -70,7 +74,8 @@ final class ReplayCommand implements DocumentedCommand
 
     public function usage(): string
     {
-        return 'usage: candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim N] [--no-trim]' . "\n";
+        return 'usage: candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim N] [--no-trim]' . "\n"
+            . "  Default --speed is instant. The header's playbackSpeed multiplier applies to rendering, not live replay." . "\n";
     }
 
     public function run(array $args, $stdout, $stderr): int

@@ -253,7 +253,7 @@ frames while it works, so a multi-minute render is not indistinguishable from a
 hang. Every verb answers `-h` / `--help` with its own usage block on stdout and
 exit 0.
 
-`inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` flushes everything as fast as the kernel will accept it. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
+`inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` (the default when the flag is omitted) flushes everything as fast as the kernel will accept it; the header's `playbackSpeed` multiplier scales rendered output (`render-tape`/`render-batch`), not live replay. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
 
 ### Recording commands
 
