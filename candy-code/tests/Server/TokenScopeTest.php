@@ -551,6 +551,30 @@ final class TokenScopeTest extends TestCase
     }
 
     /**
+     * D-7: server.hello echoes the REAL principal kind, not a hardcoded
+     * 'owner'. At base every client was told it was the owner, so a web
+     * session holding a viewer token could not tell viewer from owner before
+     * the first refused call. The owner leg keeps the constant-answer
+     * regression (a hardcoded 'viewer' now) visible too.
+     */
+    public function testHelloAnswersTheRealPrincipalKind(): void
+    {
+        $dispatcher = $this->notesDispatcher();
+
+        $viewer = WireClient::open($dispatcher, 'c-kind', 'viewer', ['read'], 'tok-kind');
+        $hello = $viewer->hello();
+
+        self::assertSame('viewer', $hello['principal']['kind']);
+        self::assertSame('viewer', $hello['principal']['via']);
+
+        $owner = WireClient::open($dispatcher, 'c-kind-owner');
+        $hello = $owner->hello();
+
+        self::assertSame('owner', $hello['principal']['kind']);
+        self::assertSame('bearer', $hello['principal']['via']);
+    }
+
+    /**
      * D-9 keystone: an idempotency answer belongs to the principal that minted
      * it. At base the dispatcher cached every answer under one shared owner
      * bucket, so a second credential replaying the same key was served the

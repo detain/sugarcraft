@@ -124,8 +124,12 @@ final class ServerMethods
                 'maxBufferedBytes' => Outbox::HARD_WATERMARK_BYTES,
                 'maxSubscribersPerSession' => SessionFeed::MAX_SUBSCRIBERS,
             ],
+            // D-7 (reviews-1103 G4-G): hello answers the real principal
+            // kind — viewer grants exist now, and a client told it is the
+            // owner would build owner expectations on a read-only socket.
+            // 'via' stays the raw door name.
             'principal' => [
-                'kind' => 'owner',
+                'kind' => $call->client->principal() === 'viewer' ? 'viewer' : 'owner',
                 'via' => $call->client->principal(),
                 'scopes' => $call->client->scopes(),
             ],
