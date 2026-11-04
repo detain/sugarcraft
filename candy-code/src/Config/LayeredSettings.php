@@ -21,6 +21,23 @@ use SugarCraft\Code\Support\ContainedPath;
  *   2. `<root>/.candy-code/settings.local.json` project, meant to be ignored
  *   3. `~/.candy-code/settings.json`            user, hand-authored
  *   4. `~/.candy-code/config.json`              user, WRITTEN BY THE CLI
+ *   5. `/etc/candy-code/config.json`            machine, read-only for candy
+ *
+ * THE FIFTH LAYER IS THE MACHINE'S OPERATOR SPEAKING, and unlike the four
+ * below it nothing inside a candy-code process can write it: no write path in
+ * `src/` targets {@see SYSTEM_CONFIG_PATH}, and the settings editor cannot be
+ * steered into it. Both halves are pinned as structure by
+ * {@see \SugarCraft\Code\Tests\Config\ConfigWriteProducerDocumentationDriftTest}.
+ * It outranks every other file, the session-saved values included, because a
+ * managed control that the person being managed could undo by re-choosing in
+ * the settings view would not be worth shipping; flags and the environment
+ * still outrank IT, for the reason {@see \SugarCraft\Code\Cli\Bootstrap::mergedConfig()}
+ * states for its own topmost arms. What it can SAY is exactly {@see LAYERED_KEYS}
+ * — the security boundary further down survives its addition word-for-word. A
+ * missing file costs nothing at all; a corrupt one degrades to the same
+ * silence on the apply path and is named by {@see keyAuditRows()} at launch
+ * and from `doctor`, so a broken machine-wide pin cannot silently un-apply
+ * itself while everyone believes it is on.
  *
  * Merged key by key, highest present key wins. Two rules make that ordering
  * statable in one sentence each, and both are choices with a cost:
@@ -64,7 +81,7 @@ use SugarCraft\Code\Support\ContainedPath;
  * and the less-read one was right. Pinned by
  * {@see \SugarCraft\Code\Tests\Config\ConfigWriteProducerDocumentationDriftTest}.
  *
- * None of the four persists a MODEL — the palette row is named for what a user
+ * None of the five persists a MODEL — the palette row is named for what a user
  * thinks they are choosing, not for the key it writes. The model choice is the
  * per-provider `models` key (decision D9), and the settings editor is what
  * writes it.
@@ -116,7 +133,7 @@ use SugarCraft\Code\Support\ContainedPath;
  * RE-READ EVERY TURN, unlike the trust list that gates it, and the asymmetry is
  * worth knowing before relying on either. `EngineBackend` calls
  * {@see \SugarCraft\Code\Cli\Bootstrap::readUserConfig()} once per turn, so
- * all four files are opened again each time: MEASURED, writing
+ * all five files are opened again each time: MEASURED, writing
  * `.candy-code/settings.local.json` mid-session flips `disabledSkills` on the
  * next turn. The TRUST list is frozen per process
  * ({@see \SugarCraft\Code\Cli\Bootstrap::$trustedSettingsRoots}), so a
@@ -178,6 +195,22 @@ final class LayeredSettings
      * it with. See `Bootstrap::readUserConfig()` for the measurement.
      */
     public const USER_FILE = 'settings.json';
+
+    /**
+     * The managed tier's file — an ABSOLUTE path, deliberately anchored to
+     * neither a project nor a home, and spelled as ONE LITERAL for
+     * {@see SHARED_PATH}'s stated reason: the read/write censuses derive their
+     * rosters from string literals in `src/`, and a path assembled from
+     * fragments would be invisible to the instruments that exist to prove no
+     * writer aims at it.
+     *
+     * The path is FIXED rather than environment-chosen on purpose: an env
+     * hatch would let any process that can set the environment impersonate the
+     * machine's operator, which is the opposite of what a managed tier is for.
+     * `--config` does not move it either — that override replaces layer 4 and
+     * nothing else.
+     */
+    public const SYSTEM_CONFIG_PATH = '/etc/candy-code/config.json';
 
     /**
      * The directory both project files live in, relative to the project root —
@@ -1068,6 +1101,39 @@ final class LayeredSettings
             self::readFile(rtrim($userConfigDir, '/') . '/' . self::USER_FILE),
             self::LAYERED_KEYS,
         );
+    }
+
+    /**
+     * Layer 5 — the managed file, filtered to {@see LAYERED_KEYS}.
+     *
+     * `$systemConfigPath` is a parameter rather than an internal read of
+     * {@see SYSTEM_CONFIG_PATH} so pins can aim it at a sandbox; production
+     * answers it from {@see \SugarCraft\Code\Cli\Bootstrap::systemConfigPath()},
+     * and pins in
+     * {@see \SugarCraft\Code\Tests\Config\ConfigWriteProducerDocumentationDriftTest}
+     * keep that door one-way — no writer in `src/` may resolve to the managed
+     * path, pinned or otherwise.
+     *
+     * The SAME alphabet as {@see userLayer()}, and the same reason in a new
+     * costume: an unlayered key such as `permissionMode` is answered by the
+     * strict side of the user tier, never through this tolerant merge — a
+     * machine-wide file that named one would produce a key that parses,
+     * validates, sits in the file the operator is looking at, and does
+     * nothing. Filtering is what keeps the class doc-block's security boundary
+     * true after this layer's addition: an unlayered key is still answered by
+     * layer 4 ALONE.
+     *
+     * Absent, unreadable or corrupt decodes to `[]` through {@see readFile()}:
+     * a broken managed file must not brick every launch on the box, the same
+     * fail-open-at-read judgment {@see projectLayer()} makes of a corrupt
+     * project file. The loud half of the degradation lives in
+     * {@see keyAuditRows()}.
+     *
+     * @return array<string, mixed>
+     */
+    public static function systemLayer(string $systemConfigPath): array
+    {
+        return self::only(self::readFile($systemConfigPath), self::LAYERED_KEYS);
     }
 
     /**
