@@ -47,11 +47,15 @@ final class RenderBatchCommand extends Command
             return 1;
         }
 
-        $backendOpt = $input->getOption('backend');
-        $backend = ($backendOpt === 'gd' || $backendOpt === 'imagick') ? $backendOpt : 'gd';
-
-        $encoderOpt = $input->getOption('encoder');
-        $encoderType = ($encoderOpt === 'ffmpeg' || $encoderOpt === 'php') ? $encoderOpt : 'ffmpeg';
+        // Same closed-set law as render-tape: a misspelled choice is a
+        // refusal, never a silent default.
+        try {
+            $backend = ChoiceOption::parse($input->getOption('backend'), '--backend', ['gd', 'imagick'], 'gd');
+            $encoderType = ChoiceOption::parse($input->getOption('encoder'), '--encoder', ['ffmpeg', 'php'], 'ffmpeg');
+        } catch (\InvalidArgumentException $e) {
+            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            return 1;
+        }
 
         $strict = (bool) $input->getOption('strict');
 

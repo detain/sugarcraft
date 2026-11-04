@@ -56,11 +56,17 @@ final class RenderTapeCommand extends Command
             return 1;
         }
 
-        $backendOpt = $input->getOption('backend');
-        $backend = ($backendOpt === 'gd' || $backendOpt === 'imagick') ? $backendOpt : 'gd';
-
-        $encoderOpt = $input->getOption('encoder');
-        $encoderType = ($encoderOpt === 'ffmpeg' || $encoderOpt === 'php') ? $encoderOpt : 'ffmpeg';
+        // --backend/--encoder used to coerce any misspelling to the
+        // default, so `--backend=imagickk` quietly rendered through gd. The
+        // flag takes a closed value set; an unknown spelling is a usage
+        // refusal that names every accepted value.
+        try {
+            $backend = ChoiceOption::parse($input->getOption('backend'), '--backend', ['gd', 'imagick'], 'gd');
+            $encoderType = ChoiceOption::parse($input->getOption('encoder'), '--encoder', ['ffmpeg', 'php'], 'ffmpeg');
+        } catch (\InvalidArgumentException $e) {
+            $output->writeln("<error>Failed: {$e->getMessage()}</error>");
+            return 1;
+        }
 
         $strict = (bool) $input->getOption('strict');
         $dryRun = (bool) $input->getOption('dry-run');
