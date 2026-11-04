@@ -97,6 +97,7 @@ use SugarCraft\Code\Tools\ReadLedger;
 use SugarCraft\Code\Tools\Sandbox\EgressProxyProcess;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tools\UserTools\UserScriptTool;
 use SugarCraft\Code\Tui\Pane;
 use SugarCraft\Code\Workflows\WorkflowEngine;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
