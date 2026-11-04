@@ -337,6 +337,66 @@ final class SessionSubcommandsTest extends TestCase
     }
 
     /**
+     * CC-QA-1: a corrupt `session.db` is a stated funnel notice at exit 1,
+     * not an uncaught `PDOException` at exit 255. At base every verb below
+     * died inside the store constructor — the file is not a database, and
+     * the first `PRAGMA` says so — so each arm was RED first, naming the 255
+     * or the raw trace (or both; the JSON arms were empty pipes on top). The
+     * store's own constructor KEEPS that loud failure (a library caller must
+     * still see it); the funnel is the verb's job. `usage` rides as the
+     * control: its door predates this change and stays green across it,
+     * pinning the degraded-RESULT shape the fix reuses.
+     */
+    public function testACorruptStoreIsAFunnelNoticeAtExitOneOnEveryVerbNotATrace(): void
+    {
+        $this->corruptStore();
+
+        [$rc, $out] = $this->dispatch(['session', 'list', '--output-format', 'json']);
+        self::assertSame(NonInteractive::EXIT_FAILURE, $rc, $out);
+        self::assertStringNotContainsString('PDOException', $out);
+        $decoded = json_decode(trim($out), true);
+        self::assertIsArray($decoded, "stdout was not a JSON envelope: {$out}");
+        self::assertFalse($decoded['result']['opened'] ?? 'unset', $out);
+        self::assertStringContainsString('session store cannot open its database', $out);
+
+        file_put_contents($this->home . '/transcript.jsonl', "{\n");
+
+        foreach ([['show', 'sess-m'], ['rename', 'sess-m', 'New'], ['delete', 'sess-m'],
+                 ['pin', 'sess-m'], ['import', $this->home . '/transcript.jsonl']] as $verb) {
+            [$rc, $out] = $this->dispatch(['session', ...$verb, '--output-format', 'json']);
+            self::assertSame(NonInteractive::EXIT_FAILURE, $rc, $verb[0] . ': ' . $out);
+            self::assertStringNotContainsString('PDOException', $out, $verb[0] . ': ' . $out);
+        }
+
+        // The text path: the notice rides stderr, so stdout stays clean.
+        [$rc, $out] = $this->dispatch(['session', 'list']);
+        self::assertSame(NonInteractive::EXIT_FAILURE, $rc, $out);
+        self::assertSame('', $out);
+
+        // The control: `usage` already funneled this exact construction before
+        // CC-QA-1; its stated-reason exit 1 must not regress.
+        [$rc, $out] = $this->dispatch(['usage', '--output-format', 'json']);
+        self::assertSame(NonInteractive::EXIT_FAILURE, $rc, $out);
+        $usage = json_decode(trim($out), true);
+        self::assertStringContainsString('file is not a database', (string) $usage['result']['usage']['reason'], $out);
+    }
+
+    /**
+     * Replace the seeded store with bytes that are not a database, dropping
+     * the WAL sidecars with them — a valid WAL header shadows a rewritten
+     * main file for a fresh connection, so the corruption only bites once the
+     * sidecars are gone. (The seeded $this->store connection stays open in
+     * this process; every arm below builds a FRESH one, which is what reads
+     * the dead bytes.)
+     */
+    private function corruptStore(): void
+    {
+        @unlink($this->home . '/.candy-code/session.db-wal');
+        @unlink($this->home . '/.candy-code/session.db-shm');
+        file_put_contents($this->home . '/.candy-code/session.db', str_repeat('not a database ', 400));
+    }
+
+    /**
      * @param list<string> $args
      *
      * @return array{0:int,1:string}

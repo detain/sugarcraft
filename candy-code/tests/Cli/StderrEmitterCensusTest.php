@@ -57,7 +57,12 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — forty-eight sites (2026-11-03: +1 in
+ *  1. `fwrite(STDERR, …)` — forty-nine sites (2026-11-04: +1 in
+ *     `Subcommands::sessionStoreForVerbs()` — CC-QA-1: a corrupt session.db
+ *     now announces its funnel notice on stderr at exit 1 instead of dying
+ *     as an uncaught PDOException at 255, stderr-alone by the same
+ *     detached-terminal decision as every sibling subcommand writer;
+ *     2026-11-03: +1 in
  *     `Attach::runTui()`'s abnormal-exit restore announcement, stderr-alone
  *     by the same detached-terminal decision as the subcommand writers below;
  *     C-TOOL-6.j 2026-10-31: +9 in
@@ -419,7 +424,10 @@ final class StderrEmitterCensusTest extends TestCase
         // announce or refusal `LspInstaller` returns), stderr-alone: a
         // subcommand is a separate process with no live transcript,
         // the same decision as every sibling writer.
-        'src/Cli/Subcommands.php' => 8,
+        // CC-QA-1 2026-11-04: +1 — sessionStoreForVerbs()' funnel notice for
+        // a session.db that will not open at all; the six session verbs share
+        // the one door, so the file gains one site, not six.
+        'src/Cli/Subcommands.php' => 9,
         // `/new` into another directory: SessionRelaunch::tell(), the one
         // line saying why candy-code could not restart there (no
         // pcntl_exec, an unenterable directory, a failed exec) and the
@@ -656,7 +664,7 @@ final class StderrEmitterCensusTest extends TestCase
         // prefix into the message {@see NonInteractive::failUsage()} carries;
         // the verb's own prose never touches stderr — preview, refusals and
         // the settle lines are all stdout echoes on the login arm's model.
-        'src/Cli/Subcommands.php' => 54,
+        'src/Cli/Subcommands.php' => 55, // CC-QA-1: the funnel notice literal
         // C-EXT-6.b: the three prefixed reason strings of a refused hook-log
         // write (directory not private, symlinked leaf, throwing append). All
         // three ride RuntimeNoticeSink::warn() behind a once-per-process latch

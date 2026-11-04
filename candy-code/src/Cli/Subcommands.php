@@ -947,6 +947,56 @@ final class Subcommands
     {
         return Lang::t('cli.session.usage');
     }
+    /**
+     * The store every `session` verb opens, through the funnel this file
+     * already runs when the file will not open at all.
+     *
+     * A corrupt `session.db` used to escape as an uncaught `PDOException` at
+     * exit 255 with a stack trace (CC-QA-1): the constructor's first
+     * `PRAGMA` is what "file is not a database" bites on, and no verb between
+     * `Bootstrap::sessionStore()` and the terminal guarded it. The store's
+     * own constructor keeps that loud failure — a library caller must still
+     * see a corrupt ledger — so the funnel is the verb's job, and this is the
+     * one door all six store-touching verbs walk through. The shape is the
+     * `usage` verb's own law ({@see self::usage()}): a store that will not
+     * open states the reason it gave and exits 1. EXIT_FAILURE, not 2, per
+     * the documented distinction ({@see self::resolveSessionTarget()}): the
+     * verb attempted something and the ledger could not answer.
+     *
+     * `PDOException` is the precise target — every failure this path can see
+     * (not-a-database, unwritable directory, locked past the busy timeout)
+     * surfaces as one; anything else is a bug and stays loud.
+     *
+     * The notice reuses the shipped `cli.doctor.pdo_unusable` line, the one
+     * rostered string whose subject is exactly this failure; this wave does
+     * not open lang/, so a dedicated session-verb key is a LANG REQUEST, not
+     * an inline invention. The JSON arm carries a degraded RESULT document
+     * (the `usage` shape) rather than a new `error.type`, because that
+     * promotion would owe README.md's error-contract lines — the same law
+     * {@see self::refuseLiveLockedSession()} records as a DOC-ROW. Under the
+     * text format stdout is left for the answer that will not come; the
+     * notice rides stderr like every sibling failure here.
+     *
+     * @return EnhancedSessionStore|int the open store, or the exit code
+     *                                 already reported
+     */
+    private static function sessionStoreForVerbs(ParsedArgs $args): EnhancedSessionStore|int
+    {
+        try {
+            return Bootstrap::sessionStore();
+        } catch (\PDOException $e) {
+            $notice = Lang::t('cli.doctor.pdo_unusable', ['error' => $e->getMessage()]);
+
+            \fwrite(\STDERR, 'candy-code: ' . $notice . "\n");
+            if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
+                self::emitDocument([
+                    'result' => ['opened' => false, 'reason' => $notice],
+                ]);
+            }
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+    }
 
     /**
      * Each `session` action and the {@see ParsedArgs::SUBCOMMAND_FLAGS} it
@@ -1022,7 +1072,12 @@ final class Subcommands
             $query = $query->withIncludeArchived();
         }
 
-        $rows = Bootstrap::sessionStore()->listSessionsFiltered($query);
+        $store = self::sessionStoreForVerbs($args);
+        if (\is_int($store)) {
+            return $store;
+        }
+
+        $rows = $store->listSessionsFiltered($query);
 
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             self::emitDocument(['result' => ['sessions' => \array_map(
@@ -1088,7 +1143,10 @@ final class Subcommands
             return self::rejectSessionOperand('show', $args->subcommandArgs[2], $args);
         }
 
-        $store = Bootstrap::sessionStore();
+        $store = self::sessionStoreForVerbs($args);
+        if (\is_int($store)) {
+            return $store;
+        }
         $row = self::resolveSessionTarget('show', $args, $store);
         if (\is_int($row)) {
             return $row;
@@ -1154,7 +1212,10 @@ final class Subcommands
             );
         }
 
-        $store = Bootstrap::sessionStore();
+        $store = self::sessionStoreForVerbs($args);
+        if (\is_int($store)) {
+            return $store;
+        }
         $row = self::resolveSessionTarget('rename', $args, $store);
         if (\is_int($row)) {
             return $row;
@@ -1187,7 +1248,10 @@ final class Subcommands
             return self::rejectSessionOperand('delete', $args->subcommandArgs[2], $args);
         }
 
-        $store = Bootstrap::sessionStore();
+        $store = self::sessionStoreForVerbs($args);
+        if (\is_int($store)) {
+            return $store;
+        }
         $row = self::resolveSessionTarget('delete', $args, $store);
         if (\is_int($row)) {
             return $row;
@@ -1224,7 +1288,10 @@ final class Subcommands
             return self::rejectSessionOperand($verb, $args->subcommandArgs[2], $args);
         }
 
-        $store = Bootstrap::sessionStore();
+        $store = self::sessionStoreForVerbs($args);
+        if (\is_int($store)) {
+            return $store;
+        }
         $row = self::resolveSessionTarget($verb, $args, $store);
         if (\is_int($row)) {
             return $row;
@@ -1305,7 +1372,10 @@ final class Subcommands
             }
         }
 
-        $store = Bootstrap::sessionStore();
+        $store = self::sessionStoreForVerbs($args);
+        if (\is_int($store)) {
+            return $store;
+        }
 
         // The ledger is the only way this verb knows a file has a session
         // already — a first import creates, and creation cannot cross a lock
