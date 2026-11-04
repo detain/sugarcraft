@@ -168,6 +168,10 @@ defineExpose({ jumpToEnd })
       <button type="button" :aria-pressed="view.showThinking" data-testid="toggle-thinking" @click="view.toggleThinking()">{{ t('web.transcript.show_thinking') }}</button>
       <button type="button" :aria-pressed="view.expandTools" data-testid="toggle-tools" @click="view.toggleExpandTools()">{{ t('web.transcript.expand_tools') }}</button>
     </div>
+    <!-- CW-UX-09: a blank scroller is not an answer. The block is keyed off the
+         item count alone; the wording reuses the agents-view empty catalog
+         string verbatim (same shape of nothing). -->
+    <p v-if="items.length === 0" class="empty" data-testid="transcript-empty">{{ t('web.agents.transcript_empty') }}</p>
     <div class="inner">
       <div class="list" :style="{ height: `${total}px` }">
         <div
@@ -229,6 +233,13 @@ defineExpose({ jumpToEnd })
   justify-content: flex-end;
   gap: 0.5rem;
   padding: 0.35rem 1rem 0;
+  font-size: 0.8125rem;
+}
+/* CW-UX-09: the empty-state line (mirrors the agents view's `.empty` shape). */
+.empty {
+  margin: 0;
+  padding: 0.35rem 1rem;
+  color: var(--muted);
   font-size: 0.8125rem;
 }
 /* MA-29: the paging failure line. The text is the server's own describe() output
