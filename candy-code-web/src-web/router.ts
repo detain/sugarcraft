@@ -4,6 +4,7 @@ import DashboardView from './views/DashboardView.vue'
 import LoginView from './views/LoginView.vue'
 import SessionView from './views/SessionView.vue'
 import SettingsView from './components/settings/SettingsView.vue'
+import TokenPanel from './components/tokens/TokenPanel.vue'
 
 export const routes: RouteRecordRaw[] = [
   { path: '/', name: 'dashboard', component: DashboardView },
@@ -11,6 +12,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/grid', name: 'grid', component: PaneGrid },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/settings', name: 'settings', component: SettingsView },
+  { path: '/tokens', name: 'tokens', component: TokenPanel },
   { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
 ]
 

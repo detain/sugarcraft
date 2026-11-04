@@ -45,6 +45,9 @@ const code = inject(SIGN_IN_CODE, null)
 
 const activeId = computed(() => (route.name === 'session' ? String(route.params.id) : null))
 const onLogin = computed(() => route.name === 'login')
+// G5-G: the token panel is owner chrome — admin scope, and a viewer-kind
+// principal never sees it even if a mis-scoped hello ever granted admin.
+const tokensVisible = computed(() => connection.scopes.includes('admin') && connection.hello?.principal.kind !== 'viewer')
 /** WEB-1c: the About overlay (`server.info` + `server.health`). */
 const aboutOpen = ref(false)
 /** C-WEB-4.b: the help overlay — `?` on an empty composer, or outside any field. */
@@ -163,6 +166,7 @@ async function signOut(): Promise<void> {
       <ApprovalsButton v-if="!onLogin" />
       <span class="status" :data-status="connection.status" data-testid="connection-status">{{ connection.statusLabel }}<template v-if="rtt"> · {{ rtt }}</template></span>
       <RouterLink v-if="!onLogin" :to="{ name: 'settings' }" class="nav" data-testid="settings-link">{{ t('web.chrome.app.settings') }}</RouterLink>
+      <RouterLink v-if="!onLogin && tokensVisible" :to="{ name: 'tokens' }" class="nav" data-testid="tokens-link">Tokens</RouterLink>
       <button v-if="!onLogin" type="button" class="link" data-testid="about-button" @click="aboutOpen = true">{{ t('web.chrome.app.about') }}</button>
       <button v-if="connection.canGenerateImage || connection.canGenerateVideo" type="button" class="link" data-testid="generate-button" @click="panels.show('generate')">{{ t('web.chrome.app.generate') }}</button>
       <button type="button" class="link opt" :title="t('web.chrome.app.theme_title', { theme: settings.theme })" @click="settings.cycleTheme()">{{ t('web.chrome.app.theme', { theme: settings.theme }) }}</button>
