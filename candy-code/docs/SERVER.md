@@ -50,7 +50,7 @@ refused `401` and burns a lockout strike.
 |---|---|---|
 | `--host <ip>` | `127.0.0.1` | Address to bind. `localhost` and `::1` are loopback too. Anything else is refused without `--allow-remote`. |
 | `--port <n>` | `7420` | Port to bind; `0` picks a free one. |
-| `--allow-remote` | off | Permit a non-loopback `--host`. Prints a cleartext warning unless built-in TLS is on (`--tls-cert` + `--tls-key`). On a wildcard bind (`0.0.0.0`, `::`) the server also answers to this machine's own addresses and its sign-in URLs name them ([Remote access](#remote-access)). |
+| `--allow-remote` | off | Permit a non-loopback `--host`. Prints a warning on every non-loopback bind — the cleartext row unless built-in TLS is on (`--tls-cert` + `--tls-key`), the over-TLS credential row with it, and an extra row when no `--allowed-ips` roster pins who may connect. Flag-only by design: a persisted allow-remote would silently re-widen the next unattended launch. On a wildcard bind (`0.0.0.0`, `::`) the server also answers to this machine's own addresses and its sign-in URLs name them ([Remote access](#remote-access)). |
 | `--tls-cert <file>` | none | Built-in TLS): the PEM certificate the public listener serves with, given together with `--tls-key`. The sign-in URLs then read `https://`, the session cookie carries `Secure`, and a plaintext `http://` client gets no answer at all. A bad, unreadable or half pair refuses startup (exit 2) rather than serving cleartext quietly. |
 | `--tls-key <file>` | none | The PEM private key for `--tls-cert`. It must be a readable file with no group- or world-readable mode bits, and it must match the certificate. |
 | `--allowed-host <list>` | none | Comma-separated extra host names (or `host:port`; an IPv6 address in brackets) the server answers to beside the loopback names and its own addresses — e.g. a DNS name for this machine. Repeats accumulate. |
@@ -1452,6 +1452,11 @@ refusal.
 The server can speak TLS itself (`--tls-cert` + `--tls-key`); beside
 that there are three ways to reach it from another machine, safest first.
 
+One invariant holds on every bind, loopback or not: **credentials are always
+mandatory** — the token store gates every request surface, and `--allow-remote`
+only widens *who may knock*, never opens an unauthenticated mode. A future
+loopback-implicit convenience must not break that; nothing today does.
+
 **An SSH tunnel** — nothing new listens on the network. Keep the default
 loopback bind and forward the port from the machine with the browser:
 
@@ -1477,8 +1482,10 @@ candy-code serve --host 0.0.0.0 --allow-remote \
 Without `--tls-cert`/`--tls-key` everything — the token, the sign-in code and
 the session cookie included — then crosses the network in **cleartext**, and
 the startup lines say so; with the pair the listener wraps itself in TLS, the
-warning is not printed, and the sign-in URLs read `https://`. A plaintext
-`http://` client against the TLS endpoint gets no answer at all.
+sign-in URLs read `https://`, and the warning branches to the over-TLS
+wording instead of retiring (D-16: reachability still invites the whole
+network to knock, and an empty `--allowed-ips` roster is said out loud).
+A plaintext `http://` client against the TLS endpoint gets no answer at all.
 
 ```sh
 candy-code serve --host 0.0.0.0 --allow-remote
@@ -1491,6 +1498,7 @@ candy-code serve: listening on http://0.0.0.0:7420 (pid 4242)
                    (one-time code, valid 120 s; Ctrl+C stops the server)
 
   !! Plain HTTP on 0.0.0.0: the token, sign-in code and session cookie cross the network in cleartext — use an SSH tunnel or a TLS reverse proxy (docs/SERVER.md, "Remote access").
+     No --allowed-ips set: any address that can route here may attempt sign-in.
 ```
 
 On a wildcard bind the server reads this machine's interface addresses once at

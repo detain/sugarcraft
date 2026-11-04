@@ -399,29 +399,41 @@ final class ServeArgsTest extends TestCase
     }
 
     /**
-     * C-WEB-5.a review MINOR-4: the cleartext-warning gate in `Serve::announce()`
-     * — the `cli.serve.announce.remote` row rides the startup output only when
-     * the bind is beyond loopback AND no TLS pair was supplied. Dropping the
-     * TLS half of the gate would keep warning over an encrypted listener;
-     * dropping the loopback half would warn on localhost. announce writes
+     * D-16 (owner ruling, reviews-1103): the remote-bind warning is about
+     * reachability, not only cleartext, so the block rides EVERY non-loopback
+     * bind and the wording branches on TLS — a TLS listener still hands every
+     * credential that survives a leaked page to whoever can route to the
+     * port. An empty --allowed-ips roster is said out loud on a third line.
+     * This supersedes the C-WEB-5.a gate (warning suppressed under TLS):
+     * dropping the loopback half still warns on localhost, and the TLS branch
+     * must pick the over-TLS row, not the cleartext one. announce writes
      * through `fwrite(STDERR, ...)`, which cannot be redirected in-process, so
      * the reflected call runs in a throwaway child — the house shape for
      * stderr routing, as in the launch-notice tests.
      */
-    public function testTheCleartextRemoteWarningIsAnnouncedOnlyForPlainRemoteBinds(): void
+    public function testTheRemoteBannerRidesEveryNonLoopbackBindWithTlsAwareWording(): void
     {
         $plain = $this->announceStderr(['--host', '192.0.2.1', '--allow-remote']);
         self::assertStringContainsString('candy-code serve: listening on', $plain, 'the child reached its announce lines at all');
-        self::assertSame(1, \substr_count($plain, '!! Plain HTTP on 192.0.2.1'), 'cleartext beyond loopback is what the warning exists for');
+        self::assertSame(1, \substr_count($plain, '!! Plain HTTP on 192.0.2.1'), 'the cleartext wording keeps its verbatim row (D-16)');
+        self::assertStringNotContainsString('over TLS', $plain, 'a plain listener does not claim TLS it does not have');
+        self::assertSame(1, \substr_count($plain, 'No --allowed-ips set: any address that can route here'), 'an empty pin roster is said out loud');
 
         [$cert, $key] = $this->writeServeArgsTlsPair('announce-');
         $tls = $this->announceStderr(['--host', '192.0.2.1', '--allow-remote', '--tls-cert', $cert, '--tls-key', $key]);
         self::assertStringContainsString('candy-code serve: listening on', $tls, 'the TLS launch announced too');
         self::assertStringNotContainsString('!! Plain HTTP on', $tls, 'a TLS listener does not carry the token, code and cookie in cleartext');
+        self::assertSame(1, \substr_count($tls, 'Reachable from the network at 192.0.2.1 over TLS'), 'TLS moves the warning to the credential-exposure wording, it does not retire it (D-16)');
+
+        $pinned = $this->announceStderr(['--host', '192.0.2.1', '--allow-remote', '--allowed-ips', '192.0.2.7']);
+        self::assertSame(1, \substr_count($pinned, '!! Plain HTTP on 192.0.2.1'), 'pinning does not silence the reachability row itself');
+        self::assertStringNotContainsString('No --allowed-ips set', $pinned, 'a non-empty roster is not called empty');
 
         $local = $this->announceStderr([]);
         self::assertStringContainsString('candy-code serve: listening on', $local, 'the loopback launch announced too');
         self::assertStringNotContainsString('!! Plain HTTP on', $local, 'loopback was never the warning target');
+        self::assertStringNotContainsString('over TLS', $local, 'loopback carries no remote banner of any wording');
+        self::assertStringNotContainsString('No --allowed-ips set', $local, 'and no unpinned row either');
     }
 
     /**

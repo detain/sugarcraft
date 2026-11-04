@@ -1364,12 +1364,21 @@ final class Serve
         if ($config->isWildcard() && $config->interfaceAddresses === []) {
             $lines[] = Lang::t('cli.serve.announce.no_interface');
         }
-        // C-WEB-5.a: the cleartext warning is about plain HTTP beyond
-        // loopback. With --tls-cert/--tls-key the listener itself speaks TLS,
-        // so the warning no longer describes what crosses the wire.
-        if (!$config->isLoopback() && !$config->hasTls()) {
+        // D-16: the remote-bind warning is about reachability, not only
+        // cleartext. A TLS listener still hands every credential that
+        // survives a leaked page to whoever can route to the port, so the
+        // block fires on ANY non-loopback bind and the wording branches on
+        // TLS; an empty --allowed-ips roster says so out loud. Credentials
+        // stay mandatory on every bind either way (docs/SERVER.md, "Remote
+        // access").
+        if (!$config->isLoopback()) {
             $lines[] = '';
-            $lines[] = Lang::t('cli.serve.announce.remote', ['host' => $config->host]);
+            $lines[] = $config->hasTls()
+                ? Lang::t('cli.serve.announce.remote_tls', ['host' => $config->host])
+                : Lang::t('cli.serve.announce.remote', ['host' => $config->host]);
+            if ($config->allowedIps === []) {
+                $lines[] = Lang::t('cli.serve.announce.remote_unpinned');
+            }
         }
         self::stderr(\implode("\n", $lines));
     }
