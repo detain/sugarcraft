@@ -71,6 +71,90 @@ final class BinTest extends TestCase
     }
 
     /**
+     * Every startup refusal names the program before it speaks (audit m34):
+     * a line that reaches a shell scrollback has to be attributable, and
+     * 'candy-top: ' is written once, in $report, never per call site.
+     */
+    public function testStartupRefusalsCarryTheProgramNamePrefix(): void
+    {
+        foreach ([['--config'], ['--bogus']] as $args) {
+            [$code, , $err] = self::invoke($args);
+            $this->assertSame(2, $code, implode(' ', $args) . ' is a usage error');
+            $this->assertStringStartsWith('candy-top: ', $err, implode(' ', $args) . ' names the program');
+        }
+    }
+
+    /**
+     * M6: the pre-TUI streams have no Surface, so nothing strips control
+     * characters between a planted value and the user's terminal. Config
+     * warnings embed the offending VALUE verbatim (ConfigReader only refuses
+     * '"', CR and LF — ESC and BEL ride through, so `graph_symbol = <ESC>]0;x<BEL>`
+     * would set the window title from a copied-over btop.conf and outlive the
+     * process), and paths come from $HOME/$XDG_*. Those sites sit BEHIND the
+     * no-tty gate this file pins, so a child probe cannot reach them; the law
+     * is pinned structurally instead. Strip the sanitizer, add a raw
+     * fwrite(STDERR, or unwire a call site and this goes red.
+     *
+     * m27 rides here: ConfigFile::new throws when neither XDG_CONFIG_HOME nor
+     * HOME resolves. Unguarded that is an uncaught fatal with a stack trace on
+     * the same stream — the refusal has to be a report + exit 2 like a bad
+     * argument.
+     */
+    public function testEveryStartupStderrWriteGoesThroughTheSanitizingReporter(): void
+    {
+        $lines = file(__DIR__ . '/../bin/candy-top', FILE_IGNORE_NEW_LINES);
+        $this->assertIsArray($lines);
+        $source = implode("\n", $lines);
+
+        // One writer, sanitizing, with the program-name prefix built in.
+        $this->assertStringContainsString(
+            "@fwrite(STDERR, 'candy-top: ' . Sanitize::untrustedForDisplay(\$message) . \"\\n\");",
+            $source,
+            '$report is the single stderr choke',
+        );
+
+        // Raw writes outside the choke are exactly the two fixed literals that
+        // carry no external text: the autoload probe (which runs before the
+        // closure exists) and the no-tty refusal (pinned byte-first above).
+        $carvedOut = ['cannot find composer autoload.php', "Lang::t('cli.no_tty')"];
+        $inChoke = 0;
+        foreach ($lines as $index => $line) {
+            if (!str_contains($line, 'fwrite(STDERR')) {
+                continue;
+            }
+
+            if (str_contains($line, 'Sanitize::untrustedForDisplay($message)')) {
+                ++$inChoke;
+                continue;
+            }
+
+            $known = false;
+            foreach ($carvedOut as $marker) {
+                if (str_contains($line, $marker)) {
+                    $known = true;
+                    break;
+                }
+            }
+
+            $this->assertTrue($known, 'unattributed raw stderr write at bin/candy-top:' . ($index + 1));
+        }
+        $this->assertSame(1, $inChoke, 'the choke owns exactly one raw write');
+
+        // The eight startup diagnostics route through it: two flag refusals,
+        // the config-path refusal, every load warning, and the four
+        // exit/save-state error reports (2 in the crash path, 2 after run()).
+        $this->assertSame(8, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
+        $this->assertStringContainsString('foreach ($loaded->warnings as $warning) {', $source);
+
+        $at = strpos($source, '$file = ConfigFile::new($configPath);');
+        $this->assertNotFalse($at, 'the config file is still built by ConfigFile::new');
+        $window = substr($source, (int) $at, 240);
+        $this->assertStringContainsString('catch (\RuntimeException $e) {', $window, 'a throwing ConfigFile::new is a refusal, not a fatal (m27)');
+        $this->assertStringContainsString('$report($e->getMessage());', $window);
+        $this->assertStringContainsString('exit(2);', $window);
+    }
+
+    /**
      * @param list<string> $args
      * @return array{int, string, string}
      */

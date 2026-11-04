@@ -46,6 +46,7 @@ namespace SugarCraft\Top\bin;
 })();
 
 use SugarCraft\Core\Program;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Top\App;
 use SugarCraft\Top\Cli\Help;
 use SugarCraft\Top\Cli\SelfUpdate;
@@ -61,6 +62,19 @@ use SugarCraft\Top\Panel\ProcPanel;
 use SugarCraft\Top\State\TreeStateFile;
 use SugarCraft\Top\State\TreeStateSavedMsg;
 use SugarCraft\Top\Theme\ThemeRegistry;
+
+// Every pre-TUI write goes through here. Until the cell-buffered Program
+// exists there is no Surface to strip control characters, and several of
+// these messages interpolate text this binary does not own: a config warning
+// embeds the offending VALUE (ConfigReader → Option → Lang::t), whose token
+// splitter refuses only `"`/CR/LF — ESC and BEL ride straight through, so a
+// planted `graph_symbol = \x1b]0;pwned\x07evil` writes a live OSC (window
+// title, OSC 52 clipboard) that outlives the process. A copied-over btop.conf
+// is an advertised input, so those bytes are untrusted by definition; a path
+// from $HOME/$XDG_* is the same class (audit M6).
+$report = static function (string $message): void {
+    @fwrite(STDERR, 'candy-top: ' . Sanitize::untrustedForDisplay($message) . "\n");
+};
 
 $args = array_slice($argv ?? [], 1);
 $fake = false;
@@ -109,12 +123,12 @@ for ($i = 0; $i < count($args); $i++) {
         $value = $arg === '--config' ? ($args[++$i] ?? null) : substr($arg, 9);
         // A following flag is not a path: `--config --fake` is a missing value.
         if ($value === null || $value === '' || ($arg === '--config' && str_starts_with($value, '-'))) {
-            fwrite(STDERR, 'candy-top: ' . Lang::t('cli.missing_value', ['option' => '--config']) . "\n");
+            $report(Lang::t('cli.missing_value', ['option' => '--config']));
             exit(2);
         }
         $configPath = $value;
     } else {
-        fwrite(STDERR, 'candy-top: ' . Lang::t('cli.unknown_argument', ['argument' => $arg]) . "\n");
+        $report(Lang::t('cli.unknown_argument', ['argument' => $arg]));
         exit(2);
     }
 }
@@ -127,10 +141,20 @@ if (!stream_isatty(STDIN) || !stream_isatty(STDOUT)) {
     exit(1);
 }
 
-$file = ConfigFile::new($configPath);
+// ConfigFile::new throws when neither XDG_CONFIG_HOME nor HOME is usable
+// (audit m27). Unguarded that is a PHP fatal — stack trace, exit 255 — on
+// the one stream the user is reading, breaking the `candy-top: …` refusal
+// discipline every other startup path keeps. It exits 2, like a bad argument.
+try {
+    $file = ConfigFile::new($configPath);
+} catch (\RuntimeException $e) {
+    $report($e->getMessage());
+    exit(2);
+}
 $loaded = $file->load();
 foreach ($loaded->warnings as $warning) {
-    fwrite(STDERR, "candy-top: {$warning}\n");
+    // A warning quotes the offending value; see the $report law.
+    $report($warning);
 }
 // btop auto-enables tty mode on a console: Term::current_tty.starts_with("/dev/tty")
 // (btop.cpp) — /dev/tty1 and serial consoles like /dev/ttyS0 alike.
@@ -198,11 +222,11 @@ try {
     if ($crashed instanceof App) {
         $saved = ($crashed->exitSave())?->__invoke();
         if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
-            @fwrite(STDERR, 'candy-top: ' . $saved->error . "\n");
+            $report($saved->error);
         }
         $state = ($crashed->stateSave())?->__invoke();
         if ($state instanceof TreeStateSavedMsg && !$state->ok) {
-            @fwrite(STDERR, 'candy-top: ' . $state->error . "\n");
+            $report($state->error);
         }
     }
 
@@ -222,12 +246,12 @@ if ($final instanceof App) {
     // Same order as the crash path and App::quitCmd(): config, then tree state.
     $saved = ($final->exitSave())?->__invoke();
     if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
-        @fwrite(STDERR, 'candy-top: ' . $saved->error . "\n");
+        $report($saved->error);
     }
     // The tree state is a convenience: a failed write is reported, never fatal.
     $state = ($final->stateSave())?->__invoke();
     if ($state instanceof TreeStateSavedMsg && !$state->ok) {
-        @fwrite(STDERR, 'candy-top: ' . $state->error . "\n");
+        $report($state->error);
     }
     if ($saved instanceof ConfigSavedMsg && !$saved->ok) {
         exit(1);

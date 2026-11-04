@@ -113,12 +113,21 @@ final class SelfUpdateTest extends TestCase
      * srv/<path>; unknown routes reject with the ConnectException a dead
      * dial would produce. The sink option is honoured because the production
      * download asks for one.
+     *
+     * $refusePharReason poisons the phar leg only — the transport's own
+     * message is the input the M6 stderr pin feeds (a dial failure reports
+     * whatever the client layer handed it, so it is the one reason string in
+     * the verb this binary does not author).
      */
-    private function fakeServerClient(): Client
+    private function fakeServerClient(?string $refusePharReason = null): Client
     {
         $srv = $this->dir . '/srv';
-        $handler = static function (RequestInterface $request, array $options) use ($srv): PromiseInterface {
-            $file = $srv . \rawurldecode($request->getUri()->getPath());
+        $handler = static function (RequestInterface $request, array $options) use ($srv, $refusePharReason): PromiseInterface {
+            $path = $request->getUri()->getPath();
+            if ($refusePharReason !== null && \str_ends_with($path, '.phar')) {
+                return new RejectedPromise(new ConnectException($refusePharReason, $request));
+            }
+            $file = $srv . \rawurldecode($path);
             if (!\is_file($file)) {
                 return new RejectedPromise(new ConnectException(
                     'fake server has no route ' . $request->getUri()->getPath(),
@@ -698,6 +707,42 @@ final class SelfUpdateTest extends TestCase
         self::assertSame(SelfUpdate::EXIT_FAILURE, $exit);
         self::assertStringContainsString('produced no bytes', $this->errorText());
         self::assertSame('ORIGINAL', \file_get_contents($this->livePharPath()));
+        self::assertSame([], \glob($this->livePharPath() . '.tmp-' . \chr(42)));
+    }
+
+    /**
+     * M6/m33: the dial-failure reason is the transport's message, not this
+     * binary's, and stderr has no Surface before the Program exists — so an
+     * OSC in it (window title, OSC 52 clipboard write) would fire on the
+     * user's terminal and outlive the process. SelfUpdate::useErrorStreamForTesting
+     * swaps in a raw php://temp, so there is nothing to mark the bytes inert on
+     * the way out: Sanitize::untrustedForDisplay at the choke is the only thing
+     * between the fake server's message and the stream. untrustedForDisplay
+     * answers the whole escape — introducer, payload and terminator gone, one
+     * OSC does not smuggle the next — while the framing text stays readable.
+     */
+    public function testADialFailureReasonReachesStderrInert(): void
+    {
+        self::assertNotFalse(\file_put_contents($this->livePharPath(), 'ORIGINAL'));
+        $hostile = "fake dial broke: \x1b]0;title-pwned\x07 clipboard\x1b]52;copy\x07 then\x00nul";
+        $exit = SelfUpdate::run(
+            [],
+            $this->fakeServerClient($hostile),
+            $this->releasesUrl([$this->stageRelease('candy-top/v9.9.9', 'NEW')]),
+            $this->livePharPath(),
+            'v0.1.0',
+        );
+        self::assertSame(SelfUpdate::EXIT_FAILURE, $exit);
+
+        $text = $this->errorText();
+        self::assertStringContainsString('could not download candy-top.phar: fake dial broke:', $text, 'the refusal and its framing stay readable');
+        self::assertStringContainsString('clipboard', $text, 'text between two escapes is not collateral damage');
+        self::assertStringNotContainsString('title-pwned', $text, 'the OSC payload is gone with its introducer');
+        foreach (["\x1b", "\x07", "\x00"] as $byte) {
+            self::assertStringNotContainsString($byte, $text, 'no live control byte reaches stderr');
+        }
+
+        self::assertSame('ORIGINAL', \file_get_contents($this->livePharPath()), 'a poisoned reason is still a refusal');
         self::assertSame([], \glob($this->livePharPath() . '.tmp-' . \chr(42)));
     }
 

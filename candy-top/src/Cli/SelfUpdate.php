@@ -7,6 +7,7 @@ namespace SugarCraft\Top\Cli;
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\TransferException;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Top\Lang;
 use SugarCraft\Top\Support\Version;
 
@@ -850,6 +851,15 @@ final class SelfUpdate
 
     private static function stderrRaw(string $text): void
     {
-        \fwrite(self::$errorStream ?? \STDERR, $text);
+        // The one choke every self-update write passes. Several messages
+        // interpolate text this command does not own — Guzzle carries a
+        // server-influenced reason into `download_failed`/`fetch_failed`, and
+        // those bytes reach a plain terminal stream with no Surface, no cell
+        // buffer and nothing else that would strip a control sequence. A
+        // forged OSC (window title, OSC 52 clipboard) on a compromised or
+        // MITM'd response would outlive the process, so the escape sweep the
+        // view gets at its choke point is applied here too (audit M6/m33).
+        // Clean messages pass through byte-identical.
+        \fwrite(self::$errorStream ?? \STDERR, Sanitize::untrustedForDisplay($text));
     }
 }
