@@ -2338,14 +2338,17 @@ announces the same fact for all three formats. The exit code does not move:
 the answer is what was asked for in shape, and what the schema would have
 forced had it reached the answering step.
 
-Three of those nine error types are **not** `NonInteractive::emitErrorDocument()`'s, and
+Five of those eleven error types are **not** `NonInteractive::emitErrorDocument()`'s, and
 that is the thing to know if you are reading the source to find where a type
 comes from. `installation` is hand-rolled by `bin/candy-code`'s autoload guard
-— see the one exception below for why it has to be. `not-found` and
-`mcp-config` come from the subcommands, which build their own documents
-through `Subcommands::emitDocument()`: `session delete <id>` on an id the store
-does not hold, and `mcp list` on a **trusted** `.mcp.json` that could not be
-read or decoded. Both exit `1` — the store and the file were opened, so
+— see the one exception below for why it has to be. The remaining four —
+`not-found`, `mcp-config`, `import-refused` and `lsp-install` — come from the
+subcommands, which build their own documents through
+`Subcommands::emitDocument()`: `session delete <id>` on an id the store does
+not hold, `mcp list` on a **trusted** `.mcp.json` that could not be read or
+decoded, `session import` on a transcript the importer refused, and
+`lsp install` when the probe produced no server. All four exit `1` — the store
+and the file were opened, so
 something was attempted; an absent, disabled, out-of-tree or untrusted
 `.mcp.json` is an answer rather than a failure and exits `0` with a `status`
 field saying so (a disabled project config owns its own status, and so does

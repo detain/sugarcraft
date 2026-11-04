@@ -1083,6 +1083,37 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
             $flatReadme,
             'README.md still counts five error types. There are ' . count($shipped) . '.',
         );
+
+        // CJKW-05: the passage that counts the outsiders has to COUNT right.
+        // Both numerals are derived here rather than re-literalled — the
+        // total from shippedTypes(), the outsider count from the same diff
+        // the loop above walks — so a twelfth type, or a type re-homed into
+        // emitErrorDocument(), reddens this leg instead of letting the
+        // sentence rot the way "three of nine" once did. Words or digits are
+        // both honoured; a wrong pair in either spelling is not.
+        $countWord = static fn (int $n): string => [
+            1 => 'one',
+            2 => 'two',
+            3 => 'three',
+            4 => 'four',
+            5 => 'five',
+            6 => 'six',
+            7 => 'seven',
+            8 => 'eight',
+            9 => 'nine',
+            10 => 'ten',
+            11 => 'eleven',
+        ][$n] ?? (string) $n;
+
+        self::assertMatchesRegularExpression(
+            '/\b(?:' . $countWord(count($outsiders)) . '|' . count($outsiders)
+                . ') of (?:those |the )?(?:' . $countWord(count($shipped)) . '|' . count($shipped)
+                . ') error types\b/iu',
+            $flatReadme,
+            'README.md opens the outsider passage without the live counts: '
+                . count($outsiders) . ' of the ' . count($shipped)
+                . " shipped error types are not NonInteractive::emitErrorDocument()'s.",
+        );
     }
 
     /**
