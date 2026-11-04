@@ -120,7 +120,7 @@ onMounted(async () => {
 }
 .search {
   width: min(36rem, 100%);
-  max-height: 70vh;
+  max-height: min(70vh, calc(100dvh - 2rem));
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -173,5 +173,15 @@ li.none {
   border-top: 1px solid var(--line);
   font-size: 0.75rem;
   color: var(--muted);
+}
+/* CW-UX-08: on short viewports the vh gutters eat the screen - collapse them
+   to a constant and tighten the cap so the dialog's own scroll stays visible. */
+@media (max-height: 480px) {
+  .backdrop {
+    padding: 1rem;
+  }
+  .search {
+    max-height: calc(100dvh - 1rem);
+  }
 }
 </style>

@@ -99,7 +99,7 @@ function displayName(command: CommandInfo): string {
 }
 .dialog {
   width: min(40rem, 100%);
-  max-height: 80vh;
+  max-height: min(80vh, calc(100dvh - 2rem));
   overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -187,5 +187,15 @@ li {
   color: var(--muted);
   font: inherit;
   cursor: pointer;
+}
+/* CW-UX-08: on short viewports the vh gutters eat the screen - collapse them
+   to a constant and tighten the cap so the dialog's own scroll stays visible. */
+@media (max-height: 480px) {
+  .backdrop {
+    padding: 1rem;
+  }
+  .dialog {
+    max-height: calc(100dvh - 1rem);
+  }
 }
 </style>

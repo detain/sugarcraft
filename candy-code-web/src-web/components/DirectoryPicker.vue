@@ -277,7 +277,7 @@ watch(selected, async () => {
 }
 .picker {
   width: min(40rem, 100%);
-  max-height: 80vh;
+  max-height: min(80vh, calc(100dvh - 2rem));
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -407,5 +407,15 @@ footer {
 .error {
   margin: 0;
   color: var(--error);
+}
+/* CW-UX-08: on short viewports the vh gutters eat the screen - collapse them
+   to a constant and tighten the cap so the dialog's own scroll stays visible. */
+@media (max-height: 480px) {
+  .backdrop {
+    padding: 1rem;
+  }
+  .picker {
+    max-height: calc(100dvh - 1rem);
+  }
 }
 </style>

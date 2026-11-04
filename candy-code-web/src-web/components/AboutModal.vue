@@ -243,7 +243,7 @@ async function stopServer(): Promise<void> {
 }
 .dialog {
   width: min(36rem, 100%);
-  max-height: min(80vh, 100%);
+  max-height: min(80vh, 100%, calc(100dvh - 2rem));
   overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -348,5 +348,15 @@ ul {
   word-break: break-word;
   max-height: 16rem;
   overflow-y: auto;
+}
+/* CW-UX-08: About is already a constant-padded centered sheet; the media block
+   only tightens the cap further so its internal scroll never leaves the view. */
+@media (max-height: 480px) {
+  .backdrop {
+    padding: 0.5rem;
+  }
+  .dialog {
+    max-height: calc(100dvh - 1rem);
+  }
 }
 </style>

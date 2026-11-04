@@ -233,7 +233,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 }
 .palette {
   width: min(36rem, 100%);
-  max-height: 70vh;
+  max-height: min(70vh, calc(100dvh - 2rem));
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -309,6 +309,16 @@ li.on {
   }
   .group {
     display: none;
+  }
+}
+/* CW-UX-08: on short viewports the vh gutters eat the screen - collapse them
+   to a constant and tighten the cap so the dialog's own scroll stays visible. */
+@media (max-height: 480px) {
+  .backdrop {
+    padding: 1rem;
+  }
+  .palette {
+    max-height: calc(100dvh - 1rem);
   }
 }
 </style>
