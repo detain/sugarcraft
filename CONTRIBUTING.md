@@ -123,6 +123,7 @@ from the lock and silently ignore the injection — it only warns.
 - Scripted-input event tests for runtime models — feed a sequence of
   `Msg`s, assert on `view()` output.
 - New features need new tests; new bug fixes need a regression test.
+- **candy-code-web (Node side)**: `cd candy-code-web && npm ci && npm run lint && npm run typecheck && npm test`, and run `npm audit --omit=dev --audit-level=critical` before pushing — that is the leg `.github/workflows/web.yml` enforces (its comment records why the threshold is not `high` today).
 
 ## Pull requests
 

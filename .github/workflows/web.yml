@@ -72,6 +72,19 @@ jobs:
       - name: Install (lockfile only)
         run: npm ci
 
+      # Supply-chain gate for the lockfile, the Node twin of ci.yml's
+      # `composer audit` legs (same posture: fail the job, accept an advisory
+      # only with a written exemption). LANDED AT --audit-level=critical, not
+      # high: measured 2026-11-04, the committed package-lock.json carries one
+      # HIGH (happy-dom GHSA-834v-8h66-3h79 + GHSA-c8p4-j97h-3vg8) and 16
+      # moderates under `npm audit --omit=dev` — npm counts the dev-only
+      # happy-dom chain even through that flag — so a high-level gate would
+      # redden web CI on arrival. Raise this to --audit-level=high in the
+      # change that bumps happy-dom past 21.0.3, and never let
+      # `npm audit fix --force` slip into a lockfile change silently.
+      - name: Audit dependencies (npm — critical advisories fail)
+        run: npm audit --omit=dev --audit-level=critical
+
       - name: Protocol types match the server schema
         run: |
           npm run gen:protocol
