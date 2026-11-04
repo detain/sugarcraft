@@ -30,7 +30,7 @@ The most common operational deployment pairs `PrometheusFileBackend` with
 the `node_exporter --collector.textfile.directory` flag:
 
 ```php
-$reg = new Registry(new PrometheusFileBackend('/var/lib/wish/metrics.prom'));
+$reg = new Registry(new PrometheusFileBackend('/var/lib/sugar-metrics/metrics.prom'));
 ```
 
 `node_exporter` scrapes every `.prom` file in that directory and exposes
@@ -131,21 +131,21 @@ Registration is idempotent — duplicate names are ignored.
 
 | Metric | Type | Labels | Meaning |
 |--------|------|--------|---------|
-| `wish.session.connect` | counter | `user`, `term` | New SSH sessions opened |
-| `wish.session.duration` | histogram | `user`, `term` | Session lifetime distribution |
-| `wish.session.error` | counter | `user`, `term`, `exception` | Session-level errors |
+| `ssh.session.connect` | counter | `user`, `term` | New SSH sessions opened |
+| `ssh.session.duration` | histogram | `user`, `term` | Session lifetime distribution |
+| `ssh.session.error` | counter | `user`, `term`, `exception` | Session-level errors |
 
 ### Histogram SLI/SLO queries
 
 ```promql
 # p50 latency
-histogram_quantile(0.5, rate(wish_session_duration_bucket[5m]))
+histogram_quantile(0.5, rate(ssh_session_duration_bucket[5m]))
 
 # p99 latency
-histogram_quantile(0.99, rate(wish_session_duration_bucket[5m]))
+histogram_quantile(0.99, rate(ssh_session_duration_bucket[5m]))
 
 # error rate
-rate(wish_session_error_total[5m]) / rate(wish_session_connect_total[5m])
+rate(ssh_session_error_total[5m]) / rate(ssh_session_connect_total[5m])
 ```
 
 ---

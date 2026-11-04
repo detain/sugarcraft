@@ -123,6 +123,18 @@ enter the same sinks. They flow through `Sanitize` gates before
 titles/labels are composed from them, and dimension/name caps are
 fail-closed, not advisory.
 
+## 7. Style renderers pass bytes through untouched
+
+`sugar-style` is a renderer, not a sanitiser: ESC and OSC sequences in
+styled content flow to the terminal unchanged, because its width
+arithmetic must see them to keep alignment honest. The caller owns
+ingress sanitisation (`Sanitize::untrusted*`). Two narrow doors exist
+inside the lib: `Style::hyperlink()` refuses ids containing `;` or `:`,
+and tabs are expanded per `tabWidth` (default 4) while `\r` is never
+stripped. Wrapping pre-styled content composes at the byte level — an
+inner `ESC[0m` resets the outer style from that point onward, so keep
+composition to one pass.
+
 ## Quick checklist for a new library
 
 1. Every string that can carry foreign bytes and reach a terminal
