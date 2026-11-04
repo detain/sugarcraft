@@ -2989,8 +2989,8 @@ Coverage spans every subsystem: typed messages + attachments, every built-in
 tool — all thirty-eight of them (the set `Bootstrap::tools()` hands the engine on
 an ordinary launch; `src/Tools/BuiltIn/` carries six more that arrive only
 when their condition is met — `Task` with an agent manager, the two board tools
-offered only to the members of a running team, the two MCP-call tools with a
-live server, and `Advisor` when a model is configured to advise), all eleven
+offered only to the members of a parallel `Task` batch, the two MCP-call tools
+with a live server, and `Advisor` when a model is configured to advise), all eleven
 `Providers\ProviderFactory` type
 keys (unit-tested with mocked transports — no live calls), the hook framework, permission-mode gating (incl. `pcntl_fork` concurrency stress tests for atomic task claiming), skills discovery + flag enforcement, sub-agents/teams/worktrees, workflow execution (sequential/parallel/pipeline/verification, PHP + YAML loading), the MCP client and its in-process git server (incl. per-agent routing enforcement), the SQLite store, token tracking, export, the TUI components, the `Runtime` orchestration (streaming accumulation, tool-result correlation, MODIFY hooks), the shell-out `CommandBackend` / `StreamingCommandBackend`, and the `EngineBackend` agentic loop (incl. the `maxSteps` guard).
 
