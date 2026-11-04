@@ -25,8 +25,19 @@ final class SliderTest extends TestCase
         $src = (string) file_get_contents(__DIR__ . '/../../src/Field/Slider.php');
         // Behavioural pins can all stay green while someone re-spreads
         // max(/min( across withers and render; the token census cannot.
-        $this->assertSame(1, substr_count($src, 'max('), 'clamp re-spread — collapse into normalise() again');
-        $this->assertSame(1, substr_count($src, 'min('), 'clamp re-spread — collapse into normalise() again');
+        // The README :99 alias contract minted `function min(`/`function max(`
+        // declarations (pure delegation, no arithmetic); the census counts
+        // clamp CALL sites, so declaration tokens are excluded mechanically.
+        $this->assertSame(
+            1,
+            substr_count($src, 'max(') - substr_count($src, 'function max('),
+            'clamp re-spread — collapse into normalise() again',
+        );
+        $this->assertSame(
+            1,
+            substr_count($src, 'min(') - substr_count($src, 'function min('),
+            'clamp re-spread — collapse into normalise() again',
+        );
     }
 
     // ------------------------------------------------------------------
