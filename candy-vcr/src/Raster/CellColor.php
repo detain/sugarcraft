@@ -8,15 +8,15 @@ use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Theme;
 
 /**
- * The single palette-vs-truecolour decision every rasterizer shares.
+ * The single palette-vs-truecolor decision every rasterizer shares.
  *
  * A {@see Cell} carries two colour representations: a resolved 256-colour slot
  * in `fg`/`bg` and — when SGR `38;2`/`48;2` supplied one — an exact 24-bit value
  * reachable through {@see Cell::fgRgb()}/{@see Cell::bgRgb()}. Before this helper
- * the image rasterizers read only the palette slot, so a truecolour cell rendered
+ * the image rasterizers read only the palette slot, so a truecolor cell rendered
  * in its (often default) palette colour and the exact 24-bit value was silently
  * downgraded. These functions are the one authoritative answer to "which colour
- * do I paint", honouring truecolour first and falling back to the {@see Theme}
+ * do I paint", honouring truecolor first and falling back to the {@see Theme}
  * palette slot otherwise — deliberately pure and ext-free so it is unit-testable
  * without a GD or Imagick canvas (per the project's rasterizer test policy).
  *
@@ -47,7 +47,7 @@ final class CellColor
     /**
      * Pack a `[r, g, b]` triple (the shape {@see Cell::fgRgb()} returns) into a
      * `0xRRGGBB` int, passing a null triple straight through so callers can use
-     * `?? $paletteFallback` to layer the truecolour-over-palette decision.
+     * `?? $paletteFallback` to layer the truecolor-over-palette decision.
      *
      * @param array{0: int, 1: int, 2: int}|null $rgb
      */

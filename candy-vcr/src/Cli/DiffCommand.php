@@ -145,8 +145,8 @@ final class DiffCommand implements DocumentedCommand
 
             // $i < max(aCount, bCount) guarantees at least one side exists,
             // but the null-safe reads below keep that visible to the types.
-            $aKind = $aEvent?->kind->value ?? '∅';
-            $bKind = $bEvent?->kind->value ?? '∅';
+            $aKind = $aEvent?->kind->value ?? 'none';
+            $bKind = $bEvent?->kind->value ?? 'none';
 
             if ($aEvent === null) {
                 $diffs[] = sprintf('event[%d]: missing in A, present in B (%s)', $i, $bKind);
@@ -192,11 +192,11 @@ final class DiffCommand implements DocumentedCommand
     private static function render($value): string
     {
         if ($value === null) {
-            return '∅';
+            return 'none';
         }
         if (\is_array($value)) {
             $json = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
-            return $json === false ? '{…}' : $json;
+            return $json === false ? '{...}' : $json;
         }
         return (string) $value;
     }

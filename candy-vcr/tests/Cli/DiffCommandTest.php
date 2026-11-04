@@ -558,4 +558,36 @@ final class DiffCommandTest extends TestCase
         $this->assertSame(2, $exit);
         $this->assertStringContainsString('candy-vcr diff: unknown option --bogus', $err);
     }
+
+    public function testNullHeaderFieldRendersAsNone(): void
+    {
+        // The empty marker is the ASCII word 'none', not a non-ASCII glyph:
+        // diff output lands in terminals and logs whose encoding cannot be
+        // assumed.
+        $a = tempnam(sys_get_temp_dir(), 'cv-diff-');
+        $b = tempnam(sys_get_temp_dir(), 'cv-diff-');
+        $events = [new Event(t: 0.0, kind: EventKind::Quit, payload: [])];
+        (new JsonlFormat())->write(new Cassette(
+            new CassetteHeader(version: 1, createdAt: '2026-05-07T10:00:00Z', cols: 80, rows: 24, runtime: 'test'),
+            $events
+        ), $a);
+        (new JsonlFormat())->write(new Cassette(
+            new CassetteHeader(version: 1, createdAt: '2026-05-07T10:00:00Z', cols: 80, rows: 24, runtime: 'test', theme: 'Dracula'),
+            $events
+        ), $b);
+        try {
+            $stdout = Stream::memory('w+');
+            $stderr = Stream::memory('w+');
+            $exit = (new DiffCommand())->run([$a, $b], $stdout, $stderr);
+            rewind($stdout);
+            $out = (string) stream_get_contents($stdout);
+
+            $this->assertSame(1, $exit);
+            $this->assertStringContainsString('header.theme: none != Dracula', $out);
+            $this->assertStringNotContainsString("\u{2205}", $out);
+        } finally {
+            @unlink($a);
+            @unlink($b);
+        }
+    }
 }

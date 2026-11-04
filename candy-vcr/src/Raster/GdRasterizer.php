@@ -18,7 +18,7 @@ use SugarCraft\Vterm\Theme;
  * 24-bit colour when SGR `38;2`/`48;2` supplied one, otherwise the cell's 0-255
  * palette slot resolved through the configured {@see Theme} (via {@see CellColor})
  * so user-selected themes like TokyoNight or Dracula reach the GIF. The shared
- * {@see Glyphs} tile cache keys on the resolved colour so a truecolour cell never
+ * {@see Glyphs} tile cache keys on the resolved colour so a truecolor cell never
  * collides with a palette cell of the same index.
  *
  * The {@see Glyphs} cache lives on the rasterizer instance so it persists
@@ -252,7 +252,7 @@ final class GdRasterizer implements Rasterizer
     ): void {
         $style = $this->styleFromAttrs($cell->attrs);
         // Block cursor paints the cell in reverse video — the tile's foreground is
-        // the cell's background channel (and vice-versa), truecolour included.
+        // the cell's background channel (and vice-versa), truecolor included.
         $tile = $glyphs->tile(
             $cell->char,
             $cell->bg,

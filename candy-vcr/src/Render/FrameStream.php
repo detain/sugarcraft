@@ -56,7 +56,16 @@ final class FrameStream implements \IteratorAggregate
     /** Fallback shell when a requested name cannot be resolved to a path. */
     private const FALLBACK_SHELL = '/bin/sh';
 
+    /**
+     * Cross-stage contract with the encoder, not API noise: a Snapshot event
+     * records its path here ({@see processSnapshot()}), and TapeToGif consumes
+     * (and re-nulls) it when writing the matching frame. FrameStream is a
+     * stateful streaming renderer — these two flags ride the same live model
+     * as the PTY master below, which is why they are plain public slots.
+     */
     public ?string $pendingScreenshotPath = null;
+
+    /** Mirrored Hide/Show events toggle this; the encoder snapshots it per frame. */
     public bool $captureCursor = true;
 
     /**

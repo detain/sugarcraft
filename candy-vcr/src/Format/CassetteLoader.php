@@ -96,7 +96,10 @@ final class CassetteLoader
         $this->compiledTape = false;
 
         if (!is_file($path)) {
-            throw new \InvalidArgumentException("cassette/tape not found: {$path}");
+            // A bare relative name leaves the user guessing which directory
+            // was searched; name the cwd whenever the path is not absolute.
+            $cwdHint = str_starts_with($path, '/') ? '' : ' (cwd: ' . (string) getcwd() . ')';
+            throw new \InvalidArgumentException("cassette/tape not found: {$path}{$cwdHint}");
         }
 
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));

@@ -79,7 +79,8 @@ final class RenderTapeCommand extends Command
         $themeName = is_string($themeOpt) ? $themeOpt : 'TokyoNight';
 
         if (!is_file($tapePath)) {
-            $output->writeln("<error>Failed: tape file not found: {$tapePath}</error>");
+            $cwdHint = str_starts_with($tapePath, '/') ? '' : ' (cwd: ' . (string) getcwd() . ')';
+            $output->writeln("<error>Failed: tape file not found: {$tapePath}{$cwdHint}</error>");
             return 1;
         }
 

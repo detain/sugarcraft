@@ -156,4 +156,30 @@ final class InspectWindowOptionTest extends TestCase
         $this->assertStringNotContainsString(\chr(27), $out);
         $this->assertStringNotContainsString(\chr(7), $out);
     }
+
+    public function testBytePreviewTrailerIsPureAscii(): void
+    {
+        // The truncation marker rides the same ASCII-only contract as the
+        // dotted preview: a clipped byte summary must not smuggle a non-ASCII
+        // ellipsis onto a hostile-terminal-hostile stream.
+        $path = $this->dir . '/wide-' . \bin2hex(\random_bytes(4)) . '.cas';
+        $cassette = new Cassette(
+            new CassetteHeader(
+                version: CassetteHeader::CURRENT_VERSION,
+                createdAt: '2026-05-07T10:00:00Z',
+                cols: 80,
+                rows: 24,
+                runtime: 'test',
+            ),
+            [new Event(t: 0.1, kind: EventKind::Output, payload: ['b' => \str_repeat('Z', 60)])],
+        );
+        (new JsonlFormat())->write($cassette, $path);
+
+        [$exit, $out] = $this->runCli(['candy-vcr', 'inspect', $path]);
+
+        $this->assertSame(0, $exit, $out);
+        $this->assertStringContainsString('60 bytes', $out);
+        $this->assertStringContainsString('...', $out);
+        $this->assertStringNotContainsString("\u{2026}", $out);
+    }
 }

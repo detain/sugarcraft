@@ -93,9 +93,9 @@ final class Glyphs
      * Get or create a cached tile for (char, fg, bg, bold, italic, underline).
      *
      * The optional `$fgRgb`/`$bgRgb` are exact 24-bit `0xRRGGBB` values supplied
-     * by {@see CellColor} when the cell carries SGR `38;2`/`48;2` truecolour; when
+     * by {@see CellColor} when the cell carries SGR `38;2`/`48;2` truecolor; when
      * present they win over the palette slots for painting AND are folded into the
-     * cache key so two cells sharing a palette index but differing in truecolour
+     * cache key so two cells sharing a palette index but differing in truecolor
      * never collide. Both null leaves the key — and every cache statistic — exactly
      * as the palette-only path.
      *
@@ -200,7 +200,7 @@ final class Glyphs
     ): string {
         $key = "{$char}|{$fg}|{$bg}|" . ($bold ? '1' : '0') . '|' . ($italic ? '1' : '0') . '|' . ($underline ? '1' : '0');
         // Palette-only cells contribute nothing here, so their keys — and the
-        // cache hit/miss census — stay byte-identical to before truecolour support.
+        // cache hit/miss census — stay byte-identical to before truecolor support.
         if ($fgRgb !== null || $bgRgb !== null) {
             $key .= '|tc' . ($fgRgb ?? '-') . ',' . ($bgRgb ?? '-');
         }

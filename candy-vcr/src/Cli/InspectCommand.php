@@ -26,10 +26,10 @@ use SugarCraft\Vterm\Theme;
  * a Renderer + Terminal exactly as `render-tape` does, then prints one line
  * per Snapshot with `time<TAB>cursor_row,cursor_col<TAB>grid_sha1`. The
  * grid hash digests `row|col|char|fg|bg|attrs|fgTruecolor|bgTruecolor|rendition`
- * tuples (the two truecolour slots hashing to `-1` when unset) in
+ * tuples (the two truecolor slots hashing to `-1` when unset) in
  * deterministic row-major order, so two grids producing the same visible
  * output share a hash regardless of cell-construction order — while a
- * differing packed truecolour or line rendition separates them.
+ * differing packed truecolor or line rendition separates them.
  */
 final class InspectCommand implements DocumentedCommand
 {
@@ -214,7 +214,7 @@ final class InspectCommand implements DocumentedCommand
      * Deterministic SHA-1 of the grid: walks row-major, emitting
      * `row|col|char|fg|bg|attrs|fgTruecolor|bgTruecolor|rendition` per cell so
      * two grids agree iff they'd render identically. The 24-bit slots and the
-     * line rendition are folded in so a truecolour repaint or a DECDHL/DECDWL
+     * line rendition are folded in so a truecolor repaint or a DECDHL/DECDWL
      * stamp changes the hash even when the glyph and palette numbers are
      * unchanged (`-1` marks a palette/default slot with no packed RGB). The
      * cursor is hashed too so blink-only frames still get distinct hashes.
@@ -324,7 +324,7 @@ final class InspectCommand implements DocumentedCommand
     {
         $len = strlen($bytes);
         $printable = preg_replace('/[^\x20-\x7e]/', '.', $bytes) ?? '';
-        $shown = strlen($printable) > 40 ? substr($printable, 0, 40) . '…' : $printable;
+        $shown = strlen($printable) > 40 ? substr($printable, 0, 40) . '...' : $printable;
         return sprintf('%d bytes  %s', $len, $shown);
     }
 }

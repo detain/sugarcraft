@@ -228,7 +228,7 @@ final class ImagickRasterizer implements Rasterizer
     ): string {
         $key = $char . '|' . $fg . '|' . $bg . '|' . ($bold ? '1' : '0') . '|' . ($italic ? '1' : '0') . '|' . ($underline ? '1' : '0') . '|' . ($wide ? 'w' : 'n');
         // Palette-only cells append nothing, so their keys — and the cache
-        // hit/miss census — stay byte-identical to before truecolour support.
+        // hit/miss census — stay byte-identical to before truecolor support.
         if ($fgRgb !== null || $bgRgb !== null) {
             $key .= '|tc' . ($fgRgb ?? '-') . ',' . ($bgRgb ?? '-');
         }

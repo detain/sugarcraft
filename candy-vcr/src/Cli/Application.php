@@ -61,6 +61,9 @@ final class Application
             return 0;
         }
         if ($args === [] || in_array($args[0], ['-h', '--help', 'help'], true)) {
+            if (($args[0] ?? '') === 'help' && isset($args[1])) {
+                return $this->printCommandHelp($args[1], $stdout, $stderr);
+            }
             $this->printUsage($stdout);
             return $args === [] ? 2 : 0;
         }
@@ -94,6 +97,39 @@ final class Application
         }
 
         return $command->run($rest, $stdout, $stderr);
+    }
+
+    /**
+     * `candy-vcr help <sub>` answers with that sub's own help. Before this the
+     * verb was ignored and only the global usage printed, so `help inspect`
+     * could never show inspect's flags — while the same information was
+     * reachable as `inspect --help` (the DocumentedCommand door above).
+     *
+     * @param resource $stdout
+     * @param resource $stderr
+     */
+    private function printCommandHelp(string $name, $stdout, $stderr): int
+    {
+        $command = $this->commands[$name] ?? null;
+        if ($command === null) {
+            fwrite($stderr, "candy-vcr: unknown subcommand '{$name}'\n\n");
+            $this->printUsage($stderr);
+            return 2;
+        }
+
+        if ($command instanceof SymfonyCommand) {
+            return $this->runSymfonyCommand($command, ['--help'], $stdout, $stderr);
+        }
+
+        if ($command instanceof DocumentedCommand) {
+            fwrite($stdout, $command->usage());
+            return 0;
+        }
+
+        // A hand-rolled verb without usage(): the global listing is the best
+        // answer available; keep exit 0 because the sub itself is valid.
+        $this->printUsage($stdout);
+        return 0;
     }
 
     /**
