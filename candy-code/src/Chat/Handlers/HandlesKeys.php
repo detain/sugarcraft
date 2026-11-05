@@ -205,6 +205,14 @@ trait HandlesKeys
                 return $this->delegateToInput($msg);
             }
 
+            // CC-QA-2: quitting mid-turn abandons whatever command children
+            // the backend is still holding — without this the whole process
+            // tree outlives the session (Cmd::quit stops the loop; nothing
+            // else waits for or kills the child). Async: the loop still
+            // ticks until this update() returns, and killTreeAsync's own
+            // shutdown function finishes the walk if it does not get there.
+            $this->abandonActiveBackendChildren(true);
+
             return [$this, Cmd::quit()];
         }
 
@@ -474,6 +482,13 @@ trait HandlesKeys
             }
 
             $this->inFlightCancellation?->cancel();
+            // CC-QA-2: the token cancel reaches backends that poll it (the
+            // async paths, which reap their child on the next tick). A
+            // backend child whose loop drain is already gone never gets to
+            // poll: abandon what is still registered — SIGKILL on a corpse
+            // is free, and a child that was reaped cleanly is no longer in
+            // the registry to be touched.
+            $this->abandonActiveBackendChildren(true);
             $parkedDraft = $this->pendingTurnHooks['draft'] ?? $this->pendingCustomCommand['draft'] ?? null;
 
             return [$this->mutate([

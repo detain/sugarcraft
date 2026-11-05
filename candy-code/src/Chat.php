@@ -53,6 +53,7 @@ use SugarCraft\Code\Automation\WebhookEvent;
 use SugarCraft\Code\Support\ClipboardImage;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\QueueMode;
+use SugarCraft\Code\Backend\TracksActiveChildren;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Events\MediaProgress;
 use SugarCraft\Code\Events\ReasoningDelta;
@@ -7828,6 +7829,22 @@ final class Chat implements Model
     public function backend(): Backend
     {
         return $this->backend;
+    }
+
+    /**
+     * CC-QA-2: kill any command children the backend spawned but has not
+     * reaped, announced once on stderr when anything dies. The two command
+     * backends own a live-children registry; the API-path backends
+     * (EngineBackend and the summariser) never spawn a process tree and
+     * answer 0 here, so this is safe to call from every quit path. Async
+     * true while the loop still ticks (the Ctrl+C / double-Escape arms),
+     * false from the bin funnel where the loop is already stopped.
+     */
+    public function abandonActiveBackendChildren(bool $async = false): int
+    {
+        return $this->backend instanceof TracksActiveChildren
+            ? $this->backend->abandonActiveChildren($async)
+            : 0;
     }
 
     /**

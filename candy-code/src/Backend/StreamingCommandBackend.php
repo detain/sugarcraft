@@ -102,8 +102,10 @@ use SugarCraft\Code\Support\ProcessReaper;
  *   );
  *   $chat->withStreaming(true);
  */
-final class StreamingCommandBackend implements Backend
+final class StreamingCommandBackend implements Backend, TracksActiveChildren
 {
+    use AbandonsActiveChildren;
+
     /**
      * How long a no-progress iteration sleeps before looking at the pipes
      * again. Unconditional: an iteration that read nothing must yield, whether
@@ -262,6 +264,10 @@ final class StreamingCommandBackend implements Backend
         if (!is_resource($proc)) {
             return Message::assistant('_[error: failed to spawn streaming backend command]_')->withUiOnly()->withError();
         }
+
+        // CC-QA-2: single spawn choke point for both streaming drivers —
+        // register so a still-live child is known to abandonActiveChildren().
+        $this->registerActiveChild($proc);
 
         // ALL THREE non-blocking, stdin included. stdout and stderr so bytes
         // can be read as they arrive; stdin because a blocking `fwrite()` of a
@@ -457,6 +463,9 @@ final class StreamingCommandBackend implements Backend
         // own-zombie count went 0 → 1 → 2 → 3 across three expiries without
         // this call on the expiry path, and did not move with it. Descriptors
         // were never the leak; the process was.
+        // CC-QA-2: finish() is the single reap sink for every settled
+        // streaming path (success, expiry, non-zero exit) — unregister here.
+        $this->forgetActiveChild($state['proc']);
         $exit = proc_close($state['proc']);
 
         $body = trim(implode('', $state['tokens']));
@@ -638,12 +647,16 @@ final class StreamingCommandBackend implements Backend
                 // because a cancel is a user abort, and `proc_close()` WAITS —
                 // anything gentler hands this loop's deadline to a child that
                 // has already been given up on.
-                $abort = static function () use (&$state, &$settled, &$timer, $loop): void {
+                $abort = function () use (&$state, &$settled, &$timer, $loop): void {
                     $settled = true;
                     if ($timer !== null) {
                         $loop->cancelTimer($timer);
                     }
                     ProcessContainment::terminate($state['proc'], 9);
+                    // CC-QA-2: the abort path skips finish(), so it must
+                    // unregister the child it is reaping right here; binds
+                    // $this to own the registry.
+                    $this->forgetActiveChild($state['proc']);
                     foreach ($state['pipes'] as $pipe) {
                         if (is_resource($pipe)) {
                             fclose($pipe);

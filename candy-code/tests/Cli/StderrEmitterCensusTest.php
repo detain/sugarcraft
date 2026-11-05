@@ -57,7 +57,11 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — forty-seven sites (X-CORE1 2026-11-04: -2 — the bin
+ *  1. `fwrite(STDERR, …)` — forty-eight sites (CC-QA-2 2026-11-05: +1 in
+ *     `Backend\AbandonsActiveChildren` — the quit-mid-turn backend-child
+ *     announce, stderr-alone by the dying-process decision: its bin funnel
+ *     twin fires after teardown with no transcript left to carry it;
+ *     X-CORE1 2026-11-04: -2 — the bin
  *     guard's abnormal-exit restore line and its attach twin retire under
  *     OD-17; sugar-core's shutdown backstop is the single terminal-release
  *     path, so neither consumer announcement survives; 2026-11-04: +1 in
@@ -352,6 +356,8 @@ final class StderrEmitterCensusTest extends TestCase
         // retired with the hand-rolled byte list (OD-17); sugar-core owns the
         // release. The TTY-guard refusal line and the fatal writer stand.
         'bin/candy-code' => 3,
+        // CC-QA-2 2026-11-05: +1 — the abandon-trait's quit-mid-turn announce.
+        'src/Backend/AbandonsActiveChildren.php' => 1,
         // C-TOOL-6.j 2026-10-31: +9 — the forked pty relay's own report lines:
         // bad launch argv, pty mechanism unavailable, staged command file
         // unreadable, no pcntl_fork, the pump fork failing, SIGTERM arming
@@ -524,6 +530,8 @@ final class StderrEmitterCensusTest extends TestCase
         // X-CORE1 2026-11-04: -1 — the guard's 'exited abnormally' shape left
         // with the byte list.
         'bin/candy-code' => 7,
+        // CC-QA-2 2026-11-05: +1 — the abandon announce's prefixed literal.
+        'src/Backend/AbandonsActiveChildren.php' => 1,
         // W7-C NOTE, reads forward: the nine E154 files whose in-code
         // `candy-code: ` literals sat only on error_log lines (AgentWorkerPool,
         // ForeignAgentPresetRegistry, CommandLoader, RuleLoader,

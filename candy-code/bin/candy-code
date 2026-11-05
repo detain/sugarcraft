@@ -683,6 +683,15 @@ fwrite(STDOUT, Ansi::popKittyKeyboard());
 // a SessionEnd hook sees the session it ran in.
 $finalChat = $finalModel instanceof \SugarCraft\Code\App\App ? $finalModel->chat : ($finalModel instanceof Chat ? $finalModel : null);
 if ($finalChat !== null) {
+    // CC-QA-2: safety net for a backend child still alive at teardown — a
+    // session-end hook or an OS signal can end the run loop before the
+    // Ctrl+C / double-Escape arms ever fire. Synchronous on purpose: the
+    // loop is stopped here, so killTreeAsync would have nothing to tick on.
+    // This sits after the keyboard release above (the terminal must be left
+    // sane first) and before the detached SessionEnd funnel below, so the
+    // announce rides the channel the dying process still owns.
+    $finalChat->abandonActiveBackendChildren();
+
     // x1102: handed to a detached daemon rather than run here. The chain is
     // bounded by the SUM of what its entries asked for — a minute of `caliber`
     // at the default — and by now the screen is restored and the prompt looks

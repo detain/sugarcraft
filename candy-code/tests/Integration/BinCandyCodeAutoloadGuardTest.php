@@ -32,7 +32,7 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FORTY-SEVEN:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FORTY-EIGHT:
  *
  *  - {@see \SugarCraft\Code\Cli\NonInteractive}, fifteen —
  *    `run()` four times (a thrown backend error, an answer that would not encode
@@ -101,6 +101,11 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *  - {@see \SugarCraft\Code\Support\SessionRelaunch}, one — `tell()`, the
  *    line saying why `/new` could not restart candy-code in another
  *    directory, and the command to run instead.
+ *  - {@see \SugarCraft\Code\Backend\AbandonsActiveChildren}, one — added by
+ *    CC-QA-2 — the abandon announce a quit or hard cancel writes when a backend
+ *    command tree is still alive to kill. Stderr alone: the process is leaving,
+ *    and the bin funnel twin fires after terminal teardown with no transcript
+ *    left to carry it.
  *  - `bin/candy-code`, two — this branch, and the TUI's one-line fatal-error
  *    notice (audit C2a), which names the log file PHP's own diagnostics were
  *    redirected into, because on that path display_errors is off.

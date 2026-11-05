@@ -76,8 +76,10 @@ use SugarCraft\Code\Support\ProcessContainment;
  * no Escape. See that method for how the same child is now drained from the
  * event loop instead.
  */
-final class CommandBackend implements Backend
+final class CommandBackend implements Backend, TracksActiveChildren
 {
+    use AbandonsActiveChildren;
+
     /**
      * How long a no-progress iteration of {@see completeAsync()}'s drain waits
      * before looking at the pipes again. Matches
@@ -210,6 +212,10 @@ final class CommandBackend implements Backend
             }
         }
 
+        // CC-QA-2: this child is reaped right here — leave the registry only
+        // with what is provably gone.
+        $this->forgetActiveChild($proc);
+
         foreach ($pipes as $pipe) {
             if (is_resource($pipe)) {
                 fclose($pipe);
@@ -327,7 +333,7 @@ final class CommandBackend implements Backend
                 // E673: ProcessContainment::terminate() turns that 9 into a
                 // group kill when the wrapped child measurably leads its own
                 // group, so the command's own children die with the turn.
-                $reap = static function (int $signal) use (&$settled, &$timer, $proc, $pipes, $loop): int {
+                $reap = function (int $signal) use (&$settled, &$timer, $proc, $pipes, $loop): int {
                     $settled = true;
                     if ($timer !== null) {
                         $loop->cancelTimer($timer);
@@ -335,6 +341,11 @@ final class CommandBackend implements Backend
                     if ($signal !== 0) {
                         ProcessContainment::terminate($proc, $signal);
                     }
+                    // CC-QA-2: every settle path (success, cancel, throw)
+                    // funnels through here, so the registry empties exactly
+                    // when the child is reaped. Non-static closure on
+                    // purpose: it binds $this to the backend owning the map.
+                    $this->forgetActiveChild($proc);
                     foreach ($pipes as $pipe) {
                         if (is_resource($pipe)) {
                             fclose($pipe);
@@ -488,6 +499,11 @@ final class CommandBackend implements Backend
         if (!is_resource($proc)) {
             return Message::assistant('_[error: failed to spawn backend command]_')->withUiOnly()->withError();
         }
+
+        // CC-QA-2: single registration choke point — both drivers spawn
+        // through here, so a child that is live when quit or a hard cancel
+        // lands is known to {@see abandonActiveChildren()}.
+        $this->registerActiveChild($proc);
 
         return [$proc, $pipes];
     }
