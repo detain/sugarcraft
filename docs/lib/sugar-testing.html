@@ -87,6 +87,7 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
       <div class="feature"><strong>send(Msg)</strong><span>Fluent message enqueue — chain multiple sends.</span></div>
       <div class="feature"><strong>withFakeCmdRunner()</strong><span>Decide the message injected for each Cmd; the real closure still runs unless you also call withRealCmdRunner(false).</span></div>
       <div class="feature"><strong>run()</strong><span>Drain the queue, return TestResult with model/view/cmds/output. Subscription output is delivered right after the message that triggered it; messages still queued when a QuitMsg/InterruptMsg halts the drain are skipped and counted in <code>droppedAfterStop</code>. run() can be called again.</span></div>
+      <div class="feature"><strong>withWindowSize() / withEnvironment() / withColorProfile()</strong><span>Arm the startup <code>WindowSizeMsg</code>/<code>EnvMsg</code>/<code>ColorProfileMsg</code> exactly as a real Program dispatches them — before <code>init()</code>. Each returns a clone.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">ScriptedInput</h3>
@@ -102,6 +103,16 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
       <div class="feature"><strong>assertGoldenAnsi</strong><span>Byte-exact snapshot test — set <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> (legacy alias: <code>UPDATE_GOLDENS=1</code>) to create a missing golden; creation is one-way and a mismatch never rewrites, so to re-baseline, delete the file and rerun with it set.</span></div>
       <div class="feature"><strong>assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers.</span></div>
       <div class="feature"><strong>assertAnsiEquals</strong><span>Byte-exact ANSI comparison with readable ESC diff.</span></div>
+      <div class="feature"><strong>assertViewIdempotent</strong><span>Render-purity check — a second <code>view()</code> must return identical bytes; catches models that mutate state while rendering.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Graphics stream assertions</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>GraphicsAssertions</strong><span><code>assertRendersTo()</code> decodes a protocol byte stream and compares it to a pixel grid, <code>assertInlineImageDimensions()</code> checks placement and size, <code>assertProtocolRoundTrip()</code> re-encodes what it decoded, <code>renderGrid()</code> exposes the grid directly.</span></div>
+      <div class="feature"><strong>Mode::detect()</strong><span>Sniff whether a stream speaks Sixel, Kitty, or iTerm2 inline images.</span></div>
+      <div class="feature"><strong>KittyStream / SixelStream / Iterm2Stream</strong><span>Per-protocol decoders returning value objects — <code>KittyImage</code> (PNG payload, placements, z-index), sixel raster (width, height, palette, grid), iTerm2 file keys.</span></div>
+      <div class="feature"><strong>PixelGrid</strong><span>The RGBA grid behind every comparison: <code>fromRgbGrid()</code>/<code>transparent()</code> constructors, <code>uniformColor()</code> and <code>toGdImage()</code> escape hatches (ext-gd).</span></div>
+      <div class="feature"><strong>DecodeLimits</strong><span>Hard caps on hostile streams — raster cells, number digits, decompressed bytes, image pixels — enforced with <code>MalformedGraphicsException</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">TapeRecorder</h3>
@@ -110,6 +121,7 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
       <div class="feature"><strong>header()</strong><span>Write VHS header (theme, font size, width, height).</span></div>
       <div class="feature"><strong>type() / enter() / sleep()</strong><span>Append the demo's choreography — Type/Enter/Sleep directive lines; nothing is captured from a running program and there is no playback API.</span></div>
       <div class="feature"><strong>save()</strong><span>Write the completed .tape file.</span></div>
+      <div class="feature"><strong>keyMsgToVhs(KeyMsg)</strong><span>Static: map a decoded key message back to VHS <code>Type</code> syntax (null when unsupported), so scripted sessions turn into directives.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
@@ -117,6 +129,7 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
       <li><strong>Deterministic Model–Update–View testing</strong> — ProgramSimulator drives Programs without real I/O.</li>
       <li><strong>Snapshot regression testing</strong> — Golden files for ANSI output.</li>
       <li><strong>Cell-grid assertions</strong> — assertCellGrid for Buffer-based renderers.</li>
+      <li><strong>Inline-image protocol tests</strong> — the <code>Graphics</code> namespace decodes real kitty/sixel/iTerm2 streams to pixel grids with no terminal attached.</li>
       <li><strong>Demo script building</strong> — TapeRecorder emits VHS-compatible .tape files; CI renders them into GIFs.</li>
       <li><strong>Test-infra hub for 22 sibling packages</strong> — incl. sugar-forms and sugar-widgets, which build their test support on it (census: sibling composer.json require/require-dev at commit time).</li>
     </ul>
@@ -139,22 +152,48 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
 <tr><td>ProgramSimulator</td><td>withRealCmdRunner(bool): self</td><td>Pass false to capture Cmds without executing them (the default executes)</td></tr>
 <tr><td>ProgramSimulator</td><td>withFakeCmdRunner(\Closure $runner): self</td><td>Per-Cmd injected-message hook (execution unchanged)</td></tr>
 <tr><td>ProgramSimulator</td><td>run(): TestResult</td><td>Drain queue, return result</td></tr>
+<tr><td>ProgramSimulator</td><td>withWindowSize(int cols, int rows): self</td><td>Arm the startup WindowSizeMsg (dispatched before init(), like Program)</td></tr>
+<tr><td>ProgramSimulator</td><td>withEnvironment(array vars): self</td><td>Arm the startup EnvMsg (dispatched before init(), like Program)</td></tr>
+<tr><td>ProgramSimulator</td><td>withColorProfile(ColorProfile): self</td><td>Arm the startup ColorProfileMsg — the message color vetoes key off</td></tr>
 <tr><td>ScriptedInput</td><td>new() / key(char, shift:, ctrl:, alt:) / namedKey(KeyType, rune, shift:, ctrl:, alt:) / enter() / arrow(dir, shift:, ctrl:, alt:) / escape() / backspace() / tab() / quit() / ticks(count, seconds:, factory:) / resize(cols, rows) / mouse(button, action, x, y) / wheel(button, x, y) / push(Msg) / paste(string) / bytes(string ...$reads) / clipboard(string, selection:) / keyboardEnhancements(flags) / withSanitizePaste(bool) / build(): list&lt;Msg&gt;</td><td>Scripted terminal input — the key builders take optional modifier flags; paste payloads are sanitized by default, as at runtime</td></tr>
+<tr><td>ScriptedInput</td><td>count(): int; constants READ_SIZE, PASTE_START, PASTE_END</td><td>Queued message count; the 4096-byte read chunk size and bracketed-paste sentinels</td></tr>
 <tr><td>TestResult</td><td>model: object</td><td>Final model after all messages</td></tr>
 <tr><td>TestResult</td><td>view: string</td><td>Last view() output</td></tr>
 <tr><td>TestResult</td><td>cmds: list&lt;Closure&gt;</td><td>Captured commands</td></tr>
 <tr><td>TestResult</td><td>output: string</td><td>Concatenated view() output across the run plus RawMsg/PrintMsg side-channel writes</td></tr>
+<tr><td>TestResult</td><td>frames: list&lt;string&gt;</td><td>Every view() render, in order</td></tr>
+<tr><td>TestResult</td><td>droppedAfterStop: int</td><td>Messages skipped when a QuitMsg/InterruptMsg ended the drain early</td></tr>
+<tr><td>TestResult</td><td>assertCmdCount(int): void / assertCmdContains(callable, ?string): void / assertNoCmds(): void</td><td>Cmd-list assertions; failure messages name how many cmds were captured</td></tr>
 <tr><td>Assertions</td><td>assertGoldenAnsi(string, string): void</td><td>Golden file snapshot assertion</td></tr>
 <tr><td>Assertions</td><td>assertCellGrid(array, Buffer): void</td><td>Cell-by-cell buffer comparison</td></tr>
 <tr><td>Assertions</td><td>assertAnsiEquals(string, string): void</td><td>Byte-exact ANSI diff</td></tr>
+<tr><td>Assertions</td><td>assertViewIdempotent(Model): void</td><td>Render-purity check — view() twice must return identical bytes</td></tr>
 <tr><td>GoldenFile</td><td>load(string): ?string</td><td>Load golden file contents</td></tr>
 <tr><td>GoldenFile</td><td>save(string, string): void</td><td>Save golden file</td></tr>
+<tr><td>GoldenFile</td><td>create(string, string): void</td><td>One-time seed write; refuses an existing golden (no-clobber enforced by link semantics)</td></tr>
+<tr><td>GoldenFile</td><td>update(string, string): void</td><td>Deliberate overwrite — the re-baseline path, stated as intent</td></tr>
+<tr><td>GoldenFile</td><td>resolve(string baseDir, string relative): string</td><td>Absolute path inside baseDir/fixtures; refuses traversal out of the fixtures base</td></tr>
 <tr><td>TapeRecorder</td><td>to(string): self</td><td>Factory: start composing the tape saved to that path</td></tr>
 <tr><td>TapeRecorder</td><td>header(...): self</td><td>Emit the VHS Set directives</td></tr>
 <tr><td>TapeRecorder</td><td>type(string): self</td><td>Append a Type directive (escaped)</td></tr>
 <tr><td>TapeRecorder</td><td>enter(): self</td><td>Append an Enter directive</td></tr>
 <tr><td>TapeRecorder</td><td>sleep(float): self</td><td>Append a Sleep directive</td></tr>
 <tr><td>TapeRecorder</td><td>save(): void</td><td>Write .tape file</td></tr>
+<tr><td>TapeRecorder</td><td>resize(int cols, int rows): self / comment(string): self / line(string): self</td><td>Resize and #comment directives; line() appends one raw directive verbatim</td></tr>
+<tr><td>TapeRecorder</td><td>keyMsgToVhs(KeyMsg): ?string</td><td>Static: map a decoded key back to VHS Type syntax, null when unsupported</td></tr>
+<tr><td>Graphics\GraphicsAssertions</td><td>assertRendersTo(string, Mode, PixelGrid|array, int tolerance = 0, string message = ''): void</td><td>Static: decode an inline-image stream and compare it to the expected pixels</td></tr>
+<tr><td>Graphics\GraphicsAssertions</td><td>assertInlineImageDimensions(string, Mode, ?int, ?int): void / assertProtocolRoundTrip(string, Mode): void / renderGrid(string, Mode): PixelGrid</td><td>Static: dimension checks, decode/re-encode round trip, direct grid access</td></tr>
+<tr><td>Graphics\Mode</td><td>enum Sixel | Kitty | Iterm2; detect(string): self</td><td>Which inline-image protocol a byte stream speaks</td></tr>
+<tr><td>Graphics\KittyStream</td><td>decode(string): self; images(): array; image(): KittyImage; count(): int; id() / action() / cols() / rows() / png()</td><td>kitty graphics parser — one or more images carried on the stream</td></tr>
+<tr><td>Graphics\KittyImage</td><td>png(): string / cols() / rows() / action() / id() / number() / zIndex() / format() / compressed() / pixelDimensions(): array / toGdImage()</td><td>Decoded kitty image: PNG payload plus placement and encoding metadata</td></tr>
+<tr><td>Graphics\SixelStream</td><td>decode(string): self; width() / height(): int / palette(): array / grid(): PixelGrid / pixel(int, int): ?array / toGdImage()</td><td>Sixel raster decoder</td></tr>
+<tr><td>Graphics\Iterm2Stream</td><td>decode(string): self; command(): string / params(): array / payload(): string / hasPayload(): bool / png(): string / cellsWidth() / cellsHeight(): ?int / toGdImage()</td><td>iTerm2 inline-file (OSC 1337) decoder</td></tr>
+<tr><td>Graphics\PixelGrid</td><td>fromRgbGrid(array): self / transparent(int, int): self; pixel(int, int): ?array / paintedPixels(): array / uniformColor(): ?array / toGdImage()</td><td>RGBA comparison grid; toGdImage() requires ext-gd</td></tr>
+<tr><td>Graphics\DecodeLimits</td><td>MAX_RASTER_CELLS / MAX_NUMBER_DIGITS / MAX_DECOMPRESSED_BYTES / MAX_IMAGE_PIXELS; assertMaterializablePng(string, string): void</td><td>Hostile-input caps shared by the decoders; PNG materialization guard</td></tr>
+<tr><td>Graphics\MalformedGraphicsException</td><td>extends RuntimeException</td><td>Thrown by all three decoders and the limit guards on malformed or over-cap streams</td></tr>
+<tr><td>LoopPin</td><td>pinStableClock(): LoopInterface</td><td>Static: stop and replace the shared loop so arm-time deadlines compute correctly; process-wide (see README caveats)</td></tr>
+<tr><td>LoopPin</td><td>hasStaleClockRisk(LoopInterface): bool</td><td>Static: fail-closed check — StreamSelectLoop is safe; extension-backed and unknown loops are reported at risk</td></tr>
+<tr><td>TemporaryDirectoryTrait</td><td>setUpTemporaryDirectory() / tearDownTemporaryDirectory() / getTempDirSuffix() / removeTreeContents(string)</td><td>Protected trait: a private 0700 scratch directory under the system temp dir, created in setUp and removed in tearDown</td></tr>
 </table>
   </div>
 </section>
