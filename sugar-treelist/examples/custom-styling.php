@@ -13,13 +13,11 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\TreeList\{Model, StringItem, Prefixer, Suffixer};
 
 class StarsPrefixer implements Prefixer {
-    public int $cursorIndex = 0;
     public function initPrefixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
         int $lineOffset, int $width, int $height, int $totalItems
     ): int {
-        $this->cursorIndex = $currentIndex;
-        return 3; // width for "*** "
+        return 3; // width for '★  ' / '✦  ' — each glyph string is 3 cells
     }
     public function prefix(int $currentLine, int $totalLines): string {
         return $currentLine === 0 ? '★  ' : '✦  ';
