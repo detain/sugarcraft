@@ -233,6 +233,20 @@ final class HyperlinkTest extends TestCase
                 $this->assertStringContainsString('control characters', $e->getMessage());
             }
         }
+
+        // A legal multibyte character before the poison does not launder it:
+        // the lone C1 after a complete sequence stays refused (fail-closed).
+        foreach ([
+            "https://example.com/→\x9Cst",
+            "https://example.com/😀\xC2\x9Bevil",
+        ] as $poisoned) {
+            try {
+                new Hyperlink($poisoned, 'ok');
+                $this->fail('valid multibyte + C1 mix was accepted: ' . addcslashes($poisoned, "\x80-\x9f"));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('control characters', $e->getMessage());
+            }
+        }
     }
 
     public function testUnserializationReforgesTheC1Guards(): void
@@ -256,13 +270,34 @@ final class HyperlinkTest extends TestCase
 
     public function testWellFormedUtf8OutsideTheC1RangeStillPasses(): void
     {
-        // café carries C3 A9 and NBSP carries C2 A0 — neither is a C1 control,
-        // so the widened refusal must not turn into a bare-UTF8 ban.
-        $link = new Hyperlink('https://example.com/café');
-        $this->assertStringContainsString('café', $link->url());
+        // Real IRI payloads: '→' is E2 86 92, the grinning face is F0 9F 98 80
+        // and Cyrillic 'ет' is D0 B5 D1 82 — each carries bytes inside the
+        // 0x80-0x9F window as UTF-8 CONTINUATION bytes, which a byte-blind
+        // [\x80-\x9f] class wrongly refuses (CB-8b, r1 MAJOR-1). café carries
+        // C3 A9 and NBSP carries C2 A0 — neither is a C1 control either, so
+        // the refusal must not turn into a bare-UTF8 ban.
+        $payloads = [
+            'arrow' => 'https://example.com/→next',
+            'emoji' => 'https://example.com/😀',
+            'cyrillic' => 'https://example.com/ет',
+            'accent' => 'https://example.com/café',
+        ];
+        foreach ($payloads as $label => $url) {
+            $link = new Hyperlink($url, $label);
+            $this->assertSame($url, $link->url(), $label . ' url must survive untouched');
+            $this->assertSame($label, $link->id(), $label . ' id must survive untouched');
+        }
 
         $nbsp = new Hyperlink("https://example.com/a\xC2\xA0b", 'ok');
         $this->assertSame("https://example.com/a\xC2\xA0b", $nbsp->url());
+
+        // The reforged unserialization gate must accept the same multibyte
+        // payloads it accepts in the constructor — it guards controls, not
+        // IRI bytes.
+        $link = $this->blankHyperlink();
+        $link->__unserialize(['url' => 'https://example.com/→next', 'id' => 'arrow']);
+        $this->assertSame('https://example.com/→next', $link->url());
+        $this->assertSame('arrow', $link->id());
     }
 
     private function blankHyperlink(): Hyperlink

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\CellBuffer;
 
+use SugarCraft\Core\Util\Ansi;
+
 /**
  * OSC 8 hyperlink anchor — a clickable terminal link.
  *
@@ -23,10 +25,10 @@ final class Hyperlink implements \JsonSerializable
         public readonly string $url,
         public readonly string $id = '',
     ) {
-        if (preg_match('/[\x00-\x1f\x7f\x80-\x9f]|\xC2[\x80-\x9F]/', $url) === 1) {
+        if (self::containsForbiddenControls($url)) {
             throw new \InvalidArgumentException('Hyperlink URL must not contain control characters');
         }
-        if (preg_match('/[\x00-\x1f\x7f\x80-\x9f]|\xC2[\x80-\x9F]/', $id) === 1) {
+        if (self::containsForbiddenControls($id)) {
             throw new \InvalidArgumentException('Hyperlink ID must not contain control characters');
         }
         if (str_contains($id, ';')) {
@@ -69,6 +71,22 @@ final class Hyperlink implements \JsonSerializable
     }
 
     /**
+     * Refusal predicate: C0/DEL (leg 1), every UTF-8 C1 spelling C2 80-BF
+     * (leg 1), and lone raw 8-bit C1 bytes (leg 2). Well-formed UTF-8
+     * sequences whose continuation bytes happen to land in the 0x80-0x9F
+     * numeric range (→, 😀, Cyrillic) are NOT controls — they must stay
+     * constructible as IRI URLs. Leg 2 is sound because leg 1 already
+     * refuses every ESC byte and every C2 xx spelling, so Ansi::strip()
+     * can only differ on a LONE raw 0x80-0x9F byte. This matches the
+     * sugar-core Sanitize::untrusted() strip-set exactly.
+     */
+    private static function containsForbiddenControls(string $value): bool
+    {
+        return preg_match('/[\x00-\x1f\x7f]|\xC2[\x80-\x9F]/', $value) === 1
+            || Ansi::strip($value) !== $value;
+    }
+
+    /**
      * Serialization hook for caching/IPC use cases.
      *
      * @return array{url: string, id: string}
@@ -92,10 +110,10 @@ final class Hyperlink implements \JsonSerializable
     {
         $url = (string) ($data['url'] ?? '');
         $id = (string) ($data['id'] ?? '');
-        if (preg_match('/[\x00-\x1f\x7f\x80-\x9f]|\xC2[\x80-\x9F]/', $url) === 1) {
+        if (self::containsForbiddenControls($url)) {
             throw new \InvalidArgumentException('Hyperlink URL must not contain control characters');
         }
-        if (preg_match('/[\x00-\x1f\x7f\x80-\x9f]|\xC2[\x80-\x9F]/', $id) === 1) {
+        if (self::containsForbiddenControls($id)) {
             throw new \InvalidArgumentException('Hyperlink ID must not contain control characters');
         }
         if (str_contains($id, ';')) {
