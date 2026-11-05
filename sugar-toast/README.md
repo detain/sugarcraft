@@ -14,7 +14,7 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 
 ## Features
 
-- **9 positions**: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight
+- **9 positions**: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight
 - **4 alert types**: Error, Warning, Info, Success — severity carried by icon + colour (add `withAccessibleText()` for a plain-text word; the chrome itself is identical across types)
 - **Dynamic width**: full `maxWidth` by default; auto-fit to content engages ONLY via `withMinWidth(n>0)` — stacked boxes then anchor at ragged per-message offsets (shrink-to-fit vs stack-alignment trade)
 - **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain text)
@@ -80,12 +80,12 @@ throws `InvalidArgumentException`.
 Position::TopLeft
 Position::TopCenter
 Position::TopRight
-Position::MiddleLeft
-Position::MiddleCenter
-Position::MiddleRight
 Position::BottomLeft
 Position::BottomCenter
 Position::BottomRight
+Position::MiddleLeft
+Position::MiddleCenter
+Position::MiddleRight
 ```
 
 ## Overflow & Concurrency
@@ -442,7 +442,7 @@ already over the new cap survive until the next push evicts them.
 
 | Enum | Cases |
 |-------|-------|
-| `Position` | TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight |
+| `Position` | TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight |
 | `ToastType` | Error, Warning, Info, Success |
 | `Overflow` | DropOldest, DropNewest, Enqueue |
 | `SymbolSet` | NerdFont, Unicode, Ascii |
