@@ -442,6 +442,25 @@ around some async work — pin the shared event loop in your `tests/bootstrap.ph
 \SugarCraft\Testing\LoopPin::pinStableClock();
 ```
 
+Two caveats about the pin itself, before why it exists:
+
+- Pin before anything else touches it: an already-created loop may own watchers that
+  do not transfer. `pinStableClock()` also calls `Loop::stop()` after installing the
+  pin, which disarms the shutdown hook `Loop::get()` may already have registered — so a
+  late pin can no longer leave the process hanging on a stale loop with a periodic
+  timer, and there is no surprise loop run after your last test. The stopped-state that
+  `Loop::stop()` leaves is process-wide and permanent, and it cuts both ways: it also
+  switches off React's "you never have to call `run()` yourself" convenience, so a suite
+  that schedules work on `Loop::get()` and leaves the shutdown hook to execute it gets
+  nothing instead. Call `run()` explicitly — which a test that wants to assert on the
+  outcome should be doing anyway.
+- `StreamSelectLoop`'s constructor calls `pcntl_async_signals(true)` process-wide, at
+  bootstrap. `Program::run()` normally does the same in production, so for most suites
+  this is the production setting arriving earlier rather than a divergence — but a
+  Program constructed with `withoutSignalHandler` or `catchInterrupts: false` never
+  enables async signals at all, and a suite built around one of those does diverge.
+  Re-check it if your suite does its own `pcntl_signal()` bookkeeping.
+
 Why: `Loop::get()` autodetects, and where `ext-uv` is installed it returns `ExtUvLoop`.
 libuv computes a timer's deadline against the loop's **cached** clock, and refreshes that
 cache once per loop iteration — as soon as the poll syscall returns. A timer's error is
@@ -484,22 +503,7 @@ Two corollaries worth spelling out, because they are easy to get backwards:
 `Program::run()` is not automatically immune either; see the timer-accuracy notes on that
 method for which sugar-core paths are safe (blocking in `update()`, because Cmds are
 deferred through `futureTick()`) and which are exposed (blocking inside a Cmd that then
-arms). Pin the loop before anything else touches it: an already-created loop may own
-watchers that do not transfer. `LoopPin` additionally calls `Loop::stop()` after installing
-the pin, which disarms the shutdown hook `Loop::get()` may already have registered — so a
-late pin can no longer leave the process hanging on a stale loop with a periodic timer, and
-there is no surprise loop run after your last test. That last part cuts both ways, and the
-flag is process-wide and permanent: it also switches off React's "you never have to call
-`run()` yourself" convenience, so a suite that schedules work on `Loop::get()` and leaves
-the shutdown hook to execute it gets nothing instead. Call `run()` explicitly — which a
-test that wants to assert on the outcome should be doing anyway.
-
-Note one global side effect: `StreamSelectLoop`'s constructor calls
-`pcntl_async_signals(true)` process-wide, at bootstrap. `Program::run()` normally does the
-same in production, so for most suites this is the production setting arriving earlier
-rather than a divergence — but a Program constructed with `withoutSignalHandler` or
-`catchInterrupts: false` never enables async signals at all, and a suite built around one
-of those does diverge. Re-check it if your suite does its own `pcntl_signal()` bookkeeping.
+arms).
 
 `LoopPin::hasStaleClockRisk($loop)` reports whether a given loop is affected, for a suite
 that wants to assert or diagnose rather than pin.
