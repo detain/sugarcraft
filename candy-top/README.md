@@ -601,7 +601,7 @@ Known limitations on FreeBSD:
 - No per-process IO (FreeBSD exposes only block-op counts), so the IO columns show `-`.
 - GPUs come from `nvidia-smi` only (no AMD, Intel or NPU readings).
 - No zswap.
-- No container or jail tags, so the containers box stays empty.
+- No per-process container or jail tags, so the containers box stays empty (running inside a jail is still detected and shown as `jail` in the cpu box border, as the container engines are on Linux).
 - One aggregate battery (`acpi`).
 - With `security.bsd.see_other_uids=0`, an unprivileged user sees only their own processes.
 - CPU interrupt time is counted as `irq` (busy) rather than dropped as btop's FreeBSD port does.
