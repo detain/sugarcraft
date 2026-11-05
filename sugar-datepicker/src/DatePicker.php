@@ -17,8 +17,9 @@ use SugarCraft\Core\Util\Width;
  * selected date, today marker, optional min/max selection bounds, and
  * navigation.
  *
- * All navigation and selection methods are immutable: they return a new
- * instance and never mutate the receiver.
+ * Navigation and selection methods are immutable: a state change returns a
+ * new instance and never mutates the receiver; a no-op or refused operation
+ * returns the receiver itself.
  *
  * Design antecedent: EthanEFung/bubble-datepicker, implemented as a native
  * PHP component (there is no Go runtime dependency).
@@ -52,7 +53,7 @@ final class DatePicker
      */
     private const VIEW_FLOOR_POS = 12;
 
-    /** Maximum month-position bound (year 10000, the upper tolerated edge). */
+    /** Largest cursor grid index (the 6×7 day grid minus one cell). */
     private const DAY_INDEX_MAX = 41;
 
     // Key constants for handleKey()
@@ -134,6 +135,10 @@ final class DatePicker
     // Factory
     // -------------------------------------------------------------------------
 
+    /**
+     * Public constructor — kept as a house exception pending a v2 convergence
+     * on private ctors; the docs advertise `DatePicker::new()` as the entry point.
+     */
     public function __construct(?\DateTimeImmutable $time = null)
     {
         $t = $time ?? new \DateTimeImmutable();
@@ -533,9 +538,11 @@ final class DatePicker
      * Escape:     range mode — clear the range; single mode — clear the
      *             selection (same as ClearDate())
      * Home/End:   jump to the first / last valid day of the viewed month
+     *             (the month's day-cell window — min/max bounds are not
+     *             consulted, so a jump can land on a dimmed out-of-bounds day)
      *
-     * An unrecognized key returns a functionally identical copy; a refused
-     * selection returns the receiver itself. Callers must compare on state,
+     * An unrecognized key returns the receiver itself, as does a refused
+     * selection. Callers must compare on state,
      * not object identity, to detect a no-op.
      */
     public function handleKey(string $key): self
@@ -705,7 +712,12 @@ final class DatePicker
         return $this->gridIndexOf($date) ?? $this->firstValidIndex();
     }
 
-    /** Grid index of the viewed month's first day (its weekday column). */
+    /**
+     * Grid index of the viewed month's first day (its weekday column).
+     * "Valid" here means grid-valid, not in-bounds: this window ignores
+     * min/max, so a jump can land on a dimmed out-of-bounds day (the trap
+     * the constraints example documents).
+     */
     private function firstValidIndex(): int
     {
         $firstOfMonth = $this->firstOfViewMonth();
@@ -716,7 +728,10 @@ final class DatePicker
         return $this->clampedCursor((int) $firstOfMonth->format('w'));
     }
 
-    /** Grid index of the viewed month's last day. */
+    /**
+     * Grid index of the viewed month's last day — grid-valid as above,
+     * not consulted against min/max bounds.
+     */
     private function lastValidIndex(): int
     {
         $firstOfMonth = $this->firstOfViewMonth();

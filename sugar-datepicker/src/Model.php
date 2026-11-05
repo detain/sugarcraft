@@ -46,7 +46,9 @@ final class Model implements \SugarCraft\Core\Model
      *
      * Maps arrow keys to cursor movement, PageUp/PageDown to previous/next
      * month, Enter to SelectDate (non-range mode) or range-start/end (range
-     * mode), Escape to ClearDate, and Home/End to the first/last valid day.
+     * mode), Escape to ClearDate in single mode — in range mode Escape clears
+     * the pending range and never the selection — and Home/End to the
+     * first/last valid day.
      * Records events to the EventStore when one is injected.
      *
      * Chorded Enter/Escape/PageUp/PageDown (Ctrl or Alt held) are ignored so a
