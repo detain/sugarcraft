@@ -514,7 +514,7 @@ trait HandlesRunControl
      * latch, so the count the policy checked and the count the ping books are
      * the same count.
      *
-     * @return array{Model, ?Cmd}
+     * @return array{0: self, 1: ?\Closure}
      */
     private function handleKeepWarmTick(): array
     {
@@ -593,7 +593,11 @@ trait HandlesRunControl
     {
         $summary = $this->summaryBackend;
         if ($summary instanceof CacheReusingSummaryBackend) {
-            return $summary->engine();
+            // The carrier stores whatever it was handed and its contract only
+            // promises the summarising interface; a non-backend there is not
+            // pingable, so the refusal is a real door, not insurance prose.
+            $engine = $summary->engine();
+            return $engine instanceof \SugarCraft\Code\Backend ? $engine : null;
         }
         if ($summary instanceof SummarisesWithCache) {
             return $summary;

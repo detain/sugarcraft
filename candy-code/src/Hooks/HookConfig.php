@@ -157,7 +157,7 @@ final class HookConfig
     /**
      * Load hooks from a YAML file, or nothing at all when there is no file.
      *
-     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool}>
+     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, prompt: string, model: string}>
      *
      * @throws \RuntimeException when the file exists and cannot be read
      * @throws \InvalidArgumentException when the file exists and cannot be used
@@ -198,7 +198,7 @@ final class HookConfig
      *        a path when there is one, so the report names the file the user
      *        has to go and fix
      *
-     * @return array<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool}>
+     * @return list<array{name: string, event: string, matcher: string, command: string, description: string, disabled: bool, timeout: float, unattendedAsk: bool, type: string, url: string, headers: array<string, string>, allowedEnvVars: list<string>, prompt: string, model: string}>
      *
      * @throws \InvalidArgumentException when the content is not a usable hook file
      */
