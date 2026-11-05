@@ -75,8 +75,11 @@ echo StatusLine::error('connection refused'), "\n";
   output under every profile pass `Theme::plain()` and, for a colourless
   Frame border, `->withBorderStyle(Style::new())`.
 - **`StatusLine`** — `success` / `error` / `warn` / `info` / `prompt` static
-  helpers returning a themed glyph + space + message. Only the glyph and
-  its space are styled; the message itself stays plain. Every call takes a
+  helpers returning a themed glyph + space + message. Only
+  the glyph is styled; the space and the message itself stay plain. The severity
+  glyphs (✓ ✗ ⚠ ℹ and the prompt) are plain Unicode — they survive every
+  degraded profile, so a status line is never colour-only: screen readers and
+  log greps still see them. Every call takes a
   trailing `int|AutoWidth|null $width` budget: an over-long message is
   clipped with `…` to fit (the glyph is never clipped; `null` renders the
   full message).

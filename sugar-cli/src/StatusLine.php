@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\Width;
  * CLI tooling so the four severities (plus the prompt) all look
  * consistent within one program.
  *
- * Only the leading glyph (and its following space) is styled; the
+ * Only the leading glyph is styled; the
  * message itself stays plain, exactly as callers hand it over.
  */
 final class StatusLine
@@ -67,7 +67,7 @@ final class StatusLine
     }
 
     /**
-     * Apply $style to the leading glyph + space; the message stays plain.
+     * Apply $style to the leading glyph; the message stays plain.
      *
      * The caller message is neutralized via {@see SafeText::line()} before it
      * reaches the terminal — it is interpolated raw into styled output, so an
