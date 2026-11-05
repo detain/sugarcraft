@@ -21,7 +21,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-navstack/issues",
-        "source": "https://github.com/sugarcraft/sugar-navstack"
+        "source": "https://github.com/sugarcraft/sugar-navstack",
+        "docs": "https://sugarcraft.github.io/lib/sugar-navstack.html"
     },
     "require": {
         "php": "^8.3",
