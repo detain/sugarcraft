@@ -4,6 +4,7 @@
 
 > Formerly published as `sugarcraft/candy-mines` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Mines\` → `SugarCraft\Minesweeper\`. <!-- @rename-keep -->
+> The pre-rename `dev-legacy/candy-mines` branch is deprecated and unreferenced; nothing under the old name ships updates. <!-- @rename-keep -->
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
