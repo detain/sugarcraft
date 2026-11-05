@@ -179,7 +179,10 @@ simulator, not the real runtime, and the boundary is explicit:
   never sees them, and any messages still queued when the halt lands are
   counted in `$result->droppedAfterStop` instead of vanishing silently.
   `ScriptedInput::quit()` sends the real thing.
-- `SuspendMsg` — consumed (there is no terminal to suspend).
+- `SuspendMsg` — DROPPED, and this is a divergence, not parity: the real
+  `Program::dispatch()` delivers `SuspendMsg` to `update()` and later emits
+  `ResumeMsg`; the simulator does neither, so Ctrl-Z-aware models cannot
+  exercise suspend/resume under it.
 - `ExecRequest` — **throws** a `RuntimeException`. `exec` suspends onto a real
   terminal; the simulator has none, so it refuses rather than faking a pass.
 - **Startup trio** — `Program` dispatches `WindowSizeMsg`, `EnvMsg` and

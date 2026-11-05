@@ -49,7 +49,10 @@ use SugarCraft\Core\Util\ColorProfile;
  *  - {@see ExecRequest} — THROWS. Exec suspends the real terminal; the
  *    simulator has none to hand over. A test that exercises exec belongs at
  *    the ProcessExecutor/integration layer, not the TEA-unit layer.
- *  - {@see SuspendMsg} — no-op (nothing to suspend).
+ *  - {@see SuspendMsg} — DROPPED, a divergence from the runtime: real
+ *    Program::dispatch() delivers it to update() and later emits ResumeMsg;
+ *    the simulator emits neither, so Ctrl-Z-aware models cannot exercise
+ *    suspend/resume under it.
  *  - {@see QuitMsg} / {@see InterruptMsg} — the drain STOPS, and these
  *    messages never reach the model (exactly what Program does); messages
  *    still queued behind the stop are dropped and counted in
@@ -454,7 +457,11 @@ final class ProgramSimulator
             }
 
             if ($msg instanceof SuspendMsg) {
-                continue; // nothing to suspend; consumed like the runtime consumes it
+                // DIVERGENCE from the runtime, not parity: Program delivers
+                // SuspendMsg to update() and later emits ResumeMsg. The
+                // simulator has no terminal to hand over and no signal
+                // plumbing, so it drops the message and emits neither.
+                continue;
             }
 
             if ($msg instanceof QuitMsg || $msg instanceof InterruptMsg) {

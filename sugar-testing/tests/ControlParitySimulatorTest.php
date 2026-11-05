@@ -33,9 +33,12 @@ use SugarCraft\Testing\TestResult;
  * could green-light a model that production would never show those
  * messages, and a scripted QuitMsg kept the drain running. These pins
  * prove the interception ladder: control messages are handled the way the
- * runtime handles them (executed, written, or halting the drain), never
- * delivered to the model, with {@see \SugarCraft\Testing\TestResult::$droppedAfterStop}
- * counting what the halt discarded.
+ * runtime handles them (executed, written, or halting the drain), with
+ * {@see \SugarCraft\Testing\TestResult::$droppedAfterStop}
+ * counting what the halt discarded. SuspendMsg is the one DROPPED
+ * divergence: the runtime delivers it to update() and later emits
+ * ResumeMsg; the simulator emits neither, so Ctrl-Z-aware models cannot
+ * exercise suspend/resume under it.
  */
 #[Group('control-parity')]
 final class ControlParitySimulatorTest extends TestCase
@@ -114,7 +117,7 @@ final class ControlParitySimulatorTest extends TestCase
         self::assertSame(1, $result->droppedAfterStop);
     }
 
-    public function testSuspendMsgIsConsumedWithoutAModelTurn(): void
+    public function testSuspendMsgIsDroppedWithoutAModelTurn(): void
     {
         $result = ProgramSimulator::for(new ControlRecorderModel())
             ->send(new SuspendMsg(), $this->key('s'))
