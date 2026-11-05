@@ -135,7 +135,7 @@ frame until the file returns.
 |---|---|
 | 0 | rendered successfully (an empty *file* renders blank) |
 | 1 | runtime failure |
-| 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument, non-text (binary) input, invalid `--width`, or no input (no file argument with a terminal on stdin, or empty stdin) |
+| 2 | usage error — bad theme, unreadable/oversized theme config, missing or unreadable file, a directory argument, non-text (binary) input, a document over 64 MiB, invalid `--width`, or no input (no file argument with a terminal on stdin, or empty stdin) |
 
 Usage errors are named and go to **stderr** (`open notes.md: no such file`,
 `open docs/: is a directory`, …); file paths and option values coming from
