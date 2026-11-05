@@ -72,8 +72,8 @@ final class EscapeDecoder
      * SS3 (ESC O <final>) application-cursor/keypad table. Stateless by law:
      * the ESC O <letter> frames are unambiguous regardless of DECKPAM/DECARM.
      *
-     * @see ansicode.txt:742-753 (VT100 keypad application-mode table) and
-     *      xterm ctlseqs — SS3 `ESC O p..y` etc.
+     * @see https://invisible-island.net/xterm/ctlseqs/ctlseqs.html — SS3
+     *      `ESC O p..y` frames and the VT100 keypad application-mode table.
      */
     private const SS3_KEY_MAP = [
         'P' => 'F1',
@@ -132,8 +132,9 @@ final class EscapeDecoder
     ];
 
     /**
-     * Legacy numbered function keys in the tilde family (xterm
-     * `kf1..kf24` numbering: 11..38 with the VT gaps). This numbering belongs
+     * Legacy numbered function keys in the tilde family (terminfo
+     * `kf1..kf24`-style numbering: 11..38 with the VT gaps; conventions vary
+     * between terminfo databases). This numbering belongs
      * to the tilde space ONLY — CSI-u functional codes are the spec table
      * KITTY_FUNCTIONAL_KEYS below, not these numbers.
      */

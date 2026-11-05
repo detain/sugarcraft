@@ -8,8 +8,8 @@ namespace SugarCraft\Input;
  * Contract for a pull-based source of decoded terminal events.
  *
  * Implementations differ in where their bytes come from — a stream resource
- * (Driver\StreamInputDriver), a signal disposition (Driver\SignalResizeDriver)
- * or nothing at all — and each documents its own construction and lifecycle.
+ * (Driver\StreamInputDriver) or a signal disposition (Driver\SignalResizeDriver)
+ * — and each documents its own construction and lifecycle.
  * The interface promises only that read() is non-blocking and yields at most
  * one Event, or null when none is available.
  *
