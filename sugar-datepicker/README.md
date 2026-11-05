@@ -195,13 +195,18 @@ $picker = $picker
 `home`, `end`, `enter`, `esc` (core names this 'escape') — onto cursor
 movement, selection and clearing.
 Unrecognized keys are ignored (the receiver is returned unchanged). The `Model`
-wrapper translates sugar-core `KeyMsg` messages into these strings, so a TEA
-application never calls `handleKey()` directly.
+wrapper routes only Enter and Escape through these `KEY_*` strings — its arrow
+arm calls the `MoveCursor*` methods directly, and `PageUp`/`PageDown` (which
+have no `KEY_*` constant) call `GoToPreviousMonth()`/`GoToNextMonth()` — so a
+TEA application never needs to call `handleKey()` directly.
 
 Honest limitations: there is no month-wrap on arrow keys (they clamp at the grid
 edge and can rest on empty lead-in/trailing cells, where single-mode Enter falls
 back to the first of the month but range-mode Enter does nothing), and no
-typeahead year entry. `PageUp`/`PageDown` step one
+typeahead year entry. Chord policy: through the `Model`, chorded Enter, Escape,
+PageUp and PageDown (Ctrl or Alt held) are ignored so a host's reserved chords
+are not hijacked, but the bare arrow keys and Home/End still act under any
+chord. `PageUp`/`PageDown` step one
 month through the `Model`; larger jumps between months and years go through the
 `GoTo*` methods.
 
