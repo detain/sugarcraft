@@ -79,6 +79,7 @@ echo $model->view();
             <div class="feature"><strong>Word-wrap</strong><span>Long items wrap at the configured viewport width (setWidth) — the terminal is never auto-detected.</span></div>
             <div class="feature"><strong>Filter state machine</strong><span>withFilterFn() / withoutFilter() with FilterState enum (unfiltered / filtering).</span></div>
             <div class="feature"><strong>Fuzzy matching</strong><span>FuzzyMatch delegates scoring to sugar-fuzzy's SmithWatermanMatcher (SSOT).</span></div>
+            <div class="feature"><strong>Per-row delta repaint</strong><span><code>view()</code> emits a full frame, then only changed rows as CUP + EL fragments; assistive hosts want <code>lines()</code> instead, or <code>resetPreviousFrame()</code> before every paint.</span></div>
             
     </div>
 

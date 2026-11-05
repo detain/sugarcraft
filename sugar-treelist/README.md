@@ -316,6 +316,15 @@ onto the same terminal region, call `resetPreviousFrame()` on the fork you are
 about to render — otherwise it diffs against its sibling's last frame. Same
 rule after any out-of-band write to the list's screen area.
 
+**Assistive hosts:** a delta frame is a fragment — changed rows plus absolute
+cursor jumps — so screen readers, braille displays and text-extraction tools
+see no stable reading order in it; only a host that interprets CUP/EL renders
+it whole. To serve an assistive surface (or to capture frames for later
+reading), render with `lines()` — the row data with no delta bookkeeping — or
+call `resetPreviousFrame()` before every paint so each frame is a full rewrite.
+There is deliberately no configuration-level "always full frame" mode; those
+two routes are the supported ones.
+
 ## Cursor & navigation API
 
 Beyond the fluent setters shown above, the navigation surface is:
@@ -325,7 +334,7 @@ Beyond the fluent setters shown above, the navigation surface is:
 - `cursorIndex()` — the cursor's **item** index (not a row position: with multi-line items, rows and items differ). `cursorItem()` — the cursor item's `\Stringable`; throws `RuntimeException` on an empty list. `tryCursorItem()` returns `null` instead, matching the `tryItemAt()`/`itemAt()` pair.
 - `length()`, `isEmpty()`, `itemAt(int)`, `tryItemAt(int)`, `find(\Stringable)`, `itemIds()` — read-only item access (indices address the **visible** projection, so they follow the active filter).
 - `lines()` — the laid-out frame rows without any delta bookkeeping; throws `RuntimeException` with a localized message (see below) on an empty list or zero viewport. `linesStream()` is a generator-shaped wrapper over the same eager computation — it interleaves nothing.
-- `view()` — full frame or row delta as described above. Together with `resetPreviousFrame()` it is one of only two members that mutate in place: `view()` updates the render memo, `resetPreviousFrame()` (void) drops it, which is why the immutability contract is scoped to item/configuration data. Unlike `lines()`, `view()` **never throws**: a `Throwable` raised mid-render drops the memo and the frame becomes the sanitized exception message on a single line (`Sanitize::untrustedForMarkedFrames` is the choke, so a failure surfaces as readable text, never as a live escape channel); pass a `LoggerInterface` as `view()`'s optional parameter to receive the same failure at `warning` level. `lines()` keeps the opposite polarity and throws.
+- `view()` — full frame or row delta as described above. Together with `resetPreviousFrame()` it is one of only two members that mutate in place: `view()` updates the render memo, `resetPreviousFrame()` (void) drops it, which is why the immutability contract is scoped to item/configuration data. Unlike `lines()`, `view()` **never throws**: a `Throwable` raised mid-render drops the memo and the frame becomes the swept exception message (`Model::sweepForFrame` — the marked-frames sanitize plus the CR→LF fold — is the choke, so a failure surfaces as readable text, never as a live escape channel; line breaks the message itself carries stay breaks); pass a `LoggerInterface` as `view()`'s optional parameter to receive the same failure at `warning` level. `lines()` keeps the opposite polarity and throws.
 
 ## Localisation
 
