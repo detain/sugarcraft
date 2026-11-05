@@ -1,8 +1,8 @@
 {
     "title": "CandyStarter — SugarCraft",
-    "description": "CandyStarter: Clone-and-run starter project for building your own SugarCraft apps.",
+    "description": "CandyStarter: starter project for building your own SugarCraft apps — scaffold with composer create-project.",
     "ogTitle": "CandyStarter — SugarCraft",
-    "ogDescription": "Clone-and-run starter project for building your own SugarCraft apps.",
+    "ogDescription": "Starter project for building your own SugarCraft apps — scaffold with composer create-project.",
     "emoji": "🧪",
     "displayName": "CandyStarter",
     "tagline": "Starter skeleton for SugarCraft apps",
