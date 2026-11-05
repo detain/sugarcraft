@@ -1,6 +1,6 @@
 # VHS tape — CandyMinesweeper flagging.
 # f toggles flag on cursor cell (place, place, toggle off).
-# Render with: `vhs candy-minesweeper/.vhs/flagging.tape`
+# Render with: `vhs .vhs/flagging.tape` (from the candy-minesweeper/ lib dir, as CI does)
 Output .vhs/flagging.gif
 
 Set FontSize 14
