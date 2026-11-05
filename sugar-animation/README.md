@@ -2,8 +2,7 @@
 
 # SugarAnimation
 
-> Formerly published as `sugarcraft/candy-flip` (renamed 2026-10). <!-- @rename-keep -->
-> Namespace changed: `SugarCraft\Flip\` → `SugarCraft\Animation\`. <!-- @rename-keep -->
+> Formerly published as `sugarcraft/candy-flip`; renamed 2026-10, with the namespace moving `SugarCraft\Flip\` → `SugarCraft\Animation\`. <!-- @rename-keep -->
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
@@ -16,18 +15,30 @@
 
 ![demo](.vhs/play.gif)
 
-ANSI/GIF animation toolkit on the SugarCraft stack for PHP 8.3+. Decodes a `.gif` on disk via `ext-gd`, downsamples each frame to a configurable cell grid, and renders the animation into the terminal as 24-bit background-coloured cells (`solid` preset) or shaded Unicode glyphs from a luminance ramp (`density` preset) at a configurable framerate. It also plays back `.ansi` ANSI-art documents — parse, catalog, and timer-free frame pacing (see [ANSI art playback](#ansi-art-playback-ansiart-artlibrary-artloop) below); `.ansi` playback needs no GD at all.
+SugarAnimation is an ANSI/GIF animation toolkit on the SugarCraft stack for PHP 8.3+. It decodes a `.gif` on disk via `ext-gd`, downsamples each frame to a configurable cell grid, and renders the animation in 24-bit color — the `solid` preset paints full cells with 24-bit background color (space glyphs), the `density` preset picks ASCII glyphs from a luminance ramp and carries the color as a 24-bit foreground.
+
+Separately, it plays back `.ansi` ANSI-art documents — parse, catalog, and timer-free frame pacing (see [ANSI art playback](#ansi-art-playback-ansiart--artlibrary--artloop) below). `.ansi` playback needs no GD at all.
 
 ```bash
 composer require sugarcraft/sugar-animation
 ```
 
-Want a ready-made viewer command? [`sugarcraft/candy-gifview`](../candy-gifview/) is the CLI front end built on this library:
+Want a ready-made viewer command? **candy-gifview** is the CLI front end built on this library, shipped as its own package ([source](https://github.com/detain/sugarcraft/tree/master/candy-gifview)):
 
 ```bash
-candy-gifview my-animation.gif         # solid-block preset (default)
+composer require sugarcraft/candy-gifview
+```
+
+```bash
+candy-gifview my-animation.gif         # solid preset (default)
 candy-gifview my-animation.gif density # ASCII luminance ramp
 ```
+
+## Requirements
+
+- PHP 8.3+ (`declare(strict_types=1)` codebase, sugar-core TEA stack).
+- `ext-gd` for the GIF path only. Without it every `Decoder` entry point throws a loud `RuntimeException` ("sugar-animation: …") — the `.ansi` playback side (AnsiArt/ArtLibrary/ArtLoop) never touches GD.
+- The cell grid is fixed at decode time: resizing the terminal clips the already-decoded art, it never re-scales. The Player's status line is not width-clamped, so playback looks its best at 82+ columns; headless decoders should size the grid to their host surface with that in mind.
 
 ## Player keys
 
@@ -37,7 +48,19 @@ candy-gifview my-animation.gif density # ASCII luminance ramp
 | `←`                | Step back one frame                 |
 | `→`                | Step forward one frame              |
 | `d`                | Toggle solid ↔ density preset       |
-| `q` / `Esc`        | Quit                                |
+| `q` / `Esc` / Ctrl+C | Quit                            |
+
+The keys are fixed — there is no rebind API. A host that wants different chords must intercept or synthesize messages before they reach `Player::update()`.
+
+## Terminal support
+
+Both presets always emit 24-bit truecolor SGR (`38;2;…` / `48;2;…`). There is no 256-color fallback ladder and no `NO_COLOR` / monochrome mode: on a terminal without truecolor the cells degrade (often to default colors), and `density` stays legible there — it is the better preset. On `TERM=dumb` or otherwise capability-poor terminals expect raw escape sequences rather than adapted output.
+
+The `.ansi` side has its own fallback: `ArtLibrary` resolves a slug through a `tc` → `256` → `16` depth cascade, picking a pre-authored variant that matches the detected `ColorProfile` instead of re-coloring at runtime.
+
+## Localization
+
+Refusal and decode errors route through sugar-core `Lang` in the `sugar-animation: …` voice, with translations shipped for every locale in `lang/` (see the repo's `LOCALES.md`). The Player's one-line status overlay is currently English-only; i18n-ing it is a tracked follow-up.
 
 ## ANSI art playback (AnsiArt / ArtLibrary / ArtLoop)
 
@@ -53,49 +76,45 @@ no timers, `frameAt(elapsedSeconds)` maps wall-clock offset to frame index.
 
 ```php
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Animation\AnsiArt;
 use SugarCraft\Animation\ArtLibrary;
 use SugarCraft\Animation\ArtLoop;
 
-$library = ArtLibrary::fromDir(__DIR__ . '/logo');           // optional ->mergeManifest('logos.jsonl')
-$depth   = ArtLibrary::profileTag(ColorProfile::detect());  // 'tc' | '256' | '16'
-$art     = $library->pick('art-deco-gilt', $depth);         // ?AnsiArt, cascade-resolved
+$library   = ArtLibrary::fromDir(__DIR__ . '/logo');        // optional ->mergeManifest('logos.jsonl')
+$depth     = ArtLibrary::profileTag(ColorProfile::detect()); // 'tc' | '256' | '16'
+$art       = $library->pick('art-deco-gilt', $depth);       // ?AnsiArt, cascade-resolved
+$startedAt = microtime(true);
 
 if ($art !== null && $art->isAnimated()) {
     $loop  = ArtLoop::new($art->frameCount());              // 0.1 s/frame + 2.5 s closing hold
-    $frame = $art->frameCells($loop->frameAt(microtime(true) - $startedAt));
-    foreach ($frame as $y => $row) {
-        foreach ($row as $x => $cell) {
-            $surface->put($x, $y, $cell->glyph, $cell->sgr); // paint cells, or echo $art->sgrText($i)
-        }
-    }
+    $frame = $loop->frameAt(microtime(true) - $startedAt);
+    echo $art->sgrText($frame);                             // canonical, SGR-safe replay
 }
 ```
 
+Caveat: parsed cells keep C0 control bytes that were not part of an escape sequence as literal glyph data — echoing `$cell->glyph` raw replays them to your terminal (an audible nuisance at best, cursor/log injection at worst). `sgrText()` is the safe reconstruction: it re-emits only the canonical SGR runs and the glyphs. For a self-contained GIF run, `php examples/play.php` generates a tiny synthetic animated GIF and plays it end-to-end through both presets.
+
 ## Implementation notes
 
-The decoder uses PHP's built-in `imagecreatefromstring()` for in-memory single-frame extraction — no temporary files are written to disk. It walks the GIF89a byte-stream manually to:
+The decoder is hand-rolled over the GIF89a byte stream — it never loads the whole animation into a `GdImage` at once — and uses PHP's `imagecreatefromstring()` for per-frame in-memory extraction; no temporary files are written. The walk:
 
 1. Parse the Logical Screen Descriptor and Global Color Table (GCT) from the header.
 2. Walk the frame stream, extracting each frame's Graphic Control Extension (GCE) delay (a delay of 0 inherits the previous frame's, defaulting to 10cs), disposal method (0–3), and transparent-color index.
-3. Extract per-frame Local Color Table (LCT) when present; fall back to the GCT otherwise.
+3. Extract the per-frame Local Color Table (LCT) when present; fall back to the GCT otherwise.
 4. Reassemble a minimal single-frame GIF payload in memory and pass it to `imagecreatefromstring()`.
-5. Area-average downsample the resulting `GdImage` to the requested cell grid, skipping transparent pixels in the average.
+5. Area-average downsample the resulting `GdImage` to the requested cell grid, skipping fully transparent pixels in the average.
 
-GIF parsing is hand-rolled to avoid loading the entire animation into a `GdImage` at once; each frame is decoded independently. The decoder caps at 256 frames, refuses logical screens larger than 2,000,000 pixels, and caps the output grid at 100,000 cells, so memory usage stays bounded for typical animations and for hostile headers alike.
+The caps — 256 frames, a 2,000,000-pixel logical screen, and a 100,000-cell output grid — bound decoding and compositing, so a runaway file or a crafted header cannot balloon the runtime once the first bytes start being processed.
 
 ## Architecture
 
 | File              | Role                                                                                                  |
 |-------------------|------------------------------------------------------------------------------------------------------|
-| `Decoder`         | Reads the GIF, extracts per-frame GCE delay + disposal + transparency + local color table + image left/top offset, hands each frame to GD via `imagecreatefromstring()`, area-average downsamples the composited canvas to a cell grid, returns a list of {@see Frame}. Compositing handles DISPOSAL_NONE/KEEP (0/1) to leave the canvas, DISPOSAL_BACKGROUND (2) to clear the prior rect, and DISPOSAL_PREVIOUS (3) to restore a canvas snapshot. E-02: `loopCount()` inspects the NETSCAPE2.0/ANIMEXTS1.0 loop extension with libnsgif semantics normalised to total playthroughs (raw 0 = infinite, raw N = N+1; no extension = infinite), and `readFile()` exposes the one-read ingress so hosts feed frames and loop inspection from the same audited bytes. |
-| `Frame`           | Pure value — 2-D RGB grid in cell coordinates with per-frame `$delay` (centiseconds), `$disposal` method (0–3), and `$transparent` flag. |
-| `Renderer`        | ANSI emitter. Two presets: `solid` (24-bit background-coloured spaces) or `density` (luminance ramp). `withAdaptiveSize()` queries the TTY via `SizeIoctl` so the output never overflows the viewport; `withConstraints()` accepts explicit row/col limits for testing. |
-| `Player`          | SugarCraft Model — index + paused + preset + renderer state, driven by an ABSOLUTE prefix-sum schedule (E-03): each tick arms the DISTANCE to the next frame deadline, so slow renders cost lateness, never drift (late ticks skip ahead). Periods are the per-frame GIF delays (centiseconds) floored at 1cs, or a uniform 1/fps override via `withFixedFps()`; `withMaxSeconds()` bounds total play time with a model-side deadline (no wall-clock kill). E-02: `withLoops()`/`playOnce()` bound playthroughs on the same schedule — the stop rides the tick that crosses the final lap boundary, last frame left displayed, with forced-advance wraps counted through a carried lap counter. E-10: `withWatch()` re-runs a host probe every `WATCH_POLL_SECONDS` (chicle's 10 ms re-stat cycle as an event-loop timer, never a sleep) and `withFrames()` rebinds the stream in place on reload — position resets, policy survives. Handles `WindowSizeMsg` by re-clamping the renderer to the new viewport (rows-1 for the status line). |
+| `Decoder`         | Reads the GIF, extracts per-frame GCE delay + disposal + transparency + local color table + image left/top offset, hands each frame to GD via `imagecreatefromstring()`, area-average downsamples the composited canvas to a cell grid, returns a list of `Frame` objects. Compositing handles DISPOSAL_NONE/KEEP (0/1) to leave the canvas, DISPOSAL_BACKGROUND (2) to clear the prior rect, and DISPOSAL_PREVIOUS (3) to restore a canvas snapshot. `loopCount()` inspects the NETSCAPE2.0/ANIMEXTS1.0 loop extension with libnsgif semantics normalized to total playthroughs (raw 0 = infinite, raw N = N+1; no extension = infinite), and `readFile()` exposes the one-read ingress so hosts feed frames and loop inspection from the same audited bytes. |
+| `Frame`           | Pure value — 2-D RGB grid in cell coordinates with per-frame `$delay` (centiseconds), `$disposal` method (0–3), and `$transparent` flag; optional full-canvas RGBA carried alongside. |
+| `Renderer`        | ANSI emitter. Two presets: `solid` (24-bit background-colored spaces) or `density` (luminance ramp with 24-bit foreground). `withAdaptiveSize()` queries the TTY via `SizeIoctl` so the art is clipped to the viewport; `renderFrame()` bounds output to the rows/cols it is given — resize clips, it never re-scales. |
+| `Player`          | SugarCraft Model — index + paused + preset + renderer state, driven by an ABSOLUTE prefix-sum schedule: each tick arms the DISTANCE to the next frame deadline, so slow renders cost lateness, never drift (late ticks skip ahead). Periods are the per-frame GIF delays (centiseconds) floored at 1cs, or a uniform 1/fps override via `withFixedFps()`; `withMaxSeconds()` bounds total play time with a model-side deadline (no wall-clock kill). `withLoops()`/`playOnce()` bound playthroughs on the same schedule — the stop rides the tick that crosses the final lap boundary, last frame left displayed, with forced-advance wraps counted through a carried lap counter. `withWatch()` re-runs a host probe every `WATCH_POLL_SECONDS` — chicle's 10 ms re-stat cycle as an event-loop timer, never a sleep — and `withFrames()` rebinds the stream in place on reload: position resets, policy survives. Handles `WindowSizeMsg` by re-clamping the renderer to the new viewport (rows-1 for the status line). |
 | `TickMsg`         | Frame-tick message produced by the Cmd.                                                            |
-| `WatchMsg`        | E-10: watch-poll message, armed by the Player itself and re-armed after every run (including reloads and failed reads).                                                            |
-
-The decoder caps at 256 frames and at a 2,000,000-pixel logical screen so a runaway file — or a crafted header — can't OOM the runtime before the first frame is even composited; pause + manual step are always available even on long animations.
+| `WatchMsg`        | Watch-poll message, armed by the Player itself and re-armed after every run (including reloads and failed reads).                                                            |
 
 ## Test
 
@@ -107,11 +126,13 @@ vendor/bin/phpunit
 ## Snapshot tests
 
 Rendering output is pinned via `sugar-testing`'s `assertGoldenAnsi` golden-file
-snapshots. Any change to the ANSI cell output must be intentional — re-record the
-fixture with `UPDATE_GOLDENS=1 vendor/bin/phpunit` to accept a new canonical render.
+snapshots. Any change to the ANSI cell output must be intentional — the flag is
+create-only and never rewrites an existing golden, so to accept a new canonical
+render delete `tests/fixtures/<name>.golden` first, then re-run once with
+`UPDATE_GOLDENS=1 vendor/bin/phpunit`.
 
 ## Credits & inspiration
 
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
 
-Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm).
+Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm). Cadence, `--watch` polling, and the frame-delay inheritance rules follow chicle, a Go GIF viewer for the terminal; loop-extension playthrough semantics follow libnsgif ([`namzug16/libnsgif`](https://github.com/namzug16/libnsgif)), the NetSurf GIF library.
