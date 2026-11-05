@@ -13,6 +13,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\MatchResult;
@@ -228,9 +229,10 @@ final class FilterModel implements Model
         // about the scored match set, so render the fuzzy list ourselves —
         // mirroring ItemList::view()'s layout — with matched characters
         // emphasised via their highlight indices.
-        $body = $this->fuzzy && $this->list->filterValue() !== '' && $this->fuzzyResults !== []
+        $fuzzyActive = $this->fuzzy && $this->list->filterValue() !== '' && $this->fuzzyResults !== [];
+        $body = $fuzzyActive
             ? $this->fuzzyView()
-            : $this->list->view();
+            : ($this->multi ? $this->markedBody() : $this->list->view());
         if ($this->multi) {
             $count = count(array_filter($this->checked));
             $cap = $this->limit > 0 ? "/{$this->limit}" : '';
@@ -240,6 +242,66 @@ final class FilterModel implements Model
             $body .= "\n" . Lang::t('hints.filter');
         }
         return $body;
+    }
+
+    /**
+     * Multi-mode non-fuzzy list body: mirrors {@see ItemList::view()}
+     * byte-for-byte except that non-cursor rows carry a per-item check
+     * mark where the item is ticked (A11y M11 — tick state visible per
+     * ROW, not only in the aggregate '[N selected]' count). Cursor row
+     * bytes untouched; unchecked rows keep the unselected prefix.
+     */
+    private function markedBody(): string
+    {
+        $visible = $this->list->visibleItems();
+        $lines   = [];
+
+        if ($this->list->title !== '') {
+            $lines[] = RenderSafe::clean($this->list->title);
+        }
+        if ($this->list->showFilter && ($this->list->filtering || $this->list->filterText !== '')) {
+            $lines[] = '/' . $this->list->filterText;
+        }
+        if ($visible === []) {
+            $lines[] = $this->list->filterText !== '' ? 'No matches.' : 'No items.';
+            if ($this->list->showStatusBar && ($status = $this->list->status()) !== '') {
+                $lines[] = $status;
+            }
+            return implode("\n", $lines);
+        }
+
+        // toggle() keys $checked by the FIRST allItems entry carrying a
+        // title; map the same way so the mark lands on the toggled row.
+        $firstByTitle = [];
+        foreach ($this->allItems as $i => $item) {
+            $t = $item->title();
+            if (!isset($firstByTitle[$t])) {
+                $firstByTitle[$t] = $i;
+            }
+        }
+
+        $top    = max(0, $this->list->offset);
+        $window = array_slice($visible, $top, $this->list->height);
+        $cursor = $this->list->index();
+        foreach ($window as $i => $item) {
+            $idx       = $top + $i;
+            $itemTitle = RenderSafe::clean($item->title());
+            if ($idx === $cursor) {
+                $lines[] = $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $itemTitle . Ansi::reset();
+            } else {
+                $orig    = $firstByTitle[$item->title()] ?? null;
+                $lines[] = $orig !== null && !empty($this->checked[$orig])
+                    ? "\u{2713} " . $itemTitle
+                    : $this->list->unselectedPrefix . $itemTitle;
+            }
+            if ($this->list->showDescription && $item->description() !== '') {
+                $lines[] = '    ' . RenderSafe::clean($item->description());
+            }
+        }
+        if ($this->list->showStatusBar && ($status = $this->list->status()) !== '') {
+            $lines[] = $status;
+        }
+        return implode("\n", $lines);
     }
 
     /**
@@ -269,9 +331,14 @@ final class FilterModel implements Model
                 $item->title(),
                 $this->fuzzyResults[$originalIndices[$idx]]->indices(),
             );
-            $lines[] = $idx === $cursor
-                ? $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $highlighted . Ansi::reset()
-                : $this->list->unselectedPrefix . $highlighted;
+            if ($idx === $cursor) {
+                $lines[] = $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $highlighted . Ansi::reset();
+            } elseif ($this->multi && !empty($this->checked[$originalIndices[$idx]])) {
+                // A11y (M11): per-row tick mark in fuzzy multi mode too.
+                $lines[] = "\u{2713} " . $highlighted;
+            } else {
+                $lines[] = $this->list->unselectedPrefix . $highlighted;
+            }
         }
         return implode("\n", $lines);
     }

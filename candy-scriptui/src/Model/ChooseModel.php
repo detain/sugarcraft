@@ -11,6 +11,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\ScriptUi\Lang;
 use SugarCraft\ScriptUi\Runtime\Geometry;
 
@@ -132,7 +134,7 @@ final class ChooseModel implements Model
 
     public function view(): string
     {
-        $body = $this->list->view();
+        $body = $this->multi ? $this->markedBody() : $this->list->view();
         if ($this->multi) {
             // Append a status line: '(N selected)'.
             $count = $this->selectedCount();
@@ -144,6 +146,68 @@ final class ChooseModel implements Model
             $body .= "\n" . Lang::t('hints.choose');
         }
         return $body;
+    }
+
+    /**
+     * Multi-mode list body: mirrors {@see ItemList::view()} byte-for-byte
+     * except that non-cursor rows carry a per-item check mark where the
+     * item is ticked. The cursor row keeps its exact bytes (the reverse
+     * video already flags it), and the mark wins over nothing on unchecked
+     * rows — they keep the (possibly user-overridden) unselected prefix.
+     * A11y (M11): the tick state must be visible per ROW, not only in the
+     * aggregate '[N selected]' count line the caller appends.
+     */
+    private function markedBody(): string
+    {
+        $visible = $this->list->visibleItems();
+        $lines   = [];
+
+        if ($this->list->title !== '') {
+            $lines[] = RenderSafe::clean($this->list->title);
+        }
+        if ($this->list->showFilter && ($this->list->filtering || $this->list->filterText !== '')) {
+            $lines[] = '/' . $this->list->filterText;
+        }
+        if ($visible === []) {
+            $lines[] = $this->list->filterText !== '' ? 'No matches.' : 'No items.';
+            if ($this->list->showStatusBar && ($status = $this->list->status()) !== '') {
+                $lines[] = $status;
+            }
+            return implode("\n", $lines);
+        }
+
+        // toggle() keys $checked by the FIRST item carrying a title; map
+        // the same way so the mark lands on exactly the row Space ticks.
+        $firstByTitle = [];
+        foreach ($this->list->items as $i => $item) {
+            $t = $item->title();
+            if (!isset($firstByTitle[$t])) {
+                $firstByTitle[$t] = $i;
+            }
+        }
+
+        $top    = max(0, $this->list->offset);
+        $window = array_slice($visible, $top, $this->list->height);
+        $cursor = $this->list->index();
+        foreach ($window as $i => $item) {
+            $idx       = $top + $i;
+            $itemTitle = RenderSafe::clean($item->title());
+            if ($idx === $cursor) {
+                $lines[] = $this->list->cursorPrefix . Ansi::sgr(Ansi::REVERSE) . $itemTitle . Ansi::reset();
+            } else {
+                $orig    = $firstByTitle[$item->title()] ?? null;
+                $lines[] = $orig !== null && !empty($this->checked[$orig])
+                    ? "\u{2713} " . $itemTitle
+                    : $this->list->unselectedPrefix . $itemTitle;
+            }
+            if ($this->list->showDescription && $item->description() !== '') {
+                $lines[] = '    ' . RenderSafe::clean($item->description());
+            }
+        }
+        if ($this->list->showStatusBar && ($status = $this->list->status()) !== '') {
+            $lines[] = $status;
+        }
+        return implode("\n", $lines);
     }
 
     /** Selected option's title once submitted (single mode). */

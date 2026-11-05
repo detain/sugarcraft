@@ -134,4 +134,37 @@ final class ChooseModelTest extends TestCase
         // Single mode view does not append the "[N selected]" multi-select indicator
         $this->assertStringNotContainsString(' selected]', $view);
     }
+
+    public function testTickMarkRendersOnTickedNonCursorRow(): void
+    {
+        $m = ChooseModel::fromOptions(['Pizza', 'Burger', 'Salad'], noLimit: true);
+        [$m, ] = $m->update(new KeyMsg(KeyType::Space)); // tick Pizza under the cursor
+        [$m, ] = $m->update(new KeyMsg(KeyType::Down));  // cursor leaves Pizza
+
+        $view = $m->view();
+        $this->assertStringContainsString("\u{2713} Pizza", $view);
+        $this->assertStringNotContainsString("\u{2713} Burger", $view);
+        $this->assertStringNotContainsString("\u{2713} Salad", $view);
+        $this->assertStringContainsString('[1 selected]', $view);
+    }
+
+    public function testCursorRowKeepsReversePaintWhenTicked(): void
+    {
+        $m = ChooseModel::fromOptions(['Pizza', 'Burger'], noLimit: true);
+        [$m, ] = $m->update(new KeyMsg(KeyType::Space)); // tick Pizza, cursor still on it
+
+        $view = $m->view();
+        // The check mark yields to the cursor row's reverse-video paint,
+        // so the ticked row under the cursor renders exactly as before.
+        $this->assertStringNotContainsString("\u{2713} Pizza", $view);
+        $this->assertStringContainsString("\x1b[7mPizza\x1b[0m", $view);
+    }
+
+    public function testSingleModeViewCarriesNoTickMarks(): void
+    {
+        $m = ChooseModel::fromOptions(['Pizza', 'Burger', 'Salad']);
+        [$m, ] = $m->update(new KeyMsg(KeyType::Down));
+
+        $this->assertStringNotContainsString("\u{2713}", $m->view());
+    }
 }

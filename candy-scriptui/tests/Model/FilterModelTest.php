@@ -252,4 +252,36 @@ final class FilterModelTest extends TestCase
 
         $this->assertStringNotContainsString("\x1b[1m", $m->view());
     }
+
+    public function testMultiModeTickMarkRendersOnTickedNonCursorRow(): void
+    {
+        $m = FilterModel::fromOptions(['banana', 'cherry', 'apple'], noLimit: true);
+        [$m, ] = $m->update(new KeyMsg(KeyType::Tab));  // tick the cursor row
+        [$m, ] = $m->update(new KeyMsg(KeyType::Down)); // cursor leaves banana
+
+        $view = $m->view();
+        $this->assertStringContainsString("\u{2713} banana", $view);
+        $this->assertStringNotContainsString("\u{2713} cherry", $view);
+        $this->assertStringNotContainsString("\u{2713} apple", $view);
+        $this->assertStringContainsString('[1 selected]', $view);
+    }
+
+    public function testMultiModeFuzzyViewMarksTickedNonCursorRow(): void
+    {
+        $m = FilterModel::fromOptions(['banana', 'band', 'cherry'], noLimit: true, fuzzy: true);
+        foreach (str_split('ban') as $c) {
+            [$m, ] = $m->update(new KeyMsg(KeyType::Char, $c));
+        }
+        [$m, ] = $m->update(new KeyMsg(KeyType::Down)); // cursor onto band
+        [$m, ] = $m->update(new KeyMsg(KeyType::Tab));  // tick band
+        [$m, ] = $m->update(new KeyMsg(KeyType::Up));   // cursor back onto banana
+
+        $view = $m->view();
+        // Fuzzy rows are keyed by original index; band (index 1) is ticked,
+        // banana is the cursor row and keeps its reverse-video paint.
+        $this->assertStringContainsString("\u{2713} ", $view);
+        $this->assertStringNotContainsString("\u{2713} banana", $view);
+        $plain = preg_replace('/\x1b\[[0-9;]*m/', '', $view);
+        $this->assertStringContainsString("\u{2713} band", $plain);
+    }
 }
