@@ -16,16 +16,15 @@
 Dual-pane terminal file manager built on the SugarCraft stack for PHP 8.3+, with the Midnight Commander look.
 
 ```
-┌────────────────────────────────────┐  ┌────────────────────────────────────┐
-│ /home/alice  [name-asc]            │  │ /var/log  [mtime-desc]             │
-│ ──────────────────                 │  │ ──────────────────                 │
-│ ▸  ../                       DIR   │  │    ../                       DIR   │
-│    Documents/               DIR   │  │ ▸✓ syslog                  240KB  │
-│    Downloads/               DIR   │  │    auth.log                 12KB  │
-│    .config/                 DIR   │  │    Xorg.0.log              4.0KB  │
-│    notes.md                12KB   │  │                                    │
-│    todo.txt              512B    │  │                                    │
-└────────────────────────────────────┘  └────────────────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ┌──────────────────────────────────────────┐
+┃ /home/alice  [name-asc]                  ┃  │ /var/log  [mtime-desc]                   │
+┃ ────────────────────────────────────     ┃  │ ────────────────────────────────────     │
+┃ ▸  ../                            DIR    ┃  │    ../                            DIR    │
+┃    Documents/                     DIR    ┃  │ ▸✓ syslog                     240.0KB    │
+┃    Downloads/                     DIR    ┃  │    auth.log                    12.0KB    │
+┃    notes.md                    12.0KB    ┃  │    Xorg.0.log                   4.0KB    │
+┃    todo.txt                      512B    ┃  └──────────────────────────────────────────┘
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · t new tab · ^w close tab · ^tab cycle
 ```
 
@@ -145,7 +144,7 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Test plan
 
-- 226 tests / 2953 assertions
+- 226 tests / 2953 assertions — this pair is hand-typed: candy-files is lib-local for PHPUnit and absent from the CI figure-pin machinery (`parallel-tests-durations.tsv` / `suite-figure.json`), so re-derive it with `vendor/bin/phpunit` here whenever tests change.
 - Pure-state coverage: `Entry` (size formatting, parent sentinel, escape-sequence sweep incl. OSC/CSI/generic-ESC), `Sort` (every order × dirs-first × cycle), `Pane` (open / relist-with-selection-preservation / navigate / move / select / sort / hidden toggle / parent-path / join)
 - `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status, Escape clears selection, resize capture (`WindowSizeMsg` → derived widths, other non-key Msgs dropped)
 - `t` duplicates the current tab; `Manager::openNewTab(path)` lands a tab on the given directory as an API (no key binding carries a path)
