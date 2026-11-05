@@ -382,6 +382,18 @@ $cache->fetch('weather', static fn (): PromiseInterface => resolve('ignored'))->
 );
 ```
 
+## Caveats
+
+- **State does not survive `pcntl_fork`.** Every stateful surface in this
+  library is per-process: a `singleFlight` closure's in-flight map, an
+  `AsyncCache` store and its coalesced flights, a `Debounced` handle's pending
+  burst, a `Throttled` handle's cooldown and queued trailing call, and a
+  `CancellationSource`'s registered callbacks. Sharing one of these across a
+  fork boundary means settles in one process never propagate to the other —
+  the parent's flight slot leaks waiting on a child's completion, and a
+  callback registered before the fork fires in whichever process cancels.
+  Mint these objects after forking, in the process that will use them.
+
 ## Testing with AsyncOps
 
 The suite runs on `StreamSelectLoop` and never sleeps past a test bound. Two
