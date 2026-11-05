@@ -147,6 +147,62 @@ final class CompactionFallbackParityTest extends TestCase
     }
 
     /**
+     * Parity row for the `Chat::landModelCompaction()` citation: the served
+     * typed `/compact` refuses a landed HOLD outright — the exact CTX-4
+     * verdict `Chat::landModelCompaction()` lands on the terminal route.
+     * The held draft must stay visible in the transcript (the refusal
+     * carries the echo), the slot is spent, and NOTHING is folded, billed
+     * or dispatched: no heuristic lines, no turn, no summary call.
+     */
+    public function testATypedFoldRefusesAHeldSafeGuardTheWayChatLandModelCompactionDoes(): void
+    {
+        $store = self::sandboxStore();
+        $backend = new ParityTurnBackend(88_000, 9);
+        $host = SessionHost::new(
+            's',
+            WorkspaceContext::new(
+                sessionStore: $store,
+                backend: $backend,
+                hooks: null,
+            ),
+            customCommands: [],
+        );
+        $band = self::reminderBandPairs();
+        self::setHistory($host, $band);
+
+        // The fingerprint is computed THROUGH the host's own service and
+        // compactor, so the match leg below is a fact about the fold door,
+        // not about two configs happening to agree.
+        $compaction = (new \ReflectionMethod(SessionHost::class, 'compaction'))->invoke($host);
+        $compactor = (new \ReflectionProperty(SessionHost::class, 'compactor'))->getValue($host);
+        $detail = 'the draft that must stay visible';
+        (new \ReflectionProperty(SessionHost::class, 'aheadOfNeed'))->setValue($host, [
+            'id' => 'cmp-hold',
+            'fingerprint' => $compaction->historyFingerprint($compactor, $band),
+            'summaries' => [],
+            'safeguardHold' => $detail,
+            'model' => 'parity-model',
+        ]);
+
+        $before = count($host->history());
+        $host->submit('/compact');
+        $after = $host->history();
+
+        self::assertCount($before + 2, $after, 'exactly the echo and the refusal land, nothing folds');
+        self::assertSame('/compact', $after[$before]->content, 'the refused command still echoes...');
+        self::assertTrue($after[$before]->uiOnly, '...but as a uiOnly row, off the model wire');
+        self::assertSame(
+            $compaction->safeguardHoldRefusal($detail),
+            $after[$before + 1]->content,
+            'the refusal row is the shared CTX-4 wording, byte for byte',
+        );
+        self::assertStringNotContainsString('[summary]', $after[$before + 1]->content, 'no heuristic lines ride the refusal');
+        self::assertNull(self::held($host), 'the matched hold is spent by the refusal, never re-asked');
+        self::assertSame(0, $backend->turnCalls, 'a refused typed fold dispatches no turn');
+        self::assertSame(0, $backend->summaryCalls, '...and bills no summary');
+    }
+
+    /**
      * The fold is the PRE-C-CTX-5.a shape: with nothing to retry on, the
      * history the engine was handed is the conversation byte-for-byte — no
      * clipping happened (clipping belongs to the overflow leg alone).

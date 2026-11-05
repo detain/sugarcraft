@@ -93,6 +93,11 @@ final class SessionHostCommandsTest extends TestCase
         self::assertSame(['/permissions', $rows[1]->content], $saved, 'the exchange is persisted');
     }
 
+    /**
+     * Parity row for the `Chat::applyCommandResult()` citation: host
+     * `applyCommand()` is that method's headless twin, and one command must
+     * answer with byte-identical rows on both drivers.
+     */
     public function testTheTuiAndTheHostAnswerOneCommandWithTheSameRows(): void
     {
         $gate = new PermissionGate(PermissionMode::Plan);

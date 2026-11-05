@@ -204,6 +204,11 @@ final class KeepWarmTest extends TestCase
 
     // ── the served alarm end to end ──────────────────────────────────────────
 
+    /**
+     * Parity row for the `Chat::handleKeepWarmTick()` citation: the served
+     * alarm-side twin, consulted at exactly the point the fold declined the
+     * fire — the SessionIdleCompaction prose this guard joins names it.
+     */
     public function testTheServedAlarmWarmsWhereTheFoldDeclined(): void
     {
         $backend = new WarmHostBackend(88_000, '.');

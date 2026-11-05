@@ -80,6 +80,11 @@ final class GoalHostLoopTest extends TestCase
         self::assertSame(11, $models['turn-model']);
     }
 
+    /**
+     * Parity row for the `Chat::endGoal()` citation: the host's endGoal is
+     * exactly these two rows (notice, then the status marker) plus the queue
+     * release, minus the TUI's terminal notification.
+     */
     public function testAMetVerdictEndsTheLoopAtOnce(): void
     {
         $judge = new ScriptedProvider([self::verdictReply(true, 95)]);
@@ -109,6 +114,11 @@ final class GoalHostLoopTest extends TestCase
         self::assertStringContainsString('"status":"stopped"', $listing);
     }
 
+    /**
+     * Parity row for the `Chat::scheduleGoalJudge()` citation: the schedule
+     * door's stop decision is the shared {@see \SugarCraft\Code\Goal\GoalLoop::refusalReason()} —
+     * this is the spend-cap arm of it, answered before the judge is dialled.
+     */
     public function testTheSpendCapStopsTheLoopBeforeTheJudgeIsDialed(): void
     {
         $judge = new ScriptedProvider([self::verdictReply(false, 10, ['more work'])]);
@@ -125,6 +135,11 @@ final class GoalHostLoopTest extends TestCase
         self::assertArrayNotHasKey('judge-model', $this->recordedModels(), 'a capped session never spends on judging');
     }
 
+    /**
+     * Parity row for the `Chat::goalEnded()` citation: the stopped marker
+     * asserted here (round 0, status stopped) is the ended-state the TUI's
+     * goalEnded predicate reads out of the transcript.
+     */
     public function testTheUsersQueuedPromptGoesFirstAndTheGoalWaits(): void
     {
         // The land-side queue check is driven directly: while the host waits

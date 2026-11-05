@@ -27,6 +27,14 @@ use SugarCraft\Code\Chat;
  * method claims; the paren is what makes the sentence "Chat has a method
  * called X".
  *
+ * The join leg (minted by L-ARCH, TUIARCH-04 queue-minor cure): a live
+ * method is only half the contract — testEveryCitationMapsToANamedParityRow
+ * requires each cited name to map to a NAMED test row that names the
+ * citation back. An extraction that single-homes a judgement keeps the
+ * prose honest only while something proves both hosts still honour it;
+ * the roster below is that proof, and set equality means a new citation
+ * must arrive with a row and a retired citation must leave with its entry.
+ *
  * Vacuity control: testTheScanSeesADeadCitationPlantedInAFixture proves the
  * walker names a citation that does not resolve, so a broken regex cannot
  * turn this guard green by matching nothing.
@@ -40,6 +48,29 @@ final class ChatParityCitationTest extends TestCase
      * turns that into a loud failure instead of a quietly vacuous pass.
      */
     private const CITATION_FLOOR = 13;
+
+    /**
+     * The join: every cited method name maps to [test file, named row] that
+     * documents the parity claim. Each row's docblock names the citation so
+     * a reader of either side finds the other; the guard checks both tokens.
+     *
+     * @var array<string, array{0: string, 1: string}>
+     */
+    private const PARITY_EVIDENCE = [
+        'applyCommandResult' => ['tests/Host/SessionHostCommandsTest.php', 'testTheTuiAndTheHostAnswerOneCommandWithTheSameRows'],
+        'dispatchTurnHooks' => ['tests/Chat/SessionStartHookWireTest.php', 'testTheSessionStartContextChatBuildsCarriesThePromptAndTheStartupSource'],
+        'endGoal' => ['tests/Host/GoalHostLoopTest.php', 'testAMetVerdictEndsTheLoopAtOnce'],
+        'goalEnded' => ['tests/Host/GoalHostLoopTest.php', 'testTheUsersQueuedPromptGoesFirstAndTheGoalWaits'],
+        'handleKeepWarmTick' => ['tests/Host/KeepWarmTest.php', 'testTheServedAlarmWarmsWhereTheFoldDeclined'],
+        'landModelCompaction' => ['tests/Host/CompactionFallbackParityTest.php', 'testATypedFoldRefusesAHeldSafeGuardTheWayChatLandModelCompactionDoes'],
+        'pumpLiveToolEvents' => ['tests/Backend/LiveLedgerFrameTest.php', 'testTheChatPumpTakesTheEventWithoutTouchingTheTranscript'],
+        'pumpRuntimeNotices' => ['tests/Host/ServedRuntimeNoticeDrainTest.php', 'testTheServedDrainIsWakeDrivenNotTimerDriven'],
+        'runtimeNoticeWake' => ['tests/Chat/HostedRuntimeNoticeWakeTest.php', 'testThePumpMsgDeliversTheNoticeAndHandsBackARearm'],
+        'scheduleBackendCompletion' => ['tests/Chat/MidTurnSpendCapTranscriptTest.php', 'testTheProductionLaunchFeedsTheCapAndTheSessionBaselineIntoTheBackend'],
+        'scheduleGoalJudge' => ['tests/Host/GoalHostLoopTest.php', 'testTheSpendCapStopsTheLoopBeforeTheJudgeIsDialed'],
+        'submit' => ['tests/Host/CompactionFallbackParityTest.php', 'testTheServedTurnProceedsOnAHeuristicFoldAfterARefusal'],
+        'usageRecordSink' => ['tests/Host/UsageModelThreadingTest.php', 'testTheProductionWiresThreadTheAuxiliaryEnginesModel'],
+    ];
 
     /**
      * @return list<string> the cited method names, de-duplicated in file order
@@ -133,5 +164,44 @@ final class ChatParityCitationTest extends TestCase
         // The guard must not accuse it: uppercase anchors are excluded by design.
         self::assertStringContainsString('Chat::CANCELLED_TOOL_CALL', $source);
         self::assertNotContains('CANCELLED_TOOL_CALL', self::citedMethods($source));
+    }
+
+    /**
+     * The join leg: the citation set and the evidence roster must be the SAME
+     * set — a new citation is born with a named parity row, a retired one
+     * takes its roster entry with it. Each evidence file must exist, carry
+     * the named row, and NAME the cited method in its own prose, so the row
+     * cannot be a stranger that merely happens to share the file.
+     */
+    public function testEveryCitationMapsToANamedParityRow(): void
+    {
+        $citations = self::citedMethods(self::sessionHostSource());
+        sort($citations);
+        $roster = array_keys(self::PARITY_EVIDENCE);
+        sort($roster);
+        self::assertSame(
+            $roster,
+            $citations,
+            'every Chat citation must carry exactly one PARITY_EVIDENCE row, and every row '
+                . 'one live citation; the join breaks in-step, never silently',
+        );
+
+        $gaps = [];
+        foreach (self::PARITY_EVIDENCE as $method => [$file, $row]) {
+            $path = \dirname(__DIR__, 2) . '/' . $file;
+            if (!is_file($path)) {
+                $gaps[] = $method . ': evidence file ' . $file . ' is gone';
+                continue;
+            }
+
+            $source = (string) file_get_contents($path);
+            if (!str_contains($source, 'function ' . $row)) {
+                $gaps[] = $method . ': named row ' . $row . ' is missing from ' . $file;
+            } elseif (!str_contains($source, $method)) {
+                $gaps[] = $method . ': ' . $file . '::' . $row . ' does not name the citation it joins';
+            }
+        }
+
+        self::assertSame([], $gaps, 'the parity join is broken: ' . implode('; ', $gaps));
     }
 }
