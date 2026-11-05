@@ -61,8 +61,12 @@ see [Terminal setup is the host's duty](#terminal-setup-is-the-hosts-duty).
 ## Installation
 
 ```sh
-composer require sugarcraft/sugar-input
+composer require sugarcraft/sugar-input:@dev
 ```
+
+The explicit `:@dev` is needed while the package has no tagged release and
+your project's `minimum-stability` is `stable` — it resolves against the
+default branch regardless. Use the plain form once a stable tag exists.
 
 ## Requirements
 
