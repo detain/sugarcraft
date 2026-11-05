@@ -74,7 +74,7 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 | `Charts\Canvas\Graph` | Drawing primitives over a `Canvas`. | `drawHLine` / `drawVLine` / `drawXYAxis` / `drawXYAxisLabel` / `drawString` / `drawLine` / `drawLinePoints` / `fillRect` / `drawColumn` / `drawColumns` / `drawRows` / `drawCandlestick` / `drawBrailleRune` / `drawBraillePatterns` / `drawVerticalLineUp` / `drawVerticalLineDown` / `drawHorizontalLineLeft` / `drawHorizontalLineRight` / `circlePoints` / `circlePointsWithLimit` / `fullCirclePoints` / `fullCirclePointsWithLimit` / `linePointsWithLimit` (`get*` spellings kept as ntcharts-mirror compat aliases) |
 | `Charts\Sparkline\Sparkline` | Single-row series renderer using the 8 Unicode bar glyphs. | `push` / `pushAll` / `clear` / `withMin` / `withMax` / `withStyle(?Style)` / `withNoAutoMaxValue(bool)` / `withWidth` |
 | `Charts\BarChart\BarChart` | Labeled bars — vertical or horizontal (`withHorizontal()`, a second render mode); auto-scales to a configurable min / max. | `withBarWidth` / `withBarGap` / `withNoAutoBarWidth` / `withFractionalHeights` (eighth-block caps) / `withBarColor(?Closure)` (per-bar `fn(Bar, int): ?Color`) / `withHorizontal(bool)` / `withShowAxis(bool)` / `withMin(?float)` / `withMax(?float)` / `withDataLabels(bool)` (values as a row, see Value labels) / `withDataLabelFormatter(?Closure)` / `push(Bar\|array)` / `pushAll(iterable)` / `clear` |
-| `Charts\LineChart\LineChart` | Multi-series ASCII or braille plot drawn onto a Canvas with configurable axes — `withDataset()` adds named series (legend auto-enables; colors cycle a six-name color-blind-safe palette (blue, orange, green, red, purple, cyan), or follow the `withTheme()` palette). | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` / `withSeriesColorFn(?Closure)` (per-point `fn(string, int, float): ?Color`) |
+| `Charts\LineChart\LineChart` | Multi-series ASCII or braille plot drawn onto a Canvas with configurable axes — `withDataset()` registers a named series and its legend entry (colors cycle a six-name color-blind-safe palette (blue, orange, green, red, purple, cyan), or follow the `withTheme()` palette); the strip itself is drawn only after `withLegend()` — adding datasets never shows it on its own. | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` / `withSeriesColorFn(?Closure)` (per-point `fn(string, int, float): ?Color`) |
 | `Charts\LineChart\TimeSeries` | LineChart variant accepting `[\DateTimeImmutable, value]` tuples. | `push` / `withPoints` / `withTimeFormat` / `withXLabelCount` / `withTimeRange(?start, ?end)` / `getTimeRange()` |
 | `Charts\LineChart\Streamline` | Streaming line windowed to width — renders through a LineChart of configurable height (default 8 rows). | `push` / `pushAll` / `clear` / `isEmpty` / `count` / `withSize` / `withMin` / `withMax` / `withYRange` / `withPoint` |
 | `Charts\LineChart\Waveline` | XY scatter / wave plot driven by `(x, y)` pairs. | `push` / `pushAll` / `clear` / `withSize` / `withXRange` / `withYRange` / `withXYRange` / `withPoint` |
@@ -215,8 +215,11 @@ braille/ASCII canvas paints one dot per column with no spare cell — so
 the knob is honest storage only there, and `BarChart` is the label
 renderer.
 
-Animation is caller-driven: `withAnimationProgress(0.0…1.0)` clamps how
-much of the series a render paints (honored in every pass), while
+Animation is caller-driven and `LineChart`-only: `withAnimationProgress(0.0…1.0)`
+clamps how much of the series a render paints, honored in both the cell
+and the braille pass; no other renderer exposes the knob (verified
+`method_exists` — `BarChart`, `Scatter`, `OHLCChart`, `Heatmap`,
+`TimeSeries`, `Streamline`, `Waveline`, `Sparkline`, `Picture`).
 `withAnimationDuration(int $ms)` is a stored **pacing hint** for the
 caller's own clock — the lib runs no timers. Drive frames by advancing
 the progress yourself, e.g. `examples/animated_line.php`.
@@ -337,10 +340,14 @@ Render cost is linear in width × height. Both canvases are sparse —
 empty cells store nothing — so mostly-blank charts render cheaply, and
 per-sample style lookups are memoized.
 
-Axis tick values come from `Graph::niceNumbers` / `NiceScale`: a
-1/2/5×10ⁿ step ladder picks human-readable bounds and spacing, which is
-why labels read as 0 / 2.5 / 5 rather than raw data extremes. The label
-formatters override only how those ticks render.
+Axis tick values are not a nice-number ladder: the live path
+(`LineChart::resolveXLabels` / `resolveYLabels`) emits evenly-spaced
+**raw** values between the data bounds (a Y axis can read
+`8, 5.6667, 3.3333, 1`) and yields no labels at all unless a label
+formatter is set — the formatter decides how those values render.
+`Graph::niceNumbers` and `NiceScale` are caller-facing 1-2-5×10ⁿ
+primitives (ntcharts mirrors) with zero production callers in the
+render path; call them yourself when you want human-readable bounds.
 
 ## Shared foundations
 
