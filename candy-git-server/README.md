@@ -85,8 +85,9 @@ stream. Nothing forks.
   phar build-stamp resolver
 - `bin/candy-git-server` — CLI: `serve` (refuses), `serve --http
   --repo-root DIR` (starts the smart-HTTP listener), `init` (writes a
-  config skeleton), `repo create|list|info` (`--public` opts a repo into
-  anonymous reads via an on-disk visibility marker), `user
+  config skeleton), `repo create|list|info` (`--public` marks a repo
+  public via an on-disk visibility marker — anonymous serving additionally
+  requires the `git.allow_anonymous_read` lever, default off), `user
   add|key|list|token` (persisted accounts, hashed passwords, expiring
   proxy-token minting), `help`, `version`
 
@@ -216,9 +217,13 @@ candy-git-server repo list /var/lib/candy-git-server
 candy-git-server repo info myrepo /var/lib/candy-git-server
 ```
 
-`repo create` makes repos PRIVATE by default; pass `--public` to opt a
-repo into anonymous reads (this writes a visibility marker inside the git
-dir, which `serve --http --repo-root` reads back on every launch). The
+`repo create` makes repos PRIVATE by default; pass `--public` to mark a
+repo public (this writes a visibility marker inside the git dir; every
+path that resolves a repo — the `serve --http --repo-root` scan and both
+embedded transports — consults the marker and defaults to PRIVATE when it
+is absent, so directory presence alone never publishes). Anonymous access
+additionally requires `git.allow_anonymous_read: true` in config (default
+off) — both are required. The
 data path resolves as: explicit argument → `CANDY_GIT_SERVER_DATA_PATH`
 → `sys_get_temp_dir()/candy-git-server`; the `/tmp` default is a
 convenience for trials, not a deploy location — set a real data path in
@@ -264,7 +269,8 @@ run `serve --http`:
 
 Both advertisement routes are gated **before** a single ref byte is
 built: `git-upload-pack` requires `canRead` (anonymous passes only for
-public repos), `git-receive-pack` requires `canWrite` (fail-closed false
+public repos AND only while `git.allow_anonymous_read` is on — default
+off), `git-receive-pack` requires `canWrite` (fail-closed false
 for anonymous callers, so the old unauthenticated receive-pack
 advertisement hole is gone). Authentication uses HTTP Basic auth or the
 `X-CandyGitServer-User` header — the header path additionally requires
@@ -442,8 +448,12 @@ Visibility is a single `SugarCraft\GitServer\Visibility` enum on `Repo`
 (replacing the old paired `isPublic`/`private` booleans; the boolean
 accessors remain as BC delegates):
 
-- **`Visibility::Public`** — anyone can read; only collaborators can
-  push (or anyone, when `allowPush` is set)
+- **`Visibility::Public`** — readable without credentials only while
+  `git.allow_anonymous_read` is on (default off; with the lever down,
+  anonymous callers are refused as for any other repo); authenticated
+  collaborators can push, and `allowPush` widens push to ANY
+  authenticated user — never to anonymous ones (`canWrite` refuses a null
+  identity unconditionally)
 - **`Visibility::CollaboratorOnly`** — not readable anonymously; only
   collaborators and admins
 - **`Visibility::Private`** — only collaborators and admins can read or
