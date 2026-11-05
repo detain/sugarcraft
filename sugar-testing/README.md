@@ -362,11 +362,12 @@ your model. Pass the factory to script your lib's real tick:
 
 Symbolic builders (`key()`, `arrow()`, `enter()`, …) produce the DECODED message
 a keyboard press becomes — `arrow('down')` is a `KeyType::Down` message, not bytes.
-`bytes()` carries the real WIRE form instead (arrow keys as `ESC [ C`). Never script
+`bytes()` carries the real WIRE form instead: arrows are `ESC [` plus a CSI final
+byte — `ESC [ A` Up, `ESC [ B` Down, `ESC [ C` Right, `ESC [ D` Left. Never script
 an arrow as the literal `→` glyph: a UTF-8 arrow is plain text — it takes the
 paste/IME path and decodes as character input, never as `KeyType::Down`. (A PTY
-harness driving a program from outside must send the `ESC [ C` bytes for the same
-reason.)
+harness driving a program from outside must send the same wire bytes — `ESC [ B`
+for down.)
 
 Terminal-shaped input is decoded by sugar-core's real `InputReader` — the parser
 `Program` reads stdin with — so a script sees the same messages the live runtime
