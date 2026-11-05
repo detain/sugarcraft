@@ -285,7 +285,10 @@ $t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
 
 
 
-Search the filterable columns simultaneously with `search()`:
+Call `search()` to filter rows across the scanned columns simultaneously: every
+column is scanned while none is marked with `withFilterable()`, and only the
+marked ones once any column opts in (the gate is detailed under "How It Works"
+below):
 
 ```php
 $t = Table::fromColumns([
@@ -640,7 +643,9 @@ All translatable strings live in `lang/en.php` under the `'table'` namespace.
 
 To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
 values. The lookup chain follows `SugarCraft\Core\I18n\T`:
-exact locale → base language → `en` → raw key.
+exact locale → base language → `en` → the raw namespaced key (the
+`'table.'`-prefixed string, e.g. `table.page_of` — not the short key passed to
+`Lang::t()`).
 
 **Adding new translatable strings:**
 
@@ -943,7 +948,7 @@ parse) — never visible state.
 `Table::withStyleFunc()` accepts a callable with the signature:
 
 ```php
-function(int $row, int $col, string $value): Style|string
+function(int $row, int $col, string $value): SugarCraft\CellBuffer\Style|string
 ```
 
 - **Returns `Style`** — new preferred style (PHP 8.3+ typed return, immutable)
