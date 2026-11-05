@@ -76,11 +76,11 @@ final class ArtLibrary
     public static function fromDir(string $dir, bool $includeSkinny = false): self
     {
         if (!is_dir($dir)) {
-            throw new RuntimeException("ArtLibrary: not a directory: '{$dir}'");
+            throw new RuntimeException(Lang::t('artlibrary.not_a_directory', ['dir' => $dir]));
         }
         $names = scandir($dir);
         if ($names === false) {
-            throw new RuntimeException("ArtLibrary: cannot list directory '{$dir}'");
+            throw new RuntimeException(Lang::t('artlibrary.cannot_list', ['dir' => $dir]));
         }
 
         $library = new self();

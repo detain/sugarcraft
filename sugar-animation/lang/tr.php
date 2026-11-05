@@ -9,12 +9,17 @@
 declare(strict_types=1);
 
 return [
-    'decoder.no_file'          => 'sugar-animation: dosya bulunamadı: {path}',
-    'decoder.no_gd'            => 'sugar-animation: ext-gd gerekli',
-    'decoder.not_gif'          => 'sugar-animation: GIF dosyası değil',
-    'decoder.grid_too_large'   => 'sugar-animation: hücre ızgara çarpımı en yüksek değeri ({max}) aşıyor',
-    'decoder.grid_too_small'   => 'sugar-animation: hücre ızgara boyutları pozitif olmalı',
-    'decoder.truncated'        => 'sugar-animation: eksik GIF',
-    'decoder.screen_too_large' => 'sugar-animation: GIF ekran boyutları en yüksek değeri ({max} piksel) aşıyor',
-    'decoder.screen_too_small' => 'sugar-animation: GIF ekran boyutları pozitif olmalı',
+    'decoder.no_file'            => 'sugar-animation: dosya bulunamadı: {path}',
+    'decoder.no_gd'              => 'sugar-animation: GIF\'leri çözmek için GD görüntü uzantısını (ext-gd) kurun - .ansi sanat oynatma buna ihtiyaç duymaz',
+    'decoder.not_gif'            => 'sugar-animation: GIF dosyası değil',
+    'decoder.unreadable'         => 'sugar-animation: dosya okunamıyor: {path}',
+    'decoder.grid_too_large'     => 'sugar-animation: hücre ızgarası çok büyük (en fazla {max} hücre)',
+    'decoder.grid_too_small'     => 'sugar-animation: hücre ızgara boyutları pozitif olmalı',
+    'decoder.truncated'          => 'sugar-animation: eksik GIF',
+    'decoder.screen_too_large'   => 'sugar-animation: GIF ekran boyutları en yüksek değeri ({max} piksel) aşıyor',
+    'decoder.screen_too_small'   => 'sugar-animation: GIF ekran boyutları pozitif olmalı',
+    'artlibrary.not_a_directory' => 'sugar-animation: bir dizin değil: {dir}',
+    'artlibrary.cannot_list'     => 'sugar-animation: dizin listelenemiyor: {dir}',
+    'ansiart.cannot_read'        => 'sugar-animation: sanat dosyası okunamıyor: {path}',
+    'ansiart.read_failed'        => 'sugar-animation: sanat dosyası okunamadı: {path}',
 ];

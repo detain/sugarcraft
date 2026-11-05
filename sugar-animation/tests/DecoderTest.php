@@ -411,7 +411,7 @@ final class DecoderTest extends TestCase
             $this->markTestSkipped('ext-gd not available');
         }
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('sugar-animation: cell grid product exceeds maximum (' . Decoder::MAX_CELLS . ')');
+        $this->expectExceptionMessage('sugar-animation: cell grid too large (maximum ' . Decoder::MAX_CELLS . ' cells)');
         Decoder::decode($this->gifPath, 500, 500);
     }
 }

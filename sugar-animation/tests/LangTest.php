@@ -29,7 +29,7 @@ final class LangTest extends TestCase
     public function testTranslateAnotherKnownKey(): void
     {
         $result = Lang::t('decoder.no_gd');
-        $this->assertSame('sugar-animation: ext-gd is required', $result);
+        $this->assertSame('sugar-animation: install the GD image extension (ext-gd) to decode GIFs - .ansi art playback does not need it', $result);
     }
 
     public function testParameterInterpolation(): void

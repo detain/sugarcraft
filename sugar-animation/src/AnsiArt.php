@@ -136,11 +136,11 @@ final class AnsiArt
     public static function fromFile(string $path): self
     {
         if (!is_file($path) || !is_readable($path)) {
-            throw new RuntimeException("AnsiArt: cannot read art file '{$path}'");
+            throw new RuntimeException(Lang::t('ansiart.cannot_read', ['path' => $path]));
         }
         $bytes = file_get_contents($path);
         if ($bytes === false) {
-            throw new RuntimeException("AnsiArt: failed to read art file '{$path}'");
+            throw new RuntimeException(Lang::t('ansiart.read_failed', ['path' => $path]));
         }
 
         return self::fromString($bytes);

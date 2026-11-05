@@ -91,7 +91,7 @@ final class DecoderCapWiringTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage(
-            'sugar-animation: cell grid product exceeds maximum (' . Decoder::MAX_CELLS . ')'
+            'sugar-animation: cell grid too large (maximum ' . Decoder::MAX_CELLS . ' cells)'
         );
         // A square grid one cell past the cap (ceil(sqrt(MAX_CELLS)) ** 2 > MAX_CELLS).
         $side = (int) ceil(sqrt(Decoder::MAX_CELLS));

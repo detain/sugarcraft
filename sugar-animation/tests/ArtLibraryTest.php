@@ -446,4 +446,20 @@ final class ArtLibraryTest extends TestCase
 
         return ArtLibrary::fromDir(self::CORPUS_DIR);
     }
+
+    public function testNotADirectoryRefusalCarriesTheHouseVoice(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'anim-notadir');
+        try {
+            ArtLibrary::fromDir($file);
+            $this->fail('expected a RuntimeException refusal');
+        } catch (RuntimeException $e) {
+            // Locale-independent: every language starts with the ASCII brand
+            // voice and interpolates the offending path.
+            $this->assertStringStartsWith('sugar-animation', $e->getMessage());
+            $this->assertStringContainsString($file, $e->getMessage());
+        } finally {
+            @unlink($file);
+        }
+    }
 }

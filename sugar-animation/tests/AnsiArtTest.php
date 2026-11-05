@@ -389,4 +389,18 @@ final class AnsiArtTest extends TestCase
 
         return implode('/', $out);
     }
+
+    public function testUnreadableArtFileRefusalCarriesTheHouseVoice(): void
+    {
+        $missing = sys_get_temp_dir() . '/anim-missing-' . uniqid() . '.ansi';
+        try {
+            AnsiArt::fromFile($missing);
+            $this->fail('expected a RuntimeException refusal');
+        } catch (RuntimeException $e) {
+            // Locale-independent: every language starts with the ASCII brand
+            // voice and interpolates the offending path.
+            $this->assertStringStartsWith('sugar-animation', $e->getMessage());
+            $this->assertStringContainsString($missing, $e->getMessage());
+        }
+    }
 }

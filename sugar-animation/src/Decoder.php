@@ -87,7 +87,8 @@ final class Decoder
         }
         $bytes = file_get_contents($path);
         if ($bytes === false) {
-            throw new \RuntimeException(Lang::t('decoder.not_gif'));
+            // Read refusal is not "not a GIF" — the bytes were never even seen.
+            throw new \RuntimeException(Lang::t('decoder.unreadable', ['path' => $path]));
         }
 
         return $bytes;
