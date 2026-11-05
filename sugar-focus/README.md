@@ -256,7 +256,7 @@ MIT © Joe Huss
 ## Credits & inspiration
 
 The focus ring is an **original SugarCraft design — no 1:1 Go counterpart**.
-It plays the role charmbracelet/bubbles' focus handling and sugar-dashboard's
+It plays the role that charmbracelet/bubbles' focus handling and sugar-dashboard's
 `FocusManager` play in their stacks, but as a standalone, dependency-free
 ring, so the attribution above is by analogy only.
 
