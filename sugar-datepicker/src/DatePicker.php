@@ -955,7 +955,7 @@ final class DatePicker
             return;
         }
 
-        $quoted = '"' . \addcslashes($s, "\x00..\x1f\x7f\"\\") . '"';
+        $quoted = '"' . \addcslashes($s, "\x00..\x1f\x7f\x80..\x9f\"\\") . '"';
 
         if (\strlen($s) > self::SGR_MAX_LEN) {
             throw new \InvalidArgumentException(
@@ -984,10 +984,13 @@ final class DatePicker
     /**
      * Place a string into the buffer at (col, row), handling wide chars.
      *
-     * C0 control bytes and DEL are dropped before they reach the buffer: the
-     * cell grid only suppresses zero-width clusters, but a control character
-     * such as TAB is scored width 4 and would otherwise land on the wire,
-     * so untrusted translated text cannot smuggle control codes into output.
+     * C0 control bytes, DEL, the C1 range (U+0080-U+009F) and clusters mb_ord
+     * cannot decode are dropped before they reach the buffer: the cell grid
+     * only suppresses zero-width clusters, but a control character such as TAB
+     * is scored width 4 and would otherwise land on the wire. The guard is the
+     * boundary — sugar-cellbuffer's Buffer::toAnsi() emits each cell rune
+     * verbatim — so untrusted translated text cannot smuggle control codes
+     * (including the one-byte CSI at U+009B) into output.
      *
      * @return Buffer
      */
@@ -1003,8 +1006,13 @@ final class DatePicker
                 break;
             }
             $ord = \mb_ord($cluster, 'UTF-8');
-            if ($ord !== false && ($ord < 0x20 || $ord === 0x7f)) {
-                // Control byte: drop it, consuming no column.
+            if ($ord === false || $ord < 0x20 || $ord === 0x7f
+                || ($ord >= 0x80 && $ord <= 0x9f)) {
+                // C0, DEL, C1 (U+0080-U+009F — includes the one-byte CSI
+                // U+009B) or a malformed UTF-8 cluster: drop it, consuming no
+                // column. The malformed case is fail-CLOSED on purpose: a
+                // sequence mb_ord cannot score may embed a raw ESC byte, and
+                // sugar-cellbuffer emits whatever rune it is given verbatim.
                 continue;
             }
             $gw = $this->graphemeWidth($cluster);

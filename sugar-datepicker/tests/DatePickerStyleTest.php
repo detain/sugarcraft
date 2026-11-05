@@ -366,6 +366,73 @@ final class DatePickerStyleTest extends TestCase
             $this->assertStringNotContainsString("\e", $e->getMessage(),
                 'the message must not carry the raw control byte');
         }
+
+        // N17: the escape range used to cover C0 and DEL only, so a rejected
+        // string opening with the one-byte CSI (U+009B) put that raw C1 byte
+        // back on the terminal through the exception path.
+        try {
+            $this->dp->WithHeaderStyle("\x9b31m");
+            $this->fail('a raw C1 escape introducer must be rejected');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringNotContainsString("\x9b", $e->getMessage(),
+                'the message must not carry the raw C1 byte');
+        }
+        try {
+            $this->dp->WithHeaderStyle("\x01abc");
+            $this->fail('a raw C0 byte must be rejected');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringNotContainsString("\x01", $e->getMessage(),
+                'the C0 escape leg must keep working');
+        }
+    }
+
+    public function testPlaceStringAtGuardFailsClosedOnMalformedAndC1Clusters(): void
+    {
+        // M8: the old guard read "mb_ord succeeded AND the codepoint is a
+        // control code", so clusters mb_ord could not decode bypassed the drop
+        // branch entirely, and the C1 range (which contains the one-byte CSI
+        // U+009B) was never named. sugar-cellbuffer emits whatever rune a cell
+        // holds, so this guard is the boundary. Pin the guard body: the
+        // behavioural table below is non-discriminating on boxes whose splitter
+        // zero-scores every probe before the fail-open branch is reached, so
+        // the body pins carry the discrimination.
+        $method = new \ReflectionMethod(DatePicker::class, 'placeStringAt');
+        $lines = \array_slice(\file((string) $method->getFileName()),
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1);
+        $body = \implode('', $lines);
+        $this->assertStringContainsString('$ord === false', $body,
+            'the guard must drop clusters mb_ord cannot decode');
+        $this->assertStringContainsString('0x9f', $body,
+            'the guard must name the top of the C1 range it drops');
+        $this->assertStringNotContainsString('$ord !== false &&', $body,
+            'the old fail-open guard shape must not return');
+    }
+
+    public function testPlaceStringAtDropsControlProbeClusters(): void
+    {
+        // Output contract locking the post-fix guarantee for future machines
+        // whose grapheme splitter surfaces the raw bytes: every hostile cluster
+        // collapses to nothing while the surrounding letters stay adjacent.
+        $probes = [
+            'C0 tab' => "A\tB",
+            'DEL' => "A\x7fB",
+            'C1 CSI' => "A\x9bB",
+            'C1 NEL' => "A\x85B",
+            'malformed 2-byte' => "A\xC3\x28B",
+            'malformed ESC tail' => "A\xC2\x1bB",
+            'overlong ESC' => "A\xF0\xF0\xF0\x1bB",
+            'BOM mid-string' => "A\xEF\xBB\xBFB",
+        ];
+        foreach ($probes as $name => $probe) {
+            $buffer = $this->invokePlaceStringAt(Buffer::new(10, 1), 0, 0, $probe, null);
+            $text = '';
+            for ($x = 0; $x < 10; $x++) {
+                $text .= $buffer->cellAt($x, 0)->rune();
+            }
+            $this->assertSame('AB' . \str_repeat(' ', 8), $text,
+                $name . ': control bytes must consume no column');
+        }
     }
 
     public function testAssertSgrLengthCap(): void
