@@ -56,6 +56,7 @@ use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\App\PromptSuggestionMsg;
 use SugarCraft\Code\Host\SessionHost\SessionLandings;
 use SugarCraft\Code\Host\SessionHost\SessionClientTools;
+use SugarCraft\Code\Host\SessionHost\SessionIdleCompaction;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
@@ -140,6 +141,7 @@ final class SessionHost
 {
     use SessionLandings;
     use SessionClientTools;
+    use SessionIdleCompaction;
 
     /** @var list<Message> */
     private array $history;
@@ -943,54 +945,6 @@ final class SessionHost
      * @param list<Message> $baseHistory the conversation to summarise
      * @return bool whether a request actually went out
      */
-    private function requestAheadOfNeed(array $dispatched, array $baseHistory): bool
-    {
-        $request = $this->compaction()->buildSummarizationRequest(
-            $this->backend(),
-            $this->compactor,
-            $dispatched,
-            null,
-            null,
-            '',
-            true,
-            $baseHistory,
-        );
-        if ($request === null) {
-            return false;
-        }
-
-        $this->aheadOfNeed = [
-            'id' => $request['id'],
-            'fingerprint' => $request['fingerprint'],
-            'summaries' => null,
-            'safeguardHold' => null,
-        ];
-        // C-CTX-2.a: this request forks a model call from either of its
-        // callers — the 70% dispatch tier or the CTX-5 idle timer — so it
-        // carries its own using() window: the summaries' child records land
-        // in THIS session's inbox wherever the request went out from, and
-        // the queue fallback for a sink without transport fills the same way.
-        RuntimeNoticeSink::using($this->notices, fn (): PromiseInterface => $request['promise']())
-            ->then(function (HistoryCompactedMsg $msg) use ($request): void {
-            // Billed before the latch check, as the TUI bills it: a
-            // paid-for provider call is never unbilled, even when the
-            // summaries it carried are superseded on arrival.
-            $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), null, 'compact');
-            if ($this->aheadOfNeed === null || $this->aheadOfNeed['id'] !== $request['id']) {
-                return;
-            }
-            // CTX-4: a HOLD is remembered so the tier that lands the
-            // heuristic fold can say why, but its summaries are
-            // discarded and never spliced.
-            $this->aheadOfNeed['summaries'] = $msg->error === null && $msg->blockedBy === null && $msg->safeguardHold === null
-                ? $msg->summaries
-                : [];
-            $this->aheadOfNeed['safeguardHold'] = $msg->safeguardHold;
-        });
-
-        return true;
-    }
-
     /**
      * (Re-)arm the CTX-5 idle auto-compaction watch. Called from every event
      * that RE-STARTS the idle window: an accepted prompt, a settled turn, and
@@ -1011,45 +965,6 @@ final class SessionHost
      * (C-CTX-5.c) — is invisible; a fold whose one-shot alarm under-shot by a
      * rounding and so silently never fired until the next prompt is the bug.
      */
-    private function armIdleAutoCompaction(): void
-    {
-        if ($this->idleAutoTimer !== null) {
-            Loop::cancelTimer($this->idleAutoTimer);
-            $this->idleAutoTimer = null;
-        }
-
-        $config = $this->compactor->config();
-        if (!$config->idleAuto || !$config->autoCompacts()
-            || $config->idleOfferSeconds <= 0 || $this->workspace->backend === null
-        ) {
-            return;
-        }
-
-        // C-CTX-5.c: `cacheTtl` re-times the alarm to the provider's prompt-cache
-        // clock, margin included, instead of the offer window — the window still
-        // gates whether a watch exists at all (the documented shape of the
-        // step), and a provider that says it caches nothing for this model has
-        // no clock to arm to, so its sessions simply never carry an alarm.
-        $seconds = $config->idleOfferSeconds;
-        if ($config->idleAutoMode === CompactorConfig::IDLE_AUTO_CACHE_TTL) {
-            $ttl = IdleCompactionPolicy::cacheTtlSecondsOf($this->workspace->backend);
-            if ($ttl === null) {
-                return;
-            }
-
-            $seconds = max(1, $ttl - IdleCompactionPolicy::CACHE_TTL_MARGIN_SECONDS);
-        }
-
-        $markedAt = $this->lastPromptAt;
-        $this->idleAutoTimer = Loop::addTimer(
-            (float) ($seconds + 2),
-            function () use ($markedAt): void {
-                $this->idleAutoTimer = null;
-                $this->onIdleAutoCompaction($markedAt);
-            },
-        );
-    }
-
     /**
      * The idle watch's verdict, every condition re-derived at fire time —
      * between the arming and the alarm anything they depend on has had an
@@ -1058,111 +973,6 @@ final class SessionHost
      * existing splice consumes on the next submit, nobody re-billed and no
      * turn ever dispatched unattended.
      */
-    private function onIdleAutoCompaction(?\DateTimeImmutable $markedAt): void
-    {
-        // The user returned — a later prompt re-stamped the clock (and
-        // re-armed) — so this is no longer an idle fold; the ordinary tiers
-        // take it. The stamp identity alone says it: every event that moves
-        // the window re-arms, so a live alarm always carries the current
-        // prompt stamp.
-        if ($this->lastPromptAt !== $markedAt) {
-            return;
-        }
-
-        // C-CTX-6.a: a running turn is a momentary silence, not the end of
-        // the watch. The TUI's tick simply re-checks the next minute and
-        // loses nothing; this one-shot hands itself to the next gap with the
-        // re-arm below, so the fold is judged from the settle instead of
-        // forfeited to the turn that outlived the alarm.
-        if ($this->isBusy()) {
-            $this->armIdleAutoCompaction();
-
-            return;
-        }
-
-        $config = $this->compactor->config();
-        // One request per cycle (the dispatch mirror's own rule), nobody to
-        // pay while the cap is breached, and the breaker: a fold run that
-        // keeps refilling without a turn in between is the loop the tier
-        // already refuses to start, and an unattended one has even less
-        // business being started.
-        if ($this->aheadOfNeed !== null
-            || $this->workspace->backend === null
-            || $this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd)
-            || IdleCompactionPolicy::thrashTripped($this->consecutiveRefills, $config->refillLimit)
-        ) {
-            return;
-        }
-
-        // Idle since the LATER of the two activity stamps — the prompt, or
-        // the settle of the turn that ran after it (C-CTX-6.a). Measuring
-        // from the prompt alone would count the turn itself as silence and
-        // bill a fold moments after a reply landed.
-        $idleAnchor = $this->lastPromptAt;
-        if ($this->lastSettledAt !== null
-            && ($idleAnchor === null || $this->lastSettledAt > $idleAnchor)
-        ) {
-            $idleAnchor = $this->lastSettledAt;
-        }
-
-        // The tier itself, measured exactly as submit() measures it, AND-ed
-        // with the shared idle clock so one policy answers both verdicts —
-        // except in `cacheTtl` mode (C-CTX-5.c), where the policy's cache
-        // predicate replaces the over-tier test with its below-the-tier floor
-        // and re-measures the provider's cache clock against the same anchor.
-        $windowLimit = $this->meter()->limit($this->backend());
-        $tierTokens = CompactionService::tierTokenCount($this->estimate($this->history), $this->history);
-        $foldDue = $config->idleAutoMode === CompactorConfig::IDLE_AUTO_CACHE_TTL
-            ? IdleCompactionPolicy::shouldAutoCompactAtCacheTtl(
-                $this->workspace->backend,
-                $tierTokens,
-                $windowLimit,
-                $idleAnchor,
-            )
-            : IdleCompactionPolicy::shouldAutoCompact(
-                $this->compactor->shouldCompact(
-                    CompactionService::compactionWire($this->history),
-                    $windowLimit,
-                    $tierTokens,
-                ),
-                $idleAnchor,
-                $config->idleAuto,
-                idleSeconds: $config->idleOfferSeconds,
-            );
-
-        if (!$foldDue) {
-            // C-CTX-5.d: the fold declined this alarm. Where keep-warm is on,
-            // the silence may instead buy a cached-read refresh — one ping,
-            // capped per stretch by the same policy the TUI's tick consults.
-            $this->keepWarmServed($tierTokens, $windowLimit, $idleAnchor);
-
-            return;
-        }
-
-        if ($this->requestAheadOfNeed($this->history, $this->history)) {
-            // MINOR-1, round-1 review: stamp the model this ask went out
-            // under, exactly like the dispatch arm below does. Without it a
-            // model-A idle prefetch survived a SetModel and spliced its
-            // records into the model-B session — the very harm the switch
-            // rule exists to prevent.
-            $idleEngine = $this->backend();
-            $idleModel = $idleEngine instanceof EngineBackend ? $idleEngine->model() : '';
-            $this->aheadOfNeed = [...$this->aheadOfNeed, 'model' => $idleModel];
-            // The human learns what the machine did while nobody was
-            // watching, in the transcript, like the advisory above it.
-            // Message::notice() is uiOnly by construction, and
-            // compactionWire() reads agent-visible rows only — the row
-            // cannot move the fingerprint the splice validates against.
-            $row = Message::notice(Lang::t('chat.compact.idle_auto_scheduled', [
-                'tokens' => $this->estimate($this->history),
-                'limit' => $this->meter()->limit($this->backend()),
-            ]));
-            $this->history[] = $row;
-            $this->save();
-            $this->announceTranscriptRow($row);
-        }
-    }
-
     /**
      * Served keep-warm (C-CTX-5.d) — the alarm-side twin of the TUI's
      * `Chat::handleKeepWarmTick()`, consulted at exactly the point where the
@@ -1180,57 +990,6 @@ final class SessionHost
      * owns this alarm untouched — this method is reached only from the
      * `!$foldDue` branch above it.
      */
-    private function keepWarmServed(int $tierTokens, int $windowLimit, ?\DateTimeImmutable $idleAnchor): void
-    {
-        // One anchor per fire, computed here like the TUI twin: the verdict
-        // and the latch must count against the SAME idle stretch, and a
-        // second read of the stamp could only ever disagree with the first.
-        $anchorTs = $idleAnchor?->getTimestamp();
-        if ($anchorTs === null) {
-            return; // no stretch to speak of: nothing's cache is going cold
-        }
-
-        $backend = $this->workspace->backend;
-        if (!KeepWarmPolicy::shouldPing(
-            $this->workspace->userConfig,
-            $this->sessionId,
-            $backend,
-            $tierTokens,
-            $windowLimit,
-            foldDue: false, // reached only where the fold just declined
-            turnInFlight: $this->isBusy(),
-            idleAnchorTs: $anchorTs,
-        )) {
-            return;
-        }
-
-        if (!$backend instanceof SummarisesWithCache) {
-            return;
-        }
-
-        if (!CacheHealthWatch::noteWarmPing($this->sessionId, $anchorTs)) {
-            return;
-        }
-
-        $history = $this->history;
-        $sessionId = $this->sessionId;
-        $backend->summariseAsync($history, KeepWarmPolicy::PING_INSTRUCTION)->then(
-            function (Message $reply) use ($sessionId): void {
-                CacheHealthWatch::settleWarmPing($sessionId, $reply->usage !== null);
-                if ($reply->usage !== null) {
-                    $this->ledger()->account($this->spend, $reply->usage, $this->usageRecordSink(), null, 'warm');
-                }
-            },
-            static function (\Throwable $failure) use ($sessionId): void {
-                // A ping that never answered warmed nothing and billed
-                // nothing; only the latch comes down.
-                CacheHealthWatch::settleWarmPing($sessionId, false);
-            },
-        );
-
-        $this->armIdleAutoCompaction();
-    }
-
     /**
      * Cancel the turn in flight — or a submission parked behind off-thread
      * work — when $turnId is null or names it. Its running tool rows are
