@@ -22,12 +22,12 @@ The contract lives in `SugarCraft\Core\Util\Sanitize`
 |------|--------|--------------|
 | Plain text into cells, titles, labels | `Sanitize::untrusted()` (:239) | Strips ANSI (`Ansi::strip`) and removes C0 controls except TAB/LF/CR, DEL, and the UTF-8-encoded C1 range — byte-wise, so malformed UTF-8 cannot smuggle a survivor past a `/u` pattern (fail-closed). |
 | Text into a user-facing display where bidi/zero-width tricks matter | `Sanitize::untrustedForDisplay()` (:314) | The above, plus CR/CRLF→LF mapping, plus `markInvisibleFormatting()` — invisible directional/zero-width codepoints are replaced by visible `<U+202E>`-style notations instead of being silently eaten. |
-| Text into a frame that already carries zone markers or image markers | `Sanitize::untrustedForMarkedFrames()` (:595) | `untrusted()` plus a surgical sweep of the two zone sentinels only (§2), preserving legitimate marker traffic. |
+| Text into a frame that already carries zone markers or image markers | `Sanitize::untrustedForMarkedFrames()` (:682) | `untrusted()` plus a surgical sweep of the two zone sentinels only (§2), preserving legitimate marker traffic. |
 | Raw paste / keyboard input from a terminal | `untrustedForMarkedFrames()` | InputReader's paste path uses it: a pasted blob is attacker-authored *and* frame-marked by the time it lands. |
 
 `untrusted()` deliberately passes the Private Use Area through — the
 PUA is our marker arena (§2), not foreign traffic. Cell-level shaping
-(`cellValue()` :171, `controlChars()` :148, `visibleControls()` :467)
+(`cellValue()` :171, `controlChars()` :148, `visibleControls()` :554)
 are separate documented tools; do not confuse them with the untrusted
 gate.
 
@@ -41,7 +41,7 @@ as its internal marker space:
   :80/:83): `sugar-mouse` `Mark::zone()` / `Scan` wrap clickable
   overlay zones in these zero-width cells. Because they are PUA
   codepoints they pass through `untrusted()` — which is exactly why
-  `stripZoneSentinels()` (:554, surgical `str_replace` of the two
+  `stripZoneSentinels()` (:641, surgical `str_replace` of the two
   sentinels only) exists and why untrusted text must be swept with
   `untrustedForMarkedFrames()` before it can enter a marked frame:
   forged sentinels could otherwise hijack a zone.
@@ -52,7 +52,7 @@ as its internal marker space:
   markers): the marker range and the
   sentinel range are **disjoint by construction**. Nerd Font / icon
   glyphs live outside the reserved band.
-- `stripPrivateUse()` (:573) removes the whole BMP PUA via the
+- `stripPrivateUse()` (:660) removes the whole BMP PUA via the
   byte-wise pattern at :96 — the safe direction is over-match, and a
   `/u` pattern would silently match nothing on malformed input, so it
   is not used.

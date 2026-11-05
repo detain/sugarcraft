@@ -652,7 +652,8 @@
         <p class="lede">
             Standalone executables — CLI tools (prompts, markdown, screenshots), full
             TUIs (file manager, git, SQLite, AI chat, games), and a project
-            starter. Install via Composer, run as a CLI binary. Each has a
+            starter — the starter you scaffold, not install. Install via Composer,
+            run as a CLI binary. Each has a
             detail page below with controls, architecture, and demo recordings.
         </p>
         <div class="lib-grid">
@@ -666,7 +667,7 @@
                     <h3>CandyStarter</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-starter">GitHub →</span>
                 </div>
-                <p class="summary"><code>composer create-project sugarcraft/candy-starter my-app</code> — pour your model into the mold and you've got a working app.</p>
+                <p class="summary"><code>composer create-project sugarcraft/candy-starter my-app --stability=dev</code> — scaffold a working app from the counter Model (Packagist carries only dev-master until a <code>candy-starter/*</code> tag exists).</p>
             </a>
 
             <a class="lib-card" href="lib/candy-scriptui.html">
@@ -1089,9 +1090,9 @@
                 <span class="demo-caption">Damped spring oscillator</span>
             </a>
             <a class="demo-card" href="lib/candy-starter.html">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-starter/.vhs/start.gif" alt="CandyStarter counter skeleton">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-starter/.vhs/start.gif" alt="CandyStarter counter app — Up/Down change the count, q exits">
                 <h3>CandyStarter</h3>
-                <span class="demo-caption">Bootstrap skeleton — counter app</span>
+                <span class="demo-caption">Counter app on the scaffold — run composer create-project</span>
             </a>
             <a class="demo-card" href="lib/candy-tetris.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-tetris/.vhs/play.gif" alt="CandyTetris gameplay">

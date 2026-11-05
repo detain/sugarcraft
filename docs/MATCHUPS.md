@@ -170,7 +170,7 @@ reference projects supplied the ideas, not the code.
 | SugarLog (sugar-log/) | [log](https://github.com/charmbracelet/log) |
 | SugarMetrics (sugar-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
 | CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
-| CandyStarter (candy-starter/) | none — first-party |
+| CandyStarter (candy-starter/) | none — first-party (bootstrap template patterned on [bubbletea](https://github.com/charmbracelet/bubbletea) starter examples; analogy only) |
 | SugarMouse (sugar-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
 | SugarImage (sugar-image/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
 | SugarColorprofile (sugar-colorprofile/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
