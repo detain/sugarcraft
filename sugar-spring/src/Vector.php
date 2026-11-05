@@ -67,7 +67,10 @@ final class Vector implements \JsonSerializable
         return new self($this->x * $s, $this->y * $s, $this->z * $s);
     }
 
-    /** Euclidean length in 3D. */
+    /**
+     * Euclidean length in 3D. Returns INF when the squared components sum
+     * past PHP_FLOAT_MAX (finite components ~1e154 and up).
+     */
     public function length(): float
     {
         return sqrt($this->x * $this->x + $this->y * $this->y + $this->z * $this->z);
@@ -91,6 +94,8 @@ final class Vector implements \JsonSerializable
 
     /**
      * Squared Euclidean length — avoids sqrt() for comparisons.
+     * Returns INF on overflow exactly like {@see length()} (components ~1e154
+     * and up).
      */
     public function lengthSquared(): float
     {

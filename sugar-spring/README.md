@@ -298,7 +298,11 @@ Both `Vector` and `Point` are **3D** (`x`, `y`, `z`) — the constructor's
 unchanged. Use the third dimension when a scene needs a Z
 axis (parallax / depth-shaded particle systems). Both types refuse
 non-finite components, and `Vector::normalize()` refuses zero and
-overflowed (`INF`) lengths rather than quietly returning garbage.
+overflowed (`INF`) lengths rather than quietly returning garbage. `length()`,
+`lengthSquared()` and `distance()` can overflow to `INF` (components ~1e154
+and up), so compare magnitudes through `normalize()`d operands on extreme
+inputs — it refuses the overflow loudly, where a raw `length()` comparison
+would silently see `INF` against `INF`.
 
 The Y-axis convention is **Y-up** by default: `Gravity::standard()` returns `(0, -9.81, 0)` so increasing
 Y means "up the screen". Terminal renderers usually grow downward —

@@ -42,7 +42,10 @@ final class Point implements \JsonSerializable
         return new self($this->x + $v->x, $this->y + $v->y, $this->z + $v->z);
     }
 
-    /** Euclidean distance to another point. */
+    /**
+     * Euclidean distance to another point. Returns INF when the squared
+     * deltas sum past PHP_FLOAT_MAX (extreme coordinates ~1e154 and up).
+     */
     public function distance(self $other): float
     {
         $dx = $this->x - $other->x;
