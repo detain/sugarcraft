@@ -10,7 +10,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 ## Mouse hit-testing
 
-- Mouse hit-testing self-contained via sugar-mouse. Don't pass Managers around for new code.
+- There is no sugar-mouse dependency in this lib (composer requires are `php ^8.3`, `sugarcraft/sugar-core`, `sugarcraft/sugar-fuzzy` only) - hit-testing is host-side: the host maps pointer rows to list indices itself. The library-side law is the defensive sweep in `Model::renderItem()`: item text passes through `Sanitize::untrustedForMarkedFrames()` so forged mouse-zone sentinels (U+E000/U+E001) can never reach a rendered frame. Do not re-add a Manager dependency.
 
 ## Rendering (row-granular delta)
 
