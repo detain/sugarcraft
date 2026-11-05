@@ -54,7 +54,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-async"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-async" alt="SugarAsync code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo. CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose() for atomic disposal, and AsyncOps static helpers for common async patterns.</p>
+    <p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo: a CancellationSource owns the mutable flag and its cancel() trigger while consumers hold a read-only CancellationToken, Subscription handles make disposal uniform (compose() gathers many into one), and the AsyncOps helpers cover timeout and deadline ceilings, retry with jittered backoff and a total budget, single-flight coalescing, debounce and throttle timers, all/race fan-in, and a pending-notice combinator — plus a bounded TTL AsyncCache that coalesces in-flight loads.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-async</code></pre>
