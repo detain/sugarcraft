@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-testing",
-    "description": "Test harness for SugarCraft terminal programs \u2014 golden snapshots, cell-grid assertions, program simulation, scripted input, VHS tape building, and graphics decoding.",
+    "description": "Test harness for SugarCraft programs \u2014 ProgramSimulator, scripted input, golden/snapshot assertions, VHS tape building, and graphics-stream decoding.",
     "type": "library",
     "license": "MIT",
     "keywords": [

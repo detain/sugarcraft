@@ -1,11 +1,11 @@
 {
     "title": "SugarCraft — SugarTesting",
-    "description": "SugarTesting: Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, and snapshot helpers.",
+    "description": "SugarTesting: Test harness for SugarCraft programs — ProgramSimulator, scripted input, golden/snapshot assertions, VHS tape building, and graphics-stream decoding.",
     "ogTitle": "SugarCraft — SugarTesting",
-    "ogDescription": "ProgramSimulator drives a Program with scripted input; captures model/view/cmds. Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals. TapeRecorder emits VHS .tape files.",
+    "ogDescription": "ProgramSimulator drives a Program with scripted input; captures model/view/cmds. Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals, assertViewIdempotent. TapeRecorder emits VHS .tape files.",
     "emoji": "🍬",
     "displayName": "SugarTesting",
-    "tagline": "Test harness for SugarCraft apps",
+    "tagline": "Test harness for SugarCraft programs",
     "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">original — no 1:1 Go counterpart</span>\n          <span class=\"tag-chip\">testing</span>\n          <span class=\"tag-chip\">testing-harness</span>\n          <span class=\"tag-chip\">foundation-package</span>"
 }
