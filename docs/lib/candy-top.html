@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyTop — SugarCraft</title>
-<meta name="description" content="CandyTop: Terminal system monitor for PHP — cpu, mem, disks, net, process, containers, GPU/NPU and BMC (ipmi) boxes, 43 themes (pastel by default) and btop-compatible config, Linux and FreeBSD collectors.">
+<meta name="description" content="CandyTop: Terminal system monitor for PHP — cpu, mem, disks, net, process, containers, GPU/NPU and BMC (ipmi) boxes, a VM dashboard, 43 themes (pastel by default) and btop-compatible config, Linux and FreeBSD collectors.">
 <meta property="og:title" content="CandyTop — SugarCraft">
-<meta property="og:description" content="Terminal system monitor — cpu, memory, disk, network, process, container and GPU boxes with braille graphs, gradient meters, 43 themes (pastel by default) and btop-compatible config.">
+<meta property="og:description" content="Terminal system monitor — cpu, memory, disk, network, process, container, GPU, BMC and VM boxes with braille graphs, gradient meters, 43 themes (pastel by default) and btop-compatible config.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-top.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-top.html">
 <meta property="og:type" content="website">
@@ -55,7 +55,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-top"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-top" alt="CandyTop code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Originally inspired by <a href="https://github.com/aristocratos/btop">btop</a> (v1.4.7 plus a set of adopted upstream pull requests) and built on the SugarCraft stack, candy-top is a full-screen terminal system monitor in pure PHP. <strong>cpu, memory + disks, network, process and containers boxes drawn with braille / block / sextant graphs, gradient meters and themes in the btop tradition</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> or FreeBSD <code>sysctl</code> collectors and driven by the <a href="sugar-core.html">SugarCore</a> Model/Cmd runtime. It reads btop's config format, so a <code>btop.conf</code> works unchanged.</p>
+    <p class="lede" style="margin-top: 28px;">Originally inspired by <a href="https://github.com/aristocratos/btop">btop</a> (v1.4.7 plus a set of adopted upstream pull requests) and built on the SugarCraft stack, candy-top is a full-screen terminal system monitor in pure PHP. <strong>cpu, memory + disks, network, process and containers boxes, up to six multi-vendor GPU / NPU boxes, a server BMC (ipmi) band and a VM dashboard, drawn with braille / block / sextant graphs, gradient meters and themes in the btop tradition</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> or FreeBSD <code>sysctl</code> collectors and driven by the <a href="sugar-core.html">SugarCore</a> Model/Cmd runtime. It reads btop's config format, so a <code>btop.conf</code> works unchanged.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-top</code></pre>

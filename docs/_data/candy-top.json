@@ -1,8 +1,8 @@
 {
     "title": "CandyTop — SugarCraft",
-    "description": "CandyTop: Terminal system monitor for PHP — cpu, mem, disks, net, process, containers, GPU/NPU and BMC (ipmi) boxes, 43 themes (42 ported from btop plus candy-top's own pastel) and btop-compatible config, Linux and FreeBSD collectors.",
+    "description": "CandyTop: Terminal system monitor for PHP — cpu, mem, disks, net, process, containers, GPU/NPU and BMC (ipmi) boxes, a VM dashboard, 43 themes (42 ported from btop plus candy-top's own pastel) and btop-compatible config, Linux and FreeBSD collectors.",
     "ogTitle": "CandyTop — SugarCraft",
-    "ogDescription": "Terminal system monitor — cpu, memory, disk, network, process, container and GPU boxes with braille graphs, gradient meters, 43 themes (42 ported from btop plus candy-top's own pastel) and btop-compatible config.",
+    "ogDescription": "Terminal system monitor — cpu, memory, disk, network, process, container, GPU, BMC and VM boxes with braille graphs, gradient meters, 43 themes (42 ported from btop plus candy-top's own pastel) and btop-compatible config.",
     "emoji": "📈",
     "displayName": "CandyTop",
     "tagline": "Terminal system monitor",

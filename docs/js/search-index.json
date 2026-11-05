@@ -19,7 +19,7 @@
   {"name":"CandySshLauncher","slug":"candy-ssh-launcher","category":"app","description":"A launch menu of your SSH hosts — pick one and connect.","url":"lib/candy-ssh-launcher.html"},
   {"name":"CandyStarter","slug":"candy-starter","category":"app","description":"Clone-and-run starter project for building your own SugarCraft apps.","url":"lib/candy-starter.html"},
   {"name":"CandyTetris","slug":"candy-tetris","category":"app","description":"Tetris on the SugarCraft stack.","url":"lib/candy-tetris.html"},
-  {"name":"CandyTop","slug":"candy-top","category":"app","description":"Terminal system monitor — cpu, memory, disk, network, process, container and GPU boxes with braille graphs, gradient meters, 43 themes (pastel by default) and btop-compatible config.","url":"lib/candy-top.html"},
+  {"name":"CandyTop","slug":"candy-top","category":"app","description":"Terminal system monitor — cpu, memory, disk, network, process, container, GPU, BMC and VM boxes with braille graphs, gradient meters, 43 themes (pastel by default) and btop-compatible config.","url":"lib/candy-top.html"},
   {"name":"CandyVcr","slug":"candy-vcr","category":"app","description":"Record + replay sugar-core sessions — JSONL/YAML cassettes, byte + cell-grid assertions, CLI.","url":"lib/candy-vcr.html"},
   {"name":"SugarAnimation","slug":"sugar-animation","category":"library","description":"ANSI/GIF animation toolkit — GIF decode, frame playback, .ansi art. CLI: candy-gifview.","url":"lib/sugar-animation.html"},
   {"name":"SugarAnsiParser","slug":"sugar-ansi-parser","category":"library","description":"ANSI escape-sequence parser and state machine (SGR, cursor, erase, DEC modes).","url":"lib/sugar-ansi-parser.html"},
