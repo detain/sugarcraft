@@ -60,7 +60,7 @@ final class SessionMetadataTest extends TestCase
             sessionId:     'xyz789',
             authMethod:    'password',
             keyFingerprint: null,
-            clientVersion: 'SSH-2.0-PHP_candy-wish',
+            clientVersion: 'SSH-2.0-PHP_sugar-ssh-server',
             serverVersion: 'SSH-2.0-OpenSSH_9.6',
         );
 
