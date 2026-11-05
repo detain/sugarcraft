@@ -45,3 +45,13 @@
   user's own shell command.
 - **`@playwright/test` is pinned exactly** (1.63.0 ↔ chromium revision 1243);
   bump it together with `npx playwright install chromium`.
+- **Design tokens are adopt-in-new-code only (UX-03).** `src-web/styles/
+  tokens.css` is the palette for chrome geometry and repeated visual values,
+  but the ~172 older rules that still spell magic numbers are deliberately
+  NOT bulk-swept: each rewrite changes rendered pixels for untested corners
+  and buys nothing on its own. Rule: any NEW style rule touches a layout
+  number only through a token (add it to `tokens.css` first if it is genuinely
+  shared, like the UXA pass's `--chrome-height`/`--chrome-reserve`); when a
+  change already edits an old rule for another finding, adopt the token in
+  that hunk. Batch sweeps are off the table until a visual-regression harness
+  exists to catch them.
