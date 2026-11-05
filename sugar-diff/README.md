@@ -4,8 +4,10 @@ Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer,
 
 ## Installation
 
+Releases: pre-1.0 — no tagged versions exist yet, so consume `dev-master`.
+
 ```bash
-composer require sugarcraft/sugar-diff
+composer require sugarcraft/sugar-diff:@dev
 ```
 
 ## Role
