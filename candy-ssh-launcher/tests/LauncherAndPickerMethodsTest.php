@@ -543,9 +543,11 @@ final class LauncherAndPickerMethodsTest extends TestCase
         $result = $ref->invoke($p, "\x01\x02test\x03");
         $this->assertSame('test', $result);
 
-        // CR/LF should be preserved
+        // CR/LF/TAB survive the canonical sanitizer, so the display policy
+        // folds them to spaces — a config field can no longer forge extra
+        // visual rows through the picker (F-23).
         $result = $ref->invoke($p, "line1\nline2\rline3");
-        $this->assertSame("line1\nline2\rline3", $result);
+        $this->assertSame('line1 line2 line3', $result);
     }
 
     public function testStripControlsRemovesBelAndOtherC0(): void

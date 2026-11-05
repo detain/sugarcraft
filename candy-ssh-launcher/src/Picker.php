@@ -6,6 +6,7 @@ namespace SugarCraft\SshLauncher;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\RawMode;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\MatchResult;
@@ -302,18 +303,23 @@ class Picker
     }
 
     /**
-     * Strip ANSI escape sequences and C0 control characters from a string
-     * before writing it to the terminal. This prevents malicious config
-     * values (names, descriptions) from injecting escape sequences.
+     * Canonical untrusted-bytes policy for everything the picker writes to
+     * the terminal. {@see Sanitize::untrustedForDisplay()} strips escape
+     * sequences, C0 controls and the encoded-C1/C1-shim bytes the old local
+     * byte-sweep missed (\xC2[\x80-\x9F] reaches a terminal as a real CSI
+     * when the C1 range is interpreted), and marks invisible formatting
+     * (bidi overrides, zero-width joins) as visible <U+XXXX> sentinels
+     * instead of letting them silently rewrite what a row says.
+     *
+     * CR, LF and TAB survive sanitizing (the boundary keeps line endings for
+     * paste fidelity), so they are folded to spaces here: a config field's
+     * newline must not forge an extra visual row through the display path.
      */
     private function stripControls(string $s): string
     {
-        // Ansi::strip() removes every 7-bit and 8-bit escape sequence,
-        // including DCS/APC/PM/SOS string payloads (ANSI audit #9).
-        $s = Ansi::strip($s);
-        // Remove remaining C0 control characters except CR/LF (which the
-        // picker handles as line terminators). This catches BEL, STX, etc.
-        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', $s);
+        $s = Sanitize::untrustedForDisplay($s);
+
+        return str_replace(["\t", "\r", "\n"], ' ', $s);
     }
 
     /**
