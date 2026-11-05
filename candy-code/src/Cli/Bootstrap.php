@@ -6068,11 +6068,11 @@ public static function useMaxCost(?string $maxCost): void
 
         $rows = [];
         foreach ($verdicts as $key => [$resolved, $expected, $consequence]) {
-            if ($resolved === null && self::isNonsenseSetting($config, $key)) {
+            if ($resolved === null && NonsenseSettings::isSet($config, $key)) {
                 $rows[] = sprintf(
                     self::translated(self::NONSENSE_LIMIT_NOTICE_FORMAT),
                     $key,
-                    self::settingValueForNotice($config[$key]),
+                    NonsenseSettings::valueForNotice($config[$key]),
                     $expected,
                     $consequence,
                 );
@@ -6129,34 +6129,6 @@ public static function useMaxCost(?string $maxCost): void
     private static function discardsWhatIsWritten(string $destination): bool
     {
         return TuiErrorLog::isNullDevice($destination);
-    }
-
-    /**
-     * Whether $key is SET to something — the precondition for calling its
-     * value nonsense. See {@see reportNonsenseLimits()} for what counts as
-     * unset.
-     *
-     * @param array<string, mixed> $config
-     */
-    private static function isNonsenseSetting(array $config, string $key): bool
-    {
-        $raw = $config[$key] ?? null;
-
-        return $raw !== null && $raw !== '';
-    }
-
-    /**
-     * A setting's value as the operator would recognise it from their own
-     * file — its JSON spelling, so `"16x"` keeps its quotes and `1.0e+19`
-     * reads as the number it was — clipped, because a hand-edited file can
-     * hold a whole object under a numeric key.
-     */
-    private static function settingValueForNotice(mixed $raw): string
-    {
-        $json = json_encode($raw, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION | JSON_PARTIAL_OUTPUT_ON_ERROR);
-        $json = $json === false ? get_debug_type($raw) : $json;
-
-        return mb_strlen($json, 'UTF-8') > 60 ? mb_substr($json, 0, 59, 'UTF-8') . '…' : $json;
     }
 
     /**
