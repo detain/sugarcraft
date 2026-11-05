@@ -92,7 +92,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 - `Buffer::withCellAt(int $col, int $row, Cell $cell): self` — immutable cell setter (enforces the wide-pair law).
 - `Buffer::withRegion(Region $region, Buffer $source): self` — blit `$source` into `$region`, clipped to the intersection.
 - `Buffer::fill(Region $region, Cell $cell): self` — paint a region.
-- `Buffer::copy(Region $region): self` — extract a region-sized buffer (verbatim blit; capped by `MAX_COPY_CELLS`).
+- `Buffer::copy(Region $region): self` — extract a buffer that is always region-sized: in-grid cells are copied verbatim, out-of-grid area is padded with blanks (unlike `withRegion()`/`fill()`, which clip to the intersection). Capped by `MAX_COPY_CELLS`.
 - `Buffer::diff(Buffer $previous): list<DiffOp>` — minimal delta ops (see [Diffing](#diffing--delta-ansi)).
 - `Buffer::applyDiff(array $ops): self` — replay a diff stream onto a buffer; refuses negative cursor ops.
 - `Buffer::toAnsi(): string` — full-repaint ANSI for the whole grid. Rows are joined with a **bare LF only** — no CR, no cursor addressing — so the stream lands on the right rows only where the terminal maps newlines to CRLF (canonical cooked mode, ONLCR on) or the grid is exactly as wide as the terminal (auto-wrap returns the cursor). Raw-mode callers post-process `"\r\n"` themselves or interpose CUP moves between rows; `text()` shares the bare-LF join contract.
