@@ -181,4 +181,33 @@ final class ChromaThemeLoaderTest extends TestCase
         );
         $this->assertSame('Iosevka Term, monospace', $load('Iosevka Term, monospace')->fontFamily);
     }
+
+    public function testNonStringFontFamilyShapesFallBackInsteadOfFatalising(): void
+    {
+        // sanitizeFontFamily takes a typed string; a hostile theme carrying
+        // fontFamily as a list or a number used to fatal the loader with a
+        // strict_types TypeError. Non-strings now fall back to the house
+        // default — theme files are not trusted, and refusal must stay a
+        // fallback, never a crash or a cast onto the wire.
+        $shapes = [
+            'list'  => ['Hack', 'monospace'],
+            'int'   => 42,
+            'float' => 1.5,
+            'bool'  => true,
+            'null'  => null,
+        ];
+        foreach ($shapes as $label => $family) {
+            $theme = ChromaThemeLoader::fromArray([
+                'background' => '#0d1117',
+                'foreground' => '#c9d1d9',
+                'colors'     => [],
+                'fontFamily' => $family,
+            ]);
+            $this->assertSame(
+                'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
+                $theme->fontFamily,
+                "a {$label}-shaped fontFamily must fall back, never fatal or cast",
+            );
+        }
+    }
 }

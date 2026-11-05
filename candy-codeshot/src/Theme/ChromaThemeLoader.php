@@ -98,7 +98,14 @@ final class ChromaThemeLoader
             ?? self::coerceColor($data['lineNumberColor'] ?? null)
             ?? '#6e7681';
 
-        $fontFamily = $data['fontFamily'] ?? 'Hack, "JetBrains Mono", Menlo, Consolas, monospace';
+        // A hostile theme can carry fontFamily as a list or a number, and the
+        // sanitizer's typed string parameter would fatal on it — theme files
+        // are not trusted, so anything that is not a plain string falls back
+        // to the house default instead of reaching the sanitizer or the wire.
+        $fontFamily = $data['fontFamily'] ?? null;
+        if (!is_string($fontFamily)) {
+            $fontFamily = 'Hack, "JetBrains Mono", Menlo, Consolas, monospace';
+        }
 
         return new Theme(
             background:     $background,

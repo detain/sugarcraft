@@ -186,8 +186,11 @@ final class VsCodeThemeLoader
                 }
             }
 
-            if (isset($settings['fontFamily'])) {
-                $map['fontFamily'] = (string) $settings['fontFamily'];
+            // Only a real string survives: (string)-casting an array or
+            // object produced "Array" (with a notice), which the whitelist
+            // accepted cleanly and silently emitted a junk font family.
+            if (isset($settings['fontFamily']) && is_string($settings['fontFamily'])) {
+                $map['fontFamily'] = $settings['fontFamily'];
             }
         }
 

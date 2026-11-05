@@ -222,4 +222,24 @@ final class VsCodeThemeLoaderTest extends TestCase
         // plainly-named family with its house punctuation rides through untouched.
         $this->assertSame("Fira Code, 'Menlo', monospace", $with("Fira Code, 'Menlo', monospace")->fontFamily);
     }
+
+    public function testNonStringSettingsFontFamilyShapesAreDropped(): void
+    {
+        // The old (string) cast turned a list into "Array" and a bool into
+        // "1" — both sailed through the charset door and silently emitted a
+        // junk font family. Non-strings are now dropped at the property map,
+        // so the house default takes over.
+        $shapes = ['list' => ['Hack'], 'int' => 42, 'bool' => true];
+        foreach ($shapes as $label => $family) {
+            $theme = VsCodeThemeLoader::fromArray([
+                'colors'      => ['editor.background' => '#0d1117', 'editor.foreground' => '#c9d1d9'],
+                'tokenColors' => [['scope' => 'comment', 'settings' => ['fontFamily' => $family]]],
+            ]);
+            $this->assertSame(
+                'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
+                $theme->fontFamily,
+                "a {$label}-shaped settings fontFamily must be dropped, not cast",
+            );
+        }
+    }
 }
