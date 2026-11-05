@@ -67,9 +67,9 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 <tr><td>Diff</td><td>isEmpty() / addedLines() / removedLines(): int|bool</td><td>Summary counts</td></tr>
 <tr><td>Hunk</td><td>header() / lines() / removedCount() / addedCount()</td><td>The @@ block (GNU-elided single-line ranges), its rows, and -/+ row tallies</td></tr>
 <tr><td>Line / LineKind</td><td>kind / text / oldNumber / newNumber; marker() / toUnifiedRow()</td><td>One numbered verbatim row; eq/del/ins vocabulary</td></tr>
-<tr><td>DiffOptions</td><td>withContextLines(int) / withMaxLcsCells(int)</td><td>Context window (DEFAULT_CONTEXT_LINES = 3) and LCS cell budget (DEFAULT_MAX_LCS_CELLS = 250 000, counted as the table's real (n+1)×(m+1) footprint)</td></tr>
-<tr><td>DiffOptions</td><td>withIgnoreWhitespace() / withIgnoreCase()</td><td>Fold comparisons; emitted rows keep original bytes</td></tr>
-<tr><td>DiffOptions</td><td>withNoNewlineMarker() / withDevNullOnEmptySide()</td><td>GNU annotations, opt-in (the marker only annotates STRING sides)</td></tr>
+<tr><td>DiffOptions</td><td>withContextLines(int) / withMaxLcsCells(int)</td><td>Context window (negative clamps to 0; DEFAULT_CONTEXT_LINES = 3) and LCS cell budget (0 = always degraded; DEFAULT_MAX_LCS_CELLS = 250 000, counted as the table's real (n+1)×(m+1) footprint)</td></tr>
+<tr><td>DiffOptions</td><td>withIgnoreWhitespace(bool $ignore = true) / withIgnoreCase(bool $ignore = true)</td><td>Fold comparisons; emitted rows keep original bytes</td></tr>
+<tr><td>DiffOptions</td><td>withNoNewlineMarker(bool $on = true) / withDevNullOnEmptySide(bool $on = true)</td><td>GNU annotations, opt-in (the marker only annotates STRING sides)</td></tr>
 <tr><td>UnifiedFormat</td><td>write(Diff, string $oldPath, ?string $newPath) / hunksOnly(Diff): string</td><td>The writer behind Diff::unified()/hunkText(); NO_NEWLINE_ROW; path labels are control-byte-safe</td></tr>
 <tr><td>SideBySideFormat</td><td>rows(Diff) / fromUnified(string|list&lt;string&gt;): list&lt;SideBySideRow&gt;</td><td>Split-view pairing; SideBySideRow-&gt;left/-&gt;right, isPaired()</td></tr>
 <tr><td>UnifiedScan</td><td>lines(string|list&lt;string&gt;): list&lt;ScannedLine&gt;</td><td>Per-row old/new line numbers, fileHeader flag, and ScanRowKind; declared-count budgets, fail-closed boundaries (MAX_LINE_NUMBER_DIGITS caps start fields)</td></tr>

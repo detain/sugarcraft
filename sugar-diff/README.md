@@ -66,7 +66,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 | Class | Purpose |
 |-------|---------|
 | `Diff` | `compute()` entry point; `lines`, `hunks`, `options`, `beforeCount`/`afterCount`, `beforeHasFinalNewline`/`afterHasFinalNewline`, `degraded`; `isEmpty()`, `addedLines()`, `removedLines()`, `unified($oldPath, ?$newPath = null)` (second argument names the new side only — the before side uses the first), `hunkText()` |
-| `DiffOptions` | `new()`; `withContextLines()` (`DEFAULT_CONTEXT_LINES` = 3), `withMaxLcsCells()` (`DEFAULT_MAX_LCS_CELLS` = 250 000), `withIgnoreWhitespace()`, `withIgnoreCase()`, `withNoNewlineMarker()`, `withDevNullOnEmptySide()` |
+| `DiffOptions` | `new()`; `withContextLines(int)` (negative clamps to 0; `DEFAULT_CONTEXT_LINES` = 3), `withMaxLcsCells(int)` (0 = every comparison falls back degraded; `DEFAULT_MAX_LCS_CELLS` = 250 000), `withIgnoreWhitespace(bool $ignore = true)`, `withIgnoreCase(bool $ignore = true)`, `withNoNewlineMarker(bool $on = true)`, `withDevNullOnEmptySide(bool $on = true)` |
 | `Hunk` | `header()`, `lines()`, `removedCount()`/`addedCount()` (`-`/`+` rows only), the `oldStart`/`oldLines`/`newStart`/`newLines` anchors |
 | `Line` / `LineKind` | One numbered row (verbatim text, side numbers, `marker()`, `toUnifiedRow()`); `eq`/`del`/`ins` vocabulary |
 | `Writer\UnifiedFormat` | `write()` / `hunksOnly()` statics behind `Diff::unified()` / `Diff::hunkText()`; `NO_NEWLINE_ROW` |
