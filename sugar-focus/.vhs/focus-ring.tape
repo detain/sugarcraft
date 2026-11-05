@@ -1,6 +1,6 @@
 Output .vhs/focus-ring.gif
 Set FontSize 14
-Set Width 820
+Set Width 800
 Set Height 300
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
