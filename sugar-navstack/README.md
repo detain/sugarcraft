@@ -327,9 +327,9 @@ round-trips a rendered bar back into titles. `Escape` is opt-in:
 ```php
 use SugarCraft\NavStack\Escape;
 
-$title  = Escape::title('Settings › Display');      // "Settings \ › Display"
+$title  = Escape::title('Settings › Display');      // "Settings\ › Display"
 $back   = Escape::unescape($title);                  // "Settings › Display"
-Escape::title('a > b', ' > ');                       // custom separator must match the breadcrumb's
+Escape::title('a > b', ' > ');                       // "a\ > b" — custom separator must match the breadcrumb's
 ```
 
 Both methods default to Breadcrumb's own `' › '` separator; pass the same
