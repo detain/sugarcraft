@@ -17,6 +17,10 @@ declare(strict_types=1);
  * sugar-focus itself carries no rendering — this example hand-rolls the ANSI so
  * the library stays dependency-free. It shows the one job the ring has: "which
  * panel has focus", moving as Tab is pressed.
+ *
+ * Note: every redraw homes and clears the whole screen (`ESC [ H` + `ESC [ 2J`),
+ * which flickers on slow terminals — and the recorded demo GIF moves by the same
+ * mechanism; a site-side reduced-motion rule cannot halt an autoplaying GIF.
  */
 
 require dirname(__DIR__) . '/vendor/autoload.php';
