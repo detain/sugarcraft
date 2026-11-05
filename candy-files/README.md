@@ -52,23 +52,23 @@ Default: left pane = current directory, right pane = `$HOME`.
 | `Space`         | Toggle selection on the entry under cursor + advance|
 | `s`             | Cycle sort order (name → mtime → size, asc / desc)  |
 | `.`             | Toggle hidden-file visibility                       |
-| `c`             | Copy (selection or cursor) to inactive pane; `y` confirm |
-| `m`             | Move (selection or cursor) to inactive pane; `y` confirm |
-| `R`             | Rename (cursor entry); new name prompted; `y` confirm    |
-| `d`             | Delete (selection or cursor); requires `y` confirm       |
-| `r`             | Refresh active pane                                      |
+| `c`             | Copy (selection or cursor) to inactive pane; `y` confirm  |
+| `m`             | Move (selection or cursor) to inactive pane; `y` confirm  |
+| `R`             | Rename cursor entry: text-entry submode — type the new name; `Enter` commits (empty buffer cancels); `Esc` cancels; printable chars INCLUDING `y` append to the buffer; other keys no-op and stay armed |
+| `d`             | Delete (selection or cursor); requires `y` confirm        |
+| `r`             | Refresh active pane                                       |
 | `q`             | Quit                                                      |
-| `/`             | Start search mode; type to filter; Enter to open          |
-| `Escape`        | Exit search mode; rename prompt: cancel; otherwise: clear the selection |
-| `t`             | Duplicate current tab                                   |
-| `Ctrl+w`        | Close current tab                                        |
-| `Ctrl+Tab`      | Cycle to next tab — needs a terminal that reports modified Tab (see below) |
-| `Ctrl+Shift+Tab`| Cycle to previous tab — same terminal-support caveat     |
-| `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — standard terminal emulators (tmux/browser terminals may intercept modified Page keys) |
+| `/`             | Start search mode; filter by type (fuzzy rank, matches within the active pane's directory only); `k`/`j` move the result cursor (so typing a name containing them needs mouse/paste); `/` cannot be typed; `Enter` opens a directory result, or exits search without opening a file result; `Backspace` on an empty query exits search mode; dotfiles appear even when `.` hides them |
+| `Escape`        | Exit search mode; cancels armed confirmations (any non-`y` answer incl. Esc cancels the pending `d`/`c`/`m` op); otherwise clears the selection |
+| `t`             | Duplicate current tab                                     |
+| `Ctrl+w`        | Close current tab (refused on the last tab: "cannot close last tab") |
+| `Ctrl+Tab`      | Cycle to next tab — on an empty tab stack, duplicates a tab instead; needs a terminal that reports modified Tab (see below) |
+| `Ctrl+Shift+Tab`| Cycle to previous tab — same terminal-support caveat; on an empty stack, no-op |
+| `Ctrl+PgUp` / `Ctrl+PgDn` | Cycle tabs forward / back — on an empty stack, Ctrl+PgUp duplicates a tab (no previous-arm for PgDn, which is a no-op); standard terminal emulators (tmux/browser terminals may intercept modified Page keys) |
 | `u` / `Ctrl+z`  | Undo last operation                                      |
 | `Ctrl+y`        | Redo last undone operation                               |
 
- Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and `^tab` is Ctrl+Tab. The trailing `_` shown while renaming is the text-entry caret.
+ Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and `^tab` is Ctrl+Tab. That in-app line is a partial cheat sheet; the full binding table is the one above. Plain `PageUp`/`PageDown` (unmodified) are not bound to anything. The trailing `_` shown while renaming is the text-entry caret.
 
 ### Terminal support for Ctrl+Tab
 
@@ -179,7 +179,7 @@ The direct constructor is kept for backward compatibility only — new code shou
 
 ## Status
 
-Phase 10 entry — copy / move / rename / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). Three-phase confirm gate (`c`/`m`/`R` arms, `y` confirms, anything else cancels). Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
+Phase 10 entry — copy / move / rename / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). The `d`/`c`/`m` operations use a three-phase confirm gate (`y` confirms, any other keystroke — including `Escape` — cancels the pending op); `R` rename is instead a text-entry submode: type the new name, `Enter` commits it (an empty buffer cancels), `Esc` cancels. The undo stack is capped at 50 operations (`UNDO_LIMIT`); the oldest entries fall off. Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
 
 Status-line semantics (all counts are **actions applied**, never arm-time intentions):
 
