@@ -180,7 +180,8 @@ $picker = $picker
 ## Keyboard handling
 
 `handleKey()` maps the eight `KEY_*` constants — `left`, `right`, `up`, `down`,
-`home`, `end`, `enter`, `esc` — onto cursor movement, selection and clearing.
+`home`, `end`, `enter`, `esc` (core names this 'escape') — onto cursor
+movement, selection and clearing.
 Unrecognized keys are ignored (the receiver is returned unchanged). The `Model`
 wrapper translates sugar-core `KeyMsg` messages into these strings, so a TEA
 application never calls `handleKey()` directly.
@@ -235,6 +236,16 @@ set.
   widths to it); `I18n\Lang` powers the translations above.
 - **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — golden-file
   snapshot tests via `assertGoldenAnsi()` pin canonical month layouts.
+
+## Examples
+
+```sh
+php examples/basic.php         # single-mode walk: navigate, move, select
+php examples/constraints.php   # min/max bounds: refused and accepted Enter legs
+```
+
+Run them from the lib root; from a standalone clone of the split repo, run
+`composer install` first so the sibling `sugarcraft/*` packages resolve.
 
 ## License
 
