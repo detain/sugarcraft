@@ -515,7 +515,8 @@ aspect by that same cell ratio.
 `ImageLayer` is the turnkey way to put real images inside a text UI. Instead of
 emitting pixel bytes into the frame (which would wreck the layout), you reserve a
 cell-sized **marker block** where the image belongs and hand the collected bytes
-to the `View`. The runtime paints each marker it finds.
+to the `View`. The runtime — sugar-core's `ImageOverlay` — paints each
+marker it finds.
 
 ```php
 use SugarCraft\Core\View;
@@ -537,7 +538,8 @@ return new View($frame, images: $layer->placements());
 
 Identical bytes register once — dedup is by content hash (`xxh3`), so the same
 image shown in several places shares one id and paints at every marker. The id
-space is the Private-Use-Area window (`ImageOverlay::MAX_IMAGES`, 6398); once it
+space is the Private-Use-Area window (sugar-core's
+`SugarCraft\Core\ImageOverlay::MAX_IMAGES`, 6398); once it
 is exhausted, further placements get a blank block of the requested size rather
 than a wrong image.
 
