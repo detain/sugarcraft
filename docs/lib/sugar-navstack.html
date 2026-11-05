@@ -96,15 +96,22 @@ $nav-&gt;depth();              // 2</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>NavStack</td><td>new()</td><td>Create navigation stack</td></tr>
-<tr><td>NavStack</td><td>push(string $title, mixed $data = null): self</td><td>Push a navigation item (mutates; returns the stack)</td></tr>
+<tr><td>NavStack</td><td>push(string $title, mixed $data = null): self</td><td>Push a navigation item (mutates; returns the stack). Refuses titles empty after trimming and sanitizing, and growth past MAX_STACK_DEPTH.</td></tr>
 <tr><td>NavStack</td><td>pop(): ?NavigationItem / popTo(int) / current() / parent() / depth()</td><td>Pop and inspect the stack</td></tr>
-<tr><td>NavStack</td><td>view(string $separator = ' › ') / viewHtml()</td><td>Render breadcrumbs</td></tr>
-<tr><td>NavStack</td><td>filter(query)</td><td>Filter breadcrumbs</td></tr>
-<tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry</td></tr>
+<tr><td>NavStack</td><td>view(string $separator = ' › '): string</td><td>Plain-text crumb trail; titles sanitized for terminal safety</td></tr>
+<tr><td>NavStack</td><td>viewHtml(?callable $href = null, string $label = 'Breadcrumb'): string</td><td>Accessible HTML: nav[aria-label=&quot;…&quot;] around an ol, last item aria-current=&quot;page&quot;. $href maps item =&gt; URL (links for every crumb but the live one); omit it and the trail renders as plain li text. $label names the landmark for screen readers.</td></tr>
+<tr><td>NavStack</td><td>filter(string $term): self</td><td>New stack with items whose title or scalar/Stringable payload (array values up to 64 levels) contains $term — ASCII case-fold only; result indices renumber.</td></tr>
+<tr><td>NavigationItem</td><td>__construct(string $title, mixed $data = null) / title()</td><td>One stack entry; the constructor refuses titles empty after trim+sanitize and over 64 KiB raw</td></tr>
 <tr><td>Breadcrumb</td><td>withScanner(?Scanner)</td><td>Attach mouse-click zones per crumb (sugar-mouse Scanner; copied in, never aliased — read it back via scanner()). Zone ids carry the STACK index, so click routing survives truncation.</td></tr>
-<tr><td>Breadcrumb</td><td>scan($rendered, $viewportWidth, $row) / hit(col, row) / hitItem(stack, col, row)</td><td>Feed the rendered string to the owned scanner (optionally clamped to the viewport width, for a row other than 1), then resolve which crumb a terminal cell falls in — hitItem() is the one-call dispatcher returning the clicked NavigationItem</td></tr>
+<tr><td>Breadcrumb</td><td>scan(string $rendered, ?int $viewportWidth = null, int $row = 1) / hit(col, row) / hitItem(stack, col, row)</td><td>Feed the rendered string to the owned scanner (optionally clamped to the viewport width, for a row other than 1), then resolve which crumb a terminal cell falls in — hitItem() is the one-call dispatcher returning the clicked NavigationItem</td></tr>
 <tr><td>Breadcrumb</td><td>setSeparator(string)</td><td>Set separator between crumbs</td></tr>
-<tr><td>Breadcrumb</td><td>setMaxWidth(int)</td><td>Truncate if total width exceeds limit</td></tr>
+<tr><td>Breadcrumb</td><td>setMaxWidth(int)</td><td>Cap trail width; oldest crumbs elide first. 0 (default) disables the cap; negative throws.</td></tr>
+<tr><td>Breadcrumb</td><td>setTruncator(string $ellipsis)</td><td>Glyph marking elided crumbs (default …); forged zone-sentinel bytes are stripped, multi-line throws</td></tr>
+<tr><td>Breadcrumb</td><td>setItemRenderer(\Closure $fn)</td><td>Per-item custom rendering fn(item, index): ?string — null falls back to the default; returned strings emit RAW. Contract errors throw at render(), not at assignment.</td></tr>
+<tr><td>Breadcrumb</td><td>setZonePrefix(string)</td><td>Rename crumb- zone ids (alphabet [A-Za-z0-9._:-]); keeps merged dispatch tables of independent widgets unambiguous</td></tr>
+<tr><td>Breadcrumb</td><td>visibleIndices(): array</td><td>Stack indices that survived the last render's truncation — the map from display position to zone id</td></tr>
+<tr><td>Breadcrumb</td><td>renderTitles(array $titles): string</td><td>Render a pre-trimmed title list (host-owned filtering) instead of a NavStack</td></tr>
+<tr><td>Breadcrumb</td><td>scanner(): ?Scanner</td><td>Read back the owned (copied-in) sugar-mouse scanner, or null when click zones are off</td></tr>
 <tr><td>Breadcrumb</td><td>render(NavStack)</td><td>Render NavStack as breadcrumb string</td></tr>
 </table>
   </div>
