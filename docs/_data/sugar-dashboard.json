@@ -1,11 +1,11 @@
 {
     "title": "SugarDashboard — SugarCraft",
-    "description": "SugarDashboard: Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more.",
+    "description": "SugarDashboard: Dashboard TUI library — column grid, constraint layout, ratio grid, data grid, tree, modal, status bar, tabs, plot/canvas, and a module/plugin system.",
     "ogTitle": "SugarDashboard — SugarCraft",
-    "ogDescription": "Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more.",
+    "ogDescription": "Dashboard TUI library — column grid, constraint layout, ratio grid, data grid, tree, modal, status bar, tabs, plot/canvas, and a module/plugin system.",
     "emoji": "📊",
     "displayName": "SugarDashboard",
-    "tagline": "Dashboard TUI library — grid layouts, panels, and more",
+    "tagline": "Dashboard TUI library — column grid, constraint layout, ratio grid, data grid, tree, modal, status bar, tabs, plot/canvas, and a module/plugin system",
     "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/shahar3/bubble-grid\" style=\"color: inherit;\">shahar3/bubble-grid</a> \u00b7 <a href=\"https://github.com/aristocratos/btop\" style=\"color: inherit;\">aristocratos/btop</a> \u00b7 <a href=\"https://github.com/gizak/termui\" style=\"color: inherit;\">gizak/termui</a></span>\n          <span class=\"tag-chip\">dashboard</span><span class=\"tag-chip\">layout</span><span class=\"tag-chip\">grid</span><span class=\"tag-chip\">panel</span>"
 }
