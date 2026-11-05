@@ -4,10 +4,27 @@
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-files</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">composer install
+    <pre class="code"><code class="language-shell"># 1. Composer consumer — the package bin (composer.json "bin"):
+vendor/bin/candy-files [LEFT_DIR] [RIGHT_DIR]
+
+# 2. Source checkout of this repo:
+composer install
 ./bin/candy-files [LEFT_DIR] [RIGHT_DIR]
 
-# Default: left = cwd, right = $HOME
+# 3. Rolling phar — published on GitHub Releases under the
+#    candy-files/dev tag (with .sha256 and .sig sidecars):
+php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
+
+# Flags (answered before the positional directory scan):
+#   --version  build stamp — phar-aware via Support\Version
+#   --help/-h  usage
+# A missing/unreadable start directory fail-fasts with exit 1
+# ("left/right directory does not exist: <dir>").
+# Default: left = cwd, right = $HOME.
+# Size honesty: the panes split the live terminal width from ~82 columns
+# up (40-cell minimum each, wrapping below — no horizontal scroll), and
+# there is no scroll viewport: listings longer than the frame are clipped
+# (Home/End/search reach the rest).
 
 # Keys
 # Tab        Swap focus
@@ -45,6 +62,7 @@
       <div class="feature"><strong>Copy / Move / Rename</strong><span><code>c</code>/<code>m</code> stage to the inactive pane, <code>y</code> commits. <code>R</code> opens a text-entry rename submode — type the new name, Enter commits, Esc cancels. Undo covers delete, move and rename (copy undo is informational).</span></div>
       <div class="feature"><strong>Delete-with-confirm</strong><span><code>d</code> stages, <code>y</code> commits — protects against fat-finger deletes.</span></div>
       <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
+      <div class="feature"><strong>Requirements</strong><span>PHP <code>^8.3</code> with <code>ext-intl</code> and <code>ext-mbstring</code> — both hard-required transitively by <code>sugar-core</code>, whose cell-width math segments through ICU, so <code>composer install</code> is the step that refuses on a bare php-cli machine.</span></div>
       <div class="feature"><strong>Live search</strong><span><code>/</code> fuzzy-filters the active pane's current directory (not recursive). <code>↑↓</code>/<code>k</code>/<code>j</code> move the result cursor — so <code>k</code>/<code>j</code> cannot be typed into a query; <code>/</code> cannot be typed either. <code>Enter</code> opens a directory result; on a file result it just exits search. Backspace-to-empty exits.</span></div>
       <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates the current tab, <code>Ctrl+Tab</code>/<code>Ctrl+Shift+Tab</code> cycle (needs a terminal that reports modified Tab; <code>Ctrl+PgUp</code>/<code>Ctrl+PgDn</code> are the alternative — tmux and browser terminals may intercept modified Page keys), <code>Ctrl+w</code> closes (refuses the last tab).</span></div>
       <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores the last delete / move / rename; <code>Ctrl+y</code> redoes.</span></div>
@@ -54,7 +72,6 @@
     <ul>
        <li><a href="https://github.com/sugarcraft/candy-files">Source on GitHub</a></li>
        <li><a href="https://github.com/sugarcraft/candy-files/blob/master/README.md">Full README</a></li>
-       <li><a href="https://github.com/sugarcraft/candy-files/tree/main/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/yorukot/superfile">superfile</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
@@ -66,7 +83,7 @@
 <tr><td>Manager</td><td>start(leftCwd, rightCwd, ?lister)</td><td>Factory — initialises two panes + first tab</td></tr>
 <tr><td>Manager</td><td>update(Msg): [Model, ?Cmd]</td><td>Main event loop — key dispatch, confirm gate</td></tr>
 <tr><td>Manager</td><td>view(): string</td><td>Renders two panes + tab bar + status line</td></tr>
-<tr><td>Manager</td><td>copy(src, dst), move(src, dst), rename(src, newName)</td><td>File-manager ops — used by confirm-gate handlers</td></tr>
+<tr><td>Manager</td><td>copy(src, dst), move(src, dst), rename(src, newName)</td><td>Direct single-entry helpers — rename/move run synchronously; the deferred engine is copy-only, and the committed copy path goes through the async command, not these</td></tr>
 <tr><td>Manager</td><td>search(query), exitSearch(), openSearchResult()</td><td>Live search mode</td></tr>
 <tr><td>Manager</td><td>undo(), redo(), canUndo(), canRedo()</td><td>Delete / move / rename undo/redo stack (copy undo is informational); <code>u</code>/<code>Ctrl+z</code> undo, <code>Ctrl+y</code> redo</td></tr>
 <tr><td>Manager</td><td>duplicateTab(), closeTab(), switchTab()</td><td>Tab management</td></tr>
@@ -86,7 +103,7 @@
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">GIFs recorded against the live app — 7 tapes under <code>.vhs/</code> drive <code>./bin/candy-files</code> over real directories. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/navigate.gif" alt="Navigate">
