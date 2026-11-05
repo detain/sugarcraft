@@ -188,6 +188,20 @@ echo $msg, "\n";
 a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
 `null` binds the shared `Loop::get()`.
 
+Abandonment triage — what each wrapper does to the inner, and whether the
+caller can walk away:
+
+| Wrapper | Inner on settle / on abandon | Abandonable? |
+|---|---|---|
+| `withTimeout` | Runs on untouched — the timeout ends only the wait | Yes: wrapper cancel releases the timer and rejects `OperationCancelledException` |
+| `withDeadline` | Cancelled at expiry; the `onTimeout` hook runs best-effort | Yes: wrapper cancel runs the same full teardown (inner cancelled, hook fired) |
+| `cancellable` | Late inner result is dropped when the token fires | Yes — that is the seam: `onCancel` hook plus best-effort inner `cancel()` |
+| `retry` | Token checked before every attempt, mid-backoff honoured (the backoff timer is cancelled) | Yes: abandoning stops the cycle; the last dispatched attempt is cancelled best-effort |
+| `singleFlight` | One flight per key settles for every joined caller | No, by design — wrap the join in `cancellable()` |
+| `debounce` / `throttle` | Superseded/suppressed calls resolve `null`; `trailing: true` queues the last one | Yes: `unsubscribe()` drops the pending burst / queued trailing as `null` |
+| `all` / `race` | Members untouched — pure fan-in | No wrapper seam — cancel the members directly |
+| `onPending` | Never cancelled; hook form is advisory only (the wait continues); hook-less form rejects `(still pending)` after N seconds while the inner keeps running | Yes: wrapper cancel releases the notice timer |
+
 - `withTimeout(?loop, promise, seconds, label:)` — rejects with `TimeoutException`
   after N seconds. The inner operation is NOT cancelled and keeps running to
   completion. The timeout timer is armed before the inner's settle handlers attach,
