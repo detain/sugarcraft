@@ -20,16 +20,8 @@ return [
 
     // bin/candy-git-server — banner + status output
     'cli.banner'               => 'CandyGitServer v{version}',
-    'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
-    'cli.starting_servers'     => 'Démarrage des serveurs...',
-    'cli.note_ssh2_required'   => '(Le mode daemon complet nécessite l\'extension ssh2 et un démon SSH en cours.)',
-    'cli.note_run_init'        => "(Utilisez 'candy-git-server init' pour initialiser d'abord votre répertoire de données.)",
     'cli.repos_header'         => 'Dépôts :',
-    'cli.repo_listing_entry'   => '  - {name}',
     'cli.repo_listing_plain'   => '  {name}',
-    'cli.note_not_a_daemon'    => 'Pas encore en mode daemon (le mode daemon nécessite un gestionnaire de processus.)',
-    'cli.note_http_help'       => 'Pour servir Git sur HTTP, pointez votre serveur web vers ce script.',
-    'cli.note_ssh_help'        => 'Pour l\'accès SSH, utilisez un tunnel inverse ou configurez sshd avec ForceCommand.',
 
     // bin/candy-git-server — init
     'cli.already_initialized'  => 'Déjà initialisé : {path}',
@@ -62,9 +54,8 @@ return [
     'cli.usage_repo_info'      => 'Usage : candy-git-server repo info <name>',
     'cli.no_repos'             => 'Aucun dépôt pour le moment.',
     'cli.repo_listing_none'    => '  (aucun dépôt pour le moment)',
-    'cli.repo_invalid_name'    => 'Nom de dépôt invalide : {name} (utilisez uniquement alphanumérique, point, tiret bas, tiret)',
+    'cli.repo_invalid_name'    => 'Nom de dépôt invalide : {name} (utilisez uniquement alphanumérique, point, tiret bas, tiret, ne doit pas commencer par un point ou un tiret)',
     'cli.repo_created'         => "Dépôt '{name}' créé à {path}",
-    'cli.repo_clone_url'       => 'URL de clone : ssh://localhost:23231/{name}',
     'cli.repo_not_found'       => 'Dépôt introuvable : {name}',
     'cli.repo_info'            => "Nom :         {name}\nDescription :  {description}\nPublic :       {is_public}\nPrivé :      {is_private}\nAutoriser push : {allow_push}\nChemin :         {path}\nBranches :     {branches}\nTags :         {tags}",
     'cli.bool_yes'             => 'oui',

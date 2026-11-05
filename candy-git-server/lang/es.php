@@ -20,16 +20,8 @@ return [
 
     // bin/candy-git-server — banner + status output
     'cli.banner'               => 'CandyGitServer v{version}',
-    'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
-    'cli.starting_servers'     => 'Iniciando servidores...',
-    'cli.note_ssh2_required'   => '(El modo daemon completo requiere la extensión ssh2 y un demonio SSH en ejecución.)',
-    'cli.note_run_init'        => "(Use 'candy-git-server init' para inicializar su directorio de datos primero.)",
     'cli.repos_header'         => 'Repositorios:',
-    'cli.repo_listing_entry'   => '  - {name}',
     'cli.repo_listing_plain'   => '  {name}',
-    'cli.note_not_a_daemon'    => 'Aún no se ejecuta como daemon (el modo daemon necesita un gestor de procesos.)',
-    'cli.note_http_help'       => 'Para servir Git por HTTP, apunte su servidor web a este script.',
-    'cli.note_ssh_help'        => 'Para acceso SSH, use un túnel inverso o configure sshd con ForceCommand.',
 
     // bin/candy-git-server — init
     'cli.already_initialized'  => 'Ya inicializado: {path}',
@@ -62,9 +54,8 @@ return [
     'cli.usage_repo_info'      => 'Uso: candy-git-server repo info <name>',
     'cli.no_repos'             => 'Aún no hay repositorios.',
     'cli.repo_listing_none'    => '  (sin repositorios aún)',
-    'cli.repo_invalid_name'    => 'Nombre de repositorio inválido: {name} (use solo alfanumérico, punto, guion bajo, guion)',
+    'cli.repo_invalid_name'    => 'Nombre de repositorio inválido: {name} (use solo alfanumérico, punto, guion bajo, guion, no debe empezar con punto ni guion)',
     'cli.repo_created'         => "Repositorio '{name}' creado en {path}",
-    'cli.repo_clone_url'       => 'URL de clon: ssh://localhost:23231/{name}',
     'cli.repo_not_found'       => 'Repositorio no encontrado: {name}',
     'cli.repo_info'            => "Nombre:         {name}\nDescripción:  {description}\nPúblico:       {is_public}\nPrivado:      {is_private}\nPermitir push:   {allow_push}\nRuta:         {path}\nRamas:     {branches}\nTags:         {tags}",
     'cli.bool_yes'             => 'sí',

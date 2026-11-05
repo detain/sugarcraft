@@ -25,16 +25,8 @@ return [
 
     // bin/candy-git-server — banner + status output
     'cli.banner'               => 'CandyGitServer v{version}',
-    'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
-    'cli.starting_servers'     => 'Starting servers...',
-    'cli.note_ssh2_required'   => '(Full daemon mode requires the ssh2 extension and a running SSH daemon.)',
-    'cli.note_run_init'        => "(Use 'candy-git-server init' to initialize your data directory first.)",
     'cli.repos_header'         => 'Repositories:',
-    'cli.repo_listing_entry'   => '  - {name}',
     'cli.repo_listing_plain'   => '  {name}',
-    'cli.note_not_a_daemon'    => 'Not yet running as daemon (daemon mode needs a process manager.)',
-    'cli.note_http_help'       => 'To serve Git over HTTP, point your web server to this script.',
-    'cli.note_ssh_help'        => 'For SSH access, use a reverse tunnel or configure sshd with ForceCommand.',
 
     // bin/candy-git-server — init
     'cli.already_initialized'  => 'Already initialized: {path}',
@@ -67,9 +59,8 @@ return [
     'cli.usage_repo_info'      => 'Usage: candy-git-server repo info <name>',
     'cli.no_repos'             => 'No repositories yet.',
     'cli.repo_listing_none'    => '  (no repositories yet)',
-    'cli.repo_invalid_name'    => 'Invalid repo name: {name} (use only alphanumeric, dot, underscore, hyphen)',
+    'cli.repo_invalid_name'    => 'Invalid repo name: {name} (use only alphanumeric, dot, underscore, hyphen; must not start with a dot or hyphen)',
     'cli.repo_created'         => "Repository '{name}' created at {path}",
-    'cli.repo_clone_url'       => 'Clone URL: ssh://localhost:23231/{name}',
     'cli.repo_not_found'       => 'Repository not found: {name}',
     'cli.repo_info'            => "Name:         {name}\nDescription:  {description}\nPublic:       {is_public}\nPrivate:      {is_private}\nAllow push:   {allow_push}\nPath:         {path}\nBranches:     {branches}\nTags:         {tags}",
     'cli.bool_yes'             => 'yes',
@@ -78,7 +69,7 @@ return [
 
     // bin/candy-git-server — help / unknown
     'cli.unknown_command'      => "Unknown command: {cmd}\n  Run 'candy-git-server help' for usage.",
-    'cli.help'                 => "CandyGitServer — Self-hostable Git Server\n\nUsage:\n  candy-git-server <command> [options]\n\nCommands:\n  serve --http --repo-root DIR [--port N]   Serve repositories over smart HTTP\n  init [data-path]         Initialize a new data directory\n  user add <username>      Create a user\n  user key <username> <file>  Add SSH public key for user (use - for stdin)\n  user list                List users\n  user token <username> [ttl]  Mint an HTTP proxy token signature\n  repo list [data-path]    List repositories\n  repo create <name> [data-path]  Create a repository\n  repo info <name> [data-path]    Show repository info\n  help, --help, -h         Show this help\n  version, --version, -v   Show version\n\nEnvironment:\n  CANDY_GIT_SERVER_DATA_PATH    Data directory (default: /tmp/candy-git-server)\n  CANDY_GIT_SERVER_LANG           Translation catalogue (default: en)\n\nExamples:\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --http --repo-root ~/candy-git-server-data/repositories\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
+    'cli.help'                 => "CandyGitServer — Self-hostable Git Server\n\nUsage:\n  candy-git-server <command> [options]\n\nCommands:\n  serve --http --repo-root DIR [--http-port N] [--http-host H] [--config F]   Serve repositories over smart HTTP\n  init [data-path]         Initialize a new data directory\n  user add <username>      Create a user\n  user key <username> <file>  Add SSH public key for user (use - for stdin)\n  user list                List users\n  user token <username> [ttl]  Mint an HTTP proxy token signature\n  repo list [data-path]    List repositories\n  repo create <name> [data-path]  Create a repository\n  repo info <name> [data-path]    Show repository info\n  help, --help, -h         Show this help\n  version, --version, -v   Show version\n\nEnvironment:\n  CANDY_GIT_SERVER_DATA_PATH    Data directory (default: /tmp/candy-git-server)\n  CANDY_GIT_SERVER_LANG           Translation catalogue (default: en)\n\nExamples:\n  candy-git-server init ~/candy-git-server-data\n  candy-git-server serve --http --repo-root ~/candy-git-server-data/repositories\n  candy-git-server repo create my-project\n  candy-git-server user key alice ~/.ssh/id_ed25519.pub",
     'cli.option_needs_value' => 'Option {option} requires a value',
     'cli.serve_http_needs_repo_root' => 'serve --http requires --repo-root DIR (the directory whose subdirectories are served)',
     'cli.serve_repo_root_not_dir' => '--repo-root is not a directory: {path}',

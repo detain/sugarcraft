@@ -20,16 +20,8 @@ return [
 
     // bin/candy-git-server — banner + status output
     'cli.banner'               => 'CandyGitServer v{version}',
-    'cli.config_summary'       => "Data path:  {data_path}\nSSH:        {ssh_addr}\nHTTP:       {http_addr}\nGit daemon: {git_addr}",
-    'cli.starting_servers'     => 'Server werden gestartet...',
-    'cli.note_ssh2_required'   => '(Voller Daemon-Modus erfordert die ssh2-Erweiterung und einen laufenden SSH-Daemon.)',
-    'cli.note_run_init'        => "(Verwenden Sie 'candy-git-server init', um zuerst Ihr Datenverzeichnis zu initialisieren.)",
     'cli.repos_header'         => 'Repositories:',
-    'cli.repo_listing_entry'   => '  - {name}',
     'cli.repo_listing_plain'   => '  {name}',
-    'cli.note_not_a_daemon'    => 'Noch nicht als Daemon aktiv (Daemon-Modus benötigt einen Prozessmanager.)',
-    'cli.note_http_help'       => 'Um Git über HTTP bereitzustellen, zeigen Sie Ihren Webserver auf dieses Skript.',
-    'cli.note_ssh_help'        => 'Für SSH-Zugriff verwenden Sie einen Reverse-Tunnel oder konfigurieren Sie sshd mit ForceCommand.',
 
     // bin/candy-git-server — init
     'cli.already_initialized'  => 'Bereits initialisiert: {path}',
@@ -62,9 +54,8 @@ return [
     'cli.usage_repo_info'      => 'Nutzung: candy-git-server repo info <name>',
     'cli.no_repos'             => 'Noch keine Repositories.',
     'cli.repo_listing_none'    => '  (noch keine Repositories)',
-    'cli.repo_invalid_name'    => 'Ungültiger Repository-Name: {name} (nur alphanumerisch, Punkt, Unterstrich, Bindestrich)',
+    'cli.repo_invalid_name'    => 'Ungültiger Repository-Name: {name} (nur alphanumerisch, Punkt, Unterstrich, Bindestrich, darf nicht mit Punkt oder Bindestrich beginnen)',
     'cli.repo_created'         => "Repository '{name}' erstellt unter {path}",
-    'cli.repo_clone_url'       => 'Clone-URL: ssh://localhost:23231/{name}',
     'cli.repo_not_found'       => 'Repository nicht gefunden: {name}',
     'cli.repo_info'            => "Name:         {name}\nBeschreibung:  {description}\nÖffentlich:       {is_public}\nPrivat:      {is_private}\nPush erlauben:   {allow_push}\nPfad:         {path}\nBranches:     {branches}\nTags:         {tags}",
     'cli.bool_yes'             => 'ja',
