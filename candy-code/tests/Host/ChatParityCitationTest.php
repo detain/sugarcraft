@@ -54,11 +54,27 @@ final class ChatParityCitationTest extends TestCase
         return array_values(array_unique($matches[1]));
     }
 
+    /**
+     * The composition unit of SessionHost: the class body plus every file in
+     * its companion directory. The CWPD-14 split (OD-30) moves methods - and
+     * with them the parity prose this law reads - into trait files under
+     * src/Host/SessionHost/; the scan follows the prose so the floor law
+     * covers the whole host no matter how the units are filed.
+     */
     private static function sessionHostSource(): string
     {
-        $path = \dirname(__DIR__, 2) . '/src/Host/SessionHost.php';
-        $source = file_get_contents($path);
+        $base = \dirname(__DIR__, 2) . '/src/Host';
+        $source = file_get_contents($base . '/SessionHost.php');
         self::assertIsString($source, 'SessionHost.php must be readable for the parity scan');
+        if (is_dir($base . '/SessionHost')) {
+            foreach (scandir($base . '/SessionHost') as $entry) {
+                if (str_ends_with($entry, '.php')) {
+                    $companion = file_get_contents($base . '/SessionHost/' . $entry);
+                    self::assertIsString($companion, 'SessionHost composition file ' . $entry . ' must be readable');
+                    $source .= "\n" . $companion;
+                }
+            }
+        }
 
         return $source;
     }
