@@ -76,7 +76,7 @@ $child-&gt;info('Batch complete');</code></pre>
             <div class="feature"><strong>StandardLogAdapter</strong><span>Go-style <code>print()</code>/<code>printLn()</code>/<code>fatal()</code>/<code>panic()</code> call pattern over a sugar-log Logger — a shape, not an interface (implements no contract); for PSR-3 interoperability use <code>PsrBridge</code>.</span></div>
             <div class="feature"><strong>PSR-3 bridge</strong><span><code>PsrBridge</code> wraps a Logger and exposes the full PSR-3 <code>LoggerInterface</code> API.</span></div>
             <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via <code>HookRegistry::onLevel()</code> for middleware-style interceptors — dispatched only by <code>PsrBridge</code> (or an explicit <code>fire()</code>); direct Logger calls never fire hooks.</span></div>
-            <div class="feature"><strong>Caller info</strong><span><code>reportCaller</code> on Logger adds <code>file:line</code> of the true call site to every entry.</span></div>
+            <div class="feature"><strong>Caller info</strong><span><code>reportCaller</code> on Logger adds <code>basename:line</code> of the nearest caller outside the library — best-effort: a bounded 20-frame walk, and the part is omitted when no such caller is found.</span></div>
             <div class="feature"><strong>PartsOrder DTO</strong><span>Configure which log-parts appear and in what order — default, syslog, or custom.</span></div>
 
     </div>
@@ -107,7 +107,7 @@ $child-&gt;info('Batch complete');</code></pre>
 <tr><td>Logger</td><td>withFormatter(Formatter)</td><td>Set output formatter</td></tr>
 <tr><td>Logger</td><td>withMinLevel(Level)</td><td>Set minimum output level</td></tr>
 <tr><td>Logger</td><td>withPrefix(string)</td><td>Set per-line prefix</td></tr>
-<tr><td>Logger</td><td>setReportCaller(bool)</td><td>Enable/disable caller file:line reporting</td></tr>
+<tr><td>Logger</td><td>setReportCaller(bool)</td><td>Enable/disable caller basename:line reporting (best-effort 20-frame walk)</td></tr>
 <tr><td>Logger</td><td>setReportTimestamp(bool)</td><td>Enable/disable timestamp</td></tr>
 <tr><td>Logger</td><td>styles()</td><td>Get Styles object for level/field styling</td></tr>
 <tr><td>Logger</td><td>styles()->keys[name]</td><td>Per-field ANSI style override (time, level, caller, message, key, value)</td></tr>
@@ -130,7 +130,7 @@ $child-&gt;info('Batch complete');</code></pre>
 <tr><td>PartsOrder</td><td>messageFirst(): self</td><td>Preset: message, level, timestamp, fields</td></tr>
 <tr><td>PartsOrder</td><td>has(PART_*): bool</td><td>Check whether a part is included in the order</td></tr>
 <tr><td>PartsOrder</td><td>PART_TIMESTAMP, PART_LEVEL, PART_PREFIX, PART_CALLER, PART_MESSAGE, PART_FIELDS</td><td>Part name constants</td></tr>
-<tr><td>CallerFormatter</td><td>find(): ?string</td><td>Walk call stack, return "file:line" of first external caller</td></tr>
+<tr><td>CallerFormatter</td><td>find(): ?string</td><td>Walk the call stack (bounded at 20 frames), return "basename:line" of the first frame outside the package, or null when none is found</td></tr>
 <tr><td>Level</td><td>Debug, Info, Warn, Error, Fatal</td><td>Enum: charmbracelet/log-aligned int deltas (-4, 0, 4, 8, 12) — deliberately NOT RFC 5424/syslog severities</td></tr>
 <tr><td>TextFormatter</td><td>new(bool, ?string, bool, ?bool, ?Styles, ?PartsOrder)</td><td>Human-readable formatter with ANSI color; <code>useColors</code> is tri-state (null consults the terminal probe), null <code>styles</code>/<code>partsOrder</code> fall back to defaults</td></tr>
 <tr><td>JsonFormatter</td><td>new(bool, ?string)</td><td>JSON object per log line; optional <code>timeFormat</code> (default <code>DateTimeInterface::ATOM</code>)</td></tr>
