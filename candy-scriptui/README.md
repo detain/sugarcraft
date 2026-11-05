@@ -80,10 +80,12 @@ Commands without the attributes get the stock help verbatim.
 
 When a user types an unknown command name, `Application::find()` refuses it
 outright — commands are only ever matched by exact name, never by prefix —
-after running the name through a `TypoSuggester`: one near alternative is
-quoted back (`Did you mean "choose"?`), several are listed (`Did you mean
-one of: "completion", "confirm", "log"?`), and beyond distance 2 nothing is
-suggested.
+after running the name through a `TypoSuggester`. A candidate qualifies when
+it starts with the typed text (prefix matches score distance 0 whatever their
+length) or lies within edit distance 2; at most five are kept. One near
+alternative is quoted back (`Did you mean "choose"?`), several are listed
+(`Did you mean one of: "choose", "completion", "confirm"?` for the input
+`c`), and anything neither prefixed nor within distance 2 names no suggestion.
 
 ### Output channels
 
@@ -91,9 +93,11 @@ Every subcommand keeps two streams apart. **Data** (the styled text, the
 chosen value, the rendered table, the completion script) goes to STDOUT
 raw — never through the console formatter, so a value that happens to look
 like `<info>` survives byte-exact. **Diagnostics** (refusals, malformed
-flag values, I/O failures) go to STDERR as plain sentences, so scripts
-that `eval` completion output or capture `confirm` answers can never
-consume an error message as data.
+flag values, I/O failures) go to STDERR — the ones the application emits
+itself are plain sentences, while Symfony's own unknown-command and
+unknown-option errors arrive as boxed error blocks — and either shape stays
+off STDOUT, so scripts that `eval` completion output or capture `confirm`
+answers can never consume an error message as data.
 
 ```php
 use SugarCraft\ScriptUi\Attribute\Flag;
@@ -140,11 +144,15 @@ $app->scan('My\\Namespace\\');  // discovers all #[Command] classes
 $app->run();
 ```
 
-`Application::scan($namespace)` iterates all already-loaded classes
-under that namespace, picks those bearing `#[Command]`, and registers
-them into the application. Classes must be autoloaded (or `require`d)
-before `scan()` can find them — the scanner uses `get_declared_classes()`
-and does not trigger autoloading.
+`Application::scan($namespace)` iterates all loaded classes under that
+namespace, picks those bearing `#[Command]`, and registers them into the
+application. Classes must be autoloaded (or `require`d) before `scan()` can
+find them — the scanner harvests through `get_declared_classes()` and never
+triggers autoloading itself, though its re-snapshot pass also collects
+classes that resolved during the scan window. A scan that matches zero
+`#[Command]` classes announces itself loudly on STDERR rather than staying
+silently empty, and non-constructible candidates are named, with their
+reasons, in `CommandScanner::skipped()`.
 
 | Command    | Role |
 |------------|------|
