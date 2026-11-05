@@ -157,9 +157,14 @@ the cancel byte itself is consumed as the terminator, not echoed; the DCS
 body carries no truncated flag beyond the `final === 0` no-final-byte
 sentinel);
 `ESC` clears and re-syncs, dispatching the interrupted string
-so `ESC \` is a terminator rather than a lost byte; a *different-type* C1
-introducer mid-string discards the stale payload (title-injection bleed
-guard) while a same-type one deliberately keeps it. Bytes with no mapped
+so `ESC \` is a terminator rather than a lost byte; the *different-type* C1
+bleed guard (cross-type introducer discards the stale payload, same-type one
+deliberately keeps it) applies **inside SOS/PM/APC strings only**, and there
+only to the four string-family introducers 0x98-0x9F — every other byte
+≥ 0x80 accumulates into the payload. OSC and DCS payloads carry no such
+guard: the table maps OscString/DcsString 0x20-0xFF to `Put`, so introducers,
+C1 controls and high bytes all stay in the payload, and only ESC, BEL (OSC)
+and ST end those strings. Bytes with no mapped
 transition follow the `None → Ground` default row and are dropped — the
 [Limits & hostile input](#limits--hostile-input) section names the exact
 bands this covers (and the C1 band it does *not*: those bytes execute).
@@ -170,12 +175,14 @@ The parser is positioned for untrusted byte streams; the bounds are the
 product:
 
 - **Payload cap:** DCS/OSC/SOS/PM/APC payload stops accumulating at **64 KiB**
-  (default; constructor arg 3, `$maxStringBuffer`, raises it by explicit
-  consumer choice — sugar-vterm keeps the default). The cap is invisible to
+  (default; constructor arg 3, `$maxStringBuffer`, changes it — any positive
+  int, so smaller values tighten the cap — by explicit consumer choice;
+  sugar-vterm keeps the default). The cap is invisible to
   decoders: past it, `put()` silently stops, so `Codec\Iterm1337` sees a short
   base64 payload with no truncation marker from the parser itself (its File
-  view reports `payload truncated` when a declared size contradicts what
-  arrived; `Codec\KittyApc` has no size declaration to cross-check and simply
+  view reports `payload truncated` when fewer bytes arrive than declared — a
+  payload LONGER than declared passes unflagged, as the check is one-way;
+  `Codec\KittyApc` has no size declaration to cross-check and simply
   describes a short payload as-is). Chunked protocols are the real answer.
 - **Parameter caps:** at most **32 slots**; a `:` or `;` arriving at the cap
   is dropped and following digits merge into the 32nd slot, and each value
@@ -190,6 +197,14 @@ product:
   entering the payload (reference-table fidelity); a payload can therefore
   differ from the raw bytes that were sent. BEL (0x07) is not part of the
   drop band — it terminates the string and dispatches it.
+- **Codec and handler accessors hand back raw wire text:** `OscHandler`
+  implementations receive `hyperlink($uri, $id)` and `title()` payloads
+  exactly as dispatched, and the decoders expose `Iterm1337::name()` and
+  `args()` (whose `rawurldecode` pass can re-synthesize control bytes from
+  percent-encoded input) and `KittyApc::control()` unvalidated. None of these
+  sanitize — validate or reject before display or re-emission; the
+  escape-and-clip discipline described under [Decoders](#decoders-codec) is
+  confined to `describe()` and does not extend to the raw accessors.
 - **UTF-8 is not validated by default:** with `$replaceMalformed = false`
   (the default, and what sugar-vterm passes), structurally-completed rune
   byte-sequences are forwarded **verbatim** to `printChar()` — overlong,
@@ -197,12 +212,17 @@ product:
   interface's "one rune" contract should pass `$replaceMalformed = true`
   (constructor arg 2) for U+FFFD replacement instead; that mode calls
   `mb_check_encoding()` (the lib already requires ext-mbstring via composer
-  regardless, because the flag must work when flipped). What is actually
-  dropped without replacement: lead bytes 0xA0-0xBF, 0xC0, 0xC1 and 0xF5-0xFF,
-  and a partial rune abandoned at end-of-stream. The C1 band 0x80-0x9F is NOT
-  dropped text — those bytes execute as controls or introduce DCS/OSC/PM/APC
-  sequences like anywhere else; lone continuation bytes likewise never become
-  U+FFFD in either mode.
+  regardless, because the flag must work when flipped). Dropped with **no**
+  replacement in either mode: lone continuation bytes 0xA0-0xBF and invalid
+  lead bytes 0xC0, 0xC1 and 0xF5-0xFF — the state table owns the raw byte
+  space before UTF-8 is consulted, so those bytes never assemble a rune.
+  *Incomplete* runes split by mode: a sequence interrupted mid-rune, and a
+  partial rune abandoned at end-of-stream (`flush()`/`reset()`), produce
+  nothing at all under the default and one U+FFFD each under
+  `$replaceMalformed = true`. The C1 band 0x80-0x9F is NOT dropped text —
+  lone C1 bytes execute as controls or introduce DCS/CSI/SOS/OSC/PM/APC
+  sequences like anywhere else; their UTF-8-encoded forms (C2 80-C2 9F) are
+  legal text — see the assistive notes below.
 - **`reset()` is not silent:** it flushes first, so an in-flight
   OSC/DCS/SOS/PM/APC **dispatches** to the handler before state clears. To
   abandon a stream without a dispatch there is none yet; call `reset()`
@@ -256,9 +276,13 @@ generators, plain-text exports):
   the raw `oscDispatch()` stream instead, treat every `8;`-prefixed payload
   as link-state and end the span on empty/malformed payloads yourself.
   `OscHandlerImpl` exposes the current `hyperlinkUri()`/`hyperlinkId()` (raw, unvalidated).
-- BEL, SO/SI and the C1 band never reach `printable()`/`printChar()` through
-  `HandlerAdapter` — consume the raw `Handler` (or wire it as the adapter's
-  `$fallback`) if those signals matter to your bridge.
+- Lone BEL, SO/SI and C1 bytes (0x80-0x9F) never reach `printable()`/
+  `printChar()` through `HandlerAdapter` — consume the raw `Handler` (or wire
+  it as the adapter's `$fallback`) if those signals matter to your bridge.
+  But UTF-8-encoded C1 (`C2 80`-`C2 9F`) is *legal text*: the parser delivers
+  those runes to `printChar()` in both modes and the adapter forwards them —
+  a consumer re-emitting printable text must reject or replace U+0080-U+009F
+  itself.
 
 ## Credits & inspiration
 

@@ -19,7 +19,11 @@ namespace SugarCraft\AnsiParser\Parser;
  * structurally-completed rune byte sequence is forwarded verbatim (overlong,
  * surrogate and >U+10FFFF encodings included). Pass `$replaceMalformed =
  * true` to the constructor for validation with U+FFFD replacement (needs
- * ext-mbstring); that flag substitutes ONLY completed invalid encodings.
+ * ext-mbstring); that flag substitutes U+FFFD both for completed-invalid
+ * encodings and for incomplete runes — a sequence interrupted mid-rune by
+ * the next discriminator, and a partial rune abandoned at end-of-stream
+ * (flush()/reset()), become U+FFFD. Under the default those incomplete runes
+ * are dropped silently, producing no character at all.
  * The raw byte space is decided by the state table first, in both modes:
  * 0x80-0x9F are live C1 controls (executed, or introducers of DCS/SOS/OSC/
  * PM/APC — never dropped and never replaced, even though UTF-8 would read
