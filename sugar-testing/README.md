@@ -27,8 +27,9 @@ simulation, VHS tape building, and graphics-stream decoding.
   traversal *and* symlink jail)
 - **`TestResult`** — what `run()` returns: final model, last view, captured cmds,
   raw output, per-turn `frames`, and `droppedAfterStop`
-- **`Graphics\`** — inline-image stream assertions (`KittyStream`, `Iterm2Stream`,
-  `SixelStream`, `PixelGrid`, `Mode`, `DecodeLimits`, `MalformedGraphicsException`)
+- **`Graphics\`** — inline-image stream assertions (`KittyStream`, `KittyImage`,
+  `Iterm2Stream`, `SixelStream`, `PixelGrid`, `Mode`, `DecodeLimits`,
+  `MalformedGraphicsException`)
   — consumed by sugar-image
 - **`LoopPin`** — pins the shared ReactPHP loop to `StreamSelectLoop` so safety
   timers keep their real deadlines (see below)
@@ -147,7 +148,9 @@ sees them. The simulator mirrors that layer message for message — but it is a
 simulator, not the real runtime, and the boundary is explicit:
 
 - `BatchMsg` / `SequenceMsg` — each member closure runs as a Cmd would; the
-  messages they produce are dispatched. Members must be callables; anything
+  messages they produce are dispatched, appended behind everything already queued —
+  so a member's result lands after later-listed messages, not in member-list order.
+  Members must be callables; anything
   else throws. The container itself never reaches `update()`.
 - `TickRequest` — `produce()` fires **immediately**. There is no virtual clock:
   the requested delay is not simulated, and nothing is armed on a loop.
@@ -380,7 +383,8 @@ the Program's model each time, so repeated runs give the same result.
 - `->cmds` — every captured command closure, in dispatch order
 - `->output` — concatenated `view()` output across the run plus `RawMsg`/`PrintMsg`
   side-channel writes
-- `->frames` — the `view()` after each delivered message (plus the final one), for
+- `->frames` — every frame the run produced, in order: the `view()` after the init
+  update and after each delivered message's update leg, plus the final render — for
   animation/progression assertions
 - `->droppedAfterStop` — messages left in the queue when a `QuitMsg`/`InterruptMsg`
   halted the drain (0 in a healthy run; a surprise non-zero means your script
@@ -403,7 +407,8 @@ TapeRecorder::to(__DIR__ . '/.vhs/demo.tape')
     ->header(theme: 'TokyoNight')          // Set Theme/FontSize/Width/Height
     ->type('php examples/demo.php')
     ->enter()
-    ->sleep(1)
+    ->sleep(1.0)
+    ->resize(100, 30)                      // Set Width/Height mid-tape
     ->type("q")
     ->comment('rendered by .github/workflows/vhs.yml')
     ->save();
@@ -413,7 +418,9 @@ Everything interpolated is escaped so it cannot forge a standalone directive
 line — `type()` neutralizes newlines and control bytes inside the quotes,
 `comment()` prefixes every physical line, and even the theme string is escaped.
 `line()` is the deliberate verbatim escape hatch: CI executes the tapes these
-files describe, so only feed it trusted, generated directives. See
+files describe, so only feed it trusted, generated directives. `save()` is a plain
+trusted-path write that fails loudly on a short write — there is no path jail and no
+atomic publish here; those are `GoldenFile`'s guarantees, not this class's. See
 `examples/tape-recorder.php` for a runnable demo.
 
 ### TemporaryDirectoryTrait
