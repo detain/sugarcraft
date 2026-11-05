@@ -393,9 +393,12 @@ $psr->log(LogLevel::ERROR, 'Operation failed', ['code' => 500]);
 ```
 
 Level mapping, in one place: `emergency`/`alert`/`critical` → `Fatal`
-(the record carries the `FTL` label and routes to the error stream, but the
-bridge swallows the `RuntimeException` that backs `Fatal` — Go's exit is not
-portable here); `error` → `Error`; `warning` → `Warn`; `notice` and `info` →
+(the record carries the `FTL` label and routes to the error stream when one is
+installed — the `errorStream` knob on the wrapped `Logger`; by default no error
+stream exists and every level is written to STDOUT, see
+[Output and streams](#output-and-streams)) — but the bridge swallows the
+`RuntimeException` that backs `Fatal` (Go's exit is not portable here);
+`error` → `Error`; `warning` → `Warn`; `notice` and `info` →
 `Info`; `debug` → `Debug`.
 
 The bridge also fires registered hooks after the record is written (see
