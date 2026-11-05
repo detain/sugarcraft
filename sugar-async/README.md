@@ -236,6 +236,14 @@ for timeouts (with structured `seconds()` / `label()` fields),
 `OperationCancelledException` for cancellation — so existing
 `catch (\RuntimeException $e)` sites keep working unchanged.
 
+Exception messages are **not sanitized**: a `label:` you pass is woven verbatim
+into the rejection text (`Operation "<label>" timed out …`), and a budget
+exhaustion in `retry` re-quotes the last inner failure's `getMessage()` in full.
+The resulting message is trusted data only — never paint it into a frame,
+terminal title, or log line an attacker-controlled input could reach without
+passing it through your display sanitizer first (`Sanitize::untrusted()` in
+`sugar-core`, or an equivalent for your surface).
+
 ```php
 use SugarCraft\Async\AsyncOps;
 use function React\Promise\resolve;
