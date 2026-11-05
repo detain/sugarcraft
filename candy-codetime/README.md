@@ -14,12 +14,13 @@
 <!-- BADGES:END -->
 
 
-![demo](.vhs/dashboard.gif)
+![candy-codetime dashboard TUI: seven-day window with project and language rankings and a daily timeline](.vhs/dashboard.gif)
 
 candy-codetime — a privacy-first coding-time tracker for PHP 8.3+. Storage is
 local by default: one append-only JSONL file per day, with an optional
-embedded-SQLite backend (`--backend=sqlite`) for milestone tracking and indexed
-queries. Nothing leaves your machine — no cloud, no daemon, and no database
+embedded-SQLite backend (`--backend=sqlite`) for milestone tracking and
+time-indexed range queries. Nothing leaves your machine — no cloud, no daemon,
+and no database
 *server* (SQLite is an in-process library reading a file you own). The
 dashboard is a SugarCraft TUI that reads whichever backend you selected.
 
@@ -55,7 +56,7 @@ anything real.
 | `milestone` | `<add\|list> [name] [description]` | Manage release markers. Milestones live only in SQLite, so this command forces the sqlite backend regardless of `--backend`; the dashboard never displays them. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]). |
 | `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7). |
-| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data. **The SQLite database is not archived**: a byte copy of a live `.db` is a torn snapshot, so sqlite users must use `sqlite3 <db> ".backup <dest>"` or `VACUUM INTO '<dest>'` (the CLI prints this reminder when a `.db` is present). |
+| `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data. Archives are named `<dir>_<file>.<day>` after the source day and its mtime date; re-running `backup` the same day is a no-op for files already archived (an existing target is skipped). **The SQLite database is not archived**: a byte copy of a live `.db` is a torn snapshot, so sqlite users must use `sqlite3 <db> ".backup <dest>"` or `VACUUM INTO '<dest>'` (the CLI prints this reminder when a `.db` is present). |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
 
@@ -69,8 +70,10 @@ Options (accepted before or after the command):
 A storage failure ends any command with a one-line message on stderr and exit
 status 1 — never a bare PHP fatal.
 
-Legacy `SUGARTICK_*` environment variables are still read (with a deprecation
-notice) and the old default data directory is migrated once on first launch.
+Legacy `SUGARTICK_*` environment variables are still imported on every launch
+(each with a deprecation notice on stderr), and the old default data directory
+is migrated once on first launch — the migration is not performed when
+`CANDY_CODETIME_DIR` is set.
 CLI messages follow `LC_ALL`/`LC_MESSAGES`/`LANG` across the 16 shipped
 locales.
 
@@ -80,8 +83,11 @@ A `.sugartrackignore` in the current directory — or, failing that, in the
 tracked file's own directory (the first found wins) — holds glob patterns one
 per line; a `push` whose file matches is reported as skipped and never
 stored. A bare pattern (`secret.log`) matches by file name at any depth; a
-path pattern (`vendor/*`) matches below any `vendor` directory, whether the
-tracked path is relative or absolute.
+pattern naming the whole tracked path matches it exactly; and a path pattern
+(`vendor/*`) matches below any `vendor` directory, whether the tracked path is
+relative or absolute. An ignore file larger than 1 MiB is refused outright:
+`push` reports it with a one-line error and exits 1 rather than parsing a
+bloated plant.
 
 Trust boundary: ignore files usually live *inside* tracked repositories, so
 their patterns are untrusted input to the tracking tool. A wildcard-only
@@ -99,7 +105,7 @@ directory-level plant, run `push` from a working directory whose own
 ```
 $CANDY_CODETIME_DIR/
   2026-10-23.jsonl      one appendable line per heartbeat
-  candy-codetime.db     created only by --backend=sqlite
+  candy-codetime.db     created by --backend=sqlite, and by `milestone` (which always uses sqlite)
 <dir>-backups/          created by `backup`
 ```
 
@@ -142,8 +148,10 @@ the directory accordingly.
 
 Colour is driven by the detected `ColorProfile` for the terminal: a profile
 below 256-colour (which `NO_COLOR=1`, `CLICOLOR=0` and `TERM=dumb` all land
-on) renders the dashboard without any tints, and a resize or capability
-report mid-session updates it live.
+on) renders the dashboard without any tints. Detection runs once at startup
+(and without a detected profile the fallback honours a set, non-empty
+`NO_COLOR`, treating `0` and `false` as not suppressing); a resize relayouts
+the frame under the stored profile.
 
 ## Keys (dashboard)
 
@@ -157,8 +165,9 @@ report mid-session updates it live.
 
 The two ranking panes render side by side from 62 columns up (two 30-cell
 frames plus a gap) and stack vertically below that. Every dashboard line is
-clipped to the terminal width — frames fill it exactly, nothing wraps into
-garbage on narrow shells, and days that cannot be drawn are counted
+clipped to the terminal width and never wraps: the timeline frame fills the
+width, while the ranking panes keep their budgeted 62-cell band, and days
+that cannot be drawn are counted
 ("+N earlier") rather than silently dropped.
 
 ## Architecture
@@ -167,7 +176,7 @@ garbage on narrow shells, and days that cannot be drawn are counted
 |------|------|
 | `Heartbeat` | Value object — one activity sample (project, language, file, duration, tags). |
 | `Store` | JSONL-backed reader/appender; implements `HeartbeatReader`; enforces the private modes above. |
-| `Storage\SqliteBackend` | Optional indexed storage; implements `HeartbeatReader`; also owns milestones. |
+| `Storage\SqliteBackend` | Optional storage whose only index is on the heartbeat time column (`idx_heartbeats_time`) for range queries; implements `HeartbeatReader`; also owns milestones. |
 | `Storage\HeartbeatReader` | The read contract (`loadRange`/`invalidate`) both storages satisfy — what lets every subcommand honour `--backend` uniformly. |
 | `Stats` | Pure fold — totals per project / language + per-day timeline buckets. |
 | `Dashboard` | SugarCraft Model — window shifts one day per press (`←/→`), reload (`r`), quit; reads through a `HeartbeatReader`. |
