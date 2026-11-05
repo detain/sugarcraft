@@ -69,7 +69,10 @@ process exits — you do not have to die to keep your best.
 
 ## Terminal requirements
 
-The framed world is a fixed 62 x 21 cells (`Game::MIN_COLS` x `Game::MIN_ROWS`).
+The framed world needs a 62 x 21 viewport (`Game::MIN_COLS` x `Game::MIN_ROWS`
+— the 60 x 18 world plus the two border columns and three status rows); on a
+wider, taller terminal the frame stays that size and the surplus rows are
+simply unused.
 
 - **Smaller viewport** — a plain "needs a 62x21 terminal" notice replaces the
   board and the world freezes (no ticks burn on an unplayable frame). Resize
@@ -110,7 +113,7 @@ DECSET 1049), so your normal scrollback is restored untouched on exit.
 | File            | Role                                                                           |
 |-----------------|--------------------------------------------------------------------------------|
 | `Bird.php`          | Wraps a SugarSpring `Projectile` — gravity pulls it down, `flap()` resets vertical velocity to a fixed kick, and fall speed is capped at terminal velocity. |
-| `Pipe.php`          | Single-column pipe pair with a centred gap. Slides left one cell per tick.     |
+| `Pipe.php`          | Single-column pipe pair with a gap centred to one row — for even gap heights the band tilts one row toward the floor (`collides()` anchors `top = gapY - intdiv(h-1,2)`, `bottom = gapY + intdiv(h,2)`). Slides left one cell per tick.     |
 | `TickMsg.php`       | Frame-tick message fired by the `game-tick` subscription timer (`Game::TICK_SECONDS`, 1/30 s exactly). |
 | `Game.php` (Model)  | Pure-state world: bird + pipes + score + crashed flag. Injects PRNG closure for deterministic gap placements in tests. |
 | `Renderer.php`      | Pure view — single playfield walk, ANSI-styled glyphs, rounded border.         |
@@ -129,7 +132,7 @@ The pipe gap height adapts to the player's score:
 | 10–14       | 4 cells    |
 | 15+         | 3 cells    |
 
-Gap shrinks by 1 every 5 points, bottoming out at 3 cells to keep the game playable. This is implemented by `PipeGenerator::gapHeightForScore()` and applied automatically when `Game` spawns new pipes via `PipeGenerator::makePipe()`.
+Gap shrinks by 1 every 5 points, bottoming out at 3 cells to keep the game playable. This is implemented by `PipeGenerator::gapHeightForScore()` and applied automatically when `Game` spawns new pipes via `PipeGenerator::makePipe()`. The gap's centre row is drawn from the injected PRNG inside `[3 + h/2, HEIGHT - 3 - h/2]`, so a gap never touches the floor or ceiling rows.
 
 ## Bird physics & tuning
 
@@ -179,8 +182,9 @@ vendor/bin/phpunit --filter GoldenRenderTest                    # must pass with
 ## Scoring
 
 The score increments by one for each pipe pair whose column passes the bird's
-column (per tick), so surviving is scored, not flapping. The top ten scores
-ever recorded on this machine are kept.
+column (per tick), so surviving is scored, not flapping. Every game that beats
+the current best is merged into the machine's leaderboard, and the list keeps
+its top ten entries (`Game::MAX_HIGH_SCORES`).
 
 Tuning is compiled in, deliberately: physics constants, tick rate, gap bands
 and key bindings are NOT configurable. The leaderboard and the difficulty
