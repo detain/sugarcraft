@@ -20,8 +20,11 @@ namespace SugarCraft\Diff\Reader;
  *
  * Mirrors the `[$old, $new, $isFileHeader]` tuples computed by
  * candy-code/src/Tui/DiffGutter.php `number()` — the gutter keeps its own
- * copy today and adds no kind; delegation to this scan is owed (the row kind
- * is the lib-side half of that seam).
+ * copy today and adds no kind; the landing side of that owed delegation is
+ * published: {@see UnifiedScan::lines()} for the region model and
+ * {@see UnifiedScan::isHunkHeader()} for the header predicate (D1a: the
+ * consumer delegation rides the candy-code wave; the row kind is the
+ * lib-side half of that seam).
  */
 final class ScannedLine
 {

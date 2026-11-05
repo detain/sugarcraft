@@ -1,6 +1,6 @@
 # SugarDiff
 
-Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. First-party (there is no 1:1 Go counterpart): the engine and the scanner were extracted from `candy-code`, whose `Tools\Concerns\BuildsUnifiedDiff` trait now delegates here. `candy-code`'s `Tui\DiffGutter` is a port of this scanner's region model and still keeps its own copy today — delegating it here is an open seam.
+Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. First-party (there is no 1:1 Go counterpart): the engine and the scanner were extracted from `candy-code`, whose `Tools\Concerns\BuildsUnifiedDiff` trait now delegates here. `candy-code`'s `Tui\DiffGutter` is a port of this scanner's region model and still keeps its own copy today — delegating it here is an open seam whose landing side is now published: `UnifiedScan::isHunkHeader()` and the `lines()` walk.
 
 ## Installation
 
@@ -15,7 +15,7 @@ composer require sugarcraft/sugar-diff:@dev
 - **`Diff::compute()`** — prefix/suffix-trimmed LCS over lines (same algorithmic guarantees as the candy-code trait: `>=` tie-break deletes first, `maxLcsCells` budget falls back to a whole-middle replace block, reported by the `degraded` flag — with the 250 000-cell default, edits far apart in a large file really can exceed the budget, so check the flag), producing numbered `Line` rows grouped into `Hunk`s.
 - **`Writer\UnifiedFormat`** — renders `diff -u` shaped text: `--- / +++` headers, `@@ -a[,b] +c[,d] @@` hunk headers (GNU count elision included), optional `\ No newline at end of file` markers and `/dev/null` empty-side labels. Path labels are control-byte-safe (C-quoted core.quotePath-style — see Fidelity notes for the two deliberate deviations from git).
 - **`Writer\SideBySideFormat`** — pairs one diff into side-by-side `[left?, right?]` rows, line by line, for split viewers: `rows(Diff)` from the hunk model, `fromUnified(string|list<string>)` from already-rendered patch text via `Reader\UnifiedScan` (both return the same rows for the same change). Leftover removals/additions stand alone; width and colour stay with the caller.
-- **`Reader\UnifiedScan`** — walks any rendered unified diff and tells a viewer which old/new line each row points at, honouring each hunk's declared counts and classifying every row with a `Reader\ScanRowKind` (the gutter model the candy-code TUI was built from), without owning any view code.
+- **`Reader\UnifiedScan`** — walks any rendered unified diff and tells a viewer which old/new line each row points at, honouring each hunk's declared counts and classifying every row with a `Reader\ScanRowKind` (the gutter model the candy-code TUI was built from), without owning any view code. `isHunkHeader(string): bool` publishes the walk's own recognition predicate, so a consumer can gate boundaries without a second regex to drift.
 - **`Writer\SideBySideRow` / `Reader\ScannedLine`** — the immutable value rows of the two render/scan halves.
 
 ## Quickstart
@@ -77,7 +77,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 | `Line` / `LineKind` | One numbered row (verbatim text, side numbers, `marker()`, `toUnifiedRow()`); `eq`/`del`/`ins` vocabulary |
 | `Writer\UnifiedFormat` | `write()` / `hunksOnly()` statics behind `Diff::unified()` / `Diff::hunkText()`; `NO_NEWLINE_ROW` |
 | `Writer\SideBySideFormat` / `Writer\SideBySideRow` | `rows()` / `fromUnified()` pairing into `[left?, right?]` value rows for split layouts; `SideBySideRow::isPaired()` |
-| `Reader\UnifiedScan` | `lines()` / `fileHeaders()` / `rowsOf()` row walks with declared-count budgets and fail-closed boundaries; `MAX_LINE_NUMBER_DIGITS` |
+| `Reader\UnifiedScan` | `lines()` / `fileHeaders()` / `rowsOf()` row walks with declared-count budgets and fail-closed boundaries; `isHunkHeader()` recognition predicate; `MAX_LINE_NUMBER_DIGITS` |
 | `Reader\ScannedLine` / `Reader\ScanRowKind` | Per-row `(old, new, fileHeader, kind)` region model; row classification enum — `isContentRow()` is true exactly for `Context`/`Insert`/`Delete`, so a pairing renderer gates its runs on the kind instead of re-sniffing the marker column |
 
 Non-visual engine: no ANSI, no rendering, no demos — view layers (gutters, coloring) consume the model and stay downstream. Sides accept a raw `string` or a `list<string>` (one element = one line; an element containing `"\n"` is refused — `file()` callers pass `FILE_IGNORE_NEW_LINES`). The model is eagerly materialised: `compute()` allocates the full `Line`/`Hunk` row set, and `addedLines()`/`removedLines()` re-walk it per call.

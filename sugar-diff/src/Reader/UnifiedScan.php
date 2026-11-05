@@ -9,7 +9,11 @@ namespace SugarCraft\Diff\Reader;
  * which file each row points at — the region/hunk model any renderer (or
  * patch tool) can use to number rows without owning the counting rules.
  * The candy-code gutter mirrors these rules today but keeps its own copy
- * ({@see ScannedLine}); delegating that copy here is the remaining seam.
+ * ({@see ScannedLine}); delegating that copy to this scanner's published
+ * doors — {@see self::lines()} for the region model and
+ * {@see self::isHunkHeader()} for the header predicate — is the remaining
+ * seam (D1a fold: the lib-side half is landed here, the consumer
+ * delegation rides the candy-code wave).
  *
  * Counters come from each `@@ -a,b +c,d @@` header and advance the way
  * `diff -u` counts: context advances both sides, `-` advances old, `+`
@@ -75,6 +79,14 @@ final class UnifiedScan
      */
     public const MAX_LINE_NUMBER_DIGITS = 9;
 
+    /**
+     * The one `@@ -a,b +c,d @@` hunk-header pattern the walk matches — and
+     * the single source behind {@see self::isHunkHeader()}, so a consumer
+     * can recognise the boundary the walk recognises without owning a
+     * second, drift-prone copy of the regex.
+     */
+    private const HUNK_HEADER_PATTERN = '/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/';
+
     private function __construct()
     {
     }
@@ -97,7 +109,7 @@ final class UnifiedScan
         $out = [];
 
         foreach ($rows as $line) {
-            if (preg_match('/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/', $line, $m) === 1) {
+            if (preg_match(self::HUNK_HEADER_PATTERN, $line, $m) === 1) {
                 // Matched with an unbounded \d+ on purpose: the header has to
                 // be RECOGNISED even when its numbers are absurd, or the rows
                 // after it get counted as context. Only the numbering opts
@@ -244,6 +256,25 @@ final class UnifiedScan
     private static function declaredCount(string $raw): int
     {
         return $raw === '' ? 1 : (int) $raw;
+    }
+
+    /**
+     * Whether a row is a `@@ ... @@` hunk header — recognition, not
+     * numbering.
+     *
+     * A header whose start lines are too large to count from safely is
+     * still a header ({@see self::MAX_LINE_NUMBER_DIGITS} governs only the
+     * numbering): it must close the hunk above it, or the rows below would
+     * be numbered off the previous counters. The walk matches the same
+     * pattern this method exposes, so a consumer that gates rows on this
+     * predicate cannot drift from what `lines()` reports. candy-code's
+     * `Tui\DiffGutter` keeps its own copy today — delegating it here (and
+     * to {@see self::lines()}) is the D1a seam; the consumer leg rides the
+     * candy-code wave.
+     */
+    public static function isHunkHeader(string $row): bool
+    {
+        return preg_match(self::HUNK_HEADER_PATTERN, $row) === 1;
     }
 
     /**

@@ -250,4 +250,64 @@ final class UnifiedScanTest extends TestCase
         $this->assertNull($line->new);
         $this->assertFalse($line->fileHeader);
     }
+
+    public function testThePublishedHunkHeaderPredicateRecognisesEveryShapeTheWalkRecognises(): void
+    {
+        // The unbounded \d+ is deliberate (see MAX_LINE_NUMBER_DIGITS):
+        // recognition is total, only the numbering opts out — a refused
+        // number must still close the hunk above it.
+        foreach ([
+            '@@ -1 +1 @@',
+            '@@ -1,3 +1,2 @@ ctx',
+            '@@ -0,0 +1 @@',
+            '@@ -99999999999 +1 @@',
+            '@@ -1 +1 @@ trailing annotation text',
+        ] as $header) {
+            $this->assertTrue(UnifiedScan::isHunkHeader($header), $header);
+        }
+
+        foreach ([
+            '',
+            '@ -1 +1 @@',
+            '@@ -1 +1 @',
+            '@@ - 1 +1 @@',
+            '@@--1+1@@',
+            'x @@ -1 +1 @@',
+            '--- a/f',
+            '+++ b/f',
+            '\\ No newline at end of file',
+        ] as $row) {
+            $this->assertFalse(UnifiedScan::isHunkHeader($row), $row);
+        }
+    }
+
+    public function testThePredicateAndTheWalkShareOneRecognition(): void
+    {
+        // A consumer gating rows on isHunkHeader() must see exactly the
+        // rows the walk classifies as HunkHeader — the pattern is shared
+        // with the walk on purpose, so a re-inlined copy could drift.
+        $rows = [
+            'diff --git a/f b/f',
+            'index 7f8f9a0..1234567 100644',
+            '--- a/f',
+            '+++ b/f',
+            '@@ -1,2 +1,2 @@',
+            ' ctx',
+            '-old',
+            '+new',
+            '@@ -99999999999 +1 @@',
+            ' after an oversized boundary',
+        ];
+
+        $walked = array_map(
+            static fn (ScannedLine $line): bool => $line->kind === ScanRowKind::HunkHeader,
+            UnifiedScan::lines($rows),
+        );
+        $published = array_map(
+            static fn (string $row): bool => UnifiedScan::isHunkHeader($row),
+            $rows,
+        );
+
+        $this->assertSame($walked, $published);
+    }
 }
