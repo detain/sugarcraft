@@ -616,26 +616,16 @@ UPDATE_GOLDENS=1 vendor/bin/phpunit
 
 ## Accessor deprecation (2026-10-24)
 
-Per the house bare-accessor convention (*"Bare accessors (no* `get`*")*),
-`SpringCollection::getTarget()` was renamed to its bare twin `target($id)` —
-the slot was unclaimed and the getter now mirrors the collection's existing
-bare `get()` / `all()` / `has()` readers. The fluent `withTarget()` builder
-and the deprecated in-place `setTarget()` shim are untouched; a bare
-`target()` coexists with both cleanly. The legacy spelling stays a
-byte-identical one-line BC forwarder marked `@deprecated` with `REMOVED-IN:
-2.0.0`; it will be removed in sugar-spring v2.0.0.
+One accessor was renamed to the house bare form: `SpringCollection::getTarget()`
+→ `target($id)`. The legacy spelling stays a byte-identical `@deprecated` BC
+forwarder until sugar-spring v2.0.0; migrate call sites.
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
 | `Spring` | `SpringCollection` | `getTarget()` | `target()` |
 
-`tests/AccessorDeprecationTest.php` pins BC identity on a live collection
-(seeded spring, after retarget, original untouched), the forwarder shape
-(single return line + markers), a discovery-first `src/` census with an
-inverse leg that reddens any unmarked public `get*()`, and the README table
-agreement. `tick()` reads `$this->targets` directly, so there were no internal
-call sites to switch; the existing `SpringCollectionTest` needles stay green
-through the forwarder.
+`tests/AccessorDeprecationTest.php` pins the table above; the dated internal
+change record lives in `CALIBER_LEARNINGS.md`.
 
 ## Credits & inspiration
 
