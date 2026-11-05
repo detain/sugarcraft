@@ -121,11 +121,13 @@ both faithfully:
   SOS/PM/APC get no push because none of them has one.
 - `HandlerAdapter` dispatches **every** parameter of `CSI h/l` to
   `CsiHandler::decset()/decrst()`, one call per mode, preserving the prefix —
-  `CSI ? 1000 ; 1006 h` therefore sets both modes. The adapter's consumers —
-  `sugar-vterm`'s renderer handler and `candy-codeshot`'s `SgrStateHandler` —
-  can therefore attribute a later mouse byte sequence to the encoding that
-  enabled it instead of assuming SGR; `candy-vcr`'s `MouseModeTracker` mirrors
-  the same semantics on the raw `Handler` path.
+  `CSI ? 1000 ; 1006 h` therefore sets both modes. The adapter's consumer —
+  `sugar-vterm`'s renderer handler — can therefore attribute a later mouse
+  byte sequence to the encoding that enabled it instead of assuming SGR;
+  `candy-vcr`'s `MouseModeTracker` mirrors the same semantics on the raw
+  `Handler` path. `candy-codeshot`'s `SgrStateHandler` is not an adapter
+  consumer: it implements `SubparamsAwareHandler` and takes SGR
+  subparameters from the parser on the raw route, with no mode handling.
 
 The parser flags colon structure but does not interpret it; a handler that
 neither implements `SubparamsAwareHandler` nor reads `subparams()` keeps its
@@ -176,8 +178,8 @@ deliberately keeps it) applies **inside SOS/PM/APC strings only**, and there
 only to the four string-family introducers 0x98-0x9F — every other byte
 ≥ 0x80 accumulates into the payload. OSC and DCS payloads carry no such
 guard: the table maps OscString/DcsString 0x20-0xFF to `Put`, so introducers,
-C1 controls and high bytes all stay in the payload, and only ESC, BEL (OSC)
-and ST end those strings. Bytes with no mapped
+C1 controls and high bytes all stay in the payload, and only ESC, BEL (OSC),
+ST and the CAN/SUB cancels above end those strings. Bytes with no mapped
 transition follow the `None → Ground` default row and are dropped — the
 [Limits & hostile input](#limits--hostile-input) section names the exact
 bands this covers (and the C1 band it does *not*: those bytes execute).
