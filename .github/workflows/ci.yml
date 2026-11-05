@@ -215,6 +215,57 @@ jobs:
       - name: Verify the tools/ guards
         run: phpunit --no-configuration --colors=never tools/tests/
 
+  # G6-P (OD-6, reviews-1103): the publishers (sync-sugarcraft, phar-dev) poll
+  # THIS workflow for their gate, so a green CI must already mean the shipped
+  # web bundle is verified — not just the PHP legs. web.yml stays the deep
+  # pipeline (audit, lint, typecheck, unit, e2e); this job mirrors only the
+  # legs whose verdict a publisher is made to vouch for: the lockfile install,
+  # the generated protocol types, the bundle build, and committed-dist parity.
+  # Unconditional on every event: CI green at a SHA ⊇ bundle green at that SHA
+  # (a path-scoped web.yml run would leave unrelated SHAs bundle-unverified —
+  # publishing a stale bundle was the CW-P1-class harm this gate closes).
+  web-bundle:
+    name: 'candy-code-web · bundle build + dist parity'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: candy-code-web
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: candy-code-web/.nvmrc
+          cache: npm
+          cache-dependency-path: candy-code-web/package-lock.json
+
+      - name: Install (lockfile only)
+        run: npm ci
+
+      - name: Protocol types match the server schema
+        run: |
+          npm run gen:protocol
+          if ! git diff --exit-code -- src-web/protocol/generated.ts; then
+            echo "::error::candy-code-web/src-web/protocol/generated.ts is stale. Run 'npm run gen:protocol' in candy-code-web/ and commit it."
+            exit 1
+          fi
+
+      - name: Build
+        run: npm run build
+
+      # Both halves matter: `git diff` catches a changed or deleted committed
+      # file, and the porcelain check catches a NEW emitted file (a renamed
+      # content-hashed chunk) that was never committed.
+      - name: Committed dist/ matches the source
+        run: |
+          if ! git diff --exit-code -- dist/ || [ -n "$(git status --porcelain -- dist/)" ]; then
+            git status --short -- dist/
+            echo "::error::candy-code-web/dist/ is stale. Run 'npm ci && npm run build' in candy-code-web/ and commit dist/ with the source change — same commit, per the dist-freshness law. 'npm run check:dist' reproduces this verdict locally before you push."
+            exit 1
+          fi
+          echo "OK: dist/ is byte-identical to a clean build of src-web/"
+
   path-repo-check:
     name: 'Path-repo policy'
     runs-on: ubuntu-latest

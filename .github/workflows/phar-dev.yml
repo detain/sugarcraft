@@ -6,6 +6,8 @@
 #   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.sha256.sig      (when signed)
 #   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig         (when signed)
 #   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.minisig.sha256  (when signed)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.commit          (tested SHA, OD-8)
+#   https://github.com/detain/sugarcraft/releases/download/<app>/dev/<app>.phar.pins.json       (sibling pin map, OD-14)
 #
 # The phar-capable set is FILESYSTEM-DRIVEN: an app is built iff it appears
 # in the affected set of scripts/affected-libs.php AND carries a
@@ -26,11 +28,20 @@
 # Version::fromPharMetadata — metadata truth, independent of whether the
 # app's CLI happens to surface it).
 #
-# REPRODUCIBILITY CAVEAT (inherited from the release pipelines, disclosed not
-# solved): composer install runs with the lock deliberately absent (house
-# rule forbids per-lib composer.lock) and sugarcraft/* siblings resolve from
-# Packagist at their dev-master moving target. Two dev builds of one commit
-# can differ byte-wise; the .sha256 names the bytes this job produced.
+# RELEASE POSTURE (OD-7 + OD-14 pinning, reviews-1103 G6-P): nothing here
+# publishes on an untested SHA. A ci-gate job polls the CI workflow run for
+# the pushed commit and fails closed — red CI, or no CI verdict inside the
+# poll budget, holds the channel back; only green releases. Siblings are
+# pinned too: composer.json's sugarcraft/* requires are transiently resolved
+# against the SAME checkout by scripts/pin-siblings.php (symlink:false path
+# repositories, so vendor carries real bytes and build-phar's linked-mode
+# refusal law still passes), and a post-install verify aborts the build if
+# any sibling floated to the network. The committed manifests keep the
+# documented @dev doctrine untouched (tools/check-path-repos.php
+# --no-lib-path-repos stays green on the tree). Each archive ships a
+# .phar.commit sidecar (the exact tested SHA it was built from) and a
+# .phar.pins.json provenance map as release assets, so a downloaded dev phar
+# is traceable to bytes CI actually tested instead of a moving dev-master.
 #
 # GITHUB_TOKEN pushes do not trigger other workflows, and this file
 # deliberately chains nothing: the <app>/dev tag pushes below exist only to
@@ -151,8 +162,43 @@ jobs:
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "matrix_count=$COUNT" >> "$GITHUB_OUTPUT"
 
-  build:
+  ci-gate:
+    # G6-P OD-7: the rolling dev channel publishes ONLY from a commit CI
+    # tested green. The push trigger arrives in parallel with the CI run for
+    # the same SHA, so this job waits on that verdict instead of bypassing
+    # it: bounded poll, fail-closed on red, cancelled, or budget exhaustion.
+    # Skipped in lockstep with an empty matrix (docs-only pushes must not
+    # park a runner polling for a build that will never happen).
     needs: detect
+    if: needs.detect.outputs.matrix_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 250
+    steps:
+      - name: CI-green door (OD-7)
+        env:
+          TARGET_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 240); do
+            run_line="$(gh run list --workflow CI --branch master --commit "$TARGET_SHA" \
+              --limit 5 --json status,conclusion \
+              --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (sort_by(.conclusion) | .[0].conclusion) end')"
+            if [ "$run_line" = "success" ]; then
+              echo "CI is green at $TARGET_SHA — building"
+              exit 0
+            fi
+            case "$run_line" in
+              PENDING) echo "CI at $TARGET_SHA not concluded yet (attempt $attempt/240)";;
+              *) echo "refusing build: CI at $TARGET_SHA concluded '$run_line'" >&2; exit 1;;
+            esac
+            sleep 60
+          done
+          echo "refusing build: no green CI at $TARGET_SHA within the poll budget (fail-closed)" >&2
+          exit 1
+
+  build:
+    needs: [detect, ci-gate]
     if: needs.detect.outputs.matrix_count != '0'
     runs-on: ubuntu-latest
     strategy:
@@ -176,15 +222,39 @@ jobs:
           # is a red matrix cell.
           extensions: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, pdo_mysql, pdo_pgsql, ssh2, gd, curl, openssl, ffi
 
+      - name: Pin sibling deps to the pushed commit (OD-14)
+        # Transient rewrite of the app manifest's sugarcraft/* requires into
+        # symlink:false path repositories over THIS checkout, plus a
+        # sibling-pins.json sidecar naming every resolved sibling. The
+        # committed tree never carries this mutation (it lives only in the
+        # runner's copy), so the path-repos inverse policy stays green.
+        env:
+          APP: ${{ matrix.app }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          php scripts/pin-siblings.php inject "$APP" --root . --sha "$SHA"
+
       - name: Install production dependencies
         run: |
           set -euo pipefail
           cd "${{ matrix.app }}"
           # Linked-mode local checkouts can carry a path-repo lock; CI starts
           # from git, and build-phar REFUSES symlinked sibling vendors as the
-          # second line of defence against frozen sibling WIP.
+          # second line of defence against frozen sibling WIP. The injected
+          # sibling repositories above are symlink:false for exactly this
+          # reason: vendor ends up holding real copies of the tested bytes.
           rm -f composer.lock
           composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+      - name: Verify no sibling floated to the network (OD-14)
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          set -euo pipefail
+          php scripts/pin-siblings.php verify "$APP"
+          # Move the sidecar out of the app dir before build-phar walks it.
+          mv "$APP/sibling-pins.json" "pins-$APP.json"
 
       - name: Build the archive
         id: build
@@ -194,13 +264,29 @@ jobs:
           short="$(git rev-parse --short=7 HEAD)"
           # SOURCE_DATE_EPOCH pins metadata['built_at'] to the commit date
           # (the same DST-1 discipline as the release pipelines); the
-          # byte-level guarantee still stops at the dev-master window
-          # disclosed in this file's header.
+          # sibling bytes are the pinned ones the verify step above just
+          # vouched for, so the whole archive is reproducible from HEAD.
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT HEAD)"
           php -d phar.readonly=0 "$app/tools/build-phar.php" \
             --out="dist/$app.phar" \
             --version="dev-$short"
           echo "short=$short" >> "$GITHUB_OUTPUT"
+
+      - name: Provenance sidecars (OD-8)
+        # The rolling channel's answer to "which commit am I holding?":
+        # .phar.commit names the full tested SHA the archive was built at
+        # (the CI-gated one), .phar.pins.json maps every sugarcraft/*
+        # sibling to those same bytes. Assets, not archive contents — the
+        # stamp inside the archive stays the dev-<short7> metadata.
+        env:
+          APP: ${{ matrix.app }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$SHA" > "dist/$APP.phar.commit"
+          mv "pins-$APP.json" "dist/$APP.phar.pins.json"
+          test -s "dist/$APP.phar.commit"
+          test -s "dist/$APP.phar.pins.json"
 
       - name: Assert the dev stamp is locatable in the archive metadata
         # Fail-closed locator gate: the release channel is only trustworthy
@@ -211,7 +297,7 @@ jobs:
         run: |
           set -euo pipefail
           app='${{ matrix.app }}'
-          want="dev-${{ steps.build.outputs.short }}"
+          want="$WANT_STAMP"
           php -r '
             $phar = getenv("PHAR_PATH");
             $want = getenv("WANT_STAMP");
@@ -287,7 +373,7 @@ jobs:
         run: |
           set -euo pipefail
           app='${{ matrix.app }}'
-          stamp="dev-${{ steps.build.outputs.short }}"
+          stamp="$STEP_STAMP"
           fake_home="$(mktemp -d)"
           out="$(HOME="$fake_home" php "dist/$app.phar" --version)"
           test -n "$out"
@@ -298,6 +384,8 @@ jobs:
             echo "::notice::$app --version does not surface the phar metadata stamp (archive metadata still carries $stamp)"
           fi
           HOME="$fake_home" php "dist/$app.phar" --help >/dev/null
+        env:
+          STEP_STAMP: dev-${{ steps.build.outputs.short }}
 
       - name: Publish rolling dev release
         # CRITICAL: --target with the explicit commit SHA on BOTH branches.
@@ -310,17 +398,17 @@ jobs:
         run: |
           set -euo pipefail
           app='${{ matrix.app }}'
-          stamp="dev-${{ steps.build.outputs.short }}"
+          stamp="$STEP_STAMP"
           git tag -f "$app/dev" "$GITHUB_SHA"
           git push -f origin "refs/tags/$app/dev"
-          assets=("dist/$app.phar" "dist/$app.phar.sha256")
+          assets=("dist/$app.phar" "dist/$app.phar.sha256" "dist/$app.phar.commit" "dist/$app.phar.pins.json")
           if [ -f "dist/$app.phar.minisig" ]; then
             assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256" "dist/$app.phar.sha256.sig")
             signed="Signed with the sugarcraft-wide key (verify the chain: check $app.phar.sha256.sig — a sodium detached signature over the sidecar body — against the public half pinned in the self-update apps' source (candy-code and candy-top — the only apps that pin the key), then sha256sum -c $app.phar.sha256 on the archive; the legacy raw-byte $app.phar.minisig rides along for older clients, and a plain sha256sum -c of it would prove integrity only, never authenticity)."
           else
             signed="Unsigned in this build (no SUGARCRAFT_SIGNING_KEY on the runner at build time)."
           fi
-          notes="Rolling development PHAR for $app at ${stamp}. Rebuilt by .github/workflows/phar-dev.yml whenever a change touches the app (master push, or workflow_dispatch with 'all'). This archive carries the locatable stamp dev-${GITHUB_SHA::7} in its manifest metadata. ${signed} Not a stable channel — the bytes move with every master merge."
+          notes="Rolling development PHAR for $app at ${stamp}. Rebuilt by .github/workflows/phar-dev.yml whenever a CI-green change touches the app (master push, gated on that commit's CI verdict, or workflow_dispatch with 'all'). This archive carries the locatable stamp dev-${GITHUB_SHA::7} in its manifest metadata, and the .phar.commit sidecar names the full tested SHA. ${signed} Not a stable channel — the bytes move with every CI-green master merge."
           if gh release view "$app/dev" >/dev/null 2>&1; then
             gh release upload "$app/dev" "${assets[@]}" --clobber
             gh release edit "$app/dev" --target "$GITHUB_SHA" --title "$app dev ${stamp#dev-}" --notes "$(printf '%b' "$notes")"
@@ -334,3 +422,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
+          STEP_STAMP: dev-${{ steps.build.outputs.short }}

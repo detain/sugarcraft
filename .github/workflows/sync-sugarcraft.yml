@@ -24,9 +24,55 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # G6-P (OD-6/OD-7, reviews-1103): nothing publishes on untested bytes.
+  # Both split publishers below now need this gate, which waits for the CI
+  # workflow run AT THE PUSHED COMMIT and refuses anything not green. The
+  # push trigger stays (the affected-range math needs github.event.before,
+  # which a workflow_run trigger would lose); the gate makes the push event
+  # a WAITER on CI, not a bypass of it. A manual workflow_dispatch gates on
+  # CI green at the dispatch SHA the same way — an untested head after a
+  # force-push simply waits until CI covers it (or fails closed).
+  ci-gate:
+    name: 'Gate: CI green at the pushed commit'
+    runs-on: ubuntu-latest
+    timeout-minutes: 250
+    steps:
+      - name: CI-green door (OD-7)
+        # Bounded poll for the CI workflow run AT THE PUSHED COMMIT — green
+        # only. Fail-closed on every non-green shape: a completed red run is
+        # fatal immediately, a missing or still-running CI is retried until
+        # the attempt budget burns out and REFUSES the sync.
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 240); do
+            run_line="$(gh run list --workflow CI --branch master --commit "$TARGET_SHA" \
+              --limit 5 --json status,conclusion \
+              --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (sort_by(.conclusion) | .[0].conclusion) end')"
+            if [ "$run_line" = 'success' ]; then
+              echo "CI is green at $TARGET_SHA — syncing"
+              exit 0
+            fi
+            case "$run_line" in
+              PENDING)
+                echo "CI at $TARGET_SHA not concluded yet (attempt $attempt/240)"
+                ;;
+              *)
+                echo "refusing sync: CI at $TARGET_SHA concluded '$run_line'" >&2
+                exit 1
+                ;;
+            esac
+            sleep 60
+          done
+          echo "refusing sync: no green CI at $TARGET_SHA within the poll budget (fail-closed)" >&2
+          exit 1
+        env:
+          TARGET_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   sync-libs:
     name: Split-push affected libs to sugarcraft/<lib>
     runs-on: ubuntu-latest
+    needs: ci-gate   # G6-P OD-7: publish only from a tested commit
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -257,6 +303,7 @@ jobs:
   sync-site:
     name: Push docs/ to sugarcraft/sugarcraft.github.io
     runs-on: ubuntu-latest
+    needs: ci-gate   # G6-P OD-7: publish only from a tested commit
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
