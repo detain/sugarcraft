@@ -145,7 +145,10 @@ $ring = is_array($decoded)
   longer exist, prefers the `focused` id over the positional leg when both are
   present, and still loads legacy positional-only snapshots. Malformed `ids`
   throw `InvalidArgumentException`; everything else *in the array payload*
-  degrades fail-soft. Note the parameter is typed `array`: a corrupt file
+  degrades fail-soft. Entry comparison is string-on-string: a hand-edited
+  numeric `1` in `disabled` never matches the id `"1"`, so that region comes
+  back **enabled** — ids in the list must be JSON strings. Note the parameter
+  is typed `array`: a corrupt file
   whose `json_decode()` yields `null` or a string is a caller-side `is_array`
   guard away — restore() itself never sees it.
 
