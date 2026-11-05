@@ -156,21 +156,40 @@ a `git` on `PATH`, `serve --http` starts but every read request answers
 ## Configuration
 
 Create `config.yaml` in your data directory (`candy-git-server init`
-emits a skeleton). Note: several keys below are parsed but not yet
-consumed by any shipped code path (`db`, `ssh.idle_timeout` — see Known
-gaps); the listening addresses describe what a future assembly would use.
+emits a skeleton). The census below is authoritative: which keys
+`Config` actually parses, and which shipped code path consults each
+one. Keys marked dead are accepted and held on the `Config` object for
+the host wiring that would use them — reading them today changes
+nothing.
+
+| Key | Parsed by `Config` | Consumed by |
+|---|---|---|
+| `name` | yes | the example script only — identity string |
+| `log_format` | yes | **dead** |
+| `ssh.listen_addr`, `ssh.public_url`, `ssh.key_path`, `ssh.client_key_path`, `ssh.max_timeout`, `ssh.idle_timeout` | yes | **dead** (the SSH host wiring that would use them is unwired scaffold) |
+| `git.listen_addr` | yes | `GitDaemon::serve()`/`serveAsync()` bind |
+| `git.max_timeout` | yes | smart-HTTP stateless git-child deadline |
+| `git.idle_timeout` | yes | `GitDaemon` idle connection timer |
+| `git.max_connections` | yes | `GitDaemon` capacity (eviction past the cap) |
+| `git.allow_anonymous_read` | yes | the anonymous-read lever (default off) |
+| `http.listen_addr` | yes | **flags only** — `serve --http` binds `--http-host`/`--http-port`, never this key |
+| `http.public_url` | yes | LFS batch hrefs |
+| `http.tls_key_path`, `http.tls_cert_path` | yes | validation only — both set refuses at load (`config.tls_not_supported`); the lib never terminates TLS |
+| `http.max_pack_bytes` | yes | the single request-body cap (pack POST + LFS object PUT) |
+| `http.user_trust_mode`, `http.trusted_proxies`, `http.auth_secret` | yes | header identity trust modes (see Authentication) |
+| `lfs.enabled` | yes | the LFS route gate |
+| `lfs.ssh_enabled` | yes | **dead** |
+| `jobs.mirror_pull` | yes | `Jobs\MirrorPuller` schedule |
+| `stats.listen_addr` | yes | `StatsServer` bind (hostless `:PORT` resolves to loopback) |
+| `db` | **no** | `Config` has no database concept; a `db:` block in the YAML is silently ignored |
 
 ```yaml
 name: "My Git Server"
-ssh:
-  listen_addr: ":23231"
-  public_url: "ssh://localhost:23231"
-  key_path: "ssh/soft_serve_host"
-  idle_timeout: 120
 git:
-  listen_addr: ":9418"
+  listen_addr: ":9418"           # GitDaemon bind (class-level daemon)
+  allow_anonymous_read: false    # anonymous-read lever, default off
 http:
-  listen_addr: ":23232"
+  listen_addr: ":23232"          # parsed; serve --http uses its CLI flags
   public_url: "http://localhost:23232"
   max_pack_bytes: 268435456
 lfs:
@@ -178,11 +197,12 @@ lfs:
 jobs:
   mirror_pull: "@every 10m"
 stats:
-  listen_addr: ":23233"
+  listen_addr: ":23233"          # hostless bind stays on loopback
 ```
 
 Config files are parsed with [symfony/yaml](https://symfony.com/doc/current/components/yaml.html),
-so full YAML 1.2 (block nesting, flow maps, anchors, …) is supported.
+so the practical YAML subset its parser implements is supported (nested
+block mappings and sequences, flow collections, scalars, comments).
 Quote values that start with a YAML reserved indicator — listen
 addresses like `":23232"` and schedules like `"@every 10m"`.
 
@@ -380,8 +400,9 @@ Rules enforced at the HTTP boundary:
   oids, sizes within the cap, operations from `{download, upload}`, and a
   transfer list that must include `basic` — malformed entries answer with
   per-object 400 errors, never storage probes.
-- TLS keys in config are refused at load (`config.tls_not_supported`) —
-  HTTPS termination is out of scope for the class.
+- TLS keys in config (`http.tls_key_path`/`http.tls_cert_path`) are
+  refused at load (`config.tls_not_supported`) — HTTPS termination is
+  out of scope for the class.
 
 Objects are stored via `LFS\LocalStorageBackend` under `<data_path>/lfs/`
 using the standard `aa/bb/oid` fan-out layout.
@@ -434,6 +455,14 @@ $ curl -s localhost:23233/stats
 {"uptime_seconds":42.1,"connections":7,"pack_uploads":1,"pack_downloads":4,
   "lfs_batch_requests":2,"lfs_object_downloads":2,"lfs_object_uploads":1}
 ```
+
+`/`, `/stats` and `/stats.json` all answer the same JSON document.
+
+The endpoint is **unauthenticated**: whatever host starts it publishes
+every counter to any client that can reach the address. The safety floor
+is the bind: a hostless `stats.listen_addr` like the default `":23233"`
+resolves to loopback (`127.0.0.1`), never the wildcard — setting an
+explicit non-loopback host is what makes the counters network-visible.
 
 Counters are recorded by the Git daemon class (both modes), the smart-HTTP
 class, and the LFS handler into the shared `Stats::getInstance()`
@@ -506,16 +535,22 @@ everywhere, and the extension manifest. What remains open:
    `Jobs\MirrorPuller` has no built-in host (call `runOnce()` from cron
    or `attach()` to your loop), and `StatsServer` does not start with the
    listener.
-4. **Dead config keys.** `log_format`, `ssh.client_key_path` and
-   `lfs.ssh_enabled` are parsed but read by nothing. Live keys worth
-   knowing: `git.allow_anonymous_read` (default false), `git.max_timeout`
-   (stateless child deadline), `http.max_pack_bytes` (the single
-   request-body cap shared by socket and router), `http.public_url`
-   (LFS hrefs), `http.user_trust_mode` + `http.trusted_proxies` +
-   `http.auth_secret` (proxy identity).
-5. **No TLS termination.** `tls.key_path`/`tls.cert_path` refuse at
-   config load (`config.tls_not_supported`) by design — terminate HTTPS
-   in a reverse proxy.
+4. **Dead config keys.** `log_format`, every `ssh.*` key and
+   `lfs.ssh_enabled` are parsed but read by nothing; `name` reaches only
+   the example script; `http.listen_addr` is parsed but `serve --http`
+   binds from its CLI flags alone; a `db:` block is not even parsed —
+   `Config` has no database concept. The Configuration table above is
+   the authoritative census. Live keys worth knowing:
+   `git.allow_anonymous_read` (default false), `git.max_timeout`
+   (stateless child deadline), `git.listen_addr`/`git.idle_timeout`/
+   `git.max_connections` (daemon bind, idle timer, capacity),
+   `http.max_pack_bytes` (the single request-body cap shared by socket
+   and router), `http.public_url` (LFS hrefs), `http.user_trust_mode` +
+   `http.trusted_proxies` + `http.auth_secret` (header identity),
+   `lfs.enabled`, `jobs.mirror_pull`, `stats.listen_addr`.
+5. **No TLS termination.** `http.tls_key_path`/`http.tls_cert_path`
+   refuse at config load (`config.tls_not_supported`) by design —
+   terminate HTTPS in a reverse proxy.
 6. **`SIGHUP` shuts down instead of reloading** — all three signals share
    one handler.
 7. **Locale coverage of CLI help copy** — the en strings are the reference

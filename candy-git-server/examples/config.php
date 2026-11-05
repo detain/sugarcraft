@@ -32,9 +32,9 @@ echo "\n=== YAML Config File ===\n\n";
 $tmpFile = \sys_get_temp_dir() . '/candy-git-server-test-config.yaml';
 $yaml = <<<'YAML'
 name: "My CandyGitServer"
-log_format: "json"
+log_format: "json"      # parsed, but no shipped code path reads it yet
 
-ssh:
+ssh:                    # parsed for the unwired SSH host; unread today
   listen_addr: ":2222"
   public_url: "ssh://localhost:2222"
   idle_timeout: 300
@@ -44,17 +44,15 @@ git:
   max_connections: 16
 
 http:
-  listen_addr: ":8080"
+  listen_addr: ":8080"  # parsed; serve --http binds from its CLI flags
   public_url: "http://localhost:8080"
-
-db:
-  driver: "sqlite"
-  data_source: "my-serve.db"
 
 lfs:
   enabled: true
-  ssh_enabled: true
+  ssh_enabled: true     # parsed, but no shipped code path reads it yet
 YAML;
+# No db: block — Config has no database concept and would silently
+# ignore one (the README Configuration table is the key census).
 
 \file_put_contents($tmpFile, $yaml);
 
