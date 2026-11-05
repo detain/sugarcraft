@@ -72,6 +72,27 @@ final class NavigationTest extends TestCase
         Navigation::gridIndexToDate(0, 5, 0);
     }
 
+    public function testGridIndexToDateRejectsNegativeYear(): void
+    {
+        // Step 21 (OB): the floor is rejected for negatives too, not just 0 —
+        // there is no year 0 or year -1 grid, and a rolled-over '1 BC' spelling
+        // would otherwise parse back into an AD month silently.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Year must be >= 1, got: -1');
+        Navigation::gridIndexToDate(0, 5, -1);
+    }
+
+    public function testGridIndexToDateAcceptsTheYearOneFloor(): void
+    {
+        // Step 21 (OB): floor legality — January 0001 is the lowest legal grid
+        // month, exactly the boundary VIEW_FLOOR_POS pins view stepping at (the
+        // no-op clamps stay pinned by DatePickerTest's year-one clamp test).
+        // 0001-01-01 is a Monday, so grid index 1 is day one.
+        $date = Navigation::gridIndexToDate(1, 1, 1);
+        $this->assertSame('0001-01-01', $date?->format('Y-m-d'),
+            'the year-one floor must be a legal grid date');
+    }
+
     public function testGridIndexToDateMonth12IsAccepted(): void
     {
         // Boundary: month 12 is valid. Dec 2026 firstDow=2 (Tue), index 2 = Dec 1.
