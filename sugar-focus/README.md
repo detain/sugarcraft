@@ -246,7 +246,8 @@ perceivable (2.4.7 *Focus Visible*).
 | `index(): int` | Focused position into **all registered ids**, or `-1` when empty (`enabledIndex()` for the "k of n" enabled ordinal). |
 | `enabledIndex(): ?int` | Focused region's 0-based ordinal into `enabledIds()`, or `null` when the ring is empty or focus is parked on a disabled region. |
 | `ids(): list<string>` | Registered region ids in traversal order. |
-| `count(): int` / `isEmpty(): bool` | Size helpers; `count($ring)` works too (`Countable`). |
+| `count(): int` | Number of registered regions (`Countable`, so `count($ring)` works too). |
+| `isEmpty(): bool` | Whether the ring has no regions. |
 | `getIterator(): Traversable<int, string>` | `foreach` support — every registered id in traversal order. |
 | `jsonSerialize(): array` | `['ids' => …, 'focused' => …, 'index' => …, 'disabled' => …]` snapshot for `json_encode()`; `restore()` reads it back. |
 
