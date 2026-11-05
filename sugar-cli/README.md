@@ -166,7 +166,9 @@ leaves every other decision to you.
 
 - **No argument parsing, exit codes or output routing.** Every helper
   returns a string; whether it goes to STDOUT or STDERR and what the
-  process exits with is the application's call.
+  process exits with is the application's call. Feed sugar-cli from
+  symfony/console, a `getopt()` loop, or your own argv code — it only
+  ever renders strings.
 - **No interaction machinery.** Line editing and prompts live in
   `sugar-readline`; scripted TUI shells in `candy-scriptui`. This library
   only decorates the text you already decided to print.
