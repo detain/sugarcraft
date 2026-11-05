@@ -350,7 +350,9 @@ and `Mosaic::probe()` resolve capabilities on every call; wrap
 ladder (its capability slot is written only by `Capability::universal()`), and
 plain half-block appears only when the text-availability slot is off itself, so
 the practical floor is the glyph-coverage engine. `Mosaic::diagnose()` returns
-the structured `ProbeReport` behind a decision, and
+the structured `ProbeReport` behind the decision — sugar-colorprofile's
+`SugarCraft\ColorProfile\Probe\ProbeReport`, straight off
+`TerminalProbe::run()` — and
 `Capability::detectSummary()` names the probed slots rather than the chosen
 renderer — a terminal that lands on the symbol tier still reports `HalfBlock`,
 because that tier rides the same text slot.
@@ -360,7 +362,8 @@ because that tier rides the same text slot.
 Every renderer implements `Renderer::delete(string $imageId): string`
 which emits the protocol-specific sequence to remove a previously
 rendered image. The `$imageId` is the numeric image identifier passed
-during rendering (Kitty) or a placeholder for interface compatibility
+during rendering — the interface takes it as a string (`delete('1')`)
+— (Kitty) or a placeholder for interface compatibility
 (iTerm2 Pop ignores it).
 
 | Renderer | Sequence | Notes |
