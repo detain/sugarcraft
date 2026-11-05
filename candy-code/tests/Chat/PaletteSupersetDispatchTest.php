@@ -113,6 +113,21 @@ final class PaletteSupersetDispatchTest extends TestCase
     }
 
     /**
+     * G2-L3-FIX2 (CC-UXD-04 × CCOPS-5): see the comment at the walk site —
+     * promoted /doctor rows must measure the session store from a clean
+     * triple on BOTH legs, or the first leg's WAL checkpoint shrinks the
+     * bytes the second leg reports. The store path itself stays put: the
+     * config-file row of the same doctor table carries the HOME verbatim.
+     */
+    private function freshSessionStore(): void
+    {
+        $db = $this->paletteSandbox . '/home/.candy-code/session.db';
+        foreach (['', '-wal', '-shm'] as $suffix) {
+            @unlink($db . $suffix);
+        }
+    }
+
+    /**
      * @param  array<int, Message>  $rows
      * @return list<string>
      */
@@ -133,7 +148,18 @@ final class PaletteSupersetDispatchTest extends TestCase
             }
             ++$walked;
 
+            // G2-L3-FIX2 (CC-UXD-04 × CCOPS-5): CC-UXD-04 promoted this row to
+            // ACTION, so both legs now EXECUTE /doctor; under CCOPS-5 the run's
+            // table carries live session-store bytes. A previous walked row
+            // opened the same store, so the leg that runs first measures
+            // main+WAL, and its own connection close checkpoints and truncates
+            // the WAL out from under the leg after it — a byte difference in
+            // DISK STATE the prior leg mutated, not a click-vs-Enter or
+            // typed-vs-palette divergence. Hand each leg a clean store triple
+            // at the same path so what is compared is the leg, not the residue.
+            $this->freshSessionStore();
             [$typed] = $this->paletteFixture('/' . $spec->name)->update(new KeyMsg(KeyType::Enter));
+            $this->freshSessionStore();
             [$palette] = $this->paletteFixture()->runPaletteAction($spec->label());
 
             self::assertSame(

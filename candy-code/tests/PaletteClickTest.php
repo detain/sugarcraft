@@ -586,6 +586,12 @@ final class PaletteClickTest extends TestCase
 
             self::assertInstanceOf(Zone::class, $zone, "row {$index} ('{$label}') is not clickable");
 
+            // G2-L3-FIX2: see freshSessionStoreForLeg() — the click leg and
+            // the Enter leg below must each measure the session store from a
+            // clean triple, or the first leg's WAL checkpoint reddens the
+            // parity byte on any row whose answer contains the store bytes.
+            $this->freshSessionStoreForLeg();
+
             [$pressed] = $chat->update($this->press($zone->startCol, $zone->startRow));
             [$clicked, $clickCmd] = $pressed->update($this->release($zone->startCol, $zone->startRow));
 
@@ -594,6 +600,7 @@ final class PaletteClickTest extends TestCase
             $typed = $walkTo($typed, $at, $index);
             $at = $index;
             self::assertSame($index, $typed->palette()?->selectedIndex, "the arrows reached row {$index}");
+            $this->freshSessionStoreForLeg();
             [$entered, $enterCmd] = $typed->update(new KeyMsg(KeyType::Enter));
 
             self::assertSame(
@@ -622,6 +629,7 @@ final class PaletteClickTest extends TestCase
                     $idle = $walkTo($idle, $idleAt, $index);
                     $idleAt = $index;
                     self::assertSame($index, $idle->palette()?->selectedIndex, "the idle walker's arrows reached row {$index}");
+                    $this->freshSessionStoreForLeg();
                     [$idleAnswered] = $idle->update(new KeyMsg(KeyType::Enter));
                     self::assertGreaterThan(
                         count($idle->history),
@@ -689,6 +697,30 @@ final class PaletteClickTest extends TestCase
             'mru' => $chat->paletteMru(),
             'cmd' => $cmd !== null,
         ];
+    }
+
+    /**
+     * G2-L3-FIX2 (CC-UXD-04 × CCOPS-5, deterministic at the 'Run the install
+     * checks' row): CC-UXD-04 promoted /doctor from a draft-only prefill row
+     * to an ACTION row, so both halves of the parity sweep now EXECUTE it —
+     * and CCOPS-5 (master d6c043355) made the doctor table's session-store
+     * row carry the store triple's live bytes. Every earlier row in the sweep
+     * that opens the store leaves WAL frames behind: the leg that runs first
+     * measures main+WAL, its own connection close checkpoints and truncates
+     * the WAL, and the leg after it measures smaller. Identical production
+     * code, different disk state at measure time — a fixture leak, not a
+     * click-vs-Enter defect (both routes funnel into the same
+     * Chat::handleDoctorCommand). Deleting the triple before each COMPARED
+     * leg makes each measure a fresh deterministic create; the HOME path
+     * itself must NOT change, because the config-file row in the same table
+     * carries it verbatim.
+     */
+    private function freshSessionStoreForLeg(): void
+    {
+        $db = $this->sandbox . '/home/.candy-code/session.db';
+        foreach (['', '-wal', '-shm'] as $suffix) {
+            @unlink($db . $suffix);
+        }
     }
 
     // =========================================================================
