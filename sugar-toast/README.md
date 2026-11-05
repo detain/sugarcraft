@@ -10,9 +10,6 @@
 
 # SugarToast
 
-
-
-
 sugar-toast — a floating alert notification component for terminal UIs, for PHP 8.3+. Alerts float to the top of your TUI like bubbles in soda.
 
 ## Features
@@ -33,17 +30,11 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 
 ## Install
 
-
-
-
 ```bash
 composer require sugarcraft/sugar-toast
 ```
 
 ## Quick Start
-
-
-
 
 ```php
 use SugarCraft\Toast\{Position, Toast, ToastType};
@@ -66,10 +57,8 @@ off), `duration` `null` (alerts persist until dismissed — persistence is the
 explicit `Alert::$persistent` sentinel, not a magic `null` expiry),
 `allowEscToClose` true, `maxConcurrent` `null` (unbounded), overflow
 `DropOldest`, history limit 100, symbol set `Unicode`.
+
 ## Alert Types
-
-
-
 
 ```php
 ToastType::Error
@@ -87,9 +76,6 @@ throws `InvalidArgumentException`.
 
 ## Positions
 
-
-
-
 ```php
 Position::TopLeft
 Position::TopCenter
@@ -104,9 +90,6 @@ Position::BottomRight
 
 ## Overflow & Concurrency
 
-
-
-
 ```php
 Overflow::DropOldest  // remove oldest alert to make room (default)
 Overflow::DropNewest  // discard the new alert instead of enqueueing
@@ -119,8 +102,6 @@ Control the maximum number of concurrent alerts with `withMaxConcurrent(int|null
 - Pass `null` for unlimited (default) — expired alerts still leave the queue on
   the next write, but persistent (non-expiring) alerts accumulate until the
   host calls `clear()` or `dismiss()`
-
-
 
 When the cap is reached, the configured `Overflow` strategy determines behaviour.
 
@@ -155,9 +136,6 @@ PROGRESS), so hosts with accessibility-critical stacks should cap
 
 ## Persistent Alerts
 
-
-
-
 By default, alerts inherit `withDuration()` for auto-dismiss timing. A `null`
 `$expiresAt` means "use the default", not "never expire" — persistence is its
 own explicit sentinel on `Alert`. To get a persistent alert that never expires
@@ -187,10 +165,7 @@ them down with `dismiss()` (moves live alerts into the history log and stops
 rendering until you `clear()`) or `clear()` (drops the queue without
 recording). While dismissed, `alert()` throws; call `clear()` first.
 
-## Loop integration
-
-
-
+## Loop Integration
 
 Expired alerts leave the queue on every write (`alert()`/`progressToast()`/
 `push()`), and `pruneExpired()` removes them explicitly — but a quiet queue with
@@ -213,35 +188,26 @@ if ($delay !== null) {
 ```
 
 - **`nextExpiry(): ?float`** — the soonest expiry instant (seconds since epoch)
-
-
-
   among queued alerts that auto-dismiss, or `null` if none expire. May be in the
   past when an alert is already due.
 
 - **`secondsUntilNextExpiry(): ?float`** — the same as a delay from now, clamped
-
-
-
   to `>= 0.0` (an already-due alert yields `0.0`), or `null` if nothing expires.
 
 ## Internationalization
-
-
-
 
 User-facing strings are internationalized via `SugarCraft\Toast\Lang::t()`.
 All translatable strings live in `lang/en.php` under the `'toast'` namespace.
 
 **Available keys** (`lang/en.php`):
 
-| Key              | Default string                    | Parameters   |
-|------------------|-----------------------------------|--------------|
+| Key               | Default string                    | Parameters   |
+|-------------------|-----------------------------------|--------------|
 | `type.info`       | `Info`                            | —            |
 | `type.warning`    | `Warning`                         | —            |
 | `type.error`      | `Error`                           | —            |
 | `type.success`    | `Success`                         | —            |
-| `dismiss`        | `Press any key to dismiss`        | —            |
+| `dismiss`         | `Press any key to dismiss`        | —            |
 | `count`           | `{count} notification(s)`         | `{count}`    |
 
 > **Note:** The `dismiss` and `count` keys are provided as convenience strings
@@ -280,9 +246,6 @@ $counter = Lang::t('count', ['count' => $n]);
 
 ## Progress Toasts
 
-
-
-
 Add a progress bar beneath the message body using `progressToast()`. Pass a
 stable `id` and re-queuing with the same id **updates the box in place** —
 without it, every tick appends another box, and on the default unlimited
@@ -306,9 +269,6 @@ single alert by identity. `progressToast()` accepts the same `$expiresAt`
 override as `alert()`. The progress value (0.0–1.0) is clamped automatically when finite; `NAN`/`INF` are refused with an `InvalidArgumentException` rather than rendering a lying bar.
 
 ## Action Buttons
-
-
-
 
 Attach clickable buttons to an alert. Either build an `Alert` and enqueue it
 with `push()`, or pass `actions:` to `alert()` directly:
@@ -385,9 +345,6 @@ $toast = $toast->push($alert);
 
 ## History Log
 
-
-
-
 `Toast` maintains an immutable history of every DISMISSED and every
 overflow-EVICTED alert via `HistoryLog`:
 
@@ -416,9 +373,6 @@ by default, oldest-first eviction; `withHistoryLimit(?int)` adjusts it
 already over the new cap survive until the next push evicts them.
 
 ## API Summary
-
-
-
 
 | Method | Description |
 |--------|-------------|
@@ -495,16 +449,10 @@ already over the new cap survive until the next push evicts them.
 ## Shared foundations
 
 - **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — alert queue
-
-
-
   composited via `Buffer`; each toast is a sub-`Buffer` composited into the
   screen `Buffer` for per-cell positioning and overlap resolution.
 
 - **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — golden-file
-
-
-
   snapshot tests via `assertGoldenAnsi()` pin canonical queue layouts.
 
 ## Security & trust boundary
@@ -547,9 +495,6 @@ The full fleet-wide contract lives in
 — §1 "the terminal is a sink".
 
 ## License
-
-
-
 
 MIT
 
