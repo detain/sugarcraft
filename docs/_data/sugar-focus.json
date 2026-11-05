@@ -1,7 +1,7 @@
 {
-    "title": "SugarCraft — SugarFocus",
+    "title": "SugarFocus — SugarCraft",
     "description": "SugarFocus: Dependency-free focus ring — an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal for full-window TUI layouts.",
-    "ogTitle": "SugarCraft — SugarFocus",
+    "ogTitle": "SugarFocus — SugarCraft",
     "ogDescription": "Focus-ring state machine for full-window TUIs: register each focusable region, map Tab to next() and Shift-Tab to previous(), and accent-border the region current() returns only where isEnabled() agrees. Immutable, dependency-free.",
     "emoji": "",
     "displayName": "SugarFocus",
