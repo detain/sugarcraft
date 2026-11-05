@@ -433,8 +433,10 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     /**
      * Pure query: the id focus would land on stepping forward from $id,
      * without moving focus. Mirrors next() including its no-op shape — an id
-     * with nowhere enabled to go answers with itself (even when focus parked
-     * on a disabled region). null when the id is not registered.
+     * with nowhere enabled to go answers with itself: when every region is
+     * disabled, or when $id is the sole enabled survivor. A parked, disabled
+     * query id with any enabled survivor moves to the nearest one in that
+     * direction. null when the id is not registered.
      */
     public function nextOf(string $id): ?string
     {
