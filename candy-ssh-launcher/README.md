@@ -48,35 +48,37 @@ composer require sugarcraft/candy-ssh-launcher
 
 # global install — goes to Composer's global bin dir
 composer global require sugarcraft/candy-ssh-launcher
-~/.composer/vendor/bin/candy-ssh-launcher
+~/.config/composer/vendor/bin/candy-ssh-launcher   # Composer >= 2.1 default
+~/.composer/vendor/bin/candy-ssh-launcher           # legacy location; `composer config --global home` prints yours
 ```
 
-Or add this repo's `candy-ssh-launcher/bin/` to your `$PATH` for a checkout.
+Or add this repo's `candy-ssh-launcher/bin/` to your `$PATH` for a checkout. From a checkout, `examples/sample-wishlist.yml` is a ready-made endpoint list — point the launcher at it with `--config examples/sample-wishlist.yml`.
 
 ## Usage
 
 ```
-candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help]
+candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version]
 ```
 
 | Argument | Meaning |
 |----------|---------|
 | `--config <path>` | Read this config file and skip the search. Accepts `--config <path>` and `--config=<path>`; a missing value is refused. |
-| `--ssh <path>` | ssh binary to exec (default `/usr/bin/ssh`). Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. |
-| `--list` | Print the resolved endpoints (`name`, `host:port`, `user`) to stdout and exit `0` — no terminal, no ssh, no picker. |
+| `--ssh <path>` | ssh binary to exec (default `/usr/bin/ssh`). Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. |
+| `--list` | Print the resolved endpoints to stdout as TAB-joined `name`, `host:port`, `user` columns (an unset user prints as a literal `-`) and exit `0` — no terminal, no ssh, no picker, and no `--ssh` executability check. |
 | `-h`, `--help` | Print the usage line and exit `0`. |
+| `-v`, `--version` | Print `candy-ssh-launcher <version>` and exit `0` — reads no config, touches no terminal. |
 | `--` | End of options — remaining arguments are ignored (there are no positional arguments). |
 
-Unrecognized flags and options given without their value exit `2` and name the offending argument.
+Unrecognized flags and options given without their value exit `2` and name the offending argument. Flags that take no value ignore a glued `=value` portion: `--list=x` behaves as `--list`, and `-h=junk` prints help.
 
 ### Exit codes
 
 | Code | When |
 |------|------|
-| `0` | `--help` / `-h` or `--list` succeeded |
-| `1` | No config found, config not found/unreadable/invalid, a config with no endpoints, or the `--ssh` path is not an executable file |
+| `0` | `--help` / `-h` or `--version` / `-v` printed, or `--list` succeeded |
+| `1` | No config found, config not found/unreadable/invalid, a config with no endpoints **on the picker path** (`--list` on such a config prints nothing and exits `0`), the composer autoload being missing, or — checked except when `--list` is given — the `--ssh` path not being an executable file |
 | `2` | Unknown flag, or `--config`/`--ssh` given without a value |
-| `130` | Quit from the picker (Esc / Ctrl-C) |
+| `130` | Quit from the picker (Esc / Ctrl-C; stdin EOF reads as cancel too — the shape of a container started without `-i`) |
 
 ### Config discovery
 
