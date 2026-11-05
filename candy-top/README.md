@@ -683,7 +683,7 @@ These are deliberate deviations and gaps; the accumulated notes live in `CALIBER
 - No CPU package watts (`show_cpu_watts` has no RAPL reader).
 - No ZFS pool IO.
 - No MAC-address fallback for an interface without an IP.
-- Accepted but not acted on: `terminal_sync` (the key never gates anything — synchronized output comes from the foundation renderer, which wraps every frame in DEC 2026 begin/end markers always-on; toggling the key changes nothing), `log_level` (no log file), `disk_free_priv` (free space is always the unprivileged figure), `keep_dead_proc_usage`, `proc_info_smaps`, and the PCIe keys `nvml_measure_pcie_speeds` and `rsmi_measure_pcie_speeds`. The options menu marks these keys "not used yet".
+- Accepted but not acted on: `terminal_sync` (the key never gates anything — synchronized output comes from the foundation renderer, which wraps every frame in DEC 2026 begin/end markers always-on; toggling the key changes nothing), `log_level` (no log file), `disk_free_priv` (free space is always the unprivileged figure), `keep_dead_proc_usage`, `proc_info_smaps`, and the PCIe keys `nvml_measure_pcie_speeds` and `rsmi_measure_pcie_speeds`. The options menu marks these keys "not used yet". Setting one changes nothing at all — the value is stored and shown back, but no code reads it, so the menu label is the only sign.
 - `freq_mode`, `cpu_sensor` and `zfs_arc_cached` take effect after a restart; the menu says so.
 
 **Behaves differently**
