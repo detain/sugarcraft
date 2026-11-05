@@ -274,6 +274,48 @@ final class GameTest extends TestCase
         }
     }
 
+    public function testQuarantineKeepsEveryGenerationOfARePoisonedSave(): void
+    {
+        // n6 (step 14): the old bare rename() silently REPLACED a same-second
+        // `.corrupt-<ts>` artifact, so the forensic copies the readScores
+        // docblock promises were destroyed by each fresh poisoning within the
+        // same second. The link()-based quarantine refuses to overwrite: five
+        // same-second poisonings must keep five distinct artifacts, each with
+        // its own generation's bytes, and the original path must be gone.
+        $tmp = sys_get_temp_dir() . '/candy-flappy-quarantine-repeat-' . getmypid();
+        mkdir($tmp . '/.candy-flappy', 0755, true);
+        $target = $tmp . '/.candy-flappy/scores.json';
+        $quarantine = new \ReflectionMethod(Game::class, 'quarantine');
+        for ($generation = 1; $generation <= 5; $generation++) {
+            file_put_contents($target, "poison-generation-{$generation}");
+            $quarantine->invoke(null, $target);
+            $this->assertFileDoesNotExist($target, "generation {$generation} must be moved aside");
+        }
+        $artifacts = array_values(array_filter(
+            scandir($tmp . '/.candy-flappy'),
+            static fn(string $f): bool => str_starts_with($f, 'scores.json.corrupt-'),
+        ));
+        $this->assertCount(5, $artifacts, 'no quarantine generation may replace an earlier same-second one');
+        $this->assertCount(5, array_unique($artifacts), 'artifact names must be distinct');
+        $bodies = array_map(
+            static fn(string $f): string => (string) file_get_contents($tmp . '/.candy-flappy/' . $f),
+            $artifacts,
+        );
+        sort($bodies);
+        $this->assertSame(
+            ['poison-generation-1', 'poison-generation-2', 'poison-generation-3',
+             'poison-generation-4', 'poison-generation-5'],
+            $bodies,
+            'every generation keeps its own bytes',
+        );
+        array_map('unlink', array_map(
+            static fn(string $f): string => $tmp . '/.candy-flappy/' . $f,
+            $artifacts,
+        ));
+        @rmdir($tmp . '/.candy-flappy');
+        @rmdir($tmp);
+    }
+
     public function testForgedAndOversizedScoresAreClampedOnRead(): void
     {
         // m7/m8: read is the legality gate, not just is_int. Negatives,

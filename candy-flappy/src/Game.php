@@ -204,12 +204,39 @@ final class Game implements Model
         return $scores;
     }
 
-    /** Best-effort rename of a poisoned save aside; if even that fails the
-     *  file is simply left in place and ignored (launch still must not
-     *  break — every later read goes through the same soft gate). */
+    /**
+     * Best-effort move of a poisoned save aside; if that fails the file is
+     * simply left in place and ignored (launch still must not break — every
+     * later read goes through the same soft gate).
+     *
+     * n6 (step 14): a bare rename() silently REPLACES a same-second
+     * `.corrupt-<ts>` artifact, so a save that keeps getting re-poisoned
+     * between launches could destroy the older forensic copies the readScores
+     * docblock promises to keep. The cure refuses to overwrite: link() is an
+     * atomic create-new-name (it fails with EEXIST if the target already
+     * exists), then unlink moves the original out. A collision walks a
+     * bounded `-%06d` counter so every quarantine generation survives under
+     * its own name; any non-collision failure (filesystem without hard links,
+     * vanished source) gets the plain rename fallback — same fail-soft
+     * posture as before, never an exception.
+     */
     private static function quarantine(string $path): void
     {
-        @rename($path, $path . '.corrupt-' . date('Ymd-His'));
+        $base = $path . '.corrupt-' . date('Ymd-His');
+        $target = $base;
+        for ($attempt = 1; $attempt <= 100; $attempt++) {
+            if (@link($path, $target) === true) {
+                @unlink($path);
+                return;
+            }
+            if (is_file($target) === false) {
+                @rename($path, $target);
+                return;
+            }
+            $target = sprintf('%s-%06d', $base, $attempt);
+        }
+        // 100 artifacts sharing one timestamp second is pathological; leave
+        // the file in place (ignored by every read) rather than loop harder.
     }
 
     public static function start(?\Closure $rand = null, ?string $configDir = null): self
