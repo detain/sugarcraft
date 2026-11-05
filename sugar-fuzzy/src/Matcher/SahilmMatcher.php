@@ -13,7 +13,8 @@ use SugarCraft\Fuzzy\SahilmScoring;
  * Sahilm/fuzzy-style fuzzy matcher.
  *
  * Ports the Go fuzzy matching algorithm used by charmbracelet/gum filter.
- * Features: separator bonus, camelCase bonus, exact-prefix bonus, consecutive match bonus.
+ * Features: separator bonus, camelCase bonus, first-character bonus, lower-case
+ * bonus, consecutive match bonus.
  *
  * Greedy first-occurrence matching — advances on the first occurrence of each
  * query char and never backtracks; a scattered early alignment is preferred
