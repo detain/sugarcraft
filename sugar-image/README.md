@@ -11,7 +11,7 @@ available protocol:
 - **Half-block Unicode** (▀ + 24-bit fg/bg) — text fallback where cell
   geometry is honored (the `auto()` floor is the symbol tier)
 - **Quarter-block Unicode** (░▒▓█ 2×2) — higher fidelity than half-block
-- **Symbols** (braille/sextant/octant/block glyph cells) — coverage-class rendering chosen by Hamming-distance candidate search (the chafa symbol engine). `SymbolMap::withSelectors()` applies chafa's `--symbols=` tag grammar over the narrow glyph corpus (ASCII/Latin/misc/legacy tables, the U+1FB80–U+1FB8B eighth-block tier, braille, sextants, octants) — **1,251 glyphs effective** under `all`: the corpus parses to 1,260 entries, but nine misc-narrow glyphs carry chafa's AMBIGUOUS tag (they have emoji variants) and are BAD-vetoed by every selector that does not name ambiguous/ugly/bad, exactly as the C build does (derivation: `Symbol/SymbolSetTables.php`). The default 676-glyph corpus is byte-frozen.
+- **Symbols** (braille/sextant/octant/block glyph cells) — each cell takes the Unicode glyph that looks closest to the image, the lib's floor tier for sighted readers on any Unicode-capable terminal within its font's glyph coverage; the corpus arithmetic lives in the Text-tier renderers section below.
 
 ```sh
 composer require sugarcraft/sugar-image
@@ -458,8 +458,16 @@ text, so they reach any Unicode-capable terminal for sighted readers:
   Hamming-distance candidate search over a symbol corpus.
   `Mosaic::symbols(canvas:, workFactor:, symbols:)` picks the colour
   canvas (`CanvasMode`), the candidate-budget work factor, and a chafa
-  `--symbols=` selector expression over the wider corpus (1,251 effective
-  glyphs under `all`; default corpus byte-frozen at 676). The double-width
+  `--symbols=` selector expression over the wider corpus — the same tag
+  grammar `SymbolMap::withSelectors()` applies directly. The corpus
+  arithmetic: the narrow tables (ASCII/Latin/misc/legacy, the
+  U+1FB80–U+1FB8B eighth-block tier, braille, sextants, octants) parse to
+  1,260 entries, but nine misc-narrow glyphs carry chafa's AMBIGUOUS tag
+  (they have emoji variants) and are BAD-vetoed by every selector that
+  does not name ambiguous/ugly/bad, exactly as the C build does —
+  **1,251 glyphs effective** under `all` (derivation:
+  `Symbol/SymbolSetTables.php`). The default 676-glyph corpus is
+  byte-frozen. The double-width
   wide-glyph engine plus the opt-in kana tier ride
   `SymbolMap::withSelectors('wide')` and the renderer's lookback pass.
 
