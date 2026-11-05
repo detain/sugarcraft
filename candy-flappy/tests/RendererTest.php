@@ -6,6 +6,7 @@ namespace SugarCraft\Flappy\Tests;
 
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Flappy\Game;
 use SugarCraft\Flappy\Renderer;
 use PHPUnit\Framework\TestCase;
@@ -123,6 +124,68 @@ final class RendererTest extends TestCase
         $out = Renderer::render($g);
         $this->assertStringNotContainsString('NEW HIGH SCORE', $out);
         $this->assertStringContainsString('best:', $out);
+    }
+
+    /**
+     * m6: pickHint's budget must equal the assembled status row. The old live
+     * path under-counted by the four cells bestLine trails, so the full hint
+     * was chosen for rows that only fit after fit() truncated them — the
+     * giveaway is a status row containing NEITHER complete hint. Sweeps both
+     * live postures across the band where budget and truth used to diverge.
+     */
+    public function testTheLiveStatusHintIsNeverMidRowTruncated(): void
+    {
+        $cases = [
+            [true, 'space / ↑ / w  flap   ·   q  quit', 'space flap · q quit'],
+            [false, 'press space / ↑ / w  to start   ·   q  quit', 'space to start · q quit'],
+        ];
+        foreach ($cases as [$started, $full, $short]) {
+            for ($cols = Game::MIN_COLS; $cols <= Game::MIN_COLS + 19; $cols++) {
+                $g = new Game(
+                    bird: $this->game()->bird,
+                    pipes: [],
+                    score: 12345,
+                    crashed: false,
+                    started: $started,
+                    highScores: [678],
+                    frameCols: $cols,
+                );
+                $rows = explode("\n", Renderer::render($g));
+                $status = $rows[count($rows) - 2];
+                $this->assertLessThanOrEqual($cols, Width::of($status), "live status overran {$cols} cols (started=" . var_export($started, true) . ')');
+                $plain = (string) preg_replace('/\e\[[0-9;]*m/', '', $status);
+                $this->assertTrue(
+                    str_contains($plain, $full) || str_contains($plain, $short),
+                    "live hint truncated mid-word at {$cols} cols (started=" . var_export($started, true) . ')',
+                );
+            }
+        }
+    }
+
+    /**
+     * m6 companion: the crash path's budget already carried its three-cell
+     * tail and matched the row exactly. fit() is SKIPPED from MIN_COLS+20 up,
+     * so this band has no truncation safety net — pin the exact fit at the
+     * width where the record banner's row (measured 83 cells) just clears it.
+     */
+    public function testTheCrashRecordRowFitsWhereFitIsSkipped(): void
+    {
+        for ($cols = 83; $cols <= 86; $cols++) {
+            $g = new Game(
+                bird: $this->game()->bird,
+                pipes: [],
+                score: 500,
+                crashed: true,
+                highScores: [500],
+                newRecord: true,
+                frameCols: $cols,
+            );
+            $rows = explode("\n", Renderer::render($g));
+            $status = $rows[count($rows) - 2];
+            $this->assertLessThanOrEqual($cols, Width::of($status), "crash record row overran {$cols} cols");
+            $plain = (string) preg_replace('/\e\[[0-9;]*m/', '', $status);
+            $this->assertStringContainsString('💥 splat — press r to try again, q to quit', $plain);
+        }
     }
 
     public function testTheCellLoopCarriesNoStyleConstruction(): void

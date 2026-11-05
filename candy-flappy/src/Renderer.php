@@ -149,19 +149,25 @@ final class Renderer
             $bestLine = Style::new()->foreground(Color::hex(self::HINT))
                 ->render($bestPlain) . '    ';
         }
+        // m6: the assembled live row is ' ' + score + bestLine + '    ' + hint,
+        // and bestLine itself already trails four cells of padding — so the
+        // budget's prefix must carry them, or pickHint under-counts by 4 and
+        // fit() silently truncates the status row. Empty best contributes no
+        // cells, matching the assembly exactly (no over-conservative collapse).
+        $prefixCells = $bestPlain === '' ? $scoreText : $scoreText . $bestPlain . '    ';
         // M10: an unstarted board advertises the start key instead of the
         // flap cadence hint; the world is visibly frozen behind it.
         if ($g->started === false) {
             $hintPlain = self::pickHint(
                 $g,
-                $scoreText . $bestPlain,
+                $prefixCells,
                 'press space / ↑ / w  to start   ·   q  quit',
                 'space to start · q quit',
             );
         } else {
             $hintPlain = self::pickHint(
                 $g,
-                $scoreText . $bestPlain,
+                $prefixCells,
                 'space / ↑ / w  flap   ·   q  quit',
                 'space flap · q quit',
             );
@@ -262,7 +268,12 @@ final class Renderer
             . "Resize the window and the game resumes right here.\n";
     }
 
-    /** Choose the hint that keeps ' ' + $prefixPlain + '    ' + hint inside the frame. */
+    /**
+     * Choose the hint that keeps ' ' + $prefixPlain + '    ' + hint inside the
+     * frame. Contract (m6): $prefixPlain carries EVERY visible cell between the
+     * leading space and the 4-space joiner — trailing padding on the score /
+     * best segment included — so the budget equals the assembled row exactly.
+     */
     private static function pickHint(Game $g, string $prefixPlain, string $hintFull, string $hintShort): string
     {
         if (Width::of(' ' . $prefixPlain) + 4 + Width::of($hintFull) <= $g->frameCols) {
