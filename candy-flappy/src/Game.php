@@ -19,13 +19,13 @@ use SugarCraft\Flappy\PipeGenerator;
 /**
  * Flappy-Bird as a SugarCraft Model. The world is `width × height`
  * cells; the bird sits at column 8 and the world scrolls past it
- * at a fixed cadence. Pipes spawn on the right edge at intervals
- * controlled by `pipeSpacing` and slide left one column per tick.
+ * at a fixed cadence. Pipes spawn on the right edge every
+ * `Game::PIPE_EVERY` ticks and slide left one column per tick.
  *
  * Keys: space / ⏎ / w / ↑ — flap, which also starts the run.  q / esc /
- * Ctrl+C — quit.  r — restart at any moment (README's "fresh board mid-flight
- * too" is the spec; M19).  Ctrl+C is the only chord action (m1, review round
- * 2): every other Ctrl-combination is inert.
+ * Ctrl+C — quit.  r — restart at any moment, after a crash or mid-flight,
+ * landing on the ready card (M19).  Ctrl+C is the only chord action (m1,
+ * review round 2): every other Ctrl-combination is inert.
  *
  * Playability (M10/M18, lib-reviews-1102): the board opens in a READY phase —
  * the bird hovers at spawn and the world does not scroll until the first
@@ -172,6 +172,13 @@ final class Game implements Model
         if (is_file($path) === false) {
             return [];
         }
+        // n7 (accepted, deliberate): the filesize-then-read pair is a TOCTOU
+        // window — a local writer could grow the file past the cap between
+        // the probe and the read. It is reachable only with write access to
+        // the user's OWN config dir (0700/0600 territory), and the parse
+        // stays bounded anyway: AtomicJsonFile::read() decodes through
+        // Json::decodeArray fail-loud, and the envelope cap below is the
+        // ordinary-size guard, not a security boundary. Accepted as-is.
         $size = @filesize($path);
         if ($size === false || $size > self::MAX_SCORE_FILE_BYTES) {
             self::quarantine($path);

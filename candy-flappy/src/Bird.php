@@ -22,9 +22,9 @@ use SugarCraft\Spring\Vector;
 final class Bird
 {
     // Tuned for an 18-row playfield at 30 ticks/sec: a free fall from the
-    // mid-screen spawn takes ~0.9s (not the old ~0.5s face-plant), and a
-    // single flap lifts ~3 cells over ~0.55s, so the bird floats and is
-    // actually controllable instead of dropping like a stone.
+    // mid-screen spawn takes ~1.0s (t = sqrt(2·9/18); not the old ~0.5s
+    // face-plant), and a single flap lifts ~3 cells over ~0.55s, so the bird
+    // floats and is actually controllable instead of dropping like a stone.
     public const FLAP_KICK     = -10.0; // cells/sec upward
     public const GRAVITY       = 18.0;  // cells/sec²
     public const TICKS_PER_SEC = 30;
