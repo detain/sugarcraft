@@ -143,6 +143,8 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 
 Footnotes: `REP` and `ECH` are not universally implemented. The gate above is pure byte arithmetic — `RepeatGate` answers `false` on ties, so runs that could go either way stay literal (plain glyphs survive every terminal; REP is an extra capability assumption). `DiffEncoder::encode()` carries no opt-out flag for the escape sequences; on a terminal that mishandles them, `toAnsi()` is the conservative full-repaint fallback (see [Degraded terminals & non-visual output](#degraded-terminals--non-visual-output)).
 
+**The `SugarCraft\CellBuffer\Diff\` machinery** — besides the op types in the table and the `DiffOp` base, four public classes carry the pipeline: `DiffEncoder` is the byte writer (op list → ANSI stream, absolute-CUP prologue); `DiffOptimiser` runs at the end of every `Buffer::diff()` and shapes the op list (style last-wins, adjacent same-state cell runs coalesced); `SgrEmitter` turns a `Style` into SGR parameter codes, preferring palette-slot identity over the RGB twin — the emission preference the Style section above relies on; `RepeatGate` is the stateless cost policy answering `worth(count, runeBytes)` for every candidate repeat.
+
 **Worked example**
 
 Two 5×2 buffers, before (all blanks) and after (styled 'A' at col 0, bold 'BBB' at col 1):
