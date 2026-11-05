@@ -25,9 +25,10 @@ namespace SugarCraft\Diff\Reader;
  * A row before the first hunk header — and any file header, which is how a
  * second file starts inside a multi-file diff — resets the walk, otherwise
  * the leading `-`/`+` of a header would count as an edit and desynchronise
- * everything below it. File headers recognised: `diff ` (any flavour — git's
- * `diff --git ` and plain GNU's `diff -u `), `index `, and out-of-hunk
- * `--- `/`+++ `.
+ * everything below it. File headers recognised: `diff ` (git's
+ * `diff --git ` and recursive GNU `diff -ru ` output — a plain single-pair
+ * `diff -u` prints no such line, so those files are keyed off the `--- `/
+ * `+++ ` pair), `index `, and out-of-hunk `--- `/`+++ `.
  *
  * `--- `/`+++ ` are ambiguous — they are also exactly what a deleted
  * `-- users table` (SQL/Lua/Haskell line comment) or an added `++ i` row
@@ -43,11 +44,12 @@ namespace SugarCraft\Diff\Reader;
  * context.
  *
  * A hunk claiming to start past {@see MAX_LINE_NUMBER_DIGITS} is recognised
- * but left unnumbered: `(int)` would clamp such a literal to PHP_INT_MAX,
- * the first `++` would promote the counter to float, and any later
- * formatting of the number would die downstream. Declining beats printing a
- * wrong number, and stopping the walk beats bleeding the previous hunk's
- * counters through. The cap gates the two START fields only; the declared
+ * but left unnumbered. The cap is deliberately conservative: on 64-bit PHP a
+ * 10-to-18-digit literal casts exactly and `(int)` only saturates to
+ * PHP_INT_MAX at 19 digits — and a saturated counter then promotes to float
+ * at the first `++` and dies downstream in any later formatting. Declining
+ * beats printing a number the walk cannot vouch for, and stopping the walk
+ * beats bleeding the previous hunk's counters through. The cap gates the two START fields only; the declared
  * COUNTS are safe without it because they are decremented toward zero and
  * never incremented, so even a clamped PHP_INT_MAX budget can only mean
  * "open until the next header" — it cannot print a number.
@@ -244,6 +246,9 @@ final class UnifiedScan
      * them, because every in-hunk row carries a marker column first.
      * `--- `/`+++ ` are not: inside an open hunk they are content
      * ({@see UnifiedScan} class docblock); outside one they are headers.
+     * That is a deliberate asymmetry: an unmarked `diff `/`index ` row seen
+     * mid-hunk means the stream lost its markers, and re-arming the walk
+     * there beats consuming the next file's header as hunk content.
      */
     private static function isFileHeader(string $line, bool $inHunk): bool
     {
