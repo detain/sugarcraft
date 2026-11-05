@@ -261,7 +261,7 @@
     "web.composer.queue_count": "{n} queued",
     "web.composer.queue_pos": "queued {position}",
     "web.composer.queue_reload": "reload",
-    "web.composer.queue_reload_title": "Re-read the queue from the server (WEB-1a)",
+    "web.composer.queue_reload_title": "Re-read the queue from the server",
     "web.composer.queue_remove": "remove",
     "web.composer.queue_remove_aria": "Remove queued prompt {position}",
     "web.composer.quick_add": "Add (Enter)",

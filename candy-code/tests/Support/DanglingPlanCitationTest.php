@@ -218,14 +218,15 @@ final class DanglingPlanCitationTest extends TestCase
      * refuses to accuse a brace-delimited codepoint (the private-use-area
      * regex `"\x{E000}-\x{F8FF}"` is protocol vocabulary, not a campaign).
      *
-     * THE ONE EXEMPTION IS SELF-RETIRING. `web.composer.queue_reload_title`
-     * in lang/en.php still carries its `(WEB-1a)` tail because the value
-     * mirrors byte-exactly into the web package's generated English strings
-     * file, which lives in a lane this census cannot regen. The exemption is
-     * not a licence: it is only admitted while that literal still contains
-     * the token, so the day the web lane strips it the row itself goes red
-     * and the census re-arms. An exemption that cannot outlive its reason
-     * cannot rot into a hole.
+     * THE ONE EXEMPTION THAT EVER EXISTED WAS SELF-RETIRING, AND IT
+     * RETIRED. `web.composer.queue_reload_title` in lang/en.php carried a
+     * `(WEB-1a)` tail only while the web package's generated English strings
+     * mirror needed byte-exactness this census cannot regen; the 2026-11
+     * docs-cleanup web lane stripped the tail, regenerated the mirror and
+     * its dist, and deleted the row in the same commit. The roster is EMPTY
+     * now — a row re-enters freely, for exactly as long as a token stands in
+     * a mirrored value. An exemption that cannot outlive its reason cannot
+     * rot into a hole.
      */
     public function testNoShippedWireStringCarriesACampaignToken(): void
     {
@@ -296,12 +297,7 @@ final class DanglingPlanCitationTest extends TestCase
      * Deliberately narrow — a row buys silence for exactly one key in exactly
      * one file, and the check above voids the licence when the reason dies.
      */
-    private const WIRE_TOKEN_SEAMS = [
-        // The value mirrors byte-exactly into candy-code-web's generated
-        // strings file; flipping it here without regenerating that mirror
-        // (and its dist) breaks the web lane's own drift guard.
-        'lang/en.php' => ['web.composer.queue_reload_title' => '(WEB-1a)'],
-    ];
+    private const WIRE_TOKEN_SEAMS = [];
 
     /**
      * @return list<string> every PHP file under src/Protocol, absolute

@@ -1,15 +1,15 @@
 {
-  "_i18n-CYP-zh45.js": {
-    "file": "assets/i18n-CYP-zh45.js",
+  "_i18n-yOeOGNMk.js": {
+    "file": "assets/i18n-yOeOGNMk.js",
     "name": "i18n"
   },
   "index.html": {
-    "file": "assets/index-BzlGz2Pk.js",
+    "file": "assets/index-DxjSBPtA.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_i18n-CYP-zh45.js"
+      "_i18n-yOeOGNMk.js"
     ],
     "dynamicImports": [
       "index.html"
@@ -24,7 +24,7 @@
     "src": "src-web/sw.ts",
     "isEntry": true,
     "imports": [
-      "_i18n-CYP-zh45.js"
+      "_i18n-yOeOGNMk.js"
     ]
   }
 }
