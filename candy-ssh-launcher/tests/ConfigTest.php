@@ -290,4 +290,29 @@ YAML;
         $this->assertSame(['/tmp/key'], $endpoints[0]->identityFiles);
         $this->assertSame(['ServerAliveInterval=30'], $endpoints[0]->options);
     }
+
+    public function testYamlCommentStrippingIsQuoteAware(): void
+    {
+        // F-18 (Step 16): a '#' inside quotes is data. The old blind strip
+        // cut `description: "hotfix #1"` mid-value and mangled option
+        // commands; unquoted whitespace-hash comments keep working.
+        $raw = <<<'YAML'
+- name: prod
+  host: p.test
+  description: "hotfix #1"
+- name: web # tag
+  host: w.test
+  description: 'plain #2'
+- name: cmd
+  host: c.test
+  options:
+    - "VerifyOnly #3"
+YAML;
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertCount(3, $endpoints);
+        $this->assertSame('hotfix #1', $endpoints[0]->description);
+        $this->assertSame('web', $endpoints[1]->name);
+        $this->assertSame('plain #2', $endpoints[1]->description);
+        $this->assertSame(['VerifyOnly #3'], $endpoints[2]->options);
+    }
 }

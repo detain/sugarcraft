@@ -133,8 +133,7 @@ final class Config
         foreach (explode("\n", $raw) as $rawLine) {
             // Normalize tab indentation to spaces so tab-indented
             // continuation keys parse instead of aborting.
-            $line = str_replace("\t", '    ', $rawLine);
-            $line = preg_replace('/\s+#.*$/', '', $line) ?? $line;
+            $line = self::stripComment(str_replace("\t", '    ', $rawLine));
             // Trim trailing whitespace from the whole line
             $line = rtrim($line);
 
@@ -197,6 +196,52 @@ final class Config
             $rows[] = $current;
         }
         return $rows;
+    }
+
+    /**
+     * Strip a trailing '#' comment from a config line — quote-aware (F-18).
+     *
+     * A '#' begins a comment only at line start or after whitespace AND
+     * outside quotes. The previous blind regex truncated quoted values that
+     * carried hashes (`description: "fix #1"`) and mangled commands
+     * (`Command="echo # hi"`). Backslash escapes are honored inside double
+     * quotes; single quotes follow YAML's doubled '' escape. This mirrors
+     * the minimal comment rule of the documented YAML subset — it is NOT a
+     * full YAML scanner. Identical copy in SshConfigParser (same-shape
+     * carrier); seam reported for a future single home.
+     */
+    private static function stripComment(string $line): string
+    {
+        $quote = null; // null | '"' | "'"
+        $length = strlen($line);
+        for ($i = 0; $i < $length; $i++) {
+            $ch = $line[$i];
+            if ($quote === '"') {
+                if ($ch === '\\') {
+                    $i++; // consume the escaped pair
+                } elseif ($ch === '"') {
+                    $quote = null;
+                }
+                continue;
+            }
+            if ($quote === "'") {
+                if ($ch === "'") {
+                    if ($i + 1 < $length && $line[$i + 1] === "'") {
+                        $i++; // doubled '' — an escaped quote, stays inside
+                    } else {
+                        $quote = null;
+                    }
+                }
+                continue;
+            }
+            if ($ch === '#' && ($i === 0 || $line[$i - 1] === ' ' || $line[$i - 1] === "\t")) {
+                return rtrim(substr($line, 0, $i));
+            }
+            if ($ch === '"' || $ch === "'") {
+                $quote = $ch;
+            }
+        }
+        return rtrim($line);
     }
 
     private static function yamlScalar(string $v): mixed

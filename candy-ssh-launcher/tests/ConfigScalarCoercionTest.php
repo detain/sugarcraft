@@ -305,4 +305,18 @@ YAML;
         $this->assertCount(1, $endpoints);
         $this->assertSame('prod', $endpoints[0]->name);
     }
+
+    public function testYamlQuotedValuePreservesInteriorSpacesAndHash(): void
+    {
+        // F-18 (Step 16) pair: quoted spaces already survived the scalar
+        // trim; the hash did not survive the blind comment strip — the cut
+        // landed before the closing quote.
+        $raw = <<<'YAML'
+- name: prod
+  host: p.test
+  description: "  keep # inside  "
+YAML;
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertSame('  keep # inside  ', $endpoints[0]->description);
+    }
 }

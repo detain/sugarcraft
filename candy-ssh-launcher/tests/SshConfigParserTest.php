@@ -414,4 +414,15 @@ CONF;
             "Expected /root/.ssh/key or ~root/.ssh/key, got: $path"
         );
     }
+
+    public function testQuotedHashSurvivesCommentStripping(): void
+    {
+        // F-18 (Step 16) carrier pair: the import side shares the quote-aware
+        // rule. The value keeps its raw quotes (ssh_config quoting is not
+        // un-escaped by this subset) — only the truncation is fixed.
+        $raw = "Host q\n  User \"root #1\"\n";
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertStringContainsString('#1', $endpoints[0]->user);
+    }
 }

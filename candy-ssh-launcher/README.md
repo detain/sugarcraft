@@ -134,7 +134,7 @@ Flat list of endpoint objects (YAML subset or JSON). The reader format follows t
 | `proxyJump` | string, optional | Passed to ssh as `-J`. |
 | `options` | list, optional | Passed verbatim as repeated `-o Key=Value`; a bare scalar is accepted as a one-item list. |
 
-Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings under list items are outside the supported subset. A `#` after whitespace starts a comment, and comment stripping is quote-blind — a `#` inside a quoted value truncates that value. Booleans (`name: yes`) are refused at any string field rather than reaching ssh as `"1"`.
+Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings under list items are outside the supported subset. A `#` after whitespace starts a comment, and stripping is quote-aware: outside quotes only, so `description: "fix #1"` keeps its hash. Booleans (`name: yes`) are refused at any string field rather than reaching ssh as `"1"`.
 
 ## Keybindings
 

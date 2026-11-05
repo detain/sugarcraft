@@ -77,7 +77,7 @@ final class SshConfigParser
         $currentIndex = null;
 
         foreach (explode("\n", $raw) as $rawLine) {
-            $line = preg_replace('/\s+#.*$/', '', $rawLine) ?? $rawLine;
+            $line = self::stripComment($rawLine);
             $line = trim($line);
             if ($line === '') {
                 continue;
@@ -124,6 +124,47 @@ final class SshConfigParser
      * @param array<string> $tokens
      * @return list<string>
      */
+    /**
+     * Quote-aware trailing-comment strip (F-18) — identical copy of
+     * Config::stripComment (same-shape carriers, one rule). A '#' begins a
+     * comment only at line start or after whitespace AND outside quotes;
+     * double-quote backslash escapes and doubled single quotes are honored.
+     * A full-YAML-scanner exemption, shared by both readers.
+     */
+    private static function stripComment(string $line): string
+    {
+        $quote = null; // null | '"' | "'"
+        $length = strlen($line);
+        for ($i = 0; $i < $length; $i++) {
+            $ch = $line[$i];
+            if ($quote === '"') {
+                if ($ch === '\\') {
+                    $i++; // consume the escaped pair
+                } elseif ($ch === '"') {
+                    $quote = null;
+                }
+                continue;
+            }
+            if ($quote === "'") {
+                if ($ch === "'") {
+                    if ($i + 1 < $length && $line[$i + 1] === "'") {
+                        $i++; // doubled '' — an escaped quote, stays inside
+                    } else {
+                        $quote = null;
+                    }
+                }
+                continue;
+            }
+            if ($ch === '#' && ($i === 0 || $line[$i - 1] === ' ' || $line[$i - 1] === "\t")) {
+                return rtrim(substr($line, 0, $i));
+            }
+            if ($ch === '"' || $ch === "'") {
+                $quote = $ch;
+            }
+        }
+        return rtrim($line);
+    }
+
     private function uniquePatterns(array $tokens): array
     {
         $seen = [];
