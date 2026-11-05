@@ -219,4 +219,99 @@ final class PickerInputIntegrityTest extends TestCase
         [, , $q] = $this->drive('jj');
         $this->assertSame('', $this->filterOf($q), 'empty-filter j/k stay navigation');
     }
+
+    public function testSigintRestoresTheTerminalAndExits130(): void
+    {
+        if (!function_exists('pcntl_async_signals') || !function_exists('pcntl_signal') || !function_exists('posix_kill')) {
+            $this->markTestSkipped('the SIGINT arm needs ext-pcntl and ext-posix');
+        }
+
+        $autoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        $this->assertIsString($autoload);
+
+        $child = <<<'PHP'
+<?php
+declare(strict_types=1);
+require '__AUTOLOAD__';
+use SugarCraft\SshLauncher\Endpoint;
+use SugarCraft\SshLauncher\Picker;
+$c = new class (STDIN, STDOUT) extends Picker {
+    public function setRawMode(bool $on): void
+    {
+        fwrite(STDOUT, ($on ? 'RAW:ON' : 'RAW:OFF') . "\n");
+    }
+};
+$c->pick([new Endpoint(name: 'a', host: 'a.test')]);
+fwrite(STDOUT, "RETURNED\n");
+PHP;
+        $child = str_replace('__AUTOLOAD__', $autoload, $child);
+        $script = tempnam(sys_get_temp_dir(), 'sshlaunch-sigint-') . '.php';
+        file_put_contents($script, $child);
+
+        $proc = proc_open(
+            [PHP_BINARY, $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname(__DIR__),
+            ['PATH' => '/usr/bin:/bin', 'HOME' => \sys_get_temp_dir()],
+        );
+        $this->assertIsResource($proc);
+
+        try {
+            // Feed one letter so the picker is mid-loop (blocking fread),
+            // then wait until the child announced raw mode — the SIGINT arm
+            // lives inside pick(), so killing before this marker proves
+            // nothing.
+            fwrite($pipes[0], 'a');
+            fflush($pipes[0]);
+
+            $seen = '';
+            stream_set_blocking($pipes[1], false);
+            $deadline = microtime(true) + 5.0;
+            while (!str_contains($seen, 'RAW:ON') && microtime(true) < $deadline) {
+                $chunk = fread($pipes[1], 64);
+                if ($chunk === false || $chunk === '') {
+                    usleep(20000);
+                    continue;
+                }
+                $seen .= $chunk;
+            }
+            $this->assertStringContainsString('RAW:ON', $seen, 'child never entered raw mode');
+
+            $pid = proc_get_status($proc)['pid'];
+            $this->assertTrue(posix_kill($pid, \SIGINT));
+
+            // Reap-first: close stdin, drain both pipes to EOF, then close.
+            fclose($pipes[0]);
+            $pipes[0] = null;
+            stream_set_blocking($pipes[1], true);
+            $rest = (string) stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            $pipes[1] = null;
+            $err = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[2]);
+            $pipes[2] = null;
+            $code = proc_close($proc);
+            $proc = null;
+
+            $this->assertSame(130, $code, 'stdout: ' . $seen . $rest . ' stderr: ' . $err);
+            $this->assertStringContainsString('RAW:OFF', $seen . $rest, 'SIGINT path restored the terminal');
+            $this->assertStringNotContainsString('RETURNED', $seen . $rest, 'the handler exits; pick() never returns');
+            $this->assertStringContainsString(
+                \SugarCraft\SshLauncher\Lang::t('cli.cancelled'),
+                $err,
+            );
+        } finally {
+            foreach ((array) $pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if ($proc !== null) {
+                proc_terminate($proc);
+                proc_close($proc);
+            }
+            @unlink($script);
+        }
+    }
 }

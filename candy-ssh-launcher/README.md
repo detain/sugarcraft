@@ -79,7 +79,7 @@ Unrecognized flags and options given without their value exit `2` and name the o
 | `1` | No config found, config not found/unreadable/invalid, a config with no endpoints **on the picker path** (`--list` on such a config prints nothing and exits `0`), the composer autoload being missing, or — checked except when `--list` is given — the `--ssh` path not being an executable file |
 | `2` | Unknown flag, or `--config`/`--ssh` given without a value |
 | `3` | The selected endpoint was refused at dispatch time (a guard-rejected field such as a leading-dash `proxyJump`, `options` entry, or destination) or the ssh binary could not be exec'd; stderr names the sanitized reason |
-| `130` | Quit from the picker (Esc / Ctrl-C; stdin EOF reads as cancel too — the shape of a container started without `-i`) |
+| `130` | Quit from the picker (Esc / Ctrl-C — SIGINT restores the terminal before exiting; stdin EOF reads as cancel too, the shape of a container started without `-i`) |
 
 ### Config discovery
 
@@ -144,7 +144,7 @@ Limits of the embedded YAML reader: flat entries only, and a nested list is writ
 | ↓ / j     | Move down (arrows always; `j` only while the filter is empty) |
 | Ctrl+H    | Delete one filter character (alias of Backspace) |
 | Enter     | Connect to highlighted endpoint |
-| Esc / ^C  | Quit without connecting (exit 130) |
+| Esc / ^C  | Quit without connecting (exit 130; on a real terminal ^C raises SIGINT, which the picker traps to restore the terminal first) |
 | (typing)  | Type to filter (once non-empty, `j`/`k` count as letters); Backspace deletes one filter codepoint (a compound emoji or flag may need two presses) |
 
 ## Implementation

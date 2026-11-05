@@ -15,8 +15,9 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 /**
  * Tiny terminal picker — renders a numbered list of {@see Endpoint}s,
  * lets the user move with j/k or ↑/↓, narrow with type-to-search,
- * and pick with Enter. Returns the selected Endpoint or null on
- * Esc / Ctrl-C.
+ * and pick with Enter. Returns the selected Endpoint or null on Esc or
+ * the cancel byte; on a real terminal Ctrl-C raises SIGINT, which the
+ * picker traps to restore the terminal before exiting 130.
  *
  * Why not the full SugarWidgets `List` widget? That's overkill for a
  * one-shot picker that we immediately replace with `pcntl_exec`.
@@ -54,6 +55,11 @@ class Picker
      */
     private int $totalEndpoints = 0;
     private bool $aborted = false;
+    /**
+     * Saved pcntl_async_signals() state so the SIGINT arm in
+     * armCancelSignal() is strictly picker-scoped.
+     */
+    private ?bool $asyncSignalsBeforeArm = null;
     /** Terminal width in columns; null = probed-and-not-a-tty, unset = not yet probed. */
     private ?int $cols = null;
     private bool $colsProbed = false;
@@ -80,6 +86,7 @@ class Picker
         $this->totalEndpoints = count($endpoints);
         $this->aborted = false;
         $this->setRawMode(true);
+        $this->armCancelSignal();
         try {
             while (true) {
                 $matches = $this->filterMatches($endpoints);
@@ -90,7 +97,7 @@ class Picker
 
                 $key = $this->readKey();
                 switch ($key) {
-                    case "\x03": /* ^C */
+                    case "\x03": /* cancel byte: stdin EOF, or ^C where SIGINT is blocked */
                     case "\x1b": /* ESC */
                         $this->aborted = true;
                         return null;
@@ -168,6 +175,7 @@ class Picker
             }
         } finally {
             $this->setRawMode(false);
+            $this->disarmCancelSignal();
             if ($this->aborted) {
                 // Esc/^C: erase the transient frame before releasing the
                 // cursor line. After a successful pick the frame is a
@@ -178,6 +186,49 @@ class Picker
                 fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseScreen());
             }
             fwrite($this->out, "\n");
+        }
+    }
+
+    /**
+     * Arm the ^C path on a real terminal. sugar-core RawMode leaves ISIG on
+     * (stty -icanon -echo keeps the signal machinery alive), so Ctrl-C
+     * arrives as SIGINT and never as a byte: without this arm the pick()
+     * finally block never runs, the terminal is left non-canonical, and the
+     * 130 exit is only the shell's coincidence. The handler restores the
+     * terminal FIRST, mirrors the cancel frame, and exits 130 with the same
+     * cli.cancelled line the byte-cancel path produces in bin. ext-pcntl is
+     * a hard composer requirement; the guard below only covers stripped
+     * builds, where ^C keeps its historical unrecovered behavior — a
+     * disclosed fallback, never a silently assumed one (F-3).
+     */
+    private function armCancelSignal(): void
+    {
+        if (!function_exists('pcntl_async_signals') || !function_exists('pcntl_signal')) {
+            return;
+        }
+        $this->asyncSignalsBeforeArm = pcntl_async_signals(true);
+        pcntl_signal(SIGINT, function (int $signal): void {
+            pcntl_signal($signal, SIG_DFL);
+            pcntl_async_signals($this->asyncSignalsBeforeArm ?? false);
+            $this->setRawMode(false);
+            fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseScreen());
+            fwrite($this->out, "\n");
+            fwrite(STDERR, Lang::t('cli.cancelled') . "\n");
+            exit(130);
+        });
+    }
+
+    /**
+     * Undo armCancelSignal(): a pick() that ended normally (or will be
+     * re-entered) must not leak a picker-scoped handler or async dispatch
+     * into the rest of the process.
+     */
+    private function disarmCancelSignal(): void
+    {
+        if ($this->asyncSignalsBeforeArm !== null && function_exists('pcntl_signal')) {
+            pcntl_signal(SIGINT, SIG_DFL);
+            pcntl_async_signals($this->asyncSignalsBeforeArm);
+            $this->asyncSignalsBeforeArm = null;
         }
     }
 
