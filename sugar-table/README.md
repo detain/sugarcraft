@@ -27,7 +27,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 - **Missing data indicator**: configurable placeholder for absent cells — the default `-` is a lone hyphen that reads ambiguously beside dashes inside your data, so `withMissingIndicator('(empty)')` gives an unmistakable absent-cell signal
 - **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Style\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
 - **Borderless mode**: `withBorderless()` — render NO outer box (no top/bottom border rows, no left/right border columns; a single space separates columns) so the table composes inside another bordered shell (e.g. a sugar-panels content box) without a double border. A selected row's reverse-video highlight stays continuous across the column gaps
-- **Width control**: `withWidth(int $cols)` pins the total render width and `ColumnWidth::Flex` columns split the leftover room by weight. Lines are clamped at the frame edge, never padded past it: an over-subscribed layout truncates content and can render narrower than `$cols` (borderless + Flex lays out exactly). Default `cellPadding` is 0 (flush) — chosen for width economy; `withCellPadding(1)` buys readability when columns run together
+- **Width control**: `withWidth(int $cols)` pins the total render width and `ColumnWidth::Flex` columns split the leftover room by weight. Lines are clamped at the frame edge, never padded past it: an over-subscribed layout truncates content and can render narrower than `$cols` (borderless + Flex lays out exactly when no column is hidden or scrolled out of the window). Default `cellPadding` is 0 (flush) — chosen for width economy; `withCellPadding(1)` buys readability when columns run together
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
 - **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content, Flex
@@ -315,7 +315,8 @@ $t = $t->ClearSearch();     // alias for search('')
 - **OR logic**: A row matches if **any** column contains the search text
 - **Filterable gate**: once **any** column opts in with `withFilterable()`, `search()` and `Filter()` scan **only** the marked columns; with none marked, every column is scanned
 - **Combines with filters**: Global search is ANDed with column filters — a row must match both
-- **Resets selection**: `search()` automatically resets `selectedIndex` to 0
+- **Resets view state**: `search()` — like `Filter()`, `SortBy()` and `withRows()` —
+  re-anchors cursor, page and scroll offset to the start
 
 
 
@@ -339,6 +340,10 @@ $t = $t->Filter('name', 'alice')  // name must contain "alice"
 |------------|--------------|---------|
 | `Filter()` | Single column | AND (row must match ALL column filters) |
 | `search()` | Filterable columns (all when none marked) | OR (row matches if ANY scanned column contains text) |
+
+- **Unknown column key**: `Filter()` and `SortBy()` throw `InvalidArgumentException`
+- **Unmarked column**: once any column carries `withFilterable()`, `Filter()` on a
+  column that lacks the mark is a silent no-op — mark the column first
 
 Both can be active simultaneously:
 
@@ -395,7 +400,22 @@ $t = $t->withFooterType(FooterType::Both)
 echo $t->View();  // Footer: "Page 2 of 4  |  Showing 26 to 50 of 100 rows"
 ```
 
+Regardless of type, the footer row itself renders only when `withShowFooter(true)`
+and pagination is active (`withPageSize(n)` with `n > 0`); with pagination off
+there is no footer at all.
+
 The row count footer uses the `showing_rows` i18n key and updates automatically based on the current page and any active filters/searches.
+
+### Numeric setters: coercion vs throw
+
+- `withScrollX()`, `withScrollY()`, `withViewportHeight()`, `withWidth()` and
+  `withCellPadding()` clamp negatives to `0` (a negative viewport height means
+  virtualization off, same as `0`)
+- `withPageSize(n)` with `n <= 0` disables pagination entirely: all rows render
+  and the footer disappears
+- `withPage()` and `SelectPage()` clamp out-of-range pages to the nearest valid
+  one and move the cursor onto the page's first row
+- `ColumnWidth::Percent` outside `0.0`–`100.0` throws `InvalidArgumentException`
 
 ## Viewport Virtualization
 
@@ -877,6 +897,11 @@ $t->isExpanded(1);   // false — row 1 is not expanded
 
 ### How It Works
 
+- **Full-width bypass**: an expanded row ignores the per-column widths — its cell
+  texts join into ONE line spanning the table's full width (two-space gap between
+  values); content longer than that span is still edge-clipped with a trailing …
+  (U+2026). Row-level styling (row style, zebra, selection reverse) applies to the
+  whole line; per-cell StyledCell styles do not.
 - **Row identity**: Expanded rows are tracked by object identity (`Row` instance),
 
 
