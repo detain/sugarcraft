@@ -32,6 +32,10 @@ Requires PHP `^8.3`.
 Coordinates are zero-based (`col`, `row`); the CUP sequences the encoders emit are one-based.
 
 ```php
+<?php
+
+require 'vendor/autoload.php';
+
 use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Position;
@@ -43,8 +47,11 @@ $buf = Buffer::new(20, 3);
 // Set a cell at (col=5, row=1).
 $buf = $buf->withCellAt(5, 1, Cell::new('H'));
 
-// Blit a 2x2 sub-buffer at origin.
+// Blit a seeded 2x2 sub-buffer at origin — seeding matters: blitting an
+// all-blank sub-buffer over blank cells is a visible no-op.
 $sub = Buffer::new(2, 2);
+$sub = $sub->withCellAt(0, 0, Cell::new('A'))->withCellAt(1, 0, Cell::new('B'));
+$sub = $sub->withCellAt(0, 1, Cell::new('C'))->withCellAt(1, 1, Cell::new('D'));
 $buf = $buf->withRegion(Region::new(Position::new(0, 0), 2, 2), $sub);
 
 // Read a cell back.
@@ -56,6 +63,10 @@ echo $cell->rune(); // 'H'
 // write "\r\n" or interpose CUP themselves — see the toAnsi() contract.
 echo $buf->toAnsi();
 ```
+
+Run end-to-end (`php examples/basic.php`) the echoed `H` and the first grid row share one line: `toAnsi()` ends rows with a bare `\n` and no carriage return, so the `A B` row continues directly after the `H`, the second row carries the `C D` pair plus the grid's `H` at column 5, the third row is space-padded, and the shell prompt lands at the end of that third row rather than on a fresh line.
+
+No `.vhs` demo — this is a pure data model; `examples/basic.php` + `examples/diff_frames.php` plus `tests/BufferTest.php` and `tests/WideCellPairingTest.php` are the executable spec.
 
 ## Wide characters
 
