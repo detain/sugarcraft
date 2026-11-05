@@ -38,8 +38,10 @@ final class Palette
      * CLICOLOR, TERM=dumb, COLORTERM, TERM_PROGRAM, WT_SESSION,
      * GOOGLE_CLOUD_SHELL, TMUX/STY, TERM depth rungs) runs through the shared
      * {@see DetectionChain} — Probe, TerminalProbe and Palette all take the
-     * same env answer from that one ladder. The only step living here is the
-     * TTY gate below it.
+     * same env answer from that one ladder at the env rung (those surfaces'
+     * additive terminfo/TERM_PROGRAM phases may raise the final answer above
+     * it; Palette's answer is the rung itself). The only step living here is
+     * the TTY gate below it.
      *
      * @param resource|null $stream  Stream whose TTY-ness gates color (null =
      *                               env-only, no TTY check — mirroring upstream
@@ -190,8 +192,10 @@ final class Palette
         // FORCE_COLOR, NO_COLOR, CLICOLOR=0, TERM=dumb, COLORTERM,
         // TERM_PROGRAM=iTerm.app, WT_SESSION, GOOGLE_CLOUD_SHELL, TMUX/STY
         // and the TERM depth rungs — lives in DetectionChain so Probe,
-        // TerminalProbe and Palette can never answer the same environment
-        // differently. (Previously FORCE_COLOR and the iTerm upgrade were
+        // TerminalProbe and Palette never disagree at the env rung of the same
+        // environment; those surfaces' additive terminfo/TERM_PROGRAM phases
+        // may still raise the final answer above the rung, and this class
+        // alone applies the TTY gate below it. (Previously FORCE_COLOR and the iTerm upgrade were
         // duplicated here on a per-key OVERLAY while the chain beneath used
         // a whole-map REPLACEMENT: an ambient CLICOLOR_FORCE leaked into a
         // "hermetic" detect() call while an ambient NO_COLOR did not.)

@@ -76,8 +76,13 @@ and `Profile::ANSI` keep resolving through deprecated constant bridges.
 
 The color-depth answer comes from one canonical 13-step chain (`DetectionChain`).
 `Probe`, `Palette` and `Probe\TerminalProbe` all consult it, so the same
-environment can never answer differently on two surfaces; `README`, the
-`DetectionChain` docblock and the tests follow this one numbering:
+environment never answers differently **at the env-ladder rung**; the final
+surface answers may still diverge, because `Probe` layers an opt-in terminfo
+phase (Phase 2) on top and `TerminalProbe` the terminfo and `TERM_PROGRAM`
+upgrade phases (Phases 2-3) — the chain's answer is the floor those phases can
+raise, never the ceiling. Measured: `{TERM_PROGRAM: WezTerm, TERM: xterm}`
+answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade).
+`README`, the `DetectionChain` docblock and the tests follow this one numbering:
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides everything)
 2. `FORCE_COLOR` (non-empty) → level: `true|yes|on|>=3` TrueColor, `2` Ansi256, `1` Ansi; any other spelling (`0`/`false`/`off`/…) → `Ascii` (disable color, keep decoration)

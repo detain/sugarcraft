@@ -11,8 +11,11 @@ namespace SugarCraft\ColorProfile;
  * This class has NO dependencies on other SugarCraft\ColorProfile classes,
  * making it safe to use from Probe, Palette, and TerminalProbe without
  * creating circular dependencies. Probe, Palette and TerminalProbe all take
- * their color-depth answer from here, so the same environment can never
- * answer differently on two surfaces.
+ * their env-ladder rung answer from here, so the same environment never
+ * answers differently at that rung. Final surface answers may still diverge:
+ * Probe layers the optional terminfo phase (Phase 2) on top and TerminalProbe
+ * the terminfo + TERM_PROGRAM upgrade phases (2-3), so this chain's answer is
+ * the floor those phases can raise — never the ceiling.
  *
  * Mirrors charmbracelet/colorprofile detection logic.
  *
