@@ -377,7 +377,7 @@ The panic handler catches uncaught exceptions and fatal PHP errors (`E_ERROR`, `
 
 ## PSR-3 Bridge
 
-`PsrBridge` wraps a `Logger` instance and **implements** `Psr\Log\LoggerInterface`: all nine methods (`emergency`, `alert`, `critical`, `error`, `warning`, `notice`, `info`, `debug`, `log`) are real interface methods, so the bridge satisfies a `LoggerInterface` type-hint anywhere a PSR-3 logger is expected. The eight severity methods never throw — a hostile `__toString()`, a formatter that raises, or the `RuntimeException` that backs `Fatal` are all contained and announced as sanitized notices on STDERR, never propagated into the caller. Only `log()`, which takes the PSR-3 spec's `mixed $level`, may raise: an unrecognized or non-string level is an `InvalidArgumentException`, as PSR-3 itself prescribes for that method:
+`PsrBridge` wraps a `Logger` instance and **implements** `Psr\Log\LoggerInterface`: all nine methods (`emergency`, `alert`, `critical`, `error`, `warning`, `notice`, `info`, `debug`, `log`) are real interface methods, so the bridge satisfies a `LoggerInterface` type-hint anywhere a PSR-3 logger is expected. The eight severity methods never throw — a hostile `__toString()` or a formatter that raises is contained and announced as a sanitized notice on STDERR, and the `RuntimeException` that backs `Fatal` is contained silently (its record already went out on the wire, so there is nothing to announce). Nothing propagates into the caller. Only `log()`, which takes the PSR-3 spec's `mixed $level`, may raise: an unrecognized or non-string level is an `InvalidArgumentException`, as PSR-3 itself prescribes for that method:
 
 ```php
 use SugarCraft\Log\Logger;
