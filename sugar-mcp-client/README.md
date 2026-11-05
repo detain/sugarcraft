@@ -90,9 +90,13 @@ as it does with no map at all (`StdioMcpServerTrustBoundaryTest` pins both
 halves of that contract). The option is for telling a server where its own
 token lives, not for withholding the rest of your environment.
 
-**To narrow, wrap `spawnPlanner`.** The planner sees the computed argv and env
-and returns the pair that actually spawns — a curated key/value map there is
-the full replacement, not a merge. This is exactly what `candy-code` does: it
+**To narrow, wrap `spawnPlanner`.** The planner receives the server name, the
+argv the spawn would exec, and the env map YOU authored via `env:` (empty
+when you passed none) — never the merged ambient environment. It returns the
+pair that actually spawns: the curated key/value map there is the full
+replacement, not a merge, and `null` in its place sends the child out with
+the parent's entire ambient environment. This is exactly what `candy-code`
+does: it
 ships credential-shaped-name scrubbing on top of this library
 (`ProcessContainment`) because the ambient-secrets hazard is real in
 production. That remediation is deliberately downstream product policy here —
@@ -100,9 +104,12 @@ this library has no list of which names are secrets, and any list it shipped
 would be wrong for someone's environment.
 
 The planner is a `callable(string $name, array $argv, array $env): array`
-returning `[$argv, $env]`; throwing from it refuses the launch:
+returning `[list<string> $argv, ?array $env]`; throwing from it refuses the
+launch:
 
 ```php
+$binary = 'npx';
+$argv = ['-y', '@modelcontextprotocol/server-everything'];
 $curated = ['PATH' => '/usr/local/bin:/usr/bin:/bin'];
 $server = new StdioMcpServer(
     name: 'narrow',

@@ -356,7 +356,9 @@ final class StdioMcpServer implements McpServer
      *        falls back to DEFAULT_START_TIMEOUT_SECONDS so a bad setting can
      *        never disable the bound entirely
      * @param \Closure|null $spawnPlanner embedder seam deciding the spawn:
-     *        called as ($name, $argv, $env) and returning [command, env],
+     *        called as ($name, $argv, $env) where $env is the map authored
+     *        via {@see $env} (empty when none was passed — never the merged
+     *        ambient environment), returning [command, env],
      *        where command is a non-empty argv list<string> (NEVER a shell
      *        string — the shell would be the direct child and stop() would
      *        orphan the server behind it; a wrapper that truly needs a shell
