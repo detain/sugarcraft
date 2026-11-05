@@ -76,11 +76,12 @@ final class DiffOptions
 
     /**
      * Treat lines equal when their whitespace-stripped forms match (emitted
-     * text keeps original bytes). "Whitespace" is every `\s` byte — CR
-     * included — so this is deliberately stronger than git's
-     * `--strip-trailing-cr`: a CRLF file compares equal to its LF form line
-     * by line, and interior runs of tabs/spaces vanish from the comparison
-     * (not from the output).
+     * text keeps original bytes). "Whitespace" is every `\s` match —
+     * Unicode-aware on valid UTF-8 (NBSP and U+2028 fold away alongside CR),
+     * byte-wise ASCII whitespace only on the malformed-UTF-8 failover — so
+     * this is deliberately stronger than git's `--strip-trailing-cr`: a CRLF
+     * file compares equal to its LF form line by line, and interior runs of
+     * tabs/spaces vanish from the comparison (not from the output).
      */
     public function withIgnoreWhitespace(bool $ignore = true): self
     {
