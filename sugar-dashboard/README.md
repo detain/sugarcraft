@@ -42,14 +42,6 @@ composer require sugarcraft/sugar-dashboard
 | `SizedItem` | A `Sizer` that can also report its intrinsic (unconstrained) size — the measurement contract every layout container in the library uses to size its children (extends `Sizer`) | `getInnerSize(): array` |
 | `Drawable` | Universal draw contract with getRect/setRect/draw | `getRect(): Rect`, `setRect(Rect): void`, `draw(Buffer): void` |
 
-### Configuration Classes
-
-| Type | Description | Key Properties |
-|------|-------------|----------------|
-| `Options` | Grid-level configuration options | `$fitScreen: bool` (default: true) |
-| `ItemOptions` | Per-item placement options within StackedGrid | `$column: int` (0-based), `$expandVertical: bool` |
-| `ItemWithOptions` | Internal pairing of Item + ItemOptions | `$item: Item`, `$options: ItemOptions` |
-
 ### Low-Level Primitives
 
 | Type | Description | Key Methods |
@@ -104,9 +96,6 @@ composer require sugarcraft/sugar-dashboard
 |------|-------------|----------------------|-----|
 | `Frame` | Bordered frame wrapping any Item with title/padding | `new(Item)`, `withBorder()`, `withBorderColor()`, `withPadding()`, `withTitle()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/frame.gif) |
 | `Panel` | Panel with header/content/footer sections | `new(Item|string)`, `titled(Item|string, string)`, `withContent()`, `withHeader()`, `withFooter()`, `withStyle()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/panel.gif) |
-| `BoxDrawing` | Unicode box-drawing frame generator | `new(?string)`, `titled(string)`, `double()`, `rounded()`, `bold()`, `withStyle()`, `withBorderColor()`, `withBgColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/box-drawing.gif) |
-| `BorderText` | Text with ASCII-art border characters | `new(Item|string)`, `withBorders(Item|string)`, `withBorderColor()`, `withTextColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/border-text.gif) |
-| `Divider` | Horizontal or vertical divider line | `new(?string)`, `h(?string)`, `v(?string)`, `withStyle()`, `withLabel()`, `withColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/divider.gif) |
 
 ### Spacing & Layout Helpers
 
@@ -114,8 +103,6 @@ composer require sugarcraft/sugar-dashboard
 |------|-------------|----------------------|-----|
 | `Spacer` | Empty space filler with optional fill character | `new(int $width, int $height)`, `dotted(int)`, `dashed(int)`, `vertical(int, int)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spacer.gif) |
 | `LayoutItem` | Item with flex properties for layouts | `flex(Item, int)`, `fixed(Item)` | |
-| `Shadow` | Drop shadow effect wrapping any Item | `new(Item)`, `withStyle()`, `withColor()`, `withOffset()`, `withHeavy()`, `withNoShadow()` | |
-| `Segment` | 7-segment digital display | `new(string)`, `withDigitWidth()`, `withOnColor()`, `withOffColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/segment.gif) |
 | `Window` | Window frame with title bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/window.gif) |
 | `Screen` | Terminal screen container | | |
 | `Viewport` | Scrollable viewport | | |
@@ -140,6 +127,17 @@ in the Components section).
 | `RatioGrid` | Grid whose rows/columns are sized by ratio (termui grid pattern); cells placed by `(row, col)` coordinate, `NewColRow` carries the generated guides | `new(columns, rows)`, `withCell(row, col, GridItem)`, `setSize()`, `render()`, `getInnerSize()` |
 | `FocusManager` | Persistence wrapper over sugar-focus's `FocusRing` for a layout hierarchy: the ring owns the ordered focusable ids and wrap-around Tab/Shift-Tab traversal; `persistState()`/`restoreState()` park the focused id through a `State\Persistence` file so focus survives panel swaps and reloads | `register(id)`, `unregister(id)`, `focus(id)`, `blur(id)`, `isFocused(id)`, `focusedId()`, `focusNext()`, `focusPrevious()`, `persistState(persistence, path)`, `restoreState(persistence, path)` |
 
+### Layout\Grid (StackedGrid Option Parts)
+
+`StackedGrid` itself is catalogued under Layout Containers; these three are
+its `Layout\Grid\` option value parts.
+
+| Type | Description | Key Properties |
+|------|-------------|----------------|
+| `Options` | Grid-level configuration options | `$fitScreen: bool` (default: true) |
+| `ItemOptions` | Per-item placement options within StackedGrid | `$column: int` (0-based), `$expandVertical: bool` |
+| `ItemWithOptions` | Internal pairing of Item + ItemOptions | `$item: Item`, `$options: ItemOptions` |
+
 ---
 
 ## Plot Namespace (Charts & Visualization)
@@ -162,7 +160,6 @@ in the Components section).
 | `GaugeCircle` | Circular gauge visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gauge-circle.gif) |
 | `HeatMapChart` | 2D heatmap with color gradient | `new(data)`, `sample()`, `withRowLabels()`, `withColumnLabels()`, `withLowColor()`, `withHighColor()` | |
 | `Heatmap` | Heat map visualization with legend | `new(data)`, `sample()`, `withLegend()`, `withValues()`, `withLowColor()`, `withHighColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/heatmap.gif) |
-| `HeatmapCalendar` | GitHub-style calendar heatmap | `new(data)`, `sample()`, `withLowColor()`, `withHighColor()`, `withEmptyChar()` | |
 | `RadarChart` | Radar/spider chart for multi-axis data | `new(labels, series)`, `withSize()`, `withGridLines()`, `withShowLabels()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/radar-chart.gif) |
 | `Sparkline` | Inline sparkline chart | `new(data)`, `withData()`, `withWidth()`, `withHeight()`, `withDataPoints()`, `withFill()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline.gif) |
 | `SparklineBar` | Bar-style sparkline | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-bar.gif) |
@@ -170,14 +167,13 @@ in the Components section).
 | `SparkArea` | Spark area chart | | |
 | `FunnelChart` | Funnel chart visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/funnel-chart.gif) |
 | `Funnel` | Funnel visualization component | | |
-| `Bullet` | Bullet chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/bullet.gif) |
 | `Meter` | Meter/gauge component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/meter.gif) |
-| `Rating` | Star rating display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/rating.gif) |
 | `OHLC` | Open-High-Low-Close data | | |
 | `OHLCPoint` | OHLC data point | | |
 | `Waterfall` | Waterfall chart | | |
 | `WaterfallItem` | Waterfall bar item | | |
-| `MetricsGrid` | Grid of metric displays | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/metrics-grid.gif) |
+| `Progress` | Progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress.gif) |
+| `ProgressRing` | Circular progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-ring.gif) |
 
 #### Value redundancy (color-vision aids)
 
@@ -203,43 +199,14 @@ shape, so the panels stay readable in a colour-blind terminal:
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `Sankey` | Sankey diagram for flow visualization | `new()`, `addNode()`, `addFlow()`, `withHorizontal()`, `withShowLabels()` | |
-| `SankeyNode` | Node in Sankey diagram: `id`, `label`, `value`, `color` | | |
-| `SankeyFlow` | Flow connection: `source`, `target`, `value`, `color` | | |
-| `Sunburst` | Sunburst chart visualization | | |
-| `Treemap` | Treemap chart visualization | | |
-| `TreemapLeaf` | Leaf node in treemap | | |
-| `TreeViz` | Tree visualization | | |
-| `Network` | Network diagram | | |
-| `NetworkNode` | Node in network | | |
-| `NetworkShape` | `Circle`, `Square`, `Diamond`, `Hexagon`, `Star` | | |
-| `MindMap` | Mind map visualization | | |
-| `OrgChart` | Organization chart | | |
-| `ClassDiagram` | UML class diagram | | |
-| `Flowchart` | Flowchart diagram | | |
-| `FlowchartNode` | Node in flowchart | | |
-| `FlowchartNodeType` | `Process`, `Decision`, `StartEnd`, `InputOutput`, `Connector`, `Data` | | |
-| `Dendrogram` | Dendrogram/tree diagram | | |
-| `DendrogramNode` | Node in dendrogram | | |
-| `Gantt` | Gantt chart | | |
-| `PERT` | PERT chart | | |
-| `Timeline` | Timeline display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/timeline.gif) |
-| `TimelineViz` | Timeline visualization | | |
-| `TimelineNode` | Node in timeline | | |
-| `Sequence` | Sequence diagram | | |
 | `Graph` | Graph visualization | | |
 | `Bubble` | Bubble chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/bubble.gif) |
 | `BubblePoint` | Bubble chart point | | |
-| `Leaderboard` | Leaderboard display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/leaderboard.gif) |
 | `WordCloud` | Word cloud visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/word-cloud.gif) |
 | `DotMatrix` | Dot matrix display | | |
-| `Pictogram` | Pictogram display | | |
 | `Partition` | Partition chart | | |
 | `PartitionSegment` | Partition segment | | |
-| `Diff` | Diff view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/diff.gif) |
-| `Ladder` | Ladder diagram | | |
 | `Canvas` | Drawing canvas | | |
-| `Scrollbar` | Custom scrollbar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/scrollbar.gif) |
 
 ### btop-derived graphs, meters & process rows
 
@@ -519,21 +486,27 @@ itself; everything else in the directory is its value part.
 | `Input` | Text input field | `new(?string)`, `labeled()`, `password()`, `withValue()`, `withPlaceholder()`, `withLabel()`, `withError()`, `withBorderColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/input.gif) |
 | `Textarea` | Multi-line text area | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/textarea.gif) |
 | `Checkbox` | Checkbox group with single/multi-select | `new(options)`, `withSelectedIndex()`, `withOptionChecked()`, `withMultiSelect()`, `withCheckedColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/checkbox.gif) |
-| `Radio` | Radio button | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/radio.gif) |
 | `Toggle` | Toggle switch | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/toggle.gif) |
 | `SwitchComponent` | Switch component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/switch-component.gif) |
 | `Slider` | Slider control | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/slider.gif) |
+| `Editor` | Text editor | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/editor.gif) |
+| `CommandPalette` | Command palette | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/command-palette.gif) |
+| `Cursor` | Terminal cursor | | |
+| `Rating` | Star rating display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/rating.gif) |
+
+### Components\Select (Choice Inputs)
+
+The choice-input family; `Option`, `OverlayPosition` and `AutoPositionHelper`
+in the same namespace are its value parts.
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
+| `Radio` | Radio button | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/radio.gif) |
 | `Select` | Dropdown select component | `new(options)`, `withSelectedIndex()`, `withOptions()`, `withSelectedColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/select.gif) |
 | `ComboBox` | Combo box | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/combo-box.gif) |
 | `Dropdown` | Dropdown menu | | |
 | `DatePicker` | Date picker | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/date-picker.gif) |
 | `ColorPicker` | Color picker | | |
-| `Label` | Form label | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/label.gif) |
-| `Chip` | Chip/tag component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/chip.gif) |
-| `ChipGroup` | Group of chips | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/chip-group.gif) |
-| `Editor` | Text editor | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/editor.gif) |
-| `CommandPalette` | Command palette | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/command-palette.gif) |
-| `Cursor` | Terminal cursor | | |
 
 ---
 
@@ -542,22 +515,22 @@ itself; everything else in the directory is its value part.
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
 | `Alert` | Inline non-modal alert (info, warning, error, success) — distinct from `Components\Modal\Alert` below, which is the bordered overlay variant the `alert` demo/GIF renders | `new(string)`, `info()`, `warning()`, `error()`, `success()`, `withMessage()`, `withTitle()`, `withBorderColor()` | |
-| `Badge` | Badge/tag component | `new(string)`, `success()`, `warning()`, `error()`, `info()`, `withStyle()`, `withSize()`, `withIcon()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/badge.gif) |
-| `BadgeGroup` | Group of badges | | |
 | `LoadingText` | Animated loading text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/loading-text.gif) |
 | `Skeleton` | Loading skeleton | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/skeleton.gif) |
 | `Spinner` | Loading spinner | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spinner.gif) |
+| `EmptyState` | Empty state placeholder | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/empty-state.gif) |
+
+### Components\Toast (Transient Feedback)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
 | `Toast` | Toast message | `new()`, `info()`, `success()`, `warning()`, `error()`, `fromNotification()`, `fromQueue()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/toast.gif) |
 | `NotificationQueue` | Dual-ring queue: active `items` + `history`, sized per instance by the constructor (`maxItems = 20`, `maxHistory = 50` defaults, each clamped to at least 1) | `new()`, `push()`, `dismiss()`, `current()`, `recent()`, `all()`, `history()`, `count()`, `historyCount()` | |
 | `Level` | Toast level enum: `Info`, `Warning`, `Error`, `Success` | `icon()`, `isError()`, `isHighlighted()` | |
 | `Notification` | Toast notification DTO: `message`, `level`, `title` | `info()`, `warning()`, `error()`, `success()` | |
 | `Tooltip` | Tooltip popup | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tooltip.gif) |
-| `Hint` | Hint/caption text line — muted/italic/severity presets, optional icon prefix, wraps long text within the allocated width (lives in `Components\Toast\`) | `new(string)`, `muted()`, `italic()`, `info()`, `success()`, `warning()`, `danger()`, `withText()`, `withColor()`, `withStyle()`, `withIcon()` | |
-| `NoticePosition` | Screen-position enum for toast notifications (lives in `Components\Toast\`): the four corners, edge centres, `Center` and `Anchor` — resolves to vertical/horizontal alignment and maps to the sugar-toast `Position` vocabulary | `vertical()`, `horizontal()`, `isCorner()`, `isCenter()`, `isAnchor()`, `toToastPosition()` | |
-| `Popover` | Popover content | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/popover.gif) |
-| `NProgress` | npm-style progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/nprogress.gif) |
-| `Marquee` | Scrolling marquee text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/marquee.gif) |
-| `EmptyState` | Empty state placeholder | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/empty-state.gif) |
+| `Hint` | Hint/caption text line — muted/italic/severity presets, optional icon prefix, wraps long text within the allocated width | `new(string)`, `muted()`, `italic()`, `info()`, `success()`, `warning()`, `danger()`, `withText()`, `withColor()`, `withStyle()`, `withIcon()` | |
+| `NoticePosition` | Screen-position enum for toast notifications: the four corners, edge centres, `Center` and `Anchor` — resolves to vertical/horizontal alignment and maps to the sugar-toast `Position` vocabulary | `vertical()`, `horizontal()`, `isCorner()`, `isCenter()`, `isAnchor()`, `toToastPosition()` | |
 
 ### Components\Modal (Modal Dialogs)
 
@@ -570,12 +543,10 @@ itself; everything else in the directory is its value part.
 | `MultiselectModal` | Modal multi-select over an options list | `new(array $options, ?string $title)`, `withSelectedIndices()` | |
 | `ProgressModal` | Modal progress readout (current/total with optional label) | `new(int $current, int $total, ?string $label)` | |
 | `Notification` | Alert card for modal overlays — styled severity message with optional icon (not the `Components\Toast` DTO above, which is the queue payload) | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/notification.gif) |
-| `Progress` | Progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress.gif) |
-| `ProgressBar` | Progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-bar.gif) |
-| `ProgressRing` | Circular progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-ring.gif) |
 | `Drawer` | Drawer panel | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/drawer.gif) |
 | `Wizard` | Multi-step wizard | | |
 | `WizardStep` | Wizard step | | |
+| `Popover` | Popover content | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/popover.gif) |
 
 > **Modal message protocol.** `Components\Modal\Msg\` defines the TEA-style answer types a modal interaction produces: `AnsweredYesMsg`, `AnsweredNoMsg`, `AnsweredEditMsg`, `AnsweredDeleteMsg` and `ClosedMsg`, each a `final readonly` class extending a shared abstract readonly `Msg` base so a host can pattern-match the whole family in one `match` arm. The bundled dialogs are renderable `Item`s — turning key presses into these messages is the host program's seam; the library ships the vocabulary, not the dispatcher.
 
@@ -585,9 +556,6 @@ itself; everything else in the directory is its value part.
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `Tabs` | Tabbed interface | `new(tabs)`, `withSelectedIndex()`, `withActiveColor()`, `withTabs()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tabs.gif) |
-| `TabsVertical` | Vertical tab navigation | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tabs-vertical.gif) |
-| `TabPane` | Pane container for tab content — renders content within a tab-pane context with optional border styling (lives in `Components\Tabs\` with `Tabs`/`TabsVertical`) | `new(Item)`, `withBorderColor()`, `withBorderChar()`, `withPadded()` | |
 | `Breadcrumb` | Breadcrumb navigation | `new(items)`, `fromPath()`, `withItems()`, `withSeparator()`, `withActiveIndex()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/breadcrumb.gif) |
 | `Pagination` | Pagination controls | | |
 | `PaginationSimple` | Simple pagination | | |
@@ -597,6 +565,14 @@ itself; everything else in the directory is its value part.
 | `Ladder` | Ladder diagram | | |
 | `Sequence` | Sequence diagram | | |
 | `Scrollbar` | Custom scrollbar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/scrollbar.gif) |
+
+### Components\Tabs (Tabbed Views)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
+| `Tabs` | Tabbed interface | `new(tabs)`, `withSelectedIndex()`, `withActiveColor()`, `withTabs()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tabs.gif) |
+| `TabsVertical` | Vertical tab navigation | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tabs-vertical.gif) |
+| `TabPane` | Pane container for tab content — renders content within a tab-pane context with optional border styling | `new(Item)`, `withBorderColor()`, `withBorderChar()`, `withPadded()` | |
 
 ### Components\StatusBar (Status Bar)
 
@@ -625,6 +601,26 @@ itself; everything else in the directory is its value part.
 | `Comment` | Comment component | | |
 | `ActivityFeed` | Activity feed | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/activity-feed.gif) |
 | `Leaderboard` | Leaderboard display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/leaderboard.gif) |
+| `BoxDrawing` | Unicode box-drawing frame generator | `new(?string)`, `titled(string)`, `double()`, `rounded()`, `bold()`, `withStyle()`, `withBorderColor()`, `withBgColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/box-drawing.gif) |
+| `BorderText` | Text with ASCII-art border characters | `new(Item|string)`, `withBorders(Item|string)`, `withBorderColor()`, `withTextColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/border-text.gif) |
+| `Divider` | Horizontal or vertical divider line | `new(?string)`, `h(?string)`, `v(?string)`, `withStyle()`, `withLabel()`, `withColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/divider.gif) |
+| `Bullet` | Bullet chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/bullet.gif) |
+| `MetricsGrid` | Grid of metric displays | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/metrics-grid.gif) |
+| `Label` | Form label | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/label.gif) |
+| `Chip` | Chip/tag component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/chip.gif) |
+| `ChipGroup` | Group of chips | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/chip-group.gif) |
+| `Badge` | Badge/tag component | `new(string)`, `success()`, `warning()`, `error()`, `info()`, `withStyle()`, `withSize()`, `withIcon()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/badge.gif) |
+| `BadgeGroup` | Group of badges | | |
+| `Stat` | Single stat display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stat.gif) |
+| `Stats` | Statistics display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stats.gif) |
+| `Metric` | Metric display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/metric.gif) |
+| `Text` | Word-wrapped text content | `new(string)`, `withMaxWidth()`, `withTrim()`, `withHorizontalAlign()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/text.gif) |
+| `Paragraph` | Paragraph text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/paragraph.gif) |
+| `Code` | Code block with syntax highlighting | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/code.gif) |
+| `Kbd` | Keyboard key display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/kbd.gif) |
+| `Markdown` | Markdown rendering | | |
+| `Highlight` | Syntax highlighted code | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/highlight.gif) |
+| `Diff` | Diff view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/diff.gif) |
 
 ### Components\Media (Media Components)
 
@@ -643,6 +639,8 @@ itself; everything else in the directory is its value part.
 | `ASCIIBanner` | ASCII banner text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/ascii-banner.gif) |
 | `Emoji` | Emoji display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/emoji.gif) |
 | `Marquee` | Scrolling marquee text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/marquee.gif) |
+| `Shadow` | Drop shadow effect wrapping any Item | `new(Item)`, `withStyle()`, `withColor()`, `withOffset()`, `withHeavy()`, `withNoShadow()` | |
+| `Pictogram` | Pictogram display | | |
 
 ### Components\Calendar (Calendar & Date Components)
 
@@ -650,6 +648,7 @@ itself; everything else in the directory is its value part.
 |------|-------------|----------------------|-----|
 | `Calendar` | Calendar view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/calendar.gif) |
 | `ListComponent` | List renderer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/list-component.gif) |
+| `HeatmapCalendar` | GitHub-style calendar heatmap | `new(data)`, `sample()`, `withLowColor()`, `withHighColor()`, `withEmptyChar()` | |
 
 ### Components\System (System/Console Components)
 
@@ -663,6 +662,9 @@ itself; everything else in the directory is its value part.
 | `Clock` | Digital clock | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/clock.gif) |
 | `Timer` | Countdown timer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/timer.gif) |
 | `Stopwatch` | Stopwatch | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stopwatch.gif) |
+| `NProgress` | npm-style progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/nprogress.gif) |
+| `ProgressBar` | Progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-bar.gif) |
+| `ProgressList` | List of progress items | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-list.gif) |
 
 ---
 
@@ -676,6 +678,29 @@ itself; everything else in the directory is its value part.
 | `StateNode` | Node in a state machine (id/label/isInitial/isFinal/entryActions/exitActions) | | |
 | `StateTransition` | Transition between states (from/to/label/trigger/action/guard/type) | | |
 | `TransitionType` | Enum: `Normal`, `Guard`, `Internal` | | |
+| `Sankey` | Sankey diagram for flow visualization | `new()`, `addNode()`, `addFlow()`, `withHorizontal()`, `withShowLabels()` | |
+| `SankeyNode` | Node in Sankey diagram: `id`, `label`, `value`, `color` | | |
+| `SankeyFlow` | Flow connection: `source`, `target`, `value`, `color` | | |
+| `Sunburst` | Sunburst chart visualization | | |
+| `Treemap` | Treemap chart visualization | | |
+| `TreemapLeaf` | Leaf node in treemap | | |
+| `TreeViz` | Tree visualization | | |
+| `Network` | Network diagram | | |
+| `NetworkNode` | Node in network | | |
+| `NetworkShape` | `Circle`, `Square`, `Diamond`, `Hexagon`, `Star` | | |
+| `MindMap` | Mind map visualization | | |
+| `OrgChart` | Organization chart | | |
+| `ClassDiagram` | UML class diagram | | |
+| `Flowchart` | Flowchart diagram | | |
+| `FlowchartNode` | Node in flowchart | | |
+| `FlowchartNodeType` | `Process`, `Decision`, `StartEnd`, `InputOutput`, `Connector`, `Data` | | |
+| `Dendrogram` | Dendrogram/tree diagram | | |
+| `DendrogramNode` | Node in dendrogram | | |
+| `Gantt` | Gantt chart | | |
+| `PERT` | PERT chart | | |
+| `Timeline` | Timeline display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/timeline.gif) |
+| `TimelineViz` | Timeline visualization | | |
+| `TimelineNode` | Node in timeline | | |
 
 ### Components\Table (Table Components)
 
@@ -684,22 +709,6 @@ itself; everything else in the directory is its value part.
 | `TableChart` | Table-based chart | | |
 | `TableBordered` | Bordered table | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/table-bordered.gif) |
 | `TableZebra` | Zebra-striped table | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/table-zebra.gif) |
-| `Stat` | Single stat display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stat.gif) |
-| `Stats` | Statistics display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stats.gif) |
-| `Metric` | Metric display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/metric.gif) |
-| `ProgressList` | List of progress items | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-list.gif) |
-
-### Components\Text (Text Components)
-
-| Type | Description | Key Methods/Factories | GIF |
-|------|-------------|----------------------|-----|
-| `Text` | Word-wrapped text content | `new(string)`, `withMaxWidth()`, `withTrim()`, `withHorizontalAlign()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/text.gif) |
-| `Paragraph` | Paragraph text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/paragraph.gif) |
-| `Code` | Code block with syntax highlighting | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/code.gif) |
-| `Kbd` | Keyboard key display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/kbd.gif) |
-| `Markdown` | Markdown rendering | | |
-| `Highlight` | Syntax highlighted code | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/highlight.gif) |
-| `Diff` | Diff view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/diff.gif) |
 
 ---
 
@@ -738,8 +747,6 @@ itself; everything else in the directory is its value part.
 | Type | Description | Key Methods |
 |------|-------------|-------------|
 | `Center` | Calculate centered position | |
-| `HAlign` | `Left`, `Right`, `Center` | |
-| `VAlign` | `Top`, `Middle`, `Bottom` | |
 | `Overlay` | Auto-positioning helper for overlays — computes the optimal position relative to an anchor, choosing above or below based on available space, clamped to container bounds | `calculate(int $overlayWidth, int $overlayHeight, int $anchorX, int $anchorY, int $containerWidth, int $containerHeight): array`, `fitsBelow()`, `fitsAbove()` | |
 
 > Note: `Position\Center` is the geometry helper (computes centered
