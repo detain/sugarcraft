@@ -70,7 +70,7 @@ $parser->parseComplete("hello\x1b[31mworld\x1b[0m");
 // slot. Finals and prefixes are raw byte values (ord() of the character).
 ```
 
-A fuller walkthrough of every event type lives in [`examples/debug.php`](examples/debug.php).
+A fuller walkthrough lives in two examples: [`examples/debug.php`](examples/debug.php) walks one stream per `Handler` event family (print/CSI, execute, ESC, OSC, OSC 8 raw payloads, DCS, APC, C1 introducers), and [`examples/adapter.php`](examples/adapter.php) drives `HandlerAdapter` itself — the DECSET multi-mode fan-out, the OSC 8 open/close decode, and the sieve with its `$fallback` escape hatch.
 
 ## Handler interface
 
