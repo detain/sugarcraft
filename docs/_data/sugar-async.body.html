@@ -90,9 +90,11 @@ $promise = AsyncOps::retry(
 <tr><td>Subscriptions</td><td>new(): self</td><td>Empty composite collection</td></tr>
 <tr><td>Subscriptions</td><td>of(Closure): Subscription</td><td>Public glue: mints a standalone disposal handle from any cleanup closure (timers, listeners, temp-file owners)</td></tr>
 <tr><td>Subscriptions</td><td>compose(Subscription ...): self</td><td>Combine multiple subscriptions into one atomic handle</td></tr>
+<tr><td>Subscriptions</td><td>add(Subscription): void</td><td>Append one handle to the composite — the @internal path compose() builds through: on an already-unsubscribed composite an incoming handle is disposed immediately, and self-composition is ignored</td></tr>
 <tr><td>Subscriptions</td><td>unsubscribe(): void</td><td>Dispose all underlying subscriptions</td></tr>
 <tr><td>Subscriptions</td><td>isActive(): bool</td><td>Returns false after unsubscribe()</td></tr>
 <tr><td>Subscriptions</td><td>count(): int · isEmpty(): bool</td><td>Size of the composite</td></tr>
+<tr><td>Subscriptions</td><td>disposeAll(): void</td><td>@internal teardown worker behind unsubscribe(): snapshot-and-clear first, then dispose every handle; a throwing unsubscribe() is logged via error_log() (stderr by default, no logger-injection seam), never propagated — the same hook-failure contract as CancellationToken::fireCallbacks()</td></tr>
 <tr><td>AsyncOps</td><td>withTimeout(?LoopInterface, PromiseInterface, float, ?string label): PromiseInterface</td><td>Wrap a promise with a timeout; rejects with TimeoutException (seconds and optional label readable on it); null loop uses the shared one</td></tr>
 <tr><td>AsyncOps</td><td>withDeadline(?LoopInterface, PromiseInterface, float, ?callable onTimeout, ?string label): PromiseInterface</td><td>Ceiling on the remaining budget: on expiry rejects with TimeoutException and cancels the inner promise; late results are dropped, never adopted</td></tr>
 <tr><td>AsyncOps</td><td>cancellable(PromiseInterface, ?CancellationToken, ?callable onCancel): PromiseInterface</td><td>Token guard: cancellation rejects with OperationCancelledException and runs the onCancel hook; the registration auto-un-registers when the inner promise settles — no loop parameter</td></tr>

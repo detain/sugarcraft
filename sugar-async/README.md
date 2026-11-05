@@ -77,7 +77,7 @@ Cancellation is not an error. Happy paths resolve; catch cancellation as its own
 arm, not as a failed request:
 
 ```php
-use SugarCraft\Async\{AsyncOps, CancellationSource, OperationCancelledException, TimeoutException};
+use SugarCraft\Async\{AsyncOps, CancellationSource, OperationCancelledException};
 use React\Promise\Deferred;
 
 $source = CancellationSource::new();
