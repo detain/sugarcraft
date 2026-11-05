@@ -45,7 +45,7 @@ $parser  = new Parser($handler);
 // SOS/PM/APC string still dispatches with the payload collected so far (and
 // an incomplete UTF-8 rune becomes U+FFFD in $replaceMalformed mode). It
 // cannot recover an in-flight CSI/ESC sequence or a half-read DCS prelude —
-// those end the stream un dispatched (see Limits & hostile input).
+// those end the stream undispatched (see Limits & hostile input).
 // For streaming/chunked input, use feed() + flush() separately.
 $parser->parseComplete("hello\x1b[31mworld\x1b[0m");
 
@@ -84,10 +84,12 @@ parameters, and `CSI ? 1000 ; 1006 h` sets **two** modes. The parser exposes
 both faithfully:
 
 - `Parser::subparams()` returns, during and after each `csiDispatch` (and
-  `dcsDispatch`) until the next `flush()`, a `list<bool>` aligned with `$params`: `true` at index *i*
+  `dcsDispatch`) until the next sequence's params start accumulating, or until
+  `flush()`/`reset()`, whichever comes first, a `list<bool>` aligned with `$params`: `true` at index *i*
   when the value at
   *i* was followed by a `:` (the slot continues). A leading `:` marks the
-  implicit default at index 0. This follows the original design's `Param.HasMore`
+  implicit default at index 0. This follows the upstream Go design's
+  (`charmbracelet/x/ansi`) `Param.HasMore`
   side-channel, so SGR consumers can implement `58:2::148:199:255`-style
   colon forms without re-splitting the byte stream, and `Parser::groupSubparameters($params, $flags)`
   reconstitutes the nested `list<list<int>>` grouping in one call. SGR 58/59
@@ -106,10 +108,11 @@ both faithfully:
   SOS/PM/APC get no push because none of them has one.
 - `HandlerAdapter` dispatches **every** parameter of `CSI h/l` to
   `CsiHandler::decset()/decrst()`, one call per mode, preserving the prefix —
-  previously only the first mode was delivered, so `?1000;1006h` silently
-  dropped `1006` downstream. Consumers (e.g. `candy-vcr`'s mouse-mode
-  tracker) can therefore attribute a later mouse byte sequence to the
-  encoding that enabled it instead of assuming SGR.
+  `CSI ? 1000 ; 1006 h` therefore sets both modes. The adapter's consumers —
+  `sugar-vterm`'s renderer handler and `candy-codeshot`'s `SgrStateHandler` —
+  can therefore attribute a later mouse byte sequence to the encoding that
+  enabled it instead of assuming SGR; `candy-vcr`'s `MouseModeTracker` mirrors
+  the same semantics on the raw `Handler` path.
 
 The parser flags colon structure but does not interpret it; a handler that
 neither implements `SubparamsAwareHandler` nor reads `subparams()` keeps its
@@ -205,9 +208,9 @@ product:
   abandon a stream without a dispatch there is none yet; call `reset()`
   accepting the trailing flush (end-of-stream semantics). The flush recovers
   *string* states only: an in-flight CSI/ESC sequence and a half-read DCS
-  prelude end un dispatched.
-- **`DebugHandler` has no cap:** its public `$log` grows with every byte fed;
-  it is a development mirror, not a production sink.
+  prelude end undispatched.
+- **`DebugHandler` has no cap:** its public `$log` grows one row per dispatched
+  action, forever; it is a development mirror, not a production sink.
 
 Test breadth is hand-built edge pins (`ParserOverflowTest`,
 `Utf8PolicyTest`, `DcsTruncationTest` and friends); there is no continuous
@@ -252,7 +255,7 @@ generators, plain-text exports):
   HVP backtick) closes the current link rather than being dropped; reading
   the raw `oscDispatch()` stream instead, treat every `8;`-prefixed payload
   as link-state and end the span on empty/malformed payloads yourself.
-  `OscHandlerImpl` exposes the resolved `hyperlinkUri()`/`hyperlinkId()`.
+  `OscHandlerImpl` exposes the current `hyperlinkUri()`/`hyperlinkId()` (raw, unvalidated).
 - BEL, SO/SI and the C1 band never reach `printable()`/`printChar()` through
   `HandlerAdapter` — consume the raw `Handler` (or wire it as the adapter's
   `$fallback`) if those signals matter to your bridge.
