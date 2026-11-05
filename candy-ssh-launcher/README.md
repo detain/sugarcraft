@@ -78,6 +78,7 @@ Unrecognized flags and options given without their value exit `2` and name the o
 | `0` | `--help` / `-h` or `--version` / `-v` printed, or `--list` succeeded |
 | `1` | No config found, config not found/unreadable/invalid, a config with no endpoints **on the picker path** (`--list` on such a config prints nothing and exits `0`), the composer autoload being missing, or — checked except when `--list` is given — the `--ssh` path not being an executable file |
 | `2` | Unknown flag, or `--config`/`--ssh` given without a value |
+| `3` | The selected endpoint was refused at dispatch time (a guard-rejected field such as a leading-dash `proxyJump`, `options` entry, or destination) or the ssh binary could not be exec'd; stderr names the sanitized reason |
 | `130` | Quit from the picker (Esc / Ctrl-C; stdin EOF reads as cancel too — the shape of a container started without `-i`) |
 
 ### Config discovery
@@ -187,7 +188,7 @@ Import surprises worth knowing: keywords outside the table above are dropped sil
 
 **Your config file is trusted input** — exactly like `~/.ssh/config` itself. Whatever a config declares, the launcher passes to ssh: `options:` entries become real `-o` settings verbatim, and OpenSSH options such as `ProxyCommand` / `LocalCommand` **execute arbitrary commands at connect time**. Keep configs (and `~/.ssh/config`) owned by you with `0600`/`0644` permissions and do not accept endpoint files from strangers; see the fleet-wide [trust boundary](../docs/TRUST-BOUNDARY.md).
 
-Untrusted bytes are still fenced where they only reach the *display* path: endpoint fields are sanitized before printing (`--list`, stderr error wrapping), the filter echo strips control sequences before rendering, and no leading-dash value can smuggle an ssh option (`proxyJump`/`options`/destination carry a dash guard; identity paths ride `-i`'s mandatory value slot).
+Untrusted bytes are fenced where they only reach the *display* path: every picker row, the filter echo, and the `--list` columns pass through the canonical sanitizer (`Sanitize::untrusted()` plus its display policy `untrustedForDisplay()`) — escape sequences, C0 controls and encoded-C1 shims are removed, invisible formatting is marked as a visible sentinel, and CR/LF/TAB are folded to spaces so no field can forge an extra row. Fields that reach ssh as arguments are REFUSED, not stripped: a leading-dash `host` (destination), `user`, `proxyJump`, or `options` entry aborts with a named error (`Endpoint::assertNotOption` family) rather than being altered into a safe shape; identity paths ride `-i`'s mandatory value slot.
 
 ## Internationalization
 
