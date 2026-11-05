@@ -16,7 +16,10 @@ use SugarCraft\Style\Style;
 /**
  * Demo Model — a counter you can drive with ↑ / ↓ and quit with `q`,
  * `Esc`, or Ctrl+C (all three are pinned in the matrix — the frame's
- * hint line enumerates exactly what `shouldQuit()` accepts).
+ * hint line names the three exit mechanisms, not the matching rule:
+ * lowercase `q` under any modifier except ctrl, Esc under any
+ * modifier, and Ctrl+C — the rune-exact gap is the teaching surface
+ * the `shouldQuit()` comment and CounterTest spell out).
  *
  * Picked deliberately as the "hello, world" of TUI development: small
  * enough to read in one screen, but exercises every piece of the
@@ -31,7 +34,8 @@ use SugarCraft\Style\Style;
  *
  * Not every Msg is a key: the harness also dispatches `WindowSizeMsg`
  * (at startup and on every resize) and `ExceptionMsg` (the async
- * failure channel for anything you schedule via `Cmd::promise()`).
+ * failure channel — anything scheduled via `Cmd::promise()` reports
+ * through it, `WorkerCmd`-backed promises included).
  * The demo ignores both — honestly, since it renders one fixed box and
  * arms no promises — but a real app capturing layout or surfacing
  * errors handles them BEFORE the key filter; see the arms sketched in
@@ -94,11 +98,19 @@ final class Counter implements Model
     //
     // Trust boundary: Program writes the frame to the terminal
     // UNMEDIATED, so anything interpolated here must be trusted. Text
-    // from files, the network, or user input goes through sugar-core's
-    // Sanitize::untrusted() first (untrustedForMarkedFrames() when the
-    // frame carries image/mouse-zone U+E000 markers) — raw SGR, OSC-8
-    // and private-use bytes are a terminal-injection surface, not
-    // payload.
+    // from files, the network, or user input goes through one of
+    // sugar-core's two sanitizer policies first: Sanitize::untrusted()
+    // strips terminal-control payload but deliberately preserves the
+    // private-use arena U+E000-U+F8FF (legitimate image-overlay
+    // markers and Nerd Font glyphs live there); untrustedForMarkedFrames()
+    // does the same pass and additionally sweeps the sugar-mouse zone
+    // sentinels U+E000/U+E001 — that extra sweep is the one a frame
+    // carrying image/mouse-zone markers needs (View's image layer and
+    // ImageOverlay::marker(), the Panes helper — machinery outside the
+    // Model contract itself), because forged zone markers ride exactly
+    // those two bytes. Raw SGR and OSC-8 payload is an injection
+    // surface under either policy, not payload. The short form lives
+    // in this package's README "Trust boundary" section.
     public function view(): string
     {
         $body = sprintf("count: %d\n↑ ↓ to change · q / Esc / Ctrl+C quit", $this->n);
@@ -108,10 +120,11 @@ final class Counter implements Model
 
     /**
      * The frame decoration is built ONCE and reused (CALIBER
-     * [bug:candy-starter-style-rebuild], shipped 2026-11-03): Style is an
-     * immutable value object, so the pre-fix per-frame construction chain
-     * in view() only manufactured throwaways at render rate. Memoized
-     * static style is the pattern for any constant decoration.
+     * [gotcha:candy-starter-style-rebuild]): Style is an immutable value
+     * object, so constructing it per frame only manufactures throwaways
+     * at render rate. A memoized static style is the pattern for any
+     * constant decoration; per-frame content styling rides inline
+     * sugar-style instead.
      */
     private static function frameStyle(): Style
     {
