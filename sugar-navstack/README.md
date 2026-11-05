@@ -44,9 +44,16 @@ composer require sugarcraft/sugar-navstack
 > `prefer-stable: true` — the SugarCraft-wide convention — or pin
 > `sugarcraft/sugar-navstack: "dev-master"`.
 
+The Quick Start and renderer follow runnable demos in this repository:
+`php examples/basic.php` drives the stack and the breadcrumb renderer, and
+`php examples/navigation.php` walks the push/pop/back-navigation flow. Both
+register the Composer autoloader themselves.
+
 ## NavStack Quick Start
 
 ```php
+require __DIR__ . '/../vendor/autoload.php'; // or the host app's autoloader
+
 use SugarCraft\NavStack\NavStack;
 
 $stack = NavStack::new();
@@ -171,7 +178,9 @@ $output = $bc->render($stack);
 // width so zones clamp to it: cells past the edge stay UNCLICKABLE even
 // when the emulator visually wraps the row. Pass the 1-based row the bar
 // is painted on when that is not row 1 — from here on hit()/hitItem()
-// take ABSOLUTE terminal coordinates.
+// take ABSOLUTE terminal coordinates. Both values are host-owned state:
+$cols = 80; // current terminal width
+$row = 1;   // 1-based row the trail occupies
 $bc->scan($output, viewportWidth: $cols, row: $row);
 
 // One-call click dispatcher: resolves a clicked cell straight to the stack
