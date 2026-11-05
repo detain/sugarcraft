@@ -36,7 +36,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | | Library | Role |
 |---|---|---|
 | <img src="media/icons/sugar-core.png" width="48" alt=""> | **[SugarCraft](sugar-core/)** | MVC-style Model–Update–View TUI runtime — `Model` / `Msg` / `Cmd` / `Program`, plus a frame-diff renderer with an opt-in cursed cell-diff mode. |
-| <img src="media/icons/sugar-ansi-parser.png" width="48" alt=""> | **[SugarAnsiParser](sugar-ansi-parser/)** | ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Extraction from sugar-vterm. |
+| <img src="media/icons/sugar-ansi-parser.png" width="48" alt=""> | **[SugarAnsiParser](sugar-ansi-parser/)** | ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Extraction from sugar-vterm; formerly published as `sugarcraft/candy-ansi` (renamed 2026-10). |
 | <img src="media/icons/sugar-cellbuffer.png" width="48" alt=""> | **[SugarCellBuffer](sugar-cellbuffer/)** | Cell-grid value objects — immutable Buffer (2-D cell grid) and Cell (`rune`/style/link/width). Shared foundation for all rendering; `Buffer::diff()` included. |
 | <img src="media/icons/sugar-constraints.png" width="48" alt=""> | **[SugarConstraints](sugar-constraints/)** | Constraint-based layout solver — `LayoutSolver` interface with a deterministic `GreedySolver` engine (`CassowarySolver` kept only as a deprecated shim). |
 | <img src="media/icons/sugar-async.png" width="48" alt=""> | **[SugarAsync](sugar-async/)** | Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). |
