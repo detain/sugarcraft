@@ -232,7 +232,8 @@ use SugarCraft\Vcr\Recorder;
 (new Program($model))
     ->withRecorder(Recorder::open('/tmp/session.cas'))
     ->run();
-// cassette is closed automatically on QuitMsg
+// cassette is closed automatically when the run loop ends
+// (final recordQuit rides only a QuitMsg exit; a crash still flushes)
 ```
 
 Read a recorded cassette back:
@@ -1159,25 +1160,28 @@ goes in with `$registry->registerFirst(new MyOne())`.
 
 ## Visual regression goldens
 
-`candy-vcr/tests/golden/` holds 10 curated `.tape` files (TokyoNight,
+`candy-vcr/tests/golden/tapes/` holds 10 curated `.tape` files (TokyoNight,
 Dracula, plain `Type+Enter`, sleep-heavy, Ctrl-sequence, arrow keys,
 wide CJK, `Set Width/Height`, multi-frame animation, idle-rich) and
 their committed `.gif` baselines under both encoders
-(`<name>.php.gif` + `<name>.ffmpeg.gif`, 20 GIFs, ~400 KB total).
+(`<name>.php.gif` + `<name>.ffmpeg.gif` one level up in `candy-vcr/tests/golden/`, 20 GIFs, 348 KB total).
 
 `tests/Encode/VisualRegressionTest.php` re-renders each tape and
 compares to the golden via:
 
 - **SHA-256 byte hash** for `PhpGifEncoder` (deterministic encoder).
-- **SSIM ≥ 0.95** via `ffmpeg`'s `compare` filter for
-  `FfmpegGifEncoder` (auto-skipped when `command -v ffmpeg` is empty);
-  pixel-diff fallback when SSIM filter is unavailable.
+- **SSIM ≥ 0.95** via `ffmpeg`'s `ssim` filter
+  (`-filter_complex '[0:v][1:v]ssim'`, the `All:` score parsed from the
+  filter's stderr line) for `FfmpegGifEncoder` (auto-skipped when
+  `command -v ffmpeg` is empty); pixel-diff fallback when the SSIM filter
+  is unavailable.
 
 To regenerate goldens intentionally (after an encoder change or a
 theme palette tweak):
 
 ```sh
 php candy-vcr/scripts/refresh-goldens.php           # safe — warns + exits 2 if >3 tapes drift
+php candy-vcr/scripts/refresh-goldens.php --dry-run # preview the drift list, change nothing
 php candy-vcr/scripts/refresh-goldens.php --force   # commit the new baseline
 ```
 
@@ -1252,6 +1256,7 @@ For the tape corpus the same rule applies in bulk, with a drift guard:
 
 ```sh
 php candy-vcr/scripts/refresh-goldens.php   # safe — warns + exits 2 if >3 tapes drift
+                                            # (--dry-run previews the drift list; --force refreshes)
 ```
 
 ## License
