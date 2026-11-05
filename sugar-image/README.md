@@ -119,8 +119,8 @@ Codec matrix (sugar-image native paths only):
 
 | Container | sugar-image native | Notes |
 |---|---|---|
-| PNG (still + APNG) | ✅ decode | APNG frames via `fromAnimatedFile()` |
-| JPEG, static GIF | ✅ decode | GIF animates via `fromAnimatedFile()` |
+| PNG (still + APNG) | ✅ decode | APNG frames via `fromAnimatedFile()` → an `Animation` |
+| JPEG, static GIF | ✅ decode | GIF animates via `fromAnimatedFile()` → an `Animation` |
 | WebP — static (VP8/VP8L/VP8X) | ✅ decode via `fromString()` | ext-gd WebP build |
 | WebP — animated (VP8X ANIM bit / ANMF) | ❌ refused by name | `UnsupportedFormatException` — needs chafa CLI or sugar-video's pure-PHP `AnimatedWebpDecoder` (no released ffmpeg decodes animated WebP frames — its demuxer skips ANMF); the refusal is structural (pure-PHP RIFF walk), so the silent first-frame degrade class is closed on every host |
 | AVIF / HEIF / HEIC (`ftyp` brands) | ❌ refused by name | no PHP-side decoder; chafa CLI renders a still |
@@ -135,7 +135,8 @@ Codec matrix (sugar-image native paths only):
   re-encode any payload that is not PNG by signature.
 - Palette PNGs are automatically converted to truecolor before
   processing.
-- Animated GIF and APNG via `ImageSource::fromAnimatedFile()`.
+- Animated GIF and APNG via `ImageSource::fromAnimatedFile()`, which returns an
+  `Animation` (frames + per-frame delays) — the input to `AnimationDriver`.
 
 ## Limits
 
