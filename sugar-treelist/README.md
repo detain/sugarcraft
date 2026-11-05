@@ -216,6 +216,7 @@ would reorder equal-score items):
 
 ```php
 use SugarCraft\TreeList\FuzzyMatch;
+use SugarCraft\TreeList\StringItem;
 
 $matcher = new FuzzyMatch();
 
@@ -303,7 +304,7 @@ Beyond the fluent setters shown above, the navigation surface is:
 - `cursorIndex()` — the cursor's **item** index (not a row position: with multi-line items, rows and items differ). `cursorItem()` — the cursor item's `\Stringable`; throws `RuntimeException` on an empty list. `tryCursorItem()` returns `null` instead, matching the `tryItemAt()`/`itemAt()` pair.
 - `length()`, `isEmpty()`, `itemAt(int)`, `tryItemAt(int)`, `find(\Stringable)`, `itemIds()` — read-only item access (indices address the **visible** projection, so they follow the active filter).
 - `lines()` — the laid-out frame rows without any delta bookkeeping; throws `RuntimeException` with a localized message (see below) on an empty list or zero viewport. `linesStream()` is a generator-shaped wrapper over the same eager computation — it interleaves nothing.
-- `view()` — full frame or row delta as described above; the only method that mutates in place (its render memo), which is why the immutability contract is scoped to item/configuration data.
+- `view()` — full frame or row delta as described above; the only method that mutates in place (its render memo), which is why the immutability contract is scoped to item/configuration data. Unlike `lines()`, `view()` **never throws**: a `Throwable` raised mid-render drops the memo and the frame becomes the sanitized exception message on a single line (`Sanitize::untrustedForMarkedFrames` is the choke, so a failure surfaces as readable text, never as a live escape channel); pass a `LoggerInterface` as `view()`'s optional parameter to receive the same failure at `warning` level. `lines()` keeps the opposite polarity and throws.
 
 ## Localisation
 
