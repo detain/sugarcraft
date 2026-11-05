@@ -111,9 +111,10 @@ production. That remediation is deliberately downstream product policy here —
 this library has no list of which names are secrets, and any list it shipped
 would be wrong for someone's environment.
 
-The planner is a `callable(string $name, array $argv, array $env): array`
-returning `[list<string> $argv, ?array $env]`; throwing from it refuses the
-launch:
+The planner is a `\Closure(string $name, array $argv, array $env): array` —
+the seam's concrete parameter type is `?\Closure`, so a callable that is not a
+Closure is a TypeError rather than an accepted fallback — returning
+`[list<string> $argv, ?array $env]`; throwing from it refuses the launch:
 
 ```php
 $binary = 'npx';
