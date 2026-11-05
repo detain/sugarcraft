@@ -13,7 +13,8 @@ $reg-&gt;counter('http.requests', 1, ['route' =&gt; '/api/foo', 'status' =&gt; '
 $reg-&gt;gauge  ('queue.depth',  42);
 
 $stop = $reg-&gt;time('http.duration', ['route' =&gt; '/api/foo']);
-handleRequest();
+// ...do the work being timed (SessionMetrics::handle() wraps exactly this
+//     start/stop pattern around the SSH session pipeline, per session)...
 $stop();
 
 // Pre-tag every emit:
