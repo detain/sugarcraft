@@ -549,7 +549,7 @@ theme[cpu_box_mid]="#ff9ad2"
 theme[cpu_box_end]="#ffc49a"
 ```
 
-Flows are drawn in truecolor only. With 256 colours, the 16-colour `TTY` theme or `tty_mode`, the outline uses the flat `<box>_box` colour. btop ignores these keys, so a theme that uses them still loads in btop with flat outlines. Themes that do not set them, which includes `Default` and every btop theme, look exactly as they do in btop.
+Flows are drawn in truecolor only. With 256 colours, `lowcolor = true`, the 16-colour `TTY` theme or `tty_mode`, the outline uses the flat `<box>_box` colour. btop ignores these keys, so a theme that uses them still loads in btop with flat outlines. Themes that do not set them, which includes `Default` and every btop theme, look exactly as they do in btop.
 
 The bundled themes are ported from btop (Apache-2.0; see `themes/LICENSE` and `themes/README.md`). `mellow` comes from btop PR #1683. `pastel` is original to candy-top. Theme colours are rendered byte-exact against btop's theme engine (see `tests/Theme/BtopThemeOracleTest.php`).
 
