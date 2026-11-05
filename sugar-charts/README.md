@@ -21,7 +21,11 @@ not resolve.
 sugar-charts — terminal charts for PHP 8.3+. The lib ships the canvas foundation
 (Canvas / BrailleGrid / Graph) plus ten chart renderers — Sparkline, BarChart,
 LineChart, TimeSeries, Streamline, Waveline, Heatmap, OHLCChart, Scatter and Picture —
-and an Aggregation toolbox. The Components table below is the real value map.
+and an Aggregation toolbox. The Components table below is the fastest way to
+find the class you need.
+
+The snippets assume a composer project with this package installed and
+`require 'vendor/autoload.php';` in scope.
 
 ```php
 use SugarCraft\Charts\Sparkline\Sparkline;
@@ -29,7 +33,7 @@ use SugarCraft\Charts\BarChart\BarChart;
 use SugarCraft\Charts\LineChart\LineChart;
 
 echo Sparkline::new([1, 3, 2, 8, 5, 4, 7, 6], 8)->view() . PHP_EOL;
-// " ▂▁█▅▃▇▆"  (the minimum value maps to the blank leading cell)
+// " ▂▁█▅▃▇▆" (scaled to the window's min..max; the minimum maps to the blank leading cell)
 
 echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)->view() . PHP_EOL;
 //               ██████
@@ -185,7 +189,7 @@ echo $chart->view();   // truecolor 38;2;… runs follow the dracula slots
 
 Available themes: `Theme::ansi()` / `Theme::dark()` / `Theme::light()` /
 `Theme::dracula()` / `Theme::tokyoNight()` / `Theme::oneDark()` /
-`Theme::githubDark()` / `Theme::solarizedDark()` / `Theme::solarizedLight()` / `Theme::adaptive()` (profile-adaptive).
+`Theme::githubDark()` / `Theme::solarizedDark()` / `Theme::solarizedLight()` / `Theme::adaptive()` (COLORFGBG-aware — dark or light by the reported background, dark when nothing is reported).
 
 Theme consumption is scoped to `LineChart` today. The other renderers do
 not read a theme (`BarChart` / `Scatter` / `OHLCChart` never had
@@ -384,16 +388,16 @@ localized, while developer-fault throws (reserved dataset name, unknown
 `tests/LangTest.php` pins locale key parity against `lang/en.php`, so a
 new message must be added to every locale to land.
 
-Terminology: a *tick* is a numeric value at an axis position, a *label*
-is the text drawn for one of the evenly-spaced *slots* along an axis
-(five slots on X, four on Y by default; `withXLabelFormatter` /
-`withYLabelFormatter` accept both).
-
 ## Performance
 
 Render cost is linear in width × height. Both canvases are sparse —
 empty cells store nothing — so mostly-blank charts render cheaply, and
 per-sample style lookups are memoized.
+
+Terminology: a *tick* is a numeric value at an axis position, a *label*
+is the text drawn for one of the evenly-spaced *slots* along an axis
+(five slots on X, four on Y by default; `withXLabelFormatter` /
+`withYLabelFormatter` accept both).
 
 Axis tick values are not a nice-number ladder: the live path
 (`LineChart::resolveXLabels` / `resolveYLabels`) emits evenly-spaced
@@ -446,7 +450,7 @@ echo $canvas->view();
 number of stops (≥ 2). `withColors(Color $cold, Color $hot)` is the
 two-stop shortcut. `withColorProfile(ColorProfile)` sets the color space
 the gradient is emitted in — there is no output autodetection; the default
-is TrueColor. `Heatmap::withCellStyle(Style)` overlays additional attributes
+is TrueColor. `Heatmap::withCellStyle(?Style)` overlays additional attributes
 (bold / background / etc.) on top of every cell's foreground gradient.
 
 ## Demos
