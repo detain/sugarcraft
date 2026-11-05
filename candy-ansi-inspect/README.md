@@ -44,13 +44,32 @@ $ printf '\e[?2026h' | candy-ansi-inspect
 ESC[?2026h  enable synchronized output
 ```
 
+```sh
+$ printf '\e[31merror: disk full\e[0m\n' > capture.ansi
+$ candy-ansi-inspect capture.ansi
+ESC[31m  SGR foreground red
+error: disk full
+ESC[0m  SGR reset
+
+  C0 LF (line feed)
+```
+
+A saved capture works exactly like a pipe: pass the file as the argument and the
+same report comes out.
+
 An empty source is a valid report of nothing: an empty file, or a command that
 printed nothing, yields an empty report and exit status **0**, so
 `cmd | candy-ansi-inspect` stays chainable when `cmd` has no output. Usage is printed on
 stderr with exit status **1** only when no source was named at all (no file
-argument and no piped stdin), and a path argument that is not a readable local
-file — including a stream wrapper such as `php://` or `data://` — is refused the
-same way rather than being read or fetched.
+argument and no piped stdin), and a path argument that is not a local file —
+including a stream wrapper such as `php://` or `data://` — is refused with the
+same exit status rather than being read or fetched. An existing file that cannot
+be read is different: the read fails with a PHP warning on stderr and the tool
+exits **0** with an empty report (the gate is "is this a file", not "can we
+read it"), so a zero exit status after a warning means "inspected nothing", not
+"inspected the file". The refusal string's wording is
+`not a readable file: {path}`, but it only ever fires for paths that are not a
+file at all.
 
 ## Library
 
@@ -63,6 +82,29 @@ foreach (Inspector::parse("\e[1;31mboom\e[0m") as $segment) {
 
 // One-shot report:
 echo Inspector::report($capturedTerminalOutput);
+
+// Machine-readable report: a JSON array of {type, content, description}:
+echo Inspector::reportAsJson($capturedTerminalOutput);
+```
+
+For incremental sources — reading a log or a live pipe chunk by chunk —
+`StreamingInspector` keeps parser state across chunks. `feed()` returns the
+segments a chunk completes (half-sequences are held until their next bytes
+arrive); `finish()` flushes the tail, so a dangling `ESC` or an unterminated
+sequence still arrives as its own segment:
+
+```php
+use SugarCraft\AnsiInspect\StreamingInspector;
+
+$streaming = new StreamingInspector();
+while (($chunk = fread($handle, 8192)) !== false) {
+    foreach ($streaming->feed($chunk) as $segment) {
+        echo $segment->describe(), "\n";
+    }
+}
+foreach ($streaming->finish() as $segment) {
+    echo $segment->describe(), "\n";
+}
 ```
 
 ## What it decodes
@@ -82,12 +124,14 @@ echo Inspector::report($capturedTerminalOutput);
 - **OSC** — title (0/2), icon (1), palette (4), cwd (7), hyperlink (8),
   iTerm2 (9), taskbar progress (9;4), terminal colour set (10/11/12),
   clipboard (52), reset terminal colour (110/111/112).
-- **DCS** — XTVERSION reply (`>|<term> <ver>`), DECRPSS, sixel.
+- **DCS** — XTVERSION reply (`>|<term> <ver>`), DECRQSS request, DECRPSS,
+  tmux passthrough, sixel.
 - **APC** — CandyZone markers (`candyzone:S/E:<id>`), kitty graphics <!-- @rename-keep legacy wire token / historical log -->
   (`G…`).
 - **SS3** — F1-F4 / cursor / Home / End.
 - **2-byte ESC** — DECSC / DECRC / keypad mode / index / reverse-index /
-  reset.
+  next line (NEL) / reset, plus the 7-bit spellings of the SOS / PM / ST
+  controls (`ESC X`, `ESC ^`, `ESC \`).
 
 Anything unrecognised falls back to a generic `CSI/OSC/...` descriptor — an
 unrecognised sequence is never silently swallowed.
@@ -179,6 +223,17 @@ loses which spelling opened the sequence, so the inspector's re-emission can onl
 pick one. What *is* new here is what the inspector reports afterwards:
 before this branch a truncated tail simply vanished, which is why item 7's
 cancelled prelude can now reappear inside one.
+
+## Localisation
+
+Sixteen locale files ship in `lang/`, and the two messages the tool prints
+itself (usage, the not-a-file refusal) route through `Lang::t()` — the decoded
+labels inside a report are English-built in `Inspector` — but locale
+*selection* is dormant: neither `bin/` nor `src/` calls `T::setLocale()`, and
+the lookup defaults hard to `en`, so `LANG=de.UTF-8 candy-ansi-inspect` still
+answers English. Turning detection on (a `T::setLocale(T::detect())` call at
+bin entry) is an owner-gated decision tracked in
+`prompt_kit/findings/docs-reviews-1104/candy-ansi-inspect-owner-gate.md`.
 
 ## Test
 
