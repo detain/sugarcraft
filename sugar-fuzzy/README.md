@@ -139,7 +139,9 @@ input source is untrusted.
 ## Sahilm weights
 
 `SahilmMatcher`'s bonuses are injectable via the immutable `SahilmScoring`; the
-canonical weights (the default) are the historical sahilm/fuzzy constants:
+canonical weights (the default) are the constants this port has always
+used — the bonus shape mirrors sahilm/fuzzy, the values are pinned by the
+characterization suites:
 
 ```php
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
@@ -157,6 +159,12 @@ $tuned = SahilmMatcher::new(scoring: SahilmScoring::canonical()->withFirstCharBo
 | `camelBonus`       |        10 |
 | `firstCharBonus`   |        15 |
 | `lowerCaseBonus`   |         1 |
+
+Note on thresholds: `match()` treats a non-positive score as no match and
+returns `null`, while `matchAll()` filters only by `$minScore` (default 1).
+Under the canonical weights the two agree; passing `minScore: 0` or injecting
+negative weights can rank a candidate through `matchAll()` that `match()`
+refuses.
 
 ## Selecting a matcher by name
 
