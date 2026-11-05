@@ -115,16 +115,27 @@ echo $source->token()->isCancelled() ? "cancelled\n" : "awaiting Ctrl-C\n";
 ## Subscriptions
 
 `Subscription` is the disposal handle returned by subscribe-style APIs.
-`Subscriptions::compose()` lets multiple subscriptions be disposed atomically:
+`Subscriptions::compose()` lets multiple subscriptions be disposed atomically;
+`Subscriptions::of()` mints one from any cleanup closure, so hand-owned
+resources join the composite without a producer that hands out handles:
 
 ```php
-use SugarCraft\Async\Subscriptions;
+use SugarCraft\Async\{CancellationSource, Subscriptions};
 
+$source = CancellationSource::new();
+
+// Two real handles: a token registration and a self-minted resource owner.
 $composite = Subscriptions::compose(
-    Subscriptions::new(), // leaf no-op handle, stand-in for real subscriptions below
-    Subscriptions::new(),
+    $source->token()->onCancel(static function (): void {
+        echo "worker told to stop\n";
+    }),
+    Subscriptions::of(static function (): void {
+        echo "socket closed\n"; // stand-in for fclose($socket) / removeListener(...)
+    }),
 );
-$composite->unsubscribe(); // disposes all members
+
+$composite->unsubscribe(); // cleanup runs once; the registration is dropped
+$source->cancel();         // the dropped callback no longer runs — the leak guard
 ```
 
 ## Suspension
