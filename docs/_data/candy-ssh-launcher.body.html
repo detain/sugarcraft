@@ -24,7 +24,7 @@
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Config discovery</strong><span><code>--config</code> ▸ <code>./wishlist.{yml,yaml,json}</code> ▸ <code>~/.config/wishlist.{yml,yaml,json}</code> — first file that exists wins at each tier.</span></div>
-      <div class="feature"><strong>YAML schema</strong><span>name, host, port, user, description, identityFiles[] (or identity_file), proxyJump, options[].</span></div>
+      <div class="feature"><strong>YAML schema</strong><span>name, host, port, user, description, identityFiles[] (or the singular identity_file / identityFile aliases), proxyJump, options[].</span></div>
       <div class="feature"><strong>Type-filter</strong><span>Type to fuzzy-narrow the list (sugar-fuzzy Smith–Waterman scoring, live match count, 16 locales).</span></div>
       <div class="feature"><strong>ProxyJump / Options</strong><span>Pass any ssh option through the entry's <code>options</code> array.</span></div>
       <div class="feature"><strong>pcntl_exec</strong><span>Replaces the launcher process — no double-shell — so signals + exit codes propagate cleanly.</span></div>
@@ -35,7 +35,7 @@
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-ssh-launcher">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-ssh-launcher/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-ssh-launcher/tree/main/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-ssh-launcher/tree/master/examples">Sample config</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/wishlist">wishlist</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
@@ -44,14 +44,17 @@
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Endpoint</td><td>new(name, host)</td><td>Create SSH endpoint</td></tr>
-<tr><td>Endpoint</td><td>withPort(port)</td><td>Set SSH port</td></tr>
-<tr><td>Endpoint</td><td>withUser(user)</td><td>Set SSH user</td></tr>
-<tr><td>Endpoint</td><td>withIdentityFile(path)</td><td>Set identity file</td></tr>
-<tr><td>Config</td><td>load(path)</td><td>Load endpoints from YAML</td></tr>
+<tr><td>Endpoint</td><td>new(name, host)</td><td>Create SSH endpoint (port, user, identityFiles, description, proxyJump, options optional)</td></tr>
+<tr><td>Endpoint</td><td>withName(name) · withHost(host) · withPort(port) · withUser(user)</td><td>Fluent setters — each returns a new endpoint</td></tr>
+<tr><td>Endpoint</td><td>withIdentityFiles(paths[])</td><td>Set identity files, in order, each passed to ssh as its own <code>-i</code></td></tr>
+<tr><td>Endpoint</td><td>withDescription(text) · withProxyJump(host) · withOptions(options[])</td><td>Fluent setters — each returns a new endpoint</td></tr>
+<tr><td>Endpoint</td><td>parsePort(host, raw)</td><td>Validate a port value (1–65535); junk is refused naming the endpoint</td></tr>
+<tr><td>Config</td><td>load(path)</td><td>Load endpoints from YAML/JSON (format auto-detected)</td></tr>
+<tr><td>Config</td><td>parse(raw, hintPath)</td><td>Parse config text directly (extension hint, else JSON iff the payload opens with <code>[</code> or <code>{</code>)</td></tr>
 <tr><td>Config</td><td>importFromSshConfig(path)</td><td>Import endpoints from ~/.ssh/config</td></tr>
-<tr><td>Picker</td><td>pick(endpoints)</td><td>Interactive selection (null on cancel)</td></tr>
-<tr><td>Launcher</td><td>dispatch(endpoint, binary)</td><td>pcntl_exec handoff — never returns</td></tr>
+<tr><td>Picker</td><td>pick(endpoints)</td><td>Interactive selection (null on cancel or empty endpoint list)</td></tr>
+<tr><td>Launcher</td><td>__construct(executor)</td><td>Optional callable executor seam for embedding and tests</td></tr>
+<tr><td>Launcher</td><td>dispatch(endpoint, binary)</td><td>pcntl_exec handoff — never returns on success; the default executor throws a RuntimeException naming the binary when exec fails</td></tr>
 </table>
   </div>
 </section>
@@ -59,7 +62,7 @@
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIF of the endpoint picker, regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-ssh-launcher/.vhs/picker.gif" alt="Picker">
