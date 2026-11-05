@@ -93,8 +93,20 @@ number column — its field width is derived from the item count, so columns
 stay aligned past nine items), `$numberRelative` (number as each item's
 unsigned distance from the cursor: 2 1 0 1 2), and `$prefixWrap` (continuation
 rows use `$separatorWrap` instead of the join glyph). The join glyph follows
-the item's **position in the list**, so a rendered window shows a real tree.
+the item's **position in the list**, so the gutter reads as a tree — the list
+itself stays flat: tree structure is yours to encode as leading whitespace in
+the item text, which survives the whitespace-faithful wrapper verbatim.
 `DefaultSuffixer::$currentMarker` (default `<`) marks the cursor row.
+
+Guide the cursor with text, not colour alone. Keep a marker glyph
+(`$currentMarker`, or your suffixer's) so position survives monochrome
+terminals and screen readers — relying on `setCurrentStyle()`'s colour by
+itself is a WCAG 1.4.1 (use of colour) warning; if you do style-only, add a
+redundant cue. Passing `''` to any glyph knob drops that decoration (control
+bytes are refused loudly, empty is not). `setLineStyle('')` +
+`setCurrentStyle('')` + `lines()` is the full plain-text mode: `lines()` never
+styles and never deltas, so it is the right reader for assistive and
+scripted-output hosts.
 
 To implement the contract yourself:
 
@@ -131,6 +143,12 @@ $model = $model->setSuffixer(new class implements Suffixer {
     }
 });
 ```
+
+Returning `''` from `suffix()` means *no suffix and no padding* on that line —
+the reserved width is still subtracted from the content budget on every line,
+but only a non-empty return is right-aligned into the column. Reserve the
+width your widest real suffix needs (an over-wide return is not clamped; it
+follows the line past the reservation).
 
 ## Viewport
 

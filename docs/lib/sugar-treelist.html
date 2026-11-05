@@ -51,7 +51,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-treelist"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-treelist" alt="SugarTreelist code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">List view with customizable box-drawing prefixes, cursor navigation, word-wrap, and live filtering. Composes with any SugarCraft model.</p>
+    <p class="lede" style="margin-top: 28px;">List view with customizable box-drawing prefixes, cursor navigation, word-wrap, and live filtering. It is a plain final class, not a TEA Model - render it from your host program's view() and feed it input there.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-treelist</code></pre>
@@ -59,7 +59,9 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer};
 
-// Fluent setters return NEW Models - rebind; instances are immutable.
+// Fluent setters return NEW Models - rebind. Data is immutable; view()
+// mutates the delta-render memo in place, and withoutFilter() with no filter
+// active is an identity return ($this, no clone).
 $model = Model::new()->setWidth(80)->setHeight(24);
 $model = $model->addItem(new StringItem('src/main.php'));
 $model = $model->addItem(new StringItem('src/Model.php'));
@@ -97,7 +99,7 @@ echo $model->view();
 </thead>
 <tr><td>Model</td><td>new()</td><td>Create model with defaults</td></tr>
 <tr><td>Model</td><td>withFilterFn(\Closure)</td><td>Filter items; returns new Model; filterState → filtering</td></tr>
-<tr><td>Model</td><td>withoutFilter()</td><td>Clear filter; restore original items; filterState → unfiltered</td></tr>
+<tr><td>Model</td><td>withoutFilter()</td><td>Clear filter; restore original items; filterState → unfiltered (identity return - $this, no clone - when no filter was active)</td></tr>
 <tr><td>Model</td><td>addItem(\Stringable)</td><td>Append a list item</td></tr>
 <tr><td>Model</td><td>setWidth(int)</td><td>Set viewport width in cells</td></tr>
 <tr><td>Model</td><td>setHeight(int)</td><td>Set viewport height in lines</td></tr>
