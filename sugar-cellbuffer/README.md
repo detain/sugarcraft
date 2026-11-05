@@ -3,7 +3,7 @@
 > Formerly published as `sugarcraft/candy-buffer` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Buffer\` → `SugarCraft\CellBuffer\`. <!-- @rename-keep -->
 
-Cell-grid value objects for terminal rendering — immutable `Buffer` and `Cell` types that form the shared render data model of the SugarCraft fleet.
+Cell-grid value objects for terminal rendering — immutable `Buffer` and `Cell` types that form the shared render data model of the SugarCraft ecosystem.
 
 ## Overview
 
@@ -70,7 +70,7 @@ No `.vhs` demo — this is a pure data model; `examples/basic.php` + `examples/d
 
 ## Wide characters
 
-Wide cells (CJK, many emoji) declare `width: 2`. The writing API enforces the pair law for you: `withCellAt()`, `fill()` and `withRegion()` automatically write the width-0 continuation partner to the right, blank a left-behind continuation when a lead is replaced, and blank the displaced partner when a new lead lands on an existing pair's slot — no orphaned half-pair can survive a public mutation.
+Wide cells (CJK, many emoji) declare `width: 2` — the pair law is exactly a width-2 contract; larger widths are single run-length spans that carry no continuation cells. The writing API enforces the pair for you: `withCellAt()`, `fill()` and `withRegion()` automatically write the width-0 continuation partner to the right (a width-2 lead placed in the last column writes no partner — the pair is clipped to the grid edge), blank a left-behind continuation when a lead is replaced, and blank the displaced partner when a new lead lands on an existing pair's slot — no orphaned half-pair can survive a public mutation. Encoded streams skip continuations while the cursor advance trusts each lead's declared width, keeping wire and grid in contract.
 
 ```php
 // Width is declared, never measured: pass width 2 explicitly.
@@ -103,7 +103,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 
 ### Cell
 
-- `Cell::new(string $rune = ' ', ?Style $style = null, ?Hyperlink $link = null, int $width = 1): self` — negative widths are refused; `0` marks a continuation, `2` a wide lead, larger values are run-length spans (see sugar-table's border fills).
+- `Cell::new(string $rune = ' ', ?Style $style = null, ?Hyperlink $link = null, int $width = 1): self` — negative widths are refused; `0` marks a continuation, `2` a wide lead (the only width that carries a continuation partner), larger values are single run-length spans (see sugar-table's border fills).
 - `Cell::continuation(): self` — blank width-0 partner cell.
 - `Cell::rune(): string`, `Cell::style(): ?Style`, `Cell::link(): ?Hyperlink`, `Cell::width(): int`, `Cell::equals(Cell $other): bool`.
 
@@ -166,16 +166,16 @@ $bytes = (new DiffEncoder())->encode($ops);
 Emitted bytes (annotated):
 
 ```text
-\x1b[0;38;2;255;0;0m  # SGR → red fg            (first MoveCursorOp skipped: encoder is already at 1;1)
+\x1b[0;38;2;255;0;0m  # SGR → red fg            (first MoveCursorOp skipped: encoder is already at the home position)
 A                   # SetCellOp 'A'
 \x1b[0;38;2;0;0;255;1m  # SGR → blue fg + bold  (second MoveCursorOp skipped: cursor advanced past 'A')
 BBB                 # 'B' + RepeatRunOp encoded LITERAL: RepeatGate::worth(2,1)
-                    # says the REP frame would cost more than the three glyphs
+                    # says the REP frame would cost more than the remaining glyphs
 \x1b[0m             # closing SGR reset — the frame ends styled; the encoder
-                    # always closes a styled stream (the ghost-colour cure)
+                    # always closes a styled stream, so stale colour never bleeds into the next frame
 ```
 
-Total: 44 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (which pays the reset too, plus per-cell style re-statements across the blanks). Cell styles in the example are equal-by-value instances; the stream is instance-independent — sharing one `Style` object across the three `B` cells yields the identical bytes. The diff is round-trip verified: `$prev->applyDiff($curr->diff($prev))` renders byte-identically to `$curr` via `toAnsi()`, hyperlinks (ids included) surviving intact.
+Total: 44 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (which pays the reset too, walks every cell including the blanks row-by-row, and joins rows with bare `\n`). Cell styles in the example are equal-by-value instances; the stream is instance-independent — sharing one `Style` object across the three `B` cells yields the identical bytes. The diff is round-trip verified: `$prev->applyDiff($curr->diff($prev))` renders byte-identically to `$curr` via `toAnsi()`, hyperlinks (ids included) surviving intact.
 
 ## Security & trust boundaries
 
@@ -189,7 +189,7 @@ Total: 44 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (wh
 
 ## Memory model
 
-Buffers are full-grid copy-on-write: a one-cell `with*()` copies the `width × height` cell list. Serialisation briefly holds both the old and new structures (~2-3× transient). Dimensions are caller-trusted at construction — size the grid to the pane, not the content. Region costs are bounded: `withRegion()`/`fill()` iterate only the clipped intersection, and `copy()` refuses regions above `MAX_COPY_CELLS` (1,000,000 cells).
+Every mutation clones the full grid: a one-cell `with*()` copies the `width × height` cell list, so the old and new structures briefly coexist (~2-3× memory, momentarily). Dimensions are caller-trusted at construction — size the grid to the pane, not the content. Region costs are bounded: `withRegion()`/`fill()` iterate only the clipped intersection, and `copy()` refuses regions above `MAX_COPY_CELLS` (1,000,000 cells).
 
 ## Degraded terminals & non-visual output
 
