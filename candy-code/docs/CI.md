@@ -341,28 +341,38 @@ tag spelled `candy-code/v*` — or dispatching the workflow manually with that t
 builds the phar and publishes it, with its checksum and signature assets, as a GitHub Release.
 Nothing else mints a stable artifact.
 
-As of this writing the workflow carries **no CI gate**: no `needs:`, no concurrency block, and
-no check that the tagged commit is on `master` or that `ci.yml`'s test matrix is green for it.
-The pipeline will happily publish a tag cut from an unmerged branch. Adding such a gate is an
-open owner decision, not an oversight a tagger should assume away.
+Since reviews-1103 G6-P the workflow is **gated in CI, not in the tagger's good intentions**
+(owner rulings OD-5/6/7/8). A `gate` job runs before any build: it resolves the tag to its
+commit, refuses (`git merge-base --is-ancestor`) any tag whose commit is not on `master`, and
+polls the `CI` workflow to a **green verdict at that exact SHA** — bounded, fail-closed, so a
+missing or red or still-running CI verdict never publishes. The release job itself carries a
+per-app concurrency lock (two releases of one app serialize; different apps proceed), checks
+out the tagged commit explicitly, and creates the GitHub Release with an explicit
+`--target <tagged-sha>` — never a branch-name default.
 
-So the compensating control is the human cutting the tag. The procedure:
+The procedure for a human is now just the honest half:
 
-1. Confirm the commit you are about to tag is on `origin/master` — a tag on a commit master
-   never contained is against policy even though nothing in CI says so.
-2. Open the Actions run for the master push of that exact commit and confirm the suite is
-   green there. Green on a neighbouring commit is not green on yours; nothing verifies it for
-   you, because the tag-triggered workflow does not consult CI at all.
-3. Tag that commit and push: `git tag candy-code/vX.Y.Z <sha> && git push origin
-   candy-code/vX.Y.Z`. Publication begins the moment the tag reaches the remote — there is no
-   second chance before it ships.
-4. Verify the finished release page: the phar assets with their `.sha256` sidecars and
-   signatures, and — once merged to master — a `self-update` run against the new tag.
+1. Confirm the commit you are about to tag is the one you mean; CI enforces ancestry and a
+   green suite at it, so a tag cut from an unmerged branch simply refuses to publish.
+2. Tag that commit and push: `git tag candy-code/vX.Y.Z <sha> && git push origin
+   candy-code/vX.Y.Z`. The gate opens the publication path only over a tested SHA.
+3. Verify the finished release page: the phar assets with their `.sha256` sidecars and
+   signatures, plus the provenance pair `.phar.commit` (full tested SHA) and
+   `.phar.pins.json` (sibling pin map), and — once merged to master — a `self-update` run
+   against the new tag.
 
-The reproducibility caveat the workflow header itself records applies to every release cut this
-way: per-lib `composer.lock` files are forbidden by house rule and the `sugarcraft/*` siblings
-resolve from Packagist's moving `dev-master`, so two builds of the same tag need not be
-byte-identical. A published `.sha256` names the bytes that job produced, not a rebuild promise.
+The old reproducibility caveat is closed at the mechanism level (OD-14 pinning half, on top of
+the still-documented `@dev` doctrine above): before `composer install` the build runs
+`php scripts/pin-siblings.php inject`, which transiently injects `symlink: false` path
+repositories pinning every `sugarcraft/*` sibling to the exact monorepo commit being released,
+and a `verify` step aborts the build if the resolved lock floated any sibling to the network.
+The injected manifest lives only in the runner's checkout — committed lib manifests keep bare
+`@dev` requires, so `tools/check-path-repos.php --no-lib-path-repos` stays green on the tree
+(pinned by `tools/tests/ReleaseSiblingPinsTest.php`). The rolling `<app>/dev` prerelease
+channel and the split/Packagist sync publish the same way: both wait for CI green at their
+commit, and dev builds carry the same `.phar.commit` / `.phar.pins.json` sidecars. A published
+`.sha256` still names the bytes that job produced rather than a rebuild promise — but those
+bytes are now traceable to one tested SHA, siblings included.
 
 Pins carry a cadence, and the cadence is this section. The base-image digests in
 `candy-code/Dockerfile` and any versioned apt pins in the workflows record their verification
