@@ -92,10 +92,10 @@ final class Player implements Model
     /**
      * E-10: how often a watching Player re-runs its probe, in seconds —
      * chicle's exact poll cadence for `--watch` (g_usleep(10000) at
-     * tools/chafa/chafa.c:924, counted in the chafa clone @ 413b76e4d),
+     * tools/chafa/chafa.c:926, counted in the chafa clone @ 413b76e4d),
      * delivered here as an event-loop timer
      * instead of a sleep. Deviations from chicle, both deliberate: its
-     * 250 ms backoff while the file is missing (:930) is not copied (the
+     * 250 ms backoff while the file is missing (:932) is not copied (the
      * probe owner decides what a failed stat costs; a stat(2) of a missing
      * path is cheap), and its re-decode of the file on EVERY poll because
      * "we can't rely on timestamps" (:915-916) is replaced by the host
