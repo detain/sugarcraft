@@ -366,9 +366,10 @@ Both can be active simultaneously:
 $t = $t->Filter('city', 'ny')     // city must contain "ny"
         ->search('li');           // some column must contain "li"
 
-// Row 1 (Alice, NYC): city matches "ny", search matches "li" in "Alice" ✅
-// Row 2 (Bob, LA):    city matches "la"? No ❌
-// Row 3 (Carol, CHI): city fails, search matches "li" in "Carol" — fails Filter ❌
+// Row 1 (Alice, NYC): city contains "ny", search finds "li" in "Alice" ✅
+// Row 2 (Bob, LA):    "LA" has no "ny" — fails Filter ❌
+// Row 3 (Carol, CHI): "CHI" has no "ny" — fails Filter ❌
+//                          ("li" matches neither "Carol" nor "CHI" anyway)
 ```
 
 ## Missing Data Indicator
@@ -419,7 +420,7 @@ $t = Table::fromColumns([...])
 |--------|----------------------------------------|--------------------------|
 | `Page` | `Page N of M`                          | `PageFooter()`           |
 | `Rows` | `Showing X to Y of Z rows`             | `RowsFooter()`           |
-| `Both` | `Page N of M  |  Showing X to Y of Z rows` | Combines both |
+| `Both` | `Page N of M \|  Showing X to Y of Z rows` | Combines both |
 
 ```php
 // Show only row count footer
@@ -681,6 +682,9 @@ Uses multi-pass computation:
    column absorbs the rounding slack so the sum is exact
 4. **Dynamic**: `max(contentWidth, one-share baseline)`
 5. **Content**: exact content width (min 1)
+
+## Internationalization
+
 
 
 
