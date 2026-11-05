@@ -43,7 +43,8 @@ $grid = PosterGrid::new(cardWidth: 16, posterHeight: 9)
 $grid = $grid->right();            // ← → step one cell (crosses row edges)
 $grid = $grid->down();             // ↑ ↓ move between rows
 $grid = $grid->pageDown();         // PgUp / PgDn
-$grid = $grid->home()->end();      // Home / End
+$grid = $grid->home();             // Home
+$grid = $grid->end();              // End
 $grid = $grid->moveTo(2600);       // jump (e.g. an A–Z letter offset)
 ```
 
@@ -75,7 +76,9 @@ is `░` `U+2591`.)
 After each move, read the visible window and fetch the page(s) covering it, then
 splice the results back in at their absolute index. `needsFetch()` dedups the
 request against the last range you loaded, so the cursor can roam inside an
-already-fetched window without re-hitting your API:
+already-fetched window without re-hitting your API. Initialise `$lastFetched =
+null` once before the first move — `needsFetch()` treats null as "nothing loaded
+yet" and always fetches:
 
 ```php
 $want = $grid->visibleRange(overscanRows: 1);
@@ -157,6 +160,10 @@ $clean = $zones->scan($frame);                 // strip markers, record bounds
 $zone  = $zones->anyInBounds($mouseMsg);       // → Zone|null — read $zone->id ("cell:42")
 ```
 
+Zone ids cover every cell in the window, skeleton placeholders included — before
+acting on a `cell:<index>` hit, check `item($index)` / `needsFetch()` so a click
+on an unfetched cell triggers a load rather than a selection.
+
 ## Rail — horizontal browse strip
 
 ```php
@@ -173,8 +180,9 @@ plus a rail-width clamp — and the empty state is localised
 (`Lang::t('rail.empty')`, see [Internationalisation](#internationalisation)).
 `moveCursor()` takes a *delta*; to restore an arbitrary `(cursor, scroll)` pair
 (e.g. returning to a remembered position) construct via `new Rail(...)` — its
-third and fourth arguments are `(cursor, scroll)`, and both are clamped to the
-card list on construction.
+third and fourth arguments are `(cursor, scroll)`: the cursor is clamped into
+the card list, and the scroll to at or below it (`[0, cursor]`), both on
+construction.
 
 ## PosterCard — one tile
 
@@ -317,7 +325,8 @@ them yourself (e.g. a `Mosaic` render of an image you chose). If your poster can
 come from somewhere you do not control, `withSafePoster($ansi)` applies the SGR
 whitelist sweep row-by-row: colours and block glyphs stay byte-identical, every
 cursor-move / OSC / DCS / control sequence goes. `withImage($bytes, $id)` overlay
-bytes never enter the text frame at all — the card carries only the marker id —
+bytes never enter the text frame at all — the frame carries only the marker
+cell, the bytes themselves ride on the card —
 but they travel their own protocol's trust boundary on the way to the screen.
 
 **Zone sentinels are swept at the coercing ingresses and again at paint.** sugar-mouse marks hit-zones with
