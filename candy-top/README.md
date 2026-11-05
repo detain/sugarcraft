@@ -529,7 +529,7 @@ This is a deliberate deviation from btop, whose default is its builtin `Default`
 1. The user directory, `$XDG_CONFIG_HOME/candy-top/themes`, or `~/.config/candy-top/themes`.
 2. The bundled `candy-top/themes/` directory.
 
-The list starts with `Default` and `TTY`, then every `*.theme` file from both directories in a single list sorted by file name. When both directories hold the same file name, both copies are listed, and the user copy comes first and wins every lookup by name.
+The list starts with `Default` and `TTY`, then every `*.theme` file from both directories in a single list sorted by file name. When both directories hold the same file name, both copies are listed, and the user copy comes first and wins every lookup by name. btop's `--themes-dir` analogue exists in the code — `ThemeRegistry` takes an optional custom directory that would rank above both — but candy-top ships no flag or config key to set it, so the user directory is the supported way to add themes.
 
 To add a theme, drop any btop `.theme` file (`theme[key]="#rrggbb"` lines; `"r g b"` triplets and `#gg` greys also work) into the user directory, then pick it with `←`/`→` on `color_theme` in the options menu, or set `color_theme = "name"`. A user file with the same name as a bundled one shadows the bundled theme; the bundled copy stays in the list and can still be selected there (it is then saved by full path). The theme list is scanned at startup and again on `ctrl+r`. An unknown or unreadable theme falls back to `Default`. `theme_background = false` drops the theme's background for a transparent terminal.
 
