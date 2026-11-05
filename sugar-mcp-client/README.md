@@ -173,7 +173,12 @@ checkout the launch stood in.
   `/proc` exists the probe reads `/proc/<pid>/stat` and treats a zombie, or a
   pid whose start time no longer matches the server's (a reused pid), as dead.
   Without `/proc` (macOS, BSD) a forked caller falls back to signal 0 and to
-  pipe EOF.
+  pipe EOF. The ~1s shape holds where each poll slice is capped at one second:
+  an unbounded call, or a bounded call carrying an `onWait:` beat (inbound
+  stderr wakes the poll for a rate-limited probe either way). A bounded call
+  with no beat may instead sleep in a single slice across its remaining
+  budget — there, a silent helper holding the pipes means the call ends at
+  its own `timeoutSeconds`, which is that call's bound.
 - A caller that DOES want a bound opts in per call:
   `callTool(name: $name, arguments: $args, timeoutSeconds: 30.0)` abandons the
   wait at the deadline (time queued for the exchange lock counts), sends
