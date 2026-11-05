@@ -66,6 +66,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
       <div class="feature"><strong>Live search</strong><span><code>/</code> fuzzy-filters the active pane's current directory (not recursive). <code>↑↓</code>/<code>k</code>/<code>j</code> move the result cursor — so <code>k</code>/<code>j</code> cannot be typed into a query; <code>/</code> cannot be typed either. <code>Enter</code> opens a directory result; on a file result it just exits search. Backspace-to-empty exits.</span></div>
       <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates the current tab, <code>Ctrl+Tab</code>/<code>Ctrl+Shift+Tab</code> cycle (needs a terminal that reports modified Tab; <code>Ctrl+PgUp</code>/<code>Ctrl+PgDn</code> are the alternative — tmux and browser terminals may intercept modified Page keys), <code>Ctrl+w</code> closes (refuses the last tab).</span></div>
       <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores the last delete / move / rename; <code>Ctrl+y</code> redoes.</span></div>
+      <div class="feature"><strong>Localized prompts</strong><span>The executable activates a language detected from <code>$LC_ALL</code>/<code>$LANG</code> (16 catalogues, English default). Confirmation gates honor the affirmative each locale's prompt teaches — a German <code>(j/n)</code> answers <code>j</code>, a Russian <code>(д/н)</code> answers <code>д</code> — and <code>y</code> works everywhere.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>

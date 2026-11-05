@@ -15,6 +15,11 @@
 
 Dual-pane terminal file manager built on the SugarCraft stack for PHP 8.3+, with the Midnight Commander look.
 
+Prompts are localized: the executable activates a detected language from
+`$LC_ALL`/`$LANG` (16 catalogues under `lang/`, English by default), and a
+confirmation gate honors the affirmative its prompt teaches — `y` always
+works, and a German `(j/n)` answers to `j`.
+
 ```
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ┌──────────────────────────────────────────┐
 ┃ /home/alice  [name-asc]                  ┃  │ /var/log  [mtime-desc]                   │

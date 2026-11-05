@@ -144,4 +144,20 @@ final class ConfirmLocaleTest extends TestCase
         [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
         $this->assertFileDoesNotExist($file);
     }
+
+    /**
+     * M-6 (step 15): the executable must activate the detected locale —
+     * without this line the 16 catalogues are dead weight. Source-scan pin
+     * (the TUI cannot run headless here); delete the call in
+     * bin/candy-files and this reddens.
+     */
+    public function testBinActivatesTheDetectedLocale(): void
+    {
+        $bin = (string) file_get_contents(dirname(__DIR__) . '/bin/candy-files');
+        $this->assertStringContainsString(
+            'T::setLocale(\SugarCraft\Core\I18n\T::detect())',
+            $bin,
+            'bin must wire locale detection before constructing the program',
+        );
+    }
 }
