@@ -41,7 +41,7 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-dashboard.png" alt="" aria-hidden="true">
       <div>
-        <h2>SugarDashboard</h2>
+        <h2>📊 SugarDashboard</h2>
         <p class="detail-sub">Dashboard TUI library — grid layouts, panels, and more</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/bubble-grid" style="color: inherit;">charmbracelet/bubble-grid</a></span>
@@ -69,11 +69,11 @@ echo $grid-&gt;render();   // two bordered cards side by side; below 90 columns 
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>StackedGrid</strong><span>Column grid layout with weighted sizing and gap support.</span></div>
+      <div class="feature"><strong>StackedGrid</strong><span>Column grid that splits width evenly (floor(width ÷ columns) per column) and stacks when narrow — gap and percentage sizing live in GridLayout.</span></div>
       <div class="feature"><strong>Frame</strong><span>Framed panel with border, title, and padding.</span></div>
       <div class="feature"><strong>StatusBar</strong><span>Status bar component for dashboard footers.</span></div>
       <div class="feature"><strong>Tabs</strong><span>Tabbed interface for switching between views.</span></div>
-      <div class="feature"><strong>Card / Box / Paragraph</strong><span>Reusable UI components for building panels.</span></div>
+      <div class="feature"><strong>Card / Paragraph / Text</strong><span>Reusable UI components for building panels.</span></div>
       <div class="feature"><strong>Event system</strong><span>Keyboard, mouse, focus, and resize event handling.</span></div>
       <div class="feature"><strong>DualSampleGraph</strong><span>btop's history graph: two samples per cell quantized through the 5×5 <code>graph_symbols</code> table, in braille / block / block2 / tty families, with invert, no-zero, max-value scaling, gradient colouring and the <code>graph_bg</code> underlay.</span></div>
       <div class="feature"><strong>Position-coloured Meter</strong><span><code>Meter::withGradient($stops, positionWise: true)</code> renders btop's one-row <code>■</code> bar — each cell coloured at its own position on a 101-stop ramp, <code>meter_bg</code> tail, invert, memoized per shape.</span></div>
@@ -102,27 +102,27 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
       <div class="feature">
         <strong>Complex Dashboard</strong>
         <span>Charts, stats, funnels, sparklines in a full StackedGrid layout.</span>
-        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-complex.gif">View gif →</a>
+        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-complex.gif" aria-label="View the Complex Dashboard demo gif">View gif →</a>
       </div>
       <div class="feature">
         <strong>Metrics Dashboard</strong>
         <span>Key statistics and status indicators.</span>
-        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-metrics.gif">View gif →</a>
+        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-metrics.gif" aria-label="View the Metrics Dashboard demo gif">View gif →</a>
       </div>
       <div class="feature">
         <strong>Status Indicators</strong>
         <span>Spinners, progress bars, gauges, alerts.</span>
-        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-status.gif">View gif →</a>
+        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-status.gif" aria-label="View the Status Indicators demo gif">View gif →</a>
       </div>
       <div class="feature">
         <strong>Interactive Dashboard</strong>
         <span>Accordion, timeline, and card components.</span>
-        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-accordion-timeline.gif">View gif →</a>
+        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-accordion-timeline.gif" aria-label="View the Interactive Dashboard demo gif">View gif →</a>
       </div>
       <div class="feature">
         <strong>Server Showcase</strong>
         <span>Production dashboard — gauges, charts, avatars, timeline in multi-column layout.</span>
-        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-showcase.gif">View gif →</a>
+        <br><a href="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-showcase.gif" aria-label="View the Server Showcase demo gif">View gif →</a>
       </div>
     </div>
 
@@ -143,7 +143,7 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 <tr><td>Layout\Grid\StackedGrid</td><td>addItem(Item, ItemOptions = new ItemOptions())</td><td>Add an item to a column</td></tr>
 <tr><td>Layout\Grid\StackedGrid</td><td>setSize(width, height) / render() / withTheme(Theme)</td><td>Size, render to an ANSI string, theme</td></tr>
 <tr><td>Layout\Grid\Options / ItemOptions</td><td>new Options(fitScreen: bool) / new ItemOptions(column: int, expandVertical: bool)</td><td>Grid and per-item options</td></tr>
-<tr><td>Components\Card\Card</td><td>static titled(Item, string $title)</td><td>Bordered card with a title</td></tr>
+<tr><td>Components\Card\Card</td><td>static titled(Item|string, string $title)</td><td>Bordered card with a title</td></tr>
 <tr><td>Layout\Frame</td><td>static new(Item) / withTitle() / withBorder() / withPadding()</td><td>Framed panel</td></tr>
 <tr><td>Plot\Gradient101</td><td>static expand(list&lt;Color&gt; $stops)</td><td>btop's 101-entry ramp (index = percent), truncating integer law</td></tr>
 <tr><td>Plot\Braille\BrailleCanvas</td><td>withGradient(stops, ?scale) / withValue(v) / withoutGradient() / gradient() / value()</td><td>Null-colour dots take the ramp colour at the current value</td></tr>
@@ -163,7 +163,7 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs for the library's examples. Regenerated automatically on every push that touches the source.</p>
 
         <h3 style="margin-top: 32px;">Layout &amp; Structure</h3>
         <div class="demo-grid">
@@ -663,7 +663,7 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/boxer.gif" alt="Boxer" onerror="this.parentElement.style.display='none'">
                 <h3>Boxer</h3>
-                <span class="demo-caption">Boxing text effect.</span>
+                <span class="demo-caption">Tree-based layout splitting — a region subdivided by ratio down to content leaves.</span>
             </div>
         </div>
 

@@ -3,7 +3,7 @@
     "description": "SugarDashboard: Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more.",
     "ogTitle": "SugarDashboard — SugarCraft",
     "ogDescription": "Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more.",
-    "emoji": "",
+    "emoji": "📊",
     "displayName": "SugarDashboard",
     "tagline": "Dashboard TUI library — grid layouts, panels, and more",
     "phpVersion": "8.3+",
