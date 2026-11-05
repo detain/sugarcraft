@@ -7,7 +7,7 @@
     <pre class="code"><code class="language-php">use SugarCraft\GitServer\{AccessControl, Config, Repo, User};
 use SugarCraft\GitServer\Git\GitDaemon;
 
-$config = Config::fromDefaults();        // CANDY_SERVE_* env vars, else defaults
+$config = Config::fromDefaults();        // CANDY_GIT_SERVER_DATA_PATH env var, else defaults
                                          // (Config::load($yamlPath) reads a config file)
 
 // Describe a repository and create it as a bare git repo on disk
@@ -33,7 +33,7 @@ $daemon-&gt;registerRepo($repo);</code></pre>
     <div class="feature-grid">
       <div class="feature"><strong>SSH front end (class)</strong><span><code>SSHServer</code> authenticates users by public key and dispatches git upload-pack / receive-pack for the single request a host sshd <code>ForceCommand</code> hands it. No SSH wire protocol, no shipped entrypoint.</span></div>
       <div class="feature"><strong>Git daemon (class)</strong><span><code>GitDaemon</code> answers the git:// <code>git-upload-pack</code> advertisement via a real <code>git upload-pack --advertise-refs</code> child — read-only by design, pushes refused at dispatch; completing fetches over git:// is open work (see README Known gaps) and nothing constructs it yet.</span></div>
-      <div class="feature"><strong>Smart-HTTP transport</strong><span><code>HttpSmartProtocol\Server</code> + <code>HttpListener</code> serve <code>git clone</code>, <code>git fetch</code> and authenticated <code>git push</code> behind <code>serve --http</code>; trust gates answer before any advertisement byte or pack body, hook declines ride in-band, and the LFS batch + object routes share the router with validated oids, sizes and atomic storage.</span></div>
+      <div class="feature"><strong>Smart-HTTP transport</strong><span><code>HttpSmartProtocol\Server</code> + <code>HttpListener</code> serve <code>git clone</code>, <code>git fetch</code> and authenticated <code>git push</code> behind <code>serve --http</code>; identity resolution and access gates answer before a git child is spawned or a response byte written (the router reads size-bounded request bodies before dispatching them), hook declines ride in-band, and the LFS batch + object routes share the router with validated oids, sizes and atomic storage. Identity arrives via HTTP Basic or the paired <code>X-CandyGitServer-User</code> + <code>X-CandyGitServer-User-Sig</code> token headers.</span></div>
       <div class="feature"><strong>Access control</strong><span><code>AccessControl</code> answers read / write / admin for a user (or anonymous) against a repo's visibility and collaborators.</span></div>
       <div class="feature"><strong>LFS support</strong><span>Git LFS over HTTP through <code>LFSHandler</code> and a pluggable storage backend.</span></div>
       <div class="feature"><strong>Config file</strong><span>YAML server configuration via <code>Config::load()</code>, or env + defaults via <code>Config::fromDefaults()</code>.</span></div>
@@ -43,7 +43,7 @@ $daemon-&gt;registerRepo($repo);</code></pre>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-git-server">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-git-server/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-git-server/tree/main/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-git-server/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/soft-serve">charmbracelet/soft-serve</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
@@ -58,11 +58,11 @@ $daemon-&gt;registerRepo($repo);</code></pre>
 <tr><td>Repo</td><td>init() / path() / branches()</td><td>Create the bare repository; inspect it</td></tr>
 <tr><td>User</td><td>static new(username) / withAdmin() / withPasswordHash() / withAuthorizedKeys() / addAuthorizedKey()</td><td>Immutable account: hashed password + SSH keys (accounts persist via UserStore)</td></tr>
 <tr><td>AccessControl</td><td>static getInstance() / canRead() / canWrite() / canAdmin()</td><td>Permission checks</td></tr>
-<tr><td>SSHServer</td><td>__construct(Config) / registerUser() / registerRepo() / handleConnection(stream, username, command, publicKey)</td><td>SSH command dispatcher</td></tr>
-<tr><td>GitDaemon</td><td>__construct(Config) / registerRepo() / serve() / serveAsync() / stop()</td><td>git:// advertisement daemon (read-only)</td></tr>
+<tr><td>SSHServer</td><td>__construct(Config) / registerUser() / registerRepo() / handleConnection(stream, username, command, ?publicKey = null)</td><td>SSH command dispatcher</td></tr>
+<tr><td>GitDaemon</td><td>__construct(Config) / registerRepo() / registerRepos() / serve(pidFile = '') / serveAsync(?loop, pidFile = '') / shutdown()</td><td>git:// advertisement daemon (read-only)</td></tr>
 <tr><td>HttpSmartProtocol\Server</td><td>__construct(Config) / registerRepo() / registerUser() / handleRequest(…)</td><td>Smart-HTTP router: clone, fetch, auth-gated push, LFS</td></tr>
 <tr><td>Git\PktLine</td><td>static encode(payload) / static flush() / static decode(bytes) / static isServiceHeader(payload, service)</td><td>Shared pkt-line codec (4-hex length prefix)</td></tr>
-<tr><td>Git\StatelessRpc</td><td>static advertise(service, repoPath) / static negotiate(service, repoPath, body, maxBytes)</td><td>git --stateless-rpc children: capped drain, TERM-to-KILL reap</td></tr>
+<tr><td>Git\StatelessRpc</td><td>static advertise(service, repoPath, ?deadlineSeconds = null) / static negotiate(service, repoPath, body, maxBytes, ?deadlineSeconds = null)</td><td>git --stateless-rpc children: capped drain, TERM-to-KILL reap</td></tr>
 <tr><td>HttpSmartProtocol\HttpListener</td><td>__construct(Server, host, port, ?loop) / start() / stop() / listenAddress()</td><td>Smart-HTTP socket listener behind serve --http</td></tr>
 </table>
   </div>
