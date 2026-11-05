@@ -93,6 +93,30 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 | `Home/End`       | First / last hunk              |
 | `Esc`            | Close diff viewer              |
 
+## Accessibility
+
+Every state the UI needs you to know is carried by **text**, not by color
+alone: status rows show git's porcelain `XY` codes, diff lines keep their
+leading `+`/`-` markers, the rebase todo spells its actions as words
+(`pick`/`reword`/`squash`/`drop`), and the ahead/behind summary is git's own
+`## …[ahead N, behind M]` upstream header rendered verbatim — so the panes
+stay readable under `NO_COLOR`, `TERM=dumb`, or an ASCII-only palette. The
+exception is pane **focus**, which is currently color-only (a non-color
+focus marker is tracked as a known gap).
+
+- **Row cursor** — the selected row is rendered with reverse video (SGR 7),
+  a channel that survives color stripping on every terminal we target.
+- **Text buffers** — commit messages, branch names, and merge/cherry-pick
+  targets are append-only: printable keys and `Space` append, `Backspace`
+  deletes the last character, and a bracketed `paste` inserts the whole
+  (sanitized, newline-flattened) blob, so screen readers and keyboard-only
+  flows never need arrow navigation inside an input.
+- **Palette contrast (design note)** — the hint strip (`#7d6e98`) lands at
+  roughly 3.4:1 and the blurred unfocused border (`#4a3868`) at roughly
+  2.1:1 against the dark background the demos ship with; actual ratios move
+  with the user's terminal palette. These are observations queued for a
+  future palette pass — no WCAG conformance is claimed here.
+
 ## Architecture
 
 | File               | Role                                                                                                                             |
