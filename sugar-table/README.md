@@ -16,7 +16,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 
 - **Column definitions**: key (the caller owns uniqueness — nothing in the table enforces it), title, width (fixed or flexible), optional style
 - **Row data**: key-value map (`RowData`), arbitrary values rendered via `fmt.Sprintf("%v")`
-- **Styled cells**: `StyledCell` wraps value + ANSI style, overrides row/column/base styles
+- **Styled cells**: `StyledCell` wraps value + ANSI style, overrides row/column/base styles (never string-cast one directly — see Rows)
 - **Row styles**: zebra striping, bold rows, per-row ANSI styling
 - **Selection**: single-row cursor via `SelectNext()`/`SelectPrevious()`/`withSelectedIndex()`; row 0 carries the highlight on first render (use `withSelectable(false)` for a cursorless table); `handleKey()` scrolls
 - **Pagination**: page size, page navigation, auto footer
@@ -169,6 +169,12 @@ Row::new($rowData)
 // Styled cell (overrides row+column style)
 StyledCell::new('value', '31;1')        // red bold cell
 ```
+
+**String-cast warning**: `(string)` on a `StyledCell` (and every implicit
+`Stringable` coercion — `echo`, `print`, `sprintf('%s')`, concatenation) emits
+its raw value wrapped in the cell's SGR codes with **no sanitization**. Never
+cast cells that hold untrusted input; render through `Table::View()`, which
+sanitizes every cell's text.
 
 ## Navigation & Sorting
 

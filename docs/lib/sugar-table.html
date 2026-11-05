@@ -132,7 +132,7 @@ echo $table-&gt;View();</code></pre>
 <tr><td>Row</td><td>new(rowData)</td><td>Create a row from RowData</td></tr>
 <tr><td>RowData</td><td>from(array)</td><td>Create from key-value array</td></tr>
 <tr><td>RowData</td><td>get(key) / has(key) / all() / with(key, value)</td><td>Keyed map lookup, presence test, full map, immutable set (ruling-3b keepers — not getFoo()-form accessors)</td></tr>
-<tr><td>StyledCell</td><td>new(value, style)</td><td>Create styled cell with ANSI style</td></tr>
+<tr><td>StyledCell</td><td>new(value, style)</td><td>Create styled cell with ANSI style; casting to string bypasses sanitization — render via Table::View()</td></tr>
 <tr><td>ColumnWidth</td><td>enum</td><td>Fixed | Percent | Dynamic | Content | Flex</td></tr>
 <tr><td>WrapMode</td><td>enum</td><td>None | WordWrap | Character</td></tr>
 </table>
