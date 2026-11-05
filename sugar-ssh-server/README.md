@@ -407,9 +407,9 @@ and who fills each slot changes what you may trust in it.
 | `TERM` | sshd, from the client's pty-request | `Session::$term` | Peer-asserted. Shape it before it reaches a terminfo lookup. |
 | `LANG`, `LC_*` | only if the client sends them **and** `AcceptEnv` allows it | `Session::$lang` (`LANG` only) | Peer-asserted, for `LANG` alone. `LC_*` reach nothing in this library: they matter solely to sugar-core's `T::detect()`, which nothing here calls. This is how a visitor picks your UI language; see the i18n note below. |
 | `COLUMNS`, `LINES` | not by sshd -- the window size lives on the tty (this transport ioctls it, or accepts `withSizeProvider()`) | `Session::$cols/$rows` | Whatever the transport measured -- with one leak: a peer that smuggles them through `AcceptEnv` reaches `Session::fromEnvironment()`, which seeds `declaredSize` from the env value (80/24 defaults). |
-| `SSH_USER_AUTH` | sshd **only** with `ExposeAuthInfo` (see `sshd_config(5)` on your release): the authorized_keys line that matched | `Auth::fingerprint()` | Good -- server-side, since sshd picked the line. |
-| `SSH_USER_KEY_FINGERPRINT` | not sshd; a wrapper that parses `SSH_USER_AUTH`, or your own `AuthorizedKeysCommand` | `Auth::fingerprint()` | Depends entirely on your wrapper. |
-| `KEY_FINGERPRINT` | same producers — the shorter alternate name the same gate reads | `Auth::fingerprint()` | Depends entirely on your wrapper. |
+| `SSH_USER_AUTH` | sshd **only** with `ExposeAuthInfo` (see `sshd_config(5)` on your release): the authorized_keys line that matched | private `Auth::fingerprint()` | Good -- server-side, since sshd picked the line. |
+| `SSH_USER_KEY_FINGERPRINT` | not sshd; a wrapper that parses `SSH_USER_AUTH`, or your own `AuthorizedKeysCommand` | private `Auth::fingerprint()` | Depends entirely on your wrapper. |
+| `KEY_FINGERPRINT` | same producers — the shorter alternate name the same gate reads | private `Auth::fingerprint()` | Depends entirely on your wrapper. |
 | `SSH_PASSWORD` | **nothing in OpenSSH ever sets it** | `PasswordAuth` | Operator-injected out of band, or peer-asserted through `AcceptEnv` -- never a credential proof. |
 | `SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE` | nothing; the first is Apache mod_ssl, the others are aspirational | `CertificateAuth::ENV_KEYS` | If your wrapper does not export one, the gate sees nothing. |
 | `SSH_CLIENT_VERSION`, `SSH_SERVER_VERSION` | nothing in stock OpenSSH | `Session::$clientVersion/$serverVersion` | Usually empty; do not treat them as audit columns. |
@@ -426,7 +426,8 @@ Two consequences deserve the front of your mind:
   `AcceptEnv` is a string the client chose. The middleware in this
   library never reads an `AcceptEnv` name as an authority; `Auth` uses
   `hash_equals()` on fingerprints, and the strings that do land are run
-  through `Auth::sanitize()` before they are echoed anywhere.
+  through a private sanitizer (public cap: `Auth::MAX_ECHOED_BYTES`) before they
+  are echoed anywhere.
 
 `Session::fromEnvironment()` takes no arguments and reads the process
 environment; nothing here offers a language-selection API yet, so
