@@ -110,7 +110,10 @@ final class Node
     }
 
     /**
-     * No-border wrapper — children rendered flat without vertical separators.
+     * No-border wrapper — suppresses every frame and every divider through
+     * the whole subtree, so adjacent panels render touching. The wrapper
+     * carries border:false and threads $noFrames on render (see
+     * SugarPanels::renderNoBorder; pinned by tests/FramingAndSeparatorsTest.php).
      */
     public static function noBorder(Node $child): self
     {
