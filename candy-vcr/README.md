@@ -54,8 +54,10 @@ Start with [Quickstart](#quickstart) for the shortest end-to-end path, or jump s
 composer require sugarcraft/candy-vcr
 ```
 
-Examples in this README invoke the binary as `vendor/bin/candy-vcr`; with a phar install or a
-composer global install it answers to plain `candy-vcr`. Rendering needs **ext-gd** (or
+Examples in this README invoke the binary as `vendor/bin/candy-vcr`; inside a checkout of this
+repo (the Examples tour below, run from the `candy-vcr/` directory) the same program answers at
+`bin/candy-vcr`; with a phar install or a composer global install it answers to plain
+`candy-vcr`. The library itself hard-requires **ext-mbstring**. Rendering needs **ext-gd** (or
 `--backend=imagick` with **ext-imagick**) and, for the default encoder, **ffmpeg** on `PATH`;
 `PhpGifEncoder` is the pure-PHP fallback that needs no external binaries. `YamlFormat`
 additionally suggests `symfony/yaml`.
@@ -250,6 +252,7 @@ vendor/bin/candy-vcr replay       session.cas --speed=realtime               # s
 vendor/bin/candy-vcr replay       session.cas --idle-trim=1.0                # clamp long gaps to 1s during replay
 vendor/bin/candy-vcr diff         a.cas b.cas                                # structural diff
 vendor/bin/candy-vcr stats        session.cas                                # show cassette statistics
+vendor/bin/candy-vcr migrate      session.cas upgraded.cas                   # rewrite a v1 cassette as v2 (--dry-run to validate)
 vendor/bin/candy-vcr render-tape demo.tape                                 # render .tape to .gif
 vendor/bin/candy-vcr render-batch demos/                                     # render all .tape files in directory
 ```
@@ -263,7 +266,8 @@ what makes `candy-vcr replay x.cas | cmp - expected` a valid test.
 `render-tape` likewise announces what it is rendering, and reports every 100
 frames while it works, so a multi-minute render is not indistinguishable from a
 hang. Every verb answers `-h` / `--help` with its own usage block on stdout and
-exit 0.
+exit 0; `--version` / `-V` answers before verb dispatch — it prints `candy-vcr <version>` on
+stdout and exits 0 (a `dev` stamp in a plain checkout, the composer or phar version otherwise).
 
 `inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` (the default when the flag is omitted) flushes everything as fast as the kernel will accept it; the header's `playbackSpeed` multiplier scales rendered output (`render-tape`/`render-batch`), not live replay. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
 
