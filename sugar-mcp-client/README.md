@@ -361,8 +361,8 @@ what that object HOLDS — a configured map rides through the same object cast,
 so `['roots' => ['listChanged' => false]]` arrives as a populated JSON object
 and the default still lands as `{}` byte-for-byte. Advertise what you will
 answer: a capability-gating server asks `roots/list` or sends
-`elicitation/create` only of clients that declared the capability, so the
-handler below section cannot fire without it.
+`elicitation/create` only of clients that declared the capability — so the
+server-request handler described below cannot fire without it.
 
 The same frame carries the client identity, configured with the `clientInfo:`
 constructor argument. It must be a non-empty string `name` and a string
