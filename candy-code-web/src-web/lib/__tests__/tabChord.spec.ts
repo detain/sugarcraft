@@ -36,10 +36,14 @@ describe('tab chord (ISS-106)', () => {
   it('folds the old stored chord into the keymap once, then the keymap is the truth', () => {
     expect(loadTabChord()).toBe('alt')
     localStorage.setItem('candy-code-web:tab-chord', '"ctrl+alt"')
+    // CW-11: the keymap memo only re-reads on a pulse, which is exactly what
+    // a stranger tab writing this key produces in a real browser.
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:tab-chord' }))
     expect(loadTabChord()).toBe('ctrl+alt')
     expect(localStorage.getItem('candy-code-web:keymap')).toContain('"primary":"ctrl"')
     expect(localStorage.getItem('candy-code-web:tab-chord')).toBeNull()
     localStorage.setItem('candy-code-web:tab-chord', '"hyper"') // a stranger now rides a dead key
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:tab-chord' }))
     expect(loadTabChord()).toBe('ctrl+alt')
     saveTabChord('alt+shift')
     expect(loadTabChord()).toBe('alt+shift')

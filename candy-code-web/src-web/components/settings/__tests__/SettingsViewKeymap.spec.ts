@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
-import { loadKeymap } from '../../../lib/keymap'
+import { invalidateKeymap, loadKeymap } from '../../../lib/keymap'
 import SettingsView from '../SettingsView.vue'
 
 /**
@@ -18,6 +18,7 @@ const shown = (wrapper: ReturnType<typeof mount>, action: string) =>
 describe('SettingsView keymap editor (C-WEB-4.b)', () => {
   beforeEach(() => {
     localStorage.clear()
+    invalidateKeymap() // CW-11: the memo must not ride into the next mount
     setActivePinia(createPinia())
   })
 

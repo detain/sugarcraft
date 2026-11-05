@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  bindingFor,
   bindingFromEvent,
   bindingLabel,
   chordBinding,
   DEFAULT_BINDINGS,
+  invalidateKeymap,
   loadKeymap,
   matchesBinding,
+  resetKeymap,
   setBinding,
 } from '../keymap'
 import { saveTabChord } from '../tabChord'
@@ -24,7 +27,12 @@ function key(init: KeyboardEventInit): KeyboardEvent {
 const storedKeymap = () => localStorage.getItem('candy-code-web:keymap')
 
 describe('web keymap (C-WEB-4.b)', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    // CW-11: loadKeymap memoizes; clearing storage behind it must drop the
+    // snapshot, exactly as a cross-tab pulse would in a real browser.
+    invalidateKeymap()
+  })
 
   it('starts every viewer on the shipped defaults', () => {
     expect(loadKeymap()).toEqual(DEFAULT_BINDINGS)
@@ -89,9 +97,13 @@ describe('web keymap (C-WEB-4.b)', () => {
     expect(loadKeymap()).toEqual(DEFAULT_BINDINGS)
     localStorage.clear()
     localStorage.setItem('candy-code-web:tab-chord', '"hyper"')
+    // CW-11: a same-file raw write is invisible to the memo until the pulse a
+    // stranger tab's write really fires is simulated.
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:tab-chord' }))
     expect(loadKeymap().tabs).toEqual(DEFAULT_BINDINGS.tabs)
     expect(localStorage.getItem('candy-code-web:tab-chord')).toBeNull()
     localStorage.setItem('candy-code-web:keymap', '{"palette":42}')
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:keymap' }))
     expect(loadKeymap().palette).toEqual(DEFAULT_BINDINGS.palette)
   })
 
@@ -155,5 +167,84 @@ describe('web keymap (C-WEB-4.b)', () => {
     // A shift the other binding cannot carry makes no press answer both — bindable.
     expect(setBinding('help', { key: 'k', primary: 'ctrl', alt: false, shift: true })).toBeNull()
     expect(loadKeymap().help).toEqual({ key: 'k', primary: 'ctrl', alt: false, shift: true })
+  })
+})
+
+/**
+ * CW-11: the parsed map is memoized — `bindingFor` runs under every keydown,
+ * and each lookup used to re-read and re-parse both storage keys. The cache
+ * must stay coherent with module writes, real cross-tab pulses, and resets,
+ * and the shared snapshot must not be writable.
+ */
+describe('keymap memoization (CW-11)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    invalidateKeymap()
+  })
+
+  it('serves repeated lookups from one pair of storage reads', () => {
+    const reads: string[] = []
+    // happy-dom wraps Storage in a Proxy whose set trap swallows method
+    // assignment (and whose binder caches getItem as an own property), so the
+    // only interception that reaches production is defineProperty — the trap
+    // forwards it to the real target.
+    const store = localStorage
+    const real = store.getItem
+    Object.defineProperty(store, 'getItem', {
+      value: (k: string) => {
+        reads.push(k)
+        return real.call(store, k)
+      },
+      configurable: true,
+      writable: true,
+    })
+    try {
+      expect(bindingFor('palette')).toEqual(DEFAULT_BINDINGS.palette)
+      const afterFirst = reads.filter((k) => k.startsWith('candy-code-web:')).length
+      expect(bindingFor('palette')).toEqual(DEFAULT_BINDINGS.palette)
+      expect(bindingFor('help')).toEqual(DEFAULT_BINDINGS.help)
+      expect(loadKeymap().tabs).toEqual(DEFAULT_BINDINGS.tabs)
+      const afterMore = reads.filter((k) => k.startsWith('candy-code-web:')).length
+      expect(afterFirst).toBe(2) // keymap + legacy mirror, exactly once per invalidation
+      expect(afterMore).toBe(afterFirst)
+    } finally {
+      Object.defineProperty(store, 'getItem', { value: real, configurable: true, writable: true })
+    }
+  })
+
+  it('re-derives when a stranger pulses either key, or clears storage', () => {
+    loadKeymap()
+    localStorage.setItem('candy-code-web:keymap', '{"palette":{"key":"j","primary":"ctrl","alt":false,"shift":false}}')
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:keymap' }))
+    expect(bindingFor('palette')).toEqual({ key: 'j', primary: 'ctrl', alt: false, shift: false })
+
+    localStorage.setItem('candy-code-web:keymap', 'garbage')
+    localStorage.setItem('candy-code-web:tab-chord', '"ctrl+alt"')
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:tab-chord' }))
+    expect(bindingFor('tabs')).toEqual(chordBinding('ctrl+alt')) // the fold rides the re-derive too
+
+    localStorage.setItem('candy-code-web:keymap', '{"palette":{"key":"j","primary":"ctrl","alt":false,"shift":false}}')
+    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:keymap' }))
+    expect(bindingFor('palette')).toEqual({ key: 'j', primary: 'ctrl', alt: false, shift: false })
+    localStorage.clear()
+    window.dispatchEvent(new StorageEvent('storage', { key: null })) // a keyless event = storage.clear()
+    // Without the keyless branch the memo would still answer 'j' here — an
+    // empty storage may only ever yield the shipped defaults.
+    expect(bindingFor('palette')).toEqual(DEFAULT_BINDINGS.palette)
+  })
+
+  it('keeps the snapshot coherent across module writes and resets', () => {
+    expect(setBinding('palette', { key: 'p', primary: 'ctrl-or-meta', alt: false, shift: false })).toBeNull()
+    expect(bindingFor('palette')).toEqual({ key: 'p', primary: 'ctrl-or-meta', alt: false, shift: false })
+    resetKeymap()
+    expect(bindingFor('palette')).toEqual(DEFAULT_BINDINGS.palette)
+  })
+
+  it('refuses to hand out a writable shared snapshot', () => {
+    const snapshot = loadKeymap()
+    expect(() => {
+      ;(snapshot as unknown as Record<string, unknown>).palette = 'tampered'
+    }).toThrow()
+    expect(loadKeymap()).toBe(snapshot) // the memo is THE instance until invalidated
   })
 })

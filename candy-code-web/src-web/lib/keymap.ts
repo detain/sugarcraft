@@ -1,4 +1,4 @@
-import { readJson, removeJson, writeJson } from '../stores/storage'
+import { readJson, removeJson, storageKey, writeJson } from '../stores/storage'
 
 /**
  * C-WEB-4.b (GAP-UI-25): the web's rebindable shortcuts in one place.
@@ -79,6 +79,19 @@ function parseBinding(value: unknown): KeyBinding | null {
   return { key: raw.key.toLowerCase(), primary: raw.primary, alt: raw.alt, shift: raw.shift }
 }
 
+/** CW-11: the memoized snapshot (frozen — consumers read, never mutate). */
+let bindingsCache: Record<KeyAction, KeyBinding> | null = null
+
+/**
+ * Drop the memoized bindings. Callers that write storage behind this module's
+ * back (tests, or the future retargeting of the ISS-106 listener) arm the
+ * next read to re-derive; in production, `setBinding`/`resetKeymap` keep the
+ * cache coherent and the cross-tab `storage` listener below covers strangers.
+ */
+export function invalidateKeymap(): void {
+  bindingsCache = null
+}
+
 /**
  * The viewer's current bindings. A missing or corrupt `keymap` entry falls
  * back action-by-action to the defaults, and the pre-keymap `tab-chord` key
@@ -86,8 +99,15 @@ function parseBinding(value: unknown): KeyBinding | null {
  * written, and the old key goes away (a stranger value goes too). With a
  * sound keymap already stored the legacy key is left exactly as it is: a
  * mirror `setBinding` maintains for the cross-tab pulse, not an authority.
+ *
+ * CW-11: the parsed map is memoized. This reader sits under `bindingFor`,
+ * which the keydown routing calls on every keystroke — re-reading and
+ * re-parsing two storage entries per key was pure waste. The cache is
+ * replaced by `setBinding`, dropped by `resetKeymap`, and dropped when a
+ * cross-tab `storage` pulse names either key (or clears everything).
  */
 export function loadKeymap(): Record<KeyAction, KeyBinding> {
+  if (bindingsCache !== null) return bindingsCache
   const stored = readJson<unknown>(STORAGE_KEY, null)
   const raw = typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {}
   const rawLegacy = readJson<unknown>(LEGACY_TAB_KEY, null)
@@ -105,7 +125,8 @@ export function loadKeymap(): Record<KeyAction, KeyBinding> {
     writeJson(STORAGE_KEY, result)
     removeJson(LEGACY_TAB_KEY)
   }
-  return result
+  bindingsCache = Object.freeze(result)
+  return bindingsCache
 }
 
 export function bindingFor(action: KeyAction): KeyBinding {
@@ -161,6 +182,7 @@ export function setBinding(action: KeyAction, binding: KeyBinding): KeyAction | 
     if (chord !== null) writeJson(LEGACY_TAB_KEY, chord)
     else removeJson(LEGACY_TAB_KEY)
   }
+  bindingsCache = Object.freeze(next)
   return null
 }
 
@@ -168,6 +190,7 @@ export function setBinding(action: KeyAction, binding: KeyBinding): KeyAction | 
 export function resetKeymap(): void {
   removeJson(STORAGE_KEY)
   removeJson(LEGACY_TAB_KEY)
+  bindingsCache = null
 }
 
 /** Exact modifier match — the rule `matchesTabChord` always enforced. */
@@ -247,4 +270,14 @@ export function endKeyCapture(): void {
 
 export function captureActive(): boolean {
   return captureDepth > 0
+}
+// CW-11: a stranger tab wrote one of our keys (or cleared all storage —
+// key null). The event carries no map we would trust, so the memo simply
+// drops and the next read re-derives from this tab's localStorage view.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event: StorageEvent) => {
+    if (event.key === null || event.key === storageKey(STORAGE_KEY) || event.key === storageKey(LEGACY_TAB_KEY)) {
+      invalidateKeymap()
+    }
+  })
 }
