@@ -720,12 +720,13 @@ final class GpuTest extends TestCase
         }
         file_put_contents("$base/b/nvidia-smi", 'not executable');
         try {
+            $real = (string) realpath($base);
             $path = implode(PATH_SEPARATOR, ["$base/a", "$base/b", '', "$base/c"]);
             $this->assertSame(
-                ["$base/a/nvidia-smi", "$base/c/nvidia-smi", "$base/wsl/nvidia-smi"],
+                ["$real/a/nvidia-smi", "$real/c/nvidia-smi", "$base/wsl/nvidia-smi"],
                 Gpu::candidates($path, ["$base/wsl/nvidia-smi", "$base/a/nvidia-smi", "$base/missing/nvidia-smi"]),
             );
-            $this->assertSame(['nvidia-smi'], Gpu::candidates('/nonexistent-candy-top', []), 'nothing found → bare name, runner reports Absent');
+            $this->assertSame([], Gpu::candidates('/nonexistent-candy-top', []), 'nothing found → empty roster: the collector reports Absent without ever spawning — a bare name would reach execvp\'s PATH search, which the sweep exists to refuse');
             $this->assertContains('/usr/lib/wsl/lib/nvidia-smi', Gpu::FALLBACK_BINARIES);
         } finally {
             foreach (['a', 'b', 'c', 'wsl'] as $d) {

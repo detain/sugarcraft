@@ -9,6 +9,7 @@ use SugarCraft\Top\Collect\Gpu\Backend;
 use SugarCraft\Top\Collect\Gpu\DrmScan;
 use SugarCraft\Top\Collect\Gpu\Settled;
 use SugarCraft\Top\Collect\Gpu\SmiProcess;
+use SugarCraft\Top\Collect\Process\AbsoluteSearchPath;
 
 use function React\Promise\resolve;
 
@@ -257,10 +258,13 @@ final class Gpu implements Backend
     }
 
     /**
-     * Every executable `nvidia-smi` on $PATH in PATH order, then each
-     * existing FALLBACK_BINARIES entry, de-duplicated by real path. When
-     * none exists the bare command name is returned so the runner reports
-     * Absent through the ordinary path.
+     * Every executable `nvidia-smi` in the absolute PATH directories ({@see
+     * AbsoluteSearchPath::directories()}) in PATH order, then each existing
+     * FALLBACK_BINARIES entry, de-duplicated by real path. When none exists
+     * an empty list is returned: the collector reports Absent without ever
+     * spawning, because the bare command name would reach execvp's own PATH
+     * search — the resolution this sweep exists to refuse, and a hijack
+     * surface in a long-lived monitor.
      *
      * @param string|null $path a PATH string; null reads the environment
      * @param list<string>|null $fallbacks null = FALLBACK_BINARIES
@@ -280,16 +284,14 @@ final class Gpu implements Backend
                 $found[] = $file;
             }
         };
-        foreach (explode(PATH_SEPARATOR, $path ?? (string) getenv('PATH')) as $dir) {
-            if ($dir !== '') {
-                $add(rtrim($dir, '/') . '/nvidia-smi');
-            }
+        foreach (AbsoluteSearchPath::directories($path) as $dir) {
+            $add($dir . '/nvidia-smi');
         }
         foreach ($fallbacks ?? self::FALLBACK_BINARIES as $file) {
             $add($file);
         }
 
-        return $found === [] ? ['nvidia-smi'] : $found;
+        return $found;
     }
 
     /**

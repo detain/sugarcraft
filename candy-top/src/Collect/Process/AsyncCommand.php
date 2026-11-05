@@ -95,7 +95,9 @@ final class AsyncCommand
      * any other exit, Absent when nothing could be spawned, Timeout past
      * `$timeout`.
      *
-     * @param list<string> $argv argv[0] must be an executable path
+     * @param list<string> $argv argv[0] must be an executable path — a bare
+     *        name is refused at the spawn gate and reports Absent, never
+     *        resolved through execvp's own PATH search
      */
     public static function run(array $argv, float $timeout = self::TIMEOUT, int $maxBytes = self::MAX_OUTPUT): CommandResult
     {
@@ -143,7 +145,9 @@ final class AsyncCommand
      * Non-blocking: the same outcomes as {@see run()}, delivered by the
      * loop. Resolves on the loop thread; never rejects.
      *
-     * @param list<string> $argv argv[0] must be an executable path
+     * @param list<string> $argv argv[0] must be an executable path — a bare
+     *        name is refused at the spawn gate and reports Absent, never
+     *        resolved through execvp's own PATH search
      * @return PromiseInterface<CommandResult>
      */
     public static function launch(array $argv, ?LoopInterface $loop = null, float $timeout = self::TIMEOUT, int $maxBytes = self::MAX_OUTPUT): PromiseInterface
@@ -291,6 +295,16 @@ final class AsyncCommand
 
     private static function spawn(array $argv, int $maxBytes = self::MAX_OUTPUT): ?self
     {
+        // The argv-array form hands argv[0] to execvp, which searches PATH —
+        // the very resolution the collectors' absolute sweeps ({@see
+        // \SugarCraft\Top\Collect\Process\AbsoluteSearchPath}) exist to do
+        // themselves, against a PATH that only the calling environment chose.
+        // The contract is an executable path; enforce it here so no caller can
+        // widen it by accident and a PATH planted by whoever started the TUI
+        // never picks the binary.
+        if ($argv === [] || !\str_contains((string) $argv[0], '/')) {
+            return null;
+        }
         self::reapExited();
         if (!self::$hooked) {
             self::$hooked = true;

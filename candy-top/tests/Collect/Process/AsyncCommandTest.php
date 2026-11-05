@@ -11,6 +11,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Top\Collect\Ipmi\Ipmi;
 use SugarCraft\Top\Collect\Ipmi\IpmiSnapshot;
 use SugarCraft\Top\Collect\Ipmi\IpmiState;
+use SugarCraft\Top\Collect\Process\AbsoluteSearchPath;
 use SugarCraft\Top\Collect\Process\AsyncCommand;
 use SugarCraft\Top\Collect\Process\CommandOutcome;
 use SugarCraft\Top\Collect\Process\CommandResult;
@@ -243,5 +244,41 @@ final class AsyncCommandTest extends TestCase
         $this->assertSame(0, AsyncCommand::liveCount(), 'every child reaped');
         $this->assertNotSame('', $ipmi->cache());
         $ipmi->__destruct();
+    }
+
+    public function testTheSpawnGateRefusesABareArgvZero(): void
+    {
+        // proc_open's argv-array form hands argv[0] to execvp, which searches
+        // PATH — the very resolution the collectors' absolute sweeps exist to
+        // do themselves. The gate is the last line: a bare name must report
+        // Absent even when one sits on PATH.
+        $tool = 'top-gate-probe-' . bin2hex(random_bytes(4));
+        $this->script('printf bare-ok', $tool);
+        $path = (string) getenv('PATH');
+        putenv('PATH=' . $this->dir . PATH_SEPARATOR . $path);
+        try {
+            $this->assertSame(CommandOutcome::Absent, AsyncCommand::run([$tool])->outcome, 'a bare name on PATH never spawns');
+            $this->assertSame(CommandOutcome::Absent, AsyncCommand::run([])->outcome, 'an empty argv never spawns');
+            $this->assertSame(CommandOutcome::Ok, AsyncCommand::run([$this->script('printf abs-ok')])->outcome, 'an absolute path still runs');
+            $loop = new StreamSelectLoop();
+            [$result] = self::await($loop, AsyncCommand::launch([$tool], $loop));
+            $this->assertInstanceOf(CommandResult::class, $result);
+            $this->assertSame(CommandOutcome::Absent, $result->outcome, 'launch() is gated the same way');
+        } finally {
+            putenv('PATH=' . $path);
+        }
+    }
+
+    public function testTheResolverKeepsOnlyRealAbsoluteDirectories(): void
+    {
+        mkdir($this->dir . '/sub');
+        $real = (string) realpath($this->dir);
+        $gone = $this->dir . '/gone-' . bin2hex(random_bytes(3));
+        $dirs = AbsoluteSearchPath::directories(implode(PATH_SEPARATOR, [
+            $this->dir . '/sub', '', 'relative', '/nonexistent-candy-top-' . bin2hex(random_bytes(3)), $this->dir, $real . '/sub', $gone,
+        ]));
+        $this->assertSame([$real . '/sub', $real], $dirs, 'PATH order kept, relative and missing refused, duplicates collapsed');
+        $this->assertNotEmpty(AbsoluteSearchPath::directories(), 'the real environment yields at least one directory');
+        rmdir($this->dir . '/sub');
     }
 }

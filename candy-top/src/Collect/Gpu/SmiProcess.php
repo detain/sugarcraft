@@ -43,7 +43,9 @@ final class SmiProcess
      * Blocking: [Ok, stdout] on exit 0, [Absent, ''] on any other exit or
      * when nothing could be spawned, [Timeout, ''] past `$timeout`.
      *
-     * @param list<string> $argv argv[0] must be an executable path
+     * @param list<string> $argv argv[0] must be an executable path — the spawn
+     *        gate in {@see AsyncCommand::run()} refuses a bare name (it reports
+     *        Absent, never resolving through execvp's own PATH search)
      * @return array{0: GpuOutcome, 1: string}
      */
     public static function run(array $argv, float $timeout = self::TIMEOUT): array
@@ -55,7 +57,9 @@ final class SmiProcess
      * Non-blocking: the same outcomes as {@see run()}, delivered by the
      * loop. Resolves on the loop thread; never rejects.
      *
-     * @param list<string> $argv argv[0] must be an executable path
+     * @param list<string> $argv argv[0] must be an executable path — the spawn
+     *        gate in {@see AsyncCommand::run()} refuses a bare name (it reports
+     *        Absent, never resolving through execvp's own PATH search)
      * @return PromiseInterface<array{0: GpuOutcome, 1: string}>
      */
     public static function launch(array $argv, ?LoopInterface $loop = null, float $timeout = self::TIMEOUT): PromiseInterface

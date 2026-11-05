@@ -6,6 +6,7 @@ namespace SugarCraft\Top\Collect\Ipmi;
 
 use React\Promise\PromiseInterface;
 use SugarCraft\Top\Collect\Gpu\Settled;
+use SugarCraft\Top\Collect\Process\AbsoluteSearchPath;
 use SugarCraft\Top\Collect\Process\AsyncCommand;
 use SugarCraft\Top\Collect\Process\CommandOutcome;
 use SugarCraft\Top\Collect\Process\CommandResult;
@@ -306,20 +307,13 @@ final class Ipmi implements IpmiReader
      * the TUI happened to export — and a sanitised PATH is exactly what drops
      * /sbin, where ipmitool lives. Relative PATH entries are refused outright:
      * they would resolve against the working directory of a long-running
-     * monitor, not the shell that started it.
+     * monitor, not the shell that started it — the filter lives in the shared
+     * {@see AbsoluteSearchPath::directories()} so the gpu sweep cannot drift
+     * from it.
      */
     public static function find(string $name): ?string
     {
-        $dirs = [];
-        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $dir) {
-            if ($dir === '' || !\str_starts_with($dir, DIRECTORY_SEPARATOR)) {
-                continue;
-            }
-            $real = \realpath($dir);
-            if ($real !== false && is_dir($real)) {
-                $dirs[] = $real;
-            }
-        }
+        $dirs = AbsoluteSearchPath::directories();
         foreach (array_unique([...self::SEARCH, ...$dirs]) as $dir) {
             $path = rtrim($dir, '/') . '/' . $name;
             if (is_file($path) && is_executable($path)) {
