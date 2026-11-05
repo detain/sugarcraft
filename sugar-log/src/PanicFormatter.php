@@ -72,7 +72,7 @@ final class PanicFormatter
      * "no ANSI", not "no redaction": a destination gate must never silently
      * drop the caller's privacy settings.
      *
-     * @param list<string> $redactPaths Substrings to redact from paths and locals.
+     * @param list<string> $redactPaths Substrings to redact from paths, locals, and message.
      */
     public static function plain(bool $showLocals = false, array $redactPaths = []): self
     {

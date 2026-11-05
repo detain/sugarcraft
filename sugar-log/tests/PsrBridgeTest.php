@@ -207,6 +207,35 @@ final class PsrBridgeTest extends TestCase
         $this->assertSame('', \file_get_contents($this->tempPath) ?: '');
     }
 
+    public function testUnknownLevelMessageIsClippedAndSingleLine(): void
+    {
+        // [N-07, sugar-docs-reviews-1104 step 27] resolveLevel interpolated the
+        // raw caller string into its refusal message: a level carrying newlines
+        // or escape bytes could forge extra lines and styling in any handler
+        // that echoes caught messages. The refusal now quotes a single-line,
+        // 64-character clip of the level. Pre-fix this pin asserts the raw
+        // interpolation and must stay red without the clip.
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        $hostile = "in\nvalid\x1b[31m" . \str_repeat('x', 300);
+        $message = null;
+        try {
+            $bridge->log($hostile, 'never written');
+        } catch (\Psr\Log\InvalidArgumentException $e) {
+            $message = $e->getMessage();
+        }
+        \fclose($this->tempFile);
+
+        $this->assertNotNull($message, 'a hostile unknown level must still be refused');
+        $this->assertStringNotContainsString("\n", $message, 'the refused level must not forge extra message lines');
+        $this->assertStringNotContainsString("\x1b", $message, 'the refused level must not smuggle escape bytes');
+        $this->assertStringContainsString('Unknown log level', $message);
+        $this->assertStringContainsString('in valid', $message, 'the clip keeps a readable head of the level');
+        $this->assertLessThanOrEqual(64, \substr_count($message, 'x'), 'the quoted level must be bounded to 64 characters');
+        $this->assertSame('', \file_get_contents($this->tempPath) ?: '', 'a refused level must write nothing');
+    }
+
     public function testImplementsPsrLoggerInterface(): void
     {
         $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);

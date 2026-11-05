@@ -119,11 +119,23 @@ final class PsrBridge implements LoggerInterface
         $sugarCraftLevel = self::toSugarCraftLevel($psrLevel);
         if ($sugarCraftLevel === null) {
             throw new InvalidArgumentException(
-                "Unknown log level '{$psrLevel}'; expected one of the PSR-3 LogLevel constants",
+                "Unknown log level '" . self::quoteLevelForMessage($psrLevel) . "'; expected one of the PSR-3 LogLevel constants",
             );
         }
 
         return [$sugarCraftLevel, $psrLevel];
+    }
+
+    /**
+     * A bounded, single-line echo of the hostile value for the refusal message.
+     * Byte-wise on purpose: the input may be invalid UTF-8, and /u patterns
+     * match nothing (and return false) on such subjects.
+     */
+    private static function quoteLevelForMessage(string $psrLevel): string
+    {
+        $clip = \mb_substr($psrLevel, 0, 64);
+
+        return \preg_replace('/[\x00-\x20\x7f]+/', ' ', $clip) ?? '';
     }
 
     /**

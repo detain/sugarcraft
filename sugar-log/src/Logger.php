@@ -31,7 +31,7 @@ use SugarCraft\Style\Style;
  *
  * Hooks: {@see Hook\HookRegistry} callbacks fire only when records pass
  * through a {@see PsrBridge}; the core Logger::log() path does not dispatch
- * hooks (deliberate — the emit path stays synchronous and allocation-free).
+ * hooks (deliberate — the emit path stays synchronous and allocation-light).
  */
 final class Logger
 {

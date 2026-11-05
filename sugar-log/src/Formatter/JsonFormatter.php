@@ -66,6 +66,10 @@ final class JsonFormatter implements Formatter
         ];
 
         if ($this->reportTimestamp) {
+            // Deliberately outside safe(): $time arrives as a DateTimeImmutable
+            // built by the caller or the clock, and the bytes are governed by
+            // the developer-supplied $timeFormat — record context cannot inject
+            // anything through this field.
             $record['time'] = $time->format($this->timeFormat);
         }
 

@@ -109,7 +109,7 @@ final class Styles
      * {@see self::default()} is a process-wide mutable singleton — editing it
      * recolors every logger riding the defaults. snapshot() hands back a copy
      * whose public arrays (and scalar knobs) can be mutated freely:
-     * `$log->setStyles(Styles::snapshot()->withLevel(...))` never leaks.
+     * `$s = Styles::snapshot(); $s->levels[Level::Warn->value] = $style; $log->setStyles($s)` never leaks.
      * The Style objects inside are value objects (every mutator clones), so
      * sharing them between copies stays safe.
      */
