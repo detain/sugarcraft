@@ -74,23 +74,36 @@ final class StyleCommand extends Command
             return Command::FAILURE;
         }
 
-        $style = StyleBuilder::fromFlags([
-            'foreground'         => $input->getOption('foreground'),
-            'background'         => $input->getOption('background'),
-            'bold'               => $input->getOption('bold'),
-            'italic'             => $input->getOption('italic'),
-            'underline'          => $input->getOption('underline'),
-            'strikethrough'      => $input->getOption('strikethrough'),
-            'faint'              => $input->getOption('faint'),
-            'padding'            => $input->getOption('padding'),
-            'margin'             => $input->getOption('margin'),
-            'width'              => $input->getOption('width'),
-            'height'             => $input->getOption('height'),
-            'align'              => $input->getOption('align'),
-            'border'             => $input->getOption('border'),
-            'border-foreground'  => $input->getOption('border-foreground'),
-            'border-background'  => $input->getOption('border-background'),
-        ]);
+        // StyleBuilder fails closed on unparseable values (bad colours,
+        // non-numeric padding) with InvalidArgumentException. Unguarded,
+        // those escaped as an uncaught trace (or, through the top-level
+        // Symfony renderer, a formatted error block on the caller's
+        // stream). Refuse like the --border door above: the translated
+        // message goes to STDERR as diagnostics, the data stream stays
+        // empty, exit is FAILURE.
+        try {
+            $style = StyleBuilder::fromFlags([
+                'foreground'         => $input->getOption('foreground'),
+                'background'         => $input->getOption('background'),
+                'bold'               => $input->getOption('bold'),
+                'italic'             => $input->getOption('italic'),
+                'underline'          => $input->getOption('underline'),
+                'strikethrough'      => $input->getOption('strikethrough'),
+                'faint'              => $input->getOption('faint'),
+                'padding'            => $input->getOption('padding'),
+                'margin'             => $input->getOption('margin'),
+                'width'              => $input->getOption('width'),
+                'height'             => $input->getOption('height'),
+                'align'              => $input->getOption('align'),
+                'border'             => $input->getOption('border'),
+                'border-foreground'  => $input->getOption('border-foreground'),
+                'border-background'  => $input->getOption('border-background'),
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            fwrite(STDERR, $e->getMessage() . "\n");
+
+            return Command::FAILURE;
+        }
 
         $rendered = $style->render($text);
         if ($input->getOption('trim')) {
