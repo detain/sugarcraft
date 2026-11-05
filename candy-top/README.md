@@ -673,7 +673,7 @@ candy-top includes these open btop pull requests (evaluated 2026-10-08). New key
 
 ## Differences from btop
 
-These are deliberate deviations and gaps. Each phase's full notes are in `CALIBER_LEARNINGS.md`.
+These are deliberate deviations and gaps; the accumulated notes live in `CALIBER_LEARNINGS.md`.
 
 **Not implemented (yet)**
 
