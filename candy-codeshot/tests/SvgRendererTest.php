@@ -122,14 +122,32 @@ final class SvgRendererTest extends TestCase
     {
         $svg = SvgRenderer::dark()->render('x');
         $this->assertStringContainsString('role="img"', $svg);
-        $this->assertStringContainsString('<title id="candy-codeshot-title">candy-codeshot screenshot</title>', $svg);
-        $this->assertStringContainsString('<desc id="candy-codeshot-desc">Code screenshot rendered by candy-codeshot.</desc>', $svg);
+        $this->assertStringContainsString('<title>candy-codeshot screenshot</title>', $svg);
+        $this->assertStringContainsString('<desc>Code screenshot rendered by candy-codeshot.</desc>', $svg);
     }
 
     public function testWithTitleOverridesTheDefaultName(): void
     {
         $svg = SvgRenderer::dark()->withTitle('example.php')->render('x');
-        $this->assertStringContainsString('<title id="candy-codeshot-title">example.php</title>', $svg);
+        $this->assertStringContainsString('<title>example.php</title>', $svg);
+    }
+
+    public function testInlineEmbedsDoNotShareAccessibleNameAnchors(): void
+    {
+        // Two renders embedded inline in one document must not collide on
+        // fixed anchor ids or aria wiring: an aria-labelledby pointing at the
+        // literal 'candy-codeshot-title' gave every SVG after the first the
+        // first render's name. Each render names itself through its child
+        // <title>, so the outputs carry no shared anchors at all.
+        $one = SvgRenderer::dark()->withTitle('a.php')->render('x');
+        $two = SvgRenderer::dark()->withTitle('b.php')->render('y');
+
+        $this->assertStringNotContainsString('aria-labelledby', $one);
+        $this->assertStringNotContainsString('aria-labelledby', $two);
+        $this->assertStringNotContainsString('id="candy-codeshot-title"', $one . $two);
+        $this->assertStringNotContainsString('id="candy-codeshot-desc"', $one . $two);
+        $this->assertStringContainsString('<title>a.php</title>', $one);
+        $this->assertStringContainsString('<title>b.php</title>', $two);
     }
 
     public function testSquareChromeBarsAreClippedToTheFrame(): void

@@ -193,14 +193,18 @@ final class SvgRenderer
         $svgHeight = (int) ($totalH - $shadowMargin * 2);
 
         $svg  = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+        // No aria-labelledby and no ids on <title>/<desc>: the child <title>
+        // names an img-role root by itself, while fixed anchor ids collide
+        // the moment two renders are embedded inline in one document — every
+        // SVG after the first would inherit the FIRST render's accessible
+        // name. Bare elements keep each render self-describing.
         $svg .= '<svg xmlns="http://www.w3.org/2000/svg" role="img" '
-              . 'aria-labelledby="candy-codeshot-title candy-codeshot-desc" '
               . 'width="' . $totalW . '" height="' . $totalH . '" '
               . 'viewBox="0 0 ' . $totalW . ' ' . $totalH . '">' . "\n"
-              . '  <title id="candy-codeshot-title">'
+              . '  <title>'
               . self::xmlEscape($this->title ?? 'candy-codeshot screenshot')
               . '</title>' . "\n"
-              . '  <desc id="candy-codeshot-desc">Code screenshot rendered by candy-codeshot.</desc>' . "\n";
+              . '  <desc>Code screenshot rendered by candy-codeshot.</desc>' . "\n";
 
         // Defs (drop shadow filter + embedded font).
         $defs = '';

@@ -273,7 +273,10 @@ their own). VS Code and Chroma palettes can be imported with
   receives the same rounded-frame clip.
 - **Accessible SVG output** — every render emits `<title>`, `<desc>` and
   `role="img"`; the CLI names the document after the input basename (or
-  `stdin`), the library via `withTitle()`. PNG bitmaps carry no text metadata.
+  `stdin`), the library via `withTitle()`. The accessible name comes from the
+  child `<title>` alone — renders carry no `aria-labelledby` anchors, so any
+  number of them can be embedded inline in one document without name
+  collisions. PNG bitmaps carry no text metadata.
 - **Terminal-accurate cell math** — layout width uses `SugarCraft\Core\Util\Width`
   (East-Asian widths) and tabs expand to 8-cell stops, matching a terminal.
   PNG still *draws* with GD's Latin-1 bitmap font, so non-Latin-1 text can
