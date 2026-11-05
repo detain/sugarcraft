@@ -44,7 +44,8 @@ echo StatusLine::error('connection refused'), "\n";
 - **`Theme`** — palette of `SugarCraft\Style\Style` objects keyed by status
   level (success / error / warn / info / prompt / accent / muted).
   `Theme::ansi()` ships the colourful palette; `Theme::plain()` strips all
-  colour; `Theme::charm()`, `dracula()`, `nord()` and `catppuccin()` are
+  styling (a bare `Style::new()` in every slot, so bold and faint go too);
+  `Theme::charm()`, `dracula()`, `nord()` and `catppuccin()` are
   fixed presets; `Theme::auto($bg)` adapts to the background colour only
   when the app passes the parsed OSC-11 reply it requested via
   `Cmd::requestBackgroundColor()` — without a message it is `ansi()`, so
