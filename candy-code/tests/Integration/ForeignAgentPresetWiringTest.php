@@ -521,6 +521,14 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // flag and ServerConfig's launch mode; ServerConfig reads its
                 // own property. Neither touches a preset's field.
                 'Cli/Serve.php',
+                // CWPD-14 extraction of the same code out of Serve.php (the
+                // closeout battery caught the un-moved roster): NOT an Agent
+                // reader — the needle matches the webhook hook's OWN
+                // configured `permissionMode` key (launch-validated, with the
+                // bypass-class refused there), the spawnSession named
+                // argument, and the ServerConfig mode payload. No preset or
+                // Agent field is read.
+                'Cli/Serve/ServeStartup.php',
                 // §7 closeout (the roster the guard asks to decide, decided):
                 // NOT an Agent reader — the status-line payload carries the
                 // SESSION's own PermissionMode value string for the operator's
@@ -537,6 +545,18 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // protocol's `permission_mode_refused` error tag, and the
                 // server/session snapshots reading ServerConfig or the host.
                 'Host/SessionHost.php',
+                // CWPD-14 carve of SessionHost's slash-command handling (the
+                // closeout battery caught the un-moved roster): NOT an Agent
+                // reader — the same Chat.php class, applying a command's
+                // SetPermissionMode effect (`CommandEffect::permissionMode()`,
+                // the mode the USER typed) through the host's own
+                // setPermissionMode(); no preset field is consulted.
+                'Host/SessionHost/SessionCommands.php',
+                // CWPD-14 carve of SessionHost's settle landings (the closeout
+                // battery caught the un-moved roster): NOT an Agent reader —
+                // the same O-3b class as the parent, reading the host's OWN
+                // per-session mode.
+                'Host/SessionHost/SessionLandings.php',
                 'Protocol/ErrorCode.php',
                 // O-3b `agents.list`: an Agent reader, display only — it
                 // reports the mode fromPreset() already gated (a foreign

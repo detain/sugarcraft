@@ -592,7 +592,7 @@ final class UsageRecordsTest extends TestCase
         // persists nothing. Both shapes are pinned verbatim: one string per
         // live call into the choke. C-SES-8.b widened both with the source
         // label: the idle fold is a context call and the reply is the turn.
-        $host = file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
+        $host = self::hostFamilySource();
         foreach ([
             "\$this->ledger()->account(\$this->spend, \$msg->usage, \$this->usageRecordSink(), null, 'compact');",
             "\$this->ledger()->account(\$this->spend, \$reply->usage, \$this->usageRecordSink(), null, 'turn');",
@@ -628,7 +628,7 @@ final class UsageRecordsTest extends TestCase
         // beside the dream arm's bare-model form, and the title arm is one.
         self::assertSame(4, substr_count($trait, "'aux')"), 'four auxiliary settle arms in the trait');
         self::assertSame(1, substr_count($trait, "'title')"), 'one titler settle arm in the trait');
-        $host = file_get_contents(dirname(__DIR__, 2) . '/src/Host/SessionHost.php');
+        $host = self::hostFamilySource();
         foreach ([
             ['count' => 3, "usageRecordSink(), null, '"], // the three bare sink sites: compact, turn, warm
             ['count' => 3, ": null, 'aux')"],            // suggestion + auto-commit + dream (engine fallback)
@@ -772,6 +772,33 @@ final class UsageRecordsTest extends TestCase
         self::assertNotFalse($end, 'the sink method closes');
 
         return substr($source, $start, $end - $start);
+    }
+
+    /**
+     * The serve host as one scan window: SessionHost.php plus the trait
+     * files CWPD-14 carved out of it under src/Host/SessionHost/. The
+     * settle arms now live across that family, so a single-file read would
+     * silently under-count; the whole family is the unit the pins describe,
+     * and future carves need no re-anchor here (the per-label counts still
+     * pin how many arms exist).
+     */
+    private static function hostFamilySource(): string
+    {
+        $root = dirname(__DIR__, 2) . '/src/Host';
+        $source = (string) file_get_contents($root . '/SessionHost.php');
+        $parts = [];
+        foreach ((array) scandir($root . '/SessionHost') as $name) {
+            if (str_ends_with($name, '.php')) {
+                $parts[] = $root . '/SessionHost/' . $name;
+            }
+        }
+        sort($parts);
+        foreach ($parts as $part) {
+            $source .= "\n" . (string) file_get_contents($part);
+        }
+        self::assertStringContainsString('SessionIdleCompaction', $source, 'the family window spans the carves');
+
+        return $source;
     }
 
     /**

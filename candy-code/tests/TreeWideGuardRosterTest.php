@@ -752,7 +752,6 @@ final class TreeWideGuardRosterTest extends TestCase
         // SES-1: tearDown() empties the sys_get_temp_dir() store dir setUp() made.
         'Session/SessionStoreBusyContentionTest.php' => ["glob(\$this->dir.'/*')"],
         // tearDown() clears the sys_get_temp_dir() ledger sandbox setUp() made.
-        'Session/UsageRecordsTest.php' => ['glob($this->tempDir.\'/*\')'],
         // Names the package root only to hand its posix-less `php -n` probe the
         // vendor autoloader; every walk is over the sys_get_temp_dir() HOME
         // setUp() made (the session config dir in it, and tearDown()'s removal).
