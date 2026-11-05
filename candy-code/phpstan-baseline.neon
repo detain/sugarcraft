@@ -1221,7 +1221,7 @@ parameters:
 		-
 			message: '#^Only iterables can be unpacked, null given\.$#'
 			identifier: arrayUnpacking.nonIterable
-			count: 2
+			count: 1
 			path: src/Host/SessionHost.php
 
 		-
