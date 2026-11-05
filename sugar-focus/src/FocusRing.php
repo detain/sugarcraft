@@ -655,10 +655,11 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * registered are dropped fail-soft (a region that no longer exists carries
      * no flag to restore).
      *
-     * Resolution order for focus: a "focused" id wins (id-keyed, drift-proof);
-     * a legacy snapshot without it falls back to the positional "index" clamped
-     * into range; an unknown focused id or an absent focus leg leaves the first
-     * region focused (or nothing, on an empty ids list).
+     * Resolution order for focus: a string "focused" id wins (id-keyed,
+     * drift-proof); an unknown focused id leaves the first region focused.
+     * The positional "index" is consulted only when no usable focus leg is
+     * present at all (legacy snapshots), and then clamped into range. An
+     * empty ids list focuses nothing either way.
      *
      * @param array<array-key, mixed> $snapshot the decoded shape from json_encode()
      * @throws \InvalidArgumentException when "ids" is not a list of strings
