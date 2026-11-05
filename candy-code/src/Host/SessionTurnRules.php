@@ -13,7 +13,7 @@ use SugarCraft\Code\Message;
  * `Chat` (the TUI) and `SessionHost` (the served host) drive one session from
  * two event loops, and for years each carried its own copy of the small,
  * pure decisions listed below — kept honest only by paired `{@see Chat::...}`
- * prose that {@see \SugarCraft\Code\Tests\Host\ChatParityCitationTest()}
+ * prose that {@see \SugarCraft\Code\Tests\Host\ChatParityCitationTest::testEveryChatCitationInSessionHostNamesALiveMethod()}
  * enforces the existence of. Prose pins that a citation exists; it cannot pin
  * that two bodies agree. These can: each method is THE implementation, called
  * from both drivers, and the deleted twin is one more line of prose the next

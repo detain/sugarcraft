@@ -37,7 +37,9 @@ use SugarCraft\Code\Role;
 final class ContextReminderDedupTest extends TestCase
 {
     /**
-     * The marker `Chat::contextReminderMessage()` is the sole producer of.
+     * The marker
+     * `\SugarCraft\Code\Host\CompactionService::contextReminderMessage()` is the
+     * sole producer of.
      *
      * Duplicated here rather than read off the private constant on purpose: a
      * test that derives its expectation from the implementation cannot notice
@@ -363,9 +365,10 @@ final class ContextReminderDedupTest extends TestCase
     }
 
     /**
-     * A verbatim reminder as `Chat::contextReminderMessage()` would have written
-     * it on an earlier turn, for fixtures that need a stale copy already in
-     * history.
+     * A verbatim reminder as
+     * `\SugarCraft\Code\Host\CompactionService::contextReminderMessage()` would
+     * have written it on an earlier turn, for fixtures that need a stale copy
+     * already in history.
      *
      * Assembled from the same literal marker the assertions use rather than from
      * the production constant, for the reason given on

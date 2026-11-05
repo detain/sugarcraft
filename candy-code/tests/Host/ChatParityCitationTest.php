@@ -29,8 +29,9 @@ use SugarCraft\Code\Chat;
  *
  * The join leg (minted by L-ARCH, TUIARCH-04 queue-minor cure): a live
  * method is only half the contract — testEveryCitationMapsToANamedParityRow
- * requires each cited name to map to a NAMED test row that names the
- * citation back. An extraction that single-homes a judgement keeps the
+ * requires each cited name to map to a NAMED test row, in an evidence file
+ * that mentions the citation back. An extraction that single-homes a
+ * judgement keeps the
  * prose honest only while something proves both hosts still honour it;
  * the roster below is that proof, and set equality means a new citation
  * must arrive with a row and a retired citation must leave with its entry.
@@ -52,7 +53,10 @@ final class ChatParityCitationTest extends TestCase
     /**
      * The join: every cited method name maps to [test file, named row] that
      * documents the parity claim. Each row's docblock names the citation so
-     * a reader of either side finds the other; the guard checks both tokens.
+     * a reader of either side finds the other; the guard checks both tokens
+     * at whole-file granularity — that the named row is declared somewhere
+     * in the file and the cited name occurs somewhere in it — not scoped to
+     * the row's own docblock.
      *
      * @var array<string, array{0: string, 1: string}>
      */
@@ -169,9 +173,10 @@ final class ChatParityCitationTest extends TestCase
     /**
      * The join leg: the citation set and the evidence roster must be the SAME
      * set — a new citation is born with a named parity row, a retired one
-     * takes its roster entry with it. Each evidence file must exist, carry
-     * the named row, and NAME the cited method in its own prose, so the row
-     * cannot be a stranger that merely happens to share the file.
+     * takes its roster entry with it. Each evidence file must exist, declare
+     * the named row, and mention the cited method somewhere in the file; the
+     * mention is a whole-file check, deliberately not scoped to the row's own
+     * docblock.
      */
     public function testEveryCitationMapsToANamedParityRow(): void
     {

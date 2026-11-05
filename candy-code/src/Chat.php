@@ -5378,7 +5378,8 @@ final class Chat implements Model
      *   ahead of the user's line.
      *
      * role:system is the NON-SPOOFABLE operator channel (plan :2584-2586) and is
-     * already what {@see contextReminderMessage()} rides, so a hook note goes onto
+     * already what {@see \SugarCraft\Code\Host\CompactionService::contextReminderMessage()}
+     * rides, so a hook note goes onto
      * HISTORY and never into the prompt assembler — which is precisely why wiring
      * these events moves no prompt golden. Hook text is expected to be factual
      * statements rather than imperatives (§4.12 wording guidance); no wrapper or
@@ -15251,7 +15252,8 @@ final class Chat implements Model
         //    entirely. The landing report is Role::System for this same reason.
         //  * Role::System for the notice, like the two notices this tier already
         //    emits ({@see contextCompactedMessage()},
-        //    {@see contextReminderMessage()}): it is the app reporting on itself.
+        //    {@see \SugarCraft\Code\Host\CompactionService::contextReminderMessage()}):
+        //    it is the app reporting on itself.
         //  * The notice goes BEFORE the prompt because it reports on history that
         //    already existed, which is the same asymmetry the synchronous route
         //    has ({@see contextCompactedMessage()}'s docblock). It no longer has
@@ -21625,7 +21627,8 @@ final class Chat implements Model
      * ROLE DIFFERS from that sibling, and deliberately: it appends `Role::System`
      * where the cap refusal appends `Role::assistant`. Every other message this tier
      * writes is Role::System ({@see scheduleParkedCompaction()}'s notice,
-     * {@see contextCompactedMessage()}, {@see contextReminderMessage()}) for the
+     * {@see contextCompactedMessage()},
+     * {@see \SugarCraft\Code\Host\CompactionService::contextReminderMessage()}) for the
      * reason those docblocks give — nothing after the user's echoed prompt renders
      * as an assistant turn, and a Role::Assistant message there is a PREFILL the
      * provider continues. This refusal sits on the same route as those, beside the
@@ -21659,16 +21662,6 @@ final class Chat implements Model
     }
 
     /**
-     * The soft, non-blocking context-usage reminder {@see dispatchTurn()}
-     * appends whenever {@see ContextCompactor::shouldSendReminder()} fires —
-     * {@see \SugarCraft\Code\Host\CompactionService::contextReminderMessage()}.
-     */
-    private function contextReminderMessage(int $tokenCount): Message
-    {
-        return \SugarCraft\Code\Host\CompactionService::contextReminderMessage($tokenCount);
-    }
-
-    /**
      * Drop every context-usage reminder from a history —
      * {@see \SugarCraft\Code\Host\CompactionService::withoutContextReminders()}, which {@see dispatchTurn()}
      * calls on EVERY dispatch so history carries at most one copy.
@@ -21682,8 +21675,9 @@ final class Chat implements Model
     }
 
     /**
-     * Whether $msg is one of {@see contextReminderMessage()}'s own products —
-     * {@see \SugarCraft\Code\Host\CompactionService::isContextReminder()}.
+     * Whether $msg is one of
+     * {@see \SugarCraft\Code\Host\CompactionService::contextReminderMessage()}'s own
+     * products — {@see \SugarCraft\Code\Host\CompactionService::isContextReminder()}.
      */
     private static function isContextReminder(Message $msg): bool
     {

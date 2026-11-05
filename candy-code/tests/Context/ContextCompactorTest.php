@@ -1150,7 +1150,7 @@ final class ContextCompactorTest extends TestCase
      * an expectation derived from the implementation cannot notice the
      * implementation changing — and `assertStringContainsString` uses the
      * production emitter's own message shape at
-     * {@see \SugarCraft\Code\Chat::contextReminderMessage()}.
+     * {@see \SugarCraft\Code\Host\CompactionService::contextReminderMessage()}.
      */
     public function testTheReminderPrefixSpellingIsPinnedToTheChatConstThatEmitsIt(): void
     {
