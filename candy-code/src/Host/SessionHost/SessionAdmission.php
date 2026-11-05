@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Host\SessionHost;
 
 use SugarCraft\Code\Host\CompactionService;
+use SugarCraft\Code\Host\SessionTurnRules;
 use SugarCraft\Code\Host\SpendLedger;
 use SugarCraft\Code\Host\SubmitOptions;
 use SugarCraft\Code\Host\TurnController;
@@ -415,22 +416,26 @@ trait SessionAdmission
         $baseHistory = $this->history;
         $reports = [];
         $refilled = null;
-        // `compaction.mode` (roadmap N-P4b) as Chat::submit() reads it: `off`
-        // skips the automatic tier, yet a prompt the window cannot take is
-        // still refused with the blocking tier's refusal. `heuristic` and
-        // `llm` need no arm here — the tier below always runs; an ahead-of-need
-        // summary that landed (ISS-064) only replaces the heuristic lines it
-        // would write, never the arm that fires them.
+        // Which route the dispatch takes is the shared judgement
+        // SessionTurnRules::compactionRoute() (TUIARCH-04, mirroring
+        // Chat::submit()'s tiers): `off` skips the automatic tier yet still
+        // refuses an over-window prompt with the blocking refusal. What the
+        // COMPACT route then spends stays this driver's own.
         $config = $this->compactor->config();
         // ISS-015: the tiers read the calibrated estimate plus tool-argument
         // bytes (the status bar's figure), not the content-only wire tally.
         $tierTokenCount = CompactionService::tierTokenCount($tokenCount, $this->history);
-        if (!$config->autoCompacts() && $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit, $tierTokenCount)) {
+        $route = SessionTurnRules::compactionRoute(
+            $config->autoCompacts(),
+            fn(): bool => $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit, $tierTokenCount),
+            fn(): bool => $this->compactor->shouldCompact($wireHistory, $tokenLimit, $tierTokenCount),
+        );
+        if ($route === SessionTurnRules::ROUTE_FOREGROUND_BLOCKED) {
             $rows = $this->compaction()->foregroundBlockedRows('', $this->history, $tokenCount, $tokenLimit);
 
             return TurnTicket::refused(array_pop($rows)->content);
         }
-        if ($config->autoCompacts() && $this->compactor->shouldCompact($wireHistory, $tokenLimit, $tierTokenCount)) {
+        if ($route === SessionTurnRules::ROUTE_COMPACT) {
             $compaction = $this->compaction();
             if (IdleCompactionPolicy::thrashTripped($this->consecutiveRefills, $config->refillLimit)) {
                 return TurnTicket::refused($compaction->thrashBreakerNotice($config->refillLimit));

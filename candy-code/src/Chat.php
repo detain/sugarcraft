@@ -2908,12 +2908,11 @@ final class Chat implements Model
     private function scheduleGoalJudge(\SugarCraft\Code\Goal\GoalState $goal): array
     {
         $judge = $this->titleBackend;
-        $stop = match (true) {
-            $judge === null => Lang::t('chat.goal.stop.no_title_model'),
-            $this->spendCapReached() => Lang::t('chat.goal.stop.spend_cap'),
-            default => null,
-        };
-        if ($stop !== null || $judge === null) {
+        // The pre-judge doors are the shared GoalLoop's (TUIARCH-04): the
+        // served driver already refuses through the same function, so the
+        // two stop reasons cannot drift between the loops again.
+        $stop = \SugarCraft\Code\Goal\GoalLoop::refusalReason($judge, $this->spendCapReached());
+        if ($stop !== null) {
             return [$this->endGoal($goal, \SugarCraft\Code\Goal\GoalState::STOPPED, Lang::t('chat.goal.check_stopped', [
                 'reason' => $stop,
                 'command' => $goal->mode->command(),
@@ -10388,23 +10387,26 @@ final class Chat implements Model
         // summary (roadmap 2.10), which rides out beside whatever this returns.
         $postCompact = null;
 
-        // `compaction.mode: off` (roadmap N-P4b): nothing compacts on its own,
-        // so the automatic tier is skipped outright — but a prompt the window
-        // cannot take is still refused, by the same blocking test and with the
-        // same refusal the tier gives once compacting has come up short, which
-        // points at `/compact` and `/clear`. Without that arm, `off` would send
-        // a request the provider rejects.
-        $autoCompacts = $this->compactor->config()->autoCompacts();
+        // Which route this dispatch takes — `off` skips the automatic tier yet
+        // still refuses an over-window prompt, the tiers read the ISS-015
+        // calibrated figure — is the shared judgement
+        // SessionTurnRules::compactionRoute() (TUIARCH-04); what each route
+        // then spends (breaker, park, heuristic) stays this driver's own.
         // ISS-015: every between-prompt tier on this route reads the calibrated
         // estimate plus tool-argument bytes — the status bar's figure — not the
         // content-only wire tally, so a session heavy in Write/Edit payloads
         // cannot show 85% on the bar while the tier sits silent.
         $tierTokenCount = \SugarCraft\Code\Host\CompactionService::tierTokenCount($tokenCount, $this->history);
-        if (!$autoCompacts && $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit, $tierTokenCount)) {
+        $route = \SugarCraft\Code\Host\SessionTurnRules::compactionRoute(
+            $this->compactor->config()->autoCompacts(),
+            fn(): bool => $this->compactor->shouldCompactForeground($wireHistory, $tokenLimit, $tierTokenCount),
+            fn(): bool => $this->compactor->shouldCompact($wireHistory, $tokenLimit, $tierTokenCount),
+        );
+        if ($route === \SugarCraft\Code\Host\SessionTurnRules::ROUTE_FOREGROUND_BLOCKED) {
             return $this->foregroundBlockedResponse($text, $this->history, $tokenCount, $tokenLimit);
         }
 
-        if ($autoCompacts && $this->compactor->shouldCompact($wireHistory, $tokenLimit, $tierTokenCount)) {
+        if ($route === \SugarCraft\Code\Host\SessionTurnRules::ROUTE_COMPACT) {
             // THE CIRCUIT BREAKER FIRST, ahead of both routes it can stop, because
             // spending nothing is the entire point (prompt_expand.md §4.23): a test
             // after the parked call would still have paid for the summarization,
@@ -11637,53 +11639,17 @@ final class Chat implements Model
             \SugarCraft\Code\Host\CompactionService::tierTokenCount($this->estimateTokenCount($baseHistory), $baseHistory),
         );
 
-        // Order is load-bearing, twice over.
-        //
-        // (1) STRIP UNCONDITIONALLY, APPEND CONDITIONALLY. Scoping the strip
-        // inside the `if` — which is what this arm did when the dedup first
-        // landed — leaves the last copy a session was ever sent in history
-        // forever once the estimate falls back UNDER the tier, which is
-        // precisely what /compact is for. It stays on the provider wire every
-        // turn thereafter, quoting a figure from before the compaction: at 22%
-        // of the window the transcript still read "grown to ~70440 estimated
-        // tokens, past the ... threshold" immediately after a /compact. Pinned
-        // by ContextReminderDedupTest::
-        // testABelowThresholdDispatchRemovesAStalePreExistingReminder().
-        //
-        // (2) THE FIGURE IS COUNTED BEFORE THE STRIP — $preStrip, not the
-        // rewritten $baseHistory — so the number the message quotes is the same
-        // number the predicate above just compared against the threshold, and
-        // the sentence "grown to ~N estimated tokens, past the ... threshold"
-        // cannot contradict itself. Counting after the strip would quote a
-        // figure 53 estimated tokens per dropped copy BELOW the threshold it
-        // claims to be past; on a history sized exactly to the threshold with
-        // one stale copy present that is 69,947 against a threshold of 70,000.
-        // Pinned by ContextReminderDedupTest::
-        // testTheQuotedFigureIsNeverBelowTheThresholdItSaysItIsPast().
-        //
-        // WHAT N DOES NOT DO IS OVERSTATE THE HISTORY COMMITTED BELOW, which an
-        // earlier draft of this comment claimed. It overstates post-strip
-        // $baseHistory IN ISOLATION, by 53 estimated tokens per dropped copy —
-        // but that array is never committed on its own, and the copy appended
-        // here weighs the same 53 as each one just dropped, so the two cancel.
-        // Measured over four turns of a one-line prompt, est(committed) less N:
-        // +65 on the FIRST fire (nothing to drop, so the prompt's ~12 plus the
-        // reminder's 53) and +12 on every turn after it (drop and append
-        // cancel, leaving just the prompt). Never negative.
-        //
-        // 53 is estimateTokenCount()'s own chars/4 + 10 over this message's
-        // 169-172 content chars, and its domain is the QUOTED FIGURE, not the
-        // window: it holds for every figure from 100 to 999,999, is 52 only
-        // below 100, and reaches 54 only once the figure passes 1,000,000.
-        // Since the figure is at least the 70% threshold, that covers every
-        // window from ~143 tokens up to ~1.43 million — i.e. every real
-        // provider window, 54 arriving only on a 2M-context model (or on a
-        // history run absurdly far past a small window). Both units here are
-        // the estimate, never a provider count.
+        // The reminder law — strip unconditionally, append conditionally, and
+        // count the quoted figure BEFORE the strip — lives once in
+        // SessionTurnRules::contextReminderFor() (TUIARCH-04); its docblock
+        // carries both load-bearing-order traps and their ContextReminderDedup
+        // pins. The strip itself is a history transform only this driver
+        // commits, so it stays here; the row to append is the shared call.
         $preStrip = $baseHistory;
         $baseHistory = self::withoutContextReminders($baseHistory);
-        if ($dueForReminder) {
-            $newTurnMessages[] = $this->contextReminderMessage($this->estimateTokenCount($preStrip));
+        $reminder = \SugarCraft\Code\Host\SessionTurnRules::contextReminderFor($dueForReminder, $this->estimateTokenCount($preStrip));
+        if ($reminder !== null) {
+            $newTurnMessages[] = $reminder;
         }
 
         // AHEAD-OF-NEED SUMMARISATION (roadmap 2.10), at the same 70% tier as
@@ -11721,23 +11687,31 @@ final class Chat implements Model
         if ($backgroundSummary !== null && (
             $backgroundSummary['sessionId'] !== $this->currentSessionId
             || !\SugarCraft\Code\Host\CompactionService::aheadOfNeedAllowed($aheadTokens, $backgroundSummary['model'] ?? null, $sessionModel)
-            || ($backgroundSummary['summaries'] !== null && (
-                !$dueForReminder
-                || !$backgroundSummary['fingerprint']->matches($this->compactionService()->historyFingerprint($this->compactor, $dispatched))
-            ))
+            || \SugarCraft\Code\Host\SessionTurnRules::summariesOutOfDate(
+                $dueForReminder,
+                $backgroundSummary['summaries'] !== null,
+                $backgroundSummary['summaries'] !== null && $backgroundSummary['fingerprint']->matches($this->compactionService()->historyFingerprint($this->compactor, $dispatched)),
+            )
         )) {
             $backgroundSummary = null;
         }
-        if ($dueForReminder
-            && $backgroundSummary === null
+        // The request-arm conjunction (tier firing, slot free, cap not
+        // reached, skip rules cleared) is SessionTurnRules::
+        // aheadOfNeedRequestAllowed() (TUIARCH-04); the two TUI-only waits
+        // below AND in beside it.
+        if (\SugarCraft\Code\Host\SessionTurnRules::aheadOfNeedRequestAllowed(
+            $dueForReminder,
+            $backgroundSummary !== null,
+            $this->spendCapReached(),
+            $aheadTokens,
+            $sessionModel,
+        )
             && $this->pendingCompactionId === null
             // CTX-5: an idle fold already out owns the next rewrite of this
             // history; two summarisers racing the same transcript is one too
             // many billed round-trips (and the fold's landing would fingerprint-
             // mismatch the moment the reminder's summaries applied).
             && $this->pendingIdleCompaction === null
-            && !$this->spendCapReached()
-            && \SugarCraft\Code\Host\CompactionService::aheadOfNeedAllowed($aheadTokens, null, $sessionModel)
         ) {
             $request = $this->buildSummarizationRequest($dispatched, null, null, '', true, $baseHistory);
             if ($request !== null) {
@@ -20867,29 +20841,17 @@ final class Chat implements Model
             return [$this, $rearm];
         }
 
-        // UI-only (audit 15b-03): these carry git stderr and model-authored
-        // tool names from parser warnings, and are addressed to the user.
+        // The mapping law — typed recall row for a structured frame, the
+        // plain row otherwise, DROPPED on a frame that fails to decode —
+        // lives once in SessionTurnRules::noticeSlotFor(), shared with the
+        // served driver (C-CTX-6.e, TUIARCH-04).
         $messages = [];
         foreach ($notices as $notice) {
-            // C-CTX-6.e: a structured frame becomes its typed row — the
-            // count sentence for content (identical bytes to what the
-            // plain notice carried before, so web and legacy readers are
-            // unchanged) plus the titles that make the row expandable.
-            // A frame that fails to decode is DROPPED, never rendered as
-            // raw JSON on the user's transcript.
-            if (RuntimeNoticeSink::isStructuredFrame($notice)) {
-                $frame = RuntimeNoticeSink::decodeStructured($notice);
-                if ($frame === null) {
-                    continue;
-                }
-                $messages[] = Message::recallNotice(
-                    $frame['count'],
-                    RuntimeNoticeSink::recallRowText($frame['count']),
-                    $frame['titles'],
-                );
+            $message = \SugarCraft\Code\Host\SessionTurnRules::noticeSlotFor($notice);
+            if ($message === null) {
                 continue;
             }
-            $messages[] = Message::notice($notice);
+            $messages[] = $message;
         }
 
         return [$this->mutate(['history' => [...$this->history, ...$messages]]), $rearm];

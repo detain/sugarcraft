@@ -997,24 +997,13 @@ final class SessionHost
     private function pumpRuntimeNotices(): void
     {
         foreach ($this->notices->drain() as $notice) {
-            // C-CTX-6.e: same mapping as Chat::pumpRuntimeNotices() — a
-            // structured frame becomes its typed recall row (whose
-            // content stays the plain count sentence, so the web
-            // reducer keeps painting exactly what it painted before);
-            // an undecodable frame is dropped, never shown raw.
-            if (RuntimeNoticeSink::isStructuredFrame($notice)) {
-                $frame = RuntimeNoticeSink::decodeStructured($notice);
-                if ($frame === null) {
-                    continue;
-                }
-                $this->appendMessageRow(Message::recallNotice(
-                    $frame['count'],
-                    RuntimeNoticeSink::recallRowText($frame['count']),
-                    $frame['titles'],
-                ));
-                continue;
+            // The mapping law — typed recall row for a structured frame,
+            // plain row otherwise, undecodable dropped — is shared with the
+            // TUI via SessionTurnRules::noticeSlotFor() (TUIARCH-04).
+            $message = SessionTurnRules::noticeSlotFor($notice);
+            if ($message !== null) {
+                $this->appendMessageRow($message);
             }
-            $this->appendMessageRow(Message::notice($notice));
         }
 
         $this->armNoticeWake();
@@ -1374,8 +1363,9 @@ final class SessionHost
         );
         $preStrip = $baseHistory;
         $baseHistory = CompactionService::withoutContextReminders($baseHistory);
-        if ($dueForReminder) {
-            $newTurnMessages[] = CompactionService::contextReminderMessage($this->estimate($preStrip));
+        $reminder = SessionTurnRules::contextReminderFor($dueForReminder, $this->estimate($preStrip));
+        if ($reminder !== null) {
+            $newTurnMessages[] = $reminder;
         }
 
         // ISS-064: ahead-of-need summarisation (roadmap 2.10, the host mirror
@@ -1401,19 +1391,27 @@ final class SessionHost
             : 0;
         if ($this->aheadOfNeed !== null && (
             !CompactionService::aheadOfNeedModelMatches($this->aheadOfNeed['model'] ?? null, $currentModel)
-            || ($this->aheadOfNeed['summaries'] !== null && (
-                !$dueForReminder
-                || !$this->aheadOfNeed['fingerprint']->matches(
+            || SessionTurnRules::summariesOutOfDate(
+                $dueForReminder,
+                $this->aheadOfNeed['summaries'] !== null,
+                $this->aheadOfNeed['summaries'] !== null && $this->aheadOfNeed['fingerprint']->matches(
                     $this->compaction()->historyFingerprint($this->compactor, $dispatched),
-                )
-            ))
+                ),
+            )
         )) {
             $this->aheadOfNeed = null;
         }
-        if ($dueForReminder && $this->aheadOfNeed === null
+        // The request-arm conjunction is SessionTurnRules::
+        // aheadOfNeedRequestAllowed() (TUIARCH-04); needing a backend to
+        // exist at all is the host-only term ANDed in beside it.
+        if (SessionTurnRules::aheadOfNeedRequestAllowed(
+            $dueForReminder,
+            $this->aheadOfNeed !== null,
+            $this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd),
+            $aheadTokens,
+            $currentModel,
+        )
             && $this->workspace->backend !== null
-            && !$this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd)
-            && CompactionService::aheadOfNeedAllowed($aheadTokens, null, $currentModel)
         ) {
             if ($this->requestAheadOfNeed($dispatched, $baseHistory)) {
                 // Every minting site stamps its model now — the CTX-5 idle
