@@ -356,7 +356,8 @@ the practical floor is the glyph-coverage engine. `Mosaic::diagnose()` returns
 the structured `ProbeReport` behind the decision — sugar-colorprofile's
 `SugarCraft\ColorProfile\Probe\ProbeReport`, straight off
 `TerminalProbe::run()` — and
-`Capability::detectSummary()` names the probed slots rather than the chosen
+`Detect::probe()->detectSummary()` (instance method on the probed
+`Capability`) names the slots rather than the chosen
 renderer — a terminal that lands on the symbol tier still reports `HalfBlock`,
 because that tier rides the same text slot.
 
