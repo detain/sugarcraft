@@ -70,8 +70,8 @@ while (!Spring::settled($pos, $vel, $target) && $frame < 600) {
 }
 ```
 
-`Spring::fps(float $n)` returns `1.0 / $n` for the deltaTime — pair with the
-same `$n` per-second simulation cadence. `Spring::settled($pos, $vel, $target,
+`Spring::fps(float $n)` returns `1.0 / $n` for the deltaTime — then tick the
+simulation `$n` times per second. `Spring::settled($pos, $vel, $target,
 $threshold)` is the stop predicate: position within the threshold (default
 `Spring::SETTLING_THRESHOLD` = `1e-4`) and velocity below it. Drive loops by
 `settled()` rather than by a fixed frame count — the count that finishes one
