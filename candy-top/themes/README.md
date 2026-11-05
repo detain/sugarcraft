@@ -31,6 +31,7 @@ that box's outline sweeps from `*_box` (top-left) through `_box_mid` to
 `_box_end` (bottom-right) in truecolor. Loaded by
 `SugarCraft\Top\Theme\ThemeConfig::fromFile()`; listed after the builtin
 `Default` and `TTY` themes by `SugarCraft\Top\Theme\ThemeRegistry`. Drop your
-own `.theme` files in `~/.config/candy-top/themes/` (or
-`$XDG_CONFIG_HOME/candy-top/themes/`) — a file there with the same name as one
+own `.theme` files in `$XDG_CONFIG_HOME/candy-top/themes/`, or
+`~/.config/candy-top/themes/` when `$XDG_CONFIG_HOME` is unset — a file there
+with the same name as one
 here takes precedence.
