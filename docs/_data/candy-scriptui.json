@@ -3,7 +3,7 @@
     "description": "CandyScriptui: Interactive terminal widgets you can call from shell scripts — prompts, tables, spinners, and more.",
     "ogTitle": "CandyScriptui — SugarCraft",
     "ogDescription": "Interactive terminal widgets you can call from shell scripts — prompts, tables, spinners, and more.",
-    "emoji": "🐚",
+    "emoji": "🧰",
     "displayName": "CandyScriptui",
     "tagline": "Composer-installable CLI of TUI primitives",
     "phpVersion": "8.3+",
