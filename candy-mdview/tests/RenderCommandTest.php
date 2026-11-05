@@ -57,6 +57,23 @@ final class RenderCommandTest extends TestCase
         return $ref->invoke(null, ...$args);
     }
 
+    public function testPagerDocumentNameFromArgvIsSanitizedBeforeTheStatusHeader(): void
+    {
+        $forged = "re\x1b]8;;http://evil\x07port.md\n\x1b[31mnext";
+
+        /** @var MdViewModel $model */
+        $model = $this->invokeStatic('buildPagerModel', ['body', 80, 24, $forged]);
+
+        $name = $model->documentName;
+        $this->assertIsString($name);
+        $this->assertStringNotContainsString("\x1b", $name, 'raw ESC bytes must never reach the pager status header');
+        $this->assertStringNotContainsString("\x07", $name, 'BEL must not survive the document-name sink');
+        $this->assertStringNotContainsString("\n", $name, 'a newline in a file name cannot split the header row');
+        $this->assertStringContainsString('[31m', $name, 'printable survivors stay visible instead of vanishing');
+        $this->assertStringStartsWith('re', $name);
+        $this->assertStringNotContainsString("\x1b]8;;", $model->view(), 'forged OSC-8 envelope must not ride the view');
+    }
+
     public function testPickThemeAnsi(): void
     {
         $theme = RenderCommand::pickTheme('ansi');

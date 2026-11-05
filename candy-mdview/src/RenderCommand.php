@@ -549,12 +549,18 @@ final class RenderCommand extends Command
      * Build the MdViewModel for pager mode from rendered content and terminal
      * size. A document name switches on the status header, which reserves its
      * own row inside withDocument() — the viewport is never pre-shrunk here.
+     *
+     * The name arrives from argv, so it is sanitized before display with the
+     * same single-line cellValue policy the error channel applies to path
+     * echoes: invalid UTF-8 repaired, newlines collapsed to the ↵ glyph, and
+     * every remaining control byte — ESC included, killing forged SGR/OSC-8
+     * envelopes — replaced by a visible dot.
      */
     private static function buildPagerModel(string $rendered, int $cols, int $rows, string $document = ''): MdViewModel
     {
         $model = MdViewModel::fromContent($rendered, $cols, $rows);
 
-        return $document === '' ? $model : $model->withDocument($document);
+        return $document === '' ? $model : $model->withDocument(Sanitize::cellValue($document));
     }
 
     /**
