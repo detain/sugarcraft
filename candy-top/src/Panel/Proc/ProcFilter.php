@@ -28,6 +28,16 @@ namespace SugarCraft\Top\Panel\Proc;
  * GPU memory is omitted. The panel only passes it on while per-process GPU
  * data exists ({@see GpuUsage::measured()}).
  *
+ * Residual risk (accepted, btop parity): a user-typed `!` pattern is run
+ * through found()'s @preg_match once per field per refresh with no PCRE
+ * time or memory limit behind it — catastrophic backtracking in a pattern
+ * the user chose can stall the render loop. regex() probes the pattern
+ * once and caches compiles (bounded), but the bound caps memory, not
+ * execution: a well-formed pathological pattern still runs per row.
+ * btop's matches_filter carries the same exposure, so this is kept as
+ * parity; tightening it (pcre limits or a row budget) is a behavior
+ * ruling, not a docs fix.
+ *
  * Mirrors aristocratos/btop Proc::matches_filter / ctr_hidden
  * (src/btop_shared.cpp).
  */
