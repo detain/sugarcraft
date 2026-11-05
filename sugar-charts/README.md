@@ -126,14 +126,19 @@ $up   = Resample::linear(30, $timestampedData);
 `LineChart` supports high-resolution dot-matrix (braille) rendering via
 `SugarCraft\Dashboard\Plot\Braille\BrailleCanvas`. Pass a `BrailleCanvas`
 instance via `withCanvas()` to switch from character-cell to 2×4
-sub-cell resolution. `withCanvas()` exists only on the `Chart` base that
-`LineChart` extends — `BarChart`, `Scatter` and `OHLCChart` compose the
-`ChartExtras` trait and have no braille mode, and `Heatmap`,
+sub-cell resolution. Braille mode needs `composer require
+sugarcraft/sugar-dashboard` — an optional display helper, not a runtime
+dependency of sugar-charts. `withCanvas()` exists only on the `Chart`
+base that `LineChart` extends — `BarChart`, `Scatter` and `OHLCChart`
+compose the `ChartExtras` trait and have no braille mode, and `Heatmap`,
 `TimeSeries`, `Streamline` and `Waveline` have no such method at all.
 
-The passed canvas works as a **mode flag**: its dimensions are ignored
-and it is never mutated — the chart's own `width` / `height` still drive
-the render, so size the *chart* (not the canvas) below. Reach for
+The passed canvas works as a **mode flag**: it accepts any non-null
+object, its dimensions are ignored and it is never mutated — the chart's
+own `width` / `height` still drive the render, so size the *chart* (not
+the canvas) below. You do not need the dashboard package installed to
+arm the mode; you need it for the `BrailleCanvas` symbol itself and for
+embedding the chart's rows in a dashboard layout. Reach for
 braille when a pane must carry more samples than it has rows (dense
 telemetry, overlapping series); plain cell mode stays the right default
 for narrow panes and hosts where glyph widths vary.

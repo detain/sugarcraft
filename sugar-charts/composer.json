@@ -40,7 +40,8 @@
         "sugarcraft/sugar-style": "dev-master"
     },
     "suggest": {
-        "ext-intl": "Enables grapheme-cluster splitting in BufferHelper/Canvas so combining marks and ZW sequences keep exact display widths."
+        "ext-intl": "Enables grapheme-cluster splitting in BufferHelper/Canvas so combining marks and ZW sequences keep exact display widths.",
+        "sugarcraft/sugar-dashboard": "Provides BrailleCanvas for LineChart braille mode — an optional display helper, not a runtime dependency (withCanvas() only uses the object as a mode flag)."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
