@@ -14,6 +14,7 @@ return [
     'confirm.move' => '移动 {names} 到 {dest}？(y/n)',
     'confirm.rename' => '将 \'{name}\' 重命名为：',
     'confirm.selected_entries' => '已选择 {count} 个条目',
+    'confirm.affirmative' => 'y',
     'status.nothing_to_delete' => '没有可删除的内容',
     'status.nothing_to_copy' => '没有可复制的内容',
     'status.nothing_to_move' => '没有可移动的内容',

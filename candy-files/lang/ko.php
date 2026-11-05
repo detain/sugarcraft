@@ -14,6 +14,7 @@ return [
     'confirm.move' => '{names}을(를) {dest}에 이동할까요? (y/n)',
     'confirm.rename' => '\'{name}\' 새 이름: ',
     'confirm.selected_entries' => '{count}개 항목 선택됨',
+    'confirm.affirmative' => 'y',
     'status.nothing_to_delete' => '삭제할 항목 없음',
     'status.nothing_to_copy' => '복사할 항목 없음',
     'status.nothing_to_move' => '이동할 항목 없음',

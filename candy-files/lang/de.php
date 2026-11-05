@@ -14,6 +14,7 @@ return [
     'confirm.move' => 'verschiebe {names} nach {dest}? (j/n)',
     'confirm.rename' => 'benenne \'{name}\' um in: ',
     'confirm.selected_entries' => '{count} ausgewählte Einträge',
+    'confirm.affirmative' => 'j',
     'status.nothing_to_delete' => 'nichts zu löschen',
     'status.nothing_to_copy' => 'nichts zu kopieren',
     'status.nothing_to_move' => 'nichts zu verschieben',

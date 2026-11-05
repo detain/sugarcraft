@@ -14,6 +14,7 @@ return [
     'confirm.move' => '{names} verplaatsen naar {dest}? (j/n)',
     'confirm.rename' => '\'{name}\' hernoemen naar: ',
     'confirm.selected_entries' => '{count} geselecteerde items',
+    'confirm.affirmative' => 'j',
     'status.nothing_to_delete' => 'niets te verwijderen',
     'status.nothing_to_copy' => 'niets te kopiëren',
     'status.nothing_to_move' => 'niets te verplaatsen',

@@ -14,6 +14,7 @@ return [
     'confirm.move' => 'spostare {names} in {dest}? (s/n)',
     'confirm.rename' => 'rinomina \'{name}\' in: ',
     'confirm.selected_entries' => '{count} voci selezionate',
+    'confirm.affirmative' => 's',
     'status.nothing_to_delete' => 'nulla da eliminare',
     'status.nothing_to_copy' => 'nulla da copiare',
     'status.nothing_to_move' => 'nulla da spostare',

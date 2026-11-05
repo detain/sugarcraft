@@ -14,6 +14,7 @@ return [
     'confirm.move' => 'přesunout {names} do {dest}? (a/n)',
     'confirm.rename' => 'přejmenovat \'{name}\' na: ',
     'confirm.selected_entries' => '{count} vybraných položek',
+    'confirm.affirmative' => 'a',
     'status.nothing_to_delete' => 'nic ke smazání',
     'status.nothing_to_copy' => 'nic ke kopírování',
     'status.nothing_to_move' => 'nic k přesunu',

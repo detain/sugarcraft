@@ -14,6 +14,7 @@ return [
     'confirm.move' => '¿mover {names} a {dest}? (s/n)',
     'confirm.rename' => 'renombrar \'{name}\' a: ',
     'confirm.selected_entries' => '{count} entradas seleccionadas',
+    'confirm.affirmative' => 's',
     'status.nothing_to_delete' => 'nada que eliminar',
     'status.nothing_to_copy' => 'nada que copiar',
     'status.nothing_to_move' => 'nada que mover',

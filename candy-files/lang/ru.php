@@ -14,6 +14,7 @@ return [
     'confirm.move' => 'переместить {names} в {dest}? (д/н)',
     'confirm.rename' => 'переименовать \'{name}\' в: ',
     'confirm.selected_entries' => 'выбрано элементов: {count}',
+    'confirm.affirmative' => 'д',
     'status.nothing_to_delete' => 'нечего удалять',
     'status.nothing_to_copy' => 'нечего копировать',
     'status.nothing_to_move' => 'нечего перемещать',

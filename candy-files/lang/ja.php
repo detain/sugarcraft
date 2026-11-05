@@ -14,6 +14,7 @@ return [
     'confirm.move' => '{names} を {dest} へ移動しますか? (y/n)',
     'confirm.rename' => '\'{name}\' の新しい名前: ',
     'confirm.selected_entries' => '{count} 件選択中',
+    'confirm.affirmative' => 'y',
     'status.nothing_to_delete' => '削除する項目がありません',
     'status.nothing_to_copy' => 'コピーする項目がありません',
     'status.nothing_to_move' => '移動する項目がありません',

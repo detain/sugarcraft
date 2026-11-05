@@ -15,6 +15,7 @@ return [
     'confirm.move'      => 'move {names} to {dest}? (y/n)',
     'confirm.rename'     => "rename '{name}' to: ",
     'confirm.selected_entries' => '{count} selected entries',
+    'confirm.affirmative' => 'y',
 
     // Status messages
     'status.nothing_to_delete' => 'nothing to delete',

@@ -14,6 +14,7 @@ return [
     'confirm.move' => '{names}, {dest} konumuna taşınsın mı? (e/h)',
     'confirm.rename' => '\'{name}\' yeni adı: ',
     'confirm.selected_entries' => '{count} öğe seçildi',
+    'confirm.affirmative' => 'e',
     'status.nothing_to_delete' => 'silinecek bir şey yok',
     'status.nothing_to_copy' => 'kopyalanacak bir şey yok',
     'status.nothing_to_move' => 'taşınacak bir şey yok',

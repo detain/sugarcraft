@@ -499,8 +499,15 @@ final class Manager implements Model
                 $this->pendingOpDest, 'rename', $this->inputBuffer), null];
         }
 
-        // Single-key y/n confirmation for delete/copy/move
-        $confirmed = $msg->type === KeyType::Char && $msg->rune === 'y';
+        // Single-key y/n confirmation for delete/copy/move. M-7: the prompt
+        // teaches a localized affirmative (de "(j/n)", ru "(д/н)", tr "(e/h)",
+        // …), so the gate honors 'y' AND the active catalogue's taught letter
+        // — case-insensitive single rune, multibyte-safe (mb_* compare; the
+        // KeyMsg rune for Char is one UTF-8 codepoint string). Every other
+        // answer still cancels; the rename submode above is untouched.
+        $rune = mb_strtolower($msg->rune);
+        $confirmed = $msg->type === KeyType::Char
+            && ($rune === 'y' || $rune === mb_strtolower(Lang::t('confirm.affirmative')));
         if (!$confirmed) {
             return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
                 ->withInputBuffer(null), null];

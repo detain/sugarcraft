@@ -14,6 +14,7 @@ return [
     'confirm.move' => 'mover {names} para {dest}? (s/n)',
     'confirm.rename' => 'renomear \'{name}\' para: ',
     'confirm.selected_entries' => '{count} itens selecionados',
+    'confirm.affirmative' => 's',
     'status.nothing_to_delete' => 'nada para excluir',
     'status.nothing_to_copy' => 'nada para copiar',
     'status.nothing_to_move' => 'nada para mover',

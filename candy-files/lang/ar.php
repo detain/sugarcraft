@@ -14,6 +14,7 @@ return [
     'confirm.move' => 'نقل {names} إلى {dest}؟ (y/n)',
     'confirm.rename' => 'إعادة تسمية \'{name}\' إلى: ',
     'confirm.selected_entries' => '{count} عناصر محددة',
+    'confirm.affirmative' => 'y',
     'status.nothing_to_delete' => 'لا شيء للحذف',
     'status.nothing_to_copy' => 'لا شيء للنسخ',
     'status.nothing_to_move' => 'لا شيء للنقل',

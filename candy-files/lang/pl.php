@@ -14,6 +14,7 @@ return [
     'confirm.move' => 'przenieść {names} do {dest}? (t/n)',
     'confirm.rename' => 'zmień nazwę \'{name}\' na: ',
     'confirm.selected_entries' => '{count} zaznaczonych wpisów',
+    'confirm.affirmative' => 't',
     'status.nothing_to_delete' => 'brak wpisów do usunięcia',
     'status.nothing_to_copy' => 'brak wpisów do skopiowania',
     'status.nothing_to_move' => 'brak wpisów do przeniesienia',
