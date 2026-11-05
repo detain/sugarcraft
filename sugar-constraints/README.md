@@ -77,13 +77,15 @@ Dock\* (DockLayout/DockGeometry/DockSlot/Side)   standalone IDE-dock surface, no
 
 - `Constraint::length(int $cells)` — fixed cell count. One exception: when a
   set has neither `Min` nor `Fill`, `Max`-clamp reclaims are shared with
-  Length/Percentage/Ratio and inflate them (see the reclaim ladder below).
-- `Constraint::min(int $floor)` — soft floor. It grows only when slack
-  survives Fill and Max (proportional clamp under demand); on its own it
-  absorbs the whole span.
+  Length/Percentage/Ratio and inflate them (the **reclaim ladder** — step 6
+  below).
+- `Constraint::min(int $floor)` — soft floor. It grows only when **slack**
+  (what the fixed reservation leaves over) survives Fill and Max
+  (proportional clamp under demand); on its own it absorbs the whole span.
 - `Constraint::max(int $ceiling)` — ceiling, greedy: takes slack up to the cap.
 - `Constraint::fill(int $weight = 1)` — proportional claim on the slack left
-  after fixed reservation.
+  after the **fixed reservation** (Length plus resolved Percentage/Ratio —
+  step 2 below).
 - `Constraint::percentage(int $percent)` — `$percent` of the solved-axis span,
   integer `0`–`100` inclusive (so 33⅓ is inexpressible; use `ratio(1, 3)`).
 - `Constraint::ratio(int $num, int $denom)` — `num/denom` of the total span on
@@ -91,12 +93,27 @@ Dock\* (DockLayout/DockGeometry/DockSlot/Side)   standalone IDE-dock surface, no
   `solve()` is strictly single-axis, so `Ratio(2, 1)` makes a pane twice as
   *wide*, never height-locked to width.
 
-The slack economy, per the algorithm in `GreedySolver`'s class docblock:
-Fill and Max share the slack first (Max greedily, up to its cap); a `Min`
-grows only when there is neither. The `Max`-clamp pass then hands back what
-Maxes gave up, in the order **Min → Fill → everything else** — and in a set
-with no Min and no Fill, that "everything else" includes Length/Percentage/
-Ratio, which is how a "fixed" `length(10)` becomes 95 in
+The slack economy, per `GreedySolver`'s class docblock — which stays the
+code-side mirror of this walk. The seven steps, condensed:
+
+1. `Percentage` and `Ratio` resolve to absolute sizes against the span.
+2. The **fixed reservation** sums: `Length` plus the step-1 sizes.
+3. `Min` floors and `Max` ceilings are entered; if slack is smaller than the
+   sum of floors, every `Min` clamps proportionally.
+4. The remaining slack is distributed across `Fill` weights and, greedily up
+   to each cap, `Max`.
+5. When the set has neither `Fill` nor `Max`, the slack rides the `Min`s
+   proportionally instead.
+6. The **reclaim ladder**: the `Max`-clamp pass hands back over-allocated
+   cells in the order Min → Fill → everything else, and only a set with no
+   `Min` and no `Fill` lets "everything else" reach Length/Percentage/Ratio.
+7. Demand above supply shrinks regions proportionally and hands the floor
+   loss back one cell per shrunk region; a **well-constrained set** — one the
+   walk finishes without gap or overflow — then tiles the span exactly.
+
+In action: Fill and Max share the slack first (Max greedily, up to its cap);
+a `Min` grows only when there is neither. The clamp pass then hands back what
+Maxes gave up, which is how a "fixed" `length(10)` becomes 95 in
 `[length(10), max(5)]@100 → [95, 5]`. Every one of these shapes is pinned in
 `tests/SolverEdgeCaseTest.php` and swept for the sum law by
 `tests/WidthSumInvariantSweepTest.php`.
