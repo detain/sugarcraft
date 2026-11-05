@@ -110,9 +110,10 @@ final class RenderCommand extends Command
                   j / Down, k / Up        scroll one line
                   space, f / PageDown     scroll one page    b / PageUp   back a page
                   g / Home, G / End       jump to top / bottom
+                  Ctrl+U / Ctrl+D         half page up / down
+                  mouse wheel             3 lines per notch, either direction
                   h / Left, l / Right     scroll long lines sideways
-                  r                       re-read the file (watched files reload live)
-                  q, Esc, Ctrl+C          quit
+                  q, Esc, Ctrl+C          quit (q only unmodified)
 
                 Exit codes:
                   0   rendered successfully
@@ -122,8 +123,8 @@ final class RenderCommand extends Command
                 Environment:
                   NO_COLOR           any non-empty value disables color (bold survives in ascii mode)
                   CLICOLOR=0         disables color (BSD convention)
-                  CLICOLOR_FORCE=1   forces color even on a pipe
-                  FORCE_COLOR=1      forces color even on a pipe
+                  CLICOLOR_FORCE     any non-empty value other than 0 forces color on (pipes included)
+                  FORCE_COLOR        any non-empty value other than 0 forces color on (pipes included)
                   TERM=dumb          treated as colorless
                 TXT);
     }
