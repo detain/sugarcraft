@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeTime\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\CodeTime\Ignore\SugarTrackIgnore;
 use SugarCraft\CodeTime\Support\Version;
 
 /**
@@ -155,6 +156,28 @@ final class CliTest extends TestCase
         $this->assertSame(0, $res['exit']);
         $this->assertStringContainsString('skipped', $res['stdout']);
         $this->assertSame('', $res['stderr'], 'honest patterns never trip the wholesale channel');
+    }
+
+    /**
+     * Step 8 (docs-fix m10/M-5): an oversized `.sugartrackignore` is refused
+     * by load() with a RuntimeException — unpatched, that fatal (exit 255)
+     * killed the whole push. The storage-failure convention must hold: a
+     * one-line stderr diagnosis and exit 1, never a bare PHP fatal.
+     */
+    public function testAnOversizedIgnoreFileRefusesWithOneLineAndExitOne(): void
+    {
+        file_put_contents(
+            $this->workDir . '/.sugartrackignore',
+            str_repeat('#', SugarTrackIgnore::MAX_IGNORE_BYTES + 1),
+        );
+
+        $res = $this->runCli(['push', 'proj', 'php', 'main.php']);
+        $this->assertSame(1, $res['exit'], 'refused at the load door, not a 255 fatal');
+        $this->assertStringContainsString('over the', $res['stderr'], 'the refusal names the byte limit breach');
+        $this->assertStringContainsString('.sugartrackignore', $res['stderr'], 'and the offending file');
+        $this->assertCount(1, array_filter(explode("\n", $res['stderr'])), 'a one-line diagnosis');
+        $this->assertStringNotContainsString('Fatal error', $res['stderr']);
+        $this->assertStringNotContainsString('entry pushed', $res['stdout']);
     }
 
     // --- SqliteBackend / --backend=sqlite wiring ----------------------------

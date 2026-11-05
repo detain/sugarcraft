@@ -111,7 +111,9 @@ if (getenv('CANDY_CODETIME_DIR') === false) {
     })();
     $moved = LegacyPaths::migrate($dataBase . '/sugar-tick', $dataBase . '/candy-codetime'); // @rename-keep
     if ($moved !== null) {
-        fwrite(STDERR, Lang::t('cli.migration_notice', ['notice' => $moved]) . "\n");
+        // The moved path is filesystem data (a planted directory name could
+        // carry control bytes) — sweep it before it paints the terminal.
+        fwrite(STDERR, Lang::t('cli.migration_notice', ['notice' => Sanitize::untrusted($moved)]) . "\n");
     }
 }
 
@@ -212,7 +214,14 @@ if ($cmd === 'push') {
     $candidates[] = dirname($file) . '/.sugartrackignore';
     foreach ($candidates as $candidate) {
         if (is_file($candidate)) {
-            $ignore = SugarTrackIgnore::load($candidate);
+            // load() refuses an oversized file with a RuntimeException; an
+            // untrusted plant must cost a one-line error and exit 1, never a
+            // 255 fatal mid-push.
+            try {
+                $ignore = SugarTrackIgnore::load($candidate);
+            } catch (\Throwable $e) {
+                $storageError($e);
+            }
             $ignorePath = $candidate;
             break;
         }
