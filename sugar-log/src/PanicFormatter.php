@@ -96,7 +96,7 @@ final class PanicFormatter
 
         // Banner
         $lines[] = '';
-        $lines[] = $this->titleStyle->render('  PANIC  ') . ' ' . $this->exceptionStyle->render(\get_class($e));
+        $lines[] = $this->titleStyle->render('  PANIC  ') . ' ' . $this->exceptionStyle->render($this->safeClassName(\get_class($e)));
         $lines[] = '';
 
         // Message — attacker-reachable text (exception messages routinely
@@ -167,7 +167,7 @@ final class PanicFormatter
                 continue;
             }
 
-            $func = self::ctrl(($frame['class'] ?? '') . ($frame['type'] ?? '') . ($frame['function'] ?? '?'));
+            $func = self::ctrl($this->safeClassName((string) ($frame['class'] ?? '')) . ($frame['type'] ?? '') . ($frame['function'] ?? '?'));
             $frameFile = self::ctrl($frame['file'] ?? '?');
             $frameLine = $frame['line'] ?? '?';
 
@@ -220,6 +220,33 @@ final class PanicFormatter
         }
 
         return $s;
+    }
+
+    /**
+     * A class name is not a safe identifier: PHP renders anonymous classes as
+     * 'Prefix@anonymous\0/creating/file.php:line$counter' (NUL-separated on
+     * 8.x), and the embedded creating path is neither stripped by {@see ctrl()}
+     * (the bytes around it are printable) nor covered by {@see $redactPaths}
+     * unless the developer happens to have configured that exact file. The
+     * NUL additionally breaks the redact str_replace matching. Collapse the
+     * creation tail — keeping the declared prefix so an anonymous subclass of
+     * RuntimeException still reads as 'RuntimeException@anonymous' — then run
+     * the remainder through the message ladder as defense in depth against
+     * any other hostile name shape.
+     */
+    private function safeClassName(string $class): string
+    {
+        $nul = strpos($class, "\0");
+        if ($nul !== false) {
+            $class = substr($class, 0, $nul);
+        }
+
+        $at = strpos($class, '@anonymous');
+        if ($at !== false) {
+            $class = substr($class, 0, $at) . '@anonymous';
+        }
+
+        return $this->safeMessage($class);
     }
 
     /**

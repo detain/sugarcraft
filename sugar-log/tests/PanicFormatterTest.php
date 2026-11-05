@@ -362,4 +362,43 @@ final class PanicFormatterTest extends TestCase
         $this->assertCount(1, $rows, 'the forged newline must not split the locals row');
         $this->assertMatchesRegularExpression('/\x{2192} x y\s+z/u', $rows[0]);
     }
+
+    public function testAnonymousExceptionNameLosesItsCreationTail(): void
+    {
+        $f = PanicFormatter::plain();
+        // Real PHP 8.3 anonymous classes are named 'RuntimeException@anonymous\0<file>:<line>$<counter>'
+        // — NUL-separated, with the creating file path embedded in the name.
+        $e = new class extends \RuntimeException {
+        };
+        $out = $f->format($e);
+
+        $banner = array_values(array_filter(
+            explode("\n", $out),
+            static fn (string $row): bool => str_contains($row, 'PANIC'),
+        ));
+        $this->assertCount(1, $banner);
+        // End-anchored: pre-fix the raw name kept '@anonymous' + creation path +
+        // counter (the NUL alone was swept by ctrl), so nothing after '@anonymous'
+        // may remain on the banner row.
+        $this->assertMatchesRegularExpression('/PANIC\s+RuntimeException@anonymous\s*$/u', $banner[0]);
+    }
+
+    public function testFrameClassNamesLoseTheirCreationTail(): void
+    {
+        $f = PanicFormatter::plain();
+        $e = new \RuntimeException('frame anon class');
+        $anon = 'class@anonymous' . "\0" . '/secret/place/creating-file.php:7$1';
+        (new \ReflectionProperty(\Exception::class, 'trace'))->setValue($e, [[
+            'file' => '/tmp/x.php',
+            'line' => 991,
+            'class' => $anon,
+            'type' => '->',
+            'function' => 'run',
+        ]]);
+
+        $out = $f->format($e);
+        $this->assertStringNotContainsString('/secret/place/creating-file.php', $out);
+        $this->assertStringNotContainsString("\0", $out);
+        $this->assertStringContainsString('class@anonymous->run()', $out);
+    }
 }
