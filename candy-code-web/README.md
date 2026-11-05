@@ -24,7 +24,8 @@ PHP users get the UI from `composer require` alone and never need Node.
 > reasoning folds), tool cards with diffs, permission cards, a composer that
 > queues, steers or interrupts, and a status bar — plus tabs and a tiled grid
 > of live sessions, a server-wide approvals drawer, the schema-driven settings
-> form, and the agent, todo, background, workflow and memory panels.
+> form, and all twelve side panels: agents, todo, background, workflows,
+> memory, rules, catalog, changes, files, context, generate and usage.
 
 ## Install
 
@@ -87,7 +88,8 @@ documents the protocol and the UI).
   browse root — breadcrumb, Up, child directories with a project badge, show
   hidden, a path box — and starts the session in the directory chosen (a
   workspace host of its own when it is not the server's root). Keyboard:
-  ↑/↓, Enter/→ to open, Backspace/← for up, Esc to cancel. Without the flag,
+  ↑/↓, Enter/→ to open, Backspace/← for up, Home/End to jump to the
+  first/last entry, Esc to cancel. Without the flag,
   New session starts on the server's own root, as before.
 - **Tabs and a grid**: every session opened stays a tab (a configurable
   chord plus the physical digit key picks one — Alt+1…9 by default, cycled
@@ -160,7 +162,9 @@ documents the protocol and the UI).
   status come from the server's workspace facts.
 - **Reconnects** after 0.5 s doubling to 15 s (±30 % jitter) with a fresh
   ticket, resuming every followed session from its gap-free `seq` cursor. Six
-  tries make up the ladder; when it runs out the tab stops retrying and says
+  tries make up the ladder; a connection held stable for a minute re-arms it,
+  so the six tries are per outage stretch; when the ladder runs out the tab
+  stops retrying and says
   the server is gone — the same verdict `candy-code attach` reaches after its
   exhausted ladder (SERVER.md) — with *Try again* to spend a fresh one.
 - **Side panels** (the *panels* button — twelve, per the `PANELS` registry in
@@ -217,7 +221,8 @@ documents the protocol and the UI).
   keymap is rebindable and persisted per browser (`src-web/lib/keymap.ts`).
   Chords quoted elsewhere in this README are defaults, not law.
 - **Installable, localized**: a PWA manifest plus a service worker
-  (`public/manifest.webmanifest`, `/sw.js` — the same worker carries push),
+  (`public/manifest.webmanifest` plus a `/sw.js` built from `src-web/sw.ts`
+  into the served root — not a `public/` file — the same worker carries push),
   and the UI's strings arrive from the server at runtime (`server.strings`,
   `src-web/stores/locale.ts`), so the bundle follows the server's language
   configuration; the top bar reflows for phone-width viewports (pinned by
@@ -261,7 +266,10 @@ documents the protocol and the UI).
 ### Browser storage
 
 Everything this UI keeps client-side lives in `localStorage` under the
-`candy-code-web:` prefix. Default retention is indefinite — state survives
+`candy-code-web:` prefix. A versioned `candy-code-web:v1:` namespace exists in
+`src-web/stores/storage.ts` (`VERSIONED_PREFIX`) but is dormant — no
+production caller reads or writes under it yet; the live keys are the bare
+prefix ones. Default retention is indefinite — state survives
 server restarts. Sign-out clears the credential, the transcript caches and
 the tab-restore keys (`tabs`, `focused`, `lastSession`); the transcript
 caches ride a per-login scope bucket, so the sweep is provably complete
@@ -309,8 +317,8 @@ model](#trust-model) and candy-code SERVER.md; the Dockerfile's shipped
 To run a custom build of this bundle, start the server with `--web-root` (or
 `CANDY_CODE_SERVER_WEB_ROOT`, candy-code ENVIRONMENT.md) — the only
 documented way to serve your own `dist/`. And the server ships `dist/assets`
-**uncompressed** (~650 KB cold, no `.gz`/`.br` siblings): compression is the
-front proxy's job, so turn gzip/brotli on for `/assets/` — the file names
+**uncompressed** (~690 KB cold — measured at fix time, no `.gz`/`.br`
+siblings): compression is the front proxy's job, so turn gzip/brotli on for `/assets/` — the file names
 are content-hashed and served immutable, so proxy-compressed copies stay
 valid across deploys.
 
@@ -339,7 +347,7 @@ headers, so additions only ever narrow the default. Typical wins are
 pinning `connect-src` to the exact `https://host` origin, or moving the
 bundled styles to fetched files and dropping `'unsafe-inline'`. Do not
 widen any directive from the shipped default — in particular `ws:`/`wss:`
-generals are unnecessary (the socket already passes) and would admit
+entries are unnecessary additions (the socket already passes) and would admit
 cross-origin sockets the app never uses.
 
 ## Developing the UI
@@ -379,16 +387,22 @@ src-web/
               background, workflows, memory, the twelve-panel drawer)
   components/ transcript and its cards (item, markdown, reasoning fold,
               tool card, diff view, file viewer), composer and queue strip,
-              permission cards and the approvals drawer, session sidebar,
-              status bar, connection banner, grid/ (tabs, tiles), panels/
-              (the twelve side panels and the command palette), dialogs
-              (history search, help overlay, about modal, canvas and media
-              cards, directory picker)
+              permission cards, session sidebar, status bar, connection
+              banner, grid/ (tabs, tiles), panels/ (the twelve side panels
+              and the command palette), agents/, approvals/ (the drawer),
+              settings/, tokens/ (the /tokens panel); the history search,
+              help overlay, about modal, canvas/media cards and the
+              directory picker sit flat here — there is no dialogs/
+              directory
   lib/        markdown + sanitising pipeline, lazy highlighter, diff model,
               format (incl. the spend ≥ law), dictation + recorder, paste,
-              media, questions, tab chord, i18n runtime, line diff, ANSI,
-              serialization, slow-pending verbs, storage helpers
+              media, questions, tab chord, i18n runtime + the dialog spine
+              (useDialog.ts), line diff, ANSI, slow-pending verbs,
+              clientTools/ (browser-hosted tool implementations)
+  styles/     design tokens and global CSS
   views/      DashboardView, SessionView, LoginView
+  __tests__/  vitest specs (incl. the storage-inventory + i18n-coverage
+              guards)
 ```
 
 **`dist/` is generated: never hand-edit it.** THE LAW: a change to the web
@@ -451,7 +465,12 @@ tool cards and diffs. Scenarios: the sign-in link and the token, a spent
 code, send and see the echo, markup injection refused, a tool call with its
 question and diff, a rejected call, a queued prompt, Stop, `/clear` through
 `command.exec`, two tabs on one session (first answer wins), a tab opened
-mid-turn, a dropped socket resuming from its cursor, and a server restart.
+mid-turn, a dropped socket resuming from its cursor, and a server restart,
+plus specs for the directory picker (browse, open, cancel), the in-graph
+highlighter under the served CSP, media cards streaming over `media.fetch`,
+the session panels and command palette, the schema-driven settings form, the
+phone-width top bar, and the transcript jump pill sitting inside the scroller
+clip at every width.
 `PHP_BINARY` and `CANDY_CODE_BIN` override where PHP and the server are.
 
 ## Accessor naming (2026-10-24)
