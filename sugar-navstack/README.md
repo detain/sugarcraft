@@ -134,15 +134,21 @@ $stack->push('Display');
 echo $bc->render($stack);  // "Home › Settings › Display"
 ```
 
-When the trail exceeds `setMaxWidth()`, the OLDEST crumbs are dropped and the
-`setTruncator()` marker (default `"… "`) is prefixed. If even the single newest
-crumb overflows, it is ellipsis-truncated — `setMaxWidth()` is a hard cap.
+When `setMaxWidth()` holds a positive width, trails that exceed it drop the
+OLDEST crumbs and prefix the `setTruncator()` marker (default `"… "`); the
+default `0` DISABLES the cap entirely (negatives throw). If even the single
+newest crumb overflows, it is ellipsis-truncated — and when the truncated
+crumb alone fills the width, the marker itself is dropped. Above zero,
+`setMaxWidth()` is a hard cap.
 `renderTitles(list<string>)` renders a bare title list without a stack — titles
 handed to it skip the stack's size and emptiness guards, so bound hostile lists
 yourself (the trust notes under `Url` spell out why).
 `setItemRenderer(fn(NavigationItem, int): ?string)` customizes each crumb
-(`null` falls back to the SANITIZED title, not the raw one). All `set*` methods
+(`null` falls back to the SANITIZED title, not the raw one) — its output is
+measured for width INCLUDING SGR escape bytes, so a styled trail elides earlier
+than it looks; strip styling before doing visual-width math. All `set*` methods
 mutate and return `$this`; `withScanner()` is the one clone-returning method.
+`scan()`'s `row:` is 1-based — a `row: 0` is silently coerced to the first row.
 
 ### Click-Region Tracking
 

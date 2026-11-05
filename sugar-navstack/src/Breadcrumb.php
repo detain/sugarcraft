@@ -183,6 +183,10 @@ final class Breadcrumb
      * docblock; theme styling is preserved, sanitizing host data is the
      * closure's own responsibility.
      *
+     * Width math counts the returned string AS-IS — SGR escape bytes inside
+     * styled output consume the `setMaxWidth()` budget, so a themed trail
+     * elides earlier than it visually fills the row.
+     *
      * @throws \InvalidArgumentException  If the closure returns a non-string, non-null value
      */
     public function setItemRenderer(\Closure $fn): self
@@ -231,7 +235,8 @@ final class Breadcrumb
      * terminal's viewport width so sugar-mouse clamps zone extents the
      * same way the emulator will wrap the row, and `$row` when the
      * breadcrumb is not painted on terminal row 1 — hit() then takes
-     * absolute terminal coordinates.
+     * absolute terminal coordinates. `$row` is 1-based: `0` is coerced to
+     * the same offset as `1` (the first row), never a "no row" sentinel.
      *
      * @throws \LogicException When no scanner is attached (the call would
      *                         silently record nothing and every later
