@@ -136,8 +136,8 @@ final class RendererTest extends TestCase
     public function testTheLiveStatusHintIsNeverMidRowTruncated(): void
     {
         $cases = [
-            [true, 'space / ↑ / w  flap   ·   q  quit', 'space flap · q quit'],
-            [false, 'press space / ↑ / w  to start   ·   q  quit', 'space to start · q quit'],
+            [true, 'space/⏎/↑/w flap · r restart · q quit', 'space flap · q quit'],
+            [false, 'press space/⏎/↑/w to start · r restart · q quit', 'space to start · q quit'],
         ];
         foreach ($cases as [$started, $full, $short]) {
             for ($cols = Game::MIN_COLS; $cols <= Game::MIN_COLS + 19; $cols++) {

@@ -801,7 +801,7 @@ final class GameTest extends TestCase
     {
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
         $this->assertStringContainsString('to start', $g->view());
-        $this->assertStringNotContainsString('flap   ·   q', $g->view());
+        $this->assertStringNotContainsString('space/⏎/↑/w flap', $g->view());
     }
 
     public function testLiveStatusCarriesTheStandingBest(): void

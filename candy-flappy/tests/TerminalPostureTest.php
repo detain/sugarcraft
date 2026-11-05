@@ -141,7 +141,7 @@ final class TerminalPostureTest extends TestCase
             configDir: $this->hermeticConfigDir(),
             frameCols: 100,
         );
-        $this->assertStringContainsString('space / ↑ / w  flap', $roomy->view());
+        $this->assertStringContainsString('space/⏎/↑/w flap', $roomy->view());
         $this->assertStringNotContainsString('space flap · q quit', $roomy->view());
     }
 

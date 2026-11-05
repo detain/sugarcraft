@@ -161,14 +161,14 @@ final class Renderer
             $hintPlain = self::pickHint(
                 $g,
                 $prefixCells,
-                'press space / ↑ / w  to start   ·   q  quit',
+                'press space/⏎/↑/w to start · r restart · q quit',
                 'space to start · q quit',
             );
         } else {
             $hintPlain = self::pickHint(
                 $g,
                 $prefixCells,
-                'space / ↑ / w  flap   ·   q  quit',
+                'space/⏎/↑/w flap · r restart · q quit',
                 'space flap · q quit',
             );
         }
@@ -241,14 +241,14 @@ final class Renderer
             $hint = self::pickHint(
                 $g,
                 $scoreText . $bestPlain,
-                'press space / ^ / w  to start   .   q  quit',
+                'press space/Enter/^/w to start . r retry . q quit',
                 'space to start . q quit',
             );
         } else {
             $hint = self::pickHint(
                 $g,
                 $scoreText . $bestPlain,
-                'space / ^ / w  flap   .   q  quit',
+                'space/Enter/^/w flap . r restart . q quit',
                 'space flap . q quit',
             );
         }
