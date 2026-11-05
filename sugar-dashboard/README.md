@@ -729,6 +729,19 @@ foreach ($procs as $row => $p) {
 > dispatched command, bounded by the HTTP client's 5 s timeout —
 > `WttrInClient`'s stream context).
 >
+> **What a plugin can react to.** A legacy plugin panel is non-interactive by
+> construction: `LegacyModuleAdapter::update()` forwards exactly two message
+> kinds into the round-trip — `Msg\AdapterTickMsg` (the scheduled refresh tick)
+> and `Core\Msg\WindowSizeMsg` (a resize). Every other routed message, keys
+> above all, is dropped at the wrapper: each keystroke used to trigger a
+> synchronous write+read against the plugin child, blocking the frame until the
+> answer arrived. The plugin's `view($state, $w, $h)` therefore receives the
+> dimensions from the last `WindowSizeMsg`, starting at 80×24 until the host
+> forwards a real size, and its refresh cadence is the `interval` the plugin
+> advertises from `init()` metadata (default 30 s, floored at 1 s) re-armed as
+> the `plugin-refresh` tick subscription — not the host's own tick rate. A
+> panel that needs keyboard input is a host component, not a plugin.
+>
 > **Color environment.** Every color emission routes through
 > `Foundation\ColorMode`: `NO_COLOR` set to any non-empty value and `TERM=dumb`
 > collapse to plain ASCII; otherwise TrueColor. `ColorMode::use($profile)`
