@@ -35,11 +35,11 @@ composer require sugarcraft/sugar-mcp-client
 
 | Class | Role |
 |---|---|
-| `McpMessage` | Immutable JSON-RPC 2.0 envelope — request / notification / success / error — with a null-preserving `result` sentinel |
+| `McpMessage` | Immutable JSON-RPC 2.0 envelope — request / notification / success / error — with a null-preserving `result` sentinel and the wire-typed id pair `parsePreservingId()` / `withWireId()`, so a reply echoes an id's original JSON type |
 | `McpTool` | Tool definition value object with a well-typedness gate (`tryFromArray`) |
 | `ArgumentShape` | Restores `{}` vs `[]` in decoded tool-call arguments against the tool's `inputSchema` |
 | `McpServer` | Transport contract: `start` / `stop` / `listTools` / `callTool` |
-| `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture, `BoundedShutdown` teardown, `__destruct` back-stop (the SIGKILLed-owner residual is named in *Fork safety*) |
+| `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture (also drainable between exchanges via `pumpStderr()`), skipped-definition reporting (`malformedToolDefinitions()` / `malformedToolDefinitionsReport()`), `BoundedShutdown` teardown, `__destruct` back-stop (the SIGKILLed-owner residual is named in *Fork safety*) |
 | `McpRouter` | Deny-before-allow SERVER narrowing over raw config keys (tool rosters follow servers); empty allow-list means allow-all |
 | `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere; the transport stringifies what it sends, so an outbound request carries `"5"` on the wire, never a bare `5` |
 | `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
