@@ -60,26 +60,58 @@
     <p>This is a PHPUnit test harness: it belongs in <code>require-dev</code> and must not enter runtime dependencies.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Testing\ProgramSimulator;
+    <p>This block runs exactly as copy-pasted — the lib's own test suite executes it as a test.</p>
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Testing\Input\ScriptedInput;
+use SugarCraft\Testing\ProgramSimulator;
 use SugarCraft\Testing\Snapshot\Assertions;
+use SugarCraft\Testing\Snapshot\GoldenFile;
 
-// Script terminal input: keys, plus a bracketed paste decoded by sugar-core's
-// real InputReader (sanitized by default, as at runtime).
-$script = ScriptedInput::new()
-    -&gt;key('+')
-    -&gt;key('+')
-    -&gt;paste("hello\n")
-    -&gt;enter();
+// The smallest drivable counter — inline so this block is self-contained.
+// A real suite hands the simulator its own app's Model (or Program).
+$counter = new class implements \SugarCraft\Core\Model {
+    public function __construct(private int $count = 0)
+    {
+    }
 
-$sim = ProgramSimulator::for(new Counter());   // a Model or a Program
-foreach ($script-&gt;build() as $msg) {
-    $sim-&gt;send($msg);
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof KeyMsg &amp;&amp; $msg-&gt;rune === 'a') {
+            return [new self($this-&gt;count + 1), null];
+        }
+
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        return 'count: ' . $this-&gt;count;
+    }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
+};
+
+$result = ProgramSimulator::for($counter)
+    -&gt;send(...ScriptedInput::new()-&gt;key('a')-&gt;key('q')-&gt;build())
+    -&gt;run();
+
+// Real suites COMMIT the golden file; a missing golden then fails loudly (see
+// Assertions). The guarded save() below just stands in for that first seeding.
+$golden = sys_get_temp_dir() . '/sugar-testing-quickstart.golden';
+if (GoldenFile::load($golden) === null) {
+    GoldenFile::save($golden, $result-&gt;view);
 }
-$result = $sim-&gt;run();                         // TestResult: model, view, cmds, output
 
-Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $result-&gt;view);
-echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
+Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 
     <h3 style="margin-top: 32px;">ProgramSimulator</h3>
     <div class="feature-grid">
