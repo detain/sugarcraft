@@ -69,6 +69,11 @@ final class ChooseCommand extends Command
         $selectIfOne = (bool) $input->getOption('select-if-one');
         $delim   = (string) $input->getOption('output-delimiter');
 
+        // Output contract, deliberate (gum-parity raw capture): the
+        // interactive selection below writes the operator's own bytes
+        // VERBATIM because the chosen item IS the data channel — a pipe
+        // downstream must receive it untouched. Program-echoed values
+        // (this auto-pick included) pass through Sanitize::cellValue.
         // Auto-pick when exactly one option is supplied.
         if ($selectIfOne && count($options) === 1) {
             $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($options[0]), true, OutputInterface::OUTPUT_RAW);
@@ -145,6 +150,9 @@ final class ChooseCommand extends Command
         // Without --no-selected an empty-but-submitted selection keeps the
         // historical behavior (blank line, exit 0) so existing pipelines
         // don't suddenly start failing.
+        // Verbatim by contract: selectedAll()/selected() are the data
+        // channel (see the note at the auto-pick above), so they print
+        // raw; only app-composed diagnostics are sanitised.
         if ($final->isAborted() || !$final->isSubmitted() || ($noSelectedMessage !== null && $empty)) {
             if ($noSelectedMessage !== null) {
                 $output->write($noSelectedMessage, true, OutputInterface::OUTPUT_RAW);

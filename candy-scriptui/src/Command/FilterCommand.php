@@ -149,6 +149,10 @@ final class FilterCommand extends Command
         string $delim,
         bool $printQuery,
     ): int {
+        // Output contract, deliberate (gum-parity raw capture): the query
+        // echo and the selection results below are the DATA channel and
+        // print VERBATIM; app-emitted refusals elsewhere in this command
+        // pass through Sanitize::cellValue.
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
         }

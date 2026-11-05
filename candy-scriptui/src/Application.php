@@ -542,6 +542,10 @@ final class Application extends SymfonyApplication
                     $target = method_exists($output, 'getErrorOutput')
                         ? $output->getErrorOutput()
                         : $output;
+                    // Deliberate contrast with the verbatim selection
+                    // echoes in ChooseCommand/FilterCommand: this refusal
+                    // embeds a raw value from config/env input, so the
+                    // whole message passes through Sanitize::cellValue.
                     $target->writeln('<error>candy-scriptui: ' . \SugarCraft\Core\Util\Sanitize::cellValue($message) . '</error>');
                     return Command::INVALID;
                 }
