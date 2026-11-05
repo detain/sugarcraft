@@ -165,7 +165,7 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
      * A strict variant of {@see of()} that throws on duplicate ids instead of
      * silently dropping them. Useful when callers want to enforce uniqueness.
      *
-     * @param list<string> $ids region ids in traversal order
+     * @param string ...$ids region ids in traversal order
      * @throws \InvalidArgumentException when a duplicate id is provided
      */
     public static function ofStrict(string ...$ids): self
