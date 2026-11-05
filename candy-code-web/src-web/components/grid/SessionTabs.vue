@@ -45,6 +45,22 @@ function status(id: string): string {
   return sessions.byId[id]?.status ?? 'closed'
 }
 
+// UX-13: the colour dot is aria-hidden decoration; screen readers get the
+// same state as a visually-hidden word instead. 'closed' is the neutral
+// border-only dot — no state claim, so no word.
+function statusWord(id: string): string {
+  switch (status(id)) {
+    case 'busy':
+      return t('web.chrome.status.working')
+    case 'waiting_permission':
+      return t('web.chrome.status.waiting')
+    case 'idle':
+      return t('web.chrome.status.idle')
+    default:
+      return ''
+  }
+}
+
 function select(id: string): void {
   if (inGrid.value) {
     layout.focus(id)
@@ -166,9 +182,10 @@ onBeforeUnmount(() => {
       >
         <button type="button" class="pick" :title="index < 9 ? `${title(id)} (${tabChordLabel(chord)} ${index + 1})` : title(id)" @click="select(id)">
           <span class="dot" :class="status(id)" aria-hidden="true" />
+          <span v-if="statusWord(id) !== ''" class="sr-only">{{ statusWord(id) }}</span>
           <span class="name">{{ title(id) }}</span>
           <span v-if="approvals.countFor(id) > 0" class="badge" data-testid="tab-ask-badge">{{ approvals.countFor(id) }}</span>
-          <span v-else-if="layout.unseen[id] === true" class="fin" :aria-label="t('web.grid.tab_unseen_aria')" data-testid="tab-unseen" :title="t('web.grid.tab_unseen_title')" />
+          <span v-else-if="layout.unseen[id] === true" class="fin" role="img" :aria-label="t('web.grid.tab_unseen_aria')" data-testid="tab-unseen" :title="t('web.grid.tab_unseen_title')" />
         </button>
         <button type="button" class="x" :aria-label="t('web.grid.tab_close_aria', {name: title(id)})" data-testid="tab-close" @click="close(id)">&#10005;</button>
       </div>

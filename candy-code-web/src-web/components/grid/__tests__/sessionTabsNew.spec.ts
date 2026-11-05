@@ -117,6 +117,8 @@ describe('session tabs: the unseen badge (P-TABS.h)', () => {
 
     const tabB = wrapper.find('[data-testid="session-tab"][data-session-id="b"]')
     expect(tabB.find('[data-testid="tab-unseen"]').exists()).toBe(true)
+    // UX-14: the labelled mark is a real image role for assistive tech.
+    expect(tabB.find('[data-testid="tab-unseen"]').attributes('role')).toBe('img')
     // The focused tab never carries it.
     expect(wrapper.find('[data-testid="session-tab"][data-session-id="a"] [data-testid="tab-unseen"]').exists()).toBe(false)
 
@@ -145,5 +147,34 @@ describe('session tabs: the unseen badge (P-TABS.h)', () => {
     const tabB = wrapper.find('[data-testid="session-tab"][data-session-id="b"]')
     expect(tabB.find('[data-testid="tab-ask-badge"]').exists()).toBe(true)
     expect(tabB.find('[data-testid="tab-unseen"]').exists()).toBe(false)
+  })
+})
+
+/**
+ * UX-13: the tab status dot is colour-only decoration (aria-hidden);
+ * assistive tech must get the same state as a visually-hidden word.
+ */
+describe('session tabs: the status dot word (UX-13)', () => {
+  it('renders the session state as assistive text beside the hidden dot', async () => {
+    const { wire, wrapper } = await setUp()
+    wire.serverEvent('session.updated', summary('a', { status: 'busy' }))
+    await flushPromises()
+    const tabA = wrapper.find('[data-testid="session-tab"][data-session-id="a"]')
+    expect(tabA.find('.dot').attributes('aria-hidden')).toBe('true')
+    expect(tabA.find('.sr-only').text()).toBe('working')
+    wire.serverEvent('session.updated', summary('a', { status: 'idle' }))
+    await flushPromises()
+    expect(tabA.find('.sr-only').text()).toBe('idle')
+  })
+
+  it('gives the neutral closed dot no state word', async () => {
+    const { wire, wrapper } = await setUp()
+    useLayoutStore().openTab('b')
+    await flushPromises()
+    wire.serverEvent('session.updated', summary('b', { status: 'closed' }))
+    await flushPromises()
+    const tabB = wrapper.find('[data-testid="session-tab"][data-session-id="b"]')
+    expect(tabB.find('.dot').exists()).toBe(true)
+    expect(tabB.find('.sr-only').exists()).toBe(false)
   })
 })

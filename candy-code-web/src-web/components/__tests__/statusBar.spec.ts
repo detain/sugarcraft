@@ -324,6 +324,17 @@ describe('StatusBar PR chip (C-AGT-6.e)', () => {
     }
   })
 
+  it('exposes the PR state and CI rollup as accessible text beside the hidden dot (UX-13)', () => {
+    const wrapper = mountBar({ pr })
+    const chip = wrapper.find('[data-testid="pr-chip"]')
+    expect(chip.find('[data-testid="pr-dot"]').attributes('aria-hidden')).toBe('true')
+    expect(chip.find('.sr-only').text()).toBe('OPEN · pass')
+    // The plain-text (non-linkable scheme) variant exposes it too.
+    const plain = mountBar({ pr: { ...pr, url: 'javascript:alert(1)' } })
+    expect(plain.find('[data-testid="pr-chip"]').element.tagName).toBe('SPAN')
+    expect(plain.find('.sr-only').text()).toBe('OPEN · pass')
+  })
+
   it('stays out of the bar while the watch has no cached answer', () => {
     expect(mountBar().find('[data-testid="pr-chip"]').exists()).toBe(false)
     expect(mountBar({ pr: null }).find('[data-testid="pr-chip"]').exists()).toBe(false)

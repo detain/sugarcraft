@@ -236,13 +236,13 @@ const prLinkable = computed(() => /^https?:\/\//i.test(props.summary?.pr?.url ??
       target="_blank"
       rel="noopener noreferrer"
       :title="t('web.chrome.status.pr_title', { number: summary.pr.number, state: summary.pr.state, checks: summary.pr.checks })"
-    >#{{ summary.pr.number }}<span class="pr-dot" :class="`is-${summary.pr.checks}`" data-testid="pr-dot" aria-hidden="true" /></a>
+    >#{{ summary.pr.number }}<span class="pr-dot" :class="`is-${summary.pr.checks}`" data-testid="pr-dot" aria-hidden="true" /><span class="sr-only">{{ summary.pr.state }} · {{ summary.pr.checks }}</span></a>
     <span
       v-else-if="summary?.pr"
       class="item pr"
       data-testid="pr-chip"
       :title="t('web.chrome.status.pr_title', { number: summary.pr.number, state: summary.pr.state, checks: summary.pr.checks })"
-    >#{{ summary.pr.number }}<span class="pr-dot" :class="`is-${summary.pr.checks}`" data-testid="pr-dot" aria-hidden="true" /></span>
+    >#{{ summary.pr.number }}<span class="pr-dot" :class="`is-${summary.pr.checks}`" data-testid="pr-dot" aria-hidden="true" /><span class="sr-only">{{ summary.pr.state }} · {{ summary.pr.checks }}</span></span>
     <button
       type="button"
       class="item action"
