@@ -72,7 +72,7 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         // setting is INI_SYSTEM — no phpunit.xml can raise it), so this guard
         // fires only on assertion-enabled builds. The check that holds on every
         // runtime is assertCacheConsistent() in tests/FocusRingTest.php, run
-        // against each mutator's result.
+        // against each cache-affecting mutator's result.
         assert(
             $this->enabledPositions === self::computeEnabledPositions($ids, $disabled),
             sprintf(
