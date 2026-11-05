@@ -587,7 +587,9 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
     $breadcrumb = '<p style="color: var(--ink-2); margin: 0 0 16px 0;">'
         . '<a href="../#' . $plural . '">← All ' . $count . ' ' . $plural . '</a></p>';
 
-    $h2 = $meta['emoji'] !== '' ? $meta['emoji'] . ' ' . $name : $name;
+    // Decorative emoji is hidden from assistive tech — the heading's accessible
+    // name is the package name already (MD-9, sugar-docs-reviews-1104 root drain).
+    $h2 = $meta['emoji'] !== '' ? '<span aria-hidden="true">' . $meta['emoji'] . '</span> ' . $name : $name;
 
     $detailMeta = normalize_port_label((string) $meta['detailMeta']);
 
@@ -604,7 +606,7 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         . "\n\n<section class=\"section\">\n  <div class=\"container\">\n    "
         . $breadcrumb . "\n\n"
         . "    <div class=\"detail-header\">\n"
-        . '      <img class="detail-icon" src="../img/icons/' . $slug . '.png" alt="' . $name . "\">\n"
+        . '      <img class="detail-icon" src="../img/icons/' . $slug . '.png" alt="">' . "\n"
         . "      <div>\n"
         . '        <h2>' . $h2 . "</h2>\n"
         . '        <p class="detail-sub">' . $meta['tagline'] . "</p>\n"
