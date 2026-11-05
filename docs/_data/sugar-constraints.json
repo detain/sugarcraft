@@ -1,6 +1,6 @@
 {
     "title": "SugarCraft — SugarConstraints",
-    "description": "SugarConstraints: Constraint-based layout solver — deterministic greedy 5-phase solver with lossless rounding, plus DockLayout pane geometry for terminal grid layouts.",
+    "description": "SugarConstraints: Constraint-based layout solver — deterministic greedy solver with lossless rounding, plus DockLayout pane geometry for terminal grid layouts.",
     "ogTitle": "SugarCraft — SugarConstraints",
     "ogDescription": "A ratatui-style constraint solver behind a one-method LayoutSolver interface: GreedySolver handles every constraint type (the deprecated CassowarySolver delegates to it), plus DockLayout pane geometry.",
     "emoji": "🍬",

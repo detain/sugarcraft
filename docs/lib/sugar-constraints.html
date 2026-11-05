@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — SugarConstraints</title>
-<meta name="description" content="SugarConstraints: Constraint-based layout solver — deterministic greedy 5-phase solver with lossless rounding, plus DockLayout pane geometry for terminal grid layouts.">
+<meta name="description" content="SugarConstraints: Constraint-based layout solver — deterministic greedy solver with lossless rounding, plus DockLayout pane geometry for terminal grid layouts.">
 <meta property="og:title" content="SugarCraft — SugarConstraints">
 <meta property="og:description" content="A ratatui-style constraint solver behind a one-method LayoutSolver interface: GreedySolver handles every constraint type (the deprecated CassowarySolver delegates to it), plus DockLayout pane geometry.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-constraints.png">
@@ -53,7 +53,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-constraints"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-constraints" alt="SugarConstraints code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic 5-phase solver ported from sugar-style) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Foundation for sugar-style, sugar-widgets, and sugar-forms layout.</p>
+    <p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic greedy solver ported from sugar-style) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Foundation for sugar-style, sugar-widgets, and sugar-forms layout.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-constraints</code></pre>
@@ -84,7 +84,7 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
 
     <h3 style="margin-top: 32px;">Solvers</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>GreedySolver</strong><span>Deterministic 5-phase solver. Bit-identical output to the existing sugar-style Solver. No deps, no edit variables. Fast and predictable. Lossless rounding: floored fractions are handed back so the regions tile the span (Fill/Max remainder to the first Fill, Min slack residue to the first Min, a Percentage/Ratio shortfall of at most N−1 cells reclaimed earliest-first). When fixed demand exceeds the span, regions shrink proportionally and still sum to it — <code>withoutOverflowTruncation()</code> keeps full base sizes instead.</span></div>
+      <div class="feature"><strong>GreedySolver</strong><span>Deterministic greedy solver. Bit-identical output to the existing sugar-style Solver. No deps, no edit variables. Fast and predictable. Lossless rounding: floored fractions are handed back so the regions tile the span (Fill/Max remainder to the first Fill, Min slack residue to the first Min, a Percentage/Ratio shortfall of at most N−1 cells reclaimed earliest-first). When fixed demand exceeds the span, regions shrink proportionally and still sum to it — <code>withoutOverflowTruncation()</code> keeps full base sizes instead.</span></div>
       <div class="feature"><strong>CassowarySolver (deprecated)</strong><span>The original Big-M simplex prototype never converged, so <code>solve()</code> raises <code>E_USER_DEPRECATED</code> and delegates wholly to <code>GreedySolver</code> — results are identical. Kept only so existing call-sites keep working.</span></div>
       <div class="feature"><strong>DockLayout</strong><span>Center pane plus left/right weighted slot stacks. Stack heights are split in exact integer arithmetic (no float decides a boundary row); a weight set whose scaled sum would overflow is refused with <code>InvalidArgumentException</code> where it is introduced, and <code>resolve()</code> itself never throws, degrading side by side on small frames.</span></div>
     </div>
