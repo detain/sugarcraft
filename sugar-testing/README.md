@@ -136,9 +136,9 @@ use SugarCraft\Testing\ProgramSimulator;
 
 $sim = ProgramSimulator::for($program);           // Model or Program
 
-$sim->send($msgA, $msgB);                          // enqueue (fluent, variadic)
-$sim->withRealCmdRunner(false);                    // capture-only: cmds collected, never executed
-$sim->withFakeCmdRunner(fn ($cmd) => $nextMsg);    // substitute the Cmd result
+$sim->send($msgA, $msgB);                          // enqueue (fluent, variadic — queues in place)
+$sim = $sim->withRealCmdRunner(false);             // capture-only: cmds collected, never executed
+$sim = $sim->withFakeCmdRunner(fn ($cmd) => $nextMsg); // substitute the Cmd result (new sim — keep it)
 $result = $sim->run();                             // replayable from the initial state
 
 echo $result->view;                                // last view() string
@@ -244,17 +244,19 @@ skipped** — a grid that cannot assert anything fails, so a typo cannot produce
 a false pass:
 
 ```php
-// A plain string row spreads its grapheme clusters across cells, one per
-// cell. This matches a 1-row, 4-column buffer painted "abcd":
-Assertions::assertCellGrid(['abcd'], $buffer);
+// One buffer, two rows: row 0 painted "abcd", row 1 painted "ok🎉" (the wide
+// rune auto-claims column 3 as its continuation). A plain string row spreads
+// its grapheme clusters across cells, one per cell; a `null` row slot skips
+// that whole row:
+Assertions::assertCellGrid(['abcd', null], $buffer);
 
 // Per-cell forms. An array row must list exactly `buffer->width()` entries —
 // one entry per column. Auto-claiming the continuation cell happens only in
 // string rows; an array row must state the continuation cell itself after a
-// wide rune. This matches a 2-row, 4-column buffer painted "ok🎉" (row 1 blank):
+// wide rune. Same buffer, now asserting row 1 (row 0 wildcarded):
 Assertions::assertCellGrid([
+    null,   // whole-row wildcard — the row slot must still exist
     ['o', 'k', ['rune' => '🎉', 'width' => 2], ['rune' => '', 'width' => 0]],
-    [null, null, null, null],   // fully wildcard row (all 4 positions skipped)
 ], $buffer);
 ```
 
@@ -323,15 +325,17 @@ suite):
 use SugarCraft\Testing\Graphics\{GraphicsAssertions, Iterm2Stream, KittyStream, Mode, SixelStream};
 
 // Decode into an inspectable stream object with typed accessors.
-$kitty  = KittyStream::decode($bytes)->image();   // png(), cols(), rows(), id()…
-$sixel  = SixelStream::decode($bytes);            // grid(): PixelGrid, palette()
-$iterm  = Iterm2Stream::decode($bytes);           // payload(), png(), params()
-$mode   = Mode::detect($bytes);                   // which protocol it introduces
+// ($kittyBytes, $sixelBytes, $itermBytes: captured output of each protocol.)
+$kitty  = KittyStream::decode($kittyBytes)->image();      // png(), cols(), rows(), id()…
+$sixel  = SixelStream::decode($sixelBytes);               // grid(): PixelGrid, palette()
+$iterm  = Iterm2Stream::decode($itermBytes);              // payload(), png(), params()
+$mode   = Mode::detect($kittyBytes);                      // which protocol it introduces
 
-// One-shot assertions over a raw stream:
-GraphicsAssertions::assertRendersTo($bytes, Mode::Kitty, $expectedGrid, tolerance: 0);
-GraphicsAssertions::assertInlineImageDimensions($bytes, Mode::Sixel, 64, 32);
-GraphicsAssertions::assertProtocolRoundTrip($bytes, Mode::Iterm2);
+// One-shot assertions over a raw stream (dimensions and round-trip need no GD):
+GraphicsAssertions::assertInlineImageDimensions($sixelBytes, Mode::Sixel, 80, 40);
+GraphicsAssertions::assertProtocolRoundTrip($kittyBytes, Mode::Kitty);
+// Pixel diff materializes the raster — needs ext-gd, see below:
+GraphicsAssertions::assertRendersTo($kittyBytes, Mode::Kitty, $expectedGrid, tolerance: 0);
 ```
 
 Pixel materialization goes through GD. Where ext-gd is absent the pixel paths
@@ -401,7 +405,8 @@ ScriptedInput::new()
     ->bytes("\x1b")                    // a lone ESC becomes Escape after the silence
     ->build();
 
-ScriptedInput::new()->withSanitizePaste(false)->paste($raw); // mirrors ProgramOptions::$sanitizePaste
+$raw = "\x1b[200~pasted\x1b[201~";                       // your unfiltered payload
+$paste = ScriptedInput::new()->withSanitizePaste(false)->paste($raw)->build(); // mirrors ProgramOptions::$sanitizePaste
 ```
 
 `paste()` follows the runtime: payloads are sanitized by default, a paste past
