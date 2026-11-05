@@ -65,6 +65,12 @@ final class StreamChannelTest extends TestCase
             'html-comment'  => ["<!--\n\n# H\n-->\n\n# After\n"],
             'backtick-info' => ["```a`b\n```\n\n# H\n"],
             'outdented-fence-close' => ["- a\n  ```\n  x\n```\n\n# H\n\ny\n"],
+            // MD-1/MD-2 (M5 arbitration): the exact bytes of the contested
+            // tui-arch repro — a paragraph holding TWO unresolved refs whose
+            // definition arrives only after the blank-line hold. Exhaustive
+            // byte-width splits run over every corpus row above.
+            'held-ref-double-token' => ["see [a] now [a] now\n\n[a]: /url\n"],
+            'ref-straddling-heading' => ["Intro [q] here\n\n# H\n[q]: /u\n\nTrailing [q] again\n"],
         ];
     }
 
@@ -329,5 +335,73 @@ final class StreamChannelTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         self::collect($this->plain(), $generator); // lazy: must surface on consumption
+    }
+
+    /**
+     * MD-2 (M5, option B — probe verdict NO-REPRO, see
+     * /tmp/opencode/sugar-docs-reviews-1104/fixes/sugar-markdown-M5-probe.md):
+     * the review cited a triple whose bytes sum to
+     * "see [a] now [a] now\n\n[a]: /url\n" — NOT the doc it compared against.
+     * Faithfully streamed against its own concatenation the invariant holds;
+     * this pins the exact split so a regression can never re-bill it as an
+     * unfixed bug.
+     */
+    public function testTheExactTuiArchTripleIsByteIdenticalToItsOwnConcatenation(): void
+    {
+        $chunks   = ['see [a] no', 'w [a] now' . "\n", "\n[a]: /url\n"];
+        $renderer = $this->plain();
+
+        $this->assertSame(
+            $renderer->render(implode('', $chunks)),
+            implode('', self::collect($renderer, $chunks)),
+        );
+    }
+
+    /**
+     * MD-2: seeded randomized multi-cut sweep over the held-reference shapes
+     * the probe family used — definition-before, definition-after, and
+     * definition-in-a-third-section, each fed 1..6 random cuts. Deterministic
+     * (fixed seeds), so a red here is a real regression, not dice.
+     */
+    public function testSeededRandomMultiCutsHoldTheByteIdentityInvariant(): void
+    {
+        $family = [
+            "see [a] now [a] now\n\n[a]: /url\n",
+            "see [a] now\n\n[a]: /url\n",
+            "[a]: /url\n\nsee [a] now\n",
+            "# H1\n\nsee [a] now\n\n# H2\n\n[a]: /url\n",
+            "text [a]\n\ntext [b]\n\n[a]: /1\n\n[b]: /2\n",
+        ];
+        $renderer = $this->plain();
+        foreach ($family as $seed => $doc) {
+            $whole = $renderer->render($doc);
+            $len   = strlen($doc);
+            for ($trial = 0; $trial < 60; $trial++) {
+                mt_srand(1000 * $seed + $trial);
+                $cuts = [];
+                for ($c = 0, $k = 1 + ($trial % 6); $c < $k; $c++) {
+                    $cuts[] = mt_rand(0, $len);
+                }
+                sort($cuts);
+                $pieces = [];
+                $prev = 0;
+                foreach ($cuts as $cut) {
+                    $piece = substr($doc, $prev, $cut - $prev);
+                    if ($piece !== '') {
+                        $pieces[] = $piece;
+                    }
+                    $prev = $cut;
+                }
+                $tailPiece = substr($doc, $prev);
+                if ($tailPiece !== '') {
+                    $pieces[] = $tailPiece;
+                }
+                $this->assertSame(
+                    $whole,
+                    implode('', self::collect($renderer, $pieces)),
+                    "seed $seed trial $trial: " . json_encode($pieces),
+                );
+            }
+        }
     }
 }
