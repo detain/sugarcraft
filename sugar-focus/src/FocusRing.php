@@ -141,7 +141,19 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         // lead byte that remains is inert — the forgery is neutralised either way.
         $id = addcslashes($id, "\x00..\x1f\x7f\x80..\x9f");
 
-        return strlen($id) > 80 ? substr($id, 0, 79) . '...' : $id;
+        if (strlen($id) <= 80) {
+            return $id;
+        }
+
+        // Clipping at a fixed byte can strand half of a multi-byte character the
+        // escape left raw, putting invalid UTF-8 into a terminal-rendered error.
+        // Walk back off continuation bytes so the clip lands on a character edge.
+        $clip = 79;
+        while ($clip > 0 && (ord($id[$clip]) & 0xC0) === 0x80) {
+            --$clip;
+        }
+
+        return substr($id, 0, $clip) . '...';
     }
 
     /** An empty ring with nothing registered or focused. */

@@ -1317,6 +1317,34 @@ final class FocusRingTest extends TestCase
         }
     }
 
+    public function testOfStrictClipNeverSplitsAMultiByteCharacter(): void
+    {
+        // U+2FA1 survives the escape as raw bytes (no byte of \xe2\xbe\xa1 sits in
+        // the escaped range), so a fixed 79-byte cut would dangle half of glyph
+        // 27 and put invalid UTF-8 into a terminal-rendered error.
+        $glyph = "\u{2FA1}";
+        $id = str_repeat($glyph, 30);
+
+        try {
+            FocusRing::ofStrict($id, 'x', $id);
+            self::fail('expected the duplicate to throw');
+        } catch (\InvalidArgumentException $e) {
+            $msg = $e->getMessage();
+            self::assertStringContainsString(str_repeat($glyph, 26) . '...', $msg, 'the clip lands on a character edge');
+            self::assertSame(1, preg_match('//u', $msg), 'the clipped message must stay valid UTF-8');
+            self::assertStringNotContainsString(str_repeat($glyph, 27), $msg, 'the half character must not survive');
+        }
+
+        $ascii = str_repeat('y', 100);
+
+        try {
+            FocusRing::ofStrict($ascii, 'x', $ascii);
+            self::fail('expected the duplicate to throw');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString(str_repeat('y', 79) . '...', $e->getMessage(), 'ASCII still clips at the byte budget');
+        }
+    }
+
     // ─── Countable ─────────────────────────────────────────────────────────
 
     /** Regression: count($ring) must work, not throw a TypeError. */
