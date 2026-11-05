@@ -623,7 +623,9 @@ final class BarChart
     private function dataLabel(Bar $bar, int $i): string
     {
         if ($this->dataLabelFormatter !== null) {
-            return (string) ($this->dataLabelFormatter)($bar, $i);
+            // CH-1 (M15): guard-then-budget — truncate alone left bidi
+            // overrides and the U+E000/E001 sentinels intact.
+            return UntrustedText::guard((string) ($this->dataLabelFormatter)($bar, $i));
         }
         return self::defaultDataLabel($bar->value);
     }

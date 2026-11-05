@@ -1090,7 +1090,10 @@ final class LineChart extends Chart
         for ($i = 0; $i < $ticks; $i++) {
             $t = $ticks > 1 ? $i / ($ticks - 1) : 0.0;
             $v = $xMin + $t * ($xMax - $xMin);
-            $out[] = (string) $fn($v);
+            // CH-1 (M15): formatter returns are untrusted — a closure
+            // echoing host data must not smuggle control bytes past the
+            // UntrustedText boundary the withXLabels() ingress enforces.
+            $out[] = UntrustedText::guard((string) $fn($v));
         }
         return $out;
     }
@@ -1116,7 +1119,7 @@ final class LineChart extends Chart
         for ($i = 0; $i < $ticks; $i++) {
             $t = $ticks > 1 ? $i / ($ticks - 1) : 0.0;
             $v = $max - $t * ($max - $min);
-            $out[] = (string) $fn($v);
+            $out[] = UntrustedText::guard((string) $fn($v)); // CH-1 (M15)
         }
         return $out;
     }

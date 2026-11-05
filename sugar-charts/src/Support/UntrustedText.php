@@ -22,7 +22,11 @@ use SugarCraft\Core\Util\Width;
  * input from the host itself. Left raw, one such string reaching a real
  * terminal is an escape-injection primitive.
  *
- * This is the single guard every text ingress passes through:
+ * This is the single guard every text ingress passes through. Static
+ * strings are swept at their setters; closure-produced ones (axis label
+ * formatters, BarChart data-label formatters) are swept at the resolve
+ * and render sites — CH-1 (docs-reviews-1104) closed the last two
+ * sites that had cast formatter returns straight into label rows:
  *
  *  1. `Sanitize::untrustedForMarkedFrames()` deletes every escape-introduced
  *     sequence (both spellings), C0 controls except TAB/LF/CR, DEL, 8-bit
