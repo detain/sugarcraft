@@ -497,10 +497,11 @@ elastic- and back-flavoured control points — same honesty rule as `Easing`.
 
 ## Public API
 
-- **`Spring`** — `__construct($dt, $ω, $ζ, ?bool $reducedMotionOverride = null)`
-  (refuses non-finite inputs, `dt < 0`, `ω < 1e-9`, `ζ <= 0` and coefficient
-  overflow) / `update($pos, $pos, $target)` / `fps(float)` /
-  `fromPreset(SpringPreset, ?float $dt = null, ?bool $reducedMotionOverride = null)` /
+- **`Spring`** — `__construct($deltaTime, $angularFrequency, $dampingRatio,
+  ?bool $reducedMotionOverride = null)` (the classic `$dt`/`ω`/`ζ` triple;
+  refuses non-finite inputs, `dt < 0`, `ω < 1e-9`, `ζ <= 0` and coefficient
+  overflow) / `update($pos, $pos, $target)` / `fps(float $fps)` /
+  `fromPreset(SpringPreset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)` /
   static `settled($pos, $vel, $target, $threshold = SETTLING_THRESHOLD)`.
   `const SETTLING_THRESHOLD = 1e-4`. `update()` rejects non-finite state and
   short-circuits to `[$target, 0.0]` when the env-driven reduced-motion
@@ -524,7 +525,7 @@ elastic- and back-flavoured control points — same honesty rule as `Easing`.
   `resolve()` returns a `SpringConfig`.
 - **`SpringConfig`** — `__construct(tension, friction, mass)` (all finite and
   positive) with public readonly `$angularFrequency` / `$dampingRatio` /
-  `spring(float $dt = 1/60, ?bool $reducedMotionOverride = null)` /
+  `spring(float $deltaTime = 1/60, ?bool $reducedMotionOverride = null)` /
   `springAt60Fps(?bool $reducedMotionOverride = null)`.
 - **`Projectile`** — `Projectile::new(...)` / `update()` / `position()` /
   `velocity()` / `acceleration()` (identical `->position` etc. properties
