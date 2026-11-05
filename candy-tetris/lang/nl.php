@@ -24,7 +24,7 @@ langzaam laten
 snel laten
 opslag
 pauze
-opnieuw
+herstart (end)
 afsluiten',
     'next_label' => 'volgende:',
     'hold_label' => 'opslag:',

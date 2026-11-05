@@ -24,7 +24,7 @@ caída suave
 caída rápida
 reserva
 pausa
-reiniciar
+reiniciar (fin)
 salir',
     'next_label' => 'siguiente:',
     'hold_label' => 'reserva:',

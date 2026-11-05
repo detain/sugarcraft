@@ -24,7 +24,7 @@ langsam fallen
 schnell fallen
 Lager
 Pause
-Neustart
+Neustart (Ende)
 beenden',
     'next_label' => 'nächste:',
     'hold_label' => 'Lager:',

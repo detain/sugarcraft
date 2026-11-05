@@ -24,7 +24,7 @@ queda suave
 queda rápida
 guardar
 pausar
-reiniciar
+reiniciar (fim)
 sair',
     'next_label' => 'próxima:',
     'hold_label' => 'reserva:',

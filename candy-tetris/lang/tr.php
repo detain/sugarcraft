@@ -24,7 +24,7 @@ yumuşak iniş
 sert iniş
 bekleme
 duraklat
-yeniden
+yeniden (sonra)
 çık',
     'next_label' => 'sonraki:',
     'hold_label' => 'bekleme:',

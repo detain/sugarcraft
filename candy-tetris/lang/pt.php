@@ -24,7 +24,7 @@ queda lenta
 queda rápida
 guardar
 pausa
-reiniciar
+reiniciar (fim)
 sair',
     'next_label' => 'seguinte:',
     'hold_label' => 'reserva:',

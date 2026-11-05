@@ -24,7 +24,7 @@ powolny zjazd
 szybki zjazd
 bufor
 pauza
-restart
+restart (po)
 wyjście',
     'next_label' => 'następny:',
     'hold_label' => 'bufor:',

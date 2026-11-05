@@ -56,6 +56,12 @@ final class Bindings
      * Help-card rows in card order. The move row answers with both arrow
      * labels, exactly as the old static card read '← →'.
      *
+     * The restart verb carries its over-screen context ('restart (over)'
+     * and per-locale equivalents): stepGame only honours r once the game
+     * is over, so a bare verb on an inert-during-play row misleads. The
+     * card box is a fixed width(20) sidebar, so each locale's qualified
+     * verb must stay within 15 cells (20 - frame - label column).
+     *
      * @var list<list<string>>
      */
     private const HELP_ROWS = [

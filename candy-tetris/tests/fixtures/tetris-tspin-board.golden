@@ -27,6 +27,6 @@
                 │ spc  hard drop       │
                 │ c    hold            │
                 │ p    pause           │
-                │ r    restart         │
+                │ r    restart (over)  │
                 │ q    quit            │
                 └──────────────────────┘

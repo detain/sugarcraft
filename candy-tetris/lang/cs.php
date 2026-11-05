@@ -24,7 +24,7 @@ pomalý pád
 rychlý pád
 hold
 pauza
-restart
+restart (konec)
 konec',
     'next_label' => 'další:',
     'hold_label' => 'hold:',

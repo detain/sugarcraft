@@ -24,7 +24,7 @@ discesa lenta
 discesa rapida
 riserva
 pausa
-ricomincia
+riavvia (fine)
 esci',
     'next_label' => 'successivo:',
     'hold_label' => 'riserva:',

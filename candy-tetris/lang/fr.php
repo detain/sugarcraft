@@ -24,7 +24,7 @@ chute lente
 chute rapide
 réserve
 pause
-relancer
+relancer (fin)
 quitter',
     'next_label' => 'suivante :',
     'hold_label' => 'réserve :',

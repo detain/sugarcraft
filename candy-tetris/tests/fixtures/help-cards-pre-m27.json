@@ -1,66 +1,66 @@
 {
     "ar": {
-        "help_card": "← →  تحريك\n↑ x  تدوير مع العقارب\nz    تدوير عكس العقارب\n↓    إنزال بطيء\nspc  إنزال فوري\nc    تخزين\np    إيقاف مؤقت\nr    إعادة التشغيل\nq    خروج",
+        "help_card": "← →  تحريك\n↑ x  تدوير مع العقارب\nz    تدوير عكس العقارب\n↓    إنزال بطيء\nspc  إنزال فوري\nc    تخزين\np    إيقاف مؤقت\nr    إعادة (نهاية)\nq    خروج",
         "vs_keys": "spc إنزال  c تخزين  p إيقاف  r إعادة  q خروج"
     },
     "cs": {
-        "help_card": "← →  posun\n↑ x  otočit ve směru\nz    otočit proti směru\n↓    pomalý pád\nspc  rychlý pád\nc    hold\np    pauza\nr    restart\nq    konec",
+        "help_card": "← →  posun\n↑ x  otočit ve směru\nz    otočit proti směru\n↓    pomalý pád\nspc  rychlý pád\nc    hold\np    pauza\nr    restart (konec)\nq    konec",
         "vs_keys": "spc pád  c hold  p pauza  r restart  q konec"
     },
     "de": {
-        "help_card": "← →  bewegen\n↑ x  im Uhrzeigersinn\nz    gegen den Uhrz.\n↓    langsam fallen\nspc  schnell fallen\nc    Lager\np    Pause\nr    Neustart\nq    beenden",
+        "help_card": "← →  bewegen\n↑ x  im Uhrzeigersinn\nz    gegen den Uhrz.\n↓    langsam fallen\nspc  schnell fallen\nc    Lager\np    Pause\nr    Neustart (Ende)\nq    beenden",
         "vs_keys": "spc fallen  c Lager  p Pause  r Neustart  q beenden"
     },
     "en": {
-        "help_card": "← →  move\n↑ x  rotate cw\nz    rotate ccw\n↓    soft drop\nspc  hard drop\nc    hold\np    pause\nr    restart\nq    quit",
+        "help_card": "← →  move\n↑ x  rotate cw\nz    rotate ccw\n↓    soft drop\nspc  hard drop\nc    hold\np    pause\nr    restart (over)\nq    quit",
         "vs_keys": "spc hard  c hold  p pause  r restart  q quit"
     },
     "es": {
-        "help_card": "← →  mover\n↑ x  girar horario\nz    girar antihorario\n↓    caída suave\nspc  caída rápida\nc    reserva\np    pausa\nr    reiniciar\nq    salir",
+        "help_card": "← →  mover\n↑ x  girar horario\nz    girar antihorario\n↓    caída suave\nspc  caída rápida\nc    reserva\np    pausa\nr    reiniciar (fin)\nq    salir",
         "vs_keys": "spc caída  c reserva  p pausa  r reinicio  q salir"
     },
     "fr": {
-        "help_card": "← →  déplacer\n↑ x  rotation horaire\nz    rotation anti-hor.\n↓    chute lente\nspc  chute rapide\nc    réserve\np    pause\nr    relancer\nq    quitter",
+        "help_card": "← →  déplacer\n↑ x  rotation horaire\nz    rotation anti-hor.\n↓    chute lente\nspc  chute rapide\nc    réserve\np    pause\nr    relancer (fin)\nq    quitter",
         "vs_keys": "spc chute  c réserve  p pause  r relance  q quitter"
     },
     "it": {
-        "help_card": "← →  muovi\n↑ x  rotazione oraria\nz    rotazione antior.\n↓    discesa lenta\nspc  discesa rapida\nc    riserva\np    pausa\nr    ricomincia\nq    esci",
+        "help_card": "← →  muovi\n↑ x  rotazione oraria\nz    rotazione antior.\n↓    discesa lenta\nspc  discesa rapida\nc    riserva\np    pausa\nr    riavvia (fine)\nq    esci",
         "vs_keys": "spc scendi  c riserva  p pausa  r ricomincia  q esci"
     },
     "ja": {
-        "help_card": "← →  移動\n↑ x  右回転\nz    左回転\n↓    ソフトドロップ\nspc  ハードドロップ\nc    ホールド\np    一時停止\nr    リスタート\nq    終了",
+        "help_card": "← →  移動\n↑ x  右回転\nz    左回転\n↓    ソフトドロップ\nspc  ハードドロップ\nc    ホールド\np    一時停止\nr    リスタート(終)\nq    終了",
         "vs_keys": "spc 落とす  c ホールド  p 停止  r 再開  q 終了"
     },
     "ko": {
-        "help_card": "← →  이동\n↑ x  시계 방향 회전\nz    반시계 방향 회전\n↓    소프트 드롭\nspc  하드 드롭\nc    홀드\np    일시 정지\nr    재시작\nq    종료",
+        "help_card": "← →  이동\n↑ x  시계 방향 회전\nz    반시계 방향 회전\n↓    소프트 드롭\nspc  하드 드롭\nc    홀드\np    일시 정지\nr    재시작(종료 후)\nq    종료",
         "vs_keys": "spc 드롭  c 홀드  p 정지  r 재시작  q 종료"
     },
     "nl": {
-        "help_card": "← →  verplaats\n↑ x  met klok mee\nz    tegen klok in\n↓    langzaam laten\nspc  snel laten\nc    opslag\np    pauze\nr    opnieuw\nq    afsluiten",
+        "help_card": "← →  verplaats\n↑ x  met klok mee\nz    tegen klok in\n↓    langzaam laten\nspc  snel laten\nc    opslag\np    pauze\nr    herstart (end)\nq    afsluiten",
         "vs_keys": "spc laten  c opslag  p pauze  r opnieuw  q afsluiten"
     },
     "pl": {
-        "help_card": "← →  ruch\n↑ x  obrót w prawo\nz    obrót w lewo\n↓    powolny zjazd\nspc  szybki zjazd\nc    bufor\np    pauza\nr    restart\nq    wyjście",
+        "help_card": "← →  ruch\n↑ x  obrót w prawo\nz    obrót w lewo\n↓    powolny zjazd\nspc  szybki zjazd\nc    bufor\np    pauza\nr    restart (po)\nq    wyjście",
         "vs_keys": "spc zjazd  c bufor  p pauza  r restart  q wyjście"
     },
     "pt": {
-        "help_card": "← →  mover\n↑ x  rodar horário\nz    rodar anti-horário\n↓    queda lenta\nspc  queda rápida\nc    guardar\np    pausa\nr    reiniciar\nq    sair",
+        "help_card": "← →  mover\n↑ x  rodar horário\nz    rodar anti-horário\n↓    queda lenta\nspc  queda rápida\nc    guardar\np    pausa\nr    reiniciar (fim)\nq    sair",
         "vs_keys": "spc queda  c guardar  p pausa  r reinício  q sair"
     },
     "pt-br": {
-        "help_card": "← →  mover\n↑ x  girar horário\nz    girar anti-horário\n↓    queda suave\nspc  queda rápida\nc    guardar\np    pausar\nr    reiniciar\nq    sair",
+        "help_card": "← →  mover\n↑ x  girar horário\nz    girar anti-horário\n↓    queda suave\nspc  queda rápida\nc    guardar\np    pausar\nr    reiniciar (fim)\nq    sair",
         "vs_keys": "spc queda  c guardar  p pausar  r reiniciar  q sair"
     },
     "ru": {
-        "help_card": "← →  движение\n↑ x  поворот вправо\nz    поворот влево\n↓    мягкое падение\nspc  жёсткое падение\nc    удержание\np    пауза\nr    заново\nq    выход",
+        "help_card": "← →  движение\n↑ x  поворот вправо\nz    поворот влево\n↓    мягкое падение\nspc  жёсткое падение\nc    удержание\np    пауза\nr    заново (финал)\nq    выход",
         "vs_keys": "spc сброс  c удержание  p пауза  r заново  q выход"
     },
     "tr": {
-        "help_card": "← →  hareket\n↑ x  saat yönünde\nz    ters yönde\n↓    yumuşak iniş\nspc  sert iniş\nc    bekleme\np    duraklat\nr    yeniden\nq    çık",
+        "help_card": "← →  hareket\n↑ x  saat yönünde\nz    ters yönde\n↓    yumuşak iniş\nspc  sert iniş\nc    bekleme\np    duraklat\nr    yeniden (sonra)\nq    çık",
         "vs_keys": "spc iniş  c bekleme  p duraklat  r yeniden  q çık"
     },
     "zh-cn": {
-        "help_card": "← →  移动\n↑ x  顺时针旋转\nz    逆时针旋转\n↓    软降\nspc  硬降\nc    暂存\np    暂停\nr    重新开始\nq    退出",
+        "help_card": "← →  移动\n↑ x  顺时针旋转\nz    逆时针旋转\n↓    软降\nspc  硬降\nc    暂存\np    暂停\nr    重开(终局后)\nq    退出",
         "vs_keys": "spc 硬降  c 暂存  p 暂停  r 重开  q 退出"
     }
 }

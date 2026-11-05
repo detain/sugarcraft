@@ -118,7 +118,10 @@ final class VsRenderer
                 'losses' => $game->scores->versusLosses,
             ]);
         }
-        $lines[] = Lang::t('over.quit_hint');
+        // The versus over screen answers r exactly like the solo one
+        // (VsGame::update), so the banner teaches both live keys:
+        // restart_hint carries 'press r to restart — press q to quit'.
+        $lines[] = Lang::t('over.restart_hint');
         return $lines;
     }
 

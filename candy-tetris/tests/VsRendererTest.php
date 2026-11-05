@@ -128,7 +128,10 @@ final class VsRendererTest extends TestCase
         $vs = new VsGame($playerGame, $overComputer, over: true, winner: 'PLAYER');
         $output = VsRenderer::render($vs);
 
-        $this->assertStringContainsString('press q to quit', $output);
+        // The over banner must teach r alongside q — the versus over
+        // screen answers restart (VsGame::update); a banner stuck on
+        // quit_hint alone hid a live key.
+        $this->assertStringContainsString('press r to restart', $output);
     }
 
     public function testRenderComputerBoardWithGhostPiece(): void
