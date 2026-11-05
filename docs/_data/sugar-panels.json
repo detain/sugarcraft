@@ -1,11 +1,11 @@
 {
     "title": "SugarPanels — SugarCraft",
-    "description": "SugarPanels: Box-drawing layout engine for terminal UIs.",
+    "description": "SugarPanels: H/V panels with flex/natural sizing, borders, nesting, and stateful delta rendering.",
     "ogTitle": "SugarPanels — SugarCraft",
-    "ogDescription": "Box-drawing layout engine for terminal UIs.",
+    "ogDescription": "H/V panels with flex/natural sizing, borders, nesting, and stateful delta rendering.",
     "emoji": "",
     "displayName": "SugarPanels",
-    "tagline": "Box-drawing layout engine for terminal UIs",
+    "tagline": "H/V panels with flex/natural sizing, borders, nesting, and stateful delta rendering",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/treilik/bubbleboxer\" style=\"color: inherit;\">treilik/bubbleboxer</a></span>\n          <span class=\"tag-chip\">layout</span><span class=\"tag-chip\">box</span><span class=\"tag-chip\">border</span><span class=\"tag-chip\">ui</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/treilik/bubbleboxer\" style=\"color: inherit;\">treilik/bubbleboxer</a></span>\n          <span class=\"tag-chip\">layout</span><span class=\"tag-chip\">box</span><span class=\"tag-chip\">border</span><span class=\"tag-chip\">ui</span><span class=\"tag-chip\">panel</span><span class=\"tag-chip\">tui</span>"
 }
