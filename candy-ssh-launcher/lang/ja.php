@@ -38,6 +38,6 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'フィルター: ',
     'picker.no_matches'  => '  (一致なし)',
-    'picker.help'        => '  ↑/↓ 選択 · Enter 接続 · Esc 終了 · 入力で絞り込み',
+    'picker.help'        => '  ↑/↓ または j/k 選択 · Enter 接続 · Esc 終了 · 入力で絞り込み',
     'picker.count'       => '  （{shown}/{total}）',
 ];

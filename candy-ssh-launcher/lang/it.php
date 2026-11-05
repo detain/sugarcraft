@@ -38,6 +38,6 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filtro: ',
     'picker.no_matches'  => '  (nessuna corrispondenza)',
-    'picker.help'        => '  ↑/↓ seleziona · Invio connetti · Esc esci · digita per filtrare',
+    'picker.help'        => '  ↑/↓ o j/k seleziona · Invio connetti · Esc esci · digita per filtrare',
     'picker.count'       => '  ({shown} di {total})',
 ];

@@ -40,6 +40,6 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filtro: ',
     'picker.no_matches'  => '  (sin coincidencias)',
-    'picker.help'        => '  ↑/↓ seleccionar · Enter conectar · Esc salir · escribe para filtrar',
+    'picker.help'        => '  ↑/↓ o j/k seleccionar · Enter conectar · Esc salir · escribe para filtrar',
     'picker.count'       => '  ({shown} de {total})',
 ];

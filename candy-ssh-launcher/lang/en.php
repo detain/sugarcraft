@@ -39,6 +39,6 @@ return [
     'picker.title'       => '── wishlist ──',
     'picker.filter'      => 'filter: ',
     'picker.no_matches'  => '  (no matches)',
-    'picker.help'        => '  ↑/↓ select · Enter connect · Esc quit · type to filter',
+    'picker.help'        => '  ↑/↓ or j/k select · Enter connect · Esc quit · type to filter',
     'picker.count'       => '  ({shown} of {total})',
 ];
