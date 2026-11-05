@@ -406,7 +406,7 @@ Only bare left presses act as clicks. Right and middle clicks and modified click
 
 ## Config keys
 
-These are all persisted keys, in config.conf write order, generated from `SugarCraft\Top\Config\Schema` and the options-menu catalog. `tests/Docs/ReadmeConfigTableDriftTest.php` fails when they disagree. "Options menu" gives the tab number, the tab and the section heading where the key is edited. Descriptions are the comment lines written into config.conf. Runtime-only state (`tty_mode`, `proc_filter`, `show_detailed`, `pause_proc_list`, ...) is never written and is not listed.
+These are all persisted keys, in config.conf write order, generated from `SugarCraft\Top\Config\Schema` and the options-menu catalog. `tests/Docs/ReadmeConfigTableDriftTest.php` fails when they disagree. "Options menu" gives the tab number, the tab and the section heading where the key is edited. The four BMC/VM options (`ctr_show_vms`, `vms_sorting`, `ipmi_update_ms`, `ipmi_show_serials`) are edited under options tab `4` proc, section "Rows and selection" — not under a containers or BMC tab. Descriptions are the comment lines written into config.conf. Runtime-only state (`tty_mode`, `proc_filter`, `show_detailed`, `pause_proc_list`, ...) is never written and is not listed.
 
 <!-- BEGIN generated:config -->
 | Key | Type | Default | Allowed values | Options menu | Description |
