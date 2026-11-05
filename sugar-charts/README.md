@@ -9,8 +9,6 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-
-![demo](.vhs/heatmap.gif)
 ```sh
 composer require sugarcraft/sugar-charts:dev-master
 ```
@@ -528,7 +526,7 @@ rm tests/fixtures/<name>.golden && SUGAR_TESTING_UPDATE_GOLDENS=1 vendor/bin/php
 (`UPDATE_GOLDENS=1` is honored as a legacy spelling; the canonical arm
 is `SUGAR_TESTING_UPDATE_GOLDENS=1`.)
 
-## Test
+## Testing
 
 ```sh
 cd sugar-charts && composer install && vendor/bin/phpunit
