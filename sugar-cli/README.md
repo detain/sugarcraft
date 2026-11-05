@@ -107,7 +107,8 @@ echo StatusLine::error('connection refused'), "\n";
   section titles are never wrapped or cut — in stacked mode a very long
   key can overflow the width, so keep keys short. `renderRows()` renders
   just the key/description grid, and `renderPage()` renders a complete
-  pre-composed page without re-wrapping it.
+  pre-composed page without re-wrapping it by default (`null`); pass an
+  `int`/`AutoWidth` to word-wrap over-long rows.
 - **`Frame`** — full-screen application chrome: a double-line box that
   fills the terminal exactly (`Frame::new()->withTitle($bar)
   ->withStatus($bar)->render($body, $cols, $rows)`), with a centred title
