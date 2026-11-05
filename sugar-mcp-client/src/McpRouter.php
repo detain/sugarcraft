@@ -31,7 +31,7 @@ final class McpRouter
     /**
      * @param array<string,McpServer> $servers keyed by server name
      * @param array<array-key, string|array{action:string}> $denyPatterns two
-     *        config notations are legal (fix wave MC-1, review C-1): a PLAIN
+     *        config notations are legal: a PLAIN
      *        LIST of glob patterns — `['scratch', 'untrusted_*']` — where every
      *        entry denies, or a pattern => action map (the candy-code config
      *        spelling, e.g. 'fs-*' => 'deny') where the action is a bare string
@@ -232,9 +232,8 @@ final class McpRouter
      * The argument is the RAW config shape, so BOTH documented notations
      * work here exactly as in the constructor — plain list of patterns
      * (each denies) or pattern => action map — and a malformed entry
-     * throws, here as at construction (fix wave MC-1, review C-1: the
-     * static is the door downstream gates read, it may not answer a plain
-     * list by failing open).
+     * throws, here as at construction: the static is the door downstream
+     * gates read, so it may not answer a plain list by failing open.
      *
      * An empty pattern never matches: the literal "" a stray config colon
      * leaves behind is not a rule anyone authored against a server name.
