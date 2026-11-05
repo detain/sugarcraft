@@ -188,6 +188,36 @@ final class RendererTest extends TestCase
         }
     }
 
+    /**
+     * n9: at the 62-column floor the board row carrying the burst glyph must
+     * keep its right border. The old full-width 💥 made that row 63 cells, so
+     * fit() truncated it and the border was clipped away one column short.
+     * Pin: every row of a crashed floor frame stays within budget, and the
+     * burst's own row still ends on the │ border after ANSI is stripped.
+     */
+    public function testTheCrashBurstLeavesTheFloorFrameBorderIntact(): void
+    {
+        $g = new Game(
+            bird: $this->game()->bird,
+            pipes: [],
+            score: 3,
+            crashed: true,
+            highScores: [42],
+            frameCols: Game::MIN_COLS,
+        );
+        $rows = explode("\n", Renderer::render($g));
+        $burstRows = 0;
+        foreach ($rows as $row) {
+            $this->assertLessThanOrEqual(Game::MIN_COLS, Width::of($row));
+            $plain = (string) preg_replace('/\e\[[0-9;]*m/', '', $row);
+            if (str_contains($plain, '✕')) {
+                $burstRows++;
+                $this->assertStringEndsWith('│', $plain, 'burst row lost its right border at the floor width');
+            }
+        }
+        $this->assertSame(1, $burstRows, 'the crash burst is on the board exactly once');
+    }
+
     public function testTheCellLoopCarriesNoStyleConstruction(): void
     {
         // M23 structural pin: the per-cell glyph path must draw from the

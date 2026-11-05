@@ -50,9 +50,17 @@ final class Renderer
         return self::$birdCell ??= Style::new()->foreground(Color::hex(self::AMBER))->bold()->render('>');
     }
 
+    /**
+     * The burst that lands on the bird's cell. m29 wanted a splat glyph on
+     * the board; n9 picks the half-width ✕ over the 💥 the status line
+     * announces because 💥 is East-Asian-width 2 — at the 62-column floor it
+     * makes the board row one cell wider than the frame, so fit() truncates
+     * it and the right border clips. The hint keeps the 💥; pickHint already
+     * counts its two cells.
+     */
     private static function crashCell(): string
     {
-        return self::$crashCell ??= Style::new()->foreground(Color::hex(self::CRASH))->bold()->render('💥');
+        return self::$crashCell ??= Style::new()->foreground(Color::hex(self::CRASH))->bold()->render('✕');
     }
 
     private static function pipeCell(): string
@@ -303,7 +311,8 @@ final class Renderer
     private static function cellGlyph(Game $g, int $x, int $y, int $birdX, int $birdRow, array $wallRows): string
     {
         // Bird glyph wins over everything (m29: on a crashed board the
-        // bird cell renders as the 💥 that the status line announces).
+        // bird cell renders the crash burst — a half-width ✕, see crashCell
+        // for why the board cannot carry the hint's full-width 💥 at 62 cols).
         if ($x === $birdX && $y === $birdRow) {
             return $g->crashed === true ? self::crashCell() : self::birdCell();
         }

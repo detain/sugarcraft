@@ -830,7 +830,10 @@ final class GameTest extends TestCase
 
     public function testCrashedBoardDrawsTheSplatGlyph(): void
     {
-        // m29: the 💥 promised by the status line is actually on the board.
+        // m29: a burst glyph is actually on the board. n9: the board carries
+        // the half-width ✕ (the hint's full-width 💥 would overflow the
+        // 62-column floor row by one cell and clip the border); the 💥 lives
+        // on in the crash hint.
         // A floor crash leaves the frame (the bird is below it), so pin the
         // glyph with an in-field crash board instead.
         $g = new Game(
@@ -841,8 +844,9 @@ final class GameTest extends TestCase
             highScores: [42],
             configDir: $this->hermeticConfigDir(),
         );
-        // One glyph on the board (m29) plus the one in the crash hint.
-        $this->assertSame(2, substr_count($g->view(), '💥'));
+        // One ✕ on the board (m29/n9) and one 💥 in the crash hint (M24 copy).
+        $this->assertSame(1, substr_count($g->view(), '✕'));
+        $this->assertSame(1, substr_count($g->view(), '💥'));
     }
 
     public function testShiftedLetterKeysActLikeTheirLowerCase(): void
