@@ -123,6 +123,13 @@ final class FormatCommand extends Command
             $rendered = \SugarCraft\Core\Util\Ansi::strip($rendered);
         }
 
+        // Verbatim by contract (n22, the note ef501148c deferred): the
+        // rendered result below is the data channel of a non-interactive
+        // pipe, so OUTPUT_RAW passes the bytes through untouched — SGR and
+        // all — exactly as downstream consumers expect. Every app-composed
+        // word (the refusals at the door checks, the template_unresolved
+        // announce above) is written to STDERR, never here, keeping the
+        // stdout stream a pipeline reads precisely the formatted bytes.
         $output->write($rendered, true, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
