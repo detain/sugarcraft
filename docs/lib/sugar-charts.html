@@ -56,7 +56,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-charts"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-charts" alt="SugarCharts code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. Auto-detects terminal capability.</p>
+    <p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. Picture output routes on <code>TERM</code> / <code>TERM_PROGRAM</code>; everything else is explicitly configured.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-charts</code></pre>
@@ -77,13 +77,14 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)-&gt;view();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Canvas</strong><span>Fixed cell grid with rune + Sprinkles Style per cell. Foundation under every chart type.</span></div>
+      <div class="feature"><strong>Canvas</strong><span>Fixed cell grid with per-cell runes and sugar-style <code>Style</code>. Foundation for the grid renderers (LineChart, Heatmap, Scatter, OHLCChart, Waveline); Sparkline builds on sugar-cellbuffer and Picture emits raw protocol bytes.</span></div>
       <div class="feature"><strong>Sparkline</strong><span>Single-row series via 8 Unicode bar glyphs. Perfect for log dashboards.</span></div>
-      <div class="feature"><strong>Bar / Line</strong><span>Auto-scaling y-axis, configurable axis labels, optional grid.</span></div>
+      <div class="feature"><strong>Bar / Line</strong><span>Auto-scaling y-axis, configurable axis labels, annotation and area knobs: <code>withMarkLines()</code>, <code>withFill()</code>, <code>withFractionalHeights()</code>.</span></div>
       <div class="feature"><strong>Heatmap</strong><span>Density visualisation with palette gradients.</span></div>
       <div class="feature"><strong>OHLC</strong><span>Candlestick chart for financial time-series.</span></div>
-      <div class="feature"><strong>TimeSeries</strong><span>Streaming series with bucket aggregation.</span></div>
-      <div class="feature"><strong>Picture (Sixel/Kitty/iTerm2)</strong><span>Inline raster image rendering. Auto-detects via terminal-version query.</span></div>
+      <div class="feature"><strong>TimeSeries</strong><span>Timestamped <code>[DateTimeImmutable, value]</code> tuples rendered through LineChart with time-range windowing; pre-aggregate with the <code>Aggregation</code> toolbox when points share a timestamp.</span></div>
+      <div class="feature"><strong>Streamline / Aggregation</strong><span>Sliding-window streaming chart (fixed-capacity ring buffer, append-only), plus bucket-by-time, moving-average, and resample aggregators.</span></div>
+      <div class="feature"><strong>Picture (Sixel/Kitty/iTerm2)</strong><span>Inline raster image rendering; <code>detect()</code> routes on <code>TERM</code> / <code>TERM_PROGRAM</code> (best-effort env sniffing, not a terminal query). When no protocol is detected, <code>view()</code> prints a plain-text placeholder — <code>withProtocol()</code> overrides the choice.</span></div>
       <div class="feature"><strong>Per-point / per-bar color</strong><span>btop-style value heat: <code>LineChart::withSeriesColorFn()</code> and <code>BarChart::withBarColor()</code> resolvers.</span></div>
     </div>
 
@@ -171,7 +172,7 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/timeseries.gif" alt="TimeSeries" onerror="this.parentElement.style.display='none'">
                 <h3>TimeSeries</h3>
-                <span class="demo-caption">Streaming series with bucket aggregation.</span>
+                <span class="demo-caption">Timestamped tuples rendered through LineChart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/ohlc.gif" alt="OHLC" onerror="this.parentElement.style.display='none'">
