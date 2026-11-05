@@ -127,6 +127,29 @@ export function storageKey(key: string): string {
   return physical(key)
 }
 
+/**
+ * Whether a `storage` event's key names THIS logical key's stored copy, under
+ * any scope the event could plausibly arrive from: the name resolving live,
+ * any other principal's bucket (`candy-code-web:<scope>/key`), or the bare and
+ * versioned pre-namespacing copies. Cross-tab watchers MUST compare per event,
+ * never against a name captured at module or setup time — the scope rotates
+ * under every login and sign-out, and a snapshot matcher goes silently stale
+ * at the first transition (the sign-out in the other tab then no longer
+ * empties this tab's memory, and this tab's next flush re-persists the dead
+ * principal's text into the live bucket). Over-clearing is the safe direction
+ * for the foreign-bucket leg: a sweep made in another tab deletes this tab's
+ * OLD-bucket file, and by the time the event lands the pointer has usually
+ * already moved, so live matching alone cannot see it.
+ */
+export function physicalKeyMatches(key: string, eventKey: string): boolean {
+  if (eventKey === physical(key)) return true
+  if (eventKey === PREFIX + key || eventKey === VERSIONED_PREFIX + key) return true
+  if (!SCOPED_KEYS.has(key)) return false
+  if (!eventKey.startsWith(PREFIX) || !eventKey.endsWith('/' + key)) return false
+  const bucket = eventKey.slice(PREFIX.length, eventKey.length - key.length - 1)
+  return bucket !== '' && !bucket.includes('/')
+}
+
 /** Drop a stored key entirely — the way out for anything a viewer recorded. */
 export function removeJson(key: string): void {
   try {
@@ -204,6 +227,7 @@ export function rotateCacheScope(): void {
   }
   ephemeralScope = null
   fireErase('drafts')
+  fireErase('promptHistory')
   fireErase('tabs')
   fireErase('lastSession')
   fireErase('focused')
@@ -225,6 +249,7 @@ export function dropCacheScope(): void {
   }
   ephemeralScope = null
   fireErase('drafts')
+  fireErase('promptHistory')
   fireErase('tabs')
   fireErase('lastSession')
   fireErase('focused')

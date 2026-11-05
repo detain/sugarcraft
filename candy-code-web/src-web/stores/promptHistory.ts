@@ -7,7 +7,7 @@
  * nothing else in the UI changes.
  */
 import { ref } from 'vue'
-import { readJson, removeJson, storageKey, writeJson } from './storage'
+import { onKeyErased, physicalKeyMatches, readJson, removeJson, writeJson } from './storage'
 
 /** How far back the ring reaches; the oldest entry falls off the tail. */
 export const PROMPT_HISTORY_CAP = 50
@@ -34,16 +34,6 @@ function clampEntry(text: string): string {
 }
 
 const KEY = 'promptHistory'
-
-/**
- * WEB-6-P1: the fully-prefixed localStorage key as `stores/storage.ts` writes
- * it. The `storage` event reports the prefixed name, and the cross-tab clear
- * watch has to recognise exactly this one — so it is DERIVED through
- * `storageKey()` (CW-DBA-16): the day the namespace flips to its versioned
- * prefix, this watch follows it by construction instead of stranding a
- * hardcoded literal behind.
- */
-const STORAGE_KEY = storageKey(KEY)
 
 /** The stored ring, sanitised: only non-empty strings, never more than the cap. */
 export function loadPromptHistory(): string[] {
@@ -93,19 +83,23 @@ export function searchPromptHistory(history: string[], query: string): string[] 
 /** Listeners told when the stored ring is erased — here or in another tab. */
 type ClearedListener = () => void
 const clearedListeners = new Set<ClearedListener>()
-let storageWatchAttached = false
+let clearWatchAttached = false
 
 function notifyCleared(): void {
   for (const listener of [...clearedListeners]) listener()
 }
 
 function onStorageEvent(event: StorageEvent): void {
-  // A removal made in ANOTHER tab arrives as this key with a null newValue;
-  // a whole-storage `localStorage.clear()` fires once with key === null.
-  // Neither the browser's DevTools erasure nor a sign-out in a second tab may
-  // leave this tab's ring alive to be re-persisted by the next send.
-  if (event.key === STORAGE_KEY && event.newValue === null) notifyCleared()
-  else if (event.key === null) notifyCleared()
+  // A removal made in ANOTHER tab arrives as some name this key answers to,
+  // with a null newValue. The event reports the name the WRITING tab resolved,
+  // which is stale against an import-time snapshot the moment any tab rotates
+  // the cache scope — so the match runs PER EVENT through `physicalKeyMatches`
+  // (L-DBA MAJOR-1: a snapshotted name silently stopped firing). A whole-
+  // storage `localStorage.clear()` fires once with key === null. Neither the
+  // browser's DevTools erasure nor a sign-out in a second tab may leave this
+  // tab's ring alive to be re-persisted by the next send.
+  if (event.key === null) notifyCleared()
+  else if (event.newValue === null && physicalKeyMatches(KEY, event.key)) notifyCleared()
 }
 
 /**
@@ -113,12 +107,22 @@ function onStorageEvent(event: StorageEvent): void {
  * The `storage` event never fires in the tab that made the change, so
  * `clearPromptHistory()` below notifies in-tab listeners directly; cross-tab
  * removals arrive over the lazily-attached window listener (at most one).
+ * MAJOR-1 adds the in-tab erase bus beside the window listener: `rotate-` and
+ * `dropCacheScope()` fire the ring's logical key, so a sign-out or a re-login
+ * in THIS tab reaches the ring's holders the same way the drafts watcher
+ * reaches the map's — a scope swap in the owning tab must not leave an open
+ * composer holding a ring whose storage name is already dead weight. The
+ * logout path's `clearPromptHistory()` then notifies a second time; every
+ * holder resets to empty, and the double is idempotent by construction.
  * Returns the unsubscribe.
  */
 export function onPromptHistoryCleared(listener: ClearedListener): () => void {
-  if (!storageWatchAttached && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-    window.addEventListener('storage', onStorageEvent)
-    storageWatchAttached = true
+  if (!clearWatchAttached) {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('storage', onStorageEvent)
+    }
+    onKeyErased(KEY, notifyCleared)
+    clearWatchAttached = true
   }
   clearedListeners.add(listener)
   return () => {

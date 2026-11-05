@@ -153,3 +153,71 @@ describe('draft touch keeps recency (CW-DBA-5)', () => {
     expect(layout.drafts.s1).toBeUndefined()
   })
 })
+
+/**
+ * L-DBA MAJOR-1 (reviews-1103): the cross-tab drafts watcher once compared
+ * the event key against `storageKey('drafts')` snapshotted in the store's
+ * setup — which runs pre-login, so every rotateCacheScope()/dropCacheScope()
+ * moved the drafts under a fresh physical name the snapshot could never
+ * match again. The sign-out in the other tab then silently stopped emptying
+ * this tab, and this tab's pagehide flush re-persisted the dead principal's
+ * whole map into whoever's live bucket the pointer named (the write side
+ * resolves live). These pins run the real topology: the pointer changes
+ * first, the event arrives under the NEW name second — the shape the
+ * in-process suite could not see while setup-snapshot and test-time key
+ * were the same ephemeral name.
+ */
+describe('cross-tab drafts watcher survives scope transitions (L-DBA MAJOR-1)', () => {
+  // Foreign-tab transitions are simulated as they actually arrive here: a
+  // direct pointer rewrite plus the storage event, never the local rotate/
+  // drop functions — those would fire this tab's erase bus and pre-empt the
+  // stale-watcher condition under test.
+  const POINTER = 'candy-code-web:cacheScope'
+
+  it('empties the map when a removal lands under the bucket a foreign login rotated into', () => {
+    layout.setDraft('s1', 'secret A')
+    vi.advanceTimersByTime(300)
+    const snapshotKey = storageKey('drafts') // the name the setup-time matcher knew
+
+    globalThis.localStorage?.setItem(POINTER, 'b1b1b1b1')
+    const liveKey = storageKey('drafts')
+    expect(liveKey).toBe('candy-code-web:b1b1b1b1/drafts')
+    expect(liveKey).not.toBe(snapshotKey)
+
+    globalThis.localStorage?.removeItem(liveKey)
+    window.dispatchEvent(new StorageEvent('storage', { key: liveKey, newValue: null }))
+    expect(layout.draft('s1')).toBe('')
+  })
+
+  it('empties the map when a foreign sign-out sweeps the bucket this tab used to live in', () => {
+    globalThis.localStorage?.setItem(POINTER, 'a0a0a0a0')
+    layout.setDraft('s1', 'old principal text')
+    vi.advanceTimersByTime(300)
+    const oldKey = 'candy-code-web:a0a0a0a0/drafts'
+    expect(storageKey('drafts')).toBe(oldKey)
+
+    globalThis.localStorage?.removeItem(POINTER) // dropCacheScope, minus this tab's bus
+    globalThis.localStorage?.removeItem(oldKey)
+    window.dispatchEvent(new StorageEvent('storage', { key: oldKey, newValue: null }))
+    // The old bucket is dead weight whoever's pointer is live now; the sweep
+    // of it must still empty this tab.
+    expect(layout.draft('s1')).toBe('')
+  })
+
+  it('a pagehide after such a clear cannot re-persist the dead principal into the new bucket', () => {
+    globalThis.localStorage?.setItem(POINTER, 'a0a0a0a0')
+    layout.setDraft('s1', 'victim draft')
+    vi.advanceTimersByTime(300)
+    const oldKey = 'candy-code-web:a0a0a0a0/drafts'
+
+    globalThis.localStorage?.setItem(POINTER, 'b2b2b2b2') // foreign login rotates: the pointer is read live at write time
+    globalThis.localStorage?.removeItem(oldKey) // foreign sweep of the old bucket
+    window.dispatchEvent(new StorageEvent('storage', { key: oldKey, newValue: null }))
+
+    window.dispatchEvent(new Event('pagehide'))
+    vi.advanceTimersByTime(400)
+    expect(layout.draft('s1')).toBe('')
+    const raw = globalThis.localStorage?.getItem('candy-code-web:b2b2b2b2/drafts') ?? null
+    expect(raw === null || Object.keys(JSON.parse(raw) as object).length === 0).toBe(true)
+  })
+})

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useConnectionStore } from './connection'
 import { useSessionsStore } from './sessions'
-import { eraseKey, onKeyErased, readJson, storageKey, writeJson } from './storage'
+import { eraseKey, onKeyErased, physicalKeyMatches, readJson, writeJson } from './storage'
 
 const DRAFT_LIMIT = 50
 
@@ -240,10 +240,15 @@ export const useLayoutStore = defineStore('layout', () => {
   // (both tabs now RMW, so the arriving map carries this tab's latest keys);
   // a removal — sign-out elsewhere — empties it, so the next keystroke here
   // cannot resurrect it from memory (same law promptHistory already obeys).
+  // MAJOR-1: the event key is matched PER EVENT, never against a snapshot of
+  // `storageKey('drafts')` — this store mounts pre-login, and every rotate/
+  // drop moves the drafts under a fresh physical name the mount-time snapshot
+  // never again equals, which silently stopped the cross-tab clear from
+  // emptying this tab (and let the pagehide flush below re-persist the dead
+  // principal's map into whoever's live bucket the pointer names).
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-    const draftsKey = storageKey('drafts')
     window.addEventListener('storage', (event: StorageEvent) => {
-      if (event.key !== draftsKey && event.key !== null) return
+      if (event.key !== null && !physicalKeyMatches('drafts', event.key)) return
       if (event.key === null || event.newValue === null) {
         if (persistTimer !== null) {
           clearTimeout(persistTimer)

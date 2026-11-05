@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { PROMPT_HISTORY_CAP, PROMPT_HISTORY_MAX_ENTRY_CHARS, clearPromptHistory, loadPromptHistory, pushPromptHistory, searchPromptHistory, storageDegraded } from '../promptHistory'
-import { readJson, storageKey, writeJson } from '../storage'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PROMPT_HISTORY_CAP, PROMPT_HISTORY_MAX_ENTRY_CHARS, clearPromptHistory, loadPromptHistory, onPromptHistoryCleared, pushPromptHistory, searchPromptHistory, storageDegraded } from '../promptHistory'
+import { dropCacheScope, readJson, rotateCacheScope, storageKey, writeJson } from '../storage'
 
 describe('prompt history ring (WEB-5a-i)', () => {
   beforeEach(() => {
@@ -194,5 +194,125 @@ describe('prompt history entry bound and write truth (CW-DBA-4)', () => {
     pushPromptHistory(loadPromptHistory(), 'second')
     expect(storageDegraded.value).toBe(false)
     expect(loadPromptHistory()).toEqual(['second'])
+  })
+})
+
+/**
+ * L-DBA MAJOR-1 (reviews-1103): the cross-tab clear once matched a physical
+ * name snapshotted at MODULE IMPORT — pre-login, so every scope rotation the
+ * ring later lived under was an unknown key to the watcher, and the cleared
+ * listeners silently stopped hearing sign-outs from the other tab.
+ *
+ * The pins below change the pointer FIRST and deliver the event under the
+ * NEW physical name SECOND — the real topology the old within-one-process
+ * spec could never see, because pre-rotation the module-load ephemeral name
+ * and the test-derived name happened to agree.
+ */
+describe('cross-tab clear survives scope transitions (L-DBA MAJOR-1)', () => {
+  const POINTER = 'candy-code-web:cacheScope'
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('empties the ring when the scope moves out from under the import-time name', () => {
+    // Seed a ring under the current (import-time) scope so holders have
+    // something live to drop.
+    pushPromptHistory(loadPromptHistory(), 'keep me until a real clear')
+
+    const cleared = vi.fn()
+    const off = onPromptHistoryCleared(cleared)
+
+    // Foreign-tab sign-in: rotate the pointer by rewriting it, then remove
+    // the key under the NEW physical name and deliver the storage event. No
+    // local bus fires, so only per-event matching can see it.
+    localStorage.setItem(POINTER, 'a0a0a0a0')
+    const key = storageKey('promptHistory')
+    expect(key).toBe('candy-code-web:a0a0a0a0/promptHistory') // the live name, not the import snapshot
+    localStorage.removeItem(key)
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: null }))
+
+    expect(cleared).toHaveBeenCalledTimes(1)
+    off()
+  })
+
+  it('clears on the legacy unversioned name a removal under an old namespace still carries', () => {
+    const cleared = vi.fn()
+    const off = onPromptHistoryCleared(cleared)
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'candy-code-web:promptHistory', newValue: null }),
+    )
+    expect(cleared).toHaveBeenCalledTimes(1)
+    off()
+  })
+
+  it('leaves the ring alone for a scoped bucket that names a DIFFERENT key', () => {
+    const cleared = vi.fn()
+    const off = onPromptHistoryCleared(cleared)
+    localStorage.setItem(POINTER, 'a0a0a0a0')
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'candy-code-web:a0a0a0a0/drafts', newValue: null }),
+    )
+    expect(cleared).not.toHaveBeenCalled()
+    off()
+  })
+
+  it('a same-tab rotateCacheScope clears the ring even though storage events never fire locally', () => {
+    // CW-DBA-9 consequence (ii): the re-login sweep deletes the old bucket
+    // but the `storage` event only reaches OTHER tabs. The ring used to be
+    // absent from rotate's fireErase list, so this tab's live ring survived a
+    // re-login with no notification — now rotate fires the ring's logical key
+    // and this module listens on the in-tab bus.
+    const cleared = vi.fn()
+    const off = onPromptHistoryCleared(cleared)
+
+    rotateCacheScope()
+
+    expect(cleared).toHaveBeenCalledTimes(1)
+    off()
+  })
+
+  it('a same-tab dropCacheScope clears the ring too, and the logout double-notify is idempotent', () => {
+    // dropCacheScope() fires the ring's bus key; auth.ts logout also calls
+    // clearPromptHistory() directly. Both land on notifyCleared, so holders
+    // hear it twice on a real sign-out — every holder resets to empty, so the
+    // double is harmless; pin that both routes reach the bus.
+    const cleared = vi.fn()
+    const off = onPromptHistoryCleared(cleared)
+
+    dropCacheScope()
+    expect(cleared).toHaveBeenCalledTimes(1)
+
+    clearPromptHistory() // the other logout route
+    expect(cleared).toHaveBeenCalledTimes(2)
+    off()
+  })
+
+  it('the predicate answers live, foreign-bucket, legacy and versioned names, and no other key', async () => {
+    // Dynamic import: the pre-fix tree lacks the export, and a static one
+    // would sink every behavioral pin above into one module-load error
+    // instead of showing them fail for the real reason.
+    const { physicalKeyMatches } = await import('../storage')
+
+    // Live name (the current scope):
+    localStorage.setItem(POINTER, 'a0a0a0a0')
+    expect(physicalKeyMatches('promptHistory', 'candy-code-web:a0a0a0a0/promptHistory')).toBe(true)
+    // A different principal's bucket for the SAME logical key — over-clearing
+    // is the safe direction (a sweep elsewhere deletes our old bucket after
+    // the pointer has already moved):
+    expect(physicalKeyMatches('promptHistory', 'candy-code-web:b9b9b9b9/promptHistory')).toBe(true)
+    // Legacy unversioned bare name:
+    expect(physicalKeyMatches('promptHistory', 'candy-code-web:promptHistory')).toBe(true)
+    // Versioned pre-namespacing name:
+    expect(physicalKeyMatches('drafts', 'candy-code-web:v1:drafts')).toBe(true)
+    // A different logical key must never match:
+    expect(physicalKeyMatches('drafts', 'candy-code-web:a0a0a0a0/promptHistory')).toBe(false)
+    expect(physicalKeyMatches('promptHistory', 'candy-code-web:a0a0a0a0/drafts')).toBe(false)
+    // Empty or nested bucket shapes are not a principal scope:
+    expect(physicalKeyMatches('drafts', 'candy-code-web:/drafts')).toBe(false)
+    expect(physicalKeyMatches('drafts', 'candy-code-web:a/b/drafts')).toBe(false)
+    // An unscoped key (theme/pref) never takes the foreign-bucket leg:
+    expect(physicalKeyMatches('theme', 'candy-code-web:b9b9b9b9/theme')).toBe(false)
+    expect(physicalKeyMatches('theme', 'candy-code-web:theme')).toBe(true)
   })
 })
