@@ -137,6 +137,8 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 | `EraseRunOp` | ECH `\x1b[N X` | Runs of 3+ blank default cells |
 | `SetHyperlinkOp` | OSC 8 | Open/close OSC 8 hyperlink anchors |
 
+Footnotes: `REP` and `ECH` are not universally implemented. The gate above is pure byte arithmetic — `RepeatGate` answers `false` on ties, so runs that could go either way stay literal (plain glyphs survive every terminal; REP is an extra capability assumption). `DiffEncoder::encode()` carries no opt-out flag for the escape sequences; on a terminal that mishandles them, `toAnsi()` is the conservative full-repaint fallback (see [Degraded terminals & non-visual output](#degraded-terminals--non-visual-output)).
+
 **Worked example**
 
 Two 5×2 buffers, before (all blanks) and after (styled 'A' at col 0, bold 'BBB' at col 1):
