@@ -72,7 +72,7 @@ try {
 } catch (InvalidArgumentException $problem) {
     // Exempt by context: a refusal that does not name the flag the user
     // typed is not diagnosable, so the message interpolates raw argv (see the
-    // throws at src/LaunchMode.php:68 and :52). The bytes are the caller's own
+    // throws in LaunchMode::resolve()). The bytes are the caller's own
     // argv printed straight back to their terminal, once, at startup — this
     // path writes no log and paints no frame, so nothing can replay them.
     fwrite(STDERR, $problem->getMessage() . "\n\n" . LaunchMode::helpText());

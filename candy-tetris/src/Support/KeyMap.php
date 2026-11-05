@@ -12,7 +12,9 @@
  *
  * A missing file is the defaults — byte for byte, no notices. An unreadable
  * one costs the session its overrides, not its game: the binary catches the
- * throw, warns on stderr, and boots the shipped table.
+ * throw, warns on stderr, and boots the shipped table. A slot occupied by
+ * anything other than a plain file (symlink, socket, FIFO) counts as
+ * unreadable: refused by name, never followed, never opened.
  */
 
 declare(strict_types=1);
@@ -31,8 +33,24 @@ final class KeyMap
      */
     public static function load(?string $path, KeyBindings $defaults): KeyBindings
     {
-        if ($path === null || is_file($path) === false) {
+        if ($path === null) {
             return $defaults;
+        }
+
+        // lstat, not is_file(): lstat never follows a symlink, so a planted
+        // keys.json -> <anything> is refused instead of being read through
+        // (and, on the save side of the same XDG slot, clobbered by the
+        // publish rename). A socket or FIFO occupying the slot must never
+        // reach the reader either — the gate and the open then judge the
+        // exact same inode, and a pre-planted special file costs the session
+        // its overrides loudly (the throw below) rather than an open() that
+        // blocks startup forever waiting for a writer.
+        $slot = @lstat($path);
+        if ($slot === false) {
+            return $defaults;
+        }
+        if (($slot['mode'] & 0o170000) !== 0o100000) {
+            throw new \RuntimeException(self::problem($path, 'key file is not a regular file'));
         }
 
         $entries = AtomicJsonFile::new($path)->read();

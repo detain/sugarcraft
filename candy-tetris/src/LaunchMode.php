@@ -49,9 +49,13 @@ final class LaunchMode
         }
 
         if (count($flags) > 1) {
+            $extras = array_slice($flags, 1);
+            $listed = '"' . implode('", "', array_map(strval(...), $extras)) . '"';
+
             throw new InvalidArgumentException(sprintf(
-                'candy-tetris: unexpected argument "%s" (at most one flag is accepted)',
-                (string) $flags[1],
+                'candy-tetris: unexpected argument%s %s (at most one flag is accepted)',
+                count($extras) > 1 ? 's' : '',
+                $listed,
             ));
         }
 

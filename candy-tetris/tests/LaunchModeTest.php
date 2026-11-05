@@ -91,6 +91,21 @@ final class LaunchModeTest extends TestCase
         LaunchMode::resolve(['candy-tetris', '-v', '-h']);
     }
 
+    public function testEveryExtraArgumentIsNamedInTheRefusal(): void
+    {
+        // A refusal that names only one token blames an innocent when the
+        // user typed several extras: with `-v --puzzle -h` every argument
+        // past the first is offending, and the message must say so.
+        try {
+            LaunchMode::resolve(['candy-tetris', '-v', '--puzzle', '-h']);
+            self::fail('a three-flag argv must be refused');
+        } catch (InvalidArgumentException $refusal) {
+            self::assertStringContainsString('unexpected arguments', $refusal->getMessage());
+            self::assertStringContainsString('"--puzzle"', $refusal->getMessage());
+            self::assertStringContainsString('"-h"', $refusal->getMessage());
+        }
+    }
+
     public function testHelpTextAdvertisesTheFlagsThatResolve(): void
     {
         $help = LaunchMode::helpText();

@@ -20,6 +20,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Tetris\Support\Bindings;
 use SugarCraft\Tetris\Support\KeyMap;
+use SugarCraft\Tetris\Support\Paths;
 use RuntimeException;
 
 final class KeyMapTest extends TestCase
@@ -118,6 +119,88 @@ final class KeyMapTest extends TestCase
     public function testTopLevelListIsRefusedNamingThePath(): void
     {
         $this->expectRefusal('[1, 2]');
+    }
+
+    public function testSymlinkedSlotIsRefusedInsteadOfReadThrough(): void
+    {
+        // is_file() follows links, so a planted keys.json -> <valid map>
+        // would have been folded silently. lstat never follows: the slot
+        // itself must be a plain file.
+        $target = $this->dir . 'target.json';
+        file_put_contents($target, '{"hold": ["b"]}');
+        $link = $this->dir . 'keys.json';
+        symlink($target, $link);
+
+        try {
+            KeyMap::load($link, Bindings::table());
+            self::fail('a symlinked slot must be refused, not opened through the link');
+        } catch (RuntimeException $problem) {
+            self::assertStringContainsString($link, $problem->getMessage());
+            self::assertStringContainsString('not a regular file', $problem->getMessage());
+        }
+    }
+
+    public function testSpecialFileAtTheSlotIsRefusedLoudlyNeverOpened(): void
+    {
+        // A socket (same family as a FIFO) would hand the reader an open()
+        // that blocks startup waiting for a writer that never comes. The
+        // gate costs the session its overrides with a named notice — the
+        // binary's loud-ignore channel — instead of hanging the launch.
+        $path = $this->dir . 'slot.sock';
+        $server = @stream_socket_server('unix://' . $path, $errno, $errstr);
+        if ($server === false) {
+            self::markTestSkipped('unix sockets unavailable here: ' . $errstr);
+        }
+
+        try {
+            KeyMap::load($path, Bindings::table());
+            self::fail('a socket at the slot must be refused, not opened');
+        } catch (RuntimeException $problem) {
+            self::assertStringContainsString('not a regular file', $problem->getMessage());
+        } finally {
+            fclose($server);
+            @unlink($path);
+        }
+    }
+
+    public function testRelativeConfigEnvironmentResolvesToNoUserTable(): void
+    {
+        // XDG defines only absolute paths as meaningful, and the Paths
+        // docblock promises absolute results — a relative value must be
+        // ignored, not passed through to depend on the working directory.
+        $home = getenv('HOME');
+        $xdg = getenv('XDG_CONFIG_HOME');
+        try {
+            putenv('XDG_CONFIG_HOME=' . $this->dir . 'xdg');
+            putenv('HOME=/candy-tetris-pin-home-for-pins-only');
+            self::assertSame(
+                $this->dir . 'xdg/candy-tetris/keys.json',
+                Paths::keys(),
+                'an absolute XDG wins over HOME',
+            );
+
+            putenv('XDG_CONFIG_HOME=relative/.config');
+            self::assertSame(
+                '/candy-tetris-pin-home-for-pins-only/.config/candy-tetris/keys.json',
+                Paths::keys(),
+                'a relative XDG is ignored and the absolute HOME answers',
+            );
+
+            putenv('HOME=relative-home');
+            self::assertNull(Paths::keys(), 'a relative HOME names no home');
+            self::assertNull(Paths::scores());
+        } finally {
+            if ($home === false) {
+                putenv('HOME');
+            } else {
+                putenv('HOME=' . $home);
+            }
+            if ($xdg === false) {
+                putenv('XDG_CONFIG_HOME');
+            } else {
+                putenv('XDG_CONFIG_HOME=' . $xdg);
+            }
+        }
     }
 
     private function expectRefusal(string $json): void

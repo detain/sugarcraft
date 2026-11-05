@@ -43,6 +43,28 @@ final class ScoresTest extends TestCase
         self::assertNull(Scores::load($this->dir . '/absent.json'));
     }
 
+    public function testSymlinkedStoreIsRefusedLoudlyNotReadThrough(): void
+    {
+        // lstat never follows a link: a planted scores.json -> <record> is
+        // refused by name (the same loud channel corruption uses) instead of
+        // being opened through the link — and the refusal must not cost the
+        // record living at the target.
+        $target = $this->dir . '/target.json';
+        (new Scores(10, 1, 0, 0, true))->save($target);
+        $link = $this->dir . '/scores.json';
+        symlink($target, $link);
+
+        try {
+            Scores::load($link);
+            self::fail('a symlinked store must be refused, not opened through the link');
+        } catch (\RuntimeException $problem) {
+            self::assertStringContainsString($link, $problem->getMessage());
+            self::assertStringContainsString('not a regular file', $problem->getMessage());
+        }
+
+        self::assertNotNull(Scores::load($target), 'refusing the link must leave the target intact');
+    }
+
     public function testSaveThenLoadRoundTripsEveryField(): void
     {
         $path = $this->dir . '/scores.json';

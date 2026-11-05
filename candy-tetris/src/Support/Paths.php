@@ -37,13 +37,19 @@ final class Paths
 
     private static function dir(): ?string
     {
+        // Only absolute values are honoured: the XDG spec defines a relative
+        // $XDG_CONFIG_HOME as invalid (it would resolve differently from every
+        // working directory, so the same user's config would depend on where
+        // the game was launched), and a relative $HOME is no home at all.
+        // Ignoring such values answers "no user table" — the same door that
+        // an unset environment already closes.
         $xdg = getenv('XDG_CONFIG_HOME');
-        if ($xdg !== false && $xdg !== '') {
+        if ($xdg !== false && $xdg !== '' && str_starts_with($xdg, '/')) {
             return rtrim($xdg, '/') . '/' . self::APP_DIR;
         }
 
         $home = getenv('HOME');
-        if ($home === false || $home === '') {
+        if ($home === false || $home === '' || !str_starts_with($home, '/')) {
             return null;
         }
 

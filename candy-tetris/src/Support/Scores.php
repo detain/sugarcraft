@@ -49,13 +49,26 @@ final class Scores
 
     /**
      * Read the record at $path. Null means "nothing to read": no path was
-     * resolvable, or the file does not exist yet. Corruption throws — the
-     * caller decides how loudly to be.
+     * resolvable, or the file does not exist yet. Corruption — and any
+     * non-regular occupant of the slot — throws; the caller decides how
+     * loudly to be.
      */
     public static function load(?string $path): ?self
     {
-        if ($path === null || !is_file($path)) {
+        if ($path === null) {
             return null;
+        }
+
+        // lstat, never is_file(): a symlink is refused instead of followed,
+        // and a socket or FIFO parked at the slot costs the record a loud
+        // refusal (same door as corruption) instead of a reader that blocks
+        // the launch waiting for a writer that never comes.
+        $slot = @lstat($path);
+        if ($slot === false) {
+            return null;
+        }
+        if (($slot['mode'] & 0o170000) !== 0o100000) {
+            throw new \RuntimeException('candy-tetris: score store is not a regular file in ' . $path);
         }
 
         try {
