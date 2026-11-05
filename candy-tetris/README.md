@@ -63,10 +63,15 @@ note on stderr and exit code 1. The refusal is also how a *combination* of
 recognised flags is refused: at most one mode flag is accepted, so `-v -h`
 exits 1 naming both extras rather than silently preferring one.
 
-Needs a colour-capable TTY of at least 40 columns by 24 rows (the full
-frame is 40x32 — at squeezed heights the sidebar drops its help card
-first, and anything under the floor shows a resize notice and freezes
-play until you widen back). The VS duel wants 54x29. Empty cells
+Needs an interactive TTY of at least 40 columns by 24 rows; colour is
+optional (the full frame is 40x32 — at squeezed heights the sidebar
+drops its help card first, and anything under the floor shows a resize
+notice and freezes play until you widen back). The VS duel wants
+54x29. A pipe or `TERM=dumb` never receives escape bytes at all — the
+launcher answers with a plain refusal instead — while `NO_COLOR` and
+`CLICOLOR=0` still play: the whole frame re-renders with zero SGR and
+shape carries every fact colour used to carry (pinned by
+`tests/ColourPostureTest.php`). Empty cells
 render as `·` so the grid stays readable even without colour.
 
 ## VS Computer Mode
