@@ -30,10 +30,13 @@ Bottom bar</code></pre>
             <div class="feature"><strong>Borders</strong><span>Preset or custom border styles per panel.</span></div>
             <div class="feature"><strong>Nested layouts</strong><span>Arbitrarily deep nesting — grids within grids.</span></div>
             <div class="feature"><strong>Word-wrap</strong><span>Text reflows inside the region at render time.</span></div>
-            <div class="feature"><strong>ANSI-aware</strong><span>Styled content places by visible columns; no escape mis-width or colour bleed.</span></div>
+            <div class="feature"><strong>ANSI-aware</strong><span>Styled content places by visible columns; a clipped or unbalanced span is auto-reset so colour stays inside its box.</span></div>
+            <div class="feature"><strong>Diff rendering</strong><span>Self-positioning delta frames repaint only the cells that changed — light SSH payloads, no full-screen flicker.</span></div>
+            <div class="feature"><strong>Trust boundary</strong><span>Hostile text is repaired, not rejected: UTF-8 mended, zone sentinels stripped, stray controls normalised at the paint choke.</span></div>
             <div class="feature"><strong>Flex / grow</strong><span>withFlex/withGrow children fill leftover space — fixed header/status, filling content.</span></div>
 
     </div>
+    <p>Styled content stays <strong>trusted input</strong> — escape sequences ride through by design; see the README's Trust boundary section.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
