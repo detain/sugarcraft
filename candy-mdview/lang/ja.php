@@ -21,5 +21,5 @@ return [
     'render.file_unreadable' => '{path} を開けません: ファイルを読み取れません',
     'render.binary_input' => '{path} をレンダリングできません: テキストファイルではありません',
     'render.input_too_large' => '入力が {limit} バイトを超えています: {path}',
-    'render.width_invalid' => '無効な --width 値: {value} (0 以上の整数が必要です)',
+    'render.width_invalid' => '無効な --width 値: {value} (0〜9999 の整数が必要です。0 は折り返し無効)',
 ];

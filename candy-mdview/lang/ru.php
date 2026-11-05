@@ -21,5 +21,5 @@ return [
     'render.file_unreadable' => 'не удаётся открыть {path}: файл нечитабелен',
     'render.binary_input' => 'отказ рендеринга {path}: это не текстовый файл',
     'render.input_too_large' => 'вход превышает {limit} байт: {path}',
-    'render.width_invalid' => 'недопустимое значение --width: {value} (ожидается неотрицательное целое)',
+    'render.width_invalid' => 'недопустимое значение --width: {value} (ожидалось целое число от 0 до 9999; 0 отключает перенос)',
 ];

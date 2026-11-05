@@ -21,5 +21,5 @@ return [
     'render.file_unreadable' => 'nelze otevřít {path}: soubor nelze číst',
     'render.binary_input' => 'zamítnuto zobrazení {path}: není textový soubor',
     'render.input_too_large' => 'vstup přesahuje {limit} bajtů: {path}',
-    'render.width_invalid' => 'neplatná hodnota --width: {value} (očekává nezáporné celé číslo)',
+    'render.width_invalid' => 'neplatná hodnota --width: {value} (očekává se celé číslo od 0 do 9999; 0 vypíná zalomení)',
 ];

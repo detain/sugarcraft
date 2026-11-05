@@ -21,5 +21,5 @@ return [
     'render.file_unreadable' => 'kan {path} niet openen: bestand niet leesbaar',
     'render.binary_input' => 'weergeven van {path} geweigerd: geen tekstbestand',
     'render.input_too_large' => 'invoer overschrijdt {limit} bytes: {path}',
-    'render.width_invalid' => 'ongeldige --width-waarde: {value} (niet-negatief geheel getal verwacht)',
+    'render.width_invalid' => 'ongeldige --width-waarde: {value} (verwacht een geheel getal tussen 0 en 9999; 0 schakelt afbreken uit)',
 ];

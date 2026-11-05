@@ -21,5 +21,5 @@ return [
     'render.file_unreadable' => '{path} 열 수 없음: 파일을 읽을 수 없습니다',
     'render.binary_input' => '{path} 렌더링 거부: 텍스트 파일이 아닙니다',
     'render.input_too_large' => '입력이 {limit}바이트를 초과합니다: {path}',
-    'render.width_invalid' => '잘못된 --width 값: {value} (0 이상의 정수 필요)',
+    'render.width_invalid' => '잘못된 --width 값: {value} (0~9999 정수 필요; 0은 줄바꿈 해제)',
 ];

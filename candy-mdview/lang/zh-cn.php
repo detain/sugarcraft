@@ -21,5 +21,5 @@ return [
     'render.file_unreadable' => '无法打开 {path}：文件不可读',
     'render.binary_input' => '拒绝渲染 {path}：不是文本文件',
     'render.input_too_large' => '输入超过 {limit} 字节：{path}',
-    'render.width_invalid' => '无效的 --width 值：{value}（应为非负整数）',
+    'render.width_invalid' => '无效的 --width 值：{value}（应为 0 到 9999 之间的整数；0 表示不换行）',
 ];

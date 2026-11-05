@@ -118,7 +118,7 @@ final class LangTest extends TestCase
             Lang::t('render.input_too_large')
         );
         $this->assertSame(
-            'invalid --width value: {value} (expected a non-negative integer)',
+            'invalid --width value: {value} (expected an integer between 0 and 9999; 0 disables wrapping)',
             Lang::t('render.width_invalid')
         );
     }

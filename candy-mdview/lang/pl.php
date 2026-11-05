@@ -21,5 +21,5 @@ return [
     'render.file_unreadable' => 'nie można otworzyć {path}: plik nieczytelny',
     'render.binary_input' => 'odmowa renderowania {path}: to nie plik tekstowy',
     'render.input_too_large' => 'wejście przekracza {limit} bajtów: {path}',
-    'render.width_invalid' => 'nieprawidłowa wartość --width: {value} (oczekiwano nieujemnej liczby całkowitej)',
+    'render.width_invalid' => 'nieprawidłowa wartość --width: {value} (oczekiwano liczby całkowitej od 0 do 9999; 0 wyłącza łamanie wierszy)',
 ];

@@ -21,5 +21,5 @@ return [
     'render.file_unreadable' => 'impossible d\'ouvrir {path} : fichier illisible',
     'render.binary_input' => 'rendu refusé pour {path} : ce n\'est pas un fichier texte',
     'render.input_too_large' => 'l\'entrée dépasse {limit} octets : {path}',
-    'render.width_invalid' => 'valeur --width invalide : {value} (entier non négatif attendu)',
+    'render.width_invalid' => 'valeur --width invalide : {value} (entier attendu entre 0 et 9999 ; 0 désactive le retour à la ligne)',
 ];
