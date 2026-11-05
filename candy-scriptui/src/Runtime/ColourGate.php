@@ -23,9 +23,9 @@ use Symfony\Component\Console\Input\InputInterface;
  *   - `NoTty`  emits no escape sequences at all;
  *   - `Ansi` / `Ansi256` / `TrueColor` re-quantise colours to the tier.
  *
- * Precedence (first decisive rule wins): `--no-ansi` < `--ansi` <
- * `FORCE_COLOR` < `CLICOLOR_FORCE` < `NO_COLOR` < `CLICOLOR=0` <
- * `TERM=dumb` < default. Being a pipe does NOT disable colour on its
+ * Precedence (first decisive rule wins): `--no-ansi` > `--ansi` >
+ * `FORCE_COLOR` > `CLICOLOR_FORCE` > `NO_COLOR` > `CLICOLOR=0` >
+ * `TERM=dumb` > default. Being a pipe does NOT disable colour on its
  * own — styled bytes flow to redirected output like they always have;
  * `CLICOLOR=0` opts into the pipe-aware behaviour instead.
  *

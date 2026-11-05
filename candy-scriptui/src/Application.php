@@ -162,7 +162,7 @@ final class Application extends SymfonyApplication
     }
 
     /**
-     * The version this install reports, phar-aware (DST-1 lineage).
+     * The version this install reports, phar-aware (archive metadata first).
      *
      * The old answer walked up from `__DIR__` looking for a composer.json with
      * a non-empty version field. That walk cannot succeed inside a phar: the
@@ -449,7 +449,7 @@ final class Application extends SymfonyApplication
      * Resolve a command by EXACT name only. Symfony's inherited find()
      * additionally accepts unique prefixes, which made typo'd invocations
      * silently EXECUTE a different command — `choos Pizza Burger` ran choose,
-     * `confir` ran confirm (review 2026-11-02 CC3). On an exit-code-gating
+     * `confir` ran confirm. On an exit-code-gating
      * CLI that is a safety defect, not a convenience. Unknown names now fail
      * closed with a did-you-mean that lists every plausible candidate
      * (prefix matches first), so the suggestion also stops misdirecting.
@@ -480,8 +480,8 @@ final class Application extends SymfonyApplication
 
     /**
      * Register a value constraint discovered by the CommandScanner from
-     * `#[Flag(enum: SomeType::class)]` (review 2026-11-02 M10 — the seam
-     * existed as documentation only and `--format=pineapple` sailed through).
+     * `#[Flag(enum: SomeType::class)]`. The seam existed as documentation
+     * only at first, and `--format=pineapple` sailed right through it.
      *
      * @param class-string $enumClass
      */
