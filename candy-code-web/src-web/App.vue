@@ -166,7 +166,7 @@ async function signOut(): Promise<void> {
       <ApprovalsButton v-if="!onLogin" />
       <span class="status" :data-status="connection.status" data-testid="connection-status">{{ connection.statusLabel }}<template v-if="rtt"> · {{ rtt }}</template></span>
       <RouterLink v-if="!onLogin" :to="{ name: 'settings' }" class="nav" data-testid="settings-link">{{ t('web.chrome.app.settings') }}</RouterLink>
-      <RouterLink v-if="!onLogin && tokensVisible" :to="{ name: 'tokens' }" class="nav" data-testid="tokens-link">Tokens</RouterLink>
+      <RouterLink v-if="!onLogin && tokensVisible" :to="{ name: 'tokens' }" class="nav" data-testid="tokens-link">{{ t('web.chrome.app.tokens') }}</RouterLink>
       <button v-if="!onLogin" type="button" class="link" data-testid="about-button" @click="aboutOpen = true">{{ t('web.chrome.app.about') }}</button>
       <button v-if="connection.canGenerateImage || connection.canGenerateVideo" type="button" class="link" data-testid="generate-button" @click="panels.show('generate')">{{ t('web.chrome.app.generate') }}</button>
       <button type="button" class="link opt" :title="t('web.chrome.app.theme_title', { theme: settings.theme })" @click="settings.cycleTheme()">{{ t('web.chrome.app.theme', { theme: settings.theme }) }}</button>

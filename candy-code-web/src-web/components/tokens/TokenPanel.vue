@@ -20,9 +20,10 @@
  * Types are the generated ones (G4-E → G4-G/addendum → G5-G weld order law
  * satisfied): the token.* defs live in protocol/generated.ts's Methods map,
  * so all three calls are plain typed connection.request — the lane's wire.ts
- * cast seam was deleted at the weld. Copy is raw English rostered in
- * src-web/__tests__/rawCopyCensus.spec.ts pending the lang window
- * (## LANG REQUEST in the lane report) — the 448f8dd1b 'Import' precedent.
+ * cast seam was deleted at the weld. All copy renders through t() — the
+ * web.chrome.tokens.* keys (plus web.chrome.app.tokens) were minted across
+ * the twelve candy-code locales in the reviews-1103 lang window; the panel's
+ * rawCopyCensus rows were deleted in the same commit as this swap.
  */
 import { computed, onMounted, ref } from 'vue'
 
@@ -77,7 +78,7 @@ function expiryLabel(expiresAt: string): string {
  */
 function sessionsLabel(row: TokenGrantRow): string {
   const ids = row.sessionIds ?? null
-  return ids === null ? 'all sessions' : `pinned to ${String(ids.length)} sessions`
+  return ids === null ? t('web.chrome.tokens.all_sessions') : t('web.chrome.tokens.pinned_sessions', { count: String(ids.length) })
 }
 
 /** The uniform-401 discriminator: kind travels in the error envelope (HANDOFFS). */
@@ -88,7 +89,7 @@ function isUnauthorized(failure: unknown): boolean {
 function refuse(failure: unknown): void {
   if (isUnauthorized(failure)) {
     locked.value = true
-    error.value = 'Not authorized to manage viewer tokens over this connection.'
+    error.value = t('web.chrome.tokens.denied')
     return
   }
   error.value = describe(failure)
@@ -162,14 +163,14 @@ async function copyMinted(): Promise<void> {
 
 async function revokeGrant(row: TokenGrantRow): Promise<void> {
   if (!canManage.value || loading.value) return
-  if (!window.confirm(`Revoke viewer grant "${row.label}"? The holder loses access immediately.`)) return
+  if (!window.confirm(t('web.chrome.tokens.revoke_confirm', { label: row.label }))) return
   loading.value = true
   error.value = ''
   notice.value = ''
   try {
     await connection.request('token.revoke', { id: row.id })
     grants.value = grants.value.filter((grant) => grant.id !== row.id)
-    notice.value = 'Grant revoked.'
+    notice.value = t('web.chrome.tokens.revoked')
   } catch (failure) {
     refuse(failure)
     void reload()
@@ -182,58 +183,58 @@ async function revokeGrant(row: TokenGrantRow): Promise<void> {
 <template>
   <section class="tokens" aria-labelledby="tokens-heading">
     <header class="head">
-      <h2 id="tokens-heading" class="heading">Viewer tokens</h2>
-      <button v-if="canManage && !locked" class="reload" type="button" data-testid="tokens-reload" :disabled="loading" @click="reload()">Refresh</button>
+      <h2 id="tokens-heading" class="heading">{{ t('web.chrome.tokens.title') }}</h2>
+      <button v-if="canManage && !locked" class="reload" type="button" data-testid="tokens-reload" :disabled="loading" @click="reload()">{{ t('web.chrome.tokens.refresh') }}</button>
     </header>
 
     <p v-if="isViewer" class="banner" role="status" data-testid="tokens-viewer-banner">
-      This connection is a viewer grant; token management is owner-only.
+      {{ t('web.chrome.tokens.viewer_only') }}
     </p>
     <p v-if="error" class="error" role="alert" data-testid="tokens-error">{{ error }}</p>
     <p v-if="notice" class="notice" role="status" data-testid="tokens-notice">{{ notice }}</p>
 
     <div v-if="minted" class="mint" role="dialog" aria-labelledby="mint-heading" data-testid="tokens-mint-dialog">
-      <h3 id="mint-heading" class="mint-heading">Grant created</h3>
-      <p class="mint-copy">The token is shown once, now. Copy it — after this dialog closes it cannot be retrieved.</p>
+      <h3 id="mint-heading" class="mint-heading">{{ t('web.chrome.tokens.grant_created') }}</h3>
+      <p class="mint-copy">{{ t('web.chrome.tokens.mint_shown_once') }}</p>
       <code class="mint-token" data-testid="tokens-mint-token">{{ minted.token }}</code>
-      <p class="mint-meta">{{ t('web.chrome.sidebar.share_expiry', { when: expiryLabel(minted.expiresAt) }) }}</p>
-      <p class="mint-meta">Rotating the owner token revokes every viewer grant.</p>
+      <p class="mint-meta">{{ t('web.chrome.tokens.expires', { when: expiryLabel(minted.expiresAt) }) }}</p>
+      <p class="mint-meta">{{ t('web.chrome.tokens.rotation_warning') }}</p>
       <div class="mint-actions">
-        <button class="reload" type="button" data-testid="tokens-mint-copy" @click="copyMinted()">{{ copied ? t('web.chrome.sidebar.revoked') : 'Copy token' }}</button>
+        <button class="reload" type="button" data-testid="tokens-mint-copy" @click="copyMinted()">{{ copied ? t('web.chrome.sidebar.revoked') : t('web.chrome.tokens.copy') }}</button>
         <button class="reload" type="button" data-testid="tokens-mint-close" @click="closeMint()">{{ t('web.chrome.sidebar.close') }}</button>
       </div>
     </div>
 
     <form v-if="canManage && !locked" class="grant" data-testid="tokens-grant-form" @submit.prevent="submitGrant">
       <label class="field">
-        <span class="field-label">Label</span>
+        <span class="field-label">{{ t('web.chrome.tokens.label') }}</span>
         <input v-model="label" type="text" maxlength="64" required data-testid="tokens-label" />
       </label>
       <label class="field">
-        <span class="field-label">Days until expiry</span>
+        <span class="field-label">{{ t('web.chrome.tokens.days') }}</span>
         <input v-model="days" type="number" min="1" max="365" data-testid="tokens-days" />
       </label>
       <label class="field check">
         <input v-model="pinSessions" type="checkbox" data-testid="tokens-pin" />
-        <span class="field-label">Limit to sessions</span>
+        <span class="field-label">{{ t('web.chrome.tokens.pin') }}</span>
       </label>
       <label v-if="pinSessions" class="field">
-        <span class="field-label">Sessions</span>
-        <input v-model="pinIds" type="text" placeholder="session ids, space-separated" data-testid="tokens-pin-ids" />
+        <span class="field-label">{{ t('web.chrome.tokens.sessions') }}</span>
+        <input v-model="pinIds" type="text" :placeholder="t('web.chrome.tokens.pin_ids_placeholder')" data-testid="tokens-pin-ids" />
       </label>
-      <p class="field-note" data-testid="tokens-scopes-note">Viewer grants are read-only in v1.</p>
-      <button class="grant-submit" type="submit" data-testid="tokens-grant-submit" :disabled="loading || label.trim() === ''">Grant</button>
+      <p class="field-note" data-testid="tokens-scopes-note">{{ t('web.chrome.tokens.readonly_note') }}</p>
+      <button class="grant-submit" type="submit" data-testid="tokens-grant-submit" :disabled="loading || label.trim() === ''">{{ t('web.chrome.tokens.grant') }}</button>
     </form>
 
     <ul v-if="canManage && !locked" class="list" data-testid="tokens-list">
-      <li v-if="grants.length === 0 && !loading" class="empty" data-testid="tokens-empty">No viewer grants.</li>
+      <li v-if="grants.length === 0 && !loading" class="empty" data-testid="tokens-empty">{{ t('web.chrome.tokens.empty') }}</li>
       <li v-for="grant in grants" :key="grant.id" class="row" :data-testid="`tokens-row-${grant.id}`">
         <span class="row-label">{{ grant.label }}</span>
-        <span class="row-meta" data-testid="tokens-meta">{{ grant.scopes.join(' ') }} · {{ sessionsLabel(grant) }} · {{ t('web.chrome.sidebar.share_expiry', { when: expiryLabel(grant.expiresAt) }) }}</span>
-        <button class="revoke" type="button" :data-testid="`tokens-revoke-${grant.id}`" :disabled="loading" @click="revokeGrant(grant)">Revoke</button>
+        <span class="row-meta" data-testid="tokens-meta">{{ grant.scopes.join(' ') }} · {{ sessionsLabel(grant) }} · {{ t('web.chrome.tokens.expires', { when: expiryLabel(grant.expiresAt) }) }}</span>
+        <button class="revoke" type="button" :data-testid="`tokens-revoke-${grant.id}`" :disabled="loading" @click="revokeGrant(grant)">{{ t('web.chrome.tokens.revoke') }}</button>
       </li>
     </ul>
-    <p v-if="canManage && !locked" class="cap">64 grants maximum</p>
+    <p v-if="canManage && !locked" class="cap">{{ t('web.chrome.tokens.cap') }}</p>
   </section>
 </template>
 
