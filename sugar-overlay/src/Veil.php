@@ -284,9 +284,13 @@ final class Veil
      * transcripts, other processes) must arrive swept: pass it through
      * Sanitize::untrustedForMarkedFrames() (or use
      * withUntrustedContent()) rather than handing it to this method raw.
-     * This veil's own mark() zones legitimately ride the same sentinels
-     * and are preserved, which is why the sweep is caller-side, not
-     * automatic.
+     * Sweeping is caller-side, not automatic, because on this raw channel
+     * a sentinel inside your string is indistinguishable from your own
+     * intended mark() zone. The sweep is also total: it strips the ENTIRE
+     * U+E000/U+E001 arena, legitimate zones included — so it must run on
+     * the raw payload BEFORE mark() wraps it, never after (see
+     * withUntrustedContent(), which sweeps on arrival and lets zones be
+     * composed afterwards).
      *
      * @see withUntrustedContent()
      * @see mark()
@@ -301,9 +305,11 @@ final class Veil
      * applies Sanitize::untrustedForDisplay() (SGR/OSC/C1 controls marked
      * invisible, CRLF and lone CR folded to LF) plus stripZoneSentinels()
      * (forged U+E000/U+E001 zone sentinels removed), then folds TAB to
-     * four spaces — the cell the terminal moves to, so the compositor's
-     * width accounting cannot be poisoned by a byte whose painted width
-     * differs from the one Width charges. Image markers (U+E002 and up)
+     * four spaces — the fixed cost Width itself charges a tab, NOT the
+     * cell the terminal moves to (a surviving TAB advances to the next
+     * 8-column stop). The fold keeps the compositor's width accounting
+     * from being poisoned by a byte whose painted width differs from
+     * the one Width charges. Image markers (U+E002 and up)
      * are preserved by design.
      *
      * This is the sugar-core house law: untrusted text enters render
@@ -346,10 +352,12 @@ final class Veil
      * This is the opt-out for hosts that cannot strip the U+E000 id
      * U+E001 envelopes before display: withoutZoneMarkers() means the
      * frame carries no sentinel bytes at all, so no consumer-side sweep
-     * duty exists (see README "Zone markers & presentation"). Hit-testing
-     * (scan()/hit()/isClickOutside()) is unavailable on such a veil by
-     * construction — clickOutsideDismiss on a markerless veil can never
-     * find its own zone.
+     * duty exists (see README "Zone markers and presentation"). The
+     * hit-testing methods stay CALLABLE on such a veil but answer
+     * vacuously: scan() finds no zones, hit() always returns null, and a
+     * dismiss-enabled markerless veil's isClickOutside() therefore
+     * returns TRUE for EVERY click — a silent always-dismiss hazard, not
+     * an error.
      */
     public function withoutZoneMarkers(): self
     {
@@ -523,7 +531,7 @@ final class Veil
      * not strip the private-use sentinels paints the id as garbage.
      * Hosts that emit raw frames to such terminals must strip envelopes
      * for display (Sanitize::stripZoneSentinels) or opt out entirely with
-     * withoutZoneMarkers(). See README "Zone markers & presentation".
+     * withoutZoneMarkers(). See README "Zone markers and presentation".
      *
      * Uses sugar-mouse Mark internally — no external Manager needed.
      *
@@ -1244,7 +1252,7 @@ final class Veil
         return \max(0, \min(255, $component));
     }
 
-    /** Base-16 palette hexes, matching Buffer::ansiColorToHex() — including
+    /** Base-16 palette hexes, matching Style::ansiColorToHex() — including
      *  the bright-black special case: an SGR 90 (or 38;5;8) cell must carry
      *  the exact 0x7f7f7f the diff model records, or a style-only change
      *  diffs as a false no-op (xterm bright black is a fixed gray, not a
@@ -1262,7 +1270,7 @@ final class Veil
         if ($idx === 0) {
             // Bright black is the fixed gray (xterm 'color8' when bold,
             // sugar-colorprofile StandardColors::$brightBlack) — matching
-            // Buffer::ansiColorToHex's identical case (sugar-cellbuffer).
+            // Style::ansiColorToHex's identical case (sugar-cellbuffer).
             return 0x7f7f7f;
         }
         $lift = static fn(int $c): int => min(255, (int) ($c + ($c * 0.4)));
@@ -1318,12 +1326,12 @@ final class Veil
             return null; // empty URI closes the link (OSC 8 spec)
         }
 
-        // BEL/ST terminated the body already, so the URL carries no C0
-        // controls by construction; Hyperlink's own guard stays load-bearing
-        // against anything that skips past this parse — and a hostile frame
-        // reaching it (a raw-with-content URL with an embedded newline) must
-        // degrade to "no link" rather than abort the whole diff pass: the
-        // ctor throws InvalidArgumentException on such URLs.
+        // The body is cut at BEL/ST, but nothing stops OTHER C0 bytes
+        // (CR, LF, NUL) from riding inside the URL — Hyperlink's ctor
+        // guard (which throws on /[\x00-\x1f\x7f]/) is load-bearing here,
+        // not belt-and-braces. A hostile frame reaching this point (a
+        // raw-with-content URL with an embedded newline) must degrade to
+        // "no link" rather than abort the whole diff pass.
         \preg_match('/(?:\A|:)id=([^:]*)/', $params, $m);
         try {
             return new Hyperlink($url, $m[1] ?? '');

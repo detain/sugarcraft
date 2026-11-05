@@ -15,7 +15,10 @@ use SugarCraft\CellBuffer\Diff\DiffEncoder;
  * it is the mutable companion to the immutable Veil, allowing Veil itself
  * to remain truly readonly while still preserving diff state across frames.
  *
- * NOT for export outside the library.
+ * A Veil carries its own session; programs normally interact through
+ * Veil's methods rather than handling this object directly. It is
+ * public API, documented in the README's "Buffer Diffing and
+ * RenderSession" section.
  */
 final class RenderSession
 {
