@@ -78,6 +78,15 @@ final class Projectile
      * Advance the simulation by one step. Returns a new Projectile —
      * the original is untouched. Position += velocity·dt; velocity +=
      * acceleration·dt.
+     *
+     * Each step builds fresh {@see Point}/{@see Vector} instances, so a
+     * state component that overflows to INF mid-simulation is refused by
+     * their constructors with an {@see \InvalidArgumentException} naming
+     * the component — callers should bound acceleration and velocity
+     * rather than discover the throw live. A deltaTime of 0 is accepted
+     * and freezes the integrator: every Euler term is multiplied by it,
+     * so the step hands back an identical state (the constructor refuses
+     * only non-finite and negative frame times).
      */
     public function update(): self
     {

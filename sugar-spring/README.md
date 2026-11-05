@@ -315,7 +315,12 @@ call — `update()` never mutates the receiver. The hazard is discarding
 the result: read state from whatever you last assigned (`$p = $p->update();`),
 not from the pre-update `$p`. The `position` / `velocity` / `acceleration`
 properties and their identically-named accessor methods expose the same
-`Vector`s; pick either spelling, just be consistent.
+`Vector`s; pick either spelling, just be consistent. Each step builds fresh
+`Point`/`Vector` instances; a state component that overflows to `INF`
+mid-simulation is refused by their constructors (`InvalidArgumentException`,
+naming the component), so bound your accelerations and velocities. A
+`deltaTime` of `0` is accepted and freezes the integrator — every Euler term
+is multiplied by it, so `update()` keeps handing back an identical state.
 
 ## When is it done? (the completion contract)
 
