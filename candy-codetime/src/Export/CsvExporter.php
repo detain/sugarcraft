@@ -18,7 +18,10 @@ final class CsvExporter implements TabularExporterInterface
     }
 
     /**
-     * Neutralize formula-injection prefixes in a cell value.
+     * Neutralize formula-injection prefixes in a cell value. The leading TAB
+     * is treated as a formula prefix on purpose: this is deliberately stricter
+     * than Sanitize::untrusted(), which preserves tabs — do not "unify" the two
+     * and drop the tab arm.
      */
     private static function safeCell(string $v): string
     {

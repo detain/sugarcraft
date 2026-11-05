@@ -17,7 +17,9 @@ interface TabularExporterInterface extends ExporterInterface
 
     /**
      * @param array<Heartbeat> $heartbeats
-     * @return list<list<string|int|float>> rows of scalar data
+     * @return list<list<string|int|float|array<int,string>>> rows of scalar data,
+     *              except the tags leg where an exporter keeps the list structured
+     *              (JsonExporter emits an array; CsvExporter implodes to a string)
      */
     public function rows(array $heartbeats): array;
 

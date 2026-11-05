@@ -26,8 +26,8 @@ use SugarCraft\Style\Style;
  * TERM=dumb and the rest of the detection ladder all land on the same
  * authority instead of a hand-rolled NO_COLOR reading. When the Model
  * carries no profile (library use without Program) the historical
- * fallback applies: any truthy NO_COLOR suppresses tints, otherwise the
- * frame paints as before.
+ * fallback applies: a set, non-empty NO_COLOR suppresses tints, with 0
+ * and false read as not suppressing, otherwise the frame paints as before.
  */
 final class Renderer
 {

@@ -63,7 +63,8 @@ final class Store implements HeartbeatReader
      * Create (or tighten) the data directory to owner-private 0700.
      *
      * WHY. The app's tagline is "privacy-first", yet the data dir holds
-     * absolute file paths and project names: on a multi-user box a 0755
+     * file paths exactly as supplied (editor plug-ins typically send
+     * absolute ones) plus project names: on a multi-user box a 0755
      * directory hands that map to every account. Creation happens under a
      * narrowed umask so the directory is never world-readable for an instant;
      * a pre-existing loose directory (from the old 0755 era) is tightened on
@@ -102,7 +103,7 @@ final class Store implements HeartbeatReader
      * Tighten an existing file to owner-private 0600, throwing when the chmod
      * fails. Public because {@see AutoBackup} must apply the same law to the
      * copies it writes: a byte-for-byte clone of a private day file, left at
-     * the umask default, leaks the same absolute paths one directory over.
+     * the umask default, leaks the same paths (as supplied) one directory over.
      *
      * @throws \RuntimeException if the mode cannot be settled
      */

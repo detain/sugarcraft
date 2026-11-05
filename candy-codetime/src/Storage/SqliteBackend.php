@@ -50,7 +50,7 @@ final class SqliteBackend implements HeartbeatReader
         )');
         $this->db->exec('CREATE INDEX IF NOT EXISTS idx_heartbeats_time ON heartbeats(time)');
 
-        // privacy-first: the db holds absolute paths and project names just like
+        // privacy-first: the db holds paths as supplied and project names just like
         // the JSONL files, so it gets the same owner-private treatment Store
         // gives them (tighten-if-loose, throw if that fails). The -wal/-journal
         // side files are transient under the default rollback journal mode and

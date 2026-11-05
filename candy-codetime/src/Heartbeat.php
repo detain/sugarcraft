@@ -5,16 +5,17 @@ declare(strict_types=1);
 namespace SugarCraft\CodeTime;
 
 /**
- * One activity sample. The editor plug-ins POST these via a tiny
- * shell-out — they're the natural unit of storage in the JSONL
- * activity log.
+ * One activity sample. Editor plug-ins record these by shelling out
+ * to the local `candy-codetime push` command — they're the natural
+ * unit of storage in the JSONL activity log.
  */
 final class Heartbeat
 {
     /**
-     * Upper bound for a single beat's duration: one year of seconds. The CLI
-     * refuses longer writes at the argument door, and {@see self::fromArray()}
-     * clamps stored rows to the same window — read and write must speak one
+     * Upper bound for a single beat's duration: one year of seconds. The
+     * `push` argument door clamps longer durations down to it (it refuses
+     * only non-numeric values), and {@see self::fromArray()} clamps stored
+     * rows to the same window — read and write must speak one
      * bound or a hand-echoed poison line (near PHP_INT_MAX) sails past the
      * writer's clamp and detonates downstream arithmetic as a TypeError inside
      * Stats::timeline()/IcalExporter, killing every launch that reads the file.

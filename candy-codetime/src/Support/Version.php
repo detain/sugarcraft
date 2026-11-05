@@ -8,7 +8,7 @@ namespace SugarCraft\CodeTime\Support;
  * Single source of truth for the printed version.
  *
  * `candy-codetime --version` renders CURRENT — unless the run happens inside
- * a phar archive whose metadata carries a build stamp (lane PHE / DST-1): a
+ * a phar archive whose metadata carries a build stamp: a
  * self-contained .phar freezes vendor/, so Composer's InstalledVersions
  * reports the build root's dev guess and only the stamp the builder wrote
  * tells the truth. The stamp wins when present; CURRENT is the fallback

@@ -22,7 +22,7 @@ final class JsonExporter implements TabularExporterInterface
 
     /**
      * @param array<Heartbeat> $heartbeats
-     * @return list<list<string|int|float>>
+     * @return list<list<string|int|float|array<int,string>>> the tags leg is an array
      */
     public function rows(array $heartbeats): array
     {
