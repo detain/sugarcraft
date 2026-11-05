@@ -22,7 +22,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 - **Pagination**: page size, page navigation, auto footer
 - **Sorting**: asc/desc, multi-column sort, numeric + string sort
 - **Filtering**: filter by column text
-- **Frozen columns**: pin columns from the left
+- **Frozen columns**: pin a contiguous prefix of columns from the left (any other index set throws)
 - **Horizontal scroll**: max width with overflow, frozen columns stay visible
 - **Missing data indicator**: configurable placeholder for absent cells — the default `-` is a lone hyphen that reads ambiguously beside dashes inside your data, so `withMissingIndicator('(empty)')` gives an unmistakable absent-cell signal
 - **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Style\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
@@ -438,6 +438,7 @@ echo $t->View();                       // ID and Name always visible
 ### How It Works
 
 - **Frozen columns** (specified by index) are always rendered, regardless of scroll position
+- **The frozen set must be a contiguous prefix starting at index 0** — `withFrozenCols([1])` or `[0, 2]` throws `InvalidArgumentException` (and frozen indices must stay disjoint from hidden ones); to freeze non-adjacent columns, re-order them first or hide the columns in between
 - **Non-frozen columns** scroll horizontally: they become visible starting at index `count(frozenCols) + scrollX`
 - Use `withScrollX($offset)` to scroll the non-frozen columns
 
