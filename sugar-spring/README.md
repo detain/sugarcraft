@@ -185,8 +185,10 @@ $alwaysAnimates = new Spring(
 
 ### Spring presets
 
-`Spring::fromPreset(SpringPreset $preset, ?float $deltaTime = null)` constructs
-a spring from a named preset at 60 fps (override the frame time as needed).
+`Spring::fromPreset(SpringPreset $preset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)`
+constructs a spring from a named preset at 60 fps (override the frame time as
+needed; `reducedMotionOverride` pins the snap-to-target behaviour — see
+[Reduced motion](#reduced-motion)).
 Five presets are available, tuned by hand against the react-spring-era folk
 tables (they are not literal UIKit values — `UIViewPropertyLiteral` documents
 duration/damping, not tension triples):
@@ -201,7 +203,8 @@ duration/damping, not tension triples):
 
 Every preset is under-damped (ζ < 1) — they all overshoot a little; that is
 the family's character. Settle frames are measured for a 0 → 100 move at the
-default `1e-4` threshold. A preset critical on demand does not exist because
+default `1e-4` threshold; under reduced motion every preset instead snaps to
+target in one tick (see [Reduced motion](#reduced-motion)). A preset critical on demand does not exist because
 none was tuned; build one with `dampingRatio: 1.0` (the flagship example
 above) or `new SpringConfig(...)` with friction `2 * sqrt(tension * mass)`.
 
@@ -230,6 +233,7 @@ use SugarCraft\Spring\{SpringConfig, Spring};
 
 $config = new SpringConfig(tension: 180.0, friction: 12.0, mass: 1.0);
 $spring = $config->springAt60Fps();  // or ->spring($deltaTime)
+$snapped = $config->springAt60Fps(reducedMotionOverride: true);  // pin the snap, ignore the env
 echo $config->angularFrequency;     // 13.416... (public readonly)
 ```
 
