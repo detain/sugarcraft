@@ -384,15 +384,30 @@ final class CliTest extends TestCase
 
     public function testImpossibleHighlightRangesExitTwoWithoutFatal(): void
     {
-        foreach (['0:5' => 'start must be >= 1', '5:3' => 'end must be >= start'] as $spec => $needle) {
+        // N18: the range contract is enforced at parse time, so the refusal is
+        // the same friendly bad-highlight line whatever format follows.
+        foreach (['0:5', '5:3'] as $spec) {
             $result = $this->runCli(['--no-window', '--no-shadow', '--highlight', $spec], "x\n");
 
             $this->assertSame(2, $result['exitCode'], $spec . ': ' . $result['stderr']);
-            $this->assertStringContainsString("rejected highlight '$spec'", $result['stderr']);
-            $this->assertStringContainsString($needle, $result['stderr']);
+            $this->assertStringContainsString("invalid highlight format '$spec'", $result['stderr']);
+            $this->assertStringContainsString('Use start:end', $result['stderr']);
             $this->assertStringNotContainsString('Uncaught', $result['stderr']);
             $this->assertSame('', $result['stdout']);
         }
+    }
+
+    public function testImpossibleHighlightRangeIsRefusedForPngAtParseTime(): void
+    {
+        // N18: before the parse-time gate, --format png dropped --highlight as
+        // unsupported and exited 0 even on an impossible range. The gate fires
+        // before the ext-gd check, so this refusal needs no GD at all.
+        $result = $this->runCli(['--format', 'png', '--highlight', '5:3'], "x\n");
+
+        $this->assertSame(2, $result['exitCode'], $result['stderr']);
+        $this->assertStringContainsString("invalid highlight format '5:3'", $result['stderr']);
+        $this->assertStringNotContainsString('ignores SVG-only options', $result['stderr']);
+        $this->assertStringNotContainsString('Uncaught', $result['stderr']);
     }
 
     public function testPngOutputAnnouncesIgnoredSvgOnlyOptions(): void

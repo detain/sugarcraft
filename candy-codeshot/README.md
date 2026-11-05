@@ -70,7 +70,7 @@ unrecognised flag).
 - `--ligatures` — enable ligatures (`font-variant-ligatures: normal`). **SVG only.**
 - `--font <path>` — embed a TTF/OTF/WOFF/WOFF2 font in the SVG. **SVG only.** The CLI validates the file's signature; the library-level `SvgRenderer::withFont()` only checks existence and falls back to `font/ttf` for unknown MIME at render time.
 - `--unsafe-paths` — allow input / `--font` / `--output` paths outside the CWD (see Path confinement).
-- `--highlight <start:end[:color]>` — highlight lines `start:end` with an optional colour (default: the theme’s own highlight colour). Ranges are validated: `start >= 1`, `end >= start`, else a friendly refusal, exit 2. **SVG only.**
+- `--highlight <start:end[:color]>` — highlight lines `start:end` with an optional colour (default: the theme’s own highlight colour). Ranges are validated at parse time, whichever output format you chose: `start >= 1`, `end >= start`, else a friendly refusal, exit 2. The highlight itself is **SVG only.**
 - `--format <svg|png>` — output format (default `svg`; `png` requires `ext-gd`).
 - `-t`, `--type <lang>` — force the syntax-highlighting language (default: filename, then shebang, then content detection). The value is not validated: any string is accepted, and a name with no grammar renders as plain text rather than erroring.
 - `-o`, `--output <path>` — write the screenshot to a file instead of stdout.

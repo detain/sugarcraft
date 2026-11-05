@@ -256,6 +256,16 @@ while (($arg = array_shift($argv)) !== null) {
             $start = (int) $m[1];
             $end   = (int) $m[2];
             $color = $m[3] ?? null;
+            // The renderer contract is start >= 1 && end >= start. Enforce it
+            // at parse time so BOTH output formats fail closed: the PNG branch
+            // drops --highlight as unsupported and used to exit 0 on an
+            // impossible range (`5:3`), because the only range check lived in
+            // the SVG branch's withHighlight catch — never reached when
+            // --format png was chosen.
+            if ($start < 1 || $end < $start) {
+                fwrite(STDERR, Lang::t('cli.bad_highlight', ['format' => $hlFormat]) . "\n");
+                exit(2);
+            }
             $highlight = [$start, $end, $color];
             $sawHighlight = true;
             break;
@@ -448,8 +458,10 @@ if ($format === 'png') {
         try {
             $renderer = $renderer->withHighlight($start, $end, $color);
         } catch (\InvalidArgumentException $e) {
-            // `--highlight 0:5` / `5:3` pass the shape regex but violate the
-            // renderer's range contract — refuse with exit 2, not a fatal.
+            // Unreachable from the CLI today: the parse gate rejects
+            // `--highlight 0:5` / `5:3` before any renderer is built. The
+            // catch stays as the fail-closed net for renderer-contract drift,
+            // mirroring the withFont leg above.
             fwrite(STDERR, Lang::t('cli.highlight_rejected', ['spec' => $start . ':' . $end, 'reason' => $e->getMessage()]) . "\n");
             exit(2);
         }
