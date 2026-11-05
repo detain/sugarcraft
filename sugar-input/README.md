@@ -58,6 +58,13 @@ while (!$driver->isEof()) {
 Before any of this reaches the decoder, the HOST owns the terminal modes —
 see [Terminal setup is the host's duty](#terminal-setup-is-the-hosts-duty).
 
+One termination caveat: `isEof()` means "ended *and* drained", not "ended". If
+the stream stops mid-sequence, the held partial keeps `isEof()` false and the
+loop above spins on `read() === null` forever. For a bounded shutdown, discard
+the stranded partial with `$driver->escapeDecoder()->reset()` (which clears the
+remainder and lets `isEof()` answer true) or exit on a grace period of
+EOF-idle polls.
+
 ## Installation
 
 ```sh
@@ -124,7 +131,7 @@ construct the mix you want (named arguments make that a one-liner).
 
 | Driver | Reads | Notes |
 |---|---|---|
-| `StreamInputDriver` | any readable stream resource (e.g. `STDIN`) | Non-blocking by contract: takes over the stream's blocking flag on construction, restores it in `__destruct`; anything that is not a resource is refused at the constructor. Each `read()` pulls at most 8192 bytes through the internal `EscapeDecoder` and returns events one at a time in order. `isEof()` distinguishes "input ended" from `read()`'s shared idle-`null`; `hasPending()` reports buffered events or a partial sequence. `escapeDecoder()` exposes the owned decoder for `reset()`, `flushDeferredEscape()` and the counters. |
+| `StreamInputDriver` | any readable stream resource (e.g. `STDIN`) | Non-blocking by contract: takes over the stream's blocking flag on construction, restores it in `__destruct`; anything that is not a resource is refused at the constructor. Each `read()` pulls at most two 8192-byte chunks (a partial frame is retried once) through the internal `EscapeDecoder` and returns events one at a time in order. `isEof()` distinguishes "input ended" from `read()`'s shared idle-`null`; `hasPending()` reports buffered events or a partial sequence. `escapeDecoder()` exposes the owned decoder for `reset()`, `flushDeferredEscape()` and the counters. |
 | `ReactInputDriver` | a `React\Stream\ReadableStreamInterface` | PUSHES events by `emit('data', Event)` — it is not an `InputDriver`. `isReadable()` follows React's contract (`true` until the stream closes, not "bytes pending"); `pause()` defers emission — already-buffered events flush on `resume()`. Incoming chunks are sliced at 8192 bytes (`MAX_CHUNK_SIZE`) with a lone-trailing-`ESC` carry law so a boundary can never split a sequence's escape byte from its params. `pipe()` forwards the RAW byte stream, not events — the React "data" event name means one event per emit here, not per chunk. `escapeDecoder()` exposes the owned decoder. |
 | `SignalResizeDriver` | `SIGWINCH` | The production producer of `ResizeEvent`. Construction is side-effect free; `arm(): bool` is opt-in: it joins a weak-map fan-out, installs the process-wide handler, enables `pcntl_async_signals()`, probes current dimensions through `tput cols`/`tput lines` (capability names are refused before any shell-out unless they are a well-formed terminfo name, and stay quoted even after validation), and returns `false` where pcntl is absent. The handler itself only sets a per-instance flag — dimension probes run lazily in `read()`, so a resize-drag storm costs one probe pair, not 2×N forks from signal context. `disarm(): bool` reverses the last `arm()`: when the final armed driver leaves, the SIGWINCH disposition is handed back (see the one-disposition law below). |
 
