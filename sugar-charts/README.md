@@ -56,6 +56,10 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 > `data` / `size` / `min` / `max` / `point` / `xRange` / `yRange` / `xyRange` / `colors` /
 > `palette` / `bars` / `barWidth` / `showLabels` / `showAxis` / `title` / `canvas` /
 > `theme` / `dataset` / `markLines` / `unicodeConnectors` / `style` / `protocol` / `items` / `position` … are all available.
+> That list is fleet-wide vocabulary, not a per-class promise: each alias exists on
+> exactly the classes that expose the matching `with*()` setter — `style()` is on
+> `Sparkline`, while neither `BarChart` nor `LineChart` carries `colors()`, `style()`
+> or `palette()`. The per-class registry is pinned by `tests/AliasCompletenessTest.php`.
 > The convention is `withFoo()` → `foo()` (drop `with`, lcfirst). A few names deviate to
 > read better: `withLegendPosition()` → `legendPos()`, `withTitlePosition()` → `titlePos()`
 > (Position shortens to `Pos`), `withDataLabelFormatter()` → `dataLabelFormat()`,
