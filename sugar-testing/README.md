@@ -162,8 +162,8 @@ initial model, so repeated runs are identical.
 ### Simulation subset
 
 `Program::dispatch()` intercepts control messages before your `update()` ever
-sees them. The simulator mirrors that layer message for message — but it is a
-simulator, not the real runtime, and the boundary is explicit:
+sees them. The simulator mirrors that layer for the messages listed below —
+but it is a simulator, not the real runtime, and the boundary is explicit:
 
 - `BatchMsg` / `SequenceMsg` — each member closure runs as a Cmd would; the
   messages they produce are dispatched, appended behind everything already queued —
@@ -185,6 +185,16 @@ simulator, not the real runtime, and the boundary is explicit:
   exercise suspend/resume under it.
 - `ExecRequest` — **throws** a `RuntimeException`. `exec` suspends onto a real
   terminal; the simulator has none, so it refuses rather than faking a pass.
+- **Interceptions that are NOT mirrored** — the real `dispatch()` also swallows
+  `AsyncCmd` (arms the promise instead) and `SubscriptionsMsg` (reconciles the
+  subscription set instead), routes `ScreenStackPushedMsg` /
+  `ScreenStackPoppedMsg` to the root model bypassing the active screen, and
+  applies a wrapped Program's `ProgramOptions::$filter` before every `update()`.
+  The simulator does none of these: the first two fall through to `update()`
+  as ordinary messages — a scripted `AsyncCmd` exercises a path production
+  never shows — and the filter is ignored, so filter-dependent models see
+  unfiltered input here. Test those surfaces on a real `Program`, not under
+  the simulator.
 - **Startup trio** — `Program` dispatches `WindowSizeMsg`, `EnvMsg` and
   `ColorProfileMsg` *before* `init()`. The simulator replays that order only
   when armed, so a default run stays byte-identical to pre-parity suites:

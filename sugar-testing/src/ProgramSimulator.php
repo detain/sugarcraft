@@ -30,9 +30,15 @@ use SugarCraft\Core\Util\ColorProfile;
  * init(), update(), and view() in sequence — without touching real
  * stdin/stdout or installing signal handlers.
  *
- * Control-layer parity: messages are routed through the SAME interception
- * ladder {@see Program::dispatch()} uses, so a model never sees what the
- * runtime would have swallowed:
+ * Control-layer parity: messages are routed through the interception
+ * ladder {@see Program::dispatch()} uses for the control messages listed
+ * below, so a model never sees what the runtime would have swallowed.
+ * The mirror is partial: AsyncCmd and SubscriptionsMsg are
+ * NOT intercepted here (they fall through to update(), where production
+ * would never show them), the ScreenStackPushed/Popped root-model routing
+ * and a wrapped Program's ProgramOptions::$filter are not applied at all,
+ * and {@see SuspendMsg} is dropped outright rather than delivered as the
+ * runtime delivers it. See the README "Simulation subset" section.
  *  - {@see BatchMsg} / {@see SequenceMsg} — their Cmd closures are executed
  *    (through the cmd-runner hooks, so they are captured like any cmd) and
  *    the messages they return are dispatched; the batch itself never reaches
@@ -383,10 +389,12 @@ final class ProgramSimulator
     }
 
     /**
-     * The dispatch() ladder, simulator edition: intercept control messages
-     * exactly as {@see Program::dispatch()} does, and run ordinary messages
-     * through update() — draining whatever the update's cmd (or a batch
-     * member) produces, iteratively, through this same pump.
+     * The dispatch() ladder, simulator edition: intercept the control
+     * messages enumerated in the class docblock, as {@see Program::dispatch()}
+     * does for those, and run ordinary messages through update() — draining
+     * whatever the update's cmd (or a batch member) produces, iteratively,
+     * through this same pump. The mirror is partial: see the class docblock
+     * and the README "Simulation subset" section for what is NOT intercepted.
      *
      * The $maxCycles bound (self::MAX_CYCLES = 10,000) guards against
      * infinite cmd loops in models that produce a cmd on every update. It
