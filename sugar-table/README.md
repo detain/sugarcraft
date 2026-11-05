@@ -407,6 +407,23 @@ The default `-` is a single hyphen — it reads ambiguously beside real hyphens
 inside data (host names, minus signs), so pick a placeholder that cannot collide
 with your content.
 
+## Empty states
+
+The degenerate shapes have defined, non-crashing output:
+
+- **No columns to paint** — a table with zero columns, or with every column hidden
+  (`withHiddenCols()` covering them all), renders as the empty string.
+- **No rows** — columns with no rows render the translatable `No data` line
+  (`no_data`, see Internationalization) centered in the content area; it shows
+  whether or not the header row is visible, and in borderless and footer-armed
+  tables alike. The same message replaces the body when `Filter()` or `search()`
+  narrows every row away.
+- **Scrolled past the end** — `withScrollX()` at or beyond the number of scrollable
+  (non-frozen) columns leaves none visible: with no frozen prefix the whole table
+  renders as the empty string; with one, only the frozen columns paint.
+
+Pinned by `tests/TableEmptyStateTest.php`.
+
 ## Pagination
 
 
@@ -586,7 +603,9 @@ echo $t->View();
 - **scrollX** skips `$offset` non-frozen columns from the left of the scrollable region
 - **Frozen columns** (if any) are always visible regardless of scrollX
 - **Negative values** are clamped to 0 automatically
-- **Excessive scroll** values are tolerated — extra columns simply don't render
+- **Excessive scroll** is tolerated but total: at or beyond the number of scrollable
+  columns no scrollable column remains — without a frozen prefix the table renders
+  as the empty string, with one only the frozen columns paint (see Empty states)
 
 ### Interaction with Frozen Columns
 
