@@ -59,11 +59,14 @@
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-cellbuffer</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\CellBuffer\Buffer;
+    <pre class="code"><code class="language-php"><?php
+
+require 'vendor/autoload.php';
+
+use SugarCraft\CellBuffer\Buffer;
 use SugarCraft\CellBuffer\Cell;
 use SugarCraft\CellBuffer\Position;
 use SugarCraft\CellBuffer\Region;
-use SugarCraft\CellBuffer\Style;
 
 // Create a 20x3 buffer filled with blank cells.
 $buf = Buffer::new(20, 3);
@@ -71,8 +74,11 @@ $buf = Buffer::new(20, 3);
 // Set a cell at (col=5, row=1).
 $buf = $buf->withCellAt(5, 1, Cell::new('H'));
 
-// Blit a 2x2 sub-buffer at the origin.
-$sub = Buffer::new(2, 2)->withCellAt(0, 0, Cell::new('A'));
+// Blit a seeded 2x2 sub-buffer at origin — seeding matters: blitting an
+// all-blank sub-buffer over blank cells is a visible no-op.
+$sub = Buffer::new(2, 2);
+$sub = $sub->withCellAt(0, 0, Cell::new('A'))->withCellAt(1, 0, Cell::new('B'));
+$sub = $sub->withCellAt(0, 1, Cell::new('C'))->withCellAt(1, 1, Cell::new('D'));
 $buf = $buf->withRegion(Region::new(Position::new(0, 0), 2, 2), $sub);
 
 // Read a cell back.
@@ -85,13 +91,13 @@ echo $buf->height(); // 3</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Buffer</strong><span>Immutable 2-D cell grid: the fluent with*() family plus fill(), copy() and applyDiff() (not named with*, equally immutable — every mutation returns a new instance). Bounds-checked cellAt() throws OutOfRangeException. Private mutate() pattern for with*() methods.</span></div>
+      <div class="feature"><strong>Buffer</strong><span>Immutable 2-D cell grid: the fluent with*() family plus fill(), copy() and applyDiff() (not named with*, equally immutable — every mutation returns a new instance). Bounds-checked cellAt() throws OutOfRangeException.</span></div>
       <div class="feature"><strong>Cell</strong><span>Readonly value object: rune (string), style (?Style), link (?Hyperlink), width (int). Cell::continuation() for wide-char neighbour cells. No with*() — rebuild via new.</span></div>
       <div class="feature"><strong>Position</strong><span>2-D coordinate (col, row) with bare accessors. Negative coordinates may be used for relative offsets.</span></div>
       <div class="feature"><strong>Region</strong><span>Rectangular sub-region defined by Position origin + width/height. contains() helper for hit-testing; zero-area regions no-op in fill()/withRegion().</span></div>
       <div class="feature"><strong>Style</strong><span>Per-cell pen: foreground/background as RGB 0xRRGGBB <em>or</em> palette-slot identity (0-255), underline colour, and an attribute bitmask. The with*() builders keep slot and RGB mutually exclusive per channel; the public fromSgr() parses SGR parameter strings back into styles. The rich styling API (border, padding, transforms) lives in sugar-style.</span></div>
-      <div class="feature"><strong>Hyperlink</strong><span>OSC 8 anchor — url and optional id grouping field, validated at construction (C0/DEL and semicolons-in-id refused).</span></div>
-      <div class="feature"><strong>Wide char handling</strong><span>width=2 cells (CJK, many emoji) carry a width-0 continuation partner at col+1. The writing API enforces the pair law automatically; Buffer::fromGrid() is the escape hatch that skips it — it validates the dimensions and requires a flat list of exactly width×height cells, but takes the cells as given, so pair maintenance is the caller's duty.</span></div>
+      <div class="feature"><strong>Hyperlink</strong><span>OSC 8 anchor — url and optional id grouping field, validated at construction and again on unserialization (C0/DEL/C1 and semicolons-in-id refused).</span></div>
+      <div class="feature"><strong>Wide char handling</strong><span>width=2 cells (CJK, many emoji) carry a width-0 continuation partner at col+1; larger widths are single run-length spans that carry no continuation cells. The writing API enforces the pair law automatically; Buffer::fromGrid() is the escape hatch that skips it — it validates the dimensions and requires a flat list of exactly width×height cells, but takes the cells as given, so pair maintenance is the caller's duty.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
@@ -99,6 +105,13 @@ echo $buf->height(); // 3</code></pre>
       <li><strong>Shared cell-grid foundation</strong> — consumed by sugar-overlay, sugar-toast, sugar-panels, sugar-table, sugar-forms, sugar-style, sugar-charts, sugar-image, sugar-dashboard, sugar-testing, sugar-video, sugar-datepicker, sugar-flexbox, candy-minesweeper and candy-tetris. Some renderers keep independent engines by design (sugar-core's line-diff Renderer, sugar-vterm's mutable grid) and candy-code does not consume this library; the package's role is the shared <em>data model</em> and its byte encoders.</li>
       <li><strong>Per-cell dirty tracking</strong> — <code>Buffer::diff()</code> emits move / style / set-cell / repeat-run / erase-run / hyperlink ops for only the changed cells, and <code>applyDiff()</code> is its round-trip inverse.</li>
       <li><strong>Terminal rendering</strong> — the data model behind styled-grid output: <code>toAnsi()</code> full repaints and diff-encoded delta frames, hyperlinks surviving intact.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Security &amp; trust boundaries</h3>
+    <ul>
+      <li><strong>Cell runes ride the wire verbatim.</strong> <code>toAnsi()</code> and the diff encoder never strip control characters from cell contents — callers rendering untrusted text must sanitise first (sugar-core <code>Sanitize::untrusted()</code>). <code>text()</code> does not respect styles either: invisible-styled runes still come out, so invisibility is not a redaction boundary.</li>
+      <li><strong>Hyperlink fields are hard-gated.</strong> url and id refuse C0 controls, DEL and the C1 range (raw bytes and their UTF-8 <code>C2 xx</code> spellings), and ids refuse semicolons — at construction and again on unserialization — so no escape introducer can be forged into the OSC 8 frame.</li>
+      <li><strong><code>Buffer::fromString()</code> is test-support, not an emulator.</strong> Only SGR sequences are interpreted; every other CSI frame deposits its parameter text into cells as literal runes. Do not feed it untrusted input expecting a parse.</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source</h3>
@@ -118,19 +131,21 @@ echo $buf->height(); // 3</code></pre>
 <tr><td>Buffer</td><td>withCellAt(int, int, Cell)</td><td>Immutable cell setter; enforces the wide-pair law</td></tr>
 <tr><td>Buffer</td><td>withRegion(Region, Buffer)</td><td>Blit source Buffer into this Buffer's region, clipped to the intersection; returns new Buffer</td></tr>
 <tr><td>Buffer</td><td>width(), height(), region()</td><td>Dimension accessors</td></tr>
+<tr><td>Buffer</td><td>fromGrid(int, int, array)</td><td>Wrap a flat cell list (index = row*width + col; count validated, pair law not)</td></tr>
 <tr><td>Buffer</td><td>diff(Buffer $previous): list&lt;DiffOp&gt; / applyDiff(array $ops)</td><td>Delta ops that turn $previous into this buffer (dimensions must match) / replay them (negative cursor ops refused)</td></tr>
-<tr><td>Buffer</td><td>fill(Region, Cell) / copy(Region)</td><td>Fill a region / extract it as a new Buffer (capped by MAX_COPY_CELLS, 1,000,000)</td></tr>
-<tr><td>Buffer</td><td>text(?Region)</td><td>Plain-text extraction; continuation cells skipped</td></tr>
-<tr><td>Buffer</td><td>toAnsi() / fromString(?string $ansi, int, int)</td><td>Render to SGR + OSC 8 bytes / lossy test-support parse back. 38;2/48;2 components are clamped to 0–255, 38;5/48;5 indices map through the xterm-256 palette, and a truncated extended colour ends the parse</td></tr>
+<tr><td>Buffer</td><td>fill(Region, Cell) / copy(Region)</td><td>Paint a region (clipped to the intersection) / extract an always region-sized Buffer (in-grid cells verbatim, out-of-grid area padded with blanks; capped by MAX_COPY_CELLS, 1,000,000)</td></tr>
+<tr><td>Buffer</td><td>text(?Region)</td><td>Plain-text extraction; continuation cells skipped, invisible-styled runes included (rows joined with a bare LF, same contract as <code>toAnsi()</code>)</td></tr>
+<tr><td>Buffer</td><td>toAnsi() / fromString(?string $ansi, int, int)</td><td>Render to SGR + OSC 8 bytes (rows joined with a bare LF — raw-mode callers post-process) / lossy test-support parse back. SGR channels above 255 saturate, a negative component is refused as malformed (params must be plain digit-runs), 38;5/48;5 indices map through the xterm-256 palette, and a truncated extended colour ends the parse keeping the pen built so far</td></tr>
 <tr><td>Cell</td><td>new(string, ?Style, ?Hyperlink, int)</td><td>Factory with rune, style, link, width (0 = continuation, 1 normal, 2 wide lead, larger = run-length span)</td></tr>
 <tr><td>Cell</td><td>rune(), style(), link(), width(), equals(Cell)</td><td>Property accessors / value equality</td></tr>
 <tr><td>Cell</td><td>continuation()</td><td>Factory: empty rune, null style/link, width=0</td></tr>
 <tr><td>Position</td><td>new(int, int)</td><td>Factory: col, row</td></tr>
 <tr><td>Region</td><td>new(Position, int, int)</td><td>Factory: origin, width, height</td></tr>
-<tr><td>Region</td><td>contains(int, int)</td><td>Hit-test a cell coordinate</td></tr>
+<tr><td>Region</td><td>contains(int, int) / right() / bottom()</td><td>Hit-test a cell coordinate / inclusive edge coordinates</td></tr>
 <tr><td>Style</td><td>new(?fg, ?bg, int attrs)</td><td>Convenience factory: RGB 0xRRGGBB colours and attrs bitmask. The full slot-aware form is the constructor — <code>new Style(fg, bg, attrs, fgSlot, bgSlot, ul, ulSlot)</code> — where slots are palette identities 0-255, validated at construction</td></tr>
-<tr><td>Style</td><td>fromSgr(string $params, ?Style $carry)</td><td>Public SGR-parameter parser: reset, base/bright/256/RGB colours (slots recorded with an RGB fallback), underline colour, attribute on/off codes; truncated params fail-stop to null</td></tr>
-<tr><td>Hyperlink</td><td>new(string, string)</td><td>Factory: url, id (C0/DEL and semicolons-in-id refused)</td></tr>
+<tr><td>Style</td><td>fromSgr(string $params, ?Style $carry)</td><td>Public SGR-parameter parser: reset, base/bright/256/RGB colours (slots recorded with an RGB fallback), underline colour, on-codes 1-5, 7-9 and 53, off-codes 22, 23-25, 27-29 (22 clears bold and faint; 6, 26 and 55 have no arm); non-digit-run params throw, a truncated extended-colour arm ends the parse keeping the pen built so far (null only when nothing was set)</td></tr>
+<tr><td>Style</td><td>withAttrs(int) / withBold()…withInvisible() / bold() / reverse() / hasX() / equals() / valuesEqual()</td><td>Bitmask replace and nine single-bit toggles (<code>bool $on = true</code>); factories and predicates for all nine attributes; <code>equals()</code>/<code>valuesEqual()</code> compare by value (the null-safe form the encoders use)</td></tr>
+<tr><td>Hyperlink</td><td>new(string, string)</td><td>Factory: url, id (C0 controls, DEL, the C1 range and semicolons-in-id refused at construction and again on unserialization)</td></tr>
 </table>
   </div>
 </section>
