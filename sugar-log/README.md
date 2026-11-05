@@ -401,8 +401,12 @@ stream exists and every level is written to STDOUT, see
 `error` → `Error`; `warning` → `Warn`; `notice` and `info` →
 `Info`; `debug` → `Debug`.
 
-The bridge also fires registered hooks after the record is written (see
-[Hook System](#hook-system)), enabling middleware-style interceptors. A hook
+The bridge also fires registered hooks after the write attempt (see
+[Hook System](#hook-system)), enabling middleware-style interceptors. A failed
+write that was announced as an internal notice still reaches the hooks — they
+are part of the observability surface — but records the level filter drops, and
+messages whose `__toString()` explodes before a write is ever attempted, never
+fire them. A hook
 that throws is contained per-handler the same way — one hostile callback can
 never cancel the walk or eat the log line.
 

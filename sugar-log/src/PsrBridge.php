@@ -29,8 +29,10 @@ use SugarCraft\Log\Hook\HookRegistry;
  *
  * Note: {@see Logger} itself is deliberately NOT a PSR-3 logger — its typed
  * Level-enum API is the house style; this bridge is the interop surface.
- * Hooks fire only through this bridge, after the record has been written,
- * and only for records the wrapped Logger's level filter actually emits.
+ * Hooks fire only through this bridge, after a write attempt completes —
+ * including one that failed and was announced as an internal notice — and
+ * never for records the wrapped Logger's level filter drops or for a message
+ * cast that explodes before the write is attempted.
  *
  * Mirrors charmbracelet/log's PSR-3 bridge where applicable.
  */
