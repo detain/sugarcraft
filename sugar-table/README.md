@@ -14,7 +14,7 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 
 ## Features
 
-- **Column definitions**: unique key, title, width (fixed or flexible), optional style
+- **Column definitions**: key (the caller owns uniqueness — nothing in the table enforces it), title, width (fixed or flexible), optional style
 - **Row data**: key-value map (`RowData`), arbitrary values rendered via `fmt.Sprintf("%v")`
 - **Styled cells**: `StyledCell` wraps value + ANSI style, overrides row/column/base styles
 - **Row styles**: zebra striping, bold rows, per-row ANSI styling
@@ -24,10 +24,10 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 - **Filtering**: filter by column text
 - **Frozen columns**: pin columns from the left
 - **Horizontal scroll**: max width with overflow, frozen columns stay visible
-- **Missing data indicator**: configurable placeholder for absent cells
+- **Missing data indicator**: configurable placeholder for absent cells — the default `-` is a lone hyphen that reads ambiguously beside dashes inside your data, so `withMissingIndicator('(empty)')` gives an unmistakable absent-cell signal
 - **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Style\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
 - **Borderless mode**: `withBorderless()` — render NO outer box (no top/bottom border rows, no left/right border columns; a single space separates columns) so the table composes inside another bordered shell (e.g. a sugar-panels content box) without a double border. A selected row's reverse-video highlight stays continuous across the column gaps
-- **Width control**: `withWidth(int $cols)` pins the total render width and `ColumnWidth::Flex` columns split the leftover room by weight. Lines are clamped at the frame edge, never padded past it: an over-subscribed layout truncates content and can render narrower than `$cols` (borderless + Flex lays out exactly). Default `cellPadding` is 0 (flush)
+- **Width control**: `withWidth(int $cols)` pins the total render width and `ColumnWidth::Flex` columns split the leftover room by weight. Lines are clamped at the frame edge, never padded past it: an over-subscribed layout truncates content and can render narrower than `$cols` (borderless + Flex lays out exactly). Default `cellPadding` is 0 (flush) — chosen for width economy; `withCellPadding(1)` buys readability when columns run together
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
 - **Render cost**: O(visible cells) per frame (flat-grid pass); the Content/Dynamic width solve scans the full row set once per width memo — keep large datasets viewport-scoped
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content, Flex
@@ -85,6 +85,9 @@ Column::new($key, $title, $width)        // key, display title, fixed width
 `ColumnWidth` specifies how a column's width is computed at render time.
 The table computes actual widths in `computeColumnWidths($tableWidth)` and uses
 them consistently throughout rendering (header, data cells, separators).
+A `Fixed` width is expected to be a positive integer: `Column::new()` does not
+validate it, so zero lays out an empty column and a negative value fails late
+at render time (a `ValueError` from the buffer fill) rather than at definition.
 
 | Case        | Description                                              |
 |-------------|----------------------------------------------------------|
@@ -140,7 +143,7 @@ echo $t->View();  // columns 1+2 sized by content; column 3 fills remaining 75%
 
 | Case        | Description                                              |
 |-------------|----------------------------------------------------------|
-| `None`      | Truncate at column width                                  |
+| `None`      | Truncate at column width, appending a trailing … (U+2026) |
 | `WordWrap`  | Break at word boundaries                                  |
 | `Character` | Break at any character, no padding on last line          |
 
@@ -561,6 +564,7 @@ echo $t->View();
 ### How It Works
 
 - **Hidden columns are excluded from rendering** but still exist in the table
+- **Out-of-range and non-numeric indices are silently ignored** — matching is a strict integer comparison against the original column index, so `withHiddenCols([99, '2'])` on a four-column table hides nothing and raises nothing
 - **Data, filters, and sorting still work** on hidden columns — you can filter by a hidden column's data
 - **Useful for optional columns** that can be toggled visible/invisible via UI
 - **Column indices refer to the original column order** — not affected by scroll position
@@ -761,7 +765,7 @@ When `withMultilineMode(true)` is enabled:
 - **Row height** equals the maximum number of lines across all visible cells after text wrapping
 - **Short cells** are vertically padded with empty space to match row height
 - **Borders** span the full row height on each line
-- **Cell wrapping** respects the column's `WrapMode`: `WordWrap` breaks at word boundaries, `Character` breaks at any character, `None` truncates
+- **Cell wrapping** respects the column's `WrapMode`: `WordWrap` breaks at word boundaries, `Character` breaks at any character, `None` truncates with a trailing … (U+2026)
 
 
 
@@ -799,7 +803,7 @@ use SugarCraft\Table\{Table, Column, Row, RowData};
 $t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
-    Column::new('desc', 'Desc',  15),   // truncated at 15 chars normally
+    Column::new('desc', 'Desc',  15),   // truncated at 15 chars (trailing …) normally
 ])
     ->withRows([
         Row::new(RowData::from([
