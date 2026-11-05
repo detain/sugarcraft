@@ -15,22 +15,39 @@
 
 candy-flappy — a Flappy-Bird-style game for the terminal, built on the SugarCraft stack, for PHP 8.3+. The bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell.
 
-*Formerly published as `sugarcraft/honey-flap` (renamed 2026-10; namespace `SugarCraft\Flap\` → `SugarCraft\Flappy\`). The first run of `bin/candy-flappy` migrates a pre-rename `~/.config/.honey-flap` high-score directory automatically.*
+*Formerly published as `sugarcraft/honey-flap` (renamed 2026-10; namespace `SugarCraft\Flap\` → `SugarCraft\Flappy\`). The first run of `bin/candy-flappy` migrates a pre-rename `.honey-flap` high-score directory automatically, under the same config base the game itself uses: `$XDG_CONFIG_HOME` first, `$HOME/.config` as fallback (see "High scores, config, and environment").*
 
 ## Install & run
 
 ```bash
-# From a clone of the monorepo:
+# From a clone of the monorepo (each lib carries its own vendor):
+cd candy-flappy
 composer install
 ./bin/candy-flappy      # or: php examples/play.php
 
 # As a library dependency (pre-1.0: the package publishes a dev branch only):
 #   composer require sugarcraft/candy-flappy:@dev
 
-# Standalone executable (rebuilt on every push to master):
+# Standalone executable (rebuilt per push to master only when flappy is in
+# the affected closure, else on force_all/workflow dispatch):
 wget https://github.com/detain/sugarcraft/releases/download/candy-flappy/dev/candy-flappy.phar
 php candy-flappy.phar
 ```
+
+### Command line
+
+`bin/candy-flappy` takes exactly two diagnostic flags; the game itself takes
+no arguments:
+
+| Invocation              | Behaviour                                       |
+|-------------------------|-------------------------------------------------|
+| `--version`             | print the stamped version line, exit 0          |
+| `-h` / `--help`         | print usage, exit 0                             |
+| unknown argument        | refuse with sanitized usage on stderr, exit 2   |
+| killed by a signal      | exit `128 + signo` (the conventional shell code) |
+
+`php examples/play.php` is the bare-`Program` path: it boots the same game but
+deliberately ignores all flags (no `--version`/`--help`/refusal handling).
 
 ## Keys
 
