@@ -118,6 +118,23 @@ composer require sugarcraft/sugar-dashboard
 | `Breakpoint` | Static helpers for responsive breakpoints — `narrow()`/`medium()`/`wide()`/`pick()` (default thresholds 90/140, Homedash convention) | `narrow(int $width, int $threshold = 90): bool`, `medium(int $width, int $narrow = 90, int $wide = 140): bool`, `wide(int $width, int $threshold = 140): bool`, `pick(int $width, array $thresholds): string` | |
 | `Pad` | Padding wrapper — CSS-style padding with optional borders (for the tree-structured focus split, see the live `Layout\Boxer` subtree) | | |
 
+### Layout Subsystems (Tile, Boxer, RatioGrid, Focus)
+
+These four subsystems carry the layout names in the GIF grid and the
+`dashboard-live` demo but had no API surface documented; each lives under
+`src/Layout/` (the data grid they feed, `Components\GridTable`, is documented
+in the Components section).
+
+| Type | Description | Key Methods/Factories |
+|------|-------------|----------------------|
+| `TileLayout` | Constraint-based tile layout (bubbletea tilelayout pattern): a named root splits its region among child `Tile`s horizontally or vertically | `horizontal(name)`, `vertical(name)`, `withTile()`, `withTiles()`, `withDirection()`, `withGap()`, `withTheme()`, `setSize()`, `render()`, `getInnerSize()` |
+| `Constraint` | How a child is sized along a container axis (tealeaves constraint law): fixed pixels, a flex weight, or fit-to-content, with min/max clamps; the active flavour is reported as a `ConstraintKind` enum | `fixed(px)`, `flex(weight)`, `fit()`, `withMinSize()`, `withMaxSize()` |
+| `Resolver` | Five-phase tile-dimension solver turning constraints into concrete rectangles (`resolveLinear` for one axis, `resolveTile` for the 2-D walk) | `resolveLinear()`, `resolveTile()` |
+| `SizeHint` | Min + desired size a widget reports to the solver; widgets supply one through the `SizeHinter` contract | `empty()` |
+| `Boxer` | Tree-based layout engine (bubbleboxer pattern): nested horizontal/vertical `Node` splits addressed by path (`Address`); items live beside the tree, so editing a leaf never rebuilds the layout tree | `leaf(address, Item)`, `tree(Node, modelMap)`, `horizontal(...nodes)`, `vertical(...nodes)`, `editLeaf(address, callable)`, `setSize()`, `render()` |
+| `RatioGrid` | Grid whose rows/columns are sized by ratio (termui grid pattern); cells placed by `(row, col)` coordinate, `NewColRow` carries the generated guides | `new(columns, rows)`, `withCell(row, col, GridItem)`, `setSize()`, `render()`, `getInnerSize()` |
+| `FocusManager` | Persistence wrapper over sugar-focus's `FocusRing` for a layout hierarchy: the ring owns the ordered focusable ids and wrap-around Tab/Shift-Tab traversal; `persistState()`/`restoreState()` park the focused id through a `State\Persistence` file so focus survives panel swaps and reloads | `register(id)`, `unregister(id)`, `focus(id)`, `blur(id)`, `isFocused(id)`, `focusedId()`, `focusNext()`, `focusPrevious()`, `persistState(persistence, path)`, `restoreState(persistence, path)` |
+
 ---
 
 ## Plot Namespace (Charts & Visualization)
@@ -444,6 +461,26 @@ foreach ($procs as $row => $p) {
 ---
 
 ## Components Namespace
+
+### Components\GridTable (Data Grid)
+
+The flagship interactive table — a full-featured data grid with sort, filter,
+pagination, and column freezing (tealeaves/teagrid law, adapted to PHP with
+wither-style immutable setters). The assembly entry point is `GridTable`
+itself; everything else in the directory is its value part.
+
+| Type | Description | Key Methods/Factories |
+|------|-------------|----------------------|
+| `GridTable` | The grid: columns + rows + interactive state, renderable via the `Item` contract | `new(columns, rows)`, `withColumns()`, `withRows()`, `setSize()`, `sort()`, `sortState()`, `filter()`, `filterText()`, `pagination()`, `page()`, `freezeColumns()`, `scrollTo()`, `render()` |
+| `Column` / `Row` / `Cell` | Grid geometry value parts — column definition (title, width, format), row, and formatted cell | `Cell` carries `value()`/`format()` |
+| `Header` / `Footer` | Column header and summary footer renderers | `Footer` summarises configured columns |
+| `Sort` / `SortState` / `SortDirection` | Sort engine and its immutable state: active column, direction, `toggleDirection()` | `isSorted()`, `column()`, `direction()` |
+| `Filter` | Text/condition filtering across columns | `filters()`, `hasFilter()`, `isActive()`, `withFilter()`, `withoutFilter()`, `clear()` |
+| `Pagination` | Page windowing with clamping | `withPage()`, `clampPage()`, `totalPages()`, `offset()` |
+| `Overflow` / `OverflowMode` | Per-cell overflow policy (clip/ellipsis/wrap family) | mode enum + helper |
+| `Scrolling` | Vertical/horizontal scroll state feeding `scrollTo()` | |
+| `BorderChars` / `BorderConfig` / `BorderRegion` | Border character sets and per-region border configuration | |
+| `Calc` | Column-width arithmetic shared by sort/filter/pagination passes | |
 
 ### Components\Form (Form & Input)
 
