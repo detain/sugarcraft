@@ -79,6 +79,10 @@ further guarantees:
   `CancellationToken::none()` is a shared never-cancelled
   sentinel for "no token here" plumbing: its `onCancel()` hands back an
   already-spent handle and nothing is ever retained.
+- Late registration never misses: calling `onCancel()` on an already-cancelled
+  token fires the callback immediately — synchronously, before the call
+  returns — and hands back an already-spent handle, so nothing is retained for
+  a cancellation that has already happened.
 
 Cancellation is not an error. Happy paths resolve; catch cancellation as its own
 arm, not as a failed request:
