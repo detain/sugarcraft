@@ -69,10 +69,11 @@ arm, not as a failed request:
 
 ```php
 use SugarCraft\Async\{AsyncOps, CancellationSource, OperationCancelledException, TimeoutException};
-use function React\Promise\resolve;
+use React\Promise\Deferred;
 
 $source = CancellationSource::new();
-$guarded = AsyncOps::cancellable(resolve('never-arrives')->then(static fn (): string => 'x'), $source->token());
+// A genuinely pending operation: the guard stays unsettled until the token fires.
+$guarded = AsyncOps::cancellable((new Deferred())->promise(), $source->token());
 $source->cancel();
 
 $guarded->then(
