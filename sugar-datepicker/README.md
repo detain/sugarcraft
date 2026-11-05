@@ -88,10 +88,11 @@ every navigation step: it keeps its grid position whenever that position is a
 day cell of the new month, so a step into a shorter month lands on its last
 day only when the old index falls past the new month's day-cell window.
 The mirror edge exists at the top: an unbounded picker stepping past year 9999
-enters year 10000, which cannot be written as `%04d`, so the grid date is
-unresolvable — `View()` still renders (reporting year 10000), but
-`dateAtCursor()` is `null` and `SelectDate()` refuses. This tolerated upper
-edge never crashes.
+enters year 10000, whose grid date fails the strict four-digit `!Y-m-d` parse
+(`%04d` is only a minimum width, so the formatted year is the literal
+five-digit `10000`), leaving the date unresolvable — `View()` still renders
+(reporting year 10000), but `dateAtCursor()` is `null` and `SelectDate()`
+refuses. This tolerated upper edge never crashes.
 
 ## Selection
 
@@ -138,9 +139,10 @@ $picker = $picker->withoutMaxDate();
 Bounds are compared at midnight (time-of-day is ignored). Setting a bound
 pulls the currently viewed month into the window and re-clamps the cursor.
 Selecting a date outside the window is refused (the receiver is returned
-unchanged); an existing selection is never retroactively cleared. Setting
-`minDate` after `maxDate` (or `maxDate` before `minDate`) throws an
-`InvalidArgumentException`.
+unchanged); an existing selection is never retroactively cleared. Each setter
+throws an `InvalidArgumentException` only when the new bound crosses the
+existing one — setting `minDate` after `maxDate` (or `maxDate` before
+`minDate`) is accepted as long as the resulting pair stays ordered.
 
 ## Today anchor
 
@@ -151,8 +153,10 @@ $picker = $picker->withoutToday();  // drop the pin (falls back to the real cloc
 
 `withoutToday()` removes only the pinned reference — the picker then treats the
 real wall-clock as "today", so the highlight keeps rendering (it is not a way to
-hide the marker; set `WithTodayStyle('')` to suppress it). `GoToToday()` always
-navigates to the pinned date, or to the real current day when nothing is pinned.
+hide the marker; set `WithTodayStyle('')` to suppress it). `GoToToday()` navigates
+to the pinned date, or to the real current day when nothing is pinned — unless
+that day lies outside a `min`/`max` window, in which case the view stays
+clamped inside the window (see the Min/max bounds section above).
 
 ## Rendering
 
