@@ -93,9 +93,9 @@ region, so `isFocused()` alone can paint an accent border on a dimmed panel.
 - **Immutable** — every mutator returns a new `FocusRing` and leaves the
   receiver untouched, so it slots into the immutable-model architecture.
   No-op calls (registering an existing id, focusing an unknown, disabled or
-  already-focused id, traversal with nowhere to go, reordering an empty
-  ring…) return the *same* instance, so `$new === $old` cheaply detects
-  "nothing changed".
+  already-focused id, traversal with nowhere to go, reordering an empty ring
+  to an empty set…) return the *same* instance, so `$new === $old` cheaply
+  detects "nothing changed".
 
 ### Disabled regions
 
