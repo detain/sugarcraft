@@ -1,6 +1,8 @@
 <?php
 /**
- * sugar-navstack — navigation stack with pop-on-backspace demo.
+ * sugar-navstack — back-navigation demo (pop() standing in for a host's
+ * back key; the scripted run shows the stack the moment before and after
+ * each back step).
  *
  * Run: php examples/navigation.php
  */
