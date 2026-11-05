@@ -87,7 +87,7 @@ The pre-PTY-upgrade architecture: middleware run inline in the supervisor, and t
 
 ### Picking a transport
 
-- **`InProcessTransport`** when you want to spawn arbitrary shells (`bash -i`, `zsh`, `fish`), editors (`vim`, `less`), or compiled TUI binaries — anything that needs a controlling terminal. Subprocess overhead per connection (~50-200ms PHP cold start), but full PTY semantics.
+- **`InProcessTransport`** when you want to spawn arbitrary shells (`bash -i`, `zsh`, `fish`), editors (`vim`, `less`), or compiled TUI binaries — anything that needs a controlling terminal. Subprocess overhead per connection — every session forks a fresh child (the target program or `/bin/bash -l`, not PHP) — but full PTY semantics.
 - **`HostSshdTransport`** when your TUI is a SugarCraft `Program` and you want zero subprocess overhead, or when you have an inline-STDIN-reading middleware (banner-style). No subprocess, but no controlling-terminal isolation.
 
 ### The byte pump needs a blocking STDOUT
@@ -525,7 +525,7 @@ transport.
 ## Language: nothing selects it for you
 
 Sixteen catalogues ship under `lang/`, and by default **none of them is
-used**. Nothing in this library calls `T::setLocale()`, so every notice —
+selected**. Nothing in this library calls `T::setLocale()`, so every notice —
 the throttle's fail-open announcement, the exec refusal, the
 `Unauthorized. (…)` line — is rendered from `lang/en.php`. Choosing a
 language is a one-line decision at the top of your entry script:
@@ -694,7 +694,7 @@ three-parameter form, and the interface exists so that fake needs no PTY.
 
 | Exception | When it's thrown |
 |-----------|-----------------|
-| `CancellationException` | `Context->cancel()` was called, or `done()` returns true with no deadline |
+| `CancellationException` | Never thrown: `Context->cancel()` records it and `err()` hands it back -- after a bare `cancel()`, or whenever `done()` is true with no stored reason |
 | `DeadlineExceededException` | The context deadline (`withDeadline()`) has passed |
 
 Both extend `\RuntimeException`.
@@ -936,7 +936,6 @@ Runnable examples:
 - [`examples/hello-server.php`](examples/hello-server.php) — banner-only stack you can ForceCommand against.
 - [`examples/showcase.php`](examples/showcase.php) — middleware-stack tour.
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — interactive bash through `Spawn`.
-- [`examples/spawn-program.php`](examples/spawn-program.php) — arbitrary child program through `Spawn`.
 - [`examples/spawn-program.php`](examples/spawn-program.php) — arbitrary child program through `Spawn`.
 - [`examples/run-program.php`](examples/run-program.php) — the wrapper that pair execs: a `Program` mounted on its own PTY process.
 
