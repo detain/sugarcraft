@@ -123,7 +123,7 @@ Flat list of endpoint objects (YAML subset or JSON). The reader format follows t
 
 | Key | Type | Meaning |
 |-----|------|---------|
-| `name` | string, required | Label shown in the picker (filtering ranks against it and `host`). |
+| `name` | string, required | Label shown in the picker (the filter scores the whole display line `name ─ user@host[:port]`, so usernames and port digits match too). |
 | `host` | string, required | Destination hostname — what ssh connects to. |
 | `port` | `1`–`65535`, default `22` | SSH port; junk values are refused with the endpoint's name. |
 | `user` | string, optional | Remote user (omitted → ssh's own default). |
@@ -141,9 +141,10 @@ Limits of the embedded YAML reader: flat entries only, and a nested list is writ
 |-----------|---------------------------------|
 | ↑ / k     | Move up                         |
 | ↓ / j     | Move down                       |
+| Ctrl+H    | Delete one filter character (alias of Backspace) |
 | Enter     | Connect to highlighted endpoint |
 | Esc / ^C  | Quit without connecting (exit 130) |
-| (typing)  | Type to filter; Backspace deletes one filter character |
+| (typing)  | Type to filter; Backspace deletes one filter codepoint (a compound emoji or flag may need two presses) |
 
 ## Implementation
 
