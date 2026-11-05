@@ -273,13 +273,18 @@ public repos AND only while `git.allow_anonymous_read` is on — default
 off), `git-receive-pack` requires `canWrite` (fail-closed false
 for anonymous callers, so the old unauthenticated receive-pack
 advertisement hole is gone). Authentication uses HTTP Basic auth or the
-`X-CandyGitServer-User` header — the header path additionally requires
-`user_trust_mode`, `trusted_proxies` and `auth_secret` to be configured
-(Server.php), otherwise the header is ignored; deactivated
+paired `X-CandyGitServer-User` + `X-CandyGitServer-User-Sig` headers; the
+header path is governed by `http.user_trust_mode` — `proxy` trusts
+`X-CandyGitServer-User` only from peers listed in `http.trusted_proxies`,
+`token` trusts it only with an unexpired `X-CandyGitServer-User-Sig` HMAC
+verified against `http.auth_secret`, and `off` (the default) ignores the
+headers entirely; each mode needs its own lever, not all of them at once
+(Server.php). Deactivated
 (`isActive === false`) users authenticate to nothing on either path. Passwords are stored only as `password_hash` digests (cleartext never
 touches disk), unauthenticated requests for gated content receive a real
 401 + `WWW-Authenticate` challenge, and proxy tokens carry an expiry
-(`user token` mints `<expiry>.<hmac>` values). Each request is logged
+(`user token` mints the `<expiry-unix>.<hex-hmac>` value the
+`X-CandyGitServer-User-Sig` header carries). Each request is logged
 one-per-line to stderr for operators.
 
 ## Git Protocol (daemon class only — not assembled)
@@ -349,7 +354,10 @@ asynchronous.
 The smart-HTTP router implements the [Git LFS batch API](https://github.com/git-lfs/git-lfs/blob/main/docs/api/batch.md)
 plus basic object transfer when `lfs.enabled` is true (reachable through
 `serve --http`; the routes are pinned end-to-end at router level against
-recording backends):
+recording backends). Real clients send them under the repository route
+with the `.git` suffix (`/{repo}.git/info/lfs/objects/batch`); repo
+lookup strips the suffix, so the table's bare spelling and the `.git`
+form address the same routes:
 
 | Route | Method | Purpose |
 |---|---|---|
