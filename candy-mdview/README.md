@@ -115,10 +115,14 @@ Symfony's output formatter never interprets `<tags>` inside your Markdown.
 ## Trust boundary
 
 Documents are untrusted input. Escape sequences, control bytes, and OSC
-payloads are stripped before parsing, and OSC 8 hyperlink URLs pass a scheme
-allowlist in SugarMarkdown — a hostile `.md` cannot emit clickable `file:` /
-`javascript:` links, move the cursor, or change terminal colors. See the fleet
-[trust boundary](../docs/TRUST-BOUNDARY.md).
+payloads are stripped on output, per rendered element — a hostile `.md`
+cannot move the cursor or change terminal colors. OSC 8 hyperlink URLs pass
+a refused-scheme gate in SugarMarkdown: `javascript:`, `data:` and
+`vbscript:` never open a link target (their text and `(url)` suffix still
+render, visible and inert). Every other scheme — `file:` and `mailto:`
+included — reaches the terminal's opener unfiltered, so treat a hostile
+document's non-`http(s)`/`mailto` links the way you would treat raw terminal
+input. See the fleet [trust boundary](../docs/TRUST-BOUNDARY.md).
 
 ## Output languages
 
