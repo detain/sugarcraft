@@ -50,8 +50,8 @@ composer install
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Tetromino</td><td>cases() / color()</td><td>Backed enum of the seven kinds; 256-colour code per kind</td></tr>
 <tr><td>Piece</td><td>rotated(delta) / moved(dx, dy)</td><td>Immutable transforms (withX/withY for placement)</td></tr>
-<tr><td>Piece</td><td>rotationsWithKicks(board, delta)</td><td>Candidate positions in SRS kick order (naive first)</td></tr>
-<tr><td>Board</td><td>new(rows)</td><td>10-wide grid (4 hidden + 20 visible rows; dims fixed)</td></tr>
+<tr><td>Piece</td><td>rotationsWithKicks(delta)</td><td>Candidate positions in SRS kick order (naive first); board-free — callers filter with Board::fits()</td></tr>
+<tr><td>Board</td><td>__construct(cells?)</td><td>10-wide grid (4 hidden + 20 visible rows; dims fixed by class constants, not settable)</td></tr>
 <tr><td>Board</td><td>place(piece)</td><td>Lock a piece's cells into the grid</td></tr>
 <tr><td>Board</td><td>fits(piece) / dropPiece(piece)</td><td>Legality gate and resting-position query</td></tr>
 <tr><td>Board</td><td>clearLines() / isPerfectClear()</td><td>Clear completed rows; true iff the grid ends empty</td></tr>
