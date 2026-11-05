@@ -293,6 +293,45 @@ final class StickyViewportTest extends TestCase
         $this->assertSame(1, substr_count($view, 'only line'));
     }
 
+    public function testMiddleWindowStopsBeforeFooterRegionOnShortDocument(): void
+    {
+        // The middle slice was bounded only by the scrollable HEIGHT, never
+        // by the rows that remain before the footer region starts: a 3-line
+        // document in a 10-row frame with header 2 + footer 2 rendered the
+        // last line as both the middle window's entry AND the footer's —
+        // breaking the absolute claim in the feature list ("a row can never
+        // appear in both regions"). The middle must stop at total - footer
+        // and blank padding fills the rest.
+        $v = Viewport::withContent("l1\nl2\nl3", 20, 10)
+            ->withStickyHeader(2)
+            ->withStickyFooter(2);
+        $view = $v->view();
+        $lines = explode("\n", $view);
+        $this->assertCount(10, $lines);
+        $this->assertSame(1, substr_count($view, 'l1'));
+        $this->assertSame(1, substr_count($view, 'l2'));
+        $this->assertSame(1, substr_count($view, 'l3'));
+        // l3 belongs to the FOOTER region (the bottom rows), not the middle.
+        $this->assertStringContainsString('l3', $lines[9]);
+        $this->assertSame('', trim($lines[8]));
+    }
+
+    public function testFooterOnlyStickyWindowNeverReachesIntoFooterRows(): void
+    {
+        // Same defect without any header: 4 lines in a 5-row frame with
+        // footer 3 let the 2-row middle window slice rows 0..1 while the
+        // footer re-rendered rows 1..3 — l2 appeared twice.
+        $v = Viewport::withContent("l1\nl2\nl3\nl4", 20, 5)
+            ->withStickyFooter(3);
+        $view = $v->view();
+        $lines = explode("\n", $view);
+        $this->assertCount(5, $lines);
+        $this->assertSame(1, substr_count($view, 'l1'));
+        $this->assertSame(1, substr_count($view, 'l2'));
+        $this->assertSame(1, substr_count($view, 'l3'));
+        $this->assertSame(1, substr_count($view, 'l4'));
+    }
+
     public function testStickyTruncatesOverlongLinesToViewportWidth(): void
     {
         // Content wider than the viewport escaped the sticky frame (the

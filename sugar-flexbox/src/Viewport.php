@@ -176,11 +176,16 @@ final readonly class Viewport
 
         // Scrollable middle: window into the remaining content.
         // Clamp against the sticky-reduced scrollable range to prevent over-scroll
-        // from pulling footer lines into the middle window.
+        // from pulling footer lines into the middle window. The window must ALSO
+        // stop before the footer region's first index: bounding only by the
+        // scrollable height let a short document slice rows the footer
+        // re-rendered, so one line appeared twice — blank padding (padLines
+        // below) fills the middle whenever content runs out before it.
         $maxMiddleStart = max($headerCount, $total - $footerCount - $scrollableHeight);
         $middleStart = min($headerCount + $yOffset, $maxMiddleStart);
+        $middleCapacity = max(0, $total - $footerCount - $middleStart);
         $middleLines = $scrollableHeight > 0
-            ? array_slice($lines, $middleStart, $scrollableHeight)
+            ? array_slice($lines, $middleStart, min($scrollableHeight, $middleCapacity))
             : [];
 
         // Fill each region to full width with padding. When the scrollbar is
