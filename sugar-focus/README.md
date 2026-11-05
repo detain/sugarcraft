@@ -67,6 +67,9 @@ $style = $ring->isFocused('sidebar') && $ring->isEnabled('sidebar')
 
 The `isEnabled()` conjunct matters: focus can legally park on a disabled
 region, so `isFocused()` alone can paint an accent border on a dimmed panel.
+The same parked state must stay inert in key routing: a consumer dispatching
+shortcuts off `current()` checks `isEnabled()` there too, not only at paint
+time.
 
 Pair the paint with a non-color cue. An accent border is invisible to users
 who cannot distinguish the hue, so `examples/focus-ring.php` prints a text

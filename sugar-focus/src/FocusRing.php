@@ -19,7 +19,8 @@ namespace SugarCraft\Focus;
  * ring focuses nothing ({@see current()} is null, {@see index()} is -1). The
  * focused region MAY be disabled — a parked state that disable() leaves behind
  * and unregister() falls back to when every survivor is disabled; see
- * {@see isFocused()} before painting a focus accent. Every mutator returns a
+ * {@see isFocused()} before painting a focus accent, and treat that parked
+ * state as inert in key routing the same way. Every mutator returns a
  * new instance and leaves the receiver untouched.
  *
  * Mirrors the focus-traversal role of charmbracelet/bubbles' focus handling and
