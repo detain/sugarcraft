@@ -25,10 +25,12 @@ consuming manifest.
 
 ## Requirements
 
-PHP `^8.3`, `ext-gd` and `ext-mbstring` — all three are `require`d in
-`composer.json`, not advisory. GD is the decode path for every pure-PHP tier;
-without it each entry point answers with a translated refusal rather than an
-undefined-function error, and `src/Support/GdAvailability.php` owns that probe.
+PHP `^8.3`, `ext-gd`, `ext-mbstring` and `react/promise` — all four are
+`require`d in `composer.json`, not advisory. GD is the decode path for every
+pure-PHP tier; without it each entry point answers with a catalogued refusal
+routed through `Lang::t` (the shipped `lang/en.php` catalog is English-only
+today) rather than an undefined-function error, and
+`src/Support/GdAvailability.php` owns that probe.
 The chafa CLI is never required: the chafa tier is opt-in, selected only by
 `Mosaic::chafa()` / `fromModeString('chafa')`, and it is the only place the lib
 runs an external program to produce image output.
@@ -97,6 +99,9 @@ $mosaic = Mosaic::builder()
     ->build();
 $ansi = $mosaic->render($image);          // 40×20 cells
 $ansi = $mosaic->render($image, 60);      // explicit width wins; height from aspect
+// At renderer level the contract is stricter: width is a mandatory argument,
+// and renderWithOptions() additionally takes the nullable height positionally
+// (pass null); the null-width fallback to the builder box is Mosaic-only.
 
 // Sixel palette budget: maxColors (1–256) is a SixelRenderer constructor
 // knob, so it rides the builder, not Mosaic::sixel().
@@ -237,7 +242,7 @@ ImageSource::fromUrlAsync('https://example.com/poster.png')
 
 `fromUrlAsync()` needs the suggested `react/http` package
 (`composer require react/http`); without it the returned promise rejects with
-an install hint rather than fataling. The default Browser it builds carries the
+an install hint rather than a fatal. The default Browser it builds carries the
 same 30-second per-request timeout as the sync path; pass your own
 pre-configured `React\Http\Browser` as the third argument to control the
 connector and timeout yourself.
@@ -354,10 +359,10 @@ $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 DA1/XTWINOPS round trip on the TTY — and `bestBackend()` seats a renderer on
 the answer: kitty → iterm2 → sixel → the symbol-map tier. Both `Mosaic::auto()`
 and `Mosaic::probe()` resolve capabilities on every call; wrap
-`Detect::cached()` at the application boundary to memoize the probe per-process
+`Detect::cached()` at the application boundary to memoise the probe per-process
 (`Detect::reset()` drops the memo). Chafa is not on that
 ladder (its capability slot is written only by `Capability::universal()`), and
-plain half-block appears only when the text-availability slot is off itself, so
+plain half-block appears only when the text-availability slot is itself off, so
 the practical floor is the glyph-coverage engine. `Mosaic::diagnose()` returns
 the structured `ProbeReport` behind the decision — sugar-colorprofile's
 `SugarCraft\ColorProfile\Probe\ProbeReport`, straight off
@@ -458,8 +463,10 @@ text, so they reach any Unicode-capable terminal for sighted readers:
   Hamming-distance candidate search over a symbol corpus.
   `Mosaic::symbols(canvas:, workFactor:, symbols:)` picks the colour
   canvas (`CanvasMode`), the candidate-budget work factor, and a chafa
-  `--symbols=` selector expression over the wider corpus — the same tag
-  grammar `SymbolMap::withSelectors()` applies directly. The corpus
+  `--symbols=` selector expression over the wider corpus. That `symbols:`
+  argument and `Mosaic::withSymbolSelectors()` are the same knob at two
+  facades; both feed `Symbol\SymbolMap::withSelectors()`, where the tag
+  grammar lives. The corpus
   arithmetic: the narrow tables (ASCII/Latin/misc/legacy, the
   U+1FB80–U+1FB8B eighth-block tier, braille, sextants, octants) parse to
   1,260 entries, but nine misc-narrow glyphs carry chafa's AMBIGUOUS tag
