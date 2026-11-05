@@ -1,4 +1,4 @@
-<img src=".assets/icon.png" alt="sugar-treelist" width="160" align="right">
+<img src=".assets/icon.png" alt="" width="160">
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
@@ -17,7 +17,7 @@ sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Re
 
 ## Features
 
-- **Customisable Prefixer** — generates per-line prefix strings (line numbers, box-drawing borders, tree branches)
+- **Customisable Prefixer** — generates per-line prefix strings (0-based line numbers, box-drawing borders, tree branches)
 - **Customisable Suffixer** — generates per-line suffix strings (status markers, padding)
 - **Line wrapping** — items wrap to multiple lines within a fixed viewport width, whitespace-faithfully (indentation and inter-word runs survive)
 - **Cursor navigation** — current item highlighted with configurable style
@@ -51,7 +51,7 @@ $model = $model->setPrefixer(new DefaultPrefixer());
 $model = $model->setSuffixer(new DefaultSuffixer());
 
 echo $model->view();
-// Renders the list with a ╭ ├ ╰ box-drawing gutter, line numbers, and > cursor marker
+// Renders the list with a ╭ ├ ╰ box-drawing gutter, 0-based line numbers, and > cursor marker
 ```
 
 ## Item Types
@@ -61,10 +61,14 @@ echo $model->view();
 embedded in the item text, and mouse-zone sentinels (U+E000/U+E001) are
 stripped at render time — item content can forge neither a frame nor a click
 zone. The only styles that reach the output are the SGR parameters you pass to
-`setLineStyle()`/`setCurrentStyle()` (both reject non-SGR escapes), and the
+`setLineStyle()`/`setCurrentStyle()` — each is sanitize-then-reject: leading
+escape/`[`/`m` decoration bytes are trimmed before the `[0-9;]` gate, so a
+style like `m1;3` is repaired to `1;3` and accepted, while anything else that
+survives the trim is refused (no escape bytes can ever ride through), and the
 `DefaultPrefixer`/`DefaultSuffixer` glyph knobs refuse control bytes at init.
-The library emits no colour of its own: if your host honours `NO_COLOR`, pass
-empty style strings — sugar-treelist neither reads nor acts on the variable.
+The library emits no colour of its own: all styles are caller-supplied — pass
+empty style strings to emit no colour (sugar-treelist neither reads nor acts on
+the `NO_COLOR` variable).
 
 ```php
 // Plain string adapter
