@@ -166,13 +166,25 @@ $col = Column::new('desc', 'Description', 20)
 
 
 ```php
-Row::new($rowData)
+$row = Row::new($rowData)
     ->withStyle('1')                    // bold entire row
-    ->withZebra()                       // alternating style
+    ->withZebra();                      // opt this row into a stripe (needs the table switch)
 
 // Styled cell (overrides row+column style)
 StyledCell::new('value', '31;1')        // red bold cell
+
+// Zebra striping is two-level: the table switch arms it (default off),
+// row opt-ins select which rows stripe.
+$t = $t->withZebra(true);
 ```
+
+**Stripe model**: the two stripes are hard-wired — the even slot is
+`30;47` (black on white), the odd slot carries no style.
+`Row::withZebra(int $styleIndex = 0)` picks the slot: index 0 takes the
+stripe, index 1 the bare one (higher indices behave as 0). Rows without an
+opt-in fall back to position parity while the table switch is on: even
+`rowIndex` stripes, odd does not. With the switch off — the default —
+nothing stripes, whatever the rows ask for.
 
 **String-cast warning**: `(string)` on a `StyledCell` (and every implicit
 `Stringable` coercion — `echo`, `print`, `sprintf('%s')`, concatenation) emits
