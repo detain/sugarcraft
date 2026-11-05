@@ -35,10 +35,15 @@ if (!$result-&gt;ok) {
     <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/master/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Record delta-time cassettes by opening the recorder with a relative-timestamped header — <code>Recorder::open($path, new CassetteHeader(timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE))</code>; <code>withFormat()</code> only confirms the encoding the header already selected and throws on a mismatch — it never flips one.</p>
 
     <h3 style="margin-top: 32px;">CLI</h3>
-    <pre class="code"><code class="language-shell">vendor/bin/candy-vcr inspect session.cas               # list events
-vendor/bin/candy-vcr replay  session.cas --speed=realtime  # stream to stdout
-vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff
-vendor/bin/candy-vcr record  --output session.cas -- bash -c 'echo hi'  # record a PTY session</code></pre>
+    <pre class="code"><code class="language-shell">vendor/bin/candy-vcr record       --output session.cas -- bash -c 'echo hi'  # capture a real PTY session
+vendor/bin/candy-vcr inspect      session.cas                                # list events
+vendor/bin/candy-vcr replay       session.cas --speed=realtime               # stream output to stdout
+vendor/bin/candy-vcr replay       session.cas --idle-trim=1.0                # clamp long gaps to 1s during replay
+vendor/bin/candy-vcr diff         a.cas b.cas                                # structural diff
+vendor/bin/candy-vcr stats        session.cas                                # show cassette statistics
+vendor/bin/candy-vcr migrate      session.cas upgraded.cas                   # rewrite a v1 cassette as v2 (--dry-run to validate)
+vendor/bin/candy-vcr render-tape  demo.tape                                  # render .tape to .gif
+vendor/bin/candy-vcr render-batch demos/                                     # render all .tape files in directory</code></pre>
 
     <h4 style="margin-top: 20px;"><code>record</code> subcommand</h4>
     <p>The <code>record</code> subcommand spawns a PTY session and captures all I/O to a cassette file:</p>
@@ -47,7 +52,7 @@ vendor/bin/candy-vcr record --no-ctty -- /bin/echo 'hello'   # non-interactive, 
 vendor/bin/candy-vcr record --shell                          # spawn $SHELL -l
 vendor/bin/candy-vcr record --env -- bash -c 'echo hi'         # capture filtered host env
 vendor/bin/candy-vcr record --env-regex='/(SECRET|TOKEN)/i' -- bash -c 'echo hi'  # custom filter
-vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $API_KEY'  # ⚠️ DANGEROUS — no filtering
+vendor/bin/candy-vcr record --env-all -- bash -c 'echo $API_KEY'  # ⚠️ DANGEROUS — no filtering (--env-allow-secrets is the legacy alias)
 vendor/bin/candy-vcr record --idle-trim 1.0 -- bash demo.sh  # compress idle gaps > 1s (asciinema-style)</code></pre>
 
     <h4 style="margin-top: 20px;"><code>replay</code> subcommand</h4>
@@ -55,7 +60,10 @@ vendor/bin/candy-vcr record --idle-trim 1.0 -- bash demo.sh  # compress idle gap
     <pre class="code"><code class="language-shell">vendor/bin/candy-vcr replay  session.cas --speed=realtime          # honour recorded cadence
 vendor/bin/candy-vcr replay  session.cas --idle-trim=1.0              # clamp gaps > 1s during replay
 vendor/bin/candy-vcr replay  session.cas --no-trim                     # use original (uncompressed) timestamps</code></pre>
-    <p style="margin-top: 8px;"><strong>⚠️ <code>--env-allow-secrets</code></strong> disables all secret-key filtering. The cassette will contain credentials verbatim — only use in fully isolated, trusted environments and never share the resulting cassette.</p>
+    <p style="margin-top: 8px;"><strong>⚠️ <code>--env-all</code></strong> (legacy alias <code>--env-allow-secrets</code>) disables all secret-key filtering. The cassette will contain credentials verbatim — <code>record</code> prints a stderr warning naming every captured variable, and the cassette file is created <code>0600</code> (owner-only), but only use this in fully isolated, trusted environments and never share the resulting cassette.</p>
+
+    <h4 style="margin-top: 20px;">Playback, the terminal, and assistive tech</h4>
+    <p>Replay is <strong>environment-blind</strong>: it streams the recorded bytes verbatim — it does not read <code>NO_COLOR</code>, does not degrade on <code>TERM=dumb</code>, and does not follow live resizes beyond the header's recorded size. Assistive tech therefore sees exactly what the original session emitted rather than a re-adapted stream; for a non-visual outcome signal, replay prints a completion summary to <em>stderr</em> (<code>candy-vcr replay: played N of M events (… output bytes, … s of recorded time)</code>) so a stdout capture stays byte-clean. Interactive replay also guards the host terminal — cursor and alternate-buffer state are saved and restored (CSI ? 1049) and signal dispositions are reinstated on exit — while <code>record</code> arms a raw-mode rescue net (a <code>/tmp/candy-vcr-rescue.&lt;pid&gt;.&lt;rand&gt;</code> marker naming the affected tty) so a crashed child leaves the user's shell recoverable with <code>stty sane</code>.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
