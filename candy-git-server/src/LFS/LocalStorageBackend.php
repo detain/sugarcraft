@@ -109,13 +109,16 @@ final class LocalStorageBackend implements LFSStorageBackendInterface
         }
 
         try {
+            // Settle the mode on the temp inode before a single payload byte
+            // lands, so no world-readable window ever opens; rename carries
+            // the mode onto the target (and tightens a loose pre-existing one).
+            if (@\chmod($temp, 0600) === false) {
+                throw new \RuntimeException("Cannot set LFS object mode: {$path}");
+            }
             if (@\stream_copy_to_stream($stream, $handle) === false) {
                 throw new \RuntimeException("Failed to write LFS object {$oid}");
             }
             \fflush($handle);
-            if (@\chmod($temp, 0600) === false) {
-                throw new \RuntimeException("Cannot set LFS object mode: {$path}");
-            }
             if (@\rename($temp, $path) === false) {
                 throw new \RuntimeException("Cannot publish LFS object {$oid}");
             }

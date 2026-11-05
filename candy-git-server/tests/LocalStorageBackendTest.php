@@ -276,12 +276,36 @@ final class LocalStorageBackendTest extends TestCase
         $this->assertStringContainsString("fopen(\$temp, 'xb')", $body[0], 'temp-file publish lost');
         $this->assertStringContainsString('rename($temp, $path)', $body[0]);
         $this->assertStringContainsString('chmod($temp, 0600)', $body[0], 'mode must settle on the temp, before rename');
-        // Order: chmod strictly before rename inside the body.
+        $chmod = \strpos($body[0], 'chmod($temp, 0600)');
+        $copy = \strpos($body[0], 'stream_copy_to_stream');
+        // Order: chmod strictly before the payload copy, and the copy
+        // strictly before the publish rename. The mode arrives on a temp
+        // inode that never held bytes at the umask default, so neither the
+        // temp nor the renamed target is ever world-readable — the
+        // chmod-after-copy shape left exactly that window open.
+        $this->assertLessThan($copy, $chmod, 'chmod-after-copy reopens the world-readable temp window');
         $this->assertLessThan(
             \strpos($body[0], 'rename($temp, $path)'),
-            \strpos($body[0], 'chmod($temp, 0600)'),
-            'chmod-after-rename reintroduces the world-readable window'
+            $copy,
+            'payload must land in the temp before the rename publishes it'
         );
         $this->assertStringNotContainsString('fopen($path', $body[0], 'direct write to the final path is back');
+    }
+
+    public function testWritePublishesWithModeZeroSixHundredEvenOverALoosePredecessor(): void
+    {
+        // The rename carries the temp's settled 0600 onto the target: a
+        // pre-existing world-readable object at the final path is tightened
+        // by replacement, never left loose.
+        $backend = new LocalStorageBackend($this->tmpDir);
+        $oid = \str_repeat('a', 64);
+        $backend->write($oid, \fopen('data://text/plain,first', 'rb'));
+
+        $path = $backend->path($oid);
+        $this->assertSame(0600, \fileperms($path) & 0777, 'fresh object must be 0600');
+        @\chmod($path, 0644); // simulate a loose predecessor
+        $backend->write($oid, \fopen('data://text/plain,second', 'rb'));
+        $this->assertSame(0600, \fileperms($path) & 0777, 'replacement must re-tighten the mode');
+        $this->assertSame('second', \file_get_contents($path));
     }
 }
