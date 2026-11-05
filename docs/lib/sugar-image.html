@@ -72,7 +72,12 @@ $ansi   = $mosaic->render($image, width: 40, height: 20);
 echo $ansi;</code></pre>
 
     <h3 style="margin-top: 32px;">API</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Image\Renderer\QuarterBlockRenderer;
+    <pre class="code"><code class="language-php">use SugarCraft\Image\ImageSource;
+use SugarCraft\Image\Mosaic;
+use SugarCraft\Image\Renderer\AsciiColorMode;
+use SugarCraft\Image\Renderer\QuarterBlockRenderer;
+
+$image  = ImageSource::fromFile('examples/fixture-gradient.png');
 
 // Probe terminal once, pick best protocol
 $mosaic = Mosaic::probe();
@@ -83,7 +88,8 @@ $mosaic = Mosaic::kitty();
 $mosaic = Mosaic::iterm2();
 $mosaic = Mosaic::halfBlock();
 $mosaic = Mosaic::quarterBlock();
-$mosaic = Mosaic::ascii();        // character ramp (Mono/Ansi16/Ansi256/TrueColor)
+$mosaic = Mosaic::ascii();                          // character ramp, monochrome
+$mosaic = Mosaic::ascii(AsciiColorMode::Ansi256);   // ...or Ansi16 / TrueColor chars
 $mosaic = Mosaic::symbols();      // chafa symbol engine, default 676-glyph corpus
 $mosaic = Mosaic::chafa('--colors=256');  // external chafa CLI (opt-in)
 
