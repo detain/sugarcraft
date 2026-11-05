@@ -132,7 +132,7 @@ $elapsed = $stop();   // emits the duration and returns it (float seconds)
 
 The constructor validates its input: a non-empty name matching `[a-zA-Z_:][a-zA-Z0-9_:]*`, non-empty help free of control bytes, a type in `counter|gauge|histogram|summary`, and non-empty string label keys — violations throw. Because the name is checked RAW, dotted names like `http.request.duration` are refused here even though they are idiomatic on StatsD and legal to *emit* (the backend folds them at write time): register descriptors under the folded name they will occupy in the exposition. `register()` is idempotent *only for identical re-registration*: same type **and** same help is a no-op; anything else throws rather than silently picking a winner. A `summary` descriptor emits only the family's `TYPE`/`HELP` lines; the quantile/`_sum`/`_count` samples remain your responsibility.
 
-`time()` returns a stop-fn that samples exactly once — a second call returns the same elapsed reading without recording a second observation. Elapsed is measured on the monotonic clock (`hrtime()`), so a system-clock step (NTP correction, manual set) can never drive a negative duration into the histogram — and out of your `finally` arm; the reading is a duration, never a wall-clock timestamp.
+`time()` records the sample exactly once — a second call to the stop-fn re-reads the clock and returns the then-current elapsed seconds, but records nothing further. Elapsed is measured on the monotonic clock (`hrtime()`), so a system-clock step (NTP correction, manual set) can never drive a negative duration into the histogram — and out of your `finally` arm; the reading is a duration, never a wall-clock timestamp.
 
 ## Usage
 
