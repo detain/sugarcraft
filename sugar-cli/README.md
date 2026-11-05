@@ -23,8 +23,8 @@ composer require sugarcraft/sugar-cli "@dev"
 
 sugar-cli — opinionated **CLI presentation helpers** that turn ordinary
 command-line output into something that matches the rest of the
-SugarCraft stack, for PHP 8.3+. SugarCli is library-only — drop it into any Composer project,
-no Symfony Console requirement.
+SugarCraft stack, for PHP 8.3+. sugar-cli is library-only — drop it into any
+Composer project, no Symfony Console requirement.
 
 ```php
 <?php
