@@ -94,7 +94,7 @@ ships as `App\` — called out in the table below.
 | **CandyFiles** (`candy-files/`) | 🟢 ready | Dual-pane file manager. |
 | **CandyGit** (`candy-git/`) | 🟢 ready | Three-pane git TUI — shells out to `git`. |
 | **CandySql** (`candy-sql/`) | 🟢 ready | SQLite/MySQL/PostgreSQL client TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history. |
-| **CandyCodetime** (`candy-codetime/`) | 🟢 ready | Privacy-first coding-time tracker — heartbeats in SQLite or JSONL on disk (`--backend`). |
+| **CandyCodetime** (`candy-codetime/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL day-files by default, optional SQLite backend (`--backend`). |
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF viewer CLI (ext-gd via sugar-animation) — sugar-animation's viewer; antecedent: gifterm. |
 | **CandyImage** (`candy-image/`) | 🟡 in progress | Terminal image viewer CLI — chafa-independent front end on sugar-image: auto/sixel/kitty/iterm2/half/quarter/ascii formats, --size/--scale, --dump-detect. |
