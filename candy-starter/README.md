@@ -18,10 +18,12 @@
 Skeleton repo for bootstrapping a SugarCraft TUI app. Start from this template and you've got a working app.
 
 ```bash
-composer create-project sugarcraft/candy-starter my-app
+composer create-project sugarcraft/candy-starter my-app --stability=dev
 cd my-app
 ./bin/start
 ```
+
+Packagist carries only `dev-master` today: `create-project` refuses a dev-only package unless told to accept it, hence `--stability=dev` above (equivalently, pin the package as `sugarcraft/candy-starter:"@dev"`). Once a `candy-starter/*` tag exists the flag is no longer needed.
 
 and you'll see a working counter — quit it with `q`, `Esc`, or Ctrl+C. Replace `src/Counter.php` with your own `Model`, keep editing.
 
