@@ -131,7 +131,9 @@ $t = Table::fromColumns([
         ->withColumnWidth(ColumnWidth::Percent, 25.0), // always 25% of table
 ])->withRows([...]);
 
-echo $t->View();  // columns 1+2 sized by content; column 3 fills remaining 75%
+echo $t->View();  // pct takes 25% of the table width, id stays 5, the three border
+                  // gaps come off first — name (Dynamic) and note (Content) share
+                  // what remains
 ```
 
 ### WrapMode Enum
