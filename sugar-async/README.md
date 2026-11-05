@@ -133,8 +133,12 @@ $composite->unsubscribe(); // disposes all members
 and an optional opaque `state`. The runtime stores the `Suspended` and calls
 `resume()` later — when the subscription fires or the model decides to continue —
 so effects that span multiple update cycles (animations, debounced input, async
-handlers) never execute eagerly. `suspended.resume()` **returns** the paused Cmd closure (or `null` if there is
-nothing to resume); dispatching it is the caller's job:
+handlers) never execute eagerly. `resume()` **returns** the paused Cmd closure (or
+`null` if there is nothing to resume); dispatching it is the caller's job. The
+handle is **fire-once by law**: the resumed latch flips on the first call, so a
+second `resume()` always returns `null` — even when the first call handed back a
+live closure that was never dispatched. A handle shared across two schedulers
+can therefore never double-fire its command. In code:
 
 ```php
 use SugarCraft\Async\Suspended;
