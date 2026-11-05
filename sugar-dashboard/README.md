@@ -516,7 +516,7 @@ itself; everything else in the directory is its value part.
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `Alert` | Alert/message box (info, warning, error, success) | `new(string)`, `info()`, `warning()`, `error()`, `success()`, `withMessage()`, `withTitle()`, `withBorderColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/alert.gif) |
+| `Alert` | Inline non-modal alert (info, warning, error, success) — distinct from `Components\Modal\Alert` below, which is the bordered overlay variant the `alert` demo/GIF renders | `new(string)`, `info()`, `warning()`, `error()`, `success()`, `withMessage()`, `withTitle()`, `withBorderColor()` | |
 | `Badge` | Badge/tag component | `new(string)`, `success()`, `warning()`, `error()`, `info()`, `withStyle()`, `withSize()`, `withIcon()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/badge.gif) |
 | `BadgeGroup` | Group of badges | | |
 | `LoadingText` | Animated loading text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/loading-text.gif) |
@@ -538,7 +538,12 @@ itself; everything else in the directory is its value part.
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `Modal` | Modal dialog | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/modal.gif) |
+| `Modal` | Modal dialog overlay | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/modal.gif) |
+| `Alert` | Modal alert / message box — severity presets, optional title, left border accent and icon prefix (bubbletea/lipgloss lineage). **This** is the variant the `alert` demo renders; the inline non-modal sibling is `Components\Feedback\Alert` above | `new(string)`, `info()`, `warning()`, `error()`, `success()`, `withMessage()`, `withTitle()`, `withBorderColor()`, `withBackgroundColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/alert.gif) |
+| `ConfirmModal` | Confirmation dialog — ok/cancel phrasing by default, `yesNo()` for Y/N, `danger()` for the destructive styling | `new(string)`, `ok()`, `yesNo()`, `danger()` | |
+| `ListModal` | Modal list of strings with optional per-item edit/delete callbacks | `new(array $items, ?string $title)`, `withSelectedIndex()`, `withOnEdit()`, `withOnDelete()` | |
+| `MultiselectModal` | Modal multi-select over an options list | `new(array $options, ?string $title)`, `withSelectedIndices()` | |
+| `ProgressModal` | Modal progress readout (current/total with optional label) | `new(int $current, int $total, ?string $label)` | |
 | `Notification` | Alert card for modal overlays — styled severity message with optional icon (not the `Components\Toast` DTO above, which is the queue payload) | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/notification.gif) |
 | `Progress` | Progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress.gif) |
 | `ProgressBar` | Progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-bar.gif) |
@@ -546,6 +551,8 @@ itself; everything else in the directory is its value part.
 | `Drawer` | Drawer panel | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/drawer.gif) |
 | `Wizard` | Multi-step wizard | | |
 | `WizardStep` | Wizard step | | |
+
+> **Modal message protocol.** `Components\Modal\Msg\` defines the TEA-style answer types a modal interaction produces: `AnsweredYesMsg`, `AnsweredNoMsg`, `AnsweredEditMsg`, `AnsweredDeleteMsg` and `ClosedMsg`, each a `final readonly` class extending a shared abstract readonly `Msg` base so a host can pattern-match the whole family in one `match` arm. The bundled dialogs are renderable `Item`s — turning key presses into these messages is the host program's seam; the library ships the vocabulary, not the dispatcher.
 
 ---
 
