@@ -429,7 +429,9 @@ stdin/stdout.
 
 Read the field names before you build a dashboard on them. There is no
 handshake in this stack — the library speaks no SSH — so what
-`withProtocolMetadata()` hands over is derived locally by the transport, and
+`withProtocolMetadata()` hands over is derived locally by the transport —
+only `InProcessTransport::run()` ever calls it, so under `HostSshdTransport`
+those three columns are permanently `-` — and
 `Session::toLogContext()` has carried it on every `Logger` line since audit
 MAJOR 3 (`session`, `auth_method`, `key_fingerprint`, each `-` when not
 carried):

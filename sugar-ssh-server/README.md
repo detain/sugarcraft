@@ -578,7 +578,9 @@ the authentication column silently).
 
 There is no handshake for those to come from — this library speaks no SSH — so
 `withProtocolMetadata()` is called by the transport on the way *into* the
-stack, with values derived locally:
+stack, with values derived locally — and only by `InProcessTransport::run()`:
+under `HostSshdTransport` nothing ever calls it, so the `session`,
+`auth_method` and `key_fingerprint` columns are permanently `-` there:
 
 ```php
 $s->sessionId;     // minted per process: bin2hex(random_bytes(16)), not a wire id
