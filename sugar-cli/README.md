@@ -41,8 +41,11 @@ echo StatusLine::error('connection refused'), "\n";
   level (success / error / warn / info / prompt / accent / muted).
   `Theme::ansi()` ships the colourful palette; `Theme::plain()` strips all
   colour; `Theme::charm()`, `dracula()`, `nord()` and `catppuccin()` are
-  fixed presets; `Theme::auto()` adapts to the background colour the
-  terminal reports, and `Theme::byName('nord')` resolves any of them
+  fixed presets; `Theme::auto($bg)` adapts to the background colour only
+  when the app passes the parsed OSC-11 reply it requested via
+  `Cmd::requestBackgroundColor()` — without a message it is `ansi()`, so
+  `Theme::byName('auto')` never adapts; `Theme::byName('nord')` resolves
+  any of them
   case-insensitively (roster in `Theme::PRESET_NAMES`). Bring your own
   theme by passing styles to the constructor, or chain `Theme::build()` —
   the builder requires all seven slots before `build()` succeeds.
