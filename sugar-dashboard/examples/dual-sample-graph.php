@@ -10,8 +10,8 @@ use SugarCraft\Dashboard\Plot\Chart\Meter;
 /**
  * dual-sample-graph.php — btop-style history graphs and meters.
  *
- * Renders the same CPU history through DualSampleGraph's three symbol
- * families (braille / block / tty), an inverted "upload" graph, a one-row
+ * Renders the same CPU history through DualSampleGraph's four symbol
+ * families (braille / block / block2 / tty), an inverted "upload" graph, a one-row
  * mini-graph on btop's graph_bg underlay, and position-coloured Meter bars
  * — all coloured through btop's Default-theme cpu gradient.
  *
@@ -27,7 +27,7 @@ for ($i = 0; $i < 48; $i++) {
     $history[] = (int) round(50 + 40 * sin($i / 5) + 8 * sin($i * 1.7));
 }
 
-foreach ([DualSampleGraph::FAMILY_BRAILLE, DualSampleGraph::FAMILY_BLOCK, DualSampleGraph::FAMILY_TTY] as $family) {
+foreach ([DualSampleGraph::FAMILY_BRAILLE, DualSampleGraph::FAMILY_BLOCK, DualSampleGraph::FAMILY_BLOCK2, DualSampleGraph::FAMILY_TTY] as $family) {
     echo "── {$family} ──\n";
     echo DualSampleGraph::new(24, 4, $family)
         ->withGradient($cpuStops)

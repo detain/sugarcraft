@@ -242,7 +242,7 @@ against oracle fixtures generated from btop's own C++).
 | `Plot\ProcRow\ProcRowPalette` | Theme slots + the `proc` / `proc_color` / `process` ramps | `btop()`, `new(...)`, `withRamps()`, `withSelected()`, `withFollowed()` |
 | `Plot\ProcRow\ProcGraphTracker` | Per-pid mini-graph lifecycle: a graph is created when a pid is first seen busy (cpu > 0), dropped after 10 consecutive samples below `IDLE_THRESHOLD` (0.1) | `new(width, family)`, `observe(pid, cpu)`, `retain(pids)`, `graph(pid)`, `sample(cpu)` |
 
-Run `php examples/dual-sample-graph.php` for all three graph families,
+Run `php examples/dual-sample-graph.php` for all four graph families,
 an inverted graph, the underlay mini-graph and position-mode meters.
 
 #### Gradient101 + BrailleCanvas gradients
@@ -852,7 +852,7 @@ The `examples/` directory contains standalone demo files that showcase individua
 | `dashboard-data.php` | Data display components demo |
 | `dashboard-devtools.php` | Devtools components demo |
 | `dashboard-layout.php` | Layout containers demo |
-| `dual-sample-graph.php` | btop-style `DualSampleGraph` in all three families (braille / block / tty), inverted + underlay graphs, and position-coloured `Meter` bars |
+| `dual-sample-graph.php` | btop-style `DualSampleGraph` in all four families (braille / block / block2 / tty), inverted + underlay graphs, and position-coloured `Meter` bars |
 
 The table lists the headline demos only — `examples/` carries the full set
 (one file per component family and beyond); see the directory for anything
