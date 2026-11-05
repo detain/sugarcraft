@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { Wire } from '../../../stores/agents/__tests__/harness'
@@ -192,6 +193,31 @@ describe('TokenPanel grant (G5-G)', () => {
       days: 90,
       sessionIds: ['s1', 's2'],
     })
+  })
+
+  it('the mint dialog runs the spine: modal, focus enters, Escape drops the token', async () => {
+    // MN-12: the mint dialog was the one shown-once popup outside the shared
+    // dialog spine. Mounted into the document so the spine's focus-in on open
+    // is observable through document.activeElement (useDialog.spec idiom).
+    await wire.connect(() => {}, {})
+    const wrapper = mount(TokenPanel, { attachTo: document.body })
+    await tick()
+    await wire.answer('token.list', LIST)
+    await tick()
+    await wrapper.find('[data-testid="tokens-label"]').setValue('fresh')
+    await wrapper.find('[data-testid="tokens-grant-form"]').trigger('submit')
+    await tick()
+    await wire.answer('token.grant', MINT)
+    await tick()
+    await nextTick()
+    const root = wrapper.find('[data-testid="tokens-mint-dialog"]')
+    expect(root.attributes('aria-modal')).toBe('true')
+    expect(root.element.contains(document.activeElement)).toBe(true)
+    await root.trigger('keydown', { key: 'Escape' })
+    await tick()
+    expect(wrapper.find('[data-testid="tokens-mint-dialog"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('cv1_')
+    wrapper.unmount()
   })
 })
 

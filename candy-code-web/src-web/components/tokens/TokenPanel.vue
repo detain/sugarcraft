@@ -29,6 +29,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import type { MethodResult } from '../../protocol/generated'
 import { t } from '../../lib/i18n'
+import { useDialog } from '../../lib/useDialog'
 import { useConnectionStore } from '../../stores/connection'
 import { describe } from '../../stores/session'
 
@@ -150,6 +151,19 @@ function closeMint(): void {
   void reload()
 }
 
+/**
+ * The shown-once mint dialog joins the shared dialog spine (CW-UX-07):
+ * focus enters on open, Tab stays trapped, Escape dismisses exactly like
+ * the close button — which is the same drop-the-token path, never a
+ * second exit.
+ */
+const dialogEl = ref<HTMLElement | null>(null)
+const dialog = useDialog({
+  panel: dialogEl,
+  open: () => minted.value !== null,
+  onClose: closeMint,
+})
+
 async function copyMinted(): Promise<void> {
   const token = minted.value?.token
   if (!token || !navigator.clipboard) return
@@ -193,7 +207,7 @@ async function revokeGrant(row: TokenGrantRow): Promise<void> {
     <p v-if="error" class="error" role="alert" data-testid="tokens-error">{{ error }}</p>
     <p v-if="notice" class="notice" role="status" data-testid="tokens-notice">{{ notice }}</p>
 
-    <div v-if="minted" class="mint" role="dialog" aria-labelledby="mint-heading" data-testid="tokens-mint-dialog">
+    <div v-if="minted" ref="dialogEl" class="mint" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="mint-heading" data-testid="tokens-mint-dialog" @keydown="dialog.onKeydown">
       <h3 id="mint-heading" class="mint-heading">{{ t('web.chrome.tokens.grant_created') }}</h3>
       <p class="mint-copy">{{ t('web.chrome.tokens.mint_shown_once') }}</p>
       <code class="mint-token" data-testid="tokens-mint-token">{{ minted.token }}</code>

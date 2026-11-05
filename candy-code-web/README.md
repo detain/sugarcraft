@@ -400,7 +400,8 @@ src-web/
               (useDialog.ts), line diff, ANSI, slow-pending verbs,
               clientTools/ (browser-hosted tool implementations)
   styles/     design tokens and global CSS
-  views/      DashboardView, SessionView, LoginView
+  views/      DashboardView, SessionView, LoginView; the /tokens route
+              renders components/tokens/TokenPanel.vue directly
   __tests__/  vitest specs (incl. the storage-inventory + i18n-coverage
               guards)
 ```

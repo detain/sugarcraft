@@ -214,6 +214,7 @@ describe('every shipped dialog consumes the spine (CW-UX-07)', () => {
     'src-web/components/DirectoryPicker.vue',
     'src-web/components/MediaCard.vue',
     'src-web/components/panels/CommandPalette.vue',
+    'src-web/components/tokens/TokenPanel.vue',
   ]
 
   /** The open tag carrying role="dialog", attributes spread or not. */
