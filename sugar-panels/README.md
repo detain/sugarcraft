@@ -336,7 +336,7 @@ ANSI-aware feature above promises. Do not embed text from untrusted sources
 without sanitising it first — e.g. `SugarCraft\Core\Util\Sanitize::untrusted()`
 (or strip control sequences) before handing it to `leaf()` / `withTitle()` —
 otherwise a payload can forge SGR, OSC-8 hyperlinks, or other terminal control
-strings. See the fleet-wide [trust-boundary notes](../docs/TRUST-BOUNDARY.md).
+strings. See the fleet-wide [trust-boundary notes](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
 
 What the library does guarantee is enforced at its own choke, in
 `SugarCraft\Panels\Sanitize::painted()` and `Sanitize::paintedTitle()`, applied to
