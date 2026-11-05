@@ -11,9 +11,13 @@ use SugarCraft\Core\Util\Ansi;
  *
  * Mirrors charmbracelet/lipgloss's Hyperlink field and the OSC 8 spec.
  * URL and ID are validated at construction to prevent ANSI escape
- * injection into the OSC 8 wire format (C0/DEL controls and the C1 range —
- * raw bytes and their UTF-8 C2 xx encodings — are rejected; a semicolon is
- * rejected in the ID, which would shift the URL field).
+ * injection into the OSC 8 wire format: C0/DEL controls are refused, and so
+ * are C1 escape introducers in both shapes that can reach the wire — lone raw
+ * 0x80-0x9F bytes that do not continue a well-formed UTF-8 sequence, and
+ * their C2 xx encodings (CB-8b). Well-formed multibyte payloads (arrows,
+ * emoji, Cyrillic — an IRI) pass, even though their continuation bytes fall
+ * in the C1 window. A semicolon is rejected in the ID, which would shift the
+ * URL field.
  *
  * @throws \InvalidArgumentException on any rejected value.
  *
