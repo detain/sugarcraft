@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "záznam uložen: {project} ({language}) +{duration}s",
-    'cli.usage' => "Použití: candy-codetime [--backend=file|sqlite] <command> [args]\n\nPříkazy:\n  dashboard              Spustí panel TUI (načítá vybraný backend)\n  push                   <project> <language> <file> [duration]  Zaznamenat heartbeat\n  milestone              <add|list> [name] [description]  Spravovat milníky (pouze sqlite)\n  export                 <csv|json|ics> [days]  Exportovat heartbeats (výchozí 7 dní)\n  gaps                   [days]  Zobrazit nesledované mezery delší než 300 sekund (výchozí 7 dní)\n  backup                 Archivovat soubory starší než 30 dní (kopíruje; nikdy nemaže)\n  help, --help, -h       Zobrazit toto použití\n  --version, -v          Vytisknout verzi\n\nMožnosti:\n  --backend=file|sqlite  Backend úložiště pro push/export/gaps/dashboard (výchozí: file)\n  CANDY_CODETIME_DIR     Datový adresář (výchozí: \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "Použití: candy-codetime [--backend=file|sqlite] <command> [args]\n\nPříkazy:\n  dashboard              Spustí panel TUI (načítá vybraný backend)\n  push                   <project> <language> <file> [duration]  Zaznamenat heartbeat\n  milestone              add [name] [description] | list  Spravovat milníky (pouze sqlite)\n  export                 <csv|json|ics> [days]  Exportovat heartbeats (výchozí 7 dní)\n  gaps                   [days]  Zobrazit nesledované mezery alespoň 300 sekund (výchozí 7 dní)\n  backup                 Archivovat soubory starší než 30 dní (kopíruje; nikdy nemaže)\n  help, --help, -h       Zobrazit toto použití\n  --version, -v          Vytisknout verzi\n\nMožnosti:\n  --backend=file|sqlite  Backend úložiště pro push/export/gaps/dashboard (výchozí: file)\n  CANDY_CODETIME_DIR     Datový adresář (výchozí: \$XDG_DATA_HOME/candy-codetime, jinak \$HOME/.local/share/candy-codetime, nebo ./.local/share/candy-codetime když HOME není nastaven)",
     'cli.push_usage' => "Použití: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: chybí povinné argumenty (project, language, file)",
     'cli.push_ignored' => "push: {file} odpovídá .sugartrackignore — přeskočeno",
@@ -20,7 +20,7 @@ return [
     'cli.backend_unavailable' => "backend sqlite není dostupný: rozšíření PHP sqlite3 není načteno",
     'cli.storage_error' => "candy-codetime: chyba úložiště: {message}",
     'cli.dashboard_needs_tty' => "candy-codetime: dashboard potřebuje interaktivní terminál (stdin a stdout nejsou TTY). Pro výstup bez terminálu: candy-codetime export <csv|json|ics>",
-    'cli.milestone_usage' => "Použití: candy-codetime milestone <add|list> [name] [description]",
+    'cli.milestone_usage' => "Použití: candy-codetime milestone add [name] [description] | list",
     'cli.milestone_missing_args' => "milestone add: chybí povinný argument (name)",
     'cli.milestone_added' => "milník přidán: {name}",
     'cli.milestone_list_header' => "Milníky:",

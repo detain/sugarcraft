@@ -268,7 +268,7 @@ if ($cmd === 'push') {
 }
 
 if ($cmd === 'milestone') {
-    // candy-codetime milestone <add|list> [name] [description]
+    // candy-codetime milestone add [name] [description] | list
     // Milestones live only in the SQLite backend.
     $sub = $positional[1] ?? null;
 

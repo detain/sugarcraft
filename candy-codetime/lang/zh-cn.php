@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "条目已记录: {project} ({language}) +{duration}s",
-    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   <project> <language> <file> [duration]  记录心跳\n  milestone              <add|list> [name] [description]  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days]  导出心跳 (默认 7 天)\n  gaps                   [days]  显示超过 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\n命令:\n  dashboard              启动 TUI 仪表盘（读取所选后端）\n  push                   <project> <language> <file> [duration]  记录心跳\n  milestone              add [name] [description] | list  管理里程碑 (仅 sqlite)\n  export                 <csv|json|ics> [days]  导出心跳 (默认 7 天)\n  gaps                   [days]  显示至少 300 秒的未跟踪空档 (默认 7 天)\n  backup                 归档 30 天前的数据文件 (仅复制; 绝不删除)\n  help, --help, -h       显示此用法\n  --version, -v          打印版本\n\n选项:\n  --backend=file|sqlite  push/export/gaps/dashboard 的存储后端 (默认: file)\n  CANDY_CODETIME_DIR     数据目录 (默认: \$XDG_DATA_HOME/candy-codetime，未设置时用 \$HOME/.local/share/candy-codetime，HOME 也未设置时用 ./.local/share/candy-codetime)",
     'cli.push_usage' => "用法: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: 缺少必需参数 (project, language, file)",
     'cli.push_ignored' => "push: {file} 匹配 .sugartrackignore — 已跳过",
@@ -20,7 +20,7 @@ return [
     'cli.backend_unavailable' => "sqlite 后端不可用: 未加载 PHP 扩展 sqlite3",
     'cli.storage_error' => "candy-codetime: 存储错误：{message}",
     'cli.dashboard_needs_tty' => "candy-codetime：仪表板需要交互式终端（stdin 与 stdout 不是 TTY）。无终端输出请使用：candy-codetime export <csv|json|ics>",
-    'cli.milestone_usage' => "用法: candy-codetime milestone <add|list> [name] [description]",
+    'cli.milestone_usage' => "用法: candy-codetime milestone add [name] [description] | list",
     'cli.milestone_missing_args' => "milestone add: 缺少必需参数 (name)",
     'cli.milestone_added' => "里程碑已添加: {name}",
     'cli.milestone_list_header' => "里程碑:",

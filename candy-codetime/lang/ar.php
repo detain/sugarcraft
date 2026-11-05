@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "تم تسجيل الإدخال: {project} ({language}) +{duration}s",
-    'cli.usage' => "الاستخدام: candy-codetime [--backend=file|sqlite] <command> [args]\n\nالأوامر:\n  dashboard              بدء لوحة التتبع TUI (يقرأ الواجهة الخلفية المحددة)\n  push                   <project> <language> <file> [duration]  تسجيل نبضة\n  milestone              <add|list> [name] [description]  إدارة الإنجازات (sqlite فقط)\n  export                 <csv|json|ics> [days]  تصدير النبضات (7 أيام افتراضيًا)\n  gaps                   [days]  عرض فترات الفراغ غير المتتبَّعة لأكثر من 300 ثانية (7 أيام افتراضيًا)\n  backup                 أرشفة ملفات أقدم من 30 يومًا (نسخ فقط؛ لا حذف أبدًا)\n  help, --help, -h       عرض هذا الاستخدام\n  --version, -v          طباعة الإصدار\n\nالخيارات:\n  --backend=file|sqlite  واجهة تخزين البيانات لـ push/export/gaps/dashboard (افتراضيًا: file)\n  CANDY_CODETIME_DIR     دليل البيانات (افتراضيًا: \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "الاستخدام: candy-codetime [--backend=file|sqlite] <command> [args]\n\nالأوامر:\n  dashboard              بدء لوحة التتبع TUI (يقرأ الواجهة الخلفية المحددة)\n  push                   <project> <language> <file> [duration]  تسجيل نبضة\n  milestone              add [name] [description] | list  إدارة الإنجازات (sqlite فقط)\n  export                 <csv|json|ics> [days]  تصدير النبضات (7 أيام افتراضيًا)\n  gaps                   [days]  عرض فترات الفراغ غير المتتبَّعة 300 ثانية أو أكثر (7 أيام افتراضيًا)\n  backup                 أرشفة ملفات أقدم من 30 يومًا (نسخ فقط؛ لا حذف أبدًا)\n  help, --help, -h       عرض هذا الاستخدام\n  --version, -v          طباعة الإصدار\n\nالخيارات:\n  --backend=file|sqlite  واجهة تخزين البيانات لـ push/export/gaps/dashboard (افتراضيًا: file)\n  CANDY_CODETIME_DIR     دليل البيانات (افتراضيًا: \$XDG_DATA_HOME/candy-codetime، وإلا \$HOME/.local/share/candy-codetime، أو ./.local/share/candy-codetime عند عدم ضبط HOME)",
     'cli.push_usage' => "الاستخدام: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: الوسائط المطلوبة مفقودة (project, language, file)",
     'cli.push_ignored' => "push: تطابق {file} مع .sugartrackignore — تم تخطيه",
@@ -20,7 +20,7 @@ return [
     'cli.backend_unavailable' => "واجهة تخزين sqlite غير متاحة: امتداد sqlite3 لـ PHP غير محمّل",
     'cli.storage_error' => "candy-codetime: خطأ التخزين: {message}",
     'cli.dashboard_needs_tty' => "candy-codetime: لوحة المتابعة تحتاج إلى طرفية تفاعلية (stdin وstdout ليستا TTY). للإخراج بدون طرفية: candy-codetime export <csv|json|ics>",
-    'cli.milestone_usage' => "الاستخدام: candy-codetime milestone <add|list> [name] [description]",
+    'cli.milestone_usage' => "الاستخدام: candy-codetime milestone add [name] [description] | list",
     'cli.milestone_missing_args' => "milestone add: الوسيط المطلوب مفقود (name)",
     'cli.milestone_added' => "تمت إضافة الإنجاز: {name}",
     'cli.milestone_list_header' => "الإنجازات:",

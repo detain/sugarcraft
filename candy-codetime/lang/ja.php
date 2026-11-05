@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "エントリを登録しました: {project} ({language}) +{duration}s",
-    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   <project> <language> <file> [duration]  ハートビートを記録\n  milestone              <add|list> [name] [description]  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "使用法: candy-codetime [--backend=file|sqlite] <command> [args]\n\nコマンド:\n  dashboard              TUI ダッシュボードを開始 (選択中のバックエンドを読み取ります)\n  push                   <project> <language> <file> [duration]  ハートビートを記録\n  milestone              add [name] [description] | list  マイルストーン管理 (sqlite のみ)\n  export                 <csv|json|ics> [days]  ハートビートをエクスポート (既定 7 日)\n  gaps                   [days]  300 秒以上の未追跡ギャップを表示 (既定 7 日)\n  backup                 30 日より古いデータファイルをアーカイブ (コピーのみ。削除しません)\n  help, --help, -h       この使用法を表示\n  --version, -v          バージョンを表示\n\nオプション:\n  --backend=file|sqlite  push/export/gaps/dashboard のストレージバックエンド (既定: file)\n  CANDY_CODETIME_DIR     データディレクトリ (既定: \$XDG_DATA_HOME/candy-codetime、未設定なら \$HOME/.local/share/candy-codetime、HOME も未設定なら ./.local/share/candy-codetime)",
     'cli.push_usage' => "使用法: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: 必須引数が不足しています (project, language, file)",
     'cli.push_ignored' => "push: {file} は .sugartrackignore に一致したためスキップしました",
@@ -20,7 +20,7 @@ return [
     'cli.backend_unavailable' => "sqlite バックエンドは利用できません: PHP 拡張機能 sqlite3 が読み込まれていません",
     'cli.storage_error' => "candy-codetime: ストレージエラー: {message}",
     'cli.dashboard_needs_tty' => "candy-codetime: ダッシュボードには対話型ターミナルが必要です (stdin と stdout が TTY でありません)。非対話の出力は candy-codetime export <csv|json|ics> を使ってください",
-    'cli.milestone_usage' => "使用法: candy-codetime milestone <add|list> [name] [description]",
+    'cli.milestone_usage' => "使用法: candy-codetime milestone add [name] [description] | list",
     'cli.milestone_missing_args' => "milestone add: 必須引数が不足しています (name)",
     'cli.milestone_added' => "マイルストーンを追加しました: {name}",
     'cli.milestone_list_header' => "マイルストーン:",

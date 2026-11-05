@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "entrée enregistrée : {project} ({language}) +{duration}s",
-    'cli.usage' => "Utilisation: candy-codetime [--backend=file|sqlite] <command> [args]\n\nCommandes:\n  dashboard              Démarrer le tableau de bord TUI (lit le backend sélectionné)\n  push                   <project> <language> <file> [duration]  Enregistrer un heartbeat\n  milestone              <add|list> [name] [description]  Gérer les jalons (sqlite uniquement)\n  export                 <csv|json|ics> [days]  Exporter les heartbeats (7 jours par défaut)\n  gaps                   [days]  Afficher les lacunes non suivies de plus de 300 secondes (7 jours par défaut)\n  backup                 Archiver les fichiers de données de plus de 30 jours (copie ; ne supprime jamais)\n  help, --help, -h       Afficher cette utilisation\n  --version, -v          Afficher la version\n\nOptions:\n  --backend=file|sqlite  Backend de stockage pour push/export/gaps/dashboard (par défaut : file)\n  CANDY_CODETIME_DIR     Répertoire de données (par défaut : \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "Utilisation: candy-codetime [--backend=file|sqlite] <command> [args]\n\nCommandes:\n  dashboard              Démarrer le tableau de bord TUI (lit le backend sélectionné)\n  push                   <project> <language> <file> [duration]  Enregistrer un heartbeat\n  milestone              add [name] [description] | list  Gérer les jalons (sqlite uniquement)\n  export                 <csv|json|ics> [days]  Exporter les heartbeats (7 jours par défaut)\n  gaps                   [days]  Afficher les lacunes non suivies d'au moins 300 secondes (7 jours par défaut)\n  backup                 Archiver les fichiers de données de plus de 30 jours (copie ; ne supprime jamais)\n  help, --help, -h       Afficher cette utilisation\n  --version, -v          Afficher la version\n\nOptions:\n  --backend=file|sqlite  Backend de stockage pour push/export/gaps/dashboard (par défaut : file)\n  CANDY_CODETIME_DIR     Répertoire de données (par défaut : \$XDG_DATA_HOME/candy-codetime, sinon \$HOME/.local/share/candy-codetime, ou ./.local/share/candy-codetime quand HOME n'est pas défini)",
     'cli.push_usage' => "Utilisation : candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push : arguments obligatoires manquants (project, language, file)",
     'cli.push_ignored' => "push : {file} correspondait à .sugartrackignore — ignoré",
@@ -20,7 +20,7 @@ return [
     'cli.backend_unavailable' => "sqlite backend indisponible : l'extension PHP sqlite3 n'est pas chargée",
     'cli.storage_error' => "candy-codetime : erreur de stockage : {message}",
     'cli.dashboard_needs_tty' => "candy-codetime : le tableau de bord exige un terminal interactif (stdin et stdout ne sont pas des TTY). Pour une sortie sans terminal : candy-codetime export <csv|json|ics>",
-    'cli.milestone_usage' => "Utilisation : candy-codetime milestone <add|list> [name] [description]",
+    'cli.milestone_usage' => "Utilisation : candy-codetime milestone add [name] [description] | list",
     'cli.milestone_missing_args' => "milestone add : argument obligatoire manquant (name)",
     'cli.milestone_added' => "jalon ajouté : {name}",
     'cli.milestone_list_header' => "Jalons :",

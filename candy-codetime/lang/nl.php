@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "item vastgelegd: {project} ({language}) +{duration}s",
-    'cli.usage' => "Gebruik: candy-codetime [--backend=file|sqlite] <command> [args]\n\nCommando's:\n  dashboard              Start het TUI-dashboard (leest het gekozen backend)\n  push                   <project> <language> <file> [duration]  Registreer een heartbeat\n  milestone              <add|list> [name] [description]  Beheer mijlpalen (alleen sqlite)\n  export                 <csv|json|ics> [days]  Exporteer heartbeats (standaard 7 dagen)\n  gaps                   [days]  Toon niet-vastgelegde gaten van meer dan 300 seconden (standaard 7 dagen)\n  backup                 Archiveer bestanden ouder dan 30 dagen (kopiëert; verwijdert nooit)\n  help, --help, -h       Deze gebruik tonen\n  --version, -v          Versie tonen\n\nOpties:\n  --backend=file|sqlite  Opslag-backend voor push/export/gaps/dashboard (standaard: file)\n  CANDY_CODETIME_DIR     Datamap (standaard: \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "Gebruik: candy-codetime [--backend=file|sqlite] <command> [args]\n\nCommando's:\n  dashboard              Start het TUI-dashboard (leest het gekozen backend)\n  push                   <project> <language> <file> [duration]  Registreer een heartbeat\n  milestone              add [name] [description] | list  Beheer mijlpalen (alleen sqlite)\n  export                 <csv|json|ics> [days]  Exporteer heartbeats (standaard 7 dagen)\n  gaps                   [days]  Toon niet-vastgelegde gaten van 300 seconden of meer (standaard 7 dagen)\n  backup                 Archiveer bestanden ouder dan 30 dagen (kopiëert; verwijdert nooit)\n  help, --help, -h       Deze gebruik tonen\n  --version, -v          Versie tonen\n\nOpties:\n  --backend=file|sqlite  Opslag-backend voor push/export/gaps/dashboard (standaard: file)\n  CANDY_CODETIME_DIR     Datamap (standaard: \$XDG_DATA_HOME/candy-codetime, anders \$HOME/.local/share/candy-codetime, of ./.local/share/candy-codetime als HOME niet is ingesteld)",
     'cli.push_usage' => "Gebruik: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: verplichte argumenten ontbreken (project, language, file)",
     'cli.push_ignored' => "push: {file} kwam overeen met .sugartrackignore — overgeslagen",
@@ -20,7 +20,7 @@ return [
     'cli.backend_unavailable' => "sqlite-backend niet beschikbaar: de PHP-extensie sqlite3 is niet geladen",
     'cli.storage_error' => "candy-codetime: opslagfout: {message}",
     'cli.dashboard_needs_tty' => "candy-codetime: het dashboard heeft een interactieve terminal nodig (stdin en stdout zijn geen TTY). Voor uitvoer zonder terminal: candy-codetime export <csv|json|ics>",
-    'cli.milestone_usage' => "Gebruik: candy-codetime milestone <add|list> [name] [description]",
+    'cli.milestone_usage' => "Gebruik: candy-codetime milestone add [name] [description] | list",
     'cli.milestone_missing_args' => "milestone add: verplicht argument ontbreekt (name)",
     'cli.milestone_added' => "mijlpaal toegevoegd: {name}",
     'cli.milestone_list_header' => "Mijlpalen:",

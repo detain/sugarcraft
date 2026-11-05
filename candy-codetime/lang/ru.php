@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "запись добавлена: {project} ({language}) +{duration}s",
-    'cli.usage' => "Использование: candy-codetime [--backend=file|sqlite] <command> [args]\n\nКоманды:\n  dashboard              Запустить TUI-дашборд (читает выбранный бэкенд)\n  push                   <project> <language> <file> [duration]  Записать heartbeat\n  milestone              <add|list> [name] [description]  Управление вехами (только sqlite)\n  export                 <csv|json|ics> [days]  Экспортировать heartbeats (по умолчанию 7 дней)\n  gaps                   [days]  Показать неотслеженные промежутки дольше 300 секунд (по умолчанию 7 дней)\n  backup                 Архивировать файлы старше 30 дней (копирует; никогда не удаляет)\n  help, --help, -h       Показать это использование\n  --version, -v          Вывести версию\n\nПараметры:\n  --backend=file|sqlite  Backend хранения для push/export/gaps/dashboard (по умолчанию: file)\n  CANDY_CODETIME_DIR     Каталог данных (по умолчанию: \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "Использование: candy-codetime [--backend=file|sqlite] <command> [args]\n\nКоманды:\n  dashboard              Запустить TUI-дашборд (читает выбранный бэкенд)\n  push                   <project> <language> <file> [duration]  Записать heartbeat\n  milestone              add [name] [description] | list  Управление вехами (только sqlite)\n  export                 <csv|json|ics> [days]  Экспортировать heartbeats (по умолчанию 7 дней)\n  gaps                   [days]  Показать неотслеженные промежутки не менее 300 секунд (по умолчанию 7 дней)\n  backup                 Архивировать файлы старше 30 дней (копирует; никогда не удаляет)\n  help, --help, -h       Показать это использование\n  --version, -v          Вывести версию\n\nПараметры:\n  --backend=file|sqlite  Backend хранения для push/export/gaps/dashboard (по умолчанию: file)\n  CANDY_CODETIME_DIR     Каталог данных (по умолчанию: \$XDG_DATA_HOME/candy-codetime, иначе \$HOME/.local/share/candy-codetime, или ./.local/share/candy-codetime если HOME не задан)",
     'cli.push_usage' => "Использование: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: отсутствуют обязательные аргументы (project, language, file)",
     'cli.push_ignored' => "push: {file} совпал с .sugartrackignore — пропущено",
@@ -20,7 +20,7 @@ return [
     'cli.backend_unavailable' => "backend sqlite недоступен: расширение PHP sqlite3 не загружено",
     'cli.storage_error' => "candy-codetime: ошибка хранилища: {message}",
     'cli.dashboard_needs_tty' => "candy-codetime: дашборду нужен интерактивный терминал (stdin и stdout не являются TTY). Для вывода без терминала: candy-codetime export <csv|json|ics>",
-    'cli.milestone_usage' => "Использование: candy-codetime milestone <add|list> [name] [description]",
+    'cli.milestone_usage' => "Использование: candy-codetime milestone add [name] [description] | list",
     'cli.milestone_missing_args' => "milestone add: отсутствует обязательный аргумент (name)",
     'cli.milestone_added' => "веха добавлена: {name}",
     'cli.milestone_list_header' => "Вехи:",

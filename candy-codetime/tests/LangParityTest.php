@@ -134,7 +134,7 @@ final class LangParityTest extends TestCase
     private const USAGE_SYNTAX = [
         'dashboard' => '',
         'push' => '<project> <language> <file> [duration]',
-        'milestone' => '<add|list> [name] [description]',
+        'milestone' => 'add [name] [description] | list',
         'export' => '<csv|json|ics> [days]',
         'gaps' => '[days]',
         'backup' => '',

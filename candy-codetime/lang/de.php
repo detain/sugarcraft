@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'cli.entry_pushed' => "Eintrag übernommen: {project} ({language}) +{duration}s",
-    'cli.usage' => "Verwendung: candy-codetime [--backend=file|sqlite] <command> [args]\n\nBefehle:\n  dashboard              TUI-Dashboard starten (liest das gewählte Backend)\n  push                   <project> <language> <file> [duration]  Heartbeat erfassen\n  milestone              <add|list> [name] [description]  Meilensteine verwalten (nur sqlite)\n  export                 <csv|json|ics> [days]  Heartbeats exportieren (Standard 7 Tage)\n  gaps                   [days]  Nicht erfasste Lücken über 300 Sekunden zeigen (Standard 7 Tage)\n  backup                 Datendateien älter als 30 Tage archivieren (kopiert; löscht nie)\n  help, --help, -h       Diese Verwendung zeigen\n  --version, -v          Version ausgeben\n\nOptionen:\n  --backend=file|sqlite  Speicher-Backend für push/export/gaps/dashboard (Standard: file)\n  CANDY_CODETIME_DIR     Datenverzeichnis (Standard: \$XDG_DATA_HOME/candy-codetime)",
+    'cli.usage' => "Verwendung: candy-codetime [--backend=file|sqlite] <command> [args]\n\nBefehle:\n  dashboard              TUI-Dashboard starten (liest das gewählte Backend)\n  push                   <project> <language> <file> [duration]  Heartbeat erfassen\n  milestone              add [name] [description] | list  Meilensteine verwalten (nur sqlite)\n  export                 <csv|json|ics> [days]  Heartbeats exportieren (Standard 7 Tage)\n  gaps                   [days]  Nicht erfasste Lücken ab 300 Sekunden zeigen (Standard 7 Tage)\n  backup                 Datendateien älter als 30 Tage archivieren (kopiert; löscht nie)\n  help, --help, -h       Diese Verwendung zeigen\n  --version, -v          Version ausgeben\n\nOptionen:\n  --backend=file|sqlite  Speicher-Backend für push/export/gaps/dashboard (Standard: file)\n  CANDY_CODETIME_DIR     Datenverzeichnis (Standard: \$XDG_DATA_HOME/candy-codetime, sonst \$HOME/.local/share/candy-codetime, oder ./.local/share/candy-codetime wenn HOME nicht gesetzt ist)",
     'cli.push_usage' => "Verwendung: candy-codetime push <project> <language> <file> [duration]",
     'cli.push_missing_args' => "push: fehlende Pflichtargumente (project, language, file)",
     'cli.push_ignored' => "push: {file} entsprach .sugartrackignore — übersprungen",
@@ -20,7 +20,7 @@ return [
     'cli.backend_unavailable' => "sqlite-Backend nicht verfügbar: die PHP-Erweiterung sqlite3 ist nicht geladen",
     'cli.storage_error' => "candy-codetime: Speicherfehler: {message}",
     'cli.dashboard_needs_tty' => "candy-codetime: das Dashboard benötigt ein interaktives Terminal (stdin und stdout sind keine TTYs). Für die Ausgabe ohne Terminal: candy-codetime export <csv|json|ics>",
-    'cli.milestone_usage' => "Verwendung: candy-codetime milestone <add|list> [name] [description]",
+    'cli.milestone_usage' => "Verwendung: candy-codetime milestone add [name] [description] | list",
     'cli.milestone_missing_args' => "milestone add: fehlendes Pflichtargument (name)",
     'cli.milestone_added' => "Meilenstein hinzugefügt: {name}",
     'cli.milestone_list_header' => "Meilensteine:",
