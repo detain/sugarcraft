@@ -76,21 +76,27 @@ colorless). An unparseable environment never throws: the probe decides.
 
 The pager reads the keyboard from `/dev/tty`, so `some-command | candy-mdview -p`
 stays scrollable; the document itself can still come from stdin. It reflows
-when you resize the terminal, and the header row shows
-`file · scroll%` (plus `↻N` after N auto-reloads).
+when you resize the terminal, and — when opened on a file — the header row
+shows `file · scroll%` (plus `↻N` after N auto-reloads); a stdin pager has no
+header row.
 
 | Key | Action |
 |---|---|
 | `↑` / `k` | line up |
-| `↓` / `j` / mouse wheel down | line down |
-| wheel up | line up (3 lines per notch) |
+| `↓` / `j` | line down |
+| mouse wheel | 3 lines per notch, either direction |
 | `PgUp` / `b` | page up |
 | `PgDn` / `space` / `f` | page down |
 | `Ctrl+U` / `Ctrl+D` | half page |
 | `Home` / `g` | top |
 | `End` / `G` | bottom |
 | `←` / `h`, `→` / `l` | scroll horizontally (no-wrap mode) |
-| `q` / `Esc` / `Ctrl+C` | exit (`Alt+q` and `Ctrl+q` do not) |
+| `q` / `Esc` / `Ctrl+C` | exit (`Shift+q`, `Alt+q` and `Ctrl+q` do not) |
+
+Only an unmodified `q` quits. The scrolling letter keys are the exception to
+that caution: they fire even with modifiers held — `Ctrl+B` pages up and
+`Alt+j` scrolls — while `Ctrl+U` / `Ctrl+D` are the deliberate half-page
+chords.
 
 When the pager is opened on a file (not stdin) it **auto-reloads**: the model
 polls the source with `FileWatcher::pollTuple()` on a 0.5 s idle tick and
