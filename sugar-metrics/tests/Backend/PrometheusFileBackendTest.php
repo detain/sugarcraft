@@ -288,6 +288,37 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringContainsString('hits{route="/b"} 7', $content);
     }
 
+    public function testRemoveReachingThroughTheFoldOntoAnotherRawsSeriesIsRefused(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('a.b', 5);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('sanitize to the same metric name');
+        $b->remove('a-b'); // Same folded key, DIFFERENT raw identity — key() would refuse this as a collision; remove() must too.
+    }
+
+    public function testRemoveRefusalLeavesTheTwinAliveAndHonestReclaimFreesTheFold(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('a.b', 5);
+
+        try {
+            $b->remove('a-b');
+            $this->fail('expected the name-collision refusal');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('sanitize to the same metric name', $e->getMessage());
+        }
+
+        $b->remove('a.b'); // The honest reclaim.
+        $b->counter('a-b', 2.0); // The collision record went with the series — the fold is free for the twin now.
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringNotContainsString('a_b 5', $content);
+        $this->assertStringContainsString('a_b 2', $content);
+    }
+
     public function testClearForgetsEverySeries(): void
     {
         $b = new PrometheusFileBackend($this->path);

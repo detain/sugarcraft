@@ -496,15 +496,25 @@ final class PrometheusFileBackend implements Backend
      * including the Registry's cardinality-eviction forward, which arrives
      * with the merged tag set. The next flush() simply no longer emits the
      * removed series; the textfile itself is rewritten whole on every
-     * flush, so no stale line survives. Distinct raws that merely FOLD to
-     * the same key cannot exist side by side (key() refuses the merge), so
-     * remove() can never wipe an innocent twin.
+     * flush, so no stale line survives. remove() consults the same
+     * collision record the write path keeps: a call whose raw (name, tags)
+     * is NOT the identity recorded under that folded key would reach
+     * through the fold and silently wipe an innocent twin, so it is
+     * refused exactly like a colliding write; the honest reclaim drops the
+     * record with the series, freeing the fold for the twin to claim later.
      *
      * @param array<string,string> $tags
      */
     public function remove(string $name, array $tags = []): void
     {
         $key = self::storageKey($name, $tags);
+        if (isset($this->rawFacts[$key])) {
+            // The reclaim path guards the fold exactly like the write path:
+            // reaching an occupied key under a DIFFERENT raw identity is
+            // the silent innocent-twin wipe the collision detector exists
+            // to refuse, not a removal to honour.
+            $this->refuseImpostor($name, $tags, $key);
+        }
         unset(
             $this->counters[$key], $this->dirtyCounters[$key],
             $this->gauges[$key], $this->dirtyGauges[$key],
@@ -549,27 +559,38 @@ final class PrometheusFileBackend implements Backend
     private function key(string $name, array $tags): string
     {
         $key = self::storageKey($name, $tags);
-        $folded = self::sanitizeFold($name, $tags);
         if (isset($this->rawFacts[$key])) {
-            [$firstRaw, $firstTags] = $this->rawFacts[$key];
-            // storageKey ksorts the labels, so tag insertion order cannot
-            // change the series identity; compare the pairs in canonical
-            // order (order-strict !== refused one series re-published).
-            $firstCanonical = $firstTags;
-            ksort($firstCanonical);
-            $nowCanonical = $tags;
-            ksort($nowCanonical);
-            if ($firstRaw !== $name || $firstCanonical !== $nowCanonical) {
-                throw new \RuntimeException(Lang::t('prom.name_collision', [
-                    'first'  => Util::displaySafe(self::describeRaw($firstRaw, $firstTags)),
-                    'second' => Util::displaySafe(self::describeRaw($name, $tags)),
-                    'folded' => Util::displaySafe($folded),
-                ]));
-            }
+            $this->refuseImpostor($name, $tags, $key);
             return $key;
         }
         $this->rawFacts[$key] = [$name, $tags];
         return $key;
+    }
+
+    /**
+     * Refuse an incoming (name, tags) whose fold has landed on a storage
+     * key already owned by a different raw identity. One refusal shape is
+     * shared by the write path (key()) and the reclaim path (remove()).
+     *
+     * @param array<string,string> $tags
+     */
+    private function refuseImpostor(string $name, array $tags, string $key): void
+    {
+        [$firstRaw, $firstTags] = $this->rawFacts[$key];
+        // storageKey ksorts the labels, so tag insertion order cannot
+        // change the series identity; compare the pairs in canonical
+        // order (order-strict !== refused one series re-published).
+        $firstCanonical = $firstTags;
+        ksort($firstCanonical);
+        $nowCanonical = $tags;
+        ksort($nowCanonical);
+        if ($firstRaw !== $name || $firstCanonical !== $nowCanonical) {
+            throw new \RuntimeException(Lang::t('prom.name_collision', [
+                'first'  => Util::displaySafe(self::describeRaw($firstRaw, $firstTags)),
+                'second' => Util::displaySafe(self::describeRaw($name, $tags)),
+                'folded' => Util::displaySafe(self::sanitizeFold($name, $tags)),
+            ]));
+        }
     }
 
     /**

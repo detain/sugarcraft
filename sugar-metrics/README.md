@@ -64,7 +64,7 @@ Metric names and tag keys are *not* free text on every wire, and the folds diffe
 - **Prometheus textfile** (`PrometheusFileBackend`): metric names keep `:` (a legal Prometheus name character) and fold every other illegal rune (including `.`) to `_`; label names never keep `:` — illegal runes become `_`.
 - **JSON stream**: names are emitted verbatim inside a JSON string — the encoding itself is the framing.
 
-Because the name/label folds are many-to-one, `PrometheusFileBackend` refuses silent collisions: two *distinct* raw series that fold onto the same metric name or the same label key throw a `RuntimeException` at the second write (see Cardinality management), instead of merging — or silently nuking the exposition — behind your back.
+Because the name/label folds are many-to-one, `PrometheusFileBackend` refuses silent collisions: two *distinct* raw series that fold onto the same metric name or the same label key throw a `RuntimeException` — at the second write, and at a `remove()` whose own raw never owned that folded key (see Cardinality management) — instead of merging or silently wiping the innocent twin behind your back.
 
 Kind mapping to wire tokens:
 
