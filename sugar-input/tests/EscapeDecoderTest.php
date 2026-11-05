@@ -1912,6 +1912,9 @@ final class EscapeDecoderTest extends TestCase
         $events = $decoder->decode("\x1b[<0;10;5M");
         $this->assertSame([], $events);
         $this->assertSame('', $decoder->remainder());
+        // A disabled family's frames are counted drops, not drained replies.
+        $this->assertSame(1, $decoder->droppedUnknownCount());
+        $this->assertSame(0, $decoder->drainedReplyCount());
     }
 
     /**
@@ -1925,6 +1928,23 @@ final class EscapeDecoderTest extends TestCase
         $this->assertCount(1, $events);
         $this->assertSame('z', $events[0]->key);
         $this->assertSame('', $decoder->remainder());
+    }
+
+    /**
+     * Load-bearing: raw X10 (ESC M + 3 payload bytes) disabled must tally like
+     * every other disabled family — a counted silent drop that stays in byte
+     * sync, not an uncounted pass-through (parity with SGR/urxvt-1015/Kitty).
+     */
+    public function testX10MouseDisabledIsACountedDrop(): void
+    {
+        $decoder = new EscapeDecoder(new EscapeDecoderOptions(enableMouse: false));
+        // chr(32)=left press, chr(33)/chr(34) = 1-based x/y; trailing 'z' proves sync.
+        $events = $decoder->decode("\x1b[M" . chr(32) . chr(33) . chr(34) . "z");
+        $this->assertCount(1, $events);
+        $this->assertSame('z', $events[0]->key);
+        $this->assertSame('', $decoder->remainder());
+        $this->assertSame(1, $decoder->droppedUnknownCount());
+        $this->assertSame(0, $decoder->drainedReplyCount());
     }
 
     /**
@@ -1947,6 +1967,8 @@ final class EscapeDecoderTest extends TestCase
         $events = $decoder->decode("\x1b[97;1u");
         $this->assertSame([], $events);
         $this->assertSame('', $decoder->remainder());
+        $this->assertSame(1, $decoder->droppedUnknownCount());
+        $this->assertSame(0, $decoder->drainedReplyCount());
     }
 
     /**

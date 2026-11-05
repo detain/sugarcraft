@@ -743,7 +743,12 @@ final class EscapeDecoder
         }
 
         if (!$this->options->enableMouse) {
-            // Structurally consumed, no event — stream stays in sync.
+            // Structurally consumed, no event — stream stays in sync. Tallied as a
+            // counted drop like every other disabled family's frames (SGR falls to
+            // the generic unknown-CSI drop, urxvt-1015 and Kitty gate to the same
+            // counter), so droppedUnknownCount() stays an honest total.
+            $this->droppedUnknownCount++;
+
             return ['events' => [], 'remaining' => substr($afterM, 3)];
         }
 
