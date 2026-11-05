@@ -63,7 +63,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | `ViewportTickMsg` |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values — `list<Item>` is a phpdoc contract, there is no runtime element guard _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
-| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values (`new Tree\Node($label, $children)` / `Node::leaf($label)`); chrome glyphs and prefixes are immutable via `withStyle(...)` — `withStyle` knobs are checked at ingress, while node labels are sanitised at RENDER (control characters stripped and `Sanitize::untrustedForMarkedFrames()` applied), not stored raw. | — |
+| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values (`Node::branch($label, ...$children)` / `Node::leaf($label)` — the constructor's second parameter is `$value`, not children, so a 2-arg `new Node(...)` silently parks the child list in the value slot and renders flat); chrome glyphs and prefixes are immutable via `withStyle(...)` — `withStyle` knobs are checked at ingress, while node labels are sanitised at RENDER (control characters stripped and `Sanitize::untrustedForMarkedFrames()` applied), not stored raw. | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
 | `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then clicks find nothing. `focus()` renders the active tab underlined — before the M9 fix (Tabs.php source comment) the focused and blurred frames were byte-identical, so keyboard focus was invisible in the render bytes | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
@@ -107,8 +107,13 @@ round-trip), `SugarCraft\Widgets\Viewport\ViewportTickMsg` (Viewport's
 auto-scroll tick — the alias of `Forms\Viewport\ViewportTickMsg` the
 component arms through `subscriptions()`). `ItemList\LoadMoreMsg` has
 **no** widgets alias — import `SugarCraft\Forms\ItemList\LoadMoreMsg`.
-Each component's `update()` filters by its own `id()` so multiple
-instances of the same component coexist on one event loop. Timer and
+The id-carrying components (`Timer`, `Stopwatch`, `Cursor`,
+`Spinner`) filter in `update()` by their own `id()`, so multiple
+instances of the same component coexist on one event loop. Not every
+tick is id-routed: `SpringTickMsg` is an id-less sentinel and
+`AnimatedProgress::update()` applies no id filtering, so two animated
+bars on one loop react to each other's ticks (seam noted for an owner
+ruling; no behaviour change here). Timer and
 Stopwatch ticks also carry an `epoch` (generation counter bumped by
 `start()`): a tick armed before a stop/start flip is refused rather than
 double-counted.
@@ -221,7 +226,7 @@ $ti = TextInput::new()
 
 | Case | When validation fires |
 |------|-----------------------|
-| `ValidateOn::None` | Never (default — use when you drive validation manually) |
+| `ValidateOn::None` | On every edit (default — immediate, like `Change`; nothing is deferred) |
 | `ValidateOn::Blur` | When the input loses focus |
 | `ValidateOn::Change` | On every keystroke |
 | `ValidateOn::Submit` | Only on `Enter` keypress |
@@ -242,7 +247,7 @@ $alphanum = TextInput::new()->withRestrict('[a-zA-Z0-9]');
 
 | Method | What it does |
 |--------|--------------|
-| `withValidateOn(ValidateOn $timing)` | Set validation timing (`None` / `Blur` / `Change` / `Submit`) |
+| `withValidateOn(ValidateOn $timing)` | Set validation timing — `None` (default) and `Change` validate on every edit; `Blur` / `Submit` defer |
 | `withRestrict(string $pattern)` | Set a PCRE regex — only matching characters are accepted (no delimiters) |
 
 ## Table — multi-column sort
@@ -380,7 +385,7 @@ $paginator = $t->paginator();    // Paginator instance
 | `paginator()->totalPages(): int` | Return the total page count (`1` when pagination is disabled and the table has at least one row; an empty table reports `0`) |
 | `paginator(): Paginator` | Return a `Paginator` instance wired to the table's current page state |
 
-Pagination works with sort and filter: changing the sort order, filter query, or page size automatically re-clamps the cursor to the first row of the current page so the cursor never points to a row outside the current page boundary.
+Pagination works with sort and filter, but nothing "re-clamps to the page head". `withFilter()`, `withFilterPredicate()` and `withPageSize()` reclamp through `moveCursor()`, which preserves the cursor's row index (only bounding it to the surviving rows) and re-derives the page as `intdiv(cursor, pageSize)` — the visible page follows the cursor. Sorting (`withSort()`, `thenSortBy()`, `clearSort()`) never moves the cursor and never reclamps: the cursor keeps pointing at the same row index under the new ordering, and its page is recomputed from there.
 
 ## Table — per-cell styles (`styleFunc`)
 
