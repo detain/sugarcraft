@@ -83,9 +83,12 @@ Every dimension is in **cells**, and allocation follows one deterministic model 
 2. **Gaps next.** `n` items cost `(n - 1) x gap` cells before any ratio math; the gap is
    reined in at render time if the budget cannot pay for it.
 3. **Ratios split the rest.** Remaining cells are shared by grow ratios with an exact-sum
-   guarantee: every item gets at least a 1-cell floor, and the rounding remainder is handed
-   out in item order (80 cells across ratios 1:1:1 yields 27/27/26, always the same way).
-   Widths never shrink when the container grows.
+   guarantee: each flex item's base share is the rounded-down quotient, and the rounding
+   remainder is handed out in item order (80 cells across ratios 1:1:1 yields 27/27/26,
+   always the same way). A base share may therefore be 0 when the container cannot pay
+   every flex sibling a cell (3 ratio-1 items across 2 cells yield 1/1/0, never 1/1/1);
+   the 1-cell floor is the fallback for ratio-0/basis-0 items and for the no-flex-space
+   path, not a per-item minimum. Widths never shrink when the container grows.
 4. **Cross-axis align** (`start`/`center`/`end`/`stretch`) places an item's content within
    its allocated slice; `render(w, h)` output always fits the requested box.
 

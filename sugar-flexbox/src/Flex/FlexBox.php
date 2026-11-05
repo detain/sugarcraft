@@ -266,8 +266,10 @@ final class FlexBox
      * 1-cell floor out of the budget and are excluded too. The remaining
      * flex items (basis == 0, ratio > 0) split the usable free space by
      * round-robin remainder carry (equivalent sum contract) of their
-     * ratios: a floor base, then one extra cell each in item order until
-     * the leftover runs out. The floor remainder is below one cell per flex
+     * ratios: a floor() base — the rounded-down quotient, which is itself 0
+     * when the container cannot pay every flex sibling a cell (3 ratio-1
+     * items across 2 cells yield 1/1/0) — then one extra cell each in
+     * item order until the leftover runs out. The floor remainder is below one cell per flex
      * item by construction, so a single in-order pass always closes the
      * budget: flex allocations sum to EXACTLY
      * `mainSize - gap*(n-1) - reserved`. The previous round()-then-
