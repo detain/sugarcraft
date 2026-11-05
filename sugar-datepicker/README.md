@@ -105,9 +105,11 @@ $picker = $picker->ClearDate();                       // programmatic equivalent
 $picker = $picker->ToggleSelection();                 // select-or-clear in one call
 ```
 
-If the cursor rests on an empty lead-in/trailing grid cell, Enter falls back to
-the first of the viewed month (the cursor only moves within the current grid;
-arrow keys do not wrap into neighbouring months).
+If the cursor rests on an empty lead-in/trailing grid cell, Enter in single mode
+falls back to the first of the viewed month (the cursor only moves within the
+current grid; arrow keys do not wrap into neighbouring months). In range mode
+the fallback does not apply: Enter on an empty cell — or on an out-of-bounds
+day — is a silent no-op and records no range step.
 
 Range mode — the first Enter sets the start, the second the end (normalized so
 start ≤ end), a third restarts:
@@ -191,8 +193,9 @@ wrapper translates sugar-core `KeyMsg` messages into these strings, so a TEA
 application never calls `handleKey()` directly.
 
 Honest limitations: there is no month-wrap on arrow keys (they clamp at the grid
-edge and can rest on empty lead-in/trailing cells, where Enter falls back to the
-first of the month), and no typeahead year entry. `PageUp`/`PageDown` step one
+edge and can rest on empty lead-in/trailing cells, where single-mode Enter falls
+back to the first of the month but range-mode Enter does nothing), and no
+typeahead year entry. `PageUp`/`PageDown` step one
 month through the `Model`; larger jumps between months and years go through the
 `GoTo*` methods.
 
