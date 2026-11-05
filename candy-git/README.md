@@ -151,9 +151,11 @@ alone: status rows show git's porcelain `XY` codes, diff lines keep their
 leading `+`/`-` markers, the rebase todo spells its actions as words
 (`pick`/`reword`/`squash`/`drop`), and the ahead/behind summary is git's own
 `## …[ahead N, behind M]` upstream header rendered verbatim — so the panes
-stay readable under `NO_COLOR`, `TERM=dumb`, or an ASCII-only palette. The
-exception is pane **focus**, which is currently color-only (a non-color
-focus marker is tracked as a known gap).
+stay readable under `NO_COLOR`, `TERM=dumb`, or an ASCII-only palette. Pane
+**focus** rides two channels too: the accent
+border *and* a `▸` text marker prefixed to the focused pane's title — the
+marker carries no color, so tab cycling stays visible under `NO_COLOR`,
+`TERM=dumb`, and an ASCII-only palette.
 
 - **Row cursor** — the selected row is rendered with reverse video (SGR 7),
   a channel that survives color stripping on every terminal we target.
@@ -184,7 +186,7 @@ focus marker is tracked as a known gap).
 | `Support\GitRequirement` | The git-version floor (`MINIMUM = '2.23'`) as pure parse/compare so launcher and tests share one authority. |
 | `Pane`            | Enum — `Status`, `Branches`, `Log` — with `next()` for Tab cycling.                                                               |
 | `App` (Model)     | Owns the three lists + cursors + focus + overlays (stash/cherry-pick/worktrees/interactive-rebase). Pure-state — every key returns a fresh App. |
-| `Renderer`        | Pure view function — three `Style::border(rounded)` panes joined horizontally / vertically; the focused pane gets a brighter accent. |
+| `Renderer`        | Pure view function — three `Style::border(rounded)` panes joined horizontally / vertically; the focused pane gets a brighter accent **and** a `▸` text prefix on its title, so focus survives color stripping. |
 | `StashEntry`        | Immutable stash entry — `index`, `sha`, `branch`, `message` + `stashRef()` / `displayLine()`.                                      |
 | `StashManager`     | Immutable stash list state — `stashes`, `cursor`, `withCursor()`, `withStashes()`, `current()`, `count()`.                        |
 | `CherryPick`       | Immutable cherry-pick state — `collecting` flag + `commitRef` accumulator + `withChar()`/`cancel()`.                              |

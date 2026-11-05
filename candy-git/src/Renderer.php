@@ -15,11 +15,22 @@ use SugarCraft\Style\Style;
 
 /**
  * Pure view function. Renders three panes side-by-side; the focused
- * pane gets a brighter border accent.
+ * pane gets a brighter border accent plus a {@see self::FOCUS_MARKER}
+ * text prefix on its title, so focus never rides the color channel alone.
  *
  * Mirrors jesseduffield/lazygit pkg/gui/views + commands — pane borders, focus accent, panel rows. */
 final class Renderer
 {
+    /**
+     * Non-color focus channel (PB-GIT-15): prepended to the focused pane's
+     * title. U+25B8 is a single-width glyph here (never in an emoji-presentation
+     * or wide East-Asian range) and carries no SGR, so it survives NO_COLOR,
+     * TERM=dumb, and ASCII-palette degradation. Deliberately not a lang key —
+     * it is punctuation, not prose.
+     */
+    public const FOCUS_MARKER = '▸';
+
+    private const FOCUS_PREFIX = self::FOCUS_MARKER . ' ';
     /**
      * Strip C0/C1 control bytes and every escape sequence from untrusted git
      * output. Applied before concatenation to prevent terminal escape
@@ -308,6 +319,10 @@ final class Renderer
         $st = Style::new()->border($border)->padding(0, 1)->width($width);
         if ($a->pane === $p) {
             $st = $st->borderForeground(Color::hex('#ff5f87'));
+            // PB-GIT-15 (M8): focus is a dual channel — the accent border plus
+            // a text marker, so pane focus stays legible under NO_COLOR,
+            // TERM=dumb, an ASCII palette, or any color-stripping path.
+            $title = self::FOCUS_PREFIX . $title;
         } else {
             $st = $st->borderForeground(Color::hex('#4a3868'));
         }

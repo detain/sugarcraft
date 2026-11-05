@@ -6,6 +6,9 @@ namespace SugarCraft\Git\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Style;
 use SugarCraft\Git\App;
 use SugarCraft\Git\CherryPick;
 use SugarCraft\Git\DiffViewer;
@@ -426,5 +429,64 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('…', $out);
         // The long string of 'a' characters should not appear in full - it should be truncated
         $this->assertStringNotContainsString(str_repeat('a', 50), $out);
+    }
+
+    /**
+     * PB-GIT-15 (M8): pane focus must never ride the color channel alone.
+     * The focused pane's title carries a {@see Renderer::FOCUS_MARKER} text
+     * prefix; unfocused titles never do, and exactly one marker is painted
+     * per frame wherever focus lives.
+     */
+    public function testTheFocusedPaneCarriesATextMarker(): void
+    {
+        $out = Renderer::render(App::start($this->git()));
+
+        $this->assertSame(1, substr_count($out, Renderer::FOCUS_MARKER), 'exactly the focused pane is marked');
+        $this->assertStringContainsString(Renderer::FOCUS_MARKER . '  status', $out, 'status is focused at start');
+        $this->assertStringNotContainsString(Renderer::FOCUS_MARKER . '  branches', $out);
+        $this->assertStringNotContainsString(Renderer::FOCUS_MARKER . '  log', $out);
+    }
+
+    public function testTheTextMarkerFollowsTabCycling(): void
+    {
+        [$a, ] = App::start($this->git())->update(new KeyMsg(KeyType::Tab, ''));
+        $out   = Renderer::render($a);
+
+        $this->assertSame(1, substr_count($out, Renderer::FOCUS_MARKER));
+        $this->assertStringContainsString(Renderer::FOCUS_MARKER . '  branches', $out);
+        $this->assertStringNotContainsString(Renderer::FOCUS_MARKER . '  status', $out);
+    }
+
+    /**
+     * The discriminating keystone (red before PB-GIT-15): with the Ascii
+     * profile the accent border emits no truecolor, so before the text
+     * marker the two focus states were byte-identical — tab cycling
+     * "showed nothing" for NO_COLOR / TERM=dumb / ASCII-palette users.
+     */
+    public function testFocusIsDistinguishableUnderAnAsciiPalette(): void
+    {
+        Style::setDefaultProfile(ColorProfile::Ascii);
+        try {
+            $git   = $this->git();
+            $onStatus = Renderer::render(App::start($git));
+            [$tabbed, ] = App::start($git)->update(new KeyMsg(KeyType::Tab, ''));
+            $onBranches = Renderer::render($tabbed);
+
+            $this->assertSame(0, substr_count($onStatus, "\x1b[38;2;"), 'Ascii strips the color channel');
+            $this->assertNotSame($onStatus, $onBranches, 'focus must change the frame with color stripped');
+            $this->assertStringContainsString(Renderer::FOCUS_MARKER . '  status', $onStatus);
+            $this->assertStringContainsString(Renderer::FOCUS_MARKER . '  branches', $onBranches);
+        } finally {
+            Style::setDefaultProfile(null);
+        }
+    }
+
+    /**
+     * ▸ must stay a one-cell glyph in the canonical width oracle, or the
+     * marker would desync the fixed-width pane boxes.
+     */
+    public function testTheFocusMarkerIsSingleWidth(): void
+    {
+        $this->assertSame(1, Width::of(Renderer::FOCUS_MARKER));
     }
 }
