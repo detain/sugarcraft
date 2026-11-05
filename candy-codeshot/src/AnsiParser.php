@@ -20,8 +20,8 @@ use SugarCraft\AnsiParser\Parser\Parser;
  * documents — because the colour-space id slot in the grouped form is not a
  * colour component.
  *
- * Other ANSI sequences (CSI cursor moves, OSC, etc.) pass through
- * silently — they have no visible effect in a static SVG.
+ * Other ANSI sequences (CSI cursor moves, OSC, DCS, etc.) are dropped
+ * silently — they have no visible effect in a static image.
  *
  * Internally delegates to sugar-ansi-parser's {@see Parser} state machine.
  */

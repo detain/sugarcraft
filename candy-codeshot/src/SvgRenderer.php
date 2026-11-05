@@ -18,10 +18,11 @@ use SugarCraft\Core\Util\Width;
  *  - Optional rounded-corner frame
  *  - Optional drop shadow
  *  - Line numbers in the gutter
- *  - Inline ANSI SGR colour parsing — foreground colours from the
- *    rendered tokens become `<tspan fill="…">` segments. Background
- *    colours and attribute flags (bold, italic, underline) are also
- *    honoured.
+ *  - Inline ANSI SGR colour parsing — each styled run becomes its own
+ *    `<text>` element carrying `fill` (plus `font-weight` / `font-style` /
+ *    `text-decoration` when set), and background colours are painted as
+ *    per-segment `<rect>` bands behind the text. Bold, italic and
+ *    underline attributes are honoured in the SVG output.
  *
  * Width and height are computed from the rendered text using a
  * monospace cell estimate (font size × 0.6 wide, font size × line

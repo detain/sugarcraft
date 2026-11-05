@@ -11,8 +11,10 @@ use SugarCraft\Core\Util\Width;
 /**
  * Handler implementation for SGR (Select Graphic Rendition) state parsing.
  *
- * Mirrors charmbracelet/vterm's state machine logic inside a TEA-friendly
- * closure-based renderer.
+ * Mirrors charmbracelet/vterm's state machine logic. This is a plain token
+ * handler: it accumulates SGR state and forwards styled segments through the
+ * callback given to its constructor — it is not a renderer and not a TEA
+ * Program of its own.
  *
  * @internal
  */
