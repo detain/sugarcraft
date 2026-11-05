@@ -33,12 +33,12 @@ ships as `App\` — called out in the table below.
 
 | Library | Status | Notes |
 |---|:---:|---|
-| **SugarAsync** (`sugar-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, onPending, singleFlight), TTL async cache. Dependents: sugar-forms, sugar-vterm, candy-sql, candy-mail, candy-git-server, candy-codetime. |
+| **SugarAsync** (`sugar-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). The foundation for ReactPHP usage across the monorepo. |
 | **SugarCraft** (`sugar-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace follows the suffix rule (`sugar-core` → `SugarCraft\Core\`). |
 | **SugarStyle** (`sugar-style/`) | 🟢 ready | Declarative styling + layout. |
-| **SugarSpring** (`sugar-spring/`) | 🟢 ready | Damped spring physics + Newtonian projectile simulation. |
+| **SugarSpring** (`sugar-spring/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
 | **SugarMouse** (`sugar-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
-| **SugarWidgets** (`sugar-widgets/`) | 🟡 in progress | First-party components — Tabs, Tree, Table, Progress, Help, Key, Paginator, Stopwatch, Timer, Input\TextEdit, Menu\OptionRow — plus render helpers; the 8 alias families (Cursor, FilePicker, ItemList, Scrollbar, Spinner, TextArea, TextInput, Viewport) are deprecated re-exports of sugar-forms. Real gap: bubbles Delegate vocabulary unported. |
+| **SugarWidgets** (`sugar-widgets/`) | 🟡 in progress | Prebuilt components (TextInput, ItemList, Table, …) plus render helpers. |
 | **SugarCharts** (`sugar-charts/`) | 🟡 in progress | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / Streamline / Waveline / OHLC / Picture. |
 | **SugarForms** (`sugar-forms/`) | 🟢 ready | Form library — Note / Input / Confirm / Select / MultiSelect / Text / FilePicker / Date / Slider / Color / NumberField / RadioPills. |
 | **SugarMarkdown** (`sugar-markdown/`) | 🟢 ready | Markdown → ANSI renderer (themes, syntax, OSC 8 hyperlinks). |
@@ -57,7 +57,7 @@ ships as `App\` — called out in the table below.
 | **SugarFocus** (`sugar-focus/`) | 🟢 ready | Dependency-free focus ring — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. |
 | **SugarGallery** (`sugar-gallery/`) | 🟢 ready | Poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed `PosterGrid` with owner-driven `need-range` paging (+ optional sugar-mouse mouse), a horizontal `Rail` carousel, and a renderer-agnostic `PosterCard` tile. |
 | **SugarFuzzy** (`sugar-fuzzy/`) | 🟢 ready | Fuzzy string matching with scored matched indices — Smith–Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem. Extracted from sugar-forms. |
-| **SugarConstraints** (`sugar-constraints/`) | 🟢 ready | Foundation: greedy constraint solver (`GreedySolver`) for terminal layout — `CassowarySolver` is a deprecated shim over it. Plus `DockLayout` pane geometry. |
+| **SugarConstraints** (`sugar-constraints/`) | 🟡 in progress | Foundation: greedy constraint solver (`GreedySolver`) for terminal layout — `CassowarySolver` is a deprecated shim over it. Plus `DockLayout` pane geometry. |
 | **SugarTesting** (`sugar-testing/`) | 🟢 ready | Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. |
 | **SugarInput** (`sugar-input/`) | 🟢 ready | Terminal escape sequence decoder — legacy keys (incl. xterm modified forms `CSI number;mods ~`), Kitty keyboard protocol event frames `CSI code;mods u` (the `CSI ?…u` shape is the flags reply family), SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste. Unblocks sugar-readline production use. |
 | **SugarTreelist** (`sugar-treelist/`) | 🟢 ready | Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type. |
@@ -70,35 +70,35 @@ ships as `App\` — called out in the table below.
 | **SugarReadline** (`sugar-readline/`) | 🟢 ready | Interactive prompts — Text, Confirm, Selection, MultiSelect, Textarea. State-machine model, no external readline dependency. |
 | **SugarDatepicker** (`sugar-datepicker/`) | 🟢 ready | Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale day names, ANSI rendering. |
 | **SugarToast** (`sugar-toast/`) | 🟢 ready | Floating notification overlays — Info / Success / Warning / Error types, configurable position and auto-dismiss. |
-| **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + delta-rendering Table (sort/filter/cursor) + sticky Viewport + Scrollbar — ratio-based sizing, gap, align, per-column styling. |
+| **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + simple sort/filter table — ratio-based sizing, gap, align, per-column styling. |
 | **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from candy-code (BuildsUnifiedDiff; candy-code's DiffGutter keeps an app-side copy). |
-| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow SERVER narrowing (tool rosters follow servers). Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
+| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow tool narrowing. Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
 
 ## Apps
 
 | App | Status | Notes |
 |---|:---:|---|
 | **CandyStarter** (`candy-starter/`) | 🟢 ready | `composer create-project` skeleton — counter Model + bin + tests. Namespace is `App\` (exception to the naming rule). |
-| **CandyScriptui** (`candy-scriptui/`) | 🟢 ready | Composer-installable CLI of 13 presentation subcommands. |
+| **CandyScriptui** (`candy-scriptui/`) | 🟢 ready | Composer-installable CLI of 13 one-shot subcommands. |
 | **CandyCodeshot** (`candy-codeshot/`) | 🟢 ready | Code → SVG screenshot (+ optional PNG via ext-gd). |
 | **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes SugarMarkdown). |
 | **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
-| **CandySshLauncher** (`candy-ssh-launcher/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON endpoints). |
+| **CandySshLauncher** (`candy-ssh-launcher/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON shortcuts directory). |
 | **CandyKv** (`candy-kv/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
 | **CandyMail** (`candy-mail/`) | 🟢 ready | Email sending — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
 | **CandyGitServer** (`candy-git-server/`) | 🟡 in progress | Self-hostable Git server — smart-HTTP clone/fetch/push via `serve`; SSH delegates real git under host-sshd `ForceCommand`; git:// daemon advertisement-only. Users, repos, access control, optional LFS. |
-| **CandyCode** (`candy-code/`) | 🟢 ready | TUI AI coding agent — eleven provider type keys over nine engines, 38 built-in tools per launch, skills, hooks, agents, MCP, SQLite sessions. |
-| **CandyCodeWeb** (`candy-code-web/`) | 🟡 in progress | Browser UI for candy-code's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. Multi-session live: tabs + a tiled grid of up to nine sessions, twelve dockable panels, approvals drawer, settings form, command palette. |
+| **CandyCode** (`candy-code/`) | 🟢 ready | TUI AI coding agent — 9 providers, tools, skills, hooks, agents, MCP, SQLite sessions. |
+| **CandyCodeWeb** (`candy-code-web/`) | 🟡 in progress | Browser UI for candy-code's WebSocket server mode — multi-session dashboard, approvals, settings; Vite + Vue 3, committed `dist/` + one-class PHP shim. Multi-session live: twelve tabs + a tiled grid of up to nine sessions, twelve dockable panels, approvals drawer, settings form, command palette. |
 | **CandyVcr** (`candy-vcr/`) | 🟢 ready | Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI. |
 | **CandyTetris** (`candy-tetris/`) | 🟢 ready | Tetris clone — SRS / 7-bag / NES scoring. |
 | **CandyFiles** (`candy-files/`) | 🟢 ready | Dual-pane file manager. |
-| **CandyGit** (`candy-git/`) | 🟢 ready | Terminal Git client — a TUI for diff/hunk staging, branching, log, stash, worktrees and rebase; shells out to `git`. |
+| **CandyGit** (`candy-git/`) | 🟢 ready | Three-pane git TUI — shells out to `git`. |
 | **CandySql** (`candy-sql/`) | 🟢 ready | SQLite/MySQL/PostgreSQL client TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history. |
-| **CandyCodetime** (`candy-codetime/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL day-files by default, optional SQLite backend (`--backend`). |
+| **CandyCodetime** (`candy-codetime/`) | 🟢 ready | Privacy-first coding-time tracker — heartbeats in SQLite or JSONL on disk (`--backend`). |
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF viewer CLI (ext-gd via sugar-animation) — sugar-animation's viewer; antecedent: gifterm. |
-| **CandyImage** (`candy-image/`) | 🟡 in progress | Terminal image viewer CLI — chafa-independent front end on sugar-image: auto/sixel/kitty/iterm2/half/quarter/ascii formats, --size/--scale, --dump-detect. Unreleased: Packagist dev-master only (no tag/branch-alias); install via `:@dev` or the rolling dev phar — see candy-image README Install (2026-11-05). |
-| **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes with braille, block and sextant graphs, up to six multi-vendor GPU/NPU boxes, an ipmi BMC band and a VM dashboard, battery readouts, menus, presets, 43 themes (42 ported from btop plus candy-top's own pastel), btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
+| **CandyImage** (`candy-image/`) | 🟡 in progress | Terminal image viewer CLI — chafa-independent front end on sugar-image: auto/sixel/kitty/iterm2/half/quarter/ascii formats, --size/--scale, --dump-detect. |
+| **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 43 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
 | **CandyFlappy** (`candy-flappy/`) | 🟢 ready | Flappy Bird clone — the bird is a SugarSpring projectile. |
 
 <!-- Windows ConPTY backend for sugar-pty: landed (sugar-pty/src/Windows, C-TUI-6.b/C-TUI-6.c). -->
@@ -153,13 +153,12 @@ reference projects supplied the ideas, not the code.
 | SugarCraft package | Ideas sparked by |
 |---|---|
 | SugarAnsiParser (sugar-ansi-parser/) | [x/ansi](https://github.com/charmbracelet/x/tree/main/ansi) |
-| SugarAnimation (sugar-animation/) | [gifterm](https://github.com/namzug16/gifterm) |
 | SugarAsync (sugar-async/) | none — first-party |
 | SugarCellbuffer (sugar-cellbuffer/) | [vte](https://github.com/charmbracelet/vte) |
 | CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |
 | CandyGifView (candy-gifview/) | [gifterm](https://github.com/namzug16/gifterm) |
 | CandyImage (candy-image/) | [chafa](https://github.com/hpjansson/chafa) (CLI surface idea, not a port) |
-| SugarFocus (sugar-focus/) | none — first-party (plays the role of [bubbles](https://github.com/charmbracelet/bubbles) focus handling; sugar-dashboard `FocusManager` analog; analogy only) |
+| SugarFocus (sugar-focus/) | none — first-party (plays the role of [bubbles](https://github.com/charmbracelet/bubbles) focus handling; analogy only) |
 | CandyCodeshot (candy-codeshot/) | [freeze](https://github.com/charmbracelet/freeze) |
 | SugarFuzzy (sugar-fuzzy/) | [fuzzy](https://github.com/sahilm/fuzzy) (+ internal algorithms) |
 | SugarQuickpick (sugar-quickpick/) | [theHermit](https://github.com/Genekkion/theHermit) |
@@ -170,7 +169,7 @@ reference projects supplied the ideas, not the code.
 | SugarLog (sugar-log/) | [log](https://github.com/charmbracelet/log) |
 | SugarMetrics (sugar-metrics/) | [promwish](https://github.com/charmbracelet/promwish) |
 | CandyMinesweeper (candy-minesweeper/) | [go-sweep](https://github.com/maxpaulus43/go-sweep) |
-| CandyStarter (candy-starter/) | none — first-party (bootstrap template patterned on [bubbletea](https://github.com/charmbracelet/bubbletea) starter examples; analogy only) |
+| CandyStarter (candy-starter/) | none — first-party |
 | SugarMouse (sugar-mouse/) | [bubblezone](https://github.com/lrstanley/bubblezone) |
 | SugarImage (sugar-image/) | [x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) |
 | SugarColorprofile (sugar-colorprofile/) | [colorprofile](https://github.com/charmbracelet/colorprofile) |
@@ -209,7 +208,7 @@ reference projects supplied the ideas, not the code.
 | CandyAnsiInspect (candy-ansi-inspect/) | [sequin](https://github.com/charmbracelet/sequin) |
 | CandyGit (candy-git/) | [lazygit](https://github.com/jesseduffield/lazygit) |
 | SugarFlexbox (sugar-flexbox/) | [stickers](https://github.com/76creates/stickers) |
-| SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration; upstream's frozen-rows concept not ported — this lib freezes columns) |
+| SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration, no frozen rows — divergent) |
 | CandyCodetime (candy-codetime/) | [TakaTime](https://github.com/Rtarun3606k/TakaTime) |
 | SugarToast (sugar-toast/) | [bubbleup](https://github.com/DaltonSW/bubbleup) |
 | SugarOverlay (sugar-overlay/) | [bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) |

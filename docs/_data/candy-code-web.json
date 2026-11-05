@@ -3,7 +3,7 @@
     "description": "CandyCodeWeb: browser UI for candy-code's WebSocket server mode. A Vite + Vue 3 bundle committed as dist/ and located by a one-class PHP shim, so candy-code serve needs no Node.",
     "ogTitle": "CandyCodeWeb — SugarCraft",
     "ogDescription": "The browser face of candy-code's server mode — Vite + Vue 3 + TypeScript + Pinia, shipped pre-built through Composer.",
-    "emoji": "",
+    "emoji": "🌐",
     "displayName": "CandyCodeWeb",
     "tagline": "Browser UI for candy-code's server mode",
     "phpVersion": "8.3+",
