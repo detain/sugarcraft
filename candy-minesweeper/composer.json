@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-minesweeper",
-    "description": "Minesweeper TUI \u2014 port of maxpaulus43/go-sweep on the SugarCraft stack.",
+    "description": "Minesweeper TUI on the SugarCraft stack, inspired by maxpaulus43/go-sweep.",
     "type": "project",
     "license": "MIT",
     "keywords": [
