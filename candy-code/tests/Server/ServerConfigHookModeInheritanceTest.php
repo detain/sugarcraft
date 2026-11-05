@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Server;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Cli\Serve;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Server\ServerConfig;
 
@@ -164,9 +165,22 @@ final class ServerConfigHookModeInheritanceTest extends TestCase
      */
     public function testTheServeHookRouteUsesTheClampAndNotTheAdmissionDoor(): void
     {
-        $source = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Serve.php');
+        // The Serve unit: class file plus every trait it composes (CWPD-14 moved
+        // the startup wiring into a companion trait). Read through the autoloader
+        // so the walk survives further splits instead of naming one path.
+        $paths = [(new \ReflectionClass(Serve::class))->getFileName()];
+        foreach (\class_uses(Serve::class) as $trait) {
+            $paths[] = (new \ReflectionClass($trait))->getFileName();
+        }
+
+        $source = '';
+        foreach ($paths as $path) {
+            self::assertIsString($path, 'the autoloader must resolve Serve and its traits to readable files');
+            $source .= (string) \file_get_contents($path);
+        }
+
         $start = \strpos($source, 'HookWebhooks::new(');
-        self::assertIsInt($start, 'the webhook route is mounted in Serve.php');
+        self::assertIsInt($start, 'the webhook route is mounted in the Serve unit');
         $end = \strpos($source, 'spawnSession(', $start);
         self::assertIsInt($end, 'the hook run closure spawns through the background supervisor');
         $closure = \substr($source, $start, $end - $start);

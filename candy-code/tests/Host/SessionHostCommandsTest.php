@@ -574,18 +574,26 @@ final class SessionHostCommandsTest extends TestCase
      * The behavioural half lives in the two rows this class already drives (a
      * successful occupying report lands unflagged, above); this is the half no
      * command fixture can reach without a daemon: every `host.command.error`
-     * sentence in the file carries the flag as it is written.
+     * sentence in the unit carries the flag as it is written.
      */
     public function testEveryCommandErrorRowIsFlaggedAtItsProducer(): void
     {
-        // The host's own file, read through the autoloader rather than by a path
-        // relative to this one. Naming the package root here would enrol this class
-        // in the tree-wide walker census for a reason that has nothing to do with the
-        // flag, and the reflection path also survives the source file being moved.
-        $path = (new \ReflectionClass(SessionHost::class))->getFileName();
-        self::assertIsString($path, 'the autoloader must resolve the host class to a readable file');
-
-        $lines = explode("\n", (string) file_get_contents($path));
+        // The host's own unit — class file plus every trait it composes — read
+        // through the autoloader rather than by a path relative to this one. Naming
+        // the package root here would enrol this class in the tree-wide walker census
+        // for a reason that has nothing to do with the flag, and the reflection walk
+        // survives the source being split across companion trait files (CWPD-14).
+        $paths = [(new \ReflectionClass(SessionHost::class))->getFileName()];
+        foreach (class_uses(SessionHost::class) as $trait) {
+            $paths[] = (new \ReflectionClass($trait))->getFileName();
+        }
+        $lines = [];
+        foreach ($paths as $path) {
+            self::assertIsString($path, 'the autoloader must resolve the host class and its traits to readable files');
+            foreach (explode("\n", (string) file_get_contents($path)) as $line) {
+                $lines[] = $line;
+            }
+        }
 
         $sites = [];
         foreach ($lines as $line) {
