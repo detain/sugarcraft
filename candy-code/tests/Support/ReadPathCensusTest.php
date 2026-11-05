@@ -411,12 +411,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'downloaded to its own `phar.tmp-<pid>-<random>` name, for the detached-signature leg '
                 . 'against the pinned release key; the path is never externally chosen',
         ],
-        'Cli/Serve.php|file_get_contents' => [
+        'Cli/Serve/ServeManagement.php|file_get_contents' => [
             'SELF_LOCATED — storedToken(): the owner-token file in the `serve` state dir '
                 . 'StateDir::existing() verified 0700 and ours; lstat refuses anything but a '
                 . 'regular file, and it is read, never minted',
         ],
-        'Cli/Serve.php|fopen' => [
+        'Cli/Serve/ServeManagement.php|fopen' => [
             'SELF_LOCATED — follow(): the same log, re-opened at the offset already printed',
         ],
         'Host/Commands/AgentsHostCommand.php|glob' => [
