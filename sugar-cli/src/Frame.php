@@ -34,13 +34,18 @@ use SugarCraft\Style\Style;
  *     than the terminal;
  *   - emits NO `\x1b[2J` / screen clear — pure content for the diff renderer.
  *
- * The title and status strings are passed in pre-rendered (the host app builds
- * them — they are app-specific), as is the body: sugar-style output whose SGR
+ * The title, status and body arrive pre-rendered by the host app — sugar-style
+ * output whose SGR
  * sequences ARE the requested styling. They are still treated as untrusted at
- * ingress: every line is run through the sanitizer that keeps exactly the
+ * ingress: every such line runs through the sanitizer that keeps exactly the
  * CSI-SGR subset and discards all other escape/control bytes, so no caller can
  * forge a screen clear, cursor move, OSC clipboard write, or extra row through
- * Frame. Only validated SGR reaches the terminal.
+ * a Frame string. That guarantee is scoped to string ingress: the border Style
+ * itself is rendered as given, and a sugar-style Style may legitimately carry
+ * an OSC-8 hyperlink envelope — hand withBorderStyle() only a style whose
+ * bytes you want on the terminal. Tightening the border path too (stripping
+ * OSC envelopes from the border Style at ingress) would change how existing
+ * apps render and is an owner call, not a silent fix.
  */
 final class Frame
 {

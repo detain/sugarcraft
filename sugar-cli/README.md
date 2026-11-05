@@ -122,7 +122,10 @@ echo StatusLine::error('connection refused'), "\n";
   Titles, status lines and body lines may carry inline SGR styling; every
   other escape and control byte is stripped on ingress (the SGR-preserving
   `SafeText::styledLine()` gate), and `withTitleText()` / `withBorderStyle()`
-  let you style plain text without building escapes yourself. An unclosed
+  let you style plain text without building escapes yourself. The stripping guarantee covers the strings; the border style from
+   `withBorderStyle()` is rendered as given and a sugar-style `Style` may carry
+   an OSC-8 hyperlink envelope — pass only styles whose bytes you want on the
+   terminal. An unclosed
   SGR on width-fitting content can bleed into the surrounding padding —
   close your styles or pass them through `withTitleText()`.
 - **`AutoWidth`** — the `int|AutoWidth|null $width` sentinel shared by the
