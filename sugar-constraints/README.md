@@ -17,8 +17,8 @@ whole cells. Why not just `int(0.3 * $width)` per pane? Because a resize must
 answer six panes at once — floors, caps, proportional fills, and rounding
 leftovers all interact, and hand-rolled arithmetic distributes them
 differently on every code path. The solver centralises that decision, keeps it
-integer-exact, and is stateless: identical inputs, identical frames, in every
-process.
+integer-exact, and is stateless: identical inputs give identical frames — no
+ambient state, nothing cached between solves.
 
 ## Install
 
@@ -38,7 +38,7 @@ use SugarCraft\Constraints\{Direction, GreedySolver, Region};
 
 $solver = GreedySolver::new();
 
-$rects = $solver->solve(Region::fromSize(100, 24), Direction::Horizontal, [
+$rects = $solver->solve(Region::fromSize(100, 20), Direction::Horizontal, [
     Constraint::length(24),   // sidebar:  24
     Constraint::fill(1),      // content:  76
 ]);
@@ -51,7 +51,7 @@ is silent by design (see [Degradation](#degradation)).
 A tour of every constraint type in one 100-column row, with real outputs:
 
 ```php
-$rects = $solver->solve(Region::fromSize(100, 24), Direction::Horizontal, [
+$rects = $solver->solve(Region::fromSize(100, 20), Direction::Horizontal, [
     Constraint::length(20),      // exactly 20 cells
     Constraint::min(10),         // floor: stays 10 — Fill and Max ate the slack
     Constraint::fill(1),         // gets 1 cell
@@ -98,7 +98,8 @@ Maxes gave up, in the order **Min → Fill → everything else** — and in a se
 with no Min and no Fill, that "everything else" includes Length/Percentage/
 Ratio, which is how a "fixed" `length(10)` becomes 95 in
 `[length(10), max(5)]@100 → [95, 5]`. Every one of these shapes is pinned in
-`solverEdgeCase`-style probes and the width-sum sweep test.
+`tests/SolverEdgeCaseTest.php` and swept for the sum law by
+`tests/WidthSumInvariantSweepTest.php`.
 
 **Rounding and overflow.** Sizes are whole cells, so `floor()` loses
 fractions; the solver hands those cells back so the regions still tile the
@@ -128,8 +129,11 @@ region at its full base size instead (the layout runs off-grid).
 
 The compat knobs exist for one reason: `sugar-panels` retired its hand-rolled
 distribution helpers against this package while keeping its golden frames
-byte-identical. Parity is pinned in this suite against sugar-panels's own
-golden tests; a full case sweep found zero divergences. New code should use
+byte-identical. Parity is pinned here by `tests/GreedySolverCompatTest.php`,
+which encodes expected splits hand-computed from sugar-panels's
+`distribute()`/`distributeFlex()` semantics — it runs this package only, not
+the upstream golden suite; a full case sweep found
+zero divergences. New code should use
 the default policy — compat mode exists to reproduce a specific history, not
 as a general recommendation.
 
