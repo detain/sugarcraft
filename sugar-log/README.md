@@ -549,8 +549,8 @@ try {
 ```
 
 An adapter built with a forced level above `Info` keeps the bypass only for
-the un-forced path: once a level is forced, `print()` goes through the
-`minLevel` filter like any ordinary call at that level.
+the un-forced path: once a level above `Info` is forced, `print()` goes
+through the `minLevel` filter like any ordinary call at that level.
 
 ## Sample output
 
