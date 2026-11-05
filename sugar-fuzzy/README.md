@@ -35,7 +35,8 @@ $result = $matcher->match('foo', 'foobar');
 $score = $matcher->score('foo', 'foobar'); // 19
 
 // Match against multiple candidates (sorted by score desc)
-$results = $matcher->matchAll('app', ['apple', 'applet', 'application', 'apricot']);
+$candidates = ['apple', 'applet', 'application', 'apricot'];
+$results = $matcher->matchAll('app', $candidates);
 // Returns array of MatchResult sorted by score
 
 // Limit results to top N with optional minScore threshold
