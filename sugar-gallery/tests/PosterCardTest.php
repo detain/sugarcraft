@@ -6,11 +6,14 @@ namespace SugarCraft\Gallery\Tests;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionClassConstant;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\ImageOverlay;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\AnsiGuard;
 use SugarCraft\Gallery\PosterCard;
+use SugarCraft\Gallery\PosterGrid;
 use SugarCraft\Style\Layout;
 
 final class PosterCardTest extends TestCase
@@ -684,6 +687,23 @@ final class PosterCardTest extends TestCase
             self::assertNotSame($before, $after);
         } finally {
             T::setLocale($previous);
+        }
+    }
+
+    /**
+     * The README's cache-levers paragraph publishes the clear methods as the
+     * sanctioned surface and states that both caps are PRIVATE constants whose
+     * names fatal on external reference. This pin reddens if either const is
+     * widened (the prose once claimed FIT_CACHE_CAP was public — it never was)
+     * or if the 2048/oldest-half bound the paragraph quotes drifts.
+     */
+    public function testTheCacheCapsStayPrivateConstants(): void
+    {
+        foreach ([PosterCard::class => 'FIT_CACHE_CAP', PosterGrid::class => 'BOX_CACHE_CAP'] as $class => $name) {
+            $constant = (new ReflectionClass($class))->getReflectionConstant($name);
+            self::assertInstanceOf(ReflectionClassConstant::class, $constant, "{$class}::{$name} is declared");
+            self::assertTrue($constant->isPrivate(), "{$class}::{$name} must stay private — the README publishes the clear methods, not the cap");
+            self::assertSame(2048, $constant->getValue(), "{$class}::{$name} bounds the memo at 2048 entries");
         }
     }
 }

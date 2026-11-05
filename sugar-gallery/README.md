@@ -374,13 +374,14 @@ marks hit-test zones.
 `?` rows under the localised `card.failed` notice, counts as unfilled to
 `hasPoster()`, so the fill policy re-queues the cell). Plus two cache levers:
 `PosterCard::clearFitCache()` and `PosterGrid::clearBoxCache()` drop process-wide
-memos. The card memo is bounded at `PosterCard::FIT_CACHE_CAP` (public const) and
-the box memo at `BOX_CACHE_CAP = 2048` (**internal** — copying that literal into
-your code fatals; call the clear methods); the two are implemented differently
-(by-ref method-static vs plain static) on purpose. Each caps at 2048 entries with
-oldest-half eviction, so resident bytes stay bounded (worst case ≈ 2048 frames
-per memo). Clearing returns an entry count and never changes a single rendered
-byte.
+memos. Both memos are internally capped — `PosterCard::FIT_CACHE_CAP` and
+`PosterGrid::BOX_CACHE_CAP` are **private** constants, so referencing either
+name from your code fatals (copying the number is legal; it is simply not an
+API, and the sanctioned levers are the clear methods). The two caps are
+implemented differently (by-ref method-static vs plain static) on purpose.
+Each caps at 2048 entries with oldest-half eviction, so resident bytes stay
+bounded (worst case ≈ 2048 frames per memo). Clearing returns an entry count
+and never changes a single rendered byte.
 
 Geometry is clamped at construction: `cardWidth ≥ 4`, `posterHeight ≥ 1`, both
 spacings `≥ 0` (and again inside `render()` — a card asked to render narrower than
