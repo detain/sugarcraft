@@ -78,7 +78,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 | `Writer\UnifiedFormat` | `write()` / `hunksOnly()` statics behind `Diff::unified()` / `Diff::hunkText()`; `NO_NEWLINE_ROW` |
 | `Writer\SideBySideFormat` / `Writer\SideBySideRow` | `rows()` / `fromUnified()` pairing into `[left?, right?]` value rows for split layouts; `SideBySideRow::isPaired()` |
 | `Reader\UnifiedScan` | `lines()` / `fileHeaders()` / `rowsOf()` row walks with declared-count budgets and fail-closed boundaries; `MAX_LINE_NUMBER_DIGITS` |
-| `Reader\ScannedLine` / `Reader\ScanRowKind` | Per-row `(old, new, fileHeader, kind)` region model; row classification enum |
+| `Reader\ScannedLine` / `Reader\ScanRowKind` | Per-row `(old, new, fileHeader, kind)` region model; row classification enum — `isContentRow()` is true exactly for `Context`/`Insert`/`Delete`, so a pairing renderer gates its runs on the kind instead of re-sniffing the marker column |
 
 Non-visual engine: no ANSI, no rendering, no demos — view layers (gutters, coloring) consume the model and stay downstream. Sides accept a raw `string` or a `list<string>` (one element = one line; an element containing `"\n"` is refused — `file()` callers pass `FILE_IGNORE_NEW_LINES`). The model is eagerly materialised: `compute()` allocates the full `Line`/`Hunk` row set, and `addedLines()`/`removedLines()` re-walk it per call.
 
