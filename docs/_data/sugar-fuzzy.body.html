@@ -37,7 +37,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
     <h3 style="margin-top: 32px;">FuzzyMatcher interface</h3>
     <div class="feature-grid">
       <div class="feature"><strong>match(string $query, string $candidate): ?MatchResult</strong><span>Returns null when no match, MatchResult with score + indices otherwise.</span></div>
-      <div class="feature"><strong>matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): list&lt;MatchResult&gt;</strong><span>Returns all matches sorted by score desc, then candidate asc as tiebreak; <code>matchAllGenerator()</code> yields the same ranked results — it drains and sorts the whole input before the first yield (ranking is global), a streaming API rather than per-candidate laziness.</span></div>
+      <div class="feature"><strong>matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): list&lt;MatchResult&gt;</strong><span>Returns all matches sorted by score desc, then candidate asc as tiebreak (compared with <code>&lt;=&gt;</code>, so digit-only candidates order numerically); perfect ties keep input order (<code>usort</code> is stable as of PHP 8.0); <code>limit: 0</code> yields none, a negative limit is unlimited. <code>matchAllGenerator()</code> yields the same ranked results — it drains and sorts the whole input before the first yield (ranking is global), a streaming API rather than per-candidate laziness.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">MatchResult</h3>
@@ -81,7 +81,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>FuzzyMatcher</td><td>match(string $query, string $candidate): ?MatchResult</td><td>Single match or null</td></tr>
-<tr><td>FuzzyMatcher</td><td>matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): list&lt;MatchResult&gt;</td><td>All matches sorted by score desc</td></tr>
+<tr><td>FuzzyMatcher</td><td>matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): list&lt;MatchResult&gt;</td><td>All matches sorted by score desc, then haystack asc (numeric-string aware); limit 0 yields none, negative limit is unlimited</td></tr>
 <tr><td>FuzzyMatcher</td><td>matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): Generator</td><td>Ranked-order generator; drains and sorts before the first yield (same output as matchAll())</td></tr>
 <tr><td>MatchResult</td><td>$score / $needle / $haystack / $matchedIndices (readonly)</td><td>Match quality score (higher = better), the query and the candidate, and the matched code-point offsets</td></tr>
 <tr><td>MatchResult</td><td>indices(): list&lt;int&gt;</td><td>0-based matched code-point offsets into the original haystack</td></tr>

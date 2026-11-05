@@ -58,6 +58,13 @@ $styled = $highlighter->highlight($result, fn($matched) => "\033[1m$matched\033[
 // Returns 'foobar' with matched chars styled
 ```
 
+**Rank contract.** `matchAll()` (and `matchAllGenerator()`, same output) order
+results by score descending, then by haystack ascending as the tiebreak — both
+compared with `<=>`, so digit-only candidates order numerically (`"10"` lands
+after `"9"`, not lexicographically before it). Perfect ties — equal score and
+equal haystack — keep their input order (`usort` is stable as of PHP 8.0).
+`limit: 0` yields no results; a negative `limit` is treated as unlimited.
+
 ## Scoring profiles
 
 The Smith-Waterman scoring weights are injectable via an immutable `ScoringProfile`.
