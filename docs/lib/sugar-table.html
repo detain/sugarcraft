@@ -51,7 +51,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-table"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-table" alt="SugarTable code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Column-definition table with sortable columns, frozen columns, per-cell styling, pagination, and a programmatic row cursor. StyledCell supports full ANSI formatting.</p>
+    <p class="lede" style="margin-top: 28px;">Column-definition table with sortable columns, frozen columns, per-cell styling, pagination, and a programmatic row cursor. Per-cell styling rides a restricted SGR attribute set canonicalised to 24-bit at render.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-table</code></pre>
@@ -76,7 +76,7 @@ echo $table-&gt;View();</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Column definitions</strong><span>Width, alignment, style, wrap per column; frozen columns and sorting handled at the table level.</span></div>
-            <div class="feature"><strong>StyledCell</strong><span>Full ANSI SGR support in every cell — colors, bold, underline.</span></div>
+            <div class="feature"><strong>StyledCell</strong><span>Per-cell SGR styling — bold, underline and colours from a restricted attribute set.</span></div>
             <div class="feature"><strong>Pagination</strong><span>Paginate large datasets, navigate between pages.</span></div>
             <div class="feature"><strong>Frozen columns</strong><span>Pin the leftmost columns with withFrozenCols([0..k]) so they stay put during horizontal scroll.</span></div>
             <div class="feature"><strong>Row selection</strong><span>Programmatic cursor - SelectNext/SelectPrevious/withSelectedIndex; handleKey(KEY_*) scrolls. No mouse handling: wire input events yourself.</span></div>

@@ -758,6 +758,11 @@ $t = Table::fromColumns([...])
 $t = $t->withBorderStyle('1;32');       // bold green
 ```
 
+Header cells default to `1;37` (bold + ANSI colour slot 7). Slot colours resolve
+through a fixed TrueColor table — slot 7 renders as `#E5E5E5`, which can vanish on
+light terminal themes. Palette-adaptive hosts should pass `withHeaderStyle('1')`
+(bold only, terminal default foreground) or `withHeaderStyle('')`.
+
 Only corner/vertical/horizontal glyphs are ever drawn — sugar-table consumes
 `Border`'s eight position glyphs (top/bottom/left/right + four corners) and
 never its junction glyphs (├/┤/┬/┴/┼): the header separator rule is built from
@@ -1041,12 +1046,15 @@ function(int $row, int $col, string $value): SugarCraft\CellBuffer\Style|string
 ```
 
 - **Returns `Style`** — new preferred style (PHP 8.3+ typed return, immutable)
-- **Returns `string`** — legacy ANSI SGR string, passed through verbatim (there is
-
-
-
-  no `Style::fromAnsiString()` in this lib or sugar-style; SGR strings are the internal
-  currency `Table::normalizeStyleResult()` works with)
+- **Returns `string`** — legacy ANSI SGR string. It is NOT echoed verbatim: every
+  style string is parsed at render time into a restricted attribute set (bold,
+  faint, italic, underline, blink, reverse, strike, overline, the 16 base colour
+  codes, and `38;2`/`38;5`/`48;2`/`48;5` colours); unrecognised tokens are dropped
+  silently, `38;5`/`48;5` codes expand to 24-bit through the fixed xterm cube
+  (levels 0/51/102/153/204/255), and the frame emits canonicalised 24-bit SGR —
+  golden byte comparisons must never assume the input codes survive to output.
+  SGR strings remain valid input; `Table::normalizeStyleResult()` folds them into
+  the internal representation.
 
 Anything else returned (e.g. a `SugarCraft\Style\Style` object) falls back to the inherited
 cell style. Prefer `SugarCraft\CellBuffer\Style`.
