@@ -177,6 +177,17 @@ leaves every other decision to you.
 
 ![cli-page](.vhs/cli-page.gif)
 
+## Examples
+
+- `examples/cli-page.php` — one page wiring together every presenter:
+  `Banner`, `Section`, `Stage`, `StatusLine` and `HelpText`. It is exactly
+  what the `cli-page` demo above records.
+- `examples/logo.php` — the `Logo` wordmark and tint flow.
+
+Run either with `php examples/<name>.php` from this directory; both need no
+arguments and exit 0. They are the quickest whole-program check of the
+drop-into-your-app path.
+
 ## Tests
 
 ```sh
