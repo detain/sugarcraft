@@ -67,11 +67,12 @@ use SugarCraft\Input\Event\TerminalReplyEvent;
 
 $driver = new StreamInputDriver(STDIN);
 
-while (true) {
+while (!$driver->isEof()) {
     $event = $driver->read();
     if ($event === null) {
-        if ($driver->isEof()) break;  // stream ended and buffers drained
-        usleep(2_000);                // idle: back off, never busy-spin
+        if (!$driver->hasPending()) {
+            usleep(2_000); // nothing buffered — back off before polling again
+        }
         continue;
     }
 
@@ -84,6 +85,8 @@ while (true) {
         default                           => handleOther($event),
     };
 }</code></pre>
+
+    <p>One termination caveat: <code>isEof()</code> means "ended <em>and</em> drained", not "ended". A stream that stops mid-sequence leaves the decoder holding a partial, so <code>isEof()</code> stays false and <code>read()</code> answers null forever — call <code>escapeDecoder()->reset()</code> (or bound the loop with a grace period) when shutdown must win over an unfinished frame.</p>
 
     <h3 style="margin-top: 32px;">EscapeDecoder</h3>
     <div class="feature-grid">
@@ -106,7 +109,7 @@ while (true) {
 
     <h3 style="margin-top: 32px;">Event types</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>KeyEvent</strong><span>key, modifiers, raw, isRelease(), isRepeat — plain keys, F1-F24, arrows, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Ctrl+letter; Kitty releases arrive as <code>ReleaseA</code> (<code>isRelease()</code>), repeats as <code>isRepeat</code></span></div>
+      <div class="feature"><strong>KeyEvent</strong><span>key, modifiers, raw, isRelease(), isRepeat — plain keys, F1-F24 legacy and up to F35 via Kitty, arrows, Home/End/PageUp/PageDown, Insert, Delete, Backspace, Tab, Enter, Escape, Ctrl+letter; Kitty releases arrive as <code>ReleaseA</code> (<code>isRelease()</code>), repeats as <code>isRepeat</code></span></div>
       <div class="feature"><strong>MouseEvent</strong><span>x, y, button, action, modifiers — SGR 1006/1016, urxvt 1015 and X10: press, release, drag, scroll (buttons 96/97 up/down, 98/99 horizontal wheel); the constructor refuses any other action</span></div>
       <div class="feature"><strong>FocusEvent</strong><span>gained, raw — terminal window focus gained/lost (DECSET 1004)</span></div>
       <div class="feature"><strong>PasteEvent</strong><span>content, truncated, truncationNotice(): ?string — bracketed paste (CSI 200~ … CSI 201~); above the 1 MiB cap the announcement fires once and the overflow is discarded until the real terminator, never re-decoded as keys</span></div>
@@ -156,13 +159,14 @@ while (true) {
 <tr><td>ReactInputDriver</td><td>escapeDecoder(): EscapeDecoder</td><td>Seam to the owned decoder</td></tr>
 <tr><td>SignalResizeDriver</td><td>arm(): bool</td><td>Install the SIGWINCH handler; false without ext-pcntl (constructor is side-effect free)</td></tr>
 <tr><td>SignalResizeDriver</td><td>disarm(): bool</td><td>Hand the process disposition back (previous handler, or SIG_DFL)</td></tr>
+<tr><td>SignalResizeDriver</td><td>read(): Event|ResizeEvent|null</td><td>InputDriver surface: returns a fresh ResizeEvent when a SIGWINCH landed since the last read, else null</td></tr>
 <tr><td>KeyEvent</td><td>key: string</td><td>Symbolic key name (releases: <code>Release</code> + capitalised name)</td></tr>
 <tr><td>KeyEvent</td><td>modifiers: KeyModifier</td><td>Modifier bitmask</td></tr>
 <tr><td>KeyEvent</td><td>raw: string</td><td>Raw bytes that produced this event</td></tr>
 <tr><td>KeyEvent</td><td>isRelease(): bool</td><td>True for Kitty key-release events</td></tr>
 <tr><td>KeyEvent</td><td>isRepeat: bool</td><td>True for Kitty autorepeat frames (decode as press)</td></tr>
-<tr><td>MouseEvent</td><td>x, y: int</td><td>Column and row (1-based)</td></tr>
-<tr><td>MouseEvent</td><td>button: int</td><td>Button index (0=left, 1=middle, 2=right; scroll 96=up, 97=down, 98=wheel-left, 99=wheel-right)</td></tr>
+<tr><td>MouseEvent</td><td>x, y: int</td><td>Column and row (1-based; cells under 1000/1006, pixels under 1016 — the decoder keeps each field's first integer verbatim, units belong to the reporting mode)</td></tr>
+<tr><td>MouseEvent</td><td>button: int</td><td>Button index (0=left, 1=middle, 2=right; scroll 96=up, 97=down, 98=wheel-left, 99=wheel-right; X10 releases report 3 — match releases on <code>action</code>, not the button index)</td></tr>
 <tr><td>MouseEvent</td><td>action: string</td><td>press | release | drag | scroll (constructor refuses anything else)</td></tr>
 <tr><td>FocusEvent</td><td>gained: bool</td><td>True if focus gained, false if lost</td></tr>
 <tr><td>FocusEvent</td><td>raw: ?string</td><td>Escape sequence that produced the event</td></tr>
@@ -170,7 +174,7 @@ while (true) {
 <tr><td>PasteEvent</td><td>truncated: bool</td><td>True when content was clipped to the cap</td></tr>
 <tr><td>PasteEvent</td><td>truncationNotice(): ?string</td><td>Localized one-liner explaining the clip, or null</td></tr>
 <tr><td>TerminalReplyEvent</td><td>family: string</td><td>One of the eight reply families (see <code>FAMILIES</code>)</td></tr>
-<tr><td>TerminalReplyEvent</td><td>params / raw / body / truncated</td><td>Parsed reply parameters and the bytes that carried them</td></tr>
+<tr><td>TerminalReplyEvent</td><td>params / paramsDropped / raw / body / truncated</td><td>Parsed reply parameters (first <code>MAX_PARAMS</code> = 32 ride the event; the count the wire carried beyond the cap rides <code>paramsDropped</code>) and the bytes that carried them</td></tr>
 <tr><td>TerminalReplyEvent</td><td>is(string $family): bool</td><td>Family check</td></tr>
 <tr><td>ResizeEvent</td><td>cols, rows: int</td><td>New terminal dimensions</td></tr>
 <tr><td>KeyModifier</td><td>none() / shift() / alt() / ctrl() / altShift() / ctrlShift() / altCtrl() / all()</td><td>Named factories (memoized)</td></tr>
@@ -179,6 +183,10 @@ while (true) {
 <tr><td>KeyModifier</td><td>equals(KeyModifier $other): bool</td><td>Bitmask equality</td></tr>
 <tr><td>KeyModifier</td><td>value(): int</td><td>Raw bitmask value</td></tr>
 </table>
+
+    <h3 style="margin-top: 40px;">Security: decoded content is untrusted</h3>
+    <p>Everything the decoder emits is attacker-writable input — any process that can write the pts slave, an injected <code>tmux send-keys</code> session, or whatever the clipboard held feeds the stream. Treat key names, <code>PasteEvent::content</code>, <code>TerminalReplyEvent::body</code>/<code>params</code>, and every <code>raw</code> field as hostile bytes: never echo decoded content straight back to the terminal (a crafted paste or reply body can carry OSC-8 hyperlinks and other introducers that command your renderer — sugar-core's <code>Sanitize</code> is the fleet's shared tool for the sweep), and never interpolate it into shell commands, paths, or logs without your own quoting and redaction discipline.</p>
+    <p>Two structural laws to design against. <strong>Bracketed paste fences are forgeable</strong>: <code>CSI 200~</code>/<code>CSI 201~</code> are just bytes — use framing for convenience (bulk text without keymap side effects), never as an authenticity boundary between typed and pasted. <strong>Caps never reinterpret</strong>: when a sequence or paste overflows its cap the excess is discarded and counted (<code>discardedPasteBytes()</code>), never pushed back into the stream for a second parse. The fleet's private-use-area arena (zone sentinels U+E000/U+E001, image markers from U+E002) passes through decoding byte-identical — the consumer that renders owns the sweep, with <code>Sanitize::untrustedForMarkedFrames()</code>; sugar-core's <code>InputReader</code> is a consumer that strips. The decoder's own caps contain parser resource use; they do not make the content trustworthy. The fleet-wide contract lives in <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
   </div>
 </section>
 
