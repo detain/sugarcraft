@@ -12,6 +12,8 @@ composer require sugarcraft/sugar-fuzzy:@dev
 
 Releases: pre-1.0 — consume `dev-master` (the `:@dev` form above).
 
+Requires PHP 8.3+.
+
 ## Role
 
 Extracts the canonical Smith-Waterman fuzzy matcher from `sugar-forms` and adds the key feature that was previously impossible: **ranked matches WITH scored matched character indices**, enabling UI filter highlighting.
@@ -58,6 +60,10 @@ $styled = $highlighter->highlight($result, fn($matched) => "\033[1m$matched\033[
 // Returns 'foobar' with matched chars styled
 ```
 
+Both construction idioms below build the same object: `new SmithWatermanMatcher(...)`
+passes constructor arguments explicitly, while `SmithWatermanMatcher::new()` is the
+house zero-argument factory mirroring upstream. Each example sticks to one idiom.
+
 **Rank contract.** `matchAll()` (and `matchAllGenerator()`, same output) order
 results by score descending, then by haystack ascending as the tiebreak — both
 compared with `<=>`, so digit-only candidates order numerically (`"10"` lands
@@ -84,8 +90,8 @@ $custom  = new SmithWatermanMatcher(
 );
 ```
 
-| Weight            | default | strict | lenient |
-|-------------------|--------:|-------:|--------:|
+| Weight            | canonical | strict | lenient |
+|-------------------|----------:|-------:|--------:|
 | `matchScore`      |       3 |      4 |       2 |
 | `mismatchPenalty` |      −3 |     −4 |      −2 |
 | `gapOpen`         |      −5 |     −6 |      −3 |
@@ -107,9 +113,10 @@ $picker->match('app', 'apple');      // indices [0, 1, 2], score as in plain mod
 $picker->match('gst', 'git status'); // indices [0, 4, 5] — plain mode only finds "st"
 ```
 
-When plain mode's best alignment already covers the whole query, the result is
-identical to plain mode. Otherwise (initials-style queries such as `gst`, where
-a short adjacent run outscores the spread-out path) the matcher scores the best
+When plain mode's best alignment already covers the whole query, full-query mode
+returns exactly that same alignment — nothing is forced. Otherwise (initials-style
+queries such as `gst`, where a short adjacent run outscores the spread-out path)
+the matcher scores the best
 alignment forced to cover every query character: the highest-scoring in-order
 placement, with the same weights and no restart inside the path. It runs from
 the first matched character to the last, and every candidate character skipped
@@ -154,8 +161,8 @@ characterization suites:
 use SugarCraft\Fuzzy\Matcher\SahilmMatcher;
 use SugarCraft\Fuzzy\SahilmScoring;
 
-$gum   = new SahilmMatcher();                                                   // canonical
-$tuned = SahilmMatcher::new(scoring: SahilmScoring::canonical()->withFirstCharBonus(0));
+$gum   = new SahilmMatcher();                                                  // canonical
+$tuned = new SahilmMatcher(scoring: SahilmScoring::canonical()->withFirstCharBonus(0));
 ```
 
 | Weight             | canonical |
@@ -178,8 +185,10 @@ refuses.
 ```php
 use SugarCraft\Fuzzy\Matcher\FuzzyMatcherFactory;
 
-FuzzyMatcherFactory::named('smith-waterman', ScoringProfile::strict());
-FuzzyMatcherFactory::named('sahilm', SahilmScoring::canonical());
+$matcher = FuzzyMatcherFactory::named('smith-waterman', ScoringProfile::strict());
+$gum     = FuzzyMatcherFactory::named('sahilm', SahilmScoring::canonical());
+
+$matcher->matchAll('app', ['apple', 'apricot']); // list<MatchResult>, ranked
 ```
 
 Each matcher takes its own weight type; passing the other one (or an unknown
@@ -229,7 +238,7 @@ partial queries from a scored hit to `null`.
 | CamelCase bonus | ❌ | ✅ (10) |
 | First-char bonus | ❌ | ✅ (15) |
 | Whole query must land | ❌ (opt-in via `withRequireFullQuery()`) | ✅ (always) |
-| Case sensitive | ❌ | Optional |
+| Case sensitivity | none (always folded) | optional |
 | Matching style | Best-alignment | Greedy first-occurrence |
 
 ## Canonical matcher & consumer migration

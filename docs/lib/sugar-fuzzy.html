@@ -58,16 +58,14 @@
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-fuzzy:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Fuzzy\FuzzyMatcher;
-use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
-use SugarCraft\Fuzzy\MatchResult;
+    <pre class="code"><code class="language-php">use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\Highlighter;
 
 $matcher = new SmithWatermanMatcher();
 
 // Single match — returns null when no match
 $result = $matcher->match('foo', 'foobar');
-// $result->score     === 19   (3 × matchScore + adjacency bonuses)
+// $result->score     === 19   (3 × matchScore + 2 × adjacentBonus = 19)
 // $result->indices() === [0, 1, 2]  (0-based character positions)
 // $result->haystack  === 'foobar'
 
