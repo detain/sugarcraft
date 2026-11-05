@@ -70,7 +70,7 @@ $child-&gt;info('Batch complete');</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Leveled logging</strong><span>Debug, Info, Warn, Error, Fatal. Color runs in two layers: a construction-time style profile that honors NO_COLOR / CLICOLOR_FORCE, and a per-write gate that downgrades non-TTY destinations so files and pipes get plain bytes.</span></div>
-            <div class="feature"><strong>Three formatters</strong><span>TextFormatter (default), JSONFormatter, LogfmtFormatter — swap via <code>withFormatter()</code>.</span></div>
+            <div class="feature"><strong>Three formatters</strong><span>TextFormatter (default), JsonFormatter, LogfmtFormatter — swap via <code>withFormatter()</code>.</span></div>
             <div class="feature"><strong>Structured context</strong><span>Arbitrary key/value pairs attached to every log call.</span></div>
             <div class="feature"><strong>Sub-loggers</strong><span><code>with(array $fields)</code> creates a child logger that inherits all context.</span></div>
             <div class="feature"><strong>StandardLogAdapter</strong><span>Go-style <code>print()</code>/<code>printLn()</code>/<code>fatal()</code>/<code>panic()</code> call pattern over a sugar-log Logger — a shape, not an interface (implements no contract); for PSR-3 interoperability use <code>PsrBridge</code>.</span></div>
@@ -110,7 +110,7 @@ $child-&gt;info('Batch complete');</code></pre>
 <tr><td>Logger</td><td>setReportCaller(bool)</td><td>Enable/disable caller basename:line reporting (best-effort 20-frame walk)</td></tr>
 <tr><td>Logger</td><td>setReportTimestamp(bool)</td><td>Enable/disable timestamp</td></tr>
 <tr><td>Logger</td><td>styles()</td><td>Get Styles object for level/field styling</td></tr>
-<tr><td>Logger</td><td>styles()->keys[name]</td><td>Per-field ANSI style override (time, level, caller, message, key, value)</td></tr>
+<tr><td>Logger</td><td>styles()->keys[name]</td><td>Per-field ANSI style override (time, level, prefix, caller, message, key, value)</td></tr>
 <tr><td>PsrBridge</td><td>new(Logger, ?HookRegistry)</td><td>Wrap a Logger with full PSR-3 API</td></tr>
 <tr><td>PsrBridge</td><td>emergency(msg, ctx)</td><td>PSR-3 emergency — maps to Level::Fatal</td></tr>
 <tr><td>PsrBridge</td><td>alert(msg, ctx)</td><td>PSR-3 alert — maps to Level::Fatal</td></tr>
