@@ -68,8 +68,10 @@ final class GraphicsAssertions extends Assert
      * Assert the stream decodes cleanly and stays internally consistent.
      *
      * Sixel: raster matches the declared header and every painted cell references
-     * a defined color. Kitty / iTerm2: the reassembled payload is a real PNG and
-     * its pixel size agrees with any declared `s`/`v` hint.
+     * a defined color. Kitty: the reassembled payload is a real PNG and its pixel
+     * size agrees with any declared `s`/`v` hint. iTerm2: the payload is a real
+     * PNG with non-zero pixel dimensions — no size hint is parsed or compared on
+     * that path.
      */
     public static function assertProtocolRoundTrip(string $stream, Mode $mode, string $message = ''): void
     {
