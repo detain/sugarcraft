@@ -348,8 +348,8 @@ abstract class Chart
      * resolution) instead of standard character cells.
      *
      * Honored by LineChart, the only class extending this base; the
-     * ChartExtras renderers (BarChart, Scatter, OHLCChart, Waveline,
-     * Sparkline) carry no canvas surface at all. Null clears the mode
+     * ChartExtras renderers (BarChart, Scatter, OHLCChart) carry no
+     * canvas surface at all. Null clears the mode
      * back to cell rendering. The canvas object is not mutated — the
      * chart rasterizes into its own internal grid on every render and the
      * instance merely selects the braille mode (its dimensions are not
