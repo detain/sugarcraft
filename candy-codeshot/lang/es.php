@@ -58,7 +58,9 @@ Opciones:
 Notas:
   Las rutas de entrada y salida deben permanecer dentro del directorio de trabajo
   actual salvo con --unsafe-paths. La salida PNG ignora las opciones solo-SVG y
-  anuncia cada opción descartada en stderr.
+  anuncia cada opción descartada en stderr. PNG sin archivo --output se
+  rechaza cuando stdout es una terminal; la lectura interactiva de stdin
+  imprime un aviso y espera Ctrl-D.
 
 Códigos de salida:
   0  éxito

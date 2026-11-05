@@ -58,6 +58,8 @@ candy-codeshot - 将代码或终端输出渲染为 SVG 或 PNG 截图
 注意:
   除非提供 --unsafe-paths，输入和输出路径必须保持在当前工作目录内。
   PNG 输出会忽略上述仅限 SVG 的选项，并在 stderr 上逐一宣布被丢弃的选项。
+  当 stdout 是终端时，缺少 --output 文件的 PNG 输出会被拒绝；
+  交互式读取 stdin 会打印提示并等待 Ctrl-D。
 
 退出码:
   0  成功

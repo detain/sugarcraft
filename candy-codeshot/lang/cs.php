@@ -58,7 +58,9 @@ Volby:
 Poznámky:
   Cesty vstupu a výstupu musí zůstat uvnitř aktuálního pracovního adresáře,
   pokud není zadáno --unsafe-paths. Výstup PNG ignoruje výše uvedené pouze-SVG
-  volby a každou vynechanou volbu oznámí na stderr.
+  volby a každou vynechanou volbu oznámí na stderr. PNG bez souboru
+  --output je odmítnuto, když je stdout terminál; interaktivní čtení ze
+  stdin zobrazí oznámení a čeká na Ctrl-D.
 
 Návratové kódy:
   0  úspěch

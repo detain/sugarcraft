@@ -58,7 +58,9 @@ Seçenekler:
 Notlar:
   Girdi ve çıktı yolları --unsafe-paths verilmedikçe geçerli çalışma dizininin
   içinde kalmalıdır. PNG çıktısı yukarıdaki yalnız-SVG seçenekleri yoksayar ve
-  bıraktığı her birini stderr üzerinde duyurur.
+  bıraktığı her birini stderr üzerinde duyurur. stdout bir terminalse
+  --output dosyasız PNG reddedilir; etkileşimli stdin okuma bir uyarı
+  yazdırır ve Ctrl-D bekler.
 
 Çıkış kodları:
   0  başarılı

@@ -58,7 +58,9 @@ Optionen:
 Hinweise:
   Eingabe- und Ausgabepfade müssen innerhalb des aktuellen Arbeitsverzeichnisses
   bleiben, außer --unsafe-paths wird angegeben. PNG-Ausgabe ignoriert die genannten
-  SVG-only-Optionen und meldet jede verworfene Option auf stderr.
+  SVG-only-Optionen und meldet jede verworfene Option auf stderr. PNG ohne
+  --output-Datei wird abgelehnt, wenn stdout ein Terminal ist; interaktives
+  stdin-Lesen zeigt einen Hinweis und wartet auf Ctrl-D.
 
 Exit-Codes:
   0  Erfolg

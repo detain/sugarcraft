@@ -58,7 +58,9 @@ Opties:
 Opmerkingen:
   Invoer- en uitvoerpaden moeten binnen de huidige werkmap blijven, tenzij
   --unsafe-paths wordt gegeven. PNG-uitvoer negeert de SVG-only-opties hierboven
-  en meldt elke weggelaten optie op stderr.
+  en meldt elke weggelaten optie op stderr. PNG zonder --output-bestand
+  wordt geweigerd als stdout een terminal is; interactief stdin lezen
+  toont een melding en wacht op Ctrl-D.
 
 Exitcodes:
   0  succes

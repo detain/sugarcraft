@@ -33,7 +33,7 @@ Usage:
   candy-codeshot input.txt --theme tokyo-night --no-window --line-numbers
 
 Flag values are separate arguments: "--theme dracula", not "--theme=dracula"
-(the "= " form is rejected as an unrecognised flag).
+(the "=" form is rejected as an unrecognised flag).
 
 Options:
   --theme <name>          Theme name: dark, light, dracula, tokyo-night, nord (default: dark)
@@ -58,12 +58,15 @@ Options:
 Notes:
   Input and output paths must stay inside the current working directory
   unless --unsafe-paths is given. PNG output ignores the SVG-only options
-  above and announces each one it drops on stderr.
+  above and announces each one it drops on stderr. PNG without an --output
+  file is refused when stdout is a terminal; reading stdin interactively
+  prints a notice and waits for Ctrl-D.
 
 Exit codes:
   0  success
   1  I/O failure (unreadable input, unwritable output, missing autoload)
-  2  usage or input error (bad flag, refused path, refused highlight, ...)
+  2  usage or input error (bad flag, missing value, bad number, refused
+     path or font, refused highlight, missing ext-gd, refused PNG-to-terminal)
 
 Examples:
   cat script.php | candy-codeshot --theme dracula

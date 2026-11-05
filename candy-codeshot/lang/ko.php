@@ -58,7 +58,8 @@ candy-codeshot - 코드 또는 터미널 출력을 SVG 또는 PNG 스크린샷�
 주의:
   입력 및 출력 경로는 --unsafe-paths가 없으면 현재 작업 디렉터리 내에
   있어야 합니다. PNG 출력은 위 SVG 전용 옵션을 무시하며 각 생략된 옵션을
-  stderr로 알림니다.
+  stderr로 알림니다. stdout이 터미널이면 --output 파일 없는 PNG 출력은
+  거부됩니다. 대화형 stdin 읽기는 알림을 출력하고 Ctrl-D를 기다립니다.
 
 종료 코드:
   0  성공
