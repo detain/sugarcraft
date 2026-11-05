@@ -27,15 +27,19 @@ composer install
 ./bin/candy-minesweeper                            # default 10×10, 12 mines
 ./bin/candy-minesweeper [width] [height] [mines]   # custom board (validated — see CustomDifficulty below)
 ./bin/candy-minesweeper --easy | --standard | --medium | --expert
+./bin/candy-minesweeper --version                  # print the version and exit
+./bin/candy-minesweeper --help                     # usage (also `-h`)
 ```
 
-The two shapes are mutually exclusive: a preset flag together with positional dimensions is refused with exit 1 rather than silently dropping one of them, and passing two preset flags is likewise refused instead of last-wins. After a global install (`composer global require sugarcraft/candy-minesweeper`) the same commands are available as `candy-minesweeper` on your `PATH` from the vendor bin directory.
+The two shapes are mutually exclusive: a preset flag together with positional dimensions is refused with exit 1 rather than silently dropping one of them, and passing two preset flags is likewise refused instead of last-wins. Any unknown option is refused with exit 1 and the usage on stderr rather than being ignored. After a global install (`composer global require sugarcraft/candy-minesweeper`) the same commands are available as `candy-minesweeper` on your `PATH` from the vendor bin directory.
 
-Custom board arguments are validated through `CustomDifficulty::fromInput()`: each side must be 2–50 and the mine count must leave a safe 3×3 first-click area (`1 ≤ mines ≤ width × height − 9`). Out-of-range values exit with an error rather than starting a broken game.
+You can also run a self-contained phar without Composer at all: a rolling development build is published on every push to master under the `candy-minesweeper/dev` release tag (`wget https://github.com/detain/sugarcraft/releases/download/candy-minesweeper/dev/candy-minesweeper.phar`, with `.sha256` and `.sig` sidecars alongside it), and versioned releases carry the same asset names.
 
-The board renders in full — there is no scrolling viewport — and the help footer fits 80 columns in every shipped locale (guarded by `FooterWidthGuardTest`). `EXPERT` (30×16) fits a standard 80×24 terminal comfortably; wide-square custom boards (towards the 50×50 bound) clip in short terminals. Resize-aware viewport fitting is open product work.
+Custom board arguments are validated through `CustomDifficulty::fromInput()`: each side must be 2–50 and the mine count must leave a safe 3×3 first-click area (`1 ≤ mines ≤ width × height − 9`). Out-of-range values exit with an error rather than starting a broken game. Give only width and (optionally) height and the mine count defaults to `max(1, intdiv(width × height, 8))` — an eighth of the board; the shipped 10×10 default's "12 mines" is that formula's result for 100 cells, not a hand-picked constant.
 
-**Stats persistence** is opt-in. Set `CANDY_MINESWEEPER_STATS=/path/to/stats.json` and each completed game's outcome (games, wins, best time per preset) is recorded there via `DifficultyStats`, surviving across sessions. The default 10×10/12 board is the `STANDARD` preset, so default games tally too. Boards whose shape matches no preset (explicit custom dimensions) are played without recording — best-times are per-preset, and a mixed-size bucket would make them meaningless (custom games still freeze the end-of-game clock so `elapsed()` reports the real time). Without the env var the game stays entirely in-memory. Concurrent instances sharing one file resolve last-writer-wins: each save is flock-guarded and whole, but an earlier instance's tally can be overwritten — point parallel sessions at separate paths. The pre-rename variable `CANDY_MINES_STATS` is still read, with a deprecation warning. <!-- @rename-keep -->
+The board renders in full — there is no scrolling viewport — and the help footer fits 80 columns in every shipped locale (guarded by `FooterWidthGuardTest`). `EXPERT` (30×16) fits a standard 80×24 terminal exactly — with zero headroom: the boot announcement lands on row 24 itself — while wide-square custom boards (towards the 50×50 bound) clip in short terminals. Resize-aware viewport fitting is open product work.
+
+**Stats persistence** is opt-in. Set `CANDY_MINESWEEPER_STATS=/path/to/stats.json` and each completed game's outcome (games, wins, best time per preset) is recorded there via `DifficultyStats`, surviving across sessions. The default 10×10/12 board is the `STANDARD` preset, so default games tally too. Whether a game tallies keys off the board's *shape*, not how you got it: `16 16 40` on the command line matches `MEDIUM` and tallies just like `--medium` would; only boards whose shape matches no preset are played without recording — best-times are per-preset, and a mixed-size bucket would make them meaningless (unmatched games still freeze the end-of-game clock so `elapsed()` reports the real time). Without the env var the game stays entirely in-memory. Concurrent instances sharing one file resolve last-writer-wins: each save is flock-guarded and whole, but an earlier instance's tally can be overwritten — point parallel sessions at separate paths. The pre-rename variable `CANDY_MINES_STATS` is still read, with a deprecation warning. <!-- @rename-keep -->
 
 ## Keys
 
@@ -44,6 +48,7 @@ The board renders in full — there is no scrolling viewport — and the help fo
 | `↑/↓/←/→` or `hjkl`| Move cursor                      |
 | `Space` / `Enter`  | Reveal cell                      |
 | `f`                | Toggle flag                      |
+| Left-click         | Reveal cell (mouse)              |
 | Right-click        | Toggle flag (mouse)              |
 | `c` / middle-click | Open around flags (chord)      |
 | `S`                | Save the live game to the slot   |
@@ -54,13 +59,20 @@ The board renders in full — there is no scrolling viewport — and the help fo
 Ctrl- and Alt-modified letters are inert (only Ctrl+C quits), so editor
 muscle-memory cannot restart or save the game by accident.
 
-Flagged cells render as a bright `F` (a wrong flag is revealed as `✗` once the board is blown, and missed mines light up in red), and the cursor as reverse video, so board semantics survive even when adjacent-count colors are hard to distinguish — the number palette leans on hue differences.
+Mouse support arms SGR cell-tracking (`MouseMode::CellMotion`), so a click
+plus drag also reports motion rows, not just button presses. Terminals or
+multiplexers that do not honour the mode simply never deliver mouse rows —
+the game stays fully playable on the keyboard, and the absence is silent.
+
+Flagged cells render as a bold gold `F` (a wrong flag is revealed as `✗` once the board is blown, and missed mines light up in red), and the cursor as reverse video, so board semantics survive even when adjacent-count colors are hard to distinguish — the number palette leans on hue differences. On terminals that treat East-Asian-ambiguous glyphs as double-width (e.g. `--ambigwidth=2` configurations), the footer separators `·`, the wrong-flag `✗` and the arrow hints render two cells wide; there is no ASCII fallback.
 
 ## Save / resume
 
-`S` writes the live game to a single save slot; `L` restores it, at any point — including after a win or loss, so you can replay the exact board you saved. Saving is refused once the board is over (the last live position keeps the slot).
+`S` writes the live game to a single save slot; `L` restores it, at any point — including after a win or loss, so you can replay the exact board you saved. Saving is refused once the board is over (the last live position keeps the slot). The slot records the full live mine layout, not just your progress — it is an answer key for the board, so treat the file as private if you sync dotfiles.
 
-The slot is `$XDG_CONFIG_HOME/candy-minesweeper/savegame.json` when `XDG_CONFIG_HOME` is set and `~/.config/candy-minesweeper/savegame.json` otherwise, written mode `0600` through sugar-core's `AtomicJsonFile` (flock sidecar, temp + `fsync` + rename — a crash never yields a half-written save). The payload wraps `Board::serialize()`'s versioned JSON with cursor position and elapsed time; `Board::unserialize()` re-validates every shape and refuses tampered or foreign-version payloads, so a hand-edited slot degrades to "load refused, game untouched" instead of a corrupt board. With `HOME` unset, or an unreadable slot, save and load are quiet no-ops — the game never dies over its save file.
+The slot is `$XDG_CONFIG_HOME/candy-minesweeper/savegame.json` when `XDG_CONFIG_HOME` is set and `~/.config/candy-minesweeper/savegame.json` otherwise, written mode `0600` through sugar-core's `AtomicJsonFile` (flock sidecar, temp + `fsync` + rename — a crash never yields a half-written save). The payload wraps `Board::serialize()`'s versioned JSON with cursor position and elapsed time; `Board::unserialize()` re-validates every shape and refuses tampered or foreign-version payloads, so a hand-edited slot degrades to "load refused, game untouched" instead of a corrupt board. With `HOME` unset, or an unreadable slot, save and load stay non-fatal no-ops — announced with a toast on the failure path (`no_save` / `save_failed` / `load_refused`), never silent — the game never dies over its save file.
+
+Colour degrades gracefully: with `NO_COLOR` set, `CLICOLOR=0`, or `TERM=dumb`, the renderer drops to plain text through sugar-core's colour profile — counts stay visible as digits and the game remains fully playable without ANSI styling.
 
 ## Language
 
@@ -68,27 +80,28 @@ The interface follows your locale. The binary arms `T::setLocale(T::detect())` b
 
 ## Architecture
 
-Five pure-state classes plus the runtime Model, renderer, UI helper, and persistence:
+Pure-state classes plus the runtime Model, renderer, UI helper, and persistence:
 
 | File                    | Role                                                                                              |
 |-------------------------|----------------------------------------------------------------------------------------------------|
 | `Cell`                  | Value object — mine / revealed / flagged / adjacent count                                          |
 | `Board`                 | The grid + every transition (reveal, flag, flood-fill, chord). Win detection is O(1) via `revealedCount` counter. Serialises to versioned JSON for mid-game save/load. |
-| `Game` (Model)          | Cursor + key routing + restart + win/lose gate + sub-second timer (`microtime(true)`), advanced on screen by a 1 Hz `TickMsg` subscription armed from the first board change until the board is over — no-op keypresses never start the clock, and the status time runs without keypresses. Records the result into `Stats` on the win/lose transition (custom boards freeze the clock but tally nothing); persists via `DifficultyStats` when an opt-in stats path is configured. `S` / `L` write and restore the single-slot savegame. |
+| `Game` (Model)          | Cursor + key routing + restart + win/lose gate + sub-second timer (`microtime(true)`), advanced on screen by a 1 Hz `TickMsg` subscription armed from the first successful reveal or chord until the board is over — flagging and no-op keypresses never start the clock, and the status time runs without keypresses. Records the result into `Stats` on the win/lose transition (unmatched-shape boards freeze the clock but tally nothing); persists via `DifficultyStats` when an opt-in stats path is configured. `S` / `L` write and restore the single-slot savegame. |
+| `Difficulty`            | Enum of the four presets — dimensions and mine counts, plus `fromDimensions()` shape lookup       |
 | `Stats`                 | Immutable difficulty stats — games, wins, best time per preset                                    |
 | `DifficultyStats`       | Atomic JSON persistence wrapper — delegates to sugar-core `AtomicJsonFile` (flock sidecar, temp + `fsync` + rename) |
 | `Ui/CustomDifficulty`   | Validated custom board dimensions — rows (2–50), cols (2–50), mines (1 to rows×cols−9). The mine cap means boards smaller than 10 cells (e.g. 2×2, 3×3) pass the side checks but can never validate; error messages name the violated bound. Throws i18n-aware `InvalidArgumentException` on constraint violation. |
 | `Renderer`              | Pure view function. SugarStyle `Style` + `Border::rounded()`                                   |
 
-**Numbers are the clue**: a revealed cell shows how many of its eight neighbours hide mines — the same rule the in-game help footer teaches on the first line (M13), so a first-timer never has to guess what the digits mean.
+**Numbers are the clue**: a revealed cell shows how many of its eight neighbours hide mines — the same rule the in-game help footer teaches on the first line, so a first-timer never has to guess what the digits mean.
 
-The first reveal is always safe — mines are placed only after click 1, with the clicked cell's 3×3 neighbourhood excluded so the player gets a non-trivial flood-fill on every game.
+The first reveal is always safe — mines are placed only after click 1, excluding the clicked cell and (whenever the mine count leaves room) its whole 3×3 neighbourhood, so the player gets a non-trivial flood-fill on every game. On dense boards that cannot afford the full exclusion the fallback shrinks the guarantee: the clicked cell itself is always kept mine-free, while edge and corner clicks shed the off-board corners (6 or 4 guaranteed-safe cells instead of 9).
 
-**Chord click** (`c` / middle-click): when a revealed number has exactly the right number of flagged neighbours, chord-clicking it safely reveals all remaining neighbours. This mirrors the standard left+right simultaneous press in classic minesweeper.
+**Chord click** (`c` / middle-click): when a revealed number has exactly the right number of flagged neighbours, chording reveals the neighbours your flags say are clear — the flagged cells stay flagged, and if any of those flags is wrong the chord detonates on it. This mirrors the standard left+right simultaneous press in classic minesweeper.
 
 **O(1) win detection**: `Board::isWon()` compares `revealedCount` (the number of non-mine cells revealed) against `width × height − mineCount`. Win detection is constant-time regardless of board size — no full-grid scan on every move.
 
-**Save / restore mid-game**: `Board::serialize()` produces a versioned JSON payload (`{v:1, w, h, m, p, e, r, c}`) covering every cell and board state. `Board::unserialize()` reconstructs an identical `Board` instance — this is the exact format the in-game `S` / `L` save slot uses (see Save / resume above), so sessions suspend and resume for real.
+**Save / restore mid-game**: `Board::serialize()` produces a versioned JSON payload (`{v:1, w, h, m, p, e, r, c}`) covering every cell and board state. `Board::unserialize()` rebuilds a fresh, fully-valid `Board` — the mine count and revealed count are recomputed from the reconstructed cell grid rather than trusted from disk (the serialized `r` field is ignored on load), so a hand-edited count cannot desync the O(1) win check. This is the exact format the in-game `S` / `L` save slot uses (see Save / resume above), so sessions suspend and resume for real.
 
 ## Demos
 
@@ -102,7 +115,7 @@ The first reveal is always safe — mines are placed only after click 1, with th
 
 ## Shared foundations
 
-The minefield renderer builds output via [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer) — each cell is zone-tagged via `Mark::zone("cell:$row:$col", $glyph)` so `Scanner::hit($x, $y)` maps directly to a cell address. `Renderer::resolveClick()` bridges mouse coordinates to row/col. Snapshot tests via [sugar-testing](https://github.com/detain/sugarcraft/tree/master/sugar-testing) pin canonical game states (first-click safe area, cascade reveal, win overlay).
+The minefield renderer builds output via [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer), and mouse hit-testing via [sugar-mouse](https://github.com/detain/sugarcraft/tree/master/sugar-mouse): the frame sent to the terminal is deliberately built UNMARKED (zone sentinels would leak onto screen and inflate the box), and a throwaway marked copy of the same layout — each cell tagged with `Mark::zone("cell:$row:$col", $glyph)` — feeds `Scanner::hit($x, $y)` so a click maps directly to a cell address. `Renderer::resolveClick()` decodes that hit into `[col, row]`. Snapshot tests via [sugar-testing](https://github.com/detain/sugarcraft/tree/master/sugar-testing) pin canonical game states (first-click safe area, cascade reveal, win overlay).
 
 ## Test
 
@@ -113,6 +126,4 @@ vendor/bin/phpunit
 
 ## Credits & inspiration
 
-Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
-
-Design antecedent: [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep).
+This app is a native PHP project; its design antecedent is the Go minesweeper [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep) (itself part of the Go [Charm](https://github.com/charmbracelet) ecosystem, which shaped SugarCraft's terminal-toolkit ambitions more broadly).
