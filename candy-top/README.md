@@ -557,7 +557,7 @@ The bundled themes are ported from btop (Apache-2.0; see `themes/LICENSE` and `t
 
 TTY mode is btop's mode for the Linux console and other limited terminals:
 
-- It switches to the 16-colour `TTY` theme, whose gradients are stepped at 33/66 rather than interpolated.
+- It switches to the 16-colour `TTY` theme, whose gradients are stepped rather than interpolated: three bands split at 33/66 where the family has a mid colour, two bands split at 50 for the free/cached/available/used/download/upload graphs, which have none.
 - Every graph is forced to the `tty` symbol set and box corners are square.
 - The dimmed frame behind menus is always frozen.
 
