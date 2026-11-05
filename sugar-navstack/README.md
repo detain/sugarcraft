@@ -62,8 +62,10 @@ echo $stack->current()->title;   // "Settings"
 > `viewHtml()`, or `Breadcrumb::render()` — all sanitize at the boundary —
 > or call `TitleSanitizer::sanitize()` yourself before echoing.
 
-`NavStack` is **mutable by design** — `push`, `pop`, `popTo`, `updateTop`,
-`setItems`, and `clear` mutate in place and return `$this` for chaining. This is a deliberate
+`NavStack` is **mutable by design** — `push`, `popTo`, `updateTop`,
+`setItems`, and `clear` mutate in place and return `$this` for chaining (`pop`
+also mutates in place but returns the removed item, `null` when the stack is
+empty — never `$this`). This is a deliberate
 exception to the repo-wide `with*()` copy-on-write convention; only `filter()`
 returns a new instance.
 
