@@ -19,7 +19,7 @@ return [
     // ProgramSimulator errors
     'simulator.cmd_loop_overflow' => 'Cmd message loop exceeded {max} cycles',
     'simulator.exec_unsupported' => 'The simulator cannot dispatch an ExecRequest: exec suspends the process onto a real terminal, and the simulator has none',
-    'simulator.batch_member_not_closure' => '{class} carries a non-closure member ({type}); batch members must be Closures here, where production scheduleCmd() accepts callables',
+    'simulator.batch_member_not_closure' => '{class} carries a non-closure member ({type}); batch members must be Closures here, exactly as production scheduleCmd() types them',
 
     // Graphics decoders (SugarCraft\Testing\Graphics)
     'graphics.detect.unknown_protocol' => 'Stream does not introduce a recognized graphics protocol (Sixel/Kitty/iTerm2)',

@@ -168,9 +168,8 @@ but it is a simulator, not the real runtime, and the boundary is explicit:
 - `BatchMsg` / `SequenceMsg` — each member closure runs as a Cmd would; the
   messages they produce are dispatched, appended behind everything already queued —
   so a member's result lands after later-listed messages, not in member-list order.
-  Members must be `Closure` instances (production's scheduler takes
-  callables; this dispatch requires the narrower type); anything
-  else throws. The container itself never reaches `update()`.
+  Members must be `Closure` instances (production's own `scheduleCmd()`
+  types them the same way); anything else throws. The container itself never reaches `update()`.
 - `TickRequest` — `produce()` fires **immediately**. There is no virtual clock:
   the requested delay is not simulated, and nothing is armed on a loop.
 - `RawMsg` / `PrintMsg` — written to `$result->output` as a side channel; no
