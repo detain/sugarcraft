@@ -59,7 +59,8 @@
     <p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. Picture output routes on <code>TERM</code> / <code>TERM_PROGRAM</code>; everything else is explicitly configured.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-charts</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-charts:dev-master</code></pre>
+    <p style="margin-top: 8px;">No tagged releases ship yet — Packagist serves the <code>dev-master</code> branch only, so name it explicitly; on a default-<code>stable</code> project a bare <code>sugarcraft/sugar-charts</code> request does not resolve.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Charts\Sparkline\Sparkline;

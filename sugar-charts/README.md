@@ -12,8 +12,13 @@
 
 ![demo](.vhs/heatmap.gif)
 ```sh
-composer require sugarcraft/sugar-charts
+composer require sugarcraft/sugar-charts:dev-master
 ```
+
+No tagged releases ship yet — Packagist serves the `dev-master` branch only,
+so name it explicitly (`:dev-master`, or `@dev` in a `composer.json` require).
+On a default-`stable` project a bare `sugarcraft/sugar-charts` request does
+not resolve.
 
 sugar-charts — terminal charts for PHP 8.3+. The lib ships the canvas foundation
 (Canvas / BrailleGrid / Graph) plus ten chart renderers — Sparkline, BarChart,
