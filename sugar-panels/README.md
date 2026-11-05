@@ -323,10 +323,15 @@ frame lines collapses to what fits. Nothing warns, because the renderer has no
 channel to warn on and a TUI host repainting per frame does not want one.
 
 Ask the model first: `totalWidth()` / `totalHeight()` return the footprint a node
-claims, so a host can size a viewport, or decide to shrink the content, before it
-renders into silence. A visible degradation cue is deliberately not invented here
-— it would change the bytes of every clipped frame — and is left as a product
-decision.
+claims **before word-wrap** — the unwrapped rectangle. The renderer reflows long
+lines at paint time and rows past the interior height are simply not painted, so
+a host that sized the viewport to the claim can still render into silence: a
+single-line leaf that claims three rows at 201 columns wide overflowed to 28
+painted rows inside a ten-cell pane (measured). Size the region to
+`totalWidth()` first and the wrap stays cosmetic; when it must be narrower,
+budget `ceil(claimedWidth / interiorWidth)` rows for the wrapped continuations.
+A visible degradation cue is deliberately not invented here — it would change the
+bytes of every clipped frame — and is left as a product decision.
 
 ## Trust boundary
 
