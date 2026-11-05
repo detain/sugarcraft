@@ -26,7 +26,7 @@ sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Re
 - **`StringItem` adapter** — wrap plain strings as list items without a class
 - **`LessFunc` / `EqualsFunc`** — plug-in sorting and equality comparison
 - **Fuzzy matching** — `FuzzyMatch` scores candidates by delegating to sugar-fuzzy's `SmithWatermanMatcher` (SSOT — see [Deprecation & delegation](#deprecation--delegation))
-- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering); a filter is a live view, mutations project through it
+- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering; `filterState()` returns `null` until one of them is called for the first time); a filter is a live view, mutations project through it
 - **Delta rendering** — `view()` emits a full frame first, then repaints only the rows that changed; `resetPreviousFrame()` forces a repaint (see [Delta rendering](#delta-rendering))
 
 ## Install
@@ -180,13 +180,14 @@ inside it — short lists simply show everything.
 
 ## Filtering
 
-Attach a filter function to narrow the visible items. The model tracks filter state via the `FilterState` enum:
+Attach a filter function to narrow the visible items. The model tracks filter state via the `FilterState` enum; `filterState()` is `null` on a fresh model and only becomes an explicit state after the first `withFilterFn()` / `withoutFilter()` call (semantically a never-filtered list is unfiltered, it just carries no recorded state yet):
 
 ```php
 use SugarCraft\TreeList\{Model, StringItem, FilterState};
 
 // Start with a list (rebind each step — setters return new Models;
-// only the delta-render frame memo is mutated in place by view())
+// only the delta-render frame memo is mutated in place, by view() and
+// resetPreviousFrame())
 $model = Model::new()->setWidth(80)->setHeight(24);
 foreach (['apple', 'banana', 'cherry', 'apricot', 'blueberry'] as $f) {
     $model = $model->addItem(new StringItem($f));
@@ -207,7 +208,7 @@ $restored = $filtered->withoutFilter();
 echo $restored->length(); // 5
 ```
 
-Filter state transitions:
+Filter state transitions (the `unfiltered` from-state is the state once `withoutFilter()` has been called at least once — see the null note above):
 
 | From | To | Trigger |
 |------|----|---------|
@@ -322,7 +323,7 @@ Beyond the fluent setters shown above, the navigation surface is:
 - `cursorIndex()` — the cursor's **item** index (not a row position: with multi-line items, rows and items differ). `cursorItem()` — the cursor item's `\Stringable`; throws `RuntimeException` on an empty list. `tryCursorItem()` returns `null` instead, matching the `tryItemAt()`/`itemAt()` pair.
 - `length()`, `isEmpty()`, `itemAt(int)`, `tryItemAt(int)`, `find(\Stringable)`, `itemIds()` — read-only item access (indices address the **visible** projection, so they follow the active filter).
 - `lines()` — the laid-out frame rows without any delta bookkeeping; throws `RuntimeException` with a localized message (see below) on an empty list or zero viewport. `linesStream()` is a generator-shaped wrapper over the same eager computation — it interleaves nothing.
-- `view()` — full frame or row delta as described above; the only method that mutates in place (its render memo), which is why the immutability contract is scoped to item/configuration data. Unlike `lines()`, `view()` **never throws**: a `Throwable` raised mid-render drops the memo and the frame becomes the sanitized exception message on a single line (`Sanitize::untrustedForMarkedFrames` is the choke, so a failure surfaces as readable text, never as a live escape channel); pass a `LoggerInterface` as `view()`'s optional parameter to receive the same failure at `warning` level. `lines()` keeps the opposite polarity and throws.
+- `view()` — full frame or row delta as described above. Together with `resetPreviousFrame()` it is one of only two members that mutate in place: `view()` updates the render memo, `resetPreviousFrame()` (void) drops it, which is why the immutability contract is scoped to item/configuration data. Unlike `lines()`, `view()` **never throws**: a `Throwable` raised mid-render drops the memo and the frame becomes the sanitized exception message on a single line (`Sanitize::untrustedForMarkedFrames` is the choke, so a failure surfaces as readable text, never as a live escape channel); pass a `LoggerInterface` as `view()`'s optional parameter to receive the same failure at `warning` level. `lines()` keeps the opposite polarity and throws.
 
 ## Localisation
 
