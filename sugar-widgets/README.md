@@ -28,10 +28,11 @@ siblings resolve from Packagist.
 
 > The most-used setters have short-form aliases, per class:
 > `TextInput` — `placeholder` / `prompt` / `charLimit` / `width` /
-> `validator` / `styles`; `TextArea` — `placeholder` / `charLimit` /
+> `echoMode` / `echoChar` / `suggest` / `validator` / `styles` / `prefix` /
+> `suffix` / `placeholderStyle`; `TextArea` — `placeholder` / `charLimit` /
 > `width` / `height` / `prompt` / `validator`; `Help` — `width` /
-> `styles` / `separator` / `ellipsis`. The `with*` long forms still work
-> side-by-side.
+> `styles` / `separator` / `ellipsis` / `fullSeparator`. The `with*` long
+> forms still work side-by-side.
 
 > `Help::getStyles()` and `Help::getWidth()` are deprecated BC accessors —
 > the house convention is bare accessors. Read the promoted readonly
@@ -39,30 +40,30 @@ siblings resolve from Packagist.
 
 ## Components
 
-9 first-party components: Help, Key, Progress (includes AnimatedProgress
-spring-variant), Timer, Stopwatch, Paginator, Tree, Table, Tabs — plus
-two btop-derived render helpers, `Input\TextEdit` and `Menu\OptionRow`.
-8 deprecated alias re-exports from `sugarcraft/sugar-forms`:
-Cursor, TextInput, TextArea, Viewport, ItemList, FilePicker, Scrollbar,
-Spinner.
+The table below lists the first-party components — Help, Key, Progress
+(includes the AnimatedProgress spring-variant), Timer, Stopwatch,
+Paginator, Tree, Table, Tabs — plus the two btop-derived render helpers,
+`Input\TextEdit` and `Menu\OptionRow`, followed by the deprecated alias
+re-exports from `sugarcraft/sugar-forms` (each row flags which it is).
+The counted inventory lives once, in the intro at the top of this file.
 
 | Component | What it does | Notable msgs |
 |---|---|---|
 | `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
 | `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the public constructor stays for BC); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()` | — |
 | `Key\Binding` | One key + label + help row; `Binding::new(...)`, `Binding::withDisabled(...)` factories | — |
-| `Key\KeyMap` | Interface — implement it so `Help` can render your bindings: `shortHelp(): list<Binding>` for the inline row, `fullHelp(): list<list<Binding>>` for the expanded pane (one inner list per column); `Tabs\TabsKeyMap` is the shipped example | — |
+| `Key\KeyMap` | Interface — implement it so `Help` can render your bindings: `shortHelp(): list<Binding>` for the inline row, `fullHelp(): list<list<Binding>>` for the expanded pane (one inner list per column); `Tabs\TabsKeyMap` is the shipped example. Note `Key\Help` — the small `{key, desc}` value object bindings render through — is a *different* type from the `Help\Help` component | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |
-| `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`) | — |
-| `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); honours `REDUCE_MOTION=1` by jumping straight to the target percent | `SpringTickMsg` |
-| `Timer\Timer` | Countdown timer — `Timer::new($duration, $interval = 1.0)` (duration is required); `remaining`, `interval`, `timeout()`, `withInterval(float)`. Quirk: `view()` renders only the formatted time — running / timed-out state is invisible in the bytes, query `isRunning()` / `timedOut()`. In-flight ticks from stopped generations are refused via the tick `epoch` | `Timer\TickMsg`, `TimeoutMsg` |
+| `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`; render modes via `withRenderMode(ProgressRenderMode)` — `Block` / `Line` / `Slim` — and custom percent copy via `withPercentFormat(string)`) | — |
+| `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); honours `REDUCE_MOTION` *and* `PREFERS_REDUCED_MOTION` (read through the sugar-colorprofile probe — any value outside `''`/`0`/`false`/`no`/`off`) by snapping to the target percent within one tick | `SpringTickMsg` |
+| `Timer\Timer` | Countdown timer — `Timer::new($duration, $interval = 1.0)` (duration is required); `remaining` / `interval` are promoted readonly properties, the methods are `interval(): float`, `timeout(): float` (remaining seconds — `0` once `TimeoutMsg` has fired) and `withInterval(float)`; there is no `remaining()` method. Quirk: `view()` renders only the formatted time — running / timed-out state is invisible in the bytes, query `isRunning()` / `timedOut()`. In-flight ticks from stopped generations are refused via the tick `epoch` | `Timer\TickMsg`, `TimeoutMsg` |
 | `Stopwatch\Stopwatch` | Count-up timer; `elapsed`, `interval()`, `withInterval(float)`. `elapsed` is a **tick-count accumulator** (ticks × interval), not wall-clock — it advances only while `update()` consumes ticks. Same render-bytes quirk as `Timer` | `Stopwatch\TickMsg` |
 | `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` _(deprecated alias — re-exported from `SugarCraft\Forms\TextInput`)_ | — |
 | `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) _(deprecated alias — re-exported from `SugarCraft\Forms\TextArea`)_ | `TextArea\TextAreaEditedMsg` |
-| `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | — |
+| `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | `ViewportTickMsg` |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
-| `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values (raw strings are not accepted) _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
-| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values (`new Tree\Node($label, $children)` / `Node::leaf($label)`); chrome glyphs and prefixes are immutable via `withStyle(...)` (labels and knobs are sanitised single-line at ingress). | — |
+| `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values — `list<Item>` is a phpdoc contract, there is no runtime element guard _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
+| `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values (`new Tree\Node($label, $children)` / `Node::leaf($label)`); chrome glyphs and prefixes are immutable via `withStyle(...)` — `withStyle` knobs are checked at ingress, while node labels are sanitised at RENDER (control characters stripped and `Sanitize::untrustedForMarkedFrames()` applied), not stored raw. | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
 | `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then clicks find nothing. `focus()` renders the active tab underlined — before the M9 fix (Tabs.php source comment) the focused and blurred frames were byte-identical, so keyboard focus was invisible in the render bytes | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
@@ -70,15 +71,27 @@ Spinner.
 | `Input\TextEdit` | Inline single-line editor value object with an underline caret (no hardware cursor), grapheme-cluster caret, cell-budget windowing, digits-only mode — btop `Draw::TextEdit` | — |
 | `Menu\OptionRow` | Static renderer for btop's two-line options-menu row (bold centred name + `← value →` / `↵` line, live `TextEdit` while editing) | — |
 
+### Keyboard control
+
+The widgets above decode these keys inside their own `update()` — the
+host forwards `KeyMsg` rows and the component moves:
+
+| Component | Keys |
+|---|---|
+| `Viewport` | `↑`/`k` line up, `↓`/`j` line down, `←`/`h` scroll left, `→`/`l` scroll right, `PageUp`/`b`, `PageDown`/`f`/`Space`, `Ctrl+u`/`Ctrl+d` half pages, `Home`/`g`, `End`/`G` |
+| `Table` | `↑`/`k`, `↓`/`j`, `Home`/`g`, `End`/`G`, `PageUp`/`PageDown` by `max(1, height)` rows — rows only, no vim letter bindings |
+| `Tree` | `↑`/`k`, `↓`/`j`, `Enter` toggles, `→`/`l` expands, `←`/`h` collapses, `g`/`G` jump |
+
 ### Vim mode
 
 `TextInput` vim mode (Insert/Normal/Visual/VisualLine keybindings) is
 powered by `sugar-forms`'s shared `VimKeyHandler` — the same handler
-backing `sugar-forms`, `sugar-readline`, and this package's `TextInput`
-re-export. Adding a new binding to the `VimAction` enum benefits all
-three at once. The per-lib opt-in flag
-`withVimMode(true)` is preserved; consumers control whether vim mode is
-enabled.
+backing `sugar-forms`' own fields and `sugar-readline`; this package's
+`TextInput` is a façade re-export riding that handler, not an
+independent third home. Adding a new binding to the `VimAction` enum
+benefits the forms and readline consumers at once. The per-lib opt-in
+flag `withVimMode(true)` is preserved; consumers control whether vim
+mode is enabled.
 
 ### Msg routing cheat-sheet
 
@@ -90,21 +103,31 @@ deprecated alias of `Forms\Cursor\BlinkMsg`),
 `SugarCraft\Widgets\Stopwatch\TickMsg`,
 `SugarCraft\Widgets\Progress\SpringTickMsg` (AnimatedProgress),
 `SugarCraft\Widgets\TextArea\TextAreaEditedMsg` (TextArea's Ctrl+O
-round-trip).
+round-trip), `SugarCraft\Widgets\Viewport\ViewportTickMsg` (Viewport's
+auto-scroll tick — the alias of `Forms\Viewport\ViewportTickMsg` the
+component arms through `subscriptions()`). `ItemList\LoadMoreMsg` has
+**no** widgets alias — import `SugarCraft\Forms\ItemList\LoadMoreMsg`.
 Each component's `update()` filters by its own `id()` so multiple
 instances of the same component coexist on one event loop. Timer and
 Stopwatch ticks also carry an `epoch` (generation counter bumped by
 `start()`): a tick armed before a stop/start flip is refused rather than
 double-counted.
+Reduced motion is gated per component: `AnimatedProgress` honours
+`REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` itself, but
+`Cursor\BlinkMsg` and `Spinner\TickMsg` are not gated in the widget —
+hosts that follow WCAG 2.2.2 must stop forwarding those ticks when the
+user asks for reduced motion.
 
 ## Quickstart — TextInput with autocomplete
 
 > `TextInput` (and `Spinner`) are deprecated `sugar-forms` re-exports.
 > New code should `composer require sugarcraft/sugar-forms` and import
-> `SugarCraft\Forms\…`; the `SugarCraft\Widgets\…` spellings below keep
-> working until the aliases are removed in the next major.
+> `SugarCraft\Forms\…` — as the example below does; the
+> `SugarCraft\Widgets\TextInput\…` spellings resolve to the very same
+> classes through the alias and keep working until the aliases are
+> removed in the next major.
 ```php
-use SugarCraft\Widgets\TextInput\TextInput;
+use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Core\{Cmd, Model, Msg, Program};
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
@@ -336,7 +359,7 @@ $t = $t->pageLast();
 // Inspect pagination state
 $pageSize   = $t->pageSize();      // int — rows per page (0 = pagination disabled)
 $current   = $t->currentPage();   // int — zero-based current page
-$totalPages = $t->paginator()->totalPages();  // int — 1 when pagination is disabled
+$totalPages = $t->paginator()->totalPages();  // int — 1 when pagination is disabled and at least one row exists (empty table → 0)
 
 // Wire a Paginator to the table for UI rendering
 $paginator = $t->paginator();    // Paginator instance
@@ -354,7 +377,7 @@ $paginator = $t->paginator();    // Paginator instance
 | `pageLast()` | Jump to the last page |
 | `pageSize(): int` | Return rows per page (`0` = pagination off) |
 | `currentPage(): int` | Return the current zero-based page |
-| `paginator()->totalPages(): int` | Return the total page count (`1` when pagination is disabled) |
+| `paginator()->totalPages(): int` | Return the total page count (`1` when pagination is disabled and the table has at least one row; an empty table reports `0`) |
 | `paginator(): Paginator` | Return a `Paginator` instance wired to the table's current page state |
 
 Pagination works with sort and filter: changing the sort order, filter query, or page size automatically re-clamps the cursor to the first row of the current page so the cursor never points to a row outside the current page boundary.
@@ -365,9 +388,10 @@ Pagination works with sort and filter: changing the sort order, filter query, or
 `fn(int $row, int $col): Style` (row `-1` is the header). Each returned
 style is merged *under* the row's own style via `Style::inherit()` — the
 selection inversion (and the header underline) therefore always survives
-the cell paint. Before this fix, the per-cell `[0m` terminators
-clobbered the row wrapper from the first cell on, so a focused table
-rendered byte-identical to an unfocused one.
+the cell paint. Each cell still ends with its own `ESC[0m` terminator,
+and that reset only closes the cell's own attributes: it cannot clobber
+the row wrapper, so even an aggressive `styleFunc` output leaves a
+focused table rendering differently from an unfocused one.
 
 ```php
 use SugarCraft\Widgets\Table\Table;
@@ -384,6 +408,14 @@ $table = Table::new(['Name', 'Status'], $rows)
 
 [$focused, ] = $table->focus();   // red FAIL cells now ride UNDER the reverse cursor
 ```
+
+The composer returns *style* only — colours and attributes, never cell
+text. A fixed TrueColor hex renders as authored on TrueColor hosts; to
+degrade gracefully on palettes that cannot carry it, follow the
+`Progress` precedent: accept a `SugarCraft\Core\Util\ColorProfile`
+(Progress takes one as its constructor default `ColorProfile::TrueColor`
+and offers `withColorProfile()`) and choose the shades from the detected
+profile inside your closure.
 
 `getStyleFunc(): ?Closure` reads the seam back for host-side
 re-composition. Partial `Table\Styles` objects no longer delete the
@@ -426,7 +458,10 @@ echo $pid->text();                 // "123" — non-digit input is rejected whol
   sequence moves and deletes as one); `view(int $limit = 0)` budgets in
   **display cells**, windowing around the caret with btop's half-budget
   law. Unlike btop, the end-caret cell is charged to the budget, so
-  output never exceeds `$limit`. `$limit <= 0` is unlimited.
+  output never exceeds `$limit` — with one carve-out: when `$limit < 2`
+  a lone wide cluster sitting under the caret stays visible and the
+  output may overrun the budget by one cell (clipping the caret away
+  would hide the position). `$limit <= 0` is unlimited.
 - `withNumeric(bool $on = true)` strips existing non-digits (keeping the
   caret on the same surviving digit) so `text()` is always parseable.
 
@@ -435,17 +470,22 @@ echo $pid->text();                 // "123" — non-digit input is rejected whol
 `OptionRow::renderRow(...)` is the primary API: the single-line btop
 option row `← label … value ↵ →` sized to exactly the field width the
 caller provides — label and value share the budget, and values are
-clipped with `Width::truncateAnsi()` so caller ANSI survives.
+clipped with `Width::truncateAnsi()` so caller ANSI survives. The field
+width is floored at 16 cells (`max(16, $field)`), so a row always
+renders into at least 16 columns even when the caller budgets less.
 
 > `OptionRow::render(...)` — the older two-line form (bold name centred
 > in `$nameCol`, value line centred in `$valueCol`) — is **deprecated**:
 > its second line was built `valueCol + 4` cells wide regardless of
-> `$nameCol`, overrunning the next column whenever `nameCol < 29`; it now
-> clips to `$nameCol` (byte-identical at the default 29/25 pair) and
-> stays supported for candy-top, but prefer `renderRow()`.
+> `$nameCol`, overrunning the next column whenever
+> `nameCol < valueCol + 4` (the default 29/25 pair makes that read
+> `nameCol < 29`); it now clips to `$nameCol` (byte-identical at the
+> default pair) and stays supported for candy-top, but prefer
+> `renderRow()`.
 
 With `←` / `→` on the selected row (while not editing) when
-`$hasArrows` and `↵` (or `E` with `tty: true`) when `$editable`. Passing a
+`$hasArrows` and `↵` (or `E` with `tty: true`) only when the row is
+*both* selected and `$editable`. Passing a
 `TextEdit` with `editing: true` renders its underline-caret view in
 `valueCol - 1` cells.
 
