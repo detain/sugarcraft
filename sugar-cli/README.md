@@ -80,8 +80,9 @@ echo StatusLine::error('connection refused'), "\n";
   rounded by default. Useful for app intros / `--version` output.
 - **`Logo`** — Unicode box-drawing text art: `Logo::sugarcraft()` (66
   cells wide, deliberately not clamped to the terminal) plus
-  `Logo::fromAscii($art)` for custom multi-line art. Control and non-SGR
-  escape bytes are stripped on ingress, and newlines are the layout;
+  `Logo::fromAscii($art)` for custom multi-line art. All escape bytes —
+  SGR included — and control bytes are stripped on ingress; newlines are
+  the layout;
   `->withColor($hex)` tints the art, and a second call replaces the tint.
 - **`Section`** — one-line themed dividers: `header()` label + fill rule,
   bare `rule()`, and indented `subHeader()` for nesting under a parent.
