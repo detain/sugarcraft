@@ -24,7 +24,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Design antecedent: DaltonSW/bubbleup.
  *
- * @see https://github.com/daltonsw/bubbleup
+ * @see https://github.com/DaltonSW/bubbleup
  */
 final class Toast
 {

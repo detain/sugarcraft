@@ -7,7 +7,7 @@ namespace SugarCraft\Toast;
 /**
  * Alert severity / type.
  *
- * @see https://github.com/daltonsw/bubbleup
+ * @see https://github.com/DaltonSW/bubbleup
  */
 enum ToastType: string
 {

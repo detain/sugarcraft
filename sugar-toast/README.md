@@ -501,4 +501,4 @@ MIT
 
 ## Credits & inspiration
 
-Design antecedent: [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup); SugarCraft is developed as a native PHP project.
+Design antecedent: [DaltonSW/bubbleup](https://github.com/DaltonSW/bubbleup); SugarCraft is developed as a native PHP project.

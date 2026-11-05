@@ -7,7 +7,7 @@ namespace SugarCraft\Toast;
 /**
  * Screen position for toast alerts.
  *
- * @see https://github.com/daltonsw/bubbleup
+ * @see https://github.com/DaltonSW/bubbleup
  */
 enum Position
 {
