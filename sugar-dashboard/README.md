@@ -2,8 +2,8 @@
 
 sugar-dashboard — a TUI building-block library for PHP 8.3+: column grid,
 constraint layout, ratio grid, data grid, tree, modal, status bar, tabs,
-plot/canvas, and a module/plugin system. Provides 200+ components organized
-into 12 namespaces.
+plot/canvas, and a module/plugin system, with components organized into the
+namespaces below.
 
 ## Installation
 
