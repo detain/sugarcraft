@@ -15,7 +15,7 @@ export function stripTerminalSequences(text: string): string {
 
 /**
  * One run of characters that share a style — the unit the tail pane paints.
- * `classes` carries the SGR look as browser classes (see SGR_CLASSES below).
+ * `classes` carries the SGR look as browser classes (built by `lookClasses`).
  */
 export interface AnsiSegment {
   text: string
@@ -50,13 +50,15 @@ function lookClasses(look: Look): string[] {
 
 /**
  * SGR state the poller understands: bold, dim, italic, underline, inverse and
- * the 16 palette colours become classes; everything else (cursor moves, OSC,
- * truecolor, 256-colour beyond the palette, unhandled params) resets nothing
- * it cannot name and is simply dropped from the render.
+ * the 16 palette colours become classes. An unrecognised plain code is
+ * ignored, but an extended (38/48) colour the poller cannot name CLEARS that
+ * slot back to default — it does not keep a colour it cannot render. Cursor
+ * moves and OSC sequences carry no style and are dropped from the render.
  *
  * Line discipline is emulated at the text level only: a lone `\\r` rewrites
- * the current line the way a terminal overwrite spinner would, and a
- * backspace erases the character before the caret. This is what makes a
+ * the current line the way a terminal overwrite spinner would, and a DEL
+ * (0x7f) erases the character before the caret (a raw BS 0x08 is not
+ * interpreted). This is what makes a
  * polling tail pane readable — it does NOT make the browser a terminal
  * emulator: there is no resize, no alternate screen, no input echo path.
  */
@@ -132,7 +134,7 @@ export function ansiSegments(text: string): AnsiSegment[] {
       else if (BG_CODE.has(code)) look.bg = code >= 100 ? `bright-${FG_NAMES[code - 100]}` : FG_NAMES[code - 40] ?? null
       else if (code === 38 || code === 48) {
         // Consume the extended-colour tail. Palette 0-15 still names a class;
-        // 256-colour beyond it and truecolor are dropped (documented limit).
+        // 256-colour beyond it and truecolor CLEAR the slot (documented limit).
         const mode = codes[i + 1]
         const size = mode === 5 ? 2 : mode === 2 ? 5 : 0
         const value = mode === 5 ? codes[i + 2] : undefined

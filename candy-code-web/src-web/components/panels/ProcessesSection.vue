@@ -53,7 +53,8 @@ function isInteractive(shell: BackgroundShell): boolean {
   return (shell as { interactive?: boolean }).interactive === true
 }
 
-/** The named keys the pane offers, exactly the wire enum's useful subset. */
+/** Six of the wire enum's eleven keys get buttons: Enter rides the send
+ *  line, and Backspace/Left/Right/C-z are sendable but unbuttoned. */
 const KEY_BUTTONS = [
   { key: 'C-c', label: 'Ctrl-C' },
   { key: 'C-d', label: 'Ctrl-D' },
