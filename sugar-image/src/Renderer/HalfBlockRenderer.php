@@ -10,8 +10,9 @@ use SugarCraft\Image\PixelGrid;
 use SugarCraft\Image\Support\OutputOptimizer;
 
 /**
- * Universal fallback renderer using Unicode half-block (▀) with 24-bit
- * foreground + background SGR codes. Each terminal cell shows two
+ * Text-tier fallback renderer for sighted readers, using Unicode half-block
+ * (▀) with 24-bit foreground + background SGR codes. Each terminal cell
+ * shows two
  * vertically-stacked pixel rows: the upper pixel's colour as foreground,
  * the lower pixel's colour as background, rendered as one ▀ glyph.
  *

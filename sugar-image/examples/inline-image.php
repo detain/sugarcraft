@@ -16,8 +16,11 @@
  * chafa rung is explicit opt-in only (it is the one tier that shells out), and the
  * practical floor is the symbol-map renderer rather than plain half-block, so a
  * Unicode-capable terminal keeps more colour than the two-row half block alone.
- * Every text tier ships 24-bit foreground and background, so a fallback still
- * renders truecolour — the compromise is glyph resolution, not palette.
+ * The text tiers emit 24-bit fg/bg SGR with no automatic palette negotiation:
+ * on a limited- or no-colour terminal select a ramp
+ * (Mosaic::ascii(AsciiColorMode::Ansi16) for 16 colours, the Mono default for
+ * none) or a canvas (CanvasMode::Ansi256/Ansi16/Fgbg on the quarter-block and
+ * symbol tiers) explicitly — NO_COLOR does not change what the renderers emit.
  *
  * Exit codes:
  *   0 — image rendered successfully

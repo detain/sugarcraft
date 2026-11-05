@@ -442,6 +442,27 @@ not universal: `QuarterBlockRenderer` and `SymbolMapRenderer` implement
 every other backend hands back the same instance, because it has no canvas to
 reinterpret and no search window to widen.
 
+## Limited-colour and no-colour terminals
+
+The half-block, quarter-block and chafa-adjacent text paths emit 24-bit
+foreground/background SGR unconditionally — there is no automatic palette
+negotiation, so a terminal that does not honour truecolour discards or
+misinterprets those sequences. The explicit escape hatches:
+
+- `Mosaic::ascii(AsciiColorMode::Ansi16)` maps every pixel onto the 16-colour
+  ANSI palette; `Mosaic::ascii()` defaults to `AsciiColorMode::Mono`, the one
+  deliberate no-colour mode in the lib (luminance ramp, no colour bytes).
+- The quarter-block and symbol-map tiers implement `withCanvasMode()`
+  (`CanvasMode::Ansi256`, `CanvasMode::Ansi16`, `CanvasMode::Fgbg`); the
+  symbol engine quantises its candidate scoring to the selected canvas, so
+  the glyph choice adapts to the palette rather than inheriting the
+  truecolour optimum.
+
+`NO_COLOR` is **not** honoured by any renderer: the variable influences only
+`Detect`'s terminfo sixel-detection ladder, changing which protocol is
+detected, never which colours are emitted. On a limited-palette terminal,
+select the ramp or canvas explicitly.
+
 ## Scaling
 
 `Mosaic::withScale(Scale::…)` decides how a source fills the requested cell box;
