@@ -226,6 +226,13 @@ final class ImageSource
         $height = imagesy($img);
         imagedestroy($img);
 
+        // The header is a hint; the decode is the truth about the buffer that
+        // was actually built. Re-guard the decoded dimensions before handing
+        // the source on, so a declared/small-decoded/large mismatch cannot
+        // carry an over-ceiling canvas into crop()/resize()/renderers.
+        // (fromString() carries the matching re-guard after its decode.)
+        self::guardPixelCount($width, $height, $maxPixels);
+
         return new self($bytes, $format, $width, $height, $maxPixels);
     }
 
@@ -253,14 +260,33 @@ final class ImageSource
 
         // Decompression-bomb guard: read dimensions from the header (no full
         // decode) and reject oversized images BEFORE imagecreatefromstring
-        // allocates the pixel buffer. For inputs getimagesizefromstring cannot
-        // size, fall through and let GD validate/reject via the decode below.
+        // allocates the pixel buffer. The header is a hint, not a verdict:
+        // inputs getimagesizefromstring cannot size are NOT thereby safe —
+        // measured on this build, 128 bytes of "\x00\xff" repeat declare no
+        // dimensions at all yet libgd materialises a 16256×16256 canvas
+        // (264 Mpx) from them. So bytes that name no format AND declare no
+        // dimensions are refused before GD is asked (the structural refusals
+        // inside detectImageFormat() still fire first for containers it
+        // recognises), and for everything else the DECODED dimensions are
+        // re-guarded below before construction.
         $info = @getimagesizefromstring($bytes);
         if ($info !== false) {
             self::guardPixelCount((int) $info[0], (int) $info[1], $maxPixels);
         }
 
         $format = self::detectImageFormat($bytes, $info === false ? null : (string) $info['mime']);
+
+        if ($format === 'application/octet-stream') {
+            // No magic named these bytes and no header sized them: whatever GD
+            // might conjure from them is exactly the unbounded allocation the
+            // pixel ceiling exists to prevent, and it would carry an honest
+            // octet-stream label while being anything up to a bomb. Refuse at
+            // the boundary — the decode below never runs, so the ceiling holds
+            // regardless of the $maxPixels value (disabled ceilings included).
+            throw new \InvalidArgumentException(
+                Lang::t('image_source.unsupported_format', ['path' => '[memory-bytes]']),
+            );
+        }
 
         // Validate the bytes are a supported image and read dimensions.
         $img = @imagecreatefromstring($bytes);
@@ -279,6 +305,13 @@ final class ImageSource
         $width  = imagesx($img);
         $height = imagesy($img);
         imagedestroy($img);
+
+        // The header is a hint; the decode is the truth about the buffer that
+        // was actually built. Re-guard the decoded dimensions before handing
+        // the source on, so a declared/small-decoded/large mismatch cannot
+        // carry an over-ceiling canvas into crop()/resize()/renderers.
+        // (fromFile() carries the matching re-guard after its decode.)
+        self::guardPixelCount($width, $height, $maxPixels);
 
         return new self($bytes, $format, $width, $height, $maxPixels);
     }
@@ -352,8 +385,13 @@ final class ImageSource
             throw new UnsupportedFormatException(Lang::t('image_source.exotic_format', ['brand' => 'tiff']));
         }
 
-        // Not one of the named formats: fromString() still lets GD validate the
-        // bytes via imagecreatefromstring(), but the label must stay truthful.
+        // Not one of the named formats, but getimagesizefromstring() sniffed a
+        // MIME for it: fromString() still lets GD validate the bytes via
+        // imagecreatefromstring(), and the label must stay truthful. Bytes with
+        // no name AND no sniffed MIME return the octet-stream sentinel below,
+        // which fromString() refuses before GD sees them — an unnamed,
+        // unsized canvas is precisely what a headerless decompression bomb
+        // declares itself to be.
         if ($sniffedMime !== null && $sniffedMime !== '') {
             return $sniffedMime;
         }

@@ -263,4 +263,63 @@ final class ImageSourceTest extends TestCase
         $this->expectExceptionMessageMatches('/exceeds the maximum of 67108864 bytes/');
         $guard->invoke(null, $atCap . 'x', 'https://example.test/over-cap');
     }
+
+    public function testAHeaderlessDecompressionBombIsRefusedBeforeGDMaterialisesIt(): void
+    {
+        // 128 bytes that declare no dimensions and name no format: measured on
+        // this build, getimagesizefromstring() says FALSE while libgd decodes a
+        // 16256×16256 (264 Mpx) canvas from them. The header-only guard skipped
+        // the unmeasurable arm, so the pixel ceiling was bypassable by simply
+        // shipping bytes no header parser recognises.
+        $bytes = str_repeat("\x00\xff", 64);
+
+        foreach ([4, 1_000_000, ImageSource::MAX_PIXELS, -1] as $ceiling) {
+            try {
+                $source = ImageSource::fromString($bytes, maxPixels: $ceiling);
+                self::fail("ceiling {$ceiling}: headerless bomb accepted at {$source->width}x{$source->height}");
+            } catch (\InvalidArgumentException $e) {
+                // The refusal names the real cause — an unnamed format refused
+                // at the boundary — not a pixel-count accusation against
+                // dimensions no header ever declared. It also fires with the
+                // ceiling disabled (-1): format anonymity, not budget size, is
+                // what the refusal polices.
+                self::assertStringContainsString('Unsupported image format: [memory-bytes]', $e->getMessage());
+                self::assertStringNotContainsString('exceed the maximum', $e->getMessage());
+            }
+        }
+    }
+
+    public function testBothByteRoutesReGuardDecodedDimensionsBeforeConstruction(): void
+    {
+        // Structural pin for the post-decode re-guard: no fixture on any
+        // honest build declares small dimensions that GD then decodes large,
+        // so removal of the guard could never go red behaviourally — this
+        // walks the source text instead and pins ORDER, not just presence.
+        $src = (string) file_get_contents(__DIR__ . '/../src/ImageSource.php');
+
+        foreach (['fromFile', 'fromString'] as $route) {
+            $start = strpos($src, "public static function {$route}(");
+            self::assertIsInt($start, "route {$route} vanished from the source");
+            $end = strpos($src, "\n    }\n", $start);
+            self::assertIsInt($end, "no method end found for {$route}");
+            $slice = substr($src, $start, $end - $start);
+
+            $decode = strpos($slice, 'imagesy($img)');
+            $guard  = strpos($slice, 'self::guardPixelCount($width, $height, $maxPixels);');
+            $ctor   = strpos($slice, 'return new self($bytes, $format, $width, $height, $maxPixels);');
+            self::assertIsInt($decode, "{$route}: decoded-dimension read vanished");
+            self::assertIsInt($guard, "{$route}: decoded-dimensions re-guard removed");
+            self::assertIsInt($ctor, "{$route}: construction seam vanished");
+            self::assertLessThan($guard, $decode, "{$route}: re-guard must run after the decode reads dimensions");
+            self::assertLessThan($ctor, $guard, "{$route}: re-guard must run before the source is constructed");
+
+            if ($route === 'fromString') {
+                $refuse = strpos($slice, "=== 'application/octet-stream'");
+                $askGd  = strpos($slice, '@imagecreatefromstring($bytes)');
+                self::assertIsInt($refuse, 'fromString: unnamed-format refusal removed');
+                self::assertIsInt($askGd, 'fromString: GD decode seam vanished');
+                self::assertLessThan($askGd, $refuse, 'fromString: refusal must precede the GD allocation');
+            }
+        }
+    }
 }

@@ -373,8 +373,12 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
             }
         }
         // Negative polarity: a generic video brand is NOT on the exotic image
-        // roster — the bytes keep their pre-E-06 fate (GD refuses them as
-        // corruption; we never claim what the list cannot honour).
+        // roster — we never claim what the list cannot honour. Its fate is
+        // still a refusal at our boundary, just the unnamed-format one: the
+        // bytes declare no dimensions and name no magic, so fromString()
+        // refuses them as an octet-stream bomb risk BEFORE GD is asked (the
+        // pre-guard-rewrite fate was GD's own corruption refusal — same
+        // reject, more honest wording, no allocation).
         $mp4 = pack('N', 24) . 'ftyp' . 'isom' . pack('N', 0) . 'isom' . str_repeat("\x00", 12);
         try {
             ImageSource::fromString($mp4);
@@ -382,7 +386,7 @@ final class ImageSourceWebpAnimDetectTest extends TestCase
         } catch (UnsupportedFormatException $e) {
             self::fail('unlisted brand must not be refused by the exotic list: ' . $e->getMessage());
         } catch (\InvalidArgumentException $e) {
-            self::assertStringContainsString('GD failed to load image', $e->getMessage());
+            self::assertStringContainsString('Unsupported image format: [memory-bytes]', $e->getMessage());
         }
     }
 
