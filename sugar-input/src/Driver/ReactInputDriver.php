@@ -24,7 +24,7 @@ use SugarCraft\Input\Event;
  * $driver = new ReactInputDriver($stdin);
  *
  * $driver->on('data', function (Event $event) {
- *     // handle key, mouse, focus, paste, or resize event
+ *     // handle key, mouse, focus, or paste event
  * });
  * ```
  *
@@ -97,9 +97,10 @@ final class ReactInputDriver implements ReadableStreamInterface
     /**
      * Pauses receiving data events.
      *
-     * For this driver, pause/resume forward to the underlying stream
-     * since the decoding is immediate and we have no internal buffering
-     * beyond pending events from a single chunk.
+     * The call forwards to the underlying stream, but it defers EMISSION, not
+     * decoding: events already decoded from an in-flight chunk park in the
+     * internal event buffer (see emitEvent) and flush on resume() — a listener
+     * that pauses mid-chunk never strands those events until stream end.
      */
     public function pause(): void
     {
