@@ -65,17 +65,27 @@
 cd my-app
 ./bin/start
 
-# Replace src/Counter.php with your own Model and keep editing.</code></pre>
+# Replace src/Counter.php with your own Model — and its matrix in tests/CounterTest.php too.</code></pre>
     <pre class="code"><code class="language-text">my-app/
-├── composer.json     # requires sugar-core + sugar-style
-├── phpunit.xml
-├── bin/start         # entry point — runs the Counter model
+├── composer.json         # type: project — requires sugar-core + sugar-style
+├── phpunit.xml           # failOnWarning gate
+├── LICENSE               # MIT
+├── README.md             # the walkthrough this page mirrors
+├── CALIBER_LEARNINGS.md  # template gotchas for AI-agent config sync
+├── .gitignore            # vendor/, composer.lock, phpunit caches, *.gif except !.vhs/start.gif
+├── .assets/icon.png      # icon for the docs site
+├── bin/start             # entry point — Program(new Counter()) + stopSignal() exit tail (128+N)
 ├── src/
-│   └── Counter.php   # demo Model with up/down/quit, styled border
-└── tests/
-    ├── CounterTest.php                    # pinned behavior matrix
-    ├── ModelContractDocumentationTest.php # README fence vs interface guard
-    └── ReadmeSnippetsTest.php             # lints + runs every README php fence</code></pre>
+│   └── Counter.php       # demo Model: up/down/quit, styled border
+├── tests/
+│   ├── BinStartExitTailTest.php           # pins the bin's stopSignal() exit tail (128+N)
+│   ├── CounterTest.php                    # pinned behavior matrix — the test-shape reference
+│   ├── ModelContractDocumentationTest.php # README fence vs interface drift guard
+│   ├── ReadmeSnippetsTest.php             # lint+execute every README php fence
+│   └── SiteBodyTruthTest.php              # docs site body matches the README's claims
+└── .vhs/
+    ├── start.tape        # CI gif recording of the running app
+    └── start.gif         # the rendered demo (un-ignored by !.vhs/start.gif; CI regenerates)</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
