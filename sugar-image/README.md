@@ -53,11 +53,13 @@ echo $ansi;
 ## API
 
 ```php
+use SugarCraft\Image\Dither;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\KittyOptions;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\AsciiColorMode;
 use SugarCraft\Image\Renderer\QuarterBlockRenderer;
+use SugarCraft\Image\Renderer\SixelRenderer;
 
 $image  = ImageSource::fromFile('examples/fixture-gradient.png');
 
@@ -65,7 +67,8 @@ $image  = ImageSource::fromFile('examples/fixture-gradient.png');
 $mosaic = Mosaic::probe();
 
 // Force a specific backend
-$mosaic = Mosaic::sixel();
+$mosaic = Mosaic::sixel();                                        // sixel, Floyd-Steinberg dither
+$mosaic = Mosaic::sixel(Dither::Ordered, intensity: 0.5);         // opt-in dither + 0.0-1.0 bias
 $mosaic = Mosaic::kitty();
 $mosaic = Mosaic::iterm2();
 $mosaic = Mosaic::halfBlock();
@@ -86,6 +89,12 @@ $mosaic = Mosaic::builder()
     ->build();
 $ansi = $mosaic->render($image);          // 40×20 cells
 $ansi = $mosaic->render($image, 60);      // explicit width wins; height from aspect
+
+// Sixel palette budget: maxColors (1–256) is a SixelRenderer constructor
+// knob, so it rides the builder, not Mosaic::sixel().
+$mosaic = Mosaic::builder()
+    ->withRenderer(new SixelRenderer(maxColors: 64))
+    ->build();
 
 // Kitty: virtual-image placement — store once, place at many offsets.
 // Step 1 — a STORING transmit: withUseVirtual(true) sends a=T,U=1 with the
@@ -471,6 +480,12 @@ misinterprets those sequences. The explicit escape hatches:
   symbol engine quantises its candidate scoring to the selected canvas, so
   the glyph choice adapts to the palette rather than inheriting the
   truecolour optimum.
+- Sixel keeps its own palette budget: `maxColors` (1–256, default 256) caps
+  the median-cut quantiser for limited-truecolour terminals, and `intensity`
+  (0.0–1.0; null leaves the chafa config default 1.0) scales the
+  `Dither::Ordered` / `Dither::Noise` bias — `intensity` arrives through
+  `Mosaic::sixel(dither, intensity)`, `maxColors` only through the builder's
+  renderer constructor.
 
 `NO_COLOR` is **not** honoured by any renderer: the variable influences only
 `Detect`'s terminfo sixel-detection ladder, changing which protocol is
