@@ -296,8 +296,15 @@ with the package; a territory spelling falls back to its base language
   an abort (Esc) from `choose` / `filter` / `input` / `write` / `file`,
   a refused flag value (`--default`, `--formatter`, `--shell`,
   `--cursor-mode`), a `log --level fatal` line, or exit code `1`
-  forwarded from the external command run by `spin`.
-- `2`   — `confirm` aborted (Esc) — distinct from a "no" answer.
+  forwarded from the external command run by `spin`. Run without a
+  usable controlling terminal, every interactive command (`choose`,
+  `confirm`, `filter`, `input`, `write`, `file`, `pager`) also refuses
+  up front with this code and a STDERR notice — it never paints a fake
+  session.
+- `2`   — `confirm` aborted (Esc) — distinct from a "no" answer — and a
+  bad value for a scanned option that carries a `#[Flag(enum: …)]`
+  constraint, which the pre-flight validator refuses before the command
+  runs (the allowed set is named on STDERR).
 - `124` — a `--timeout` deadline elapsed before the interaction finished
   (gum-compatible, matches GNU `timeout(1)`). A malformed `--timeout` value
   is refused up front (exit `1` on STDERR) — it is never coerced to "no
@@ -323,14 +330,16 @@ success (`0`) rather than specific non-zero values.
 | ↑ / ↓ | Move the highlighted item / cursor line. |
 | Enter | Submit `choose`, `confirm`, `filter`, `input` (in `write`, inserts a newline). |
 | y / n | Answer `confirm` directly. |
+| ← / → · h / l | Toggle the `confirm` answer (like `Tab` there); in `pager`, `h`/`l` scroll sideways. |
 | Ctrl+D | Submit `write` (end-of-input convention). |
-| Space | Toggle selection in multi-select `choose` / `filter`; page down in `pager`. |
-| Tab | Toggle the highlighted item in multi-select `filter`. |
+| Space | Toggle selection in multi-select `choose`; page down in `pager`. In multi-select `filter` the toggle is `Tab` — a Space is typed into the filter text instead, as it is in `input` / `write`. |
+| Tab | Toggle the highlighted item in multi-select `filter`; toggle the answer in `confirm`. |
 | Any printable key | Filter text in `filter`. |
-| `j`/`k` `PgUp`/`PgDn` `b`/`f` `g`/`G` `Home`/`End` `Ctrl+U`/`Ctrl+D` `q` | Paging, scrolling, top/bottom jumps, and quit in `pager`. |
-| Esc | Abort (exit `1`, or `2` on `confirm`). |
+| `j`/`k` · `g`/`G` · `Home`/`End` · `PgUp`/`PgDn` | Move, jump to top / bottom, and page the lists in `choose` and `filter` (`j`/`k` plus `Home`/`End` in `file`); the same set also scrolls the `pager`. |
+| `b`/`f` · `Ctrl+U`/`Ctrl+D` · `q` | Page, half-page, and quit keys of the `pager`. |
+| Esc | Abort (exit `1`, or `2` on `confirm`) — except in `pager`, where Esc is a normal finish like `q` (exit `0`). |
 | Ctrl+C | Abort with exit `130`; `spin` also terminates its child. |
-| Backspace | Ascend a directory in `file`; delete before the caret elsewhere. |
+| Backspace | Ascend a directory in `file` (`←` does the same); delete before the caret elsewhere. |
 
 The key bindings are owned by each `Model`; the table matches their
 doc-comments, and those are exercised by the model tests.
