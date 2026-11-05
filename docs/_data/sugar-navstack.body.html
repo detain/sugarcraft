@@ -1,7 +1,8 @@
-<p class="lede" style="margin-top: 28px;">Push / pop navigation items to build breadcrumbs. Track a stack of visited locations — useful for file explorers, menu trees, and shell history.</p>
+<p class="lede" style="margin-top: 28px;">Push / pop navigation items to build breadcrumbs. Track a stack of visited locations — useful for file explorers, menu trees, and cwd-tracked directory trails. Rendered trails carry click zones (sugar-mouse) and an accessible HTML shape (aria-label nav + aria-current).</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-navstack</code></pre>
+    <p>Packagist currently serves this package from <code>dev-master</code> only (no tagged release yet): require it with a root <code>minimum-stability: "dev"</code> plus an exact <code>sugarcraft/sugar-navstack: "dev-master"</code>.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\NavStack\NavStack;
@@ -21,8 +22,10 @@ $nav-&gt;depth();              // 2</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>NavStack</strong><span>Push / pop navigation stack (mutable, chainable push) with depth, parent and truncation helpers.</span></div>
-            <div class="feature"><strong>Shell integration</strong><span>Explicit directory stacks — your host detects a cwd change and calls pushDirectory(); nothing auto-pushes.</span></div>
-            <div class="feature"><strong>Filter</strong><span>Case-insensitive substring filtering over titles and payload data (arrays matched by value, at any depth).</span></div>
+            <div class="feature"><strong>Directory stacks (Shell)</strong><span>Explicit cwd-tracked trails — your host detects a directory change and calls pushDirectory(); nothing auto-pushes, and `.`/`..` follow the documented no-downward-walk rule.</span></div>
+            <div class="feature"><strong>Filter</strong><span>ASCII case-folded substring filtering over titles and payload data (arrays matched by value up to 64 nesting levels — deeper payloads throw).</span></div>
+            <div class="feature"><strong>Accessible HTML</strong><span>viewHtml() emits the recommended nav[aria-label] &gt; ol shape with aria-current="page" on the live crumb — screen-reader-ready without host markup work.</span></div>
+            <div class="feature"><strong>Breadcrumb renderer</strong><span>Theme-aware plain-text rendering with width-capped left-elision, custom separators/ellipses, per-item renderer closures, and stack-indexed mouse zones that survive truncation.</span></div>
             
     </div>
 
