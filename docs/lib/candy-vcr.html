@@ -64,9 +64,9 @@
     <pre class="code"><code class="language-php">use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Recorder;
 
-(new Program($model))
-    -&gt;withRecorder(Recorder::open('/tmp/session.cas'))
-    -&gt;run();
+$program = new Program($model);
+$program-&gt;setRecorder(Recorder::open('/tmp/session.cas'));
+$program-&gt;run();
 // cassette is closed automatically when the loop ends.</code></pre>
 
     <h3 style="margin-top: 32px;">Replay</h3>
@@ -125,7 +125,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Cassette format</strong><span>Five shipped codecs — JSONL (absolute <code>t</code>, <code>.cas</code>/<code>.jsonl</code>/<code>.cassette</code>), gzip JSONL (<code>.cas.gz</code>), RelativeFormat (delta <code>dt</code>, asciinema-cast style), YAML (<code>.yaml</code>/<code>.yml</code>, hand-written fixtures), and a read-only asciinema importer (<code>.cast</code>, v2/v3); <code>.tape</code> files compile into cassettes through the tape compiler. All decode into the same <code>Cassette</code> value object; <code>Player::open()</code> picks JSONL vs RelativeFormat by content-sniffing (a <code>.gz</code> name routes straight to the gzip codec), while <code>Player::loadAny()</code> dispatches by extension.</span></div>
-      <div class="feature"><strong>Recorder hook</strong><span><code>Program::withRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
+      <div class="feature"><strong>Recorder hook</strong><span><code>Program::setRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
       <div class="feature"><strong>Msg serializers</strong><span>17 builtin Msg types (KeyMsg, MouseClickMsg/MouseMotionMsg/MouseWheelMsg/MouseReleaseMsg, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are sugar-vterm CSI I/O focus events that round-trip through VCR.</span></div>
       <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
       <div class="feature"><strong>ByteAssertion</strong><span>Strict byte-equality with hex+printable diff window starting at the first divergence offset.</span></div>

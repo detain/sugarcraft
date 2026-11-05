@@ -243,9 +243,9 @@ Record a session:
 use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Recorder;
 
-(new Program($model))
-    ->withRecorder(Recorder::open('/tmp/session.cas'))
-    ->run();
+$program = new Program($model);
+$program->setRecorder(Recorder::open('/tmp/session.cas'));  // void — statement form
+$program->run();
 // cassette is closed automatically when the run loop ends
 // (final recordQuit rides only a QuitMsg exit; a crash still flushes)
 ```
@@ -403,7 +403,9 @@ $recorder->withHook(new MetadataHook([
     'test_name' => 'MyTest::testViewOutput',
 ]));
 
-(new Program($model))->withRecorder($recorder)->run();
+$program = new Program($model);
+$program->setRecorder($recorder);
+$program->run();
 ```
 
 **Available hooks:**

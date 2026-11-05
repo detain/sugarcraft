@@ -23,12 +23,14 @@ use SugarCraft\Vcr\Hook\HookRegistry;
  * {@see \SugarCraft\Vcr\Format\JsonlFormat}).
  *
  * Implements {@see \SugarCraft\Core\Recorder} so it can be attached via
- * {@see \SugarCraft\Core\Program::withRecorder()}.
+ * {@see \SugarCraft\Core\Program::setRecorder()}.
  *
  * Usage:
  * ```php
  * $recorder = Recorder::open('/tmp/session.cas');
- * (new Program($model))->withRecorder($recorder)->run();
+ * $program = new Program($model);
+ * $program->setRecorder($recorder);
+ * $program->run();
  * // recorder is closed automatically when the loop ends
  * ```
  */

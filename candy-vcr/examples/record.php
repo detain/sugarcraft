@@ -73,7 +73,7 @@ $program = new Program(
         loop: $loop,
     ),
 );
-$program->withRecorder(Recorder::open($path));
+$program->setRecorder(Recorder::open($path));
 
 // Pipe a few input bytes so the recording captures real Msg flow.
 $loop->futureTick(static function () use ($inputWrite): void {

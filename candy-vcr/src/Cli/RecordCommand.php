@@ -22,7 +22,7 @@ use SugarCraft\Vcr\Recorder;
  *
  * Pairs with {@see ReplayCommand} for round-trip workflows
  * (`record … | replay`), and the existing API-mode capture via
- * `\SugarCraft\Core\Program::withRecorder()` for in-program recording.
+ * `\SugarCraft\Core\Program::setRecorder()` for in-program recording.
  *
  * Wired behind the record verb; depends on sugar-pty's recorder tap.
  */
