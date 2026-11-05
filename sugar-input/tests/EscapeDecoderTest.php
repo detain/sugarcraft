@@ -840,6 +840,25 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame($before + 5, $this->decoder->droppedUnknownCount());
     }
 
+    public function testKittyTextCodepointsArriveAsTheCharacterThemselves(): void
+    {
+        // Everything below the 0xE000 functional boundary is a TEXT codepoint
+        // per the spec — digits, punctuation and Unicode runes must arrive as
+        // the character itself (the README's "complete vocabulary"), exactly
+        // as the modifyOtherKeys leg already names keysyms 32..126. Counting
+        // them as drops silently loses every unmodified digit and symbol typed
+        // under Kitty protocol with disambiguation off.
+        $before = $this->decoder->droppedUnknownCount();
+        $this->assertSame('0', $this->decoder->decode("\x1b[48u")[0]->key);
+        $this->assertSame('!', $this->decoder->decode("\x1b[33u")[0]->key);
+        $this->assertSame('é', $this->decoder->decode("\x1b[233u")[0]->key);
+        $this->assertSame('€', $this->decoder->decode("\x1b[8364u")[0]->key);
+        // A released digit keeps the Release prefix; ucfirst is a no-op on a
+        // non-letter, so the name is Release0 (match isRelease(), not prefix).
+        $this->assertSame('Release0', $this->decoder->decode("\x1b[48;33u")[0]->key);
+        $this->assertSame($before, $this->decoder->droppedUnknownCount());
+    }
+
     public function testKittyLetterKey(): void
     {
         $events = $this->decoder->decode("\x1b[97;0u");

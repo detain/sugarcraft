@@ -1790,10 +1790,12 @@ final class EscapeDecoder
     /**
      * Map a Kitty key code to a symbolic key name.
      *
-     * Codes below 0xE000 are TEXT codepoints (printable Unicode plus the four
-     * shared control codes and space); functional keys live exclusively at
-     * 0xE000+ per the spec table hoisted above. Anything unmapped is a
-     * complete-but-unknown code — the caller counts the drop.
+     * Codes below the functional table's 0xE000 start are TEXT codepoints:
+     * the four shared control codes and space keep their symbolic names, the
+     * rest of 32–0xD7FF arrives as the character itself, and the surrogate
+     * block plus the unnamed controls below 32 are unmapped — the caller
+     * counts those drops. Functional keys live exclusively at 0xE000+ per the
+     * spec table hoisted above.
      *
      * @see https://sw.kovidgoyal.net/kitty/keyboard-protocol/ — the CSI u encoding.
      */
@@ -1811,6 +1813,14 @@ final class EscapeDecoder
         // Letters (Kitty reports the shifted codepoint; we name the letter)
         if ($code >= 97 && $code <= 122) return chr($code);
         if ($code >= 65 && $code <= 90)  return chr($code + 32);
+
+        // Remaining TEXT codepoints arrive as the character itself — digits,
+        // punctuation and Unicode runes below the spec's functional space.
+        // Control-adjacent codes (< 32) were named above or stay counted drops,
+        // and the surrogate block (0xD800–0xDFFF) is not a scalar value, so the
+        // leg ends at 0xD7FF and those codes keep counting as drops — exactly
+        // the contract the modifyOtherKeys leg honors for printable keysyms.
+        if ($code >= 32 && $code <= 0xD7FF) return mb_chr($code);
 
         return self::KITTY_FUNCTIONAL_KEYS[$code] ?? null;
     }
