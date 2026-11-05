@@ -353,8 +353,10 @@ render path; call them yourself when you want human-readable bounds.
 
 `Sparkline` (with the `Buffer` / `BufferHelper` row-composition helpers
 it uses) builds through [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer);
-the grid-based renderers (`LineChart`, `BarChart`, `Heatmap`, `Scatter`,
-`OHLCChart`) compose the lib-local `SugarCraft\Charts\Canvas\Canvas`.
+the grid-based renderers (`LineChart`, `Waveline`, `Heatmap`, `Scatter`,
+`OHLCChart`) compose the lib-local `SugarCraft\Charts\Canvas\Canvas` —
+`BarChart` does not (it composes `ChartExtras` text rows) and `Picture`
+emits raw protocol bytes.
 Do not re-implement string padding or cell-grid assembly — reuse `Buffer`
 or `Canvas` as the shape of your output demands. Display widths come from
 `SugarCraft\Core\Util\Width`, so bar labels, gutters and truncation are
