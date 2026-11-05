@@ -89,7 +89,7 @@ Unrecognized flags and options given without their value exit `2` and name the o
 2. `wishlist.yml` / `wishlist.yaml` / `wishlist.json` in the **current directory** (first that exists) <!-- @rename-keep -->
 3. `~/.config/wishlist.yml` / `.yaml` / `.json` (only when `$HOME` is set; again first that exists)
 
-So a config in the directory you launch from takes precedence over your home config. (The `wishlist.{yml,yaml,json}` file names predate the product rename and are kept for config-file compatibility.) Hosts are managed by **editing that file** — the launcher never rewrites your config. Unfiltered, the picker lists endpoints in exactly the order they appear in the file; typing narrows and re-ranks by match score.
+So a config in the directory you launch from takes precedence over your home config. (The `wishlist.{yml,yaml,json}` file names predate the product rename and are kept for config-file compatibility.) Hosts are managed by **editing that file** — the launcher never rewrites your config. Unfiltered, the picker lists endpoints in exactly the order they appear in the file; typing narrows and re-ranks by match score. While the filter is empty, `j`/`k` move the selection like the arrows; once you have typed anything, `j` and `k` are letters of your query and only the arrows navigate.
 
 ## Config format
 
@@ -140,12 +140,12 @@ Limits of the embedded YAML reader: flat entries only, and a nested list is writ
 
 | Key       | Action                          |
 |-----------|---------------------------------|
-| ↑ / k     | Move up                         |
-| ↓ / j     | Move down                       |
+| ↑ / k     | Move up (arrows always; `k` only while the filter is empty) |
+| ↓ / j     | Move down (arrows always; `j` only while the filter is empty) |
 | Ctrl+H    | Delete one filter character (alias of Backspace) |
 | Enter     | Connect to highlighted endpoint |
 | Esc / ^C  | Quit without connecting (exit 130) |
-| (typing)  | Type to filter; Backspace deletes one filter codepoint (a compound emoji or flag may need two presses) |
+| (typing)  | Type to filter (once non-empty, `j`/`k` count as letters); Backspace deletes one filter codepoint (a compound emoji or flag may need two presses) |
 
 ## Implementation
 

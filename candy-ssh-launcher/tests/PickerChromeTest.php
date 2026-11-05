@@ -118,8 +118,26 @@ final class PickerChromeTest extends TestCase
         [$picked] = $this->drive("x\r", $endpoints);
         self::assertSame(22, $picked?->port, 'first of the equal-score pair wins');
 
-        [$down] = $this->drive("xj\r", $endpoints);
+        // F-8 (Step 12): once 'x' is typed, 'j' is a LETTER, not navigation —
+        // the arrows (unconditional) express "move down" from here on.
+        [$down] = $this->drive("x\x1b[B\r", $endpoints);
         self::assertSame(23, $down?->port);
+    }
+
+    public function testJJoinsTheFilterOnceTypingStarted(): void
+    {
+        $endpoints = [
+            new Endpoint(name: 'alpha', host: 'x.test', port: 22),
+            new Endpoint(name: 'beta', host: 'x.test', port: 23),
+        ];
+        // The letter stays in the query: 'xj' still ranks both hosts (gapped
+        // local alignment bridges 'j' via 'beta'), proving 'j' was intake,
+        // not navigation. Backspace removes it and Enter picks the first
+        // equal-score row.
+        [$picked, $output] = $this->drive("xj\x7f\r", $endpoints);
+        self::assertStringContainsString("\x1b[36mxj\x1b[0m", $output);
+        self::assertStringContainsString('(2 of 2)', $output);
+        self::assertSame(22, $picked?->port);
     }
 
     public function testRowsClampToOneLessThanTerminalWidth(): void

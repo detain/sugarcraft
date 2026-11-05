@@ -100,16 +100,34 @@ class Picker
                             continue 2;
                         }
                         return $matches[$this->cursor]['endpoint'];
-                    case 'j':
                     case "\x1b[B":
                         if ($this->cursor < count($matches) - 1) {
                             $this->cursor++;
                         }
                         break;
-                    case 'k':
                     case "\x1b[A":
                         if ($this->cursor > 0) {
                             $this->cursor--;
+                        }
+                        break;
+                    case 'j':
+                    case 'k':
+                        // j/k navigate only while the filter is empty. Once
+                        // the user has started typing, letters belong to the
+                        // query — an unqualified j/k used to eat them, making
+                        // names like 'jumpbox' untypeable while arrows still
+                        // navigated unconditionally.
+                        if ($this->filter === '') {
+                            if ($key === 'j' && $this->cursor < count($matches) - 1) {
+                                $this->cursor++;
+                            } elseif ($key === 'k' && $this->cursor > 0) {
+                                $this->cursor--;
+                            }
+                            break;
+                        }
+                        if ($this->isTextKey($key)) {
+                            $this->filter .= $key;
+                            $this->cursor = 0;
                         }
                         break;
                     case "\x7f": /* backspace */

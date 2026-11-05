@@ -208,4 +208,15 @@ final class PickerInputIntegrityTest extends TestCase
         // The combining sequence stays unhighlighted and intact.
         $this->assertStringStartsWith("e\u{0301}", $rendered);
     }
+
+    public function testLettersJoinTheFilterOnceItIsNonEmpty(): void
+    {
+        // F-8 (Step 12): while empty, j/k are navigation; after any letter,
+        // further letters — j and k included — append to the query.
+        [, , $p] = $this->drive('proj');
+        $this->assertSame('proj', $this->filterOf($p));
+
+        [, , $q] = $this->drive('jj');
+        $this->assertSame('', $this->filterOf($q), 'empty-filter j/k stay navigation');
+    }
 }
