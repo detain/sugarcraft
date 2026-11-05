@@ -70,7 +70,7 @@ own git config.
 | `r`                      | Open rebase menu (continue / abort / skip) — when in progress only: opens while a rebase or cherry-pick has stopped; on an idle repo it reports "no rebase in progress" |
 | `S`                      | Open stash manager (list / apply / drop; drop asks twice)   |
 | `V`                      | Cherry-pick — type a commit ref and press Enter       |
-| `w` (branches pane)     | Open worktrees manager (list / add / remove)            |
+| `w` (branches pane)     | Open worktrees manager (list / add / remove) — path collection refuses option-injection and `..` traversal; it does not jail the destination inside the repository |
 | `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
 | `R`                      | Refresh from disk                                       |
 | `?`                      | Context-sensitive help                                  |
@@ -123,7 +123,7 @@ on a conflict; the prompt names the armed operation:
 | Key              | Action                                          |
 |------------------|--------------------------------------------------|
 | `j/k` or `↑/↓`  | Move between worktrees                          |
-| `a`              | Start adding a worktree — type the path, `Enter` confirms |
+| `a`              | Start adding a worktree — type the path, `Enter` confirms (relative paths anchor to the repo root; an absolute path is used as given; `..` segments are refused) |
 | `d`              | Start removing the selected worktree — `Enter` confirms |
 | `c`              | Cancel a pending add/remove                     |
 | `Esc`            | Close the whole overlay (even mid-add)          |
@@ -180,7 +180,7 @@ focus marker is tracked as a known gap).
 | `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `hunkCount()` / `withHunkCursor()` drive navigation and `currentHunkPatch()` yields the selection to stage (applying it is `Git::stagePatch()`). |
 | `DiffHighlighter`  | Per-line hunk-header/old/new token spans for the diff overlay. |
 | `Lang`             | i18n lookup over `lang/*.php` (16 locales) on the core `T` registry, namespace `git`. |
-| `Support\Version`  | `--version` line + phar build stamping (dev-build detection mirrors candy-top's DST-1 shape). |
+| `Support\Version`  | `--version` line + phar build stamping — the archive-first read mirrors candy-top's version channels: the stamp of the phar the process launched from wins, and the `dev-build` sentinel is never read as a version. |
 | `Support\GitRequirement` | The git-version floor (`MINIMUM = '2.23'`) as pure parse/compare so launcher and tests share one authority. |
 | `Pane`            | Enum — `Status`, `Branches`, `Log` — with `next()` for Tab cycling.                                                               |
 | `App` (Model)     | Owns the three lists + cursors + focus + overlays (stash/cherry-pick/worktrees/interactive-rebase). Pure-state — every key returns a fresh App. |
@@ -305,7 +305,9 @@ what it cannot disarm safely, it detects and discloses:
   you to do. Before running `merge`, `rebase --continue`/`--skip`,
   `cherry-pick`, or `stash apply`/`pop`, CandyGit lists every reachable
   `merge.*.driver` key in the merged config scope and overrides each one with
-  `false` (git's inert exit-1 builtin): a hostile clone then produces a plain
+  `false` — git launches driver values as programs, so this resolves through
+  PATH to the inert exit-1 coreutils binary rather than anything git-internal:
+  a hostile clone then produces a plain
   CONFLICT instead of code execution. If a driver key exists in a shape that
   cannot be re-expressed as an override, the merge is *refused*, not run —
   and because the enumeration reads the merged config scope, such a key in

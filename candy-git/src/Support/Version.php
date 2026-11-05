@@ -7,8 +7,8 @@ namespace SugarCraft\Git\Support;
 /**
  * The version string this tool reports on `--version`.
  *
- * Lighter namespace copy of candy-top/src/Support/Version.php (the DST-1
- * program): {@see self::CURRENT} is the checkout fallback and the ONE
+ * Lighter namespace copy of candy-top/src/Support/Version.php:
+ * {@see self::CURRENT} is the checkout fallback and the ONE
  * override is the build stamp of the phar this process was launched from.
  * candy-git ships no `self-update`, so the ordering machinery candy-top
  * needs (parse/compare, fail-closed on `dev-master`) has nothing to serve
@@ -16,7 +16,7 @@ namespace SugarCraft\Git\Support;
  * dev-built archive (whose stamp is the sentinel `dev-build`) honestly falls
  * through to CURRENT.
  *
- * WHY THE ARCHIVE ARM EXISTS AT ALL (DST-1): the frozen `vendor/` baked
+ * WHY THE ARCHIVE ARM EXISTS AT ALL: the frozen `vendor/` baked
  * into a release archive reports the BUILD ROOT's dev guess, so a `--version`
  * that trusted anything but the archive's own manifest would lie about the
  * artifact it is running from. The build stamps `metadata['version']` in

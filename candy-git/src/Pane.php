@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Git;
 
 /**
- * Which pane has focus. The Tab key cycles forward through them; the
- * status pane is the only one that takes line-level interaction
- * (stage / unstage), while branches and log are read-only view panes
- * at v1.
+ * Which pane has focus. The Tab key cycles forward through them. Every
+ * pane carries the row cursor and viewport movement; the status pane is
+ * the one that takes file-line actions (stage/unstage/discard/diff) and
+ * the branches pane the one that takes branch actions (Space checkout,
+ * D delete, w worktrees overlay), while the log pane is navigation only.
+ * Repo-wide verbs — commit, amend, new branch, merge, cherry-pick,
+ * rebase, undo/redo — dispatch regardless of which pane holds focus.
  */
 enum Pane: string
 {

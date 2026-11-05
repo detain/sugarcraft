@@ -420,9 +420,13 @@ final class Git implements GitDriver
      * The worktree path is attacker-influenceable — it is collected keystroke
      * by keystroke in the TUI — so the leading-dash option-injection guard
      * alone is not enough. Reject any `..` traversal segment outright, then
-     * anchor a relative path to the realpath'd repository root so a
-     * CWD-relative or `foo/../../etc`-style value cannot plant a worktree
-     * outside the intended tree. Returns the absolute path handed to git.
+     * anchor a RELATIVE path to the realpath'd repository root so the
+     * process CWD cannot silently redirect where a worktree lands. Absolute
+     * paths pass through as given (once past the dash and `..` checks): a
+     * linked worktree legitimately lives outside the main tree — `git
+     * worktree add ../wt` is the normal workflow — so this guard refuses
+     * traversal-shaped input, it does NOT jail the destination inside the
+     * repository. Returns the path handed to git.
      *
      * @throws \RuntimeException (see {@see self::guardRef()} on the type)
      */
@@ -835,10 +839,11 @@ final class Git implements GitDriver
      * `.git/config` includes and from `config.worktree` under
      * `extensions.worktreeConfig`, both of which `--local` is blind to while
      * merges honor them (measured on git 2.43). Each name is overridden with
-     * `-c merge.<name>.driver=false`: the driver then resolves to the inert
-     * shell builtin `false`, which exits non-zero, which git reports as a
-     * plain CONFLICT — fail loud, lose nothing, execute nothing the repo
-     * wrote. Empty-string overrides are rejected because git emits a scary
+     * `-c merge.<name>.driver=false`: git launches the driver value as a
+     * program, so `false` resolves through PATH to the inert coreutils
+     * binary (not a git-internal), which exits non-zero, which git reports
+     * as a plain CONFLICT — fail loud, lose nothing, execute nothing the
+     * repo wrote. Empty-string overrides are rejected because git emits a scary
      * `cannot run :` line for them; `true` is rejected because it would
      * silently keep OUR version of every matched path (silent data loss).
      *
