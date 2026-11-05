@@ -156,8 +156,12 @@ final class Breadcrumb
 
     /**
      * Rename the per-crumb zone id prefix (default `crumb`, ids
-     * `crumb-{stackIndex}`). Useful when several breadcrumb widgets share
-     * one scanner and need disjoint id namespaces.
+     * `crumb-{stackIndex}`). Note that {@see withScanner()} CLONES the
+     * Scanner, so two breadcrumb widgets can never share one scanner
+     * instance; the prefix serves the reachable multi-widget shape
+     * instead — a host merging the zone enumerations (or one dispatch
+     * table) of several breadcrumbs, each with its own scanner, keeps
+     * `crumb-2` unambiguous across the combined view.
      *
      * Restricted to sugar-mouse's zone-id alphabet
      * (`[A-Za-z0-9._:-]`, non-empty) so a prefix can never carry sentinel,
@@ -187,7 +191,11 @@ final class Breadcrumb
      * styled output consume the `setMaxWidth()` budget, so a themed trail
      * elides earlier than it visually fills the row.
      *
-     * @throws \InvalidArgumentException  If the closure returns a non-string, non-null value
+     * @throws \InvalidArgumentException Raised at RENDER time (view()/
+     *                                   render()) when the closure returns
+     *                                   a non-string, non-null value — NOT
+     *                                   at assignment; setItemRenderer()
+     *                                   itself accepts any Closure
      */
     public function setItemRenderer(\Closure $fn): self
     {

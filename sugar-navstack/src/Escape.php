@@ -16,14 +16,17 @@ namespace SugarCraft\NavStack;
  * {@see Breadcrumb}'s (and {@see NavStack::view()}'s) default separator (' › ').
  *
  * Limits (this is a display-splitting aid, not a general quoting system):
- * escaping is purely mechanical backslash-insertion, so a title that ALREADY
- * contains a backslash-escaped separator needs no escaping to split safely,
- * and {@see unescape()} on a never-escaped title rewrites any literal
- * literal backslash-plus-separator it happens to contain. There is no
- * double-escape marker, so
- * backslash handling is not invertible for titles that contain escaped
- * backslashes; full round-trip fidelity for adversarial titles is out of
- * scope.
+ * both operations are purely mechanical left-to-right replacements of whole
+ * non-overlapping occurrences — {@see title()} prefixes each separator with
+ * a backslash, {@see unescape()} removes a backslash before each separator.
+ * unescape() is only an inverse for strings title() produced: applied to a
+ * never-escaped title it rewrites any backslash-plus-separator pair the
+ * title happened to contain, and a title that ALREADY had a backslash glued
+ * to a separator occurrence does not survive the title()→unescape()
+ * round-trip either (the leftmost pair is ambiguous about which backslash
+ * was inserted). There is no double-escape marker. If verbatim round-trip
+ * fidelity of raw-backslash titles matters, carry the exact title in the
+ * item's data payload and keep the display label escape-safe.
  */
 final class Escape
 {

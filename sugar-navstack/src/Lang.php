@@ -17,7 +17,12 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * only user-visible strings are the breadcrumb separator and the
  * truncation ellipsis, which are punctuation glyphs chosen per
  * {@see Breadcrumb::setSeparator()}/{@see setTruncator()}, not text to
- * translate. The facade and lang file are therefore DORMANT on purpose:
+ * translate, plus the `aria-label` on {@see NavStack::viewHtml()}'s
+ * `<nav>` element: the ONLY string assistive technology ever utters
+ * from this package. Its default (`Breadcrumb`) is a plain API constant
+ * in the $label parameter — localized by the host passing its own
+ * string, never consulted from this registry. The facade and lang file
+ * are therefore DORMANT on purpose:
  * the library's own render paths NEVER consult the registry — Breadcrumb
  * starts from its hardcoded defaults. A host that wants localized glyphs
  * reads them itself (`Lang::t('separator')`) and feeds the result to the

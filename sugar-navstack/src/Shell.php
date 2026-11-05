@@ -26,9 +26,12 @@ namespace SugarCraft\NavStack;
  *
  * Additionally the stack/breadcrumb props are `public readonly` — readonly
  * protects the READING of the property, not mutation THROUGH the object:
- * `$shell->stack->push('X')` mutates the shared NavStack in place and every
- * Shell that holds it sees the change. Treat that as the escape hatch it
- * is; prefer the `with*()` methods.
+ * `$shell->stack->push('X')` mutates that NavStack INSTANCE in place, and
+ * every Shell holding THE SAME INSTANCE (the original, or one built as
+ * `new Shell($shell->stack, ...)`) sees the change. The `with*()` family
+ * copies the item list into a fresh NavStack, so derived Shells do NOT
+ * see later direct pushes on an ancestor's stack object. Treat in-place
+ * mutation as the escape hatch it is; prefer the `with*()` methods.
  *
  * `withPop()` on a depth-1 stack DOES empty it (it is not a no-op there);
  * guard with {@see NavStack::canPop()} to keep a root crumb alive.

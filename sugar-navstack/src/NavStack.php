@@ -19,7 +19,9 @@ namespace SugarCraft\NavStack;
  * convention: `filter()` correctly returns a new instance, but the
  * push/pop/set family mutate in place. Callers must not assume
  * copy-on-write for the push/pop/set family (see {@see Shell} for the
- * immutable wrapper — and note it SHARES the stack list, not deep copies).
+ * immutable wrapper — its `with*()` family copies the item LIST into a
+ * fresh NavStack, sharing the readonly item objects themselves, never
+ * deep-copying them).
  *
  * ## Click dispatch
  *
@@ -309,6 +311,11 @@ final class NavStack
      * scalar/Stringable value inside the array matches, at any depth
      * (bounded: see {@see MAX_PAYLOAD_DEPTH} below).
      * Returns a new NavStack with only matching items.
+     *
+     * "Case-insensitive" is ASCII-only in practice: the fold is the
+     * byte-level one `stripos()` performs, so case variants of non-ASCII
+     * letters (É vs é) match only when their UTF-8 bytes are identical —
+     * an accented query silently under-matches its unaccented spelling.
      *
      * Notes: the result is a FRESH stack — item order is kept but indices
      * renumber, so zone ids (`crumb-N`) of a breadcrumb rendered from the

@@ -12,6 +12,10 @@ final class Url
     /**
      * Derive a URL path string from the navigation stack.
      * e.g. NavStack with items ["home", "settings", "display"] → "/home/settings/display"
+     *
+     * An EMPTY stack derives to `/` — the base case of the join, and the
+     * inverse shape {@see parse()} reads back as an empty stack (a depth-0
+     * trail is representable even though a depth-1 root is the normal floor).
      */
     public static function derive(NavStack $stack): string
     {
