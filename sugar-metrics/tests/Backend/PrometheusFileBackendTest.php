@@ -36,6 +36,21 @@ final class PrometheusFileBackendTest extends TestCase
         }
     }
 
+    public function testSameTagsInDifferentInsertionOrderAreOneSeriesNotACollision(): void
+    {
+        // storageKey ksorts the labels, so ['a'=>1,'b'=>2] and ['b'=>2,'a'=>1]
+        // are one series. The rawFacts guard compared them with order-strict
+        // !== and raised a false "sanitize to the same metric name" refusal.
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('x', 1.0, ['a' => '1', 'b' => '2']);
+        $b->counter('x', 2.0, ['b' => '2', 'a' => '1']);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('x{a="1",b="2"} 3', $content);
+        $this->assertSame(1, substr_count($content, 'x{a='));
+    }
+
     public function testEmitsCounterAndGaugeAndHistogram(): void
     {
         $b = new PrometheusFileBackend($this->path);

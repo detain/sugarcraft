@@ -517,7 +517,14 @@ final class PrometheusFileBackend implements Backend
         $folded = self::sanitizeFold($name, $tags);
         if (isset($this->rawFacts[$key])) {
             [$firstRaw, $firstTags] = $this->rawFacts[$key];
-            if ($firstRaw !== $name || $firstTags !== $tags) {
+            // storageKey ksorts the labels, so tag insertion order cannot
+            // change the series identity; compare the pairs in canonical
+            // order (order-strict !== refused one series re-published).
+            $firstCanonical = $firstTags;
+            ksort($firstCanonical);
+            $nowCanonical = $tags;
+            ksort($nowCanonical);
+            if ($firstRaw !== $name || $firstCanonical !== $nowCanonical) {
                 throw new \RuntimeException(Lang::t('prom.name_collision', [
                     'first'  => Util::displaySafe(self::describeRaw($firstRaw, $firstTags)),
                     'second' => Util::displaySafe(self::describeRaw($name, $tags)),
