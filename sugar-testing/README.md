@@ -146,6 +146,12 @@ echo $result->output;                              // view() across the run + Ra
 $finalModel = $result->model;                      // the model object — inspect it, don't echo it
 ```
 
+**Fake-runner caveat.** `withFakeCmdRunner()` substitutes the message a Cmd
+*resolves to* — it is not a suppression switch. The simulator defaults to
+execute mode, so the real Cmd still runs for its side effects before the fake
+message is injected. Pair it with `withRealCmdRunner(false)` (one line above)
+when the original execution must not happen.
+
 **Queue and clone discipline.** `send()` mutates the handle you call it on; the
 `with*()` configuration setters return a **clone** that copies the queue by
 value at clone time. Configure first, then send — sending on the original
