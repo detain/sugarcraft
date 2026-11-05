@@ -1290,6 +1290,18 @@ final class FocusRingTest extends TestCase
             self::assertStringNotContainsString(chr(7), $e->getMessage());
             self::assertStringContainsString('\033', $e->getMessage(), 'control bytes arrive as printable escapes');
         }
+
+        // Raw C1 is not C0: chr(0x9b) . 'H' is a complete 8-bit cursor-motion
+        // sequence, and today's $hostile above cannot discriminate it.
+        $c1 = 'pa' . chr(0x9b) . 'Hnel';
+
+        try {
+            FocusRing::ofStrict($c1, 'x', $c1);
+            self::fail('expected the duplicate to throw');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringNotContainsString(chr(0x9b), $e->getMessage(), 'raw C1 must not survive either');
+            self::assertStringContainsString('\233', $e->getMessage(), 'C1 arrives as an octal escape');
+        }
     }
 
     public function testOfStrictErrorMessageClipsAbsurdlyLongIds(): void

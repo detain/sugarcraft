@@ -127,14 +127,19 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
     }
 
     /**
-     * A caller-supplied id made safe to embed in an exception message: control
-     * bytes (ESC, BEL, newlines…) become printable escape sequences and absurd
-     * lengths are clipped, so a hostile id cannot forge terminal output
-     * through an error the host prints verbatim.
+     * A caller-supplied id made safe to embed in an exception message: every
+     * C0 control byte (`\x00..\x1f` — ESC, BEL, newlines…), DEL (`\x7f`) and
+     * raw C1 byte (`\x80..\x9f` — a bare CSI `\x9b` followed by `H` is a
+     * complete cursor-motion sequence) becomes a printable octal escape, and
+     * absurd lengths are clipped, so a hostile id cannot forge terminal
+     * output through an error the host prints verbatim.
      */
     private static function describeId(string $id): string
     {
-        $id = addcslashes($id, "\x00..\x1f\x7f");
+        // addcslashes walks bytes, so this also catches the second byte of a
+        // UTF-8-encoded C1 (\xc2\x80..\xc2\x9f): the pair splits and the lone
+        // lead byte that remains is inert — the forgery is neutralised either way.
+        $id = addcslashes($id, "\x00..\x1f\x7f\x80..\x9f");
 
         return strlen($id) > 80 ? substr($id, 0, 79) . '...' : $id;
     }
