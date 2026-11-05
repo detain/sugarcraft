@@ -22,8 +22,10 @@ namespace SugarCraft\CellBuffer\Diff;
  *
  * For 1-byte runes (ASCII): count 1-3 strictly lose (4 bytes vs 1-3), count 4
  * is a byte-for-byte tie ("AAAA" vs "\x1b[4b", both 4), and count 5
- * is the FIRST strict win (5 bytes vs 4). Whole ASCII runs therefore start
- * paying at FIVE cells: a run under five never wins, and the tie at four keeps
+ * is the FIRST strict win (5 bytes vs 4). The gate is fed the REPEAT COUNT —
+ * the whole run's length minus its lead glyph, which the stream spells as a
+ * plain SetCellOp — so whole ASCII runs start paying at SIX cells: a repeat
+ * tail under five never wins, and the tie at four keeps
  * the literal form — the tie-break prefers plain glyphs because they survive every
  * terminal, while REP is an extra capability assumption.
  *

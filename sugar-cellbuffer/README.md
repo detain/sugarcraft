@@ -120,7 +120,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 | `MoveCursorOp` | CUP `\x1b[row;colH` | Reposition before a run of changes (skipped when the encoder cursor is already there) |
 | `SetStyleOp` | SGR `\x1b[...m` | Style transition (only when style differs by value); a full reset + restatement, not a minimal delta |
 | `SetCellOp` | raw rune bytes | One or more consecutive changed cells |
-| `RepeatRunOp` | REP `\x1b[N b` | Runs of identical cells where `RepeatGate` byte-math wins (ASCII: 5+ cells; below that the literal bytes are emitted) |
+| `RepeatRunOp` | REP `\x1b[N b` | Tail of a run of identical cells where `RepeatGate` byte-math wins — REP bytes appear for whole ASCII runs of 6+ cells (the gate sees `runLen−1`; the lead glyph rides a literal `SetCellOp`) and for shorter multi-byte runs; below that the literal bytes are emitted. `Buffer::diff()` emits a `RepeatRunOp` for every ≥2-cell width-1 identical run; the REP-vs-literal choice is made later in `DiffEncoder::encodeRepeatRun()` |
 | `EraseRunOp` | ECH `\x1b[N X` | Runs of 3+ blank default cells |
 | `SetHyperlinkOp` | OSC 8 | Open/close OSC 8 hyperlink anchors |
 
@@ -154,7 +154,7 @@ Emitted bytes (annotated):
 \x1b[0;38;2;255;0;0m  # SGR → red fg            (first MoveCursorOp skipped: encoder is already at 1;1)
 A                   # SetCellOp 'A'
 \x1b[0;38;2;0;0;255;1m  # SGR → blue fg + bold  (second MoveCursorOp skipped: cursor advanced past 'A')
-BBB                 # 'B' + RepeatRunOp encoded LITERAL: RepeatGate::worth(3,1)
+BBB                 # 'B' + RepeatRunOp encoded LITERAL: RepeatGate::worth(2,1)
                     # says the REP frame would cost more than the three glyphs
 \x1b[0m             # closing SGR reset — the frame ends styled; the encoder
                     # always closes a styled stream (the ghost-colour cure)
