@@ -6,6 +6,7 @@ namespace SugarCraft\Diff\Tests\Reader;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Diff\Diff;
+use SugarCraft\Diff\Reader\ScanRowKind;
 use SugarCraft\Diff\Reader\ScannedLine;
 use SugarCraft\Diff\Reader\UnifiedScan;
 
@@ -185,6 +186,44 @@ final class UnifiedScanTest extends TestCase
         $rows = ['--- a/x', '+++ b/x', '@@ -1,1 +1,1 @@', ' ok'];
 
         $this->assertSame([true, true, false, false], UnifiedScan::fileHeaders($rows));
+    }
+
+    public function testGitExtendedHeaderLinesAreNotFileHeaders(): void
+    {
+        // The M1 behaviour half: rename/mode/CIM extended rows carry none of
+        // the recognised header prefixes, so they read as unnumbered
+        // out-of-hunk prose — only git's `index <sha>..` line starts with a
+        // recognised prefix and counts.
+        $rows = [
+            'diff --git a/legacy.txt b/newname.txt',
+            'similarity index 90%',
+            'rename from legacy.txt',
+            'rename to newname.txt',
+            'old mode 100644',
+            'new mode 100755',
+            'index 7f8f9a0..1234567 100644',
+        ];
+
+        $this->assertSame([true, false, false, false, false, false, true], UnifiedScan::fileHeaders($rows));
+
+        $this->assertSame(
+            [
+                ScanRowKind::FileHeader,
+                ScanRowKind::OutsideHunk,
+                ScanRowKind::OutsideHunk,
+                ScanRowKind::OutsideHunk,
+                ScanRowKind::OutsideHunk,
+                ScanRowKind::OutsideHunk,
+                ScanRowKind::FileHeader,
+            ],
+            array_map(static fn (ScannedLine $l): ScanRowKind => $l->kind, UnifiedScan::lines($rows)),
+        );
+
+        $this->assertSame(
+            array_fill(0, 7, [null, null]),
+            $this->numbers($rows),
+            'none of these rows carries a line number',
+        );
     }
 
     public function testStringInputScansRowForRowAtTheWriterParsesIt(): void

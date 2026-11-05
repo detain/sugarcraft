@@ -26,6 +26,9 @@ final class DocsTruthTest extends TestCase
     /** The overclaim the docs-fix era deleted (the gutter keeps its own copy). */
     private const FALSE_SHARED_CLAIM = 'shares one faithful implementation';
 
+    /** M1: the Fidelity bullet's generalisation the scanner does not honour. */
+    private const FALSE_EXTENDED_HEADER_CLAIM = 'extended header lines scan as file headers';
+
     private static function readme(): string
     {
         return (string) file_get_contents(self::ROOT . '/README.md');
@@ -69,6 +72,23 @@ final class DocsTruthTest extends TestCase
                 'the DiffGutter delegation gap must stay disclosed in every doc surface',
             );
         }
+    }
+
+    public function test_the_readme_states_the_true_extended_header_rule(): void
+    {
+        // The scanner recognises `diff `, `index ` and out-of-hunk `--- `/
+        // `+++ ` only; `similarity index`/`rename from`/`old mode` rows carry
+        // none of those prefixes, so the old blanket claim was false and the
+        // corrected rule must stay on one physical line (the wrap-sensitive
+        // needle below).
+        $readme = self::readme();
+
+        self::assertStringNotContainsString(self::FALSE_EXTENDED_HEADER_CLAIM, $readme);
+        self::assertStringContainsString(
+            'scanned as unnumbered out-of-hunk rows',
+            $readme,
+            'the corrected extended-header rule must live in the README, unwrapped',
+        );
     }
 
     public function test_the_source_carries_no_phantom_method_sees_targets(): void
