@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a sugar-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="sugar-vterm.html">SugarVterm</a>).</p>
+<p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a sugar-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="sugar-vterm.html">SugarVterm</a>). The same frame pipeline also compiles <code>.tape</code> scripts into themed animated GIFs via <code>render-tape</code>/<code>render-batch</code>.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-vcr</code></pre>
@@ -62,6 +62,10 @@ vendor/bin/candy-vcr replay  session.cas --idle-trim=1.0              # clamp ga
 vendor/bin/candy-vcr replay  session.cas --no-trim                     # use original (uncompressed) timestamps</code></pre>
     <p style="margin-top: 8px;"><strong>⚠️ <code>--env-all</code></strong> (legacy alias <code>--env-allow-secrets</code>) disables all secret-key filtering. The cassette will contain credentials verbatim — <code>record</code> prints a stderr warning naming every captured variable, and the cassette file is created <code>0600</code> (owner-only), but only use this in fully isolated, trusted environments and never share the resulting cassette.</p>
 
+    <h4 style="margin-top: 20px;">Frame renderer + GIF export</h4>
+    <p>candy-vcr ships a <code>Render</code> layer and a <code>TapeToGif</code> pipeline: <code>.tape</code> scripts compile through Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder into an animated GIF. <code>render-tape</code>/<code>render-batch</code> expose it from the CLI with <code>--theme</code> (TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark), <code>--fps</code>, <code>--backend gd|imagick</code> (GD default; imagick needs ext-imagick), and <code>--encoder ffmpeg|php</code> (ffmpeg with two-pass palette generation is the default; <code>PhpGifEncoder</code> is the pure-PHP fallback needing no external binaries). <code>.tape</code> is the only renderable input — a recorded cassette cannot be exported to GIF.</p>
+    <p style="margin-top: 8px;"><strong>⚠ A <code>.tape</code> file is a program:</strong> the <code>Set Shell</code> directive, <code>--shell=&lt;sh&gt;</code>, or <code>--exec</code> put the renderer into exec mode — every typed keystroke runs in a real PTY-hosted shell. Review third-party tapes before rendering them.</p>
+
     <h4 style="margin-top: 20px;">Playback, the terminal, and assistive tech</h4>
     <p>Replay is <strong>environment-blind</strong>: it streams the recorded bytes verbatim — it does not read <code>NO_COLOR</code>, does not degrade on <code>TERM=dumb</code>, and does not follow live resizes beyond the header's recorded size. Assistive tech therefore sees exactly what the original session emitted rather than a re-adapted stream; for a non-visual outcome signal, replay prints a completion summary to <em>stderr</em> (<code>candy-vcr replay: played N of M events (… output bytes, … s of recorded time)</code>) so a stdout capture stays byte-clean. Interactive replay also guards the host terminal — cursor and alternate-buffer state are saved and restored (CSI ? 1049) and signal dispositions are reinstated on exit — while <code>record</code> arms a raw-mode rescue net (a <code>/tmp/candy-vcr-rescue.&lt;pid&gt;.&lt;rand&gt;</code> marker naming the affected tty) so a crashed child leaves the user's shell recoverable with <code>stty sane</code>.</p>
 
@@ -69,6 +73,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
     <div class="feature-grid">
       <div class="feature"><strong>Cassette format</strong><span>Five shipped codecs — JSONL (absolute <code>t</code>, <code>.cas</code>/<code>.jsonl</code>/<code>.cassette</code>), gzip JSONL (<code>.cas.gz</code>), RelativeFormat (delta <code>dt</code>, asciinema-cast style), YAML (<code>.yaml</code>/<code>.yml</code>, hand-written fixtures), and a read-only asciinema importer (<code>.cast</code>, v2/v3); <code>.tape</code> files compile into cassettes through the tape compiler. All decode into the same <code>Cassette</code> value object; <code>Player::open()</code> picks JSONL vs RelativeFormat by content-sniffing (a <code>.gz</code> name routes straight to the gzip codec), while <code>Player::loadAny()</code> dispatches by extension.</span></div>
       <div class="feature"><strong>Recorder hook</strong><span><code>Program::setRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
+      <div class="feature"><strong>Tape renderer</strong><span><code>Render\Renderer</code> + <code>FrameDedup</code> + <code>TapeToGif</code> turn <code>.tape</code> scripts into themed animated GIFs — <code>render-tape</code>/<code>render-batch</code>, GD/imagick rasterizers, ffmpeg/pure-PHP encoders. Recorded cassettes are replay-assert only, not GIF-exportable.</span></div>
       <div class="feature"><strong>Msg serializers</strong><span>17 builtin Msg types (KeyMsg, MouseClickMsg/MouseMotionMsg/MouseWheelMsg/MouseReleaseMsg, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are sugar-vterm CSI I/O focus events that round-trip through VCR.</span></div>
       <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
       <div class="feature"><strong>ByteAssertion</strong><span>Strict byte-equality with hex+printable diff window starting at the first divergence offset.</span></div>
@@ -77,7 +82,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Bug repro from user reports</strong> — user runs <code>--record bug.cas</code>, ships the cassette, maintainer replays locally.</li>
+      <li><strong>Bug repro from user reports</strong> — user runs <code>candy-vcr record --output bug.cas -- &lt;cmd&gt;</code>, ships the cassette, maintainer replays locally.</li>
       <li><strong>Regression tests in CI</strong> — record a known-good session, replay against the current build, fail the build on cell-grid divergence.</li>
       <li><strong>Demos &amp; documentation</strong> — alternative to VHS for headless / scriptable recordings; runs in the PHP unit-test process, no Docker.</li>
       <li><strong>Fuzzing seeds</strong> — record real sessions, mutate Msgs, replay to find edge cases.</li>
@@ -105,6 +110,9 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
 <tr><td>Player</td><td>play(factory, assertion)</td><td>Replay session with assertion</td></tr>
 <tr><td>ByteAssertion</td><td>new()</td><td>Strict byte-equality assertion</td></tr>
 <tr><td>ScreenAssertion</td><td>new(cols, rows)</td><td>Cell-grid equality assertion</td></tr>
+<tr><td>Render\Renderer</td><td>render(player, terminal, fps)</td><td>Produce a <code>FrameStream</code> of <code>Snapshot</code> frames at the given cadence</td></tr>
+<tr><td>Render\FrameDedup</td><td>dedup(stream)</td><td>Collapse identical adjacent frames (typical recordings run 80–95% duplicates)</td></tr>
+<tr><td>Encode\TapeToGif</td><td>create(options)</td><td>Full <code>.tape</code> → <code>.gif</code> pipeline — options select <code>theme</code>, <code>fps</code>, <code>backend</code> (<code>gd</code> default | <code>imagick</code>), <code>encoder</code> (<code>ffmpeg</code> default | <code>php</code>)</td></tr>
 <tr><td>RelativeFormat</td><td>new()</td><td>Delta-time (<code>dt</code>) format — the style asciinema casts use; easier manual editing</td></tr>
 <tr><td>Cassette</td><td>eventCount()</td><td>Number of recorded events; the events themselves ride the readonly <code>$events</code> property</td></tr>
 </table>
