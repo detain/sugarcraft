@@ -42,11 +42,13 @@ Damped harmonic oscillator (Ryan-Juckett's algorithm, [spring physics
 part 1](https://ryanjuckett.com/posts/spring-physics-part-1/) / [part
 2](https://ryanjuckett.com/posts/spring-physics-part-2/)). Choose
 `dampingRatio`: < 1 oscillates, = 1 is critical (no overshoot, fastest
-convergence), > 1 is over-damped. Both arguments must produce a converging
-spring: `angularFrequency` must be at least `1e-9` and `dampingRatio` must be
-greater than `0` — a zero-damping spring oscillates forever and a negative one
-diverges, so the constructor refuses both instead of letting your frame loop
-run until the user closes the window.
+convergence), > 1 is over-damped. The frequency and damping arguments must
+produce a converging spring (and the frame time must not be negative):
+`angularFrequency` must be at least `1e-9` and `dampingRatio` must be greater
+than `0` — a zero-damping spring oscillates forever and a negative one
+diverges, and a negative `deltaTime` would integrate backwards, so the
+constructor refuses these instead of letting your frame loop run until the
+user closes the window.
 
 ```php
 use SugarCraft\Spring\Spring;
