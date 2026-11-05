@@ -53,7 +53,6 @@ use SugarCraft\Code\Automation\WebhookEvent;
 use SugarCraft\Code\Support\ClipboardImage;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\QueueMode;
-use SugarCraft\Code\Backend\TracksActiveChildren;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Events\MediaProgress;
 use SugarCraft\Code\Events\ReasoningDelta;
@@ -7832,22 +7831,6 @@ final class Chat implements Model
     }
 
     /**
-     * CC-QA-2: kill any command children the backend spawned but has not
-     * reaped, announced once on stderr when anything dies. The two command
-     * backends own a live-children registry; the API-path backends
-     * (EngineBackend and the summariser) never spawn a process tree and
-     * answer 0 here, so this is safe to call from every quit path. Async
-     * true while the loop still ticks (the Ctrl+C / double-Escape arms),
-     * false from the bin funnel where the loop is already stopped.
-     */
-    public function abandonActiveBackendChildren(bool $async = false): int
-    {
-        return $this->backend instanceof TracksActiveChildren
-            ? $this->backend->abandonActiveChildren($async)
-            : 0;
-    }
-
-    /**
      * Swap the backend — also the live half of a settings save that rebuilds
      * the engine ({@see applySettings()}), which only ever calls this between
      * turns: the completion handlers of a running turn close over the backend
@@ -8339,21 +8322,6 @@ final class Chat implements Model
     public function workspace(): ?\SugarCraft\Code\Host\WorkspaceContext
     {
         return $this->workspace;
-    }
-
-    /**
-     * The launch's user-settings layer, or the empty array when this Chat was
-     * built without a workspace. Written as an explicit null test rather than
-     * `$this->workspace?->userConfig ?? []` because PHPStan 2.3 flags that
-     * shape with nullsafe.neverNull even when the subject is legitimately
-     * nullable (reproduced in isolation), and the baseline matcher then
-     * double-counts the message through Chat's own traits (PHP-M1).
-     *
-     * @return array<string, mixed>
-     */
-    private function workspaceUserConfig(): array
-    {
-        return null === $this->workspace ? [] : $this->workspace->userConfig;
     }
 
     /**

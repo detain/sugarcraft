@@ -721,4 +721,23 @@ trait HandlesRunControl
 
         return [$this, null];
     }
+
+    /**
+     * The launch's user-settings layer, or the empty array when this Chat was
+     * built without a workspace. Written as an explicit null test rather than
+     * `$this->workspace?->userConfig ?? []` because PHPStan 2.3 flags that
+     * shape with nullsafe.neverNull even when the subject is legitimately
+     * nullable (reproduced in isolation), and the baseline matcher then
+     * double-counts the message through Chat's own traits (PHP-M1).
+     *
+     * Composed into Chat by this trait; its keep-warm gate below is one of
+     * the consumers, and the Chat-side dispatch sites resolve the helper
+     * through the same composition.
+     *
+     * @return array<string, mixed>
+     */
+    private function workspaceUserConfig(): array
+    {
+        return null === $this->workspace ? [] : $this->workspace->userConfig;
+    }
 }

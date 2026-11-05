@@ -29,6 +29,7 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\LoadMoreMsg;
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Code\Backend\TracksActiveChildren;
 use SugarCraft\Code\Config\StatusLineCommand;
 use SugarCraft\Code\Skills\SkillMentions;
 use SugarCraft\Code\Host\SessionTabState;
@@ -1252,5 +1253,25 @@ trait HandlesKeys
         }
 
         return [$this, $cmd];
+    }
+
+    /**
+     * CC-QA-2: kill any command children the backend spawned but has not
+     * reaped, announced once on stderr when anything dies. The two command
+     * backends own a live-children registry; the API-path backends
+     * (EngineBackend and the summariser) never spawn a process tree and
+     * answer 0 here, so this is safe to call from every quit path. Async
+     * true while the loop still ticks (the Ctrl+C / double-Escape arms),
+     * false from the bin funnel where the loop is already stopped.
+     *
+     * Composed into Chat by this trait because the two async callers are
+     * the Ctrl+C and double-Escape arms right above; bin/candy-code's exit
+     * funnel is the third, synchronous, consumer.
+     */
+    public function abandonActiveBackendChildren(bool $async = false): int
+    {
+        return $this->backend instanceof TracksActiveChildren
+            ? $this->backend->abandonActiveChildren($async)
+            : 0;
     }
 }
