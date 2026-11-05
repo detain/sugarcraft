@@ -104,10 +104,13 @@ $req-&gt;counter('events');</code></pre>
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Descriptor</td><td>new(name, help, type, labelKeys)</td><td>Metric registration DTO (type: counter|gauge|histogram|summary)</td></tr>
-<tr><td>Registry</td><td>new(backend)</td><td>Create registry with backend</td></tr>
-<tr><td>Registry</td><td>new(backend, defaultTags, cardinalityLimit)</td><td>Create registry with backend, default tags, and per-metric cardinality limit (default 10 000)</td></tr>
+<caption>API surface — classes, constructors, and instrument methods.</caption>
+<thead>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+</thead>
+<tbody>
+<tr><td>Descriptor</td><td>new(name, help, type, labelKeys)</td><td>Metric registration DTO (type: counter|gauge|histogram|summary). Names are checked raw — dots are rejected, use underscores</td></tr>
+<tr><td>Registry</td><td>new(backend, defaultTags, cardinalityLimit)</td><td>Create a registry from a backend, with default tags merged into every emit and a per-metric cardinality limit (default 10 000)</td></tr>
 <tr><td>Registry</td><td>register(Descriptor)</td><td>Register metric descriptor for early TYPE/HELP emission</td></tr>
 <tr><td>Registry</td><td>counter(name, value, tags)</td><td>Increment counter</td></tr>
 <tr><td>Registry</td><td>gauge(name, value, tags)</td><td>Set gauge value</td></tr>
@@ -115,20 +118,28 @@ $req-&gt;counter('events');</code></pre>
 <tr><td>Registry</td><td>upDownCounter(name, amount, tags)</td><td>Add positive or negative increment to a synchronous up-down counter</td></tr>
 <tr><td>Registry</td><td>asyncCounter(name, value, tags)</td><td>Record an observation from an asynchronous counter callback</td></tr>
 <tr><td>Registry</td><td>asyncGauge(name, value, tags)</td><td>Record an observation from an asynchronous gauge callback</td></tr>
-<tr><td>Registry</td><td>time(name, tags)</td><td>Time a block, returns callable</td></tr>
+<tr><td>Registry</td><td>time(name, tags)</td><td>Time a block on the monotonic clock; returns a closer callable</td></tr>
 <tr><td>Registry</td><td>withTags(tags)</td><td>Pre-tag every emit</td></tr>
 <tr><td>Registry</td><td>backend()</td><td>Returns the current backend</td></tr>
+<tr><td>Registry</td><td>cardinalityLimit()</td><td>The per-metric label-combination budget (constructor argument)</td></tr>
 <tr><td>Registry</td><td>cardinality(name)</td><td>Number of unique label-value combinations currently tracked for a metric</td></tr>
-<tr><td>Registry</td><td>deleteLabelValues(name, tags)</td><td>Evict a specific label combination (FIFO eviction also runs automatically when limit is exceeded)</td></tr>
-<tr><td>UpDownCounter</td><td>new(registry, name, help)</td><td>Create an up-down counter instrument</td></tr>
+<tr><td>Registry</td><td>flush()</td><td>Publish the backend's state. Stream/socket backends emit as you record and no-op here; a textfile collector is only rewritten inside flush() and nothing in the library arms a timer — always call flush() explicitly from your own schedule</td></tr>
+<tr><td>Registry</td><td>remove(name, tags)</td><td>Reclaim a series from the backend and the cardinality tracker together (default tags are merged once, exactly as the emit path does)</td></tr>
+<tr><td>Registry</td><td>deleteLabelValues(name, tags)</td><td>Drop a label combination from the cardinality tracker only — backend series are NOT touched; use remove() for a full reclaim (FIFO eviction also runs automatically when the limit is exceeded)</td></tr>
+<tr><td>Registry</td><td>newUpDownCounter(name, help, tags)</td><td>Create a bound UpDownCounter instrument (preferred over constructing the instrument directly)</td></tr>
+<tr><td>Registry</td><td>newAsyncCounter(name, help, callback, tags)</td><td>Create an AsyncCounter observed via callback at collection time</td></tr>
+<tr><td>Registry</td><td>newAsyncGauge(name, help, callback, tags)</td><td>Create an AsyncGauge observed via callback at collection time</td></tr>
 <tr><td>UpDownCounter</td><td>add(amount, tags)</td><td>Add positive or negative increment</td></tr>
-<tr><td>AsyncCounter</td><td>new(registry, name, help, callback, tags)</td><td>Create an async counter instrument</td></tr>
-<tr><td>AsyncCounter</td><td>observe()</td><td>Invoke callback and record the returned sum</td></tr>
-<tr><td>AsyncGauge</td><td>new(registry, name, help, callback, tags)</td><td>Create an async gauge instrument</td></tr>
-<tr><td>AsyncGauge</td><td>observe()</td><td>Invoke callback and record the returned instantaneous value</td></tr>
-<tr><td>InMemoryBackend</td><td>new()</td><td>In-memory storage</td></tr>
-<tr><td>StatsdBackend</td><td>new(host, port)</td><td>StatsD protocol</td></tr>
-<tr><td>PrometheusFileBackend</td><td>new(path)</td><td>Prometheus textfile (atomic write, 14 bucket boundaries +Inf)</td></tr>
+<tr><td>AsyncCounter</td><td>observe(tags)</td><td>Invoke the callback and record the sum it returned</td></tr>
+<tr><td>AsyncGauge</td><td>observe(tags)</td><td>Invoke the callback and record the instantaneous value it returned</td></tr>
+<tr><td>InMemoryBackend</td><td>new(maxSamplesPerKey, maxSeries)</td><td>In-memory storage: per-key histogram reservoir cap (default 4096) and a global series ceiling evicted oldest-first (0 = unbounded)</td></tr>
+<tr><td>JsonStreamBackend</td><td>new(target, throwOnError)</td><td>One JSON object per line to a stream or path (default php://stderr); throwOnError = false drops partial-write failures silently</td></tr>
+<tr><td>StatsdBackend</td><td>new(host, port, dogstatsd, failSilently, timeout, existingSocket)</td><td>UDP StatsD/DogStatsD; defaults 127.0.0.1:8125, dogstatsd on, failSilently on, 1.0 s open timeout, or pass a pre-made existingSocket</td></tr>
+<tr><td>PrometheusFileBackend</td><td>new(path, buckets, maxSeriesPerFamily)</td><td>Prometheus textfile (atomic write; default 14 bucket boundaries +Inf; per-family FIFO ceiling, default 10 000)</td></tr>
+<tr><td>MultiBackend</td><td>new(...backends)</td><td>Fan out to two or more backends in order; a child failure propagates immediately (fail-fast). Zero children is refused at the door</td></tr>
+<tr><td>MultiBackend</td><td>withContinueOnError(...backends)</td><td>Static factory with error isolation: every child gets the emit even if others throw, and the collected failures are rethrown together as one MultiBackendException</td></tr>
+<tr><td>MultiBackendException</td><td>errors()</td><td>The array of Throwables collected during a continue-on-error fanout</td></tr>
+</tbody>
 </table>
   </div>
 </section>
