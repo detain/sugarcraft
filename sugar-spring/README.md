@@ -206,9 +206,10 @@ duration/damping, not tension triples):
 Every preset is under-damped (ζ < 1) — they all overshoot a little; that is
 the family's character. Settle frames are measured for a 0 → 100 move at the
 default `1e-4` threshold; under reduced motion every preset instead snaps to
-target in one tick (see [Reduced motion](#reduced-motion)). A preset critical on demand does not exist because
-none was tuned; build one with `dampingRatio: 1.0` (the flagship example
-above) or `new SpringConfig(...)` with friction `2 * sqrt(tension * mass)`.
+target in one tick (see [Reduced motion](#reduced-motion)). No
+critical-by-construction preset ships (none was tuned); build one with
+`dampingRatio: 1.0` (the flagship example above) or `new SpringConfig(...)`
+with friction `2 * sqrt(tension * mass)`.
 
 ```php
 use SugarCraft\Spring\{Spring, SpringPreset};
