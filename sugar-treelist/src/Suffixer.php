@@ -16,13 +16,20 @@ namespace SugarCraft\TreeList;
  * right-aligned at the reserved column; an empty return adds no padding.
  * A return wider than the reservation is not guarded - that line overruns
  * past the reserved column.
+ *
+ * `suffix()` returns are swept to plain inline text by the Model before they
+ * enter the row frame (control/ANSI bytes and zone sentinels stripped, line
+ * breaks dropped), so an implementation can forge neither a frame nor a row —
+ * emit visible text only and apply styling through the Model's style setters.
+ * `initSuffixer()` instead receives the item's RAW value: sanitize before
+ * echoing or logging it anywhere.
  */
 interface Suffixer
 {
     /**
      * Called once per item within a rendering pass to initialise state.
      *
-     * @param \Stringable $value          The current item's value
+     * @param \Stringable $value          The current item's value (raw, unsanitized — sanitize before echoing/logging)
      * @param int         $currentIndex   Index of the current item in the list
      * @param int         $cursorIndex    The currently selected item index
      * @param int         $lineOffset     Pass-through context value for relative markers; viewport tracking lives in the Model (cursorOffset/width/height), not here - the default hooks ignore it
@@ -41,6 +48,10 @@ interface Suffixer
 
     /**
      * Return the suffix string for a given line.
+     *
+     * The Model sweeps this return to plain inline text before it enters the
+     * row frame; anything non-text (control bytes, ANSI, sentinels, breaks)
+     * is removed, never rendered.
      *
      * @param int $currentLine  0-based line index within the current item
      * @param int $totalLines   Total number of lines this item spans

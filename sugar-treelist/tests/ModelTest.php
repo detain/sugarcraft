@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\TreeList\Tests;
 
-use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, StringItem, Suffixer};
+use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, Prefixer, StringItem, Suffixer};
 use SugarCraft\TreeList\Tests\Support\RowDeltaAssertions;
 use PHPUnit\Framework\TestCase;
 
@@ -1681,6 +1681,65 @@ final class ModelTest extends TestCase
         $this->assertStringNotContainsString("\r", $frame);
         $this->assertStringContainsString('layout', $frame);
         $this->assertStringContainsString('broke', $frame);
+    }
+
+    public function testPrefixerAndSuffixerReturnsAreSweptIntoTheFrame(): void
+    {
+        // Extension points splice INSIDE an already-wrapped row: a hostile
+        // prefix()/suffix() return must not smuggle ANSI/OSC/BEL, a bare CR,
+        // or a row-splitting LF into the frame — the Model sweeps both to
+        // plain inline text (PB-TREELIST-M10).
+        $prefixer = new class implements Prefixer {
+            public function initPrefixer(
+                \Stringable $value,
+                int $currentIndex,
+                int $cursorIndex,
+                int $lineOffset,
+                int $width,
+                int $height,
+                int $totalItems,
+            ): int {
+                return 0;
+            }
+
+            public function prefix(int $currentLine, int $totalLines): string
+            {
+                return "\x1b]0;pwn\x07evil\r";
+            }
+        };
+        $suffixer = new class implements Suffixer {
+            public function initSuffixer(
+                \Stringable $value,
+                int $currentIndex,
+                int $cursorIndex,
+                int $lineOffset,
+                int $width,
+                int $height,
+            ): int {
+                return 0;
+            }
+
+            public function suffix(int $currentLine, int $totalLines): string
+            {
+                return "\x1b[31mred\x07tail\r\nbreak";
+            }
+        };
+
+        $m = $this->model
+            ->setViewport(20, 10)
+            ->addItem(new StringItem('alpha'))
+            ->setPrefixer($prefixer)
+            ->setSuffixer($suffixer);
+
+        $lines = $m->lines();
+        $this->assertCount(1, $lines, 'a dropped break must never fragment the row');
+        $this->assertStringContainsString('alpha', $lines[0]);
+        $this->assertStringContainsString('evil', $lines[0]);
+        $this->assertStringContainsString('red', $lines[0]);
+        foreach (["\x1b", "\x07", "\r", "\n"] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $lines[0]);
+            $this->assertStringNotContainsString($forbidden, $m->view());
+        }
     }
 
     public function testRowBudgetCapsLayoutWorkForPathologicalValues(): void

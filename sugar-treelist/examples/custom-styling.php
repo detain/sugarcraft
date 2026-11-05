@@ -6,6 +6,11 @@ declare(strict_types=1);
  * SugarTreelist — custom Prefixer and Suffixer demo.
  *
  * Run: php examples/custom-styling.php
+ *
+ * Pattern note: prefix()/suffix() returns must be plain text — the Model
+ * sweeps control/ANSI bytes and zone sentinels and drops any line break from
+ * them before they enter the row, so style through the Model's setters, not
+ * through escape sequences here.
  */
 
 require __DIR__ . '/../vendor/autoload.php';

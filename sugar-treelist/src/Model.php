@@ -1043,6 +1043,21 @@ final class Model
     }
 
     /**
+     * Frame-content sweep for a fragment spliced INSIDE an already-wrapped
+     * row: a Prefixer/Suffixer return. Identical sanitization to
+     * sweepForFrame(), then every line break is DROPPED rather than folded —
+     * unlike item content, a gutter fragment has no row to break onto, and an
+     * embedded LF here would fragment the frame row itself. The same choke,
+     * then, with a stricter tail: control bytes, ANSI, and zone sentinels
+     * stripped and no break survives, so an extension can neither forge a
+     * frame nor split one.
+     */
+    private static function sweepForInline(string $text): string
+    {
+        return \str_replace(["\n", "\r"], '', self::sweepForFrame($text));
+    }
+
+    /**
      * Render styled lines for a single item — applies prefix, optional padded
      * suffix, and per-item style. Mirrors Go upstream's getItemLines.
      *
@@ -1104,13 +1119,16 @@ final class Model
 
         $output = [];
         foreach ($rawLines as $lineIdx => $lineContent) {
-            $linePrefix = $this->prefixer?->prefix($lineIdx, $total) ?? '';
+            // Extension returns splice into the row unswept otherwise: the
+            // Model sweeps them to plain inline text (PB-TREELIST-M10) so a
+            // prefixer/suffixer can forge neither a frame nor a row break.
+            $linePrefix = self::sweepForInline($this->prefixer?->prefix($lineIdx, $total) ?? '');
 
             // Suffix is only emitted (and content right-padded) when the suffixer
             // actually produces a non-empty marker for this line. Matches Go upstream.
             $lineSuffix = '';
             if ($this->suffixer !== null) {
-                $rawSuffix = $this->suffixer->suffix($lineIdx, $total);
+                $rawSuffix = self::sweepForInline($this->suffixer->suffix($lineIdx, $total));
                 if ($rawSuffix !== '') {
                     $free = $contentWidth - $this->ansiWidth($lineContent);
                     $lineSuffix = \str_repeat(' ', \max(0, $free)) . $rawSuffix;
