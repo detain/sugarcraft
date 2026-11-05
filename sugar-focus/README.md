@@ -161,6 +161,16 @@ $ring = is_array($decoded)
   whose `json_decode()` yields `null` or a string is a caller-side `is_array`
   guard away — restore() itself never sees it.
 
+The ring never sanitises ids for you, and snapshot data is the one input you
+do not control: a restored id is whatever the file said. Ids flow to
+`current()` verbatim — the demo prints `current()` raw in its footer — so any
+id you paint must first pass through your terminal-sanitisation layer. The
+sugar-core companion has exactly these helpers:
+`SugarCraft\Core\Util\Sanitize::untrusted()` for plain output, and
+`untrustedForMarkedFrames()` when frames carry sugar-mouse zones. A restored
+string holding the U+E000/U+E001 zone sentinels would otherwise forge a mouse
+zone at paint time.
+
 ## Modals and focus traps
 
 The ring has no built-in layer concept: a modal dialog is just more regions,
@@ -201,7 +211,7 @@ SGR borders are invisible *and* inaudible: an Orca-style reader never sees the
 accent paint, so the ring's state must reach the user as text. Announce
 `current()` by name whenever it changes — the demo's footer (`● focused: …`)
 is that contract in miniature. For a "region k of n" position, prefer
-`enabledIndex() + 1` over `enabledCount()` (`FocusRing.php:753, :607`) to the
+`enabledIndex() + 1` over `enabledCount()` (`FocusRing.php:758, :612`) to the
 raw `index()`/`count()` pair: it reflects what Tab can actually reach.
 `enabledIndex()` is `null` when focus is parked on a disabled region or the
 ring is empty — announce the region name alone in that case, never position
