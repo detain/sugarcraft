@@ -4,7 +4,7 @@ Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer,
 
 ## Installation
 
-Releases: pre-1.0 — no tagged versions exist yet, so consume `dev-master`.
+Releases: pre-1.0 — no tagged versions exist yet, so consume `dev-master`. The manifest requires PHP `^8.3` and `ext-mbstring`: `withIgnoreCase()` folds case through `mb_strtolower()` (gated on `mb_check_encoding()`, with a byte-wise ASCII failover for malformed input).
 
 ```bash
 composer require sugarcraft/sugar-diff:@dev
@@ -49,6 +49,12 @@ $wide = Diff::compute($before, $after, DiffOptions::new()
     ->withNoNewlineMarker()
     ->withDevNullOnEmptySide());
 
+// None of those four options bite this one-line change: the sides differ
+// beyond whitespace, neither is empty, both end in a newline, and the single
+// hunk fits any context window — so the wide-options patch is byte-identical:
+echo $wide->unified('file.txt') === $patchText ? "same patch\n" : "wider patch\n";
+// same patch
+
 // Row model for renderers:
 foreach ($diff->lines as $line) {
     // $line->kind (LineKind enum), $line->text, $line->oldNumber, $line->newNumber
@@ -90,7 +96,6 @@ Hunk row text ships exactly what the sides held — the engine never strips cont
 - A line's newline termination is invisible to the line diff: `"a\n"` vs `"a"` compare equal and produce **no hunks at all**, and a terminator-only change stays silent whether or not the marker is enabled — with no hunk triggered there is no row for a `\ No newline at end of file` annotation to ride on. The `beforeHasFinalNewline`/`afterHasFinalNewline` facts are exposed so a caller can surface such a change itself.
 - `withNoNewlineMarker()` governs *triggered* hunks instead: with it ON, a hunk that ends on an unterminated final row carries the same `\ No newline at end of file` line GNU `diff -u` and git emit, and that annotated shape is what `patch`-style consumers expect to read; with it OFF (the default) the row prints without the annotation. The annotation is a `string`-side affair only — a `list<string>` side is terminated by construction, so the marker is inert there.
 - CRLF vs LF differ in **every** line under default exact comparison (`\r` is content); `withIgnoreWhitespace()` folds `\r` away — deliberately stronger than git's `--strip-trailing-cr`.
-- Zero-length sides anchor at the line the hunk sits AFTER, so at the start of a file the header reads `@@ -0,0 +1 @@` — a caret-style anchor, not a row.
 - Binary files and rename/mode/CIM headers are out of scope: `git diff --binary` payloads and extended headers (`similarity index`, `old mode`, …) are not modelled — extended header lines scan as file headers, and binary content would diff as text by design. Colour is likewise left to the consuming surface (see candy-code's `Tui\DiffGutter` and web `DiffView`).
 - This library produces and reads patch text; it does not apply patches. `patch`-style hunk fuzz, reversal detection and the `--batch`/already-applied behaviours are outside its scope — feed the output to a real applier if you need them.
 

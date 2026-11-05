@@ -28,6 +28,12 @@ $wide = Diff::compute($before, $after, DiffOptions::new()
     ->withNoNewlineMarker()
     ->withDevNullOnEmptySide());
 
+// None of those four options bite this one-line change: the sides differ
+// beyond whitespace, neither is empty, both end in a newline, and the single
+// hunk fits any context window — so the wide-options patch is byte-identical:
+echo $wide->unified('file.txt') === $patchText ? "same patch\n" : "wider patch\n";
+// same patch
+
 // Number the rows of an existing patch (gutter/viewer support):
 foreach (UnifiedScan::lines($patchText) as $row) {
     // $row->old, $row->new, $row->fileHeader, $row->kind (ScanRowKind enum)
