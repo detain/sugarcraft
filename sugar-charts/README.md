@@ -331,8 +331,8 @@ the Heatmap's truecolor fill, themed frame rules — keeps emitting SGR
 regardless, and there is no automatic non-TTY degradation: piping a chart
 to a file yields full color. To force monochrome deliberately, set the
 sugar-style profile for the whole process
-(`Style::setDefaultProfile(ColorProfile::Ascii())`) and cool the Heatmap
-separately with `Heatmap::withColorProfile(ColorProfile::Ascii())`; the
+(`Style::setDefaultProfile(ColorProfile::Ascii)`) and cool the Heatmap
+separately with `Heatmap::withColorProfile(ColorProfile::Ascii)`; the
 library never installs a profile from the environment on your behalf.
 
 **Structural channels that never carry color.** `withDataLabels()` prints
