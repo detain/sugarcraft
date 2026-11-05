@@ -93,6 +93,17 @@ afterEach(() => {
 })
 
 describe('sidebar transcript import (CW-EU-01)', () => {
+  // LANG REQUEST web.chrome.sidebar.import / import_hint (G5-B): the label
+  // and tooltip ride the catalogue now, so the connected-state tooltip is a
+  // real hint instead of silence (red-before: the title was undefined when
+  // connected; the raw 'Import' word sat outside the copy census by design).
+  it('the import seat answers to the catalogue: label and connected tooltip', async () => {
+    const { wrapper } = await mountSidebar()
+    const button = wrapper.find('[data-testid="import-session"]')
+    expect(button.text()).toBe('Import')
+    expect(button.attributes('title')).toBe('Import a transcript file as a new session')
+  })
+
   it('sends the file text and name through session.import and follows the minted session', async () => {
     const { wire, wrapper } = await mountSidebar()
     // Open the mobile drawer first so "closing it on follow" is a real flip.

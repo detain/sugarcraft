@@ -1,21 +1,21 @@
 {
-  "_i18n-CUNEDlB-.js": {
-    "file": "assets/i18n-CUNEDlB-.js",
+  "_i18n-CYP-zh45.js": {
+    "file": "assets/i18n-CYP-zh45.js",
     "name": "i18n"
   },
   "index.html": {
-    "file": "assets/index-CMxlJxMg.js",
+    "file": "assets/index-CHgJZyOs.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_i18n-CUNEDlB-.js"
+      "_i18n-CYP-zh45.js"
     ],
     "dynamicImports": [
       "index.html"
     ],
     "css": [
-      "assets/index-Dn8ZJ-mw.css"
+      "assets/index-CDGSqX7b.css"
     ]
   },
   "src-web/sw.ts": {
@@ -24,7 +24,7 @@
     "src": "src-web/sw.ts",
     "isEntry": true,
     "imports": [
-      "_i18n-CUNEDlB-.js"
+      "_i18n-CYP-zh45.js"
     ]
   }
 }

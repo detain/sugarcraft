@@ -421,7 +421,7 @@ function onKey(event: KeyboardEvent): void {
            discipline; session.import is write-scoped, so a read-only
            connection is not shown a door it cannot open. -->
       <input ref="fileInput" type="file" accept=".json,.md,.txt" class="pick-file" data-testid="import-file" @change="importTranscript">
-      <button v-if="canWrite" type="button" :disabled="importing || !connection.connected" :aria-busy="importing" :title="connection.connected ? undefined : t('web.chrome.banner.no_answer')" data-testid="import-session" @click="pickTranscript">Import</button>
+      <button v-if="canWrite" type="button" :disabled="importing || !connection.connected" :aria-busy="importing" :title="!connection.connected ? t('web.chrome.banner.no_answer') : t('web.chrome.sidebar.import_hint')" data-testid="import-session" @click="pickTranscript">{{ t('web.chrome.sidebar.import') }}</button>
     </div>
     <input v-model="filter" type="search" :placeholder="t('web.chrome.sidebar.filter_placeholder')" :aria-label="t('web.chrome.sidebar.filter_aria')">
     <!-- C-SES-7.e: the tray toggle drives the store's re-read of the server. -->
