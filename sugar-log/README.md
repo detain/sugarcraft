@@ -27,7 +27,7 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 - **PSR-3 bridge** — `PsrBridge` implements `Psr\Log\LoggerInterface`; the eight severity methods never throw (a failed write lands as an internal notice, not an exception), while `log()` rejects unknown level strings with `InvalidArgumentException` as PSR-3 itself prescribes
 - **Record integrity** — colliding context keys are namespaced (`ctx_`), logfmt values escape `\` and `"`, control bytes are neutralised (see [Record integrity](#record-integrity))
 - **Error-stream routing** — optional second stream for severe records (threshold defaults to `Error`) without moving everything else off `STDOUT`
-- **Hook system** — register callbacks per log level via `HookRegistry::onLevel()`
+- **Hook system** — register callbacks per log level via `HookRegistry::onLevel()` — fired via `PsrBridge` (direct `Logger` calls never dispatch hooks)
 - **Configurable log-part ordering** — `PartsOrder` DTO controls which parts appear and in what sequence
 
 ## Install
@@ -376,7 +376,7 @@ never cancel the walk or eat the log line.
 
 The hook system lets you register callbacks that fire whenever a log entry is emitted at or above a given level. Hooks receive the `Level`, PSR-3 level string, message, and context — useful for dispatching to external services, enriching context, or filtering.
 
-> **Note:** Hooks fire **only via `PsrBridge`** — they do not fire when calling `Logger->info()` etc. directly. For the plain `Logger` API, hooks are not invoked. To use hooks, wrap your `Logger` in a `PsrBridge` and call methods on the bridge.
+> **Note:** Hooks fire **only via `PsrBridge`** — they do not fire when calling `Logger->info()` etc. directly. For the plain `Logger` API, hooks are not invoked. To use hooks, wrap your `Logger` in a `PsrBridge` and call methods on the bridge. A record the bridge's level filter drops is neither written nor dispatched to hooks.
 
 ```php
 use SugarCraft\Log\Logger;

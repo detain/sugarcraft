@@ -22,7 +22,7 @@ $child-&gt;info('Batch complete');</code></pre>
             <div class="feature"><strong>Sub-loggers</strong><span><code>with(array $fields)</code> creates a child logger that inherits all context.</span></div>
             <div class="feature"><strong>StandardLogAdapter</strong><span>Go-style <code>print()</code>/<code>printLn()</code>/<code>fatal()</code>/<code>panic()</code> call pattern over a sugar-log Logger — a shape, not an interface (implements no contract); for PSR-3 interoperability use <code>PsrBridge</code>.</span></div>
             <div class="feature"><strong>PSR-3 bridge</strong><span><code>PsrBridge</code> wraps a Logger and exposes the full PSR-3 <code>LoggerInterface</code> API.</span></div>
-            <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via <code>HookRegistry::onLevel()</code> for middleware-style interceptors.</span></div>
+            <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via <code>HookRegistry::onLevel()</code> for middleware-style interceptors — dispatched only by <code>PsrBridge</code> (or an explicit <code>fire()</code>); direct Logger calls never fire hooks.</span></div>
             <div class="feature"><strong>Caller info</strong><span><code>reportCaller</code> on Logger adds <code>file:line</code> of the true call site to every entry.</span></div>
             <div class="feature"><strong>PartsOrder DTO</strong><span>Configure which log-parts appear and in what order — default, syslog, or custom.</span></div>
 
@@ -65,7 +65,7 @@ $child-&gt;info('Batch complete');</code></pre>
 <tr><td>PsrBridge</td><td>info(msg, ctx)</td><td>PSR-3 info — maps to Level::Info</td></tr>
 <tr><td>PsrBridge</td><td>debug(msg, ctx)</td><td>PSR-3 debug — maps to Level::Debug</td></tr>
 <tr><td>PsrBridge</td><td>log(level, msg, ctx)</td><td>Generic PSR-3 log dispatch</td></tr>
-<tr><td>HookRegistry</td><td>onLevel(Level, callable): int</td><td>Register a callback for all events at/above Level</td></tr>
+<tr><td>HookRegistry</td><td>onLevel(Level, callable): int</td><td>Register a callback for all events at/above Level (dispatched by PsrBridge or explicit fire())</td></tr>
 <tr><td>HookRegistry</td><td>fire(Level, psrLevel, msg, ctx)</td><td>Dispatch to all matching handlers</td></tr>
 <tr><td>Hook</td><td>onLevel(Level, string, string, array)</td><td>Interface for structured hook implementations</td></tr>
 <tr><td>PartsOrder</td><td>new(?list)</td><td>Config DTO for log-part ordering</td></tr>
