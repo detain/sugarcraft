@@ -1,6 +1,6 @@
 {
     "title": "SugarAnimation — SugarCraft",
-    "description": "SugarAnimation: ANSI/GIF animation toolkit.",
+    "description": "SugarAnimation: ANSI/GIF animation toolkit — ext-gd GIF decode to a cell grid, 24-bit truecolor playback, and .ansi art parsing and looping. The CLI viewer ships as candy-gifview.",
     "ogTitle": "SugarAnimation — SugarCraft",
     "ogDescription": "ANSI/GIF animation toolkit — GIF decode, frame playback, .ansi art. CLI: candy-gifview.",
     "emoji": "🎞",
