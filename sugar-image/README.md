@@ -17,6 +17,12 @@ available protocol:
 composer require sugarcraft/sugar-image
 ```
 
+Sibling `sugarcraft/*` requirements track `dev-master`, so the plain
+command above only resolves when dev stability is allowed: pin the
+package with `composer require sugarcraft/sugar-image:@dev`, or set
+`minimum-stability: "dev"` with `prefer-stable: true` in your
+consuming manifest.
+
 ## Requirements
 
 PHP `^8.3`, `ext-gd` and `ext-mbstring` — all three are `require`d in
