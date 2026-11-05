@@ -16,7 +16,7 @@
 
 ![demo](.vhs/play.gif)
 
-candy-git — a three-pane git TUI for PHP 8.3+, built on the SugarCraft stack. Status / branches / log laid out side-by-side, single-key stage / unstage, refresh, and ahead/behind branch summary.
+candy-git — a three-pane git TUI for PHP 8.3+, built on the SugarCraft stack. Status on the left, branches stacked over the log on the right; single-key stage / unstage, refresh, and an ahead/behind summary for branches that track an upstream.
 
 ```bash
 composer require sugarcraft/candy-git
@@ -25,15 +25,18 @@ vendor/bin/candy-git    # run inside any git working tree
 
 From a clone of this repository, `php candy-git/bin/candy-git` works too, and
 release users can grab the `candy-git.phar` from the GitHub release and run
-`php candy-git.phar`. `--version` and `--help` answer anywhere; any other
-argument exits 2 with a usage line rather than being silently ignored.
+`php candy-git.phar`. Until a stable `candy-git/v*` tag is cut, the only release
+channel is the rolling `candy-git/dev` prerelease. `--version`, `--help`, and the
+`-h` alias short-circuit and exit 0 anywhere; any *other* argument exits 2 with a
+usage line rather than being silently ignored.
 
 ## Requirements
 
 - PHP 8.3+
-- git **2.23 or newer** — the floor for `git restore` and the `--porcelain=v1`
-  status engine. candy-git checks `git --version` at launch and refuses older
-  binaries (or a missing git) with one readable sentence, exit code 1.
+- git **2.23 or newer** — the hard floor is `git restore` (candy-git's discard
+  and unstage engine); the `--porcelain=v1` status engine predates it. candy-git
+  checks `git --version` at launch and refuses older binaries (or a missing git)
+  with one readable sentence, exit code 1.
 - An interactive terminal: the UI is a full-screen alt-buffer program, so a
   piped stdout is refused instead of rendering escape-sequence soup.
 - A checked-out work tree — bare repositories have no status pane to show and
@@ -50,7 +53,7 @@ own git config.
 | `↑/↓` or `k/j`           | Move cursor in active pane                             |
 | `PageUp/PageDown`        | Jump the cursor a paneful in active pane                |
 | `Home/End`               | Jump the cursor to the first / last entry               |
-| `s` (status pane)        | Stage / unstage the highlighted entry                    |
+| `s` (status pane)        | Stage / unstage the highlighted entry — on conflicted or untracked rows the first press stages (there is no staged side to reverse) |
 | `a` (status pane)        | Stage all files                                         |
 | `d` (status pane)        | Discard changes to the highlighted file (press twice)    |
 | `P` (status pane)        | Open diff viewer for the highlighted file                |
@@ -60,7 +63,7 @@ own git config.
 | `n`                      | Create and switch to a new branch                        |
 | `u`                      | Undo last operation                                    |
 | `Ctrl+r`                 | Redo last undone operation                             |
-| `D` (branches pane)      | Delete the selected branch (press twice)                 |
+| `D` (branches pane)      | Delete the selected branch (press twice) — refuses to delete the current branch |
 | `M`                      | Merge selected branch into current                     |
 | `r`                      | Open rebase menu (continue / abort / skip / cancel)   |
 | `S`                      | Open stash manager (list / apply / drop; drop asks twice)   |
@@ -102,8 +105,8 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 | `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `stagePatch()` turns the selection into an `apply --cached` patch. |
 | `DiffHighlighter`  | Per-line hunk-header/old/new token spans for the diff overlay. |
 | `Lang`             | i18n lookup over `lang/*.php` (16 locales) on the core `T` registry, namespace `git`. |
-| `Support\\Version`  | `--version` line + phar build stamping (dev-build detection mirrors candy-top's DST-1 shape). |
-| `Support\\GitRequirement` | The git-version floor (`MINIMUM = '2.23'`) as pure parse/compare so launcher and tests share one authority. |
+| `Support\Version`  | `--version` line + phar build stamping (dev-build detection mirrors candy-top's DST-1 shape). |
+| `Support\GitRequirement` | The git-version floor (`MINIMUM = '2.23'`) as pure parse/compare so launcher and tests share one authority. |
 | `Pane`            | Enum — `Status`, `Branches`, `Log` — with `next()` for Tab cycling.                                                               |
 | `App` (Model)     | Owns the three lists + cursors + focus + overlays (stash/cherry-pick/worktrees/interactive-rebase). Pure-state — every key returns a fresh App. |
 | `Renderer`        | Pure view function — three `Style::border(rounded)` panes joined horizontally / vertically; the focused pane gets a brighter accent. |
@@ -124,6 +127,12 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 
 User-facing strings are internationalized via `SugarCraft\Git\Lang::t()`.
 All translatable strings live in `lang/en.php` under the `'git'` namespace.
+
+**Namespacing:** `Lang::t()` bakes the `git` namespace into every lookup, so a
+file key like `git.timeout` resolves through the core `T` registry as
+`git.git.timeout`. Always call through `SugarCraft\Git\Lang`; reaching for
+`T::translate('git.error')` directly misses the registered key and returns the
+raw string.
 
 **Available keys** (`lang/en.php`):
 
@@ -167,6 +176,13 @@ $msg = Lang::t('git.error', ['stderr' => $stderr]);
 
 ## Demos
 
+### Hero tour
+
+The gif at the top of this README is `.vhs/play.gif`: `play.tape` drives
+`examples/play.php` — a fixture-backed, repo-less build of the same TUI — so
+the tour is hermetic and renders identically on every machine. It is the
+friendliest first look: no repository required.
+
 ### Staging workflow
 
 ![stage](.vhs/stage.gif)
@@ -182,6 +198,10 @@ call through a fixed argument prelude that disarms the repo-controlled
 execution channels it can neutralize without breaking legitimate tooling;
 what it cannot disarm safely, it detects and discloses:
 
+- `-c core.quotepath=off` — git octal-escapes non-ASCII path bytes in porcelain
+  output by default; the prelude pins the flag off so a repository with unicode
+  filenames lists real paths in the status pane and stage/discard targets
+  round-trip correctly.
 - `-c core.fsmonitor=false` — `core.fsmonitor` (in the cloned repo's
   `.git/config`) names a program git invokes on the very first `status`; a
   hostile clone would otherwise achieve instant code execution before you see
@@ -254,9 +274,9 @@ code: clone, open, and commit only what you trust.
 
 ## Shared foundations
 
-candy-git uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar-fuzzy) for Smith-Waterman scored matching infrastructure, laying the groundwork for future fuzzy stash search.
+candy-git uses [sugar-fuzzy](https://sugarcraft.github.io/lib/sugar-fuzzy.html) for Smith-Waterman scored matching infrastructure, laying the groundwork for future fuzzy stash search.
 
-## Test
+## Testing
 
 ```bash
 composer install
