@@ -95,6 +95,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 <tr><td>SahilmScoring</td><td>canonical() / withMatchScore() / withConsecutiveBonus() / withSeparatorBonus() / withCamelBonus() / withFirstCharBonus() / withLowerCaseBonus()</td><td>Immutable Sahilm weights (canonical 1 / 5 / 10 / 10 / 15 / 1)</td></tr>
 <tr><td>FuzzyMatcherFactory</td><td>named(string $type, ScoringProfile|SahilmScoring|null $scoring = null): FuzzyMatcher</td><td>'smith-waterman' or 'sahilm'; a mismatched weight type or unknown name throws. create(string $type, $profile = null) is a deprecated alias that forwards to named() and keeps its <code>$profile</code> parameter name for named-argument callers</td></tr>
 <tr><td>Highlighter</td><td>highlight(MatchResult, \Closure(string): string): string</td><td>Apply styler to matched runs</td></tr>
+<tr><td>CharFold</td><td>foldSplit(string): list&lt;string&gt; / fold(string): string</td><td>Per-codepoint case fold that stays 1:1 with the original string — keeps matched code-point indices truthful where whole-string lowercase would expand (U+0130, final sigma); malformed bytes fold to <code>?</code> without desync</td></tr>
 </table>
   </div>
 </section>

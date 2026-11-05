@@ -210,6 +210,8 @@ final class MatchResult
 }
 ```
 
+**Case folding.** Both matchers fold case per code point (`CharFold::foldSplit()`) instead of lowercasing the whole string: `mb_strtolower` expands U+0130 (İ → i + combining dot) and context-maps Greek final sigma, which shifts every later code-point index; per-codepoint folding keeps exactly one fold element per original character, so `matchedIndices` stay truthful. Malformed UTF-8 bytes fold to `?` without desync (see Security note).
+
 ## Interface
 
 Swap matchers without touching call-sites — type-hint the `FuzzyMatcher` interface, implemented by both `SmithWatermanMatcher` and `SahilmMatcher`:
