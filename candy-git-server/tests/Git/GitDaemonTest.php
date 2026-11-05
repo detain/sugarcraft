@@ -227,6 +227,35 @@ final class GitDaemonTest extends TestCase
         $this->assertNull($found);
     }
 
+    public function testTheDiskFallbackCarriesTheVisibilityMarker(): void
+    {
+        $daemon = $this->createDaemon();
+        $reposPath = $this->tmpDir . '/repositories';
+
+        // A plain clone that merely exists on disk is NOT a publication:
+        // public-by-presence was the fail-open this pin retires.
+        \mkdir($reposPath . '/markerless/.git/objects', 0777, true);
+        \mkdir($reposPath . '/markerless/.git/refs', 0777, true);
+
+        $findMethod = (new \ReflectionClass($daemon))->getMethod('findRepoByPath');
+        $findMethod->setAccessible(true);
+
+        $found = $findMethod->invoke($daemon, $reposPath . '/markerless');
+        $this->assertNotNull($found, 'the directory still resolves');
+        $this->assertFalse(
+            $found->isVisiblePublic(),
+            'no marker means fail-closed PRIVATE for the daemon transport'
+        );
+
+        // An explicit publication arrives with the marker.
+        \mkdir($reposPath . '/published/.git/objects', 0777, true);
+        Repo::new('published', $reposPath . '/published')->withPublic(true)->writeVisibilityMarker();
+
+        $found = $findMethod->invoke($daemon, $reposPath . '/published');
+        $this->assertNotNull($found);
+        $this->assertTrue($found->isVisiblePublic(), 'the marker is the only path to public');
+    }
+
     // -------------------------------------------------------------------------
     // Access control integration tests
     // -------------------------------------------------------------------------

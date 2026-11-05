@@ -996,7 +996,10 @@ final class GitDaemon
     }
 
     /**
-     * Find a repo by filesystem path.
+     * Find a repo by filesystem path: registered instances first, then a
+     * disk fallback that carries the on-disk visibility marker — a
+     * directory without a public declaration resolves fail-closed PRIVATE,
+     * never public-by-presence.
      */
     private function findRepoByPath(string $path): ?Repo
     {
@@ -1012,7 +1015,11 @@ final class GitDaemon
         $fullPath = $this->config->reposPath() . '/' . $name;
 
         if (\is_dir($fullPath . '/.git')) {
-            return Repo::new($name, $fullPath);
+            // Marker-honest fallback: the on-disk visibility marker decides
+            // publication — a directory that merely exists is fail-closed
+            // PRIVATE for the daemon transport, never public-by-presence.
+            return Repo::new($name, $fullPath)
+                ->withVisibility(Repo::markerVisibility($fullPath . '/.git'));
         }
 
         return null;

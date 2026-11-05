@@ -52,6 +52,14 @@ final class SSHServer
 
     public function registerRepo(Repo $repo): void
     {
+        // Registration is state the operator means to survive the process:
+        // a PUBLIC registration persists its visibility marker (idempotent,
+        // exists()-gated), exactly as GitDaemon::registerRepo does, so the
+        // repo stays published for the next boot’s marker-honest fallback.
+        if ($repo->exists() && $repo->isVisiblePublic()) {
+            $repo->writeVisibilityMarker();
+        }
+
         $this->repos[$repo->name] = $repo;
     }
 
@@ -208,7 +216,10 @@ final class SSHServer
     }
 
     /**
-     * Find a repo by its filesystem path.
+     * Find a repo by its filesystem path: registered instances first, then
+     * a disk fallback that carries the on-disk visibility marker — an
+     * unregistered directory resolves fail-closed PRIVATE, never
+     * public-by-presence.
      */
     private function findRepoByPath(string $path): ?Repo
     {
@@ -224,7 +235,8 @@ final class SSHServer
         $fullPath = $this->config->reposPath() . '/' . $name;
 
         if (\is_dir($fullPath . '/.git')) {
-            $repo = Repo::new($name, $fullPath);
+            $repo = Repo::new($name, $fullPath)
+                ->withVisibility(Repo::markerVisibility($fullPath . '/.git'));
             $this->repos[$name] = $repo;
             return $repo;
         }

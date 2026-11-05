@@ -370,6 +370,37 @@ final class SSHServerTest extends TestCase
     // Query tests
     // -------------------------------------------------------------------------
 
+    public function testTheDiskFallbackCarriesTheVisibilityMarker(): void
+    {
+        // Config::load sets dataPath=dirname(path), so the server's
+        // reposPath lands inside this fixture tmpDir (same material route
+        // the daemon pins use).
+        $yaml = $this->tmpDir . '/fallback.yaml';
+        \file_put_contents($yaml, "name: ssh-fallback\n");
+        $server = new SSHServer(Config::load($yaml));
+
+        $dir = $this->createRepoPath('markerless');
+        \mkdir($dir . '/.git/objects', 0777, true);
+
+        $find = (new \ReflectionClass($server))->getMethod('findRepoByPath');
+        $find->setAccessible(true);
+
+        $found = $find->invoke($server, $dir);
+        $this->assertNotNull($found, 'the directory still resolves');
+        $this->assertFalse(
+            $found->isVisiblePublic(),
+            'no marker means fail-closed PRIVATE for the SSH transport'
+        );
+
+        $published = $this->createRepoPath('published');
+        \mkdir($published . '/.git/objects', 0777, true);
+        Repo::new('published', $published)->withPublic(true)->writeVisibilityMarker();
+
+        $found = $find->invoke($server, $published);
+        $this->assertNotNull($found);
+        $this->assertTrue($found->isVisiblePublic(), 'the marker is the only path to public');
+    }
+
     public function testConfig(): void
     {
         $this->assertSame($this->config, $this->server->config());

@@ -352,6 +352,10 @@ dispatch by design. The descriptions below document the class surface for
 whoever wires it, not a promise of working `git://` clones.
 
 **Class behavior:**
+- Repository resolution is marker-honest: registered instances first, then
+  a disk fallback under `<data_path>/repositories` that carries the on-disk
+  visibility marker — an unregistered directory is fail-closed PRIVATE,
+  never public-by-existence
 - Runs synchronously in the calling process — no fork-per-connection
   accept loop, but each served request spawns bounded, reaped `git`
   children; daemonize with systemd/supervisord if you host it
