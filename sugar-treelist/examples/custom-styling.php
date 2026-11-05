@@ -27,7 +27,7 @@ class StarsPrefixer implements Prefixer {
 class CursorMarker implements Suffixer {
     private int $itemIndex = 0;
     private int $cursorIndex = 0;
-    private int $markerWidth = 2;
+    private int $markerWidth = 3; // ' ◉ ' is 3 cells; reserve the real width
 
     public function initSuffixer(
         \Stringable $value, int $currentIndex, int $cursorIndex,
@@ -42,7 +42,7 @@ class CursorMarker implements Suffixer {
         if ($this->itemIndex === $this->cursorIndex && $currentLine === 0) {
             return ' ◉ ';
         }
-        return '   ';
+        return ''; // empty suffix = no padding on this line
     }
 }
 
