@@ -60,7 +60,7 @@ Direct emits for every kind exist too — `$reg->upDownCounter()`, `$reg->asyncC
 
 Metric names and tag keys are *not* free text on every wire, and the folds differ per backend. The folds run on the *emit path* only — a registered `Descriptor` name must already be in the exposition charset (its constructor refuses dots, see *Descriptor registration*):
 
-- **StatsD** (`StatsdBackend`): the metric name may keep dots (`http.requests` is idiomatic) but colons are flattened to `_` because `:` separates value from type on the wire. Tag keys keep letters/digits/dots/underscores; everything else the token sweep (below) replaces.
+- **StatsD** (`StatsdBackend`): the metric name may keep dots (`http.requests` is idiomatic) but colons are flattened to `_` because `:` separates value from type on the wire. Tag keys keep letters/digits/dots/underscores *and all other punctuation the sweep below does not name* — the sweep is a denylist of exactly `:` `|` `,` space, control/DEL and the C1 range, so `-`, `/`, `@`, `=`, `#` survive raw.
 - **Prometheus textfile** (`PrometheusFileBackend`): metric names keep `:` (a legal Prometheus name character) and fold every other illegal rune (including `.`) to `_`; label names never keep `:` — illegal runes become `_`.
 - **JSON stream**: names are emitted verbatim inside a JSON string — the encoding itself is the framing.
 
@@ -177,7 +177,7 @@ A string file target's parent directory must exist and be writable — construct
 
 ### `StatsdBackend`
 
-UDP datagrams in the etsy / DogStatsD wire format. Tags emit as `|#k:v,...`; with `dogstatsd: false` tags are dropped entirely (legacy StatsD has no tag channel). Every wire token is flattened at the send chokepoint so untrusted label values can never forge a second field, pair or line: in metric names, control bytes, DEL, the C1 range, `|`, `,`, space — and `:` — become `_`; in tag keys the same sweep applies plus `=`; in tag values `|`, `,`, space and control/C1 bytes become `_` while `:` is kept (safe, since a pair token can no longer contain a separator). Colons inside a tag *value* therefore survive; colons in the *name* do not.
+UDP datagrams in the etsy / DogStatsD wire format. Tags emit as `|#k:v,...`; with `dogstatsd: false` tags are dropped entirely (legacy StatsD has no tag channel). Every wire token is flattened at the send chokepoint so untrusted label values can never forge a second field, pair or line: in metric names, control bytes, DEL, the C1 range, `|`, `,`, space — and `:` — become `_`; in tag keys the identical sweep applies (the same set, `:` included — measured: `a=b` rides raw, `a:b` folds to `a_b`); in tag values `|`, `,`, space and control/C1 bytes become `_` while `:` is kept (safe, since a pair token can no longer contain a separator). Colons inside a tag *value* therefore survive; colons in the *name* or in a *key* do not. The sweep is a denylist: other punctuation (`-`, `/`, `@`, `=`, `#`) survives everywhere.
 
 ```
 hits:1|c|#route:/x,env:prod
