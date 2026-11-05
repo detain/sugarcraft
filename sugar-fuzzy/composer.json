@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-fuzzy",
-    "description": "Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Unblocks filter-highlighting UI across the ecosystem.",
+    "description": "Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Enables filter-highlighting UI across the ecosystem.",
     "type": "library",
     "license": "MIT",
     "keywords": [
