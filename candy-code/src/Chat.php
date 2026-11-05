@@ -3016,7 +3016,7 @@ final class Chat implements Model
      */
     private function terminalNotification(string $text): ?\Closure
     {
-        return \SugarCraft\Code\Tui\TerminalNotifier::fromConfig($this->workspace?->userConfig ?? [])->cmd($text);
+        return \SugarCraft\Code\Tui\TerminalNotifier::fromConfig($this->workspaceUserConfig())->cmd($text);
     }
 
     /** This model with $goal recorded as ended ($status) and $notice beside it. */
@@ -8339,6 +8339,21 @@ final class Chat implements Model
     public function workspace(): ?\SugarCraft\Code\Host\WorkspaceContext
     {
         return $this->workspace;
+    }
+
+    /**
+     * The launch's user-settings layer, or the empty array when this Chat was
+     * built without a workspace. Written as an explicit null test rather than
+     * `$this->workspace?->userConfig ?? []` because PHPStan 2.3 flags that
+     * shape with nullsafe.neverNull even when the subject is legitimately
+     * nullable (reproduced in isolation), and the baseline matcher then
+     * double-counts the message through Chat's own traits (PHP-M1).
+     *
+     * @return array<string, mixed>
+     */
+    private function workspaceUserConfig(): array
+    {
+        return null === $this->workspace ? [] : $this->workspace->userConfig;
     }
 
     /**
@@ -13841,7 +13856,7 @@ final class Chat implements Model
             sessionId: $this->currentSessionId,
             generation: $this->generation,
             projectRoot: $this->projectRoot(),
-            userConfig: $this->workspace?->userConfig ?? [],
+            userConfig: $this->workspaceUserConfig(),
             sessionStore: $this->sessionStore,
             titleService: $this->titleService(),
         );
@@ -17154,7 +17169,7 @@ final class Chat implements Model
             sessionId: $this->currentSessionId,
             generation: $this->generation,
             projectRoot: $this->projectRoot(),
-            userConfig: $this->workspace?->userConfig ?? [],
+            userConfig: $this->workspaceUserConfig(),
             sessionStore: $this->sessionStore,
         );
 
@@ -20394,7 +20409,7 @@ final class Chat implements Model
             && $this->dirPicker === null
             && $this->historySearch === null
             && !$this->readOnlySession
-            && \SugarCraft\Code\Support\AiCommentWatcher::enabled($this->workspace?->userConfig ?? [])
+            && \SugarCraft\Code\Support\AiCommentWatcher::enabled($this->workspaceUserConfig())
         ) {
             $watcher = \SugarCraft\Code\Support\AiCommentWatcher::shared($this->projectRoot());
             $subscriptions = ($subscriptions ?? new \SugarCraft\Core\Subscriptions())->withTick(

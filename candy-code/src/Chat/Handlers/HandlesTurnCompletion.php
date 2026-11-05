@@ -345,7 +345,7 @@ trait HandlesTurnCompletion
                 sessionId: $done->currentSessionId,
                 generation: $done->generation,
                 projectRoot: $done->projectRoot(),
-                userConfig: $done->workspace?->userConfig ?? [],
+                userConfig: $done->workspaceUserConfig(),
                 sessionStore: $done->sessionStore,
                 titleService: $done->titleService(),
             );

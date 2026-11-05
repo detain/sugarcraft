@@ -564,7 +564,7 @@ trait HandlesRunControl
 
         $backend = $this->backendForKeepWarm();
         if (!KeepWarmPolicy::shouldPing(
-            $this->workspace?->userConfig ?? [],
+            $this->workspaceUserConfig(),
             $sessionKey,
             $backend,
             \SugarCraft\Code\Host\CompactionService::tierTokenCount($this->estimateTokenCount($this->history), $this->history),
