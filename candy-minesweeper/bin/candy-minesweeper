@@ -62,7 +62,7 @@ use SugarCraft\Style\Style;
 foreach (\SugarCraft\Core\Util\LegacyEnv::import([
     'CANDY_MINES_' => 'CANDY_MINESWEEPER_', // @rename-keep
 ]) as $legacyVar) {
-    fwrite(STDERR, "candy-minesweeper: {$legacyVar} is deprecated; set " . 'CANDY_MINESWEEPER_' . substr($legacyVar, strlen('CANDY_MINES_')) . " instead.\n"); // @rename-keep
+    fwrite(STDERR, "candy-minesweeper: " . cliVisible($legacyVar) . " is deprecated; set " . cliVisible('CANDY_MINESWEEPER_' . substr($legacyVar, strlen('CANDY_MINES_'))) . " instead.\n"); // @rename-keep
 }
 
 // Honour NO_COLOR / CLICOLOR=0 / TERM=dumb through the fleet colour authority
@@ -127,7 +127,27 @@ if (in_array('--help', $args, true) || in_array('-h', $args, true)) {
 function cliVisible(string $raw): string
 {
     $probe = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
-    return strlen($probe) > 40 ? substr($probe, 0, 39) . '…' : $probe;
+    if (strlen($probe) <= 40) {
+        return $probe;
+    }
+    // Clip on CODEPOINT boundaries: a byte slice at 39 can cut a multi-byte
+    // character in half and emit invalid UTF-8 (a replacement glyph or a
+    // mangled name) into the very error line reporting the problem.
+    $chars = preg_split('//u', $probe, -1, PREG_SPLIT_NO_EMPTY);
+    if ($chars === false) {
+        // Already not valid UTF-8 — the byte floor is all that exists. The
+        // control scrub above ran first, so no truncated tail can re-form an
+        // escape sequence.
+        return substr($probe, 0, 39) . '…';
+    }
+    $keep = '';
+    foreach ($chars as $char) {
+        if (strlen($keep) + strlen($char) > 39) {
+            break;
+        }
+        $keep .= $char;
+    }
+    return $keep . '…';
 }
 
 /**
@@ -148,7 +168,13 @@ function integerArgument(array $positional, int $index, string $name, string $us
         fwrite(STDERR, $usage);
         exit(1);
     }
-    return (int) $raw;
+    // Range-cap BEFORE any arithmetic uses the value: a 20+ digit string
+    // saturates to PHP_INT_MAX under (int), and the default-mines path then
+    // computes intdiv((float) $w * $h, 8) — a TypeError fatal with a path
+    // trace, not the clean translated refusal this CLI promises. 1e8 is past
+    // every legal board (sides 2..50, mines <= 50*50 - 9) but multiplies as
+    // an int, so CustomDifficulty::fromInput() stays the refusal authority.
+    return min((int) $raw, 100_000_000);
 }
 
 $preset = null;

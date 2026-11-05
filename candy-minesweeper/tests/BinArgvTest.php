@@ -274,4 +274,42 @@ final class BinArgvTest extends TestCase
         $en = require __DIR__ . '/../lang/en.php';
         $this->assertStringContainsString($en['ui.resume'], $out, 'frame one must announce the resume option');
     }
+
+    public function testGiantDigitArgumentsRefuseWithoutFatalError(): void
+    {
+        // Beyond every legal board, digit argv must land on the translated
+        // CustomDifficulty::fromInput refusal — never a float-overflow fatal.
+        foreach ([
+            ['99999999999999999999', '99999999999999999999'],
+            ['99999999999999999999'],
+            ['20', '20', '99999999999999999999'],
+        ] as $argv) {
+            [$code, , $err] = self::runBinary($argv);
+            $this->assertSame(1, $code, 'giant argv must be refused with exit 1: ' . $err);
+            $this->assertStringNotContainsString('TypeError', $err);
+            $this->assertStringNotContainsString('Fatal error', $err);
+            $this->assertStringContainsString('candy-minesweeper:', $err);
+        }
+    }
+
+    public function testLegacyEnvNameWithControlBytesIsEchoedScrubbed(): void
+    {
+        // M6: the deprecation echo interpolates the raw env NAME; an
+        // ESC-bearing name must reach stderr scrubbed, never as bytes.
+        [$code, , $err] = self::runBinary(['--version'], ["CANDY_MINES_\x1bH" => '1']);
+        $this->assertSame(0, $code);
+        $this->assertStringContainsString('is deprecated', $err, 'vacuity guard: the planted name must reach the loop');
+        $this->assertStringNotContainsString("\x1b", $err, 'raw ESC from an env name must never reach stderr');
+        $this->assertStringContainsString('?', $err, 'the scrubbed byte must arrive as ?');
+    }
+
+    public function testCliVisibleTruncationIsClusterSafe(): void
+    {
+        // n14: the 40-char clip must not split a UTF-8 codepoint in two.
+        [$code, , $err] = self::runBinary(['--' . str_repeat('é', 45)]);
+        $this->assertSame(1, $code);
+        $this->assertTrue(mb_check_encoding($err), 'stderr must stay valid UTF-8 through the clip');
+        $this->assertStringNotContainsString("\u{FFFD}", $err, 'no replacement glyph may appear');
+        $this->assertStringContainsString('candy-minesweeper:', $err);
+    }
 }
