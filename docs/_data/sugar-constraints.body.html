@@ -64,20 +64,27 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
+<!-- n1: bare <tr><th> header kept - the site-wide .api-table cure (docs-review-1023 G4 seam) owns the thead/scope upgrade; do not hand-patch here. -->
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>LayoutSolver</td><td>solve(Region, Direction, list&lt;Constraint&gt;)</td><td>Solve constraints against a region in the given direction; returns list of sub-regions</td></tr>
+<tr><td>LayoutSolver</td><td>solve(Region $region, Direction $dir, array $constraints): array</td><td>Solve constraints against a region in the given direction; returns one positioned sub-region per constraint - an empty list solves to <code>[]</code>, keyed/sparse arrays and non-Constraint members throw <code>InvalidArgumentException</code>, and one constraint per region is the law: "30% but never under 20" is inexpressible</td></tr>
 <tr><td>GreedySolver</td><td>new(): self / compat(): self</td><td>Default factory / sugar-panels parity mode (round-split, remainder-to-last, non-truncating overflow)</td></tr>
-<tr><td>GreedySolver</td><td>withRoundSplit() / withRemainderToLast() / withoutOverflowTruncation() / withMinShare(cells, reserveGap, reserveLead)</td><td>Immutable rounding and overflow options</td></tr>
-<tr><td>GreedySolver / CassowarySolver</td><td>static greedy() / static cassowary()</td><td>Concrete-class factories — construction lives on the classes, not the interface</td></tr>
+<tr><td>GreedySolver</td><td>static solveStatic(Region $area, array $constraints, Direction $dir)</td><td>Legacy no-instance entry - note the transposed argument order versus <code>solve()</code>; signature frozen for callers</td></tr>
+<tr><td>GreedySolver</td><td>withRoundSplit() / withRemainderToLast() / withoutOverflowTruncation() / withOverflowTruncation(bool) / withMinShare(cells, reserveGap, reserveLead)</td><td>Immutable rounding and overflow options; <code>withMinShare()</code> runs its own proportional path and refuses any set containing a non-Fill constraint on both axes</td></tr>
+<tr><td>GreedySolver / CassowarySolver</td><td>static greedy() / static cassowary()</td><td>Concrete-class factories - construction lives on the classes, not the interface; <code>CassowarySolver::greedy()</code> is a warning-free escape hatch returning a supported <code>GreedySolver</code></td></tr>
 <tr><td>CassowarySolver</td><td>new(): self</td><td>Deprecated shim; solve() raises E_USER_DEPRECATED and delegates to GreedySolver</td></tr>
 <tr><td>Direction</td><td>Horizontal, Vertical</td><td>Enum: split direction</td></tr>
 <tr><td>Region</td><td>fromSize(int, int)</td><td>Factory: width, height</td></tr>
-<tr><td>Constraint</td><td>length(int)</td><td>Fixed cell count</td></tr>
-<tr><td>Constraint</td><td>min(int)</td><td>Floor — at least n cells</td></tr>
-<tr><td>Constraint</td><td>max(int)</td><td>Ceiling — at most n cells</td></tr>
-<tr><td>Constraint</td><td>fill(int $weight)</td><td>Proportional remainder with weight</td></tr>
-<tr><td>Constraint</td><td>percentage(int 0-100)</td><td>Percentage of total</td></tr>
-<tr><td>Constraint</td><td>ratio(int $num, int $denom)</td><td>Fractional proportion of the total span</td></tr>
+<tr><td>Constraint</td><td>length(int $n)</td><td>Fixed cell count; <code>length(-1)</code> throws <code>InvalidArgumentException</code></td></tr>
+<tr><td>Constraint</td><td>min(int $n)</td><td>Soft floor - at least n cells; negative <code>n</code> throws <code>InvalidArgumentException</code></td></tr>
+<tr><td>Constraint</td><td>max(int $n)</td><td>Ceiling - at most n cells; negative <code>n</code> throws <code>InvalidArgumentException</code></td></tr>
+<tr><td>Constraint</td><td>fill(int $weight = 1)</td><td>Proportional remainder with weight; <code>fill(0)</code> is accepted and silently weightless</td></tr>
+<tr><td>Constraint</td><td>percentage(int $n)</td><td>Percentage of total for <code>0</code>-<code>100</code>; out of range (e.g. <code>150</code> or <code>-5</code>) throws <code>InvalidArgumentException</code></td></tr>
+<tr><td>Constraint</td><td>ratio(int $numerator, int $denominator)</td><td>Fraction of the total span; a negative numerator or a zero/negative denominator throws <code>InvalidArgumentException</code></td></tr>
+<tr><td>Dock\DockLayout</td><td>new(centerPaneId) / withSlotAdded(side, paneId, index?) / withSlotRemoved(paneId) / withSlotMovedTo(paneId, side, index?) / slots(side)</td><td>Immutable center-plus-stacks dock manifest; <code>fromArray()</code> batches additions in one linear pass</td></tr>
+<tr><td>Dock\DockLayout</td><td>withColumnShare(side, num, denom) / withStackWeight(side, index, num, denom) / withMinimums(centerMinCols, sideMinCols) / columnShare(side) / toArray()</td><td>Share / weight / minimum mutators (malformed rationals throw); versioned lossless persistence shape</td></tr>
+<tr><td>Dock\DockLayout</td><td>resolve(Region $frame): DockGeometry</td><td>Never throws; below the floors it degrades by dropping sides, and the divider is fixed at one column</td></tr>
+<tr><td>Dock\DockGeometry</td><td>public $regions / regionFor(paneId) / dividerColumns() / isEmpty()</td><td>Resolved absolute regions in insertion order (left stack, center, right stack)</td></tr>
+<tr><td>Dock\DockSlot / Dock\Side</td><td>DockSlot::new(paneId, num, denom) / withWeight(num, denom); Side::other()</td><td>One vertical stack slot with a rational weight; opposite-side lookup</td></tr>
 </table>
   </div>
 </section>
