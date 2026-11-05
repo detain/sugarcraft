@@ -314,15 +314,21 @@ cursor-move / OSC / DCS / control sequence goes. `withImage($bytes, $id)` overla
 bytes never enter the text frame at all — the card carries only the marker id —
 but they travel their own protocol's trust boundary on the way to the screen.
 
-**Zone sentinels are swept at every ingress.** sugar-mouse marks hit-zones with
+**Zone sentinels are swept at the coercing ingresses and again at paint.** sugar-mouse marks hit-zones with
 the private-use-area sentinel pair `U+E000`/`U+E001` around the zone id; forged
 sentinels inside untrusted titles or poster text would otherwise splice a phantom
 zone (a click target over nothing) or a duplicate zone id (a throw in the app's
 click path) straight into the frame. `stripControls()` / `sanitize()` /
 `withSafePoster()` / `withSafeStyledTitle()` perform the surgical sweep
-(`AnsiGuard::stripSentinels()`), and the grid re-sweeps every card body right
-before it marks zones — so even verbatim `withPoster()` bytes cannot reach the
-marking choke point with forgery intact. ImageOverlay art markers live at
+(`AnsiGuard::stripSentinels()`); the verbatim setters (`withPoster()`,
+`withStyledTitle()`, `withImage()`) deliberately store exactly the bytes you
+handed them, so the sweep runs again downstream — the grid re-sweeps every card
+body right before it marks zones, and `Rail::render()` sweeps its own title —
+so even verbatim `withPoster()` bytes cannot reach the marking choke point with
+forgery intact. Stored bytes can still be verbatim, so the law at the frame's
+own edge stays yours: an app that composes frames for a marker-consuming
+renderer sanitises the assembled frame at its own boundary, not here.
+ImageOverlay art markers live at
 `U+E002` and above, outside the sentinel window: they survive every sweep.
 
 ## Internationalisation
