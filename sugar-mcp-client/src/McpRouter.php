@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\McpClient;
 
 /**
- * Tool/server narrowing over a keyed map of MCP servers: deny patterns first,
- * then an explicit allow-list.
+ * SERVER narrowing over a keyed map of MCP servers (tool rosters follow
+ * servers): deny patterns first, then an explicit allow-list.
  *
  * Extracted from the candy-code MCP stack (src/MCP/McpRouter.php). The
  * product-coupled half stayed downstream: candy-code reads the allow-list out
- * of an AgentPreset; this library takes the already-extracted `list<string>`
- * of server keys, so routing is policy-free and any preset, config layer or
- * CLI flag can feed it.
+ * of an AgentPreset, and narrows individual tool rosters there by matching
+ * preset grants against the sanitised wire names; this library takes the
+ * already-extracted `list<string>` of server keys, so routing is policy-free
+ * and any preset, config layer or CLI flag can feed it.
  *
  * WHY deny-before-allow: an author who lists a server explicitly should not be
  * able to out-vote an operator's deny rule. Ordering the filter as
@@ -110,8 +111,9 @@ final class McpRouter
     }
 
     /**
-     * Every tool from every allowed server, after deny patterns and the
-     * per-preset allow-list have had their say.
+     * Every tool from every allowed server, after the deny patterns and the
+     * server allow-list have had their say. Tool rosters arrive whole: the
+     * filter's unit is the SERVER.
      *
      * @param list<string> $allowList empty list means "all servers allowed"
      * @return list<McpTool>

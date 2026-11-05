@@ -36,7 +36,7 @@ composer require sugarcraft/sugar-mcp-client
 | `ArgumentShape` | Restores `{}` vs `[]` in decoded tool-call arguments against the tool's `inputSchema` |
 | `McpServer` | Transport contract: `start` / `stop` / `listTools` / `callTool` |
 | `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture, `BoundedShutdown` teardown, `__destruct` orphan-proofing |
-| `McpRouter` | Deny-before-allow tool/server narrowing over raw config keys; empty allow-list means allow-all |
+| `McpRouter` | Deny-before-allow SERVER narrowing over raw config keys (tool rosters follow servers); empty allow-list means allow-all |
 | `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere |
 | `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
 
@@ -232,11 +232,14 @@ What you get when things go wrong, so you can branch on it knowingly:
 
 ## Routing policy
 
-`McpRouter` narrows which servers and tools a caller may see, before any
-transport runs. It holds a name-keyed map of already-built servers and takes
-deny patterns as config — either a plain list of glob patterns (all `deny`) or
-a `pattern => action` map; an action other than the exact string `"deny"` is
-ignored, and a malformed spec throws at construction:
+`McpRouter` narrows which SERVERS a caller may see, before any transport
+runs. A server's tool roster arrives whole or not at all, so tool narrowing
+is server narrowing: tool rosters follow servers. It holds a name-keyed map
+of already-built servers and takes deny patterns as config — either a plain
+list of glob patterns (every entry denies) or a `pattern => action` map; an
+action other than the exact string `"deny"` is ignored, and a malformed
+spec (a non-string list entry, or a map value that is neither an action
+string nor a spec array carrying one) throws at construction:
 
 ```php
 use SugarCraft\McpClient\{McpRouter, StdioMcpServer};
@@ -244,9 +247,14 @@ use SugarCraft\McpClient\{McpRouter, StdioMcpServer};
 $servers = ['fs' => $fsServer, 'scratch' => $scratchServer];
 $router = new McpRouter($servers, denyPatterns: ['scratch', 'untrusted_*']);
 
-$visible = $router->resolveAllowedServers();            // deny applies first
-$fsTools = $router->resolveAllowedTools('fs', ['read']);// per-server allow-list
+$visible = $router->resolveAllowedServers();      // deny applies first
+$tools = $router->resolveAllowedTools(['fs']);    // SERVER allow-list
 ```
+
+Trimming ONE server's roster to a named subset is deliberately not this
+class's job: that is downstream product policy. In candy-code the agent
+presets do it by matching their tool rosters against the sanitised
+`mcp__<server>__<tool>` wire names; this library keeps routing policy-free.
 
 The two membership laws are public statics so downstream gates read exactly
 this doctrine: `McpRouter::serverDenied($name, $denyPatterns)` and
