@@ -153,6 +153,26 @@ composer require sugarcraft/sugar-dashboard
 | `WaterfallItem` | Waterfall bar item | | |
 | `MetricsGrid` | Grid of metric displays | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/metrics-grid.gif) |
 
+#### Value redundancy (color-vision aids)
+
+Colour alone should never be the only channel carrying a reading. These
+shipped toggles encode the same value redundantly as text, position, or
+shape, so the panels stay readable in a colour-blind terminal:
+
+- `Chart::withShowValues()` — prints the numeric value on each bar.
+- `Gauge::withPercentage()` — prints the fill ratio as a number beside
+  the bar length.
+- `Heatmap::withValues()` — writes each cell's value over the gradient
+  fill. (`HeatMapChart` carries the low→high gradient but no value
+  overlay; label it yourself when colour is the only channel.)
+- `Plot\Chart\Meter::withGradient($stops, positionWise: true)` — hue maps
+  to fill *position*, so the meter reads identically by height alone.
+- `Plot\DistanceFade` — selection distance is expressed as a dimming
+  falloff, a shape cue independent of the palette.
+- `Plot\Braille\DualSampleGraph::withGradient()` and
+  `Plot\Braille\BrailleCanvas::withGradient()` — the colour follows the
+  sample value; the glyph geometry always carries it on its own.
+
 ### Graph & Network Visualization
 
 | Type | Description | Key Methods/Factories | GIF |
@@ -208,10 +228,10 @@ against oracle fixtures generated from btop's own C++).
 | `Plot\Gradient101` | btop `Theme::generateGradients`: expand ≥2 stops into a 101-entry ramp (index = percent) with btop's truncating integer law | `expand(list<Color>): list<Color>` |
 | `Plot\Braille\BrailleCanvas` | Dot canvas — now with an optional value→colour ramp | `withGradient(stops, ?scale)`, `withValue()`, `withoutGradient()`, `gradient()`, `value()` |
 | `Plot\Braille\DualSampleGraph` | btop `Draw::Graph`: two adjacent samples quantized into one glyph; braille / block / block2 / tty families | `new(width, height, family, invert, noZero, maxValue, offset)`, `push()`, `withData()`, `withGradient()`, `withUnderlay()`, `underlay()`, `render()` |
-| `Plot\Chart\Meter` | Analog meter — now with btop's one-row position-coloured `■` bar | `withGradient(stops, positionWise)`, `withGlyph()`, `withInvert()`, `withMeterBg()`, `memoStats()`, `resetMemo()` |
+| `Plot\Chart\Meter` | Analog meter — now with btop's one-row position-coloured `■` bar (value redundancy aid — see **Value redundancy** above) | `withGradient(stops, positionWise)`, `withGlyph()`, `withInvert()`, `withMeterBg()`, `memoStats()`, `resetMemo()` |
 | `Foundation\NetAutoScale` | btop net-graph ceiling hysteresis (grow/shrink only after 5 sustained samples) | `new(sync)`, `offer(down, up)`, `downloadMax()`, `uploadMax()`, `maxFor()`, `counters()`, `forceRescale()` |
 | `Foundation\GradientStore` | Named 101-entry ramps — `at('cpu', 73)` is btop `Theme::g("cpu")[73]` | `new()`, `fromStops()`, `ramp()`, `withGradient()`, `at()`, `gradient()`, `has()`, `names()` |
-| `Plot\DistanceFade` | btop proc-list distance fade (text dims, metrics blend to grey away from the selection) | `ramp()`, `distance()`, `fadeIndex()`, `fadeColor()`, `metricPosition()`, `metricColor()`, `flatMetricColor()`, `metricValues()` |
+| `Plot\DistanceFade` | btop proc-list distance fade (text dims, metrics blend to grey away from the selection; value redundancy aid — see **Value redundancy** above) | `ramp()`, `distance()`, `fadeIndex()`, `fadeColor()`, `metricPosition()`, `metricColor()`, `flatMetricColor()`, `metricValues()` |
 | `Plot\ProcRow\ProcRowComposer` | One btop process-list row: pid, name, cmd, threads, user, mem, 5×1 cpu graph on graph_bg, cpu% | `new(width)` (box inner width), `row(ProcRow, row, selected, selectMax, ?graph, followed)`, `withColumns()`, `withPalette()`, `withProcColors()`, `withProcGradient()`, `withFamily()` |
 | `Plot\ProcRow\ProcRow` | Process DTO (pid, name, cmd, threads, user, cpu, memPercent, ?memLabel) | `new(...)` |
 | `Plot\ProcRow\ProcColumns` | btop column widths | `btop(boxWidth, cpuGraphs)`, `new(prog, cmd, threads, user, cpuGraphs)`, `width()` |
@@ -275,7 +295,9 @@ and every `push()` scrolls the frame half a cell (a whole cell in `tty`).
   samples.
 - `withGradient($stops)` colours through a `Gradient101` ramp: a one-row
   graph colours each cell by `max(prev, cur)`, taller graphs colour each
-  row by its vertical position.
+  row by its vertical position (value redundancy aid — glyph height alone
+  still carries the reading; see **Value redundancy** under Chart
+  Components).
 - `withUnderlay(Color $inactiveFg)` paints btop's `graph_bg` glyph
   (`⣀` / `▄` / `░`, see `underlayGlyph()`) wherever a one-row graph is
   transparent; static `underlay($family, $cells, $inactiveFg)` returns the
