@@ -383,8 +383,8 @@ the Program's model each time, so repeated runs give the same result.
 - `->cmds` — every captured command closure, in dispatch order
 - `->output` — concatenated `view()` output across the run plus `RawMsg`/`PrintMsg`
   side-channel writes
-- `->frames` — every frame the run produced, in order: the `view()` after the init
-  update and after each delivered message's update leg, plus the final render — for
+- `->frames` — every frame the run produced, in order: the `view()` after the init-trio
+  updates, after each delivered message's update leg, and the final render — for
   animation/progression assertions
 - `->droppedAfterStop` — messages left in the queue when a `QuitMsg`/`InterruptMsg`
   halted the drain (0 in a healthy run; a surprise non-zero means your script
@@ -408,7 +408,7 @@ TapeRecorder::to(__DIR__ . '/.vhs/demo.tape')
     ->type('php examples/demo.php')
     ->enter()
     ->sleep(1.0)
-    ->resize(100, 30)                      // Set Width/Height mid-tape
+    ->resize(100, 30)                      // '# Resize 100x30' comment line only
     ->type("q")
     ->comment('rendered by .github/workflows/vhs.yml')
     ->save();
@@ -418,7 +418,15 @@ Everything interpolated is escaped so it cannot forge a standalone directive
 line — `type()` neutralizes newlines and control bytes inside the quotes,
 `comment()` prefixes every physical line, and even the theme string is escaped.
 `line()` is the deliberate verbatim escape hatch: CI executes the tapes these
-files describe, so only feed it trusted, generated directives. `save()` is a plain
+files describe, so only feed it trusted, generated directives. Beyond the fence
+above, the builder roster is `to()`, `header()`, `type()`, `enter()`, `sleep()`,
+`resize()`, `comment()`, `line()`, `save()` — and `resize()` is disclosure-only:
+VHS carries no mid-tape resize directive (dimensions are fixed by `header()`), so
+it records a `# Resize CxR` comment line and changes nothing. The tape-side
+companion to the key builders is the static `keyMsgToVhs(KeyMsg): ?string` — it
+renders a decoded key message back into VHS `Type` syntax (a quoted rune for
+character keys, `Enter`/`PageUp`/`F12` and friends for named keys, `null` for
+anything unmappable). `save()` is a plain
 trusted-path write that fails loudly on a short write — there is no path jail and no
 atomic publish here; those are `GoldenFile`'s guarantees, not this class's. See
 `examples/tape-recorder.php` for a runnable demo.
