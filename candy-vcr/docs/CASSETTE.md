@@ -43,11 +43,14 @@ cassette.
 | `theme` | `string` | Optional. VHS theme name carried from a `.tape`'s `Set Theme`. Absent on cassettes recorded from a live PTY. |
 
 `created` is the wire key; the PHP DTO property is
-`CassetteHeader::$createdAt`. The remaining header fields on a
-tape-compiled cassette (`playbackSpeed`, `fontSize`, `fontFamily`,
-`widthPx`, `heightPx`) live on the DTO in memory but are not written to
-line 1. On the live-recording path, `cols`/`rows` are read from the PTY
-winsize at the moment recording starts.
+`CassetteHeader::$createdAt`. The remaining header fields
+(`playbackSpeed`, `fontSize`, `fontFamily`, `widthPx`, `heightPx`) are
+nullable: `toWireArray()` writes each one to line 1 exactly when it is
+non-null and omits it when unset — a tape-compiled cassette that sets
+`Set FontSize`/`Set PlaybackSpeed` therefore carries those keys on the
+wire, and `JsonlFormat` reads them back (the `migrate` v1→v2 round-trip
+relies on it). On the live-recording path, `cols`/`rows` are read from the
+PTY winsize at the moment recording starts.
 
 ---
 
@@ -66,8 +69,10 @@ instead:
 {"dt":0.001,"k":"output","b":"\u001b[2J\u001b[H"}
 ```
 
-`Player::open()` content-sniffs the file and selects the `RelativeFormat`
-decoder when it sees `dt`; the extension is never consulted.
+`Player::open()` routes a name ending in `.gz` straight to the gzip codec
+(`CompressedJsonlFormat`) without sniffing; any other file is content-sniffed,
+and the `RelativeFormat` decoder is selected when the first event line shows
+`dt` — so for non-`.gz` names the extension is never consulted.
 
 ### `output` — terminal output bytes
 
