@@ -6,10 +6,10 @@ namespace SugarCraft\Diff\Reader;
 
 /**
  * What kind of row a scanned line of a unified diff is — the discriminator
- * that lets a viewer tell real content from decoration instead of
- * re-sniffing the marker column (the fragile path a bare `(null, null)`
- * tuple cannot express: an `@@` row, out-of-hunk prose, and a `\ No newline`
- * annotation all looked alike before this existed).
+ * that lets a viewer tell real content from decoration instead of re-sniffing
+ * the marker column, the fragile path a bare `(null, null)` tuple cannot
+ * express: an `@@` row, out-of-hunk prose, and a `\ No newline` annotation
+ * can all share that one shape.
  */
 enum ScanRowKind
 {

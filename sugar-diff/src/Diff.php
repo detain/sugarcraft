@@ -18,10 +18,10 @@ use SugarCraft\Diff\Writer\UnifiedFormat;
  * cell budget of the LCS table is capped ({@see DiffOptions::$maxLcsCells})
  * so a pathological scattered edit degrades to a valid — if non-minimal —
  * delete-all/insert-all block instead of hanging; {@see self::$degraded}
- * reports when that fired. The blast radius is honest: with the default
- * budget an ordinary few-hundred-line file whose edits sit far apart can
- * still degrade, and the caller — not the engine — decides whether to
- * re-run with a bigger {@see DiffOptions::withMaxLcsCells()}.
+ * reports when that fired. In practice, with the default budget an ordinary
+ * few-hundred-line file whose edits sit far apart can still degrade, and the
+ * caller — not the engine — decides whether to re-run with a bigger
+ * {@see DiffOptions::withMaxLcsCells()}.
  *
  * Immutable value object: computed once, read many times. {@see self::$lines}
  * is the raw line-mode op sequence; {@see self::$hunks} the same rows grouped
