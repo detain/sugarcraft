@@ -268,8 +268,10 @@ documents the protocol and the UI).
   (longer text lives in memory for the session, not storage), at most 50
   sessions are kept, and a page-hide flushes before unload; sign-out clears
   the key in every open tab, a session leaving the list drops its own row,
-  and a quota refusal sets a visible "storage degraded" state instead of
-  diverging silently. Signing out is the whole-browser clear; the 50-session
+  and a quota refusal flips the store's `storageDegraded` flag — set once,
+  never cleared, and not yet surfaced in the UI: the refused write loses
+  only reload-survival, while the composer's in-memory copy keeps working.
+  Signing out is the whole-browser clear; the 50-session
   window bounds what an endless sign-in could accumulate.
 
 ### Browser storage
