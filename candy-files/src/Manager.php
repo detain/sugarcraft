@@ -487,7 +487,10 @@ final class Manager implements Model
                 $buf = $this->inputBuffer ?? '';
                 $newBuf = $buf . $msg->rune;
                 return [$this->withConfirm(ConfirmState::RenameSelected,
-                    Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]) . $newBuf . '_',
+                    // N-4: the typed buffer joins the status like every other
+                    // name-bearing write — sanitize at the choke, even though
+                    // live keystrokes are printables (defense-in-depth).
+                    Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]) . Entry::sanitizeName($newBuf) . '_',
                     $this->pendingOpDest, 'rename', $newBuf), null];
             }
             // All other keys: no-op, stay in confirm state
@@ -1369,8 +1372,10 @@ final class Manager implements Model
                     $errors++;
                 }
             } elseif (isset($item['isDir']) && $item['isDir']) {
-                // Restore directory (fallback for old undo items without trash path)
-                if (!is_dir($path) && !@mkdir($path, 0755, true)) {
+                // Restore directory (fallback for old undo items without trash path).
+                // N-6: 0700, the same private-tree law as the trash root —
+                // a re-created directory is restored data, not a public share.
+                if (!is_dir($path) && !@mkdir($path, 0700, true)) {
                     $errors++;
                 }
             } else {

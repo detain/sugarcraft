@@ -148,6 +148,28 @@ final class ManagerRenameTest extends TestCase
         $this->assertSame('new', $m->inputBuffer);
     }
 
+    /**
+     * N-4 (step 13): the rename buffer echo joins the status through the same
+     * Entry::sanitizeName() choke as every other name-bearing write. A rune
+     * carrying control bytes is not something the live parser emits (this is
+     * belt-braces against a forged KeyMsg), but a choke is a choke — revert
+     * the wrap and the raw ESC byte reaches the status string and this reddens.
+     */
+    public function testRenameBufferEchoIsSanitizedInStatus(): void
+    {
+        $file = $this->tmpDir . '/oldname.txt';
+        file_put_contents($file, 'content');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+
+        [$m] = $m->update(new KeyMsg(KeyType::Char, "a\x1b[31mb"));
+        $this->assertStringNotContainsString("\x1b", $m->status);
+        $this->assertStringContainsString('ab_', $m->status);
+        $this->assertSame("a\x1b[31mb", $m->inputBuffer, 'buffer keeps raw truth for the commit path');
+    }
+
     public function testRenameBackspaceRemovesLastChar(): void
     {
         $file = $this->tmpDir . '/oldname.txt';

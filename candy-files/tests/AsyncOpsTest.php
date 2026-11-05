@@ -259,4 +259,59 @@ final class AsyncOpsTest extends TestCase
 
         $this->assertFalse($resolved, 'copy past MAX_COPY_DEPTH must abort');
     }
+
+    /**
+     * M-10 (step 13): copying a symlink must REPLACE an existing
+     * destination — the bare symlink() used to fail silently there while
+     * the schedule-time "(N overwrote)" count had already advertised a
+     * replacement. Revert the unlink-then-link guard and this resolves
+     * false with the old destination bytes still in place → red.
+     */
+    public function testSymlinkCopyReplacesExistingDestination(): void
+    {
+        $target = $this->tmpDir . '/target.txt';
+        file_put_contents($target, 'points-here');
+        $src = $this->tmpDir . '/link-src';
+        $this->assertTrue(symlink($target, $src), 'setup: source symlink');
+        $dst = $this->tmpDir . '/link-dst';
+        file_put_contents($dst, 'stale-occupant');
+
+        $resolved = null;
+        $this->ops->copyAsync($src, $dst)->then(function (bool $result) use (&$resolved): void {
+            $resolved = $result;
+            Loop::stop();
+        });
+        Loop::run();
+
+        $this->assertTrue($resolved, 'symlink copy onto an existing path must succeed');
+        $this->assertTrue(is_link($dst), 'destination is a link now, not the old file');
+        $this->assertSame($target, readlink($dst));
+    }
+
+    /**
+     * M-10 parity (step 13): the recursive directory walk replaces an
+     * existing inner entry when the source tree carries a symlink of the
+     * same name (fresh-destination copies were never the broken case).
+     */
+    public function testCopyDirReplacesExistingSymlinkEntry(): void
+    {
+        $srcDir = $this->tmpDir . '/src-tree';
+        mkdir($srcDir, 0755, true);
+        file_put_contents($srcDir . '/note.txt', 'fresh');
+        $this->assertTrue(symlink('elsewhere', $srcDir . '/note-link'), 'setup: inner link');
+        $dstDir = $this->tmpDir . '/dst-tree';
+        mkdir($dstDir, 0755, true);
+        file_put_contents($dstDir . '/note-link', 'occupant');
+
+        $resolved = null;
+        $this->ops->copyAsync($srcDir, $dstDir)->then(function (bool $result) use (&$resolved): void {
+            $resolved = $result;
+            Loop::stop();
+        });
+        Loop::run();
+
+        $this->assertTrue($resolved);
+        $this->assertTrue(is_link($dstDir . '/note-link'), 'inner occupant replaced by the link');
+        $this->assertSame('elsewhere', readlink($dstDir . '/note-link'));
+    }
 }

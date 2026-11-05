@@ -66,6 +66,9 @@ final class AsyncOps
     /**
      * Move a file or directory asynchronously.
      *
+     * Public API surface — no production caller today: Manager::move()
+     * completes with a synchronous @rename() (M-9 truth-stamp).
+     *
      * @param string $src Source path
      * @param string $dst Destination path
      * @return PromiseInterface<bool> Resolves true on success, false on failure
@@ -88,6 +91,9 @@ final class AsyncOps
 
     /**
      * Rename a file or directory (atomic rename in the same directory).
+     *
+     * Public API surface — no production caller today: Manager::rename()
+     * completes with a synchronous @rename() (M-9 truth-stamp).
      *
      * @param string $src    Source path
      * @param string $newName New base name (not a full path)
@@ -181,6 +187,9 @@ final class AsyncOps
      * batches — never parallel disk I/O (same contract as
      * {@see self::copyManyAsync()}).
      *
+     * Public API surface — no production caller today (M-9 truth-stamp;
+     * Manager stages moves and resolves them through performMove()).
+     *
      * @param array<string, string> $map Source → Destination mapping
      * @return PromiseInterface<array<string, bool>> Map of source → success
      */
@@ -219,6 +228,14 @@ final class AsyncOps
     private static function doCopy(string $src, string $dst): bool
     {
         if (\is_link($src)) {
+            // M-10: symlink() onto an existing destination FAILS silently, so
+            // the schedule-time "(N overwrote)" count advertised a replacement
+            // that never landed. Unlink first — same replace semantics as the
+            // @copy() leg below (files replace; a directory destination fails
+            // both ways and reports false).
+            if (\file_exists($dst) || \is_link($dst)) {
+                @\unlink($dst);
+            }
             return @\symlink(\readlink($src), $dst);
         }
         if (\is_dir($src)) {
@@ -271,6 +288,11 @@ final class AsyncOps
             $srcPath = Pane::join($src, $item);
             $dstPath = Pane::join($dst, $item);
             if (\is_link($srcPath)) {
+                // M-10 parity: replace an existing link/file destination
+                // instead of failing the link creation silently.
+                if (\file_exists($dstPath) || \is_link($dstPath)) {
+                    @\unlink($dstPath);
+                }
                 @\symlink(\readlink($srcPath), $dstPath);
             } elseif (\is_dir($srcPath)) {
                 if (!self::copyDir($srcPath, $dstPath, $visited, $depth + 1)) {
