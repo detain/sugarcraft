@@ -50,7 +50,9 @@ whose cell-width math segments through ICU — on a bare php-cli machine
 
 `--version` short-circuits wherever it appears in the argv — even alongside a
 bogus flag — and exits 0. Any *other* unrecognised flag is refused with a usage
-note on stderr and exit code 1.
+note on stderr and exit code 1. The refusal is also how a *combination* of
+recognised flags is refused: at most one mode flag is accepted, so `-v -h`
+exits 1 naming both extras rather than silently preferring one.
 
 Needs a colour-capable TTY of at least 40 columns by 24 rows (the full
 frame is 40x32 — at squeezed heights the sidebar drops its help card
@@ -294,4 +296,5 @@ When all lines are cleared at once and the board becomes completely empty, an ad
 
 ## Shared foundations
 
-The single-player playfield is painted into a canonical [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer) `Buffer` cell grid (10×20 visible); per-tetromino background style and ghost-piece foreground style are applied per-cell. The hold/next/score sidebar and the VS split-screen panels are [sugar-style](https://github.com/detain/sugarcraft/tree/master/sugar-style) cards joined with its `Layout` (`Layout::joinVertical` / `Layout::joinHorizontal`), composited alongside the buffered playfield. Snapshot tests via [sugar-testing](https://github.com/detain/sugarcraft/tree/master/sugar-testing) pin canonical game states (starting board, T-spin completion, pause overlay).
+The single-player playfield is painted into a canonical [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer) `Buffer` cell grid (10×20 visible); per-tetromino background style and ghost-piece foreground style are applied per-cell. The hold/next/score sidebar and the VS split-screen panels are [sugar-style](https://github.com/detain/sugarcraft/tree/master/sugar-style) cards joined with its `Layout` (`Layout::joinVertical` / `Layout::joinHorizontal`), composited alongside the buffered playfield. Snapshot tests via [sugar-testing](https://github.com/detain/sugarcraft/tree/master/sugar-testing) pin canonical game states (starting board, T-spin completion, pause overlay,
+game-over overlay).
