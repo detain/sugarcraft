@@ -171,8 +171,14 @@ days selectable), so the rendered width is never below the natural grid.
 ## Styling
 
 Seven style setters accept bare SGR digit strings (e.g. `'7'`, `'1;31'`,
-`'4;35'`); the extended-colour introducers `38`/`48`, escape sequences and
-dangling delimiters are rejected with an `InvalidArgumentException`:
+`'4;35'`) up to `SGR_MAX_LEN` (32 characters); escape sequences, dangling
+delimiters and the extended-colour introducers `38`/`48` are rejected with an
+`InvalidArgumentException`. Note the introducer `58` (underline-colour) is NOT
+rejected — it decodes as unrelated attributes, so avoid it. Only part of the
+SGR space decodes: attributes `1,2,3,4,5,6,7,9` and colours `30-37`/`40-47`/
+`90-97`; other well-formed codes (`0`, `21`-`29`, `39`, `49`, `53`) are
+silently dropped, so `WithTodayStyle('39')` suppresses the today marker rather
+than resetting its style:
 
 ```php
 $picker = $picker
