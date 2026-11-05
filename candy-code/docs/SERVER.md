@@ -302,7 +302,7 @@ single address may hold at most 16 simultaneous connections; more are refused
 
 | Endpoint | Auth | Answer |
 |---|---|---|
-| `GET /api/health` | none | `{"ok": true, "protocol": 1}` — nothing else, so a prober learns neither the version nor the root |
+| `GET /api/health` | none | `{"ok": true, "protocol": 1, "web": <bool>}` — the `web` flag says whether a browser bundle was found; the payload still names neither the version nor the root |
 | `POST /api/login` | none (rate limited) | `{"code"}` or `{"token"}` → `{"ok": true, "loginSecret": "<64-hex>"}` + the session cookie; wrong → `401` |
 | `POST /api/ticket` | session cookie + `X-Candy-Code-Auth` secret | `{"ticket", "expiresInSeconds": 30}`; a bearer client gets `400` (it needs no ticket) |
 | `POST /api/logout` | any | revokes the session, closes every WebSocket bound to it with close code `4001`, and clears the cookie |
