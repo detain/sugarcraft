@@ -71,8 +71,8 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 <tr><td>DiffOptions</td><td>withIgnoreWhitespace(bool $ignore = true) / withIgnoreCase(bool $ignore = true)</td><td>Fold comparisons; emitted rows keep original bytes</td></tr>
 <tr><td>DiffOptions</td><td>withNoNewlineMarker(bool $on = true) / withDevNullOnEmptySide(bool $on = true)</td><td>GNU annotations, opt-in (the marker only annotates STRING sides)</td></tr>
 <tr><td>UnifiedFormat</td><td>write(Diff, string $oldPath, ?string $newPath) / hunksOnly(Diff): string</td><td>The writer behind Diff::unified()/hunkText(); NO_NEWLINE_ROW; path labels are control-byte-safe</td></tr>
-<tr><td>SideBySideFormat</td><td>rows(Diff) / fromUnified(string|list&lt;string&gt;): list&lt;SideBySideRow&gt;</td><td>Split-view pairing; SideBySideRow-&gt;left/-&gt;right, isPaired()</td></tr>
-<tr><td>UnifiedScan</td><td>lines(string|list&lt;string&gt;): list&lt;ScannedLine&gt;</td><td>Per-row old/new line numbers, fileHeader flag, and ScanRowKind; declared-count budgets, fail-closed boundaries (MAX_LINE_NUMBER_DIGITS caps start fields)</td></tr>
+<tr><td>SideBySideFormat</td><td>rows(Diff) / fromUnified(string|list&lt;string&gt;): list&lt;SideBySideRow&gt;</td><td>Split-view pairing; SideBySideRow-&gt;left/-&gt;right, isPaired(); list rows are taken as given (no newline refusal — unlike a compute() side), so a host printing an embedded newline into its channel owns sanitising it</td></tr>
+<tr><td>UnifiedScan</td><td>lines(string|list&lt;string&gt;): list&lt;ScannedLine&gt;</td><td>Per-row old/new line numbers, fileHeader flag, and ScanRowKind; declared-count budgets, fail-closed boundaries (MAX_LINE_NUMBER_DIGITS caps start fields); list input is not newline-refused the way compute() sides are — a "a\n+++ forged" element scans as one verbatim row and the lib never re-emits it</td></tr>
 <tr><td>UnifiedScan</td><td>fileHeaders(string|list&lt;string&gt;): list&lt;bool&gt; / rowsOf(string): list&lt;string&gt;</td><td>Which rows start a new file; the writer-compatible row split</td></tr>
 </table>
   </div>

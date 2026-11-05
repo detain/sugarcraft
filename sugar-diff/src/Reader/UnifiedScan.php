@@ -54,6 +54,13 @@ namespace SugarCraft\Diff\Reader;
  * never incremented, so even a clamped PHP_INT_MAX budget can only mean
  * "open until the next header" — it cannot print a number.
  *
+ * Row input is `string` or `list<string>` with NO newline refusal: unlike a
+ * `Diff::compute()` side (whose `parseSide()` rejects an embedded `"\n"`), a
+ * passed row may carry a newline and is reported verbatim as that row's
+ * text — a `--- a\n+++ forged` element reads as one ordinary row. This walk
+ * has no re-emit path, so a host that prints scanned text owns sanitising
+ * its own channel.
+ *
  * Mirrors candy-code/src/Tui/DiffGutter.php `number()` / `isFileHeader()` /
  * `numberable()` (which predate the count tracking above — see the
  * delegation seam note on {@see ScannedLine}).

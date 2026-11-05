@@ -42,6 +42,12 @@ use SugarCraft\Diff\Reader\UnifiedScan;
  * separate TypeScript code, so the two surfaces ALIGN BY CONVENTION, not by
  * a shared implementation — changing this rule should come with a look at
  * that viewer.
+ *
+ * As in {@see \SugarCraft\Diff\Reader\UnifiedScan}, list input to
+ * `fromUnified()` is taken as given: a row element carrying an embedded
+ * `"\n"` is not refused (only `Diff::compute()` sides are), and it lands
+ * verbatim in a `SideBySideRow` text. Pairing here never re-emits — the host
+ * printing the two columns owns sanitising its channel.
  */
 final class SideBySideFormat
 {
