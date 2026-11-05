@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Methods;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Protocol\CallContext;
 use SugarCraft\Code\Protocol\ErrorCode;
 use SugarCraft\Code\Protocol\MethodRegistry;
@@ -64,12 +65,12 @@ final class TokenMethods
         $label = $params->string('label', ViewerTokens::LABEL_MAX);
         $scopes = $params->strings('scopes', 8, 32);
         if ($scopes === []) {
-            throw RpcError::invalidParams('at least one scope is required', 'invalid_scopes');
+            throw RpcError::invalidParams(Lang::t('cli.serve.tokens.scopes_required'), 'invalid_scopes');
         }
 
         foreach ($scopes as $scope) {
             if (!\in_array($scope, ViewerTokens::SCOPES, true)) {
-                throw RpcError::invalidParams('viewer scopes are read-only in v1', 'scope_not_supported');
+                throw RpcError::invalidParams(Lang::t('cli.serve.tokens.scopes_readonly'), 'scope_not_supported');
             }
         }
 
@@ -83,8 +84,10 @@ final class TokenMethods
         } catch (\RuntimeException $e) {
             // The store's two refusals are the cap and a failed persist — one
             // reads to the operator as "revoke one first", the other as
-            // "nothing was minted". Both messages are the store's own.
-            if (str_contains($e->getMessage(), 'cap')) {
+            // "nothing was minted". Both messages are the store's own (and
+            // translated); the routing rides the exception CODES, because a
+            // message matched on text would break the moment the locale does.
+            if ($e->getCode() === ViewerTokens::ERR_GRANT_CAP) {
                 throw RpcError::of(ErrorCode::Conflict, $e->getMessage(), 'grant_cap_reached');
             }
 
@@ -136,7 +139,7 @@ final class TokenMethods
 
         $id = $params->string('id', 64);
         if (!$tokens->revoke($id)) {
-            throw RpcError::notFound('no viewer grant matches that id', 'token_not_found');
+            throw RpcError::notFound(Lang::t('cli.serve.tokens.not_found'), 'token_not_found');
         }
 
         return ['revoked' => true];
@@ -149,7 +152,7 @@ final class TokenMethods
     private static function store(CallContext $call): ViewerTokens
     {
         return $call->server->hub()->workspace()->service(ViewerTokens::class)
-            ?? throw RpcError::of(ErrorCode::UnsupportedInServer, 'this server supervises no viewer token store', 'tokens_unavailable');
+            ?? throw RpcError::of(ErrorCode::UnsupportedInServer, Lang::t('cli.serve.tokens.store_absent'), 'tokens_unavailable');
     }
 
     private static function stamp(float $seconds): string

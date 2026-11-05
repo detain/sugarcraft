@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Protocol;
 use React\EventLoop\TimerInterface;
 use Ratchet\RFC6455\Messaging\Frame;
 use SugarCraft\Code\Host\BackgroundEvents;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Protocol\Methods\AgentsMethods;
 use SugarCraft\Code\Protocol\Methods\BgMethods;
 use SugarCraft\Code\Protocol\Methods\ClientToolMethods;
@@ -419,7 +420,7 @@ final class Dispatcher implements MessageHandler
                 if (\is_string($sessionId) && !\in_array($sessionId, $viewerSessions, true)) {
                     throw RpcError::of(
                         ErrorCode::Forbidden,
-                        'this viewer grant does not cover that session',
+                        Lang::t('cli.serve.tokens.session_denied'),
                         'viewer_session_denied',
                     );
                 }

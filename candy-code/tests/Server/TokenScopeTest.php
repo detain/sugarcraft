@@ -9,6 +9,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use React\Http\Message\Response;
 use React\Http\Message\ServerRequest;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Protocol\CallContext;
 use SugarCraft\Code\Protocol\Dispatcher;
 use SugarCraft\Code\Protocol\ErrorCode;
@@ -1028,5 +1029,177 @@ final class TokenScopeTest extends TestCase
             $dispatcher->stop('over');
             $barren->tearDown();
         }
+    }
+
+    /**
+     * The L-TOKENS catalogue law: moving the ten token-surface refusals into
+     * `cli.serve.tokens.*` changed no byte of their English — each rendered
+     * line below is exactly the literal the code carried before the swap,
+     * parameters filled the way the throw sites fill them.
+     */
+    public function testTheTokenCatalogueStillSpeaksItsEnglishBytes(): void
+    {
+        self::assertSame(
+            'the viewer token store holds its cap of 64 grants; revoke one before minting another',
+            Lang::t('cli.serve.tokens.cap_reached', ['count' => ViewerTokens::MAX_GRANTS]),
+        );
+        self::assertSame(
+            'a viewer token must live between 1 and 365 days; got 400',
+            Lang::t('cli.serve.tokens.days_range', ['max' => ViewerTokens::MAX_DAYS, 'actual' => 400]),
+        );
+        self::assertSame(
+            'a viewer token label must be between 1 and 64 characters; got 0',
+            Lang::t('cli.serve.tokens.label_range', ['max' => ViewerTokens::LABEL_MAX, 'actual' => 0]),
+        );
+        self::assertSame('no viewer grant matches that id', Lang::t('cli.serve.tokens.not_found'));
+        self::assertSame(
+            'the viewer token could not be persisted; nothing was minted',
+            Lang::t('cli.serve.tokens.persist_failed'),
+        );
+        self::assertSame('viewer scopes are read-only in v1', Lang::t('cli.serve.tokens.scopes_readonly'));
+        self::assertSame('at least one scope is required', Lang::t('cli.serve.tokens.scopes_required'));
+        self::assertSame(
+            'this viewer grant does not cover that session',
+            Lang::t('cli.serve.tokens.session_denied'),
+        );
+        self::assertSame(
+            'a viewer grant session list must hold non-empty strings, or be null for all sessions',
+            Lang::t('cli.serve.tokens.session_list'),
+        );
+        self::assertSame(
+            'this server supervises no viewer token store',
+            Lang::t('cli.serve.tokens.store_absent'),
+        );
+    }
+
+    /**
+     * The store's refusals are the operator's, not a wire format: under `de`
+     * the exception messages come off the catalogue in German. The
+     * not-English legs keep this honest — a throw site that kept its old
+     * literal would answer the same message and pass a catalogue-comparison
+     * leg by tautology.
+     */
+    public function testTheStoreRefusalsSpeakTheActiveLocale(): void
+    {
+        $store = $this->store($this->tokens());
+
+        Lang::inLocale('de', function () use ($store): void {
+            foreach (
+                [
+                    'cli.serve.tokens.label_range' => ['max' => ViewerTokens::LABEL_MAX, 'actual' => ViewerTokens::LABEL_MAX + 1],
+                    'cli.serve.tokens.days_range' => ['max' => ViewerTokens::MAX_DAYS, 'actual' => ViewerTokens::MAX_DAYS + 1],
+                    'cli.serve.tokens.session_list' => [],
+                ] as $key => $params
+            ) {
+                $refusal = null;
+                try {
+                    match ($key) {
+                        'cli.serve.tokens.label_range' => $store->grant(str_repeat('x', ViewerTokens::LABEL_MAX + 1)),
+                        'cli.serve.tokens.days_range' => $store->grant('lifetime', null, ViewerTokens::MAX_DAYS + 1),
+                        default => $store->grant('pinned', ['']),
+                    };
+                    self::fail("{$key}: the malformed input must not mint");
+                } catch (\InvalidArgumentException $e) {
+                    $refusal = $e;
+                }
+
+                self::assertSame(
+                    Lang::t($key, $params),
+                    $refusal->getMessage(),
+                    "{$key} must ride the catalogue in the active locale",
+                );
+            }
+
+            $nonEnglish = null;
+            try {
+                $store->grant(str_repeat('x', ViewerTokens::LABEL_MAX + 1));
+            } catch (\InvalidArgumentException $e) {
+                $nonEnglish = $e->getMessage();
+            }
+
+            self::assertStringNotContainsString('characters', (string) $nonEnglish, 'the swap reached the throw site: this is the catalogue line, not the old literal');
+        });
+    }
+
+    /**
+     * The keystone of the locale-safe routing: the cap refusal reaches
+     * `token.grant`'s catch as a CONFLICT because the dispatch rides the
+     * stable exception CODE, never the word cap — an English-word router
+     * would read the German refusal as an unknown store failure and answer
+     * Internal `token_store_unavailable` instead.
+     */
+    public function testTheCapRefusalRoutesOnItsCodeNotItsMessage(): void
+    {
+        $owner = WireClient::open($this->tokenDispatcher(), 'c-cap-de');
+        $owner->hello();
+
+        for ($i = 0; $i < ViewerTokens::MAX_GRANTS; $i++) {
+            $this->unwrapResult($owner, 'token.grant', ['label' => 'full-' . $i, 'scopes' => ['read']]);
+        }
+
+        $over = Lang::inLocale('de', static fn (): array => $owner->request('token.grant', ['label' => 'eins zu viel', 'scopes' => ['read']]));
+
+        self::assertArrayNotHasKey('result', $over);
+        self::assertSame(ErrorCode::Conflict->value, $over['error']['code'] ?? null, 'the cap stays a Conflict whatever the language it speaks');
+        self::assertSame('grant_cap_reached', $over['error']['data']['kind'] ?? null);
+        self::assertSame(
+            Lang::inLocale('de', static fn (): string => Lang::t('cli.serve.tokens.cap_reached', ['count' => ViewerTokens::MAX_GRANTS])),
+            $over['error']['message'] ?? null,
+        );
+        self::assertStringNotContainsString('cap', (string) ($over['error']['message'] ?? ''), 'a message-word router would have answered this leg Internal');
+        self::assertSame(ViewerTokens::MAX_GRANTS, $this->tokenStore?->count());
+    }
+
+    /**
+     * The other arm of the code dispatch: a persist failure carries its own
+     * stable code and its translated line, and the mint that cannot be
+     * remembered leaves no live grant behind.
+     */
+    public function testAPersistFailureRefusesTheMintOnItsOwnStableCode(): void
+    {
+        $tokens = $this->tokens();
+        $store = $this->store($tokens);
+        $store->grant('written-first');
+
+        $stateDir = $tokens->dir();
+        \chmod($stateDir, 0o500);
+        try {
+            $refusal = null;
+            try {
+                $store->grant('cannot-be-remembered');
+            } catch (\RuntimeException $e) {
+                $refusal = $e;
+            }
+
+            self::assertNotNull($refusal, 'a store that cannot write must not mint');
+            self::assertSame(ViewerTokens::ERR_PERSIST, (int) $refusal->getCode(), 'the persist arm rides its own code, not message text');
+            self::assertStringContainsString('nothing was minted', $refusal->getMessage());
+            self::assertStringNotContainsString('cap', $refusal->getMessage(), 'the cap dispatch must not capture this arm');
+            self::assertSame(1, $store->count(), 'the unremembered grant left no live row');
+        } finally {
+            \chmod($stateDir, 0o700);
+        }
+    }
+
+    /**
+     * The D-13 session gate speaks through the catalogue too: a pinned
+     * viewer refused under `de` answers the German line, not the literal the
+     * Dispatcher carried before the swap.
+     */
+    public function testTheSessionGateRefusalSpeaksTheActiveLocale(): void
+    {
+        $dispatcher = $this->notesDispatcher();
+        $pinned = WireClient::open($dispatcher, 'c-pin-de', 'viewer', ['read'], 'tok-pin-de', ['s-one']);
+        $pinned->hello();
+
+        $refused = Lang::inLocale('de', static fn (): array => $pinned->request('test.note', ['sessionId' => 's-two']));
+
+        self::assertArrayNotHasKey('result', $refused);
+        self::assertSame(ErrorCode::Forbidden->value, $refused['error']['code'] ?? null);
+        self::assertSame(
+            Lang::inLocale('de', static fn (): string => Lang::t('cli.serve.tokens.session_denied')),
+            $refused['error']['message'] ?? null,
+        );
+        self::assertStringNotContainsString('does not cover', (string) ($refused['error']['message'] ?? ''));
     }
 }

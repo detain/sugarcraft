@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Server\Auth;
 
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\PrivateRetainedDir;
 
 /**
@@ -53,6 +54,14 @@ final class ViewerTokens
 
     /** The v1 grant scope set: read-only, no exceptions, per owner ruling. */
     public const SCOPES = ['read'];
+
+    /**
+     * Refusal codes carried on the store's RuntimeExceptions so dispatch is
+     * locale-stable: the messages ride `Lang::t()` and change language, the
+     * codes never do — TokenMethods routes on these, never on message text.
+     */
+    public const ERR_GRANT_CAP = 1;
+    public const ERR_PERSIST = 2;
 
     private const LABEL = 'server state';
 
@@ -113,23 +122,21 @@ final class ViewerTokens
     {
         $label = \trim($label);
         if ($label === '' || \strlen($label) > self::LABEL_MAX) {
-            throw new \InvalidArgumentException(\sprintf(
-                'a viewer token label must be between 1 and %d characters; got %d',
-                self::LABEL_MAX,
-                \strlen($label),
-            ));
+            throw new \InvalidArgumentException(Lang::t('cli.serve.tokens.label_range', [
+                'max' => self::LABEL_MAX,
+                'actual' => \strlen($label),
+            ]));
         }
         if ($days < 1 || $days > self::MAX_DAYS) {
-            throw new \InvalidArgumentException(\sprintf(
-                'a viewer token must live between 1 and %d days; got %d',
-                self::MAX_DAYS,
-                $days,
-            ));
+            throw new \InvalidArgumentException(Lang::t('cli.serve.tokens.days_range', [
+                'max' => self::MAX_DAYS,
+                'actual' => $days,
+            ]));
         }
         if ($sessionIds !== null) {
             foreach ($sessionIds as $sessionId) {
                 if (!\is_string($sessionId) || \trim($sessionId) === '') {
-                    throw new \InvalidArgumentException('a viewer grant session list must hold non-empty strings, or be null for all sessions');
+                    throw new \InvalidArgumentException(Lang::t('cli.serve.tokens.session_list'));
                 }
             }
         }
@@ -139,10 +146,10 @@ final class ViewerTokens
         if (\count($this->entries) >= self::MAX_GRANTS) {
             // Refuse, never evict: dropping an existing grant to admit a new
             // one would be a revocation nobody asked for.
-            throw new \RuntimeException(\sprintf(
-                'the viewer token store holds its cap of %d grants; revoke one before minting another',
-                self::MAX_GRANTS,
-            ));
+            throw new \RuntimeException(
+                Lang::t('cli.serve.tokens.cap_reached', ['count' => self::MAX_GRANTS]),
+                self::ERR_GRANT_CAP,
+            );
         }
 
         $now = ($this->clock)();
@@ -165,7 +172,7 @@ final class ViewerTokens
             // walk out the door as a real token either.
             unset($this->entries[$hash]);
 
-            throw new \RuntimeException('the viewer token could not be persisted; nothing was minted');
+            throw new \RuntimeException(Lang::t('cli.serve.tokens.persist_failed'), self::ERR_PERSIST);
         }
 
         return ['token' => $token] + $this->entries[$hash];
