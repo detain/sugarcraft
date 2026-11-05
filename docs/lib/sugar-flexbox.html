@@ -112,7 +112,7 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 <tr><td>Table</td><td>addRow(cells)</td><td>Add table row</td></tr>
 <tr><td>Table</td><td>sortBy(col, asc)</td><td>Sort by column (resets the cursor to row 0)</td></tr>
 <tr><td>Table</td><td>sortByNext(col)</td><td>Toggle asc/desc on a column (resets the cursor to row 0)</td></tr>
-<tr><td>Table</td><td>filter(text)</td><td>Rows containing text in any cell (resets the cursor to row 0)</td></tr>
+<tr><td>Table</td><td>filter(text)</td><td>Rows containing the case-insensitive substring in any cell (resets the cursor to row 0)</td></tr>
 <tr><td>Table</td><td>withCursorStyle(style)</td><td>SGR string for the cursor row (default '' marks nothing)</td></tr>
 <tr><td>Table</td><td>setCursor(row)</td><td>Move the cursor — not clamped; an off-range index falls off the view</td></tr>
 <tr><td>Table</td><td>currentRow()</td><td>Row under the cursor, or null when the cursor is off the view</td></tr>
