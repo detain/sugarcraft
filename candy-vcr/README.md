@@ -1242,15 +1242,21 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
 php candy-vcr/bin/candy-vcr render-batch <lib>/.vhs/ --encoder ffmpeg
 ```
 
-The `vhs-candy-vcr` job in the repo-root `.github/workflows/vhs.yml` renders the libs in its
-`all=(...)` matrix with this command — the soak window has closed and the matrix now
-covers essentially every library in the monorepo (hundreds of `.tape` files), including
-`candy-vcr` itself, smoke-checks that every produced GIF is non-empty, and uploads
-them as `vhs-candy-vcr-<lib>` workflow artifacts with 7-day retention. The job is
-advisory (`continue-on-error: true`); the legacy `render` job remains the blocking
-renderer, and reverting the `vhs-candy-vcr` job stanza is the rollback. `candy-vcr` ships
-one smoke tape (`.vhs/smoke.tape`); the rendered GIF is a CI artifact, not a
-committed file.
+The `vhs-candy-vcr` job in the repo-root `.github/workflows/vhs.yml` renders its
+matrix via that command — but the matrix is still the soak **seed**, `lib:
+[sugar-core]` (vhs.yml:59-64), and the workflow comment expands it only in a
+follow-up PR after the soak window passes without visual drift. The soak has
+**not** closed: `candy-vcr`'s own tapes are not rendered by this job (the seed
+renders sugar-core's `.vhs/*.tape` set). The job smoke-checks that every
+produced GIF is non-empty and that `file` recognises it as a `GIF image`, and
+uploads them as `vhs-candy-vcr-<lib>` workflow artifacts with 7-day retention.
+The job is advisory (`continue-on-error: true`); the legacy `render` job remains
+the blocking renderer — its matrix (vhs.yml:225, ~49 libs, `candy-vcr` included;
+sugar-dashboard is excluded there and rendered by a dedicated job) is gated by
+the `changed` job's per-lib diff output, whose render-all `all=(...)` selector
+(vhs.yml:141-155) fires only on manual dispatch or a `vhs.yml` change. Reverting
+the `vhs-candy-vcr` job stanza is the rollback. `candy-vcr` ships one smoke tape
+(`.vhs/smoke.tape`); the rendered GIF is a CI artifact, not a committed file.
 
 The job runs on `ubuntu-latest` with PHP 8.3 via `shivammathur/setup-php`
 (`ext-gd`, `ext-curl`, `ext-ssh2` among others) and ffmpeg from apt. A matching
