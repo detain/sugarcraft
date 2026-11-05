@@ -262,15 +262,17 @@ documents the protocol and the UI).
 
 Everything this UI keeps client-side lives in `localStorage` under the
 `candy-code-web:` prefix. Default retention is indefinite — state survives
-server restarts; only the first three keys are credential- or content-
-sensitive enough to be cleared on sign-out.
+server restarts. Sign-out clears the credential, the transcript caches and
+the tab-restore keys (`tabs`, `focused`, `lastSession`); the transcript
+caches ride a per-login scope bucket, so the sweep is provably complete
+(OD-28). Device preferences survive sign-out.
 
 | Key | Contents | Bound | Cleared by |
 | --- | --- | --- | --- |
 | `login-secret` | sign-in secret (a credential) | one | sign-out; any server 401 |
 | `promptHistory` | recent SENT prompts, newest first | 50 | sign-out (all tabs); palette "Clear prompt history" |
 | `drafts` | unsent composer text per session | 50 sessions × 16 KiB | sign-out (all tabs); session leaving the index; FIFO eviction |
-| `tabs` / `mode` / `focused` / `lastSession` | open tab ids / list vs grid / focused session / last opened id | tabs: 12 | sign-out keeps them (device convenience); a vanished session prunes its own rows |
+| `tabs` / `mode` / `focused` / `lastSession` | open tab ids / list vs grid / focused session / last opened id | tabs: 12 | sign-out sweeps tabs/focused/lastSession (OD-28); mode kept (view pref); a vanished session prunes its own rows |
 | `theme` / `notify` / `diffStyle` | UI preferences | enum values | kept |
 | `push` | device-notification consent | boolean | its own Settings toggle |
 | `panels.open` / `panels.active` | side-panel drawer state | enum values | kept |
