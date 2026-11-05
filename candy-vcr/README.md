@@ -139,9 +139,13 @@ $recorder = Recorder::open('/tmp/session.cas')
     ->run();
 ```
 
-The `Player::open()` factory auto-detects which format a cassette uses by
-examining the first event line — `dt` field means RelativeFormat, `t` field
-means JsonlFormat. No format parameter needed on replay.
+The `Player::open()` factory auto-detects which format a cassette uses: a
+name ending in `.gz` is handed straight to `CompressedJsonlFormat` (gzipped
+JSONL) without any sniffing, every other name is decided by examining the
+first event line — `dt` field means RelativeFormat, `t` field
+means JsonlFormat. No format parameter needed on replay; for
+extension-routed loading (`.tape` sources, `.cast` imports) use
+`Player::loadAny()`.
 
 **Absolute mode example:**
 ```jsonl
@@ -216,7 +220,7 @@ The core types in `SugarCraft\Vcr\`:
 | `Event` | One recorded line. Fields: `t: float`, `kind: EventKind`, payload `array`. |
 | `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`, `Snapshot`, `Hide`, `Show`. |
 | `Recorder` | Record-side. Construct via `Recorder::open($path)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets. Methods: `withFormat(Format)`, `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`, `captureWriteErrors(): int` (count of failed write/flush attempts — a non-zero total means the cassette is silently incomplete). Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry`. Env filtering is `RecordCommand::filteredHostEnv()` — see the record options below. |
-| `Player` | Replay-side. Factories: `Player::open($path)` (content-sniffs the second line — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`; the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
+| `Player` | Replay-side. Factories: `Player::open($path)` (a `.gz` name is routed straight to `CompressedJsonlFormat` without sniffing; any other name content-sniffs the second line — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`, so for non-`.gz` names the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
 | `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`. `AsciinemaFormat` is a read-only importer with `read()` only and implements nothing. |
 | `Format\CassetteLoader` | `load($path): Cassette` — auto-detects cassette vs tape source. `isTape($path): bool` — exposes the sniff. |
 | `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `$diff: string` (empty when `ok`; the assertion diff otherwise), `$eventCount`, `$inputCount`, `$resizeCount`, `$outputCount`, `$quitCount`, `$programQuitCleanly: bool`, `$undecodedInputCount` (input events whose `msg` envelope had no registered decoder and were skipped — `diffSummary()` prints it when non-zero); helper `diffSummary(): string`. |
@@ -261,7 +265,7 @@ vendor/bin/candy-vcr render-tape demo.tape                                 # ren
 vendor/bin/candy-vcr render-batch demos/                                     # render all .tape files in directory
 ```
 
-`record` spawns the given command under a fresh master/slave PTY, drops the host stdin into raw mode, runs the sugar-pty byte pump with a `Recorder` tee'd onto every stdin/master-output chunk, and writes a `session-<timestamp>.cas` cassette (override with `--output PATH`). The recorded child gets a controlling terminal by default so Ctrl+C reaches it (use `--no-ctty` to disable); the host termios is restored on every exit path including thrown exceptions. The cassette can then be replayed via `vendor/bin/candy-vcr replay …` or loaded by tests through `Player::play()`.
+`record` spawns the given command under a fresh master/slave PTY, drops the host stdin into raw mode, runs the sugar-pty byte pump with a `Recorder` tee'd onto every stdin/master-output chunk, and writes a `session-<timestamp>.cas` cassette (override with `--output PATH`). The CLI is defensive about that file: an existing target is never silently truncated — without `--force`, `record` exits 2 with `refusing to overwrite existing cassette …pass --force to replace` — and a `--output` ending in `.gz` is refused outright (exit 2), because the CLI records plain JSONL bytes only; gzip cassettes are the API's job (`CompressedJsonlFormat`, see [Gzip compression](#gzip-compression)). The recorded child gets a controlling terminal by default so Ctrl+C reaches it (use `--no-ctty` to disable); the host termios is restored on every exit path including thrown exceptions. The cassette can then be replayed via `vendor/bin/candy-vcr replay …` or loaded by tests through `Player::play()`.
 
 A finished `replay` prints one summary line to **stderr** — events streamed,
 output bytes and virtual time — so a silent terminal is never ambiguous about
@@ -325,7 +329,7 @@ Captured env lands on the cassette header as a JSON object:
 
 #### `--idle-trim N` and `replay --no-trim`
 
-Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller). Both `--idle-trim=N` and `--idle-trim N` are accepted, like every value-taking flag on `replay`.
+Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller). `--idle-trim` is `replay`'s only dual-form flag — both `--idle-trim=N` and `--idle-trim N` are accepted. `--speed` accepts the `--speed=…` form **only**; any other `--flag` spelling (the space form `--speed 2` included) is reported as `unknown option` and exits 2.
 
 ```jsonl
 {"v":1,"created":"...","cols":80,"rows":24,"runtime":"sugarcraft/candy-vcr@record"}
@@ -343,7 +347,7 @@ Replay defaults to the compressed timeline. Pass `--no-trim` to replay to honour
 - `register_shutdown_function([RecordCommand::class, 'rescueRestore'])` — fires on every PHP run shutdown, including fatal errors.
 - `pcntl_signal(SIGTERM/SIGHUP/SIGINT, [RecordCommand::class, 'handleRescueSignal'])` with `pcntl_async_signals(true)` — restores then re-raises the signal with the default handler so the process still dies with the right status.
 
-`SIGKILL` cannot be intercepted by anything. As a mitigation, while recording is in flight the command drops a marker file at `sys_get_temp_dir() . '/candy-vcr-rescue.<pid>'` containing the host TTY's device path (resolved via `posix_ttyname(STDIN)`). If a hard kill leaves your terminal stuck in raw mode, run `stty sane < /path/to/your/tty` (you'll find the path in the marker file, which is cleaned up on every clean exit).
+`SIGKILL` cannot be intercepted by anything. As a mitigation, while recording is in flight the command drops a marker file at `sys_get_temp_dir() . '/candy-vcr-rescue.' . getmypid() . '.' . bin2hex(random_bytes(8))` — the 16-hex suffix makes the name unguessable and collision-proof against a recycled PID, and it is created with `fopen($path, 'xb')` (`O_CREAT|O_EXCL`: a pre-existing path, including a symlink planted on a shared `/tmp`, is refused rather than followed). The file carries `tty=` (the host TTY's device path, resolved via `posix_ttyname(STDIN)`), `pid=` and `started=` lines. If a hard kill leaves your terminal stuck in raw mode, run `stty sane < /path/to/your/tty` (you'll find the path in the marker file, which is cleaned up on every clean exit).
 
 The static handlers are signal-safe (no allocation, no logging) and idempotent; calling `rescueRestore()` twice in a row is a no-op.
 
