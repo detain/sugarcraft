@@ -39,6 +39,9 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
       <li>Design antecedent: <a href="https://github.com/76creates/stickers">76creates/stickers</a> (PHP); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
+    <h3 style="margin-top: 32px;">Trust boundary</h3>
+    <p>Table, Column and FlexBox treat everything they render as untrusted data: cell values and column titles pass through <code>Sanitize::untrusted()</code>, and newlines, tabs and carriage returns are replaced with spaces at render time, so no escape sequence can ride in through content. Style strings are gated to legal SGR parameter text (codes 0..255 separated by single <code>;</code>) or empty for no style; anything else throws <code>InvalidArgumentException</code> naming the refused property. Viewport and Scrollbar are trusted-input by design — the Viewport renders your <code>withContent()</code> lines as given and the Scrollbar emits your runes verbatim — so sanitize user input before feeding them. The FlexBox measures an item's raw content before the render-time sweep, so control bytes still consume measured cells even though the printed frame carries the swept text.</p>
+
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
     <h3 style="margin-top: 32px;">API</h3>

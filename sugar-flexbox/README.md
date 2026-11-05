@@ -153,6 +153,31 @@ $viewport = $viewport->lineDown(3)->withStickyHeader(1);
 echo $viewport->view();                    // first content line stays pinned at top
 ```
 
+## Trust boundary
+
+Table, Column and FlexBox treat everything they render as **untrusted data**.
+Cell values and column titles pass through `Sanitize::untrusted()`, and
+newlines, tabs and carriage returns are replaced with spaces at render time,
+so hostile content can never smuggle a terminal escape sequence into a frame.
+Style strings (`FlexItem::withStyle()`, `Column::withStyle()`,
+`Table::withHeaderStyle()`, `Table::withCursorStyle()`) pass through one door:
+a legal SGR parameter string — codes 0..255 separated by single `;` — or the
+empty string/null for no style; anything else throws `InvalidArgumentException`
+naming the refused property, so the style knobs cannot be repurposed as an
+escape channel.
+
+Viewport and Scrollbar are **trusted-input by design**: the Viewport splits
+your `withContent()` string on `\n` and renders the lines as given (the
+delegated widget stores content without a sweep), and the Scrollbar emits the
+track/thumb runes and labels you passed straight to the terminal. Feed them
+program-generated frames, or sanitize user input yourself first.
+
+One asymmetry to know about: the FlexBox **measures** an item's content —
+width, height and the ratio split are computed from the raw string — before
+the render-time sweep replaces control characters. Control bytes inside
+content therefore still consume measured cells even though the printed frame
+carries the swept text.
+
 ## Buffer diffing (TableRenderer)
 
 `Table::render()` is pure — it always returns a full frame. `TableRenderer` is the stateful
