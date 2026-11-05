@@ -31,17 +31,17 @@ echo "One more step back stays put: "
 
 // Selection outside the window is refused; the picker comes back unchanged.
 $beforeBound = $may
-    ->handleKey(DatePicker::KEY_HOME)          // cursor onto the first valid day (May 10, the min)
+    ->handleKey(DatePicker::KEY_HOME)          // HOME lands on the month-first day-cell (May 1); min/max are not consulted
     ->handleKey(DatePicker::KEY_LEFT);         // clamps into the empty lead-in
 $refused = $beforeBound->handleKey(DatePicker::KEY_ENTER);
 echo "Enter on the empty lead-in cell (fallback = May 1, before the bound): "
     . ($refused->IsSelecting() ? 'SELECTED?!' : 'refused') . "\n";
 
-// May 10 sits at grid index 14 (May 2026 starts Friday, firstDow=5).
-$atBound = $may;
-for ($i = 0; $i < 14; $i++) {
-    $atBound = $atBound->MoveCursorRight();
-}
+// The acceptance leg must land exactly on the bound. MoveToDate positions the
+// cursor on a chosen day — a short walk would not: the seed cursor was already
+// re-clamped to May 11 when May was opened, so 14 rights reached May 25 and
+// announced a mid-month acceptance as the min-date bound.
+$atBound = $may->MoveToDate(new \DateTimeImmutable('2026-05-10'));
 echo "Date under cursor: " . ($atBound->dateAtCursor()?->format('Y-m-d') ?? 'none') . "\n";
 $accepted = $atBound->handleKey(DatePicker::KEY_ENTER);
 echo "Enter on the bound itself: "
