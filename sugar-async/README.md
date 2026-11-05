@@ -52,8 +52,11 @@ composer require sugarcraft/sugar-async
 1. The flag is flipped (idempotent)
 2. All callbacks registered via `onCancel()` fire in registration order, exactly once
 
-This pattern allows cancellation to propagate without the consumer being able to
-trigger it themselves. Two further guarantees:
+This pattern propagates cancellation from the owner. The boundary is
+trigger-restricted by convention, not by visibility: `notifyCancellation()` and
+`fireCallbacks()` carry only an `@internal` marker and are public, so a consumer
+holding the token *can* fire it — do not hand tokens to untrusted code. Two
+further guarantees:
 
 - `onCancel()` returns a `Subscription`: unsubscribe before the token fires and the
   callback never runs; the library's own wrappers (`cancellable`, `retry`) drop

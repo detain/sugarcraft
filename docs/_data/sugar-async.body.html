@@ -34,7 +34,7 @@ $promise = AsyncOps::retry(
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>CancellationToken</strong><span>Read-only view of a cancellation state. Consumers can observe isCancelled() and register onCancel() callbacks but cannot trigger cancellation.</span></div>
+      <div class="feature"><strong>CancellationToken</strong><span>Read-only view of a cancellation state. Consumers observe isCancelled() and register onCancel() callbacks; the trigger methods are @internal-tagged but public, so restriction is by convention, not visibility — do not hand tokens to untrusted code.</span></div>
       <div class="feature"><strong>CancellationSource</strong><span>Owns the mutable cancellation flag. Create via CancellationSource::new(). Call cancel() to flip the flag and fire all registered callbacks.</span></div>
       <div class="feature"><strong>Cancellable interface</strong><span>Contract for components that can be cancelled. Implemented by CancellationSource. Callbacks fire exactly once, even on repeated cancel() calls.</span></div>
       <div class="feature"><strong>Subscription interface</strong><span>Disposal handle returned by subscribe()-style APIs. unsubscribe() disposes the subscription; isActive() reports whether it is still live.</span></div>
