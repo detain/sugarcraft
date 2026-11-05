@@ -18,7 +18,10 @@ answer six panes at once — floors, caps, proportional fills, and rounding
 leftovers all interact, and hand-rolled arithmetic distributes them
 differently on every code path. The solver centralises that decision, keeps it
 integer-exact, and is stateless: identical inputs give identical frames — no
-ambient state, nothing cached between solves.
+ambient state, nothing cached between solves. A "cell" here is a terminal
+character column: the library places boxes and never measures text — sizing a
+string with CJK, emoji, or combining marks is the caller's problem, and
+`sugar-core`'s `Width::of()` answers it.
 
 ## Install
 
@@ -44,6 +47,12 @@ $rects = $solver->solve(Region::fromSize(100, 20), Direction::Horizontal, [
 ]);
 ```
 
+`solve()` returns one positioned `Region` per constraint, in list order —
+output `x`/`y` are offsets **inside the input region**, so each returned box
+can be painted directly. The input may itself be a sub-area: pass
+`new Region($x, $y, $w, $h)` (say, a span inset by borders) and the walk
+places panes within it.
+
 At width 10 there is not enough room for both: the fixed pane keeps what it
 can take first and the elastic pane collapses — `[10, 0]`. That degradation
 is silent by design (see [Degradation](#degradation)).
@@ -60,6 +69,16 @@ $rects = $solver->solve(Region::fromSize(100, 20), Direction::Horizontal, [
     Constraint::max(50),         // ceiling: greedy up to 50, took 6 here
 ]);                                  // widths 20,10,1,30,33,6 — sum 100
 ```
+
+## Choosing a layout strategy
+
+- One content flow that sizes itself (paragraphs, form fields): reach for
+  `sugar-flexbox`.
+- Several panes split and re-resolved on every resize: this solver.
+- An IDE-style center with vertical side stacks: the `Dock\*` surface below.
+
+The first is a different package; the last is a different surface of this one.
+Cross-references only — nothing here depends on sugar-flexbox.
 
 ## Types
 
@@ -308,6 +327,14 @@ Malformed manifests throw `InvalidArgumentException` naming the failed key —
 including a slot id that collides with the center pane's (a pane has exactly
 one home; `withSlotAdded()` refuses the same collision). `dividerCols` has no
 public mutator and is not persisted.
+
+## Development and tests
+
+After `composer install`, the examples run directly (`php examples/sidebar.php`)
+and the suite lives in `tests/` (`vendor/bin/phpunit -c phpunit.xml`). Every
+fenced `php` block in this README is executed by `tests/ReadmeSnippetsTest.php`,
+which also asserts `examples/sidebar.php` prints the exact frames quoted here —
+the snippets cannot rot.
 
 ## Credits & inspiration
 
