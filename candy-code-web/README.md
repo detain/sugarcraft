@@ -248,7 +248,7 @@ documents the protocol and the UI).
   and the command palette's “Clear prompt history” action (the `Actions`
   group, after a confirm) clears it any time without signing out —
   `clearPromptHistory()` in `src-web/stores/promptHistory.ts`. **Three:**
-  UNSent composer drafts persist too (`candy-code-web:drafts`) — this is
+  Unsent composer drafts persist too (`candy-code-web:drafts`) — this is
   user-typed text, which routinely holds file paths, pasted credentials and
   proprietary code. Writes are debounced, each entry is clamped to 16 KiB
   (longer text lives in memory for the session, not storage), at most 50
