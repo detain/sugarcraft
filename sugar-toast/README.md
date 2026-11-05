@@ -492,7 +492,7 @@ output stream contains only the SGR sequences the renderer itself emits:
   whole; nothing ever returns as printable `]8;;…` garbage.
 
 The full fleet-wide contract lives in
-[`docs/TRUST-BOUNDARY.md`](../docs/TRUST-BOUNDARY.md)
+[`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md)
 — §1 "the terminal is a sink".
 
 ## License
