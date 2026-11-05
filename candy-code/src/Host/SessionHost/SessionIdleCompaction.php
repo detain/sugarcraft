@@ -96,6 +96,19 @@ use SugarCraft\Core\Util\Sanitize;
  */
 trait SessionIdleCompaction
 {
+    /**
+     * Put out the ahead-of-need summarisation request (roadmap 2.10) and
+     * latch its landing slot — the block the 70% dispatch tier used to carry
+     * inline, shared now with the CTX-5 idle watch. Sharing is the point:
+     * the timer's whole trick is to run the very request the next dispatch
+     * would have asked for, through the same gate, so the served splice —
+     * billing included — never sees two sources and never pays twice.
+     *
+     * @param list<Message> $dispatched the history the summaries are asked against
+     * @param list<Message> $baseHistory the conversation to summarise
+     * @return bool whether a request actually went out
+     */
+
     private function requestAheadOfNeed(array $dispatched, array $baseHistory): bool
     {
         $request = $this->compaction()->buildSummarizationRequest(
@@ -144,6 +157,27 @@ trait SessionIdleCompaction
         return true;
     }
 
+    /**
+     * (Re-)arm the CTX-5 idle auto-compaction watch. Called from every event
+     * that RE-STARTS the idle window: an accepted prompt, a settled turn, and
+     * an alarm that fired into a running turn (C-CTX-6.a — dropping the watch
+     * on a busy fire forfeits the fold the opt-in exists to make). Each call
+     * replaces the deadline (cancel first — a user
+     * who returned must not leave an orphan alarm that fires against the
+     * NEXT quiet gap and charges for it to the wrong window), and the
+     * opt-out shape never arms at all, so the default-off default costs a
+     * served session exactly nothing.
+     *
+     * The +2 s slack exists because {@see IdleCompactionPolicy::shouldAutoCompact()}
+     * keeps the offer clock's strict `>` semantics while an event-loop timer's
+     * wall-clock elapsed at fire time can land a hair under its deadline —
+     * and, unlike the TUI's tick, this watch gets no second chance. An
+     * unattended fold that waits two extra seconds — of an hour-long idle, or
+     * of the 240 seconds a 5-minute cache leaves after the margin
+     * (C-CTX-5.c) — is invisible; a fold whose one-shot alarm under-shot by a
+     * rounding and so silently never fired until the next prompt is the bug.
+     */
+
     private function armIdleAutoCompaction(): void
     {
         if ($this->idleAutoTimer !== null) {
@@ -182,6 +216,15 @@ trait SessionIdleCompaction
             },
         );
     }
+
+    /**
+     * The idle watch's verdict, every condition re-derived at fire time —
+     * between the arming and the alarm anything they depend on has had an
+     * hour to move. Passing means exactly what passing means at the tier:
+     * the shared {@see requestAheadOfNeed()}, whose landed summaries the
+     * existing splice consumes on the next submit, nobody re-billed and no
+     * turn ever dispatched unattended.
+     */
 
     private function onIdleAutoCompaction(?\DateTimeImmutable $markedAt): void
     {
@@ -287,6 +330,24 @@ trait SessionIdleCompaction
             $this->announceTranscriptRow($row);
         }
     }
+
+    /**
+     * Served keep-warm (C-CTX-5.d) — the alarm-side twin of the TUI's
+     * `Chat::handleKeepWarmTick()`, consulted at exactly the point where the
+     * fold declined this fire. A ping goes out over the session engine's own
+     * frozen-prefix route (the conversation as a turn would send it plus one
+     * instruction row asking for a one-character reply), lands billed under
+     * the `warm` source label like any other call the ledger has ever seen,
+     * and — because this host carries a one-shot alarm where the TUI has a
+     * 60-second tick — re-arms the very same idle watch so the stretch stays
+     * watched and its cap keeps counting down. A fire that meets a ping
+     * still out finds the latch and decides nothing; no timeout is armed on
+     * the ask (E646), so a stalled ping is a held latch and nothing louder.
+     *
+     * C-CTX-6.a's rule holds throughout: the fold, when it IS due, still
+     * owns this alarm untouched — this method is reached only from the
+     * `!$foldDue` branch above it.
+     */
 
     private function keepWarmServed(int $tierTokens, int $windowLimit, ?\DateTimeImmutable $idleAnchor): void
     {

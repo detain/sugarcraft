@@ -94,10 +94,29 @@ use SugarCraft\Core\Util\Sanitize;
  */
 trait SessionClientTools
 {
+    /**
+     * C-TOOL-6.h: host $specs as this client's tools for the session's NEXT
+     * turns, replacing whatever $clientKey held before. Returns the
+     * registration id every later answer for these tools must carry.
+     * Throws with a one-word verdict when the batch is not shippable
+     * ({@see ClientToolRegistry::register()}); who may call this at all —
+     * a connection holding Write scope, behind `server.clientTools` — is
+     * the protocol step's door (6.i), not this substrate's.
+     *
+     * @param list<ClientToolSpec> $specs
+     */
+
     public function registerClientTools(string $clientKey, array $specs): string
     {
         return $this->clientTools->register($clientKey, $specs);
     }
+
+    /**
+     * C-TOOL-6.h: drop $clientKey's registrations (its connection closed —
+     * the ruling that kills a client's tools with it) and settle its open
+     * calls as errors, so a child blocked on one of them learns the truth
+     * instead of waiting out its deadline.
+     */
 
     public function forgetClientTools(string $clientKey): void
     {
@@ -110,6 +129,15 @@ trait SessionClientTools
             $entry['pending']->cancel('the client that hosts this tool is gone');
         }
     }
+
+    /**
+     * C-TOOL-6.h: answer the open client call $callId — first answer wins
+     * (the same law {@see answer()} keeps for questions). An id not open, a
+     * call already settled another way, and an answer carrying a
+     * registration id other than the one that opened the call all read the
+     * same from here: false. A client re-registered between the call and
+     * the answer is exactly the case that id exists to refuse.
+     */
 
     public function resolveClientCall(string $callId, string $registrationId, string $content, bool $isError): bool
     {
@@ -135,10 +163,29 @@ trait SessionClientTools
         return $entry['pending']->resolve($content, $isError);
     }
 
+    /**
+     * C-TOOL-6.h: bind (or pass null to clear) the listener that hears each
+     * freshly opened client call with the client and registration that must
+     * answer it — the handle the serve relay (6.i) forwards on.
+     *
+     * @param (\Closure(PendingClientCall, string, string): void)|null $hook
+     */
+
     public function onClientCall(?\Closure $hook): void
     {
         $this->clientCallListener = $hook;
     }
+
+    /**
+     * C-TOOL-6.h: the sink {@see \SugarCraft\Code\Backend\EngineBackend::withClientCallSink()}
+     * takes — called in the parent when a turn child puts a client-hosted
+     * call on the channel. It opens the call in {@see $pendingClientCalls}
+     * under the registration that owns the name, tells the 6.i relay, and
+     * leaves the answer to {@see resolveClientCall()}; the engine's own
+     * deadline stays the bound either way. A call whose name no
+     * registration owns (the client forgot it mid-turn, after this turn's
+     * roster was fixed) is answered as an error at once rather than held.
+     */
 
     private function clientCallSink(): \Closure
     {

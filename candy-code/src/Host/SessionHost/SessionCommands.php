@@ -101,6 +101,22 @@ use SugarCraft\Core\Util\Sanitize;
  */
 trait SessionCommands
 {
+    /**
+     * Run the built-in command `/$name $args` (roadmap O-2h, Appendix O §6.3
+     * `command.exec`) and say what it produced. Its rows are already in the
+     * transcript and its effects applied when this returns; off-turn work it
+     * started lands later as a row.
+     *
+     * Refused while a turn holds the session — a command would rewrite the
+     * history that turn is about to append to — except the built-ins the
+     * keyboard itself admits mid-turn: `/workflow pause|status` inside the
+     * workflow run they control, and `/btw` answered beside the run
+     * (C-WEB-2.a). One decision table, two doors: this consults the same
+     * {@see TurnController::midTurnRoute()} {@see admitWhileBusy()} applies.
+     * A name that is no built-in is refused too: unlike {@see submit()},
+     * this never sends text to the model.
+     */
+
     public function runCommand(string $name, string $args = ''): CommandResult
     {
         $name = ltrim(trim($name), '/');
@@ -127,6 +143,11 @@ trait SessionCommands
         return $result;
     }
 
+    /**
+     * Run $text when it is a built-in command and say how it was taken, or
+     * null when it is not one (prose, or a `/word` no built-in answers to).
+     */
+
     private function command(string $text): ?TurnTicket
     {
         $result = $this->dispatchCommand($text);
@@ -146,6 +167,14 @@ trait SessionCommands
 
         return TurnTicket::handled();
     }
+
+    /**
+     * The built-in $text dispatches to, run through its host command — the
+     * TUI's table (`builtin-commands/`), so the two cannot route one draft
+     * differently. Null when $text names no built-in. A built-in with no host
+     * body, or one whose answer is a screen ({@see CommandEffectKind::OpenTitleEditor}),
+     * is {@see CommandResult::clientOnly()}.
+     */
 
     private function dispatchCommand(string $text): ?CommandResult
     {
@@ -182,6 +211,12 @@ trait SessionCommands
             : $result;
     }
 
+    /**
+     * Whether $text is `/workflow pause|status`, typed while the workflow run
+     * it controls holds the session — the one command a busy session runs
+     * (audit WF-4). A command file of that name is a prompt, so it queues.
+     */
+
     private function isWorkflowControl(string $text): bool
     {
         if (!$this->workflowTurn || $this->workspace->workflowEngine === null) {
@@ -194,6 +229,24 @@ trait SessionCommands
             && \in_array($tokens[1] ?? '', ['pause', 'status'], true)
             && $this->turns()->resolveCustomCommand($text, $this->customCommands) === null;
     }
+
+    /**
+     * Apply what a command decided to this session — `Chat::applyCommandResult()`'s
+     * headless twin. Effects first, then the rows, then a save.
+     *
+     * - The session id is this host's for life, so a `/branch` does not move
+     *   it: the branch exists in the store (its reply names it) and a client
+     *   opens it through the hub.
+     * - A rename is already in the store; a host keeps no title in memory.
+     * - Off-turn work runs on the loop; its answer lands as a UI-only row.
+     * - An occupying run (a workflow) holds the session as a turn does, until
+     *   its report lands; a cancelled run's report still lands, and releases
+     *   nothing.
+     *
+     * $commandName is the dispatched name ('' when the caller has none); it
+     * is what lets {@see self::CONTEXT_CHANGING_COMMANDS} mark a result that
+     * rewrote the prompt's sources (C-CTX-2.d).
+     */
 
     private function applyCommandResult(CommandResult $result, string $commandName = ''): void
     {
@@ -329,6 +382,18 @@ trait SessionCommands
         }
     }
 
+    /**
+     * WEB-2: the typed `/compact` fold on a served session — the shared
+     * {@see CompactionService::compactedHistory()} engine, run now, on this
+     * host's own compactor, window and estimate. A landed ahead-of-need
+     * summary whose fingerprint still matches rides the fold; a landed HOLD
+     * REFUSES it outright (CTX-4's typed-route verdict, the exact branch
+     * `Chat::landModelCompaction()` lands), and anything else folds on the heuristic
+     * the engine builds from the history itself. The echo and report rows come
+     * back INSIDE the folded history — announce what the fold appended, and
+     * the transcript matches the terminal row for row.
+     */
+
     private function typedCompact(string $text): void
     {
         $compaction = $this->compaction();
@@ -431,10 +496,21 @@ trait SessionCommands
         $promise->then($land, static fn (\Throwable $e) => $land(Lang::t('host.command.error', ['error' => $e->getMessage()]), true));
     }
 
+    /**
+     * One UI-only reply row a command's later answer lands as, saved.
+     *
+     * $error is the row's own verdict (ISS-097): the command's failure arms
+     * pass true so the transcript paints the sentence in the error colour,
+     * while a successful answer keeps the plain `local` label. The renderer
+     * never sniffs the text, so the flag has to arrive with the producer.
+     */
+
     private function appendCommandRow(string $text, bool $error = false): void
     {
         $this->appendMessageRow(Message::assistant($text)->withUiOnly()->withError($error));
     }
+
+    /** The session as a host command reads it ({@see CommandContext}). */
 
     private function commandContext(): CommandContext
     {

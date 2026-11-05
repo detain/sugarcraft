@@ -96,6 +96,19 @@ use SugarCraft\Core\Util\Sanitize;
  */
 trait SessionLandings
 {
+    /**
+     * Land a prompt-suggestion answer (C-CTX-2.d, mirroring Chat's
+     * `PromptSuggestionMsg` arm): billed FIRST whatever becomes of it — the
+     * guess ran on the user's key on the title engine, so the OBS-3 model
+     * the ledger sees is that engine's — then shown to the composer as the
+     * ephemeral `prompt.suggested` event only while it is still current:
+     * same generation, same history length, same session, nothing in flight.
+     * A suggestion is NEVER persisted — the point is a ghost prompt the user
+     * may decline, and a transcript row would show the model its own guess
+     * as conversation on the next turn. An answer arriving late, or after
+     * {@see self::release()}, is billed and dropped.
+     */
+
     private function landPromptSuggestion(mixed $msg): void
     {
         if (!$msg instanceof PromptSuggestionMsg) {
@@ -126,6 +139,15 @@ trait SessionLandings
         ], $this->sessionId));
     }
 
+    /**
+     * Land a consolidation answer (C-CTX-2.c, mirroring Chat's
+     * `MemoryConsolidatedMsg` arm): billed FIRST whatever the outcome, on the
+     * model the summary engine actually ran (the TUI's OBS-3 rule — the
+     * ledger must not bill a call to a model that did not make it), then the
+     * producer's own notice row, or nothing when the run saved nothing.
+     * An answer arriving after {@see self::release()} is billed and dropped.
+     */
+
     private function landConsolidation(mixed $msg): void
     {
         if (!$msg instanceof MemoryConsolidatedMsg) {
@@ -146,6 +168,15 @@ trait SessionLandings
         $this->appendMessageRow(Message::notice($notice));
     }
 
+    /**
+     * Land an auto-commit answer (C-CTX-2.c, mirroring Chat's
+     * `AutoCommittedMsg` arm): the commit is already made (or refused), so
+     * the subject's provider call is billed first — on the title engine's
+     * model per OBS-3 — and the line saying what was committed, or why not,
+     * ALWAYS shows. An answer arriving after {@see self::release()} is
+     * billed and dropped.
+     */
+
     private function landAutoCommit(mixed $msg): void
     {
         if (!$msg instanceof AutoCommittedMsg) {
@@ -160,6 +191,15 @@ trait SessionLandings
 
         $this->appendMessageRow(Message::notice($msg->notice()));
     }
+
+    /**
+     * Land a dream-pass answer (C-CTX-2.c, mirroring Chat's
+     * `DreamPassCompletedMsg` arm): billed first — the pass ran on the
+     * session's own engine, so the engine {@see self::runSettleWork()} handed
+     * the table IS the OBS-3 model here — then the producer's notice, or
+     * nothing when the pass neither saved nor proposed. An answer arriving
+     * after {@see self::release()} is billed and dropped.
+     */
 
     private function landDream(mixed $msg, ?Backend $engine): void
     {
@@ -179,6 +219,14 @@ trait SessionLandings
 
         $this->appendMessageRow(Message::notice($notice));
     }
+
+    /**
+     * Hold the turn slot and ask the title model to judge the live goal
+     * (W7a-3, mirroring {@see Chat::scheduleGoalJudge()} exactly): the bump
+     * of the generation strands anything already in flight, and the verdict
+     * lands through {@see self::landGoalVerdict()} on this promise's own
+     * channel — the same shape the ahead-of-need compaction uses.
+     */
 
     private function scheduleGoalJudge(GoalState $goal): void
     {
@@ -208,6 +256,20 @@ trait SessionLandings
             $this->landGoalVerdict($msg);
         });
     }
+
+    /**
+     * Land the `/goal` judge's verdict on a served session (W7a-3): the
+     * judge's usage is billed first — stamped with the JUDGE's model, the
+     * threaded sink from W7a-1 — then the shared {@see GoalLoop} table says
+     * whether the goal ended (met, budget spent, no usable verdict) or the
+     * agent goes back to work with what is still missing.
+     *
+     * A prompt the user queued while the turn ran goes first and the goal
+     * waits: the user's own message is the conversation carrying on, and the
+     * turn it starts is judged when it settles like any other. The follow-up
+     * prompt goes out through {@see self::submit()}, so every admission gate
+     * applies to it, refusal row and all.
+     */
 
     private function landGoalVerdict(mixed $msg): void
     {
@@ -261,12 +323,26 @@ trait SessionLandings
         }
     }
 
+    /**
+     * End $goal with $status and say so in $notice, then let the queue move —
+     * the served twin of {@see Chat::endGoal()}/{@see Chat::goalEnded()}
+     * minus the TUI's terminal-notification, which a headless session has no
+     * terminal to notify.
+     */
+
     private function endGoal(GoalState $goal, string $status, string $notice): void
     {
         $this->appendMessageRow(Message::notice($notice));
         $this->appendMessageRow($goal->withStatus($status)->toMessage());
         $this->releaseQueue();
     }
+
+    /**
+     * Roadmap 5.7-2: a plan the user approved through `PlanExit` ends plan
+     * mode once its turn is over — the mode the approval names, else
+     * `default` — and only while the session is still in `plan`, before a
+     * queued prompt starts the next turn ({@see TurnRunner::approvedPlanExit()}).
+     */
 
     private function applyApprovedPlanExit(): void
     {

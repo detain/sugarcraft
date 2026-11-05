@@ -60,6 +60,8 @@ use SugarCraft\Code\Support\HomeDirectory;
  */
 trait ServeStartup
 {
+    /** @param array<string, string> $env */
+
     private static function start(ParsedArgs $args, array $env): int
     {
         try {
@@ -121,6 +123,12 @@ trait ServeStartup
         return self::detachAndServe($args, $config, $state, $tokens, $static, $watchdog);
     }
 
+    /**
+     * `--detach`: daemonize, let the daemon bind and report over a socket
+     * pair, and print what it reported. The original process returns as soon
+     * as the daemon has either bound its port or failed to.
+     */
+
     private static function detachAndServe(
         ParsedArgs $args,
         ServerConfig $config,
@@ -178,6 +186,14 @@ trait ServeStartup
 
         return NonInteractive::EXIT_OK;
     }
+
+    /**
+     * Bind, publish the discovery record and control socket, report, and run
+     * the loop until a signal (or the parent-pid watchdog) stops it.
+     *
+     * @param \Closure(array<string, mixed>): void $report called exactly once,
+     *        with `ok` and either the URLs or the `reason` it failed
+     */
 
     private static function serve(
         ParsedArgs $args,
@@ -468,6 +484,14 @@ trait ServeStartup
         return NonInteractive::EXIT_OK;
     }
 
+    /**
+     * The `candy-code.v1` protocol over this server's workspace: the launch's
+     * workspace for the served root ({@see Bootstrap::workspace()}, the same
+     * bundle a TUI session is built on), a {@see SessionHub} capped at
+     * `server.maxOpenSessions`, and the {@see Dispatcher} the WebSocket
+     * transport hands its messages to.
+     */
+
     private static function protocol(ServerConfig $config, LoopInterface $loop, ?\Closure $log = null, ?AuthContext $auth = null): Dispatcher
     {
         $workspace = Bootstrap::workspace($config->root);
@@ -484,6 +508,18 @@ trait ServeStartup
         // client; the context's log sink is where that cause lands instead.
         return Dispatcher::new(ServerContext::new($hub, $config, Help::versionString(), $loop, null, $log));
     }
+
+    /**
+     * The local control socket `serve url` asks for a fresh sign-in URL on:
+     * the login codes live in this process's memory, so a code minted anywhere
+     * else would be one the server never heard of. Inside the 0700 state
+     * directory, created under umask 077, and every request must still carry
+     * the owner token. Registered with the fork registry by {@see Listener}
+     * like the TCP listener. Null (logged) when it cannot be bound: the server
+     * still serves, only `serve url` cannot reach it.
+     *
+     * @param \Closure(string): void $log
+     */
 
     private static function openControlSocket(StateDir $state, Server $server, TokenStore $tokens, \Closure $log): ?Listener
     {
@@ -547,6 +583,15 @@ trait ServeStartup
         return $listener;
     }
 
+    /**
+     * The daemon's one-line report, or null when it closed or stayed silent
+     * for $seconds.
+     *
+     * @param resource $stream
+     *
+     * @return array<string, mixed>|null
+     */
+
     private static function readReport($stream, float $seconds): ?array
     {
         \stream_set_blocking($stream, false);
@@ -577,6 +622,14 @@ trait ServeStartup
 
         return \is_array($report) && \is_bool($report['ok'] ?? null) ? $report : null;
     }
+
+    /**
+     * The startup lines (stderr) and, under JSON, the one stdout document —
+     * from the foreground server itself, or from the process that detached
+     * one, reporting what the daemon told it.
+     *
+     * @param array<string, mixed> $report
+     */
 
     private static function announce(ParsedArgs $args, ServerConfig $config, array $report, StaticFiles $static, bool $detached): void
     {
@@ -646,12 +699,36 @@ trait ServeStartup
         self::stderr(\implode("\n", $lines));
     }
 
+    /**
+     * The sign-in URLs a report or a `serve url` answer carries; one, the
+     * `loginUrl`, when it predates `loginUrls`.
+     *
+     * @param array<string, mixed> $answer
+     *
+     * @return list<string>
+     */
+
     private static function loginUrlsOf(array $answer): array
     {
         $urls = \is_array($answer['loginUrls'] ?? null) ? \array_values(\array_filter($answer['loginUrls'], 'is_string')) : [];
 
         return $urls !== [] ? $urls : [(string) ($answer['loginUrl'] ?? '')];
     }
+
+    /**
+     * The installed `sugarcraft/candy-code-web` build, or null when the
+     * package is absent or its bundle is not built. Looked up by name so this
+     * package carries no hard dependency on it (it is a composer `suggest`).
+     *
+     * CW-P2: this asks the SOFT probe `tryDistPath()` — which answers null for
+     * a half-installed bundle (composer registered the package, `dist/` was
+     * never built) — rather than the throwing `distPath()`. A missing bundle
+     * is the designed "serve the API without a UI" state, not a startup crash:
+     * null here routes through `StaticFiles::new(null)` to the
+     * `cli.serve.announce.web_missing` notice and API-over-WebSocket-only
+     * mode. `distPath()` would raise a `RuntimeException` the caller's catch
+     * turns into a hard `failUsage`, never reaching that graceful branch.
+     */
 
     private static function installedWebRoot(): ?string
     {

@@ -58,6 +58,8 @@ use SugarCraft\Code\Support\HomeDirectory;
  */
 trait ServeManagement
 {
+    /** @param array<string, string> $env */
+
     private static function status(ParsedArgs $args, array $env): int
     {
         $found = self::locate($args, $env);
@@ -110,6 +112,8 @@ trait ServeManagement
 
         return $running ? NonInteractive::EXIT_OK : NonInteractive::EXIT_FAILURE;
     }
+
+    /** @param array<string, string> $env */
 
     private static function stop(ParsedArgs $args, array $env): int
     {
@@ -174,6 +178,8 @@ trait ServeManagement
         );
     }
 
+    /** @param array<string, string> $env */
+
     private static function logs(ParsedArgs $args, array $env): int
     {
         $follow = isset($args->subcommandFlags['--follow']) || isset($args->subcommandFlags['-f']);
@@ -213,6 +219,8 @@ trait ServeManagement
 
         return NonInteractive::EXIT_OK;
     }
+
+    /** @param array<string, string> $env */
 
     private static function url(ParsedArgs $args, array $env): int
     {
@@ -274,6 +282,8 @@ trait ServeManagement
         return NonInteractive::EXIT_OK;
     }
 
+    /** @param array<string, string> $env */
+
     private static function token(ParsedArgs $args, array $env): int
     {
         $rotate = isset($args->subcommandFlags['--rotate']);
@@ -324,6 +334,13 @@ trait ServeManagement
         return NonInteractive::EXIT_OK;
     }
 
+    /**
+     * The host a pairing QR would carry in the clear, or null when the URL is
+     * safe to print: https (TLS — `serve` itself refuses to mint LAN/WAN http
+     * codes elsewhere), or an http bind on a loopback host where the token
+     * never leaves the machine. Names the host only — never the fragment code.
+     */
+
     private static function qrCleartextHost(string $loginUrl): ?string
     {
         $parts = \parse_url($loginUrl);
@@ -340,6 +357,8 @@ trait ServeManagement
         return $host;
     }
 
+    /** Poll until $record's process is gone, up to $seconds; whether it went. */
+
     private static function waitForExit(DiscoveryFile $record, float $seconds): bool
     {
         $deadline = \microtime(true) + $seconds;
@@ -352,6 +371,12 @@ trait ServeManagement
 
         return true;
     }
+
+    /**
+     * `GET /api/health` on $url, bounded to two seconds: the one route that
+     * needs no credential, so `status` proves the server answers without
+     * spending the token.
+     */
 
     private static function probeHealth(string $url): bool
     {
@@ -373,6 +398,13 @@ trait ServeManagement
         return \preg_match('#^HTTP/1\.[01] 200 #', $response) === 1 && \str_contains($response, '"ok":true');
     }
 
+    /**
+     * One request line on the running server's control socket, and its JSON
+     * answer, bounded to five seconds; null when it does not answer.
+     *
+     * @return array<string, mixed>|null
+     */
+
     private static function controlRequest(StateDir $state, string $line): ?array
     {
         $socket = @\stream_socket_client('unix://' . $state->controlSocketPath(), $errno, $errstr, 5.0);
@@ -388,6 +420,15 @@ trait ServeManagement
         return \is_array($decoded) ? $decoded : null;
     }
 
+    /**
+     * How long `stop` waits for a drained exit: {@see STOP_DRAIN_SECONDS}, or
+     * the configured `server.drainSeconds` plus a margin when that is longer,
+     * so `stop` never SIGKILLs a server still inside the drain it was told to
+     * allow.
+     *
+     * @param array<string, string> $env
+     */
+
     private static function stopWaitSeconds(array $env): float
     {
         try {
@@ -398,6 +439,8 @@ trait ServeManagement
 
         return \max(self::STOP_DRAIN_SECONDS, $drain + self::STOP_DRAIN_MARGIN_SECONDS);
     }
+
+    /** The token file's token, read without minting one; null when absent. */
 
     private static function storedToken(StateDir $state): ?string
     {
@@ -410,6 +453,12 @@ trait ServeManagement
 
         return \preg_match('/^[0-9a-f]{64}$/', $token) === 1 ? $token : null;
     }
+
+    /**
+     * `logs -f`: print what is appended to $path from $offset on, across a
+     * rotation (the file shrinks or is replaced), until the server named by
+     * $record is gone — or forever if there was none to watch (Ctrl+C ends it).
+     */
 
     private static function follow(string $path, int $offset, ?DiscoveryFile $record): void
     {

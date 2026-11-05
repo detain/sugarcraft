@@ -785,48 +785,6 @@ final class SessionHost
     }
 
     /**
-     * C-TOOL-6.h: host $specs as this client's tools for the session's NEXT
-     * turns, replacing whatever $clientKey held before. Returns the
-     * registration id every later answer for these tools must carry.
-     * Throws with a one-word verdict when the batch is not shippable
-     * ({@see ClientToolRegistry::register()}); who may call this at all —
-     * a connection holding Write scope, behind `server.clientTools` — is
-     * the protocol step's door (6.i), not this substrate's.
-     *
-     * @param list<ClientToolSpec> $specs
-     */
-    /**
-     * C-TOOL-6.h: drop $clientKey's registrations (its connection closed —
-     * the ruling that kills a client's tools with it) and settle its open
-     * calls as errors, so a child blocked on one of them learns the truth
-     * instead of waiting out its deadline.
-     */
-    /**
-     * C-TOOL-6.h: answer the open client call $callId — first answer wins
-     * (the same law {@see answer()} keeps for questions). An id not open, a
-     * call already settled another way, and an answer carrying a
-     * registration id other than the one that opened the call all read the
-     * same from here: false. A client re-registered between the call and
-     * the answer is exactly the case that id exists to refuse.
-     */
-    /**
-     * C-TOOL-6.h: bind (or pass null to clear) the listener that hears each
-     * freshly opened client call with the client and registration that must
-     * answer it — the handle the serve relay (6.i) forwards on.
-     *
-     * @param (\Closure(PendingClientCall, string, string): void)|null $hook
-     */
-    /**
-     * C-TOOL-6.h: the sink {@see \SugarCraft\Code\Backend\EngineBackend::withClientCallSink()}
-     * takes — called in the parent when a turn child puts a client-hosted
-     * call on the channel. It opens the call in {@see $pendingClientCalls}
-     * under the registration that owns the name, tells the 6.i relay, and
-     * leaves the answer to {@see resolveClientCall()}; the engine's own
-     * deadline stays the bound either way. A call whose name no
-     * registration owns (the client forgot it mid-turn, after this turn's
-     * roster was fixed) is answered as an error at once rather than held.
-     */
-    /**
      * Ask the running turn to stop at its next step boundary, letting the tool
      * in flight finish (`cancel_soft`, Appendix O §5.1). The turn settles on
      * its own; nothing is healed here.
@@ -938,63 +896,6 @@ final class SessionHost
     }
 
     /**
-     * Put out the ahead-of-need summarisation request (roadmap 2.10) and
-     * latch its landing slot — the block the 70% dispatch tier used to carry
-     * inline, shared now with the CTX-5 idle watch. Sharing is the point:
-     * the timer's whole trick is to run the very request the next dispatch
-     * would have asked for, through the same gate, so the served splice —
-     * billing included — never sees two sources and never pays twice.
-     *
-     * @param list<Message> $dispatched the history the summaries are asked against
-     * @param list<Message> $baseHistory the conversation to summarise
-     * @return bool whether a request actually went out
-     */
-    /**
-     * (Re-)arm the CTX-5 idle auto-compaction watch. Called from every event
-     * that RE-STARTS the idle window: an accepted prompt, a settled turn, and
-     * an alarm that fired into a running turn (C-CTX-6.a — dropping the watch
-     * on a busy fire forfeits the fold the opt-in exists to make). Each call
-     * replaces the deadline (cancel first — a user
-     * who returned must not leave an orphan alarm that fires against the
-     * NEXT quiet gap and charges for it to the wrong window), and the
-     * opt-out shape never arms at all, so the default-off default costs a
-     * served session exactly nothing.
-     *
-     * The +2 s slack exists because {@see IdleCompactionPolicy::shouldAutoCompact()}
-     * keeps the offer clock's strict `>` semantics while an event-loop timer's
-     * wall-clock elapsed at fire time can land a hair under its deadline —
-     * and, unlike the TUI's tick, this watch gets no second chance. An
-     * unattended fold that waits two extra seconds — of an hour-long idle, or
-     * of the 240 seconds a 5-minute cache leaves after the margin
-     * (C-CTX-5.c) — is invisible; a fold whose one-shot alarm under-shot by a
-     * rounding and so silently never fired until the next prompt is the bug.
-     */
-    /**
-     * The idle watch's verdict, every condition re-derived at fire time —
-     * between the arming and the alarm anything they depend on has had an
-     * hour to move. Passing means exactly what passing means at the tier:
-     * the shared {@see requestAheadOfNeed()}, whose landed summaries the
-     * existing splice consumes on the next submit, nobody re-billed and no
-     * turn ever dispatched unattended.
-     */
-    /**
-     * Served keep-warm (C-CTX-5.d) — the alarm-side twin of the TUI's
-     * `Chat::handleKeepWarmTick()`, consulted at exactly the point where the
-     * fold declined this fire. A ping goes out over the session engine's own
-     * frozen-prefix route (the conversation as a turn would send it plus one
-     * instruction row asking for a one-character reply), lands billed under
-     * the `warm` source label like any other call the ledger has ever seen,
-     * and — because this host carries a one-shot alarm where the TUI has a
-     * 60-second tick — re-arms the very same idle watch so the stretch stays
-     * watched and its cap keeps counting down. A fire that meets a ping
-     * still out finds the latch and decides nothing; no timeout is armed on
-     * the ask (E646), so a stalled ping is a held latch and nothing louder.
-     *
-     * C-CTX-6.a's rule holds throughout: the fold, when it IS due, still
-     * owns this alarm untouched — this method is reached only from the
-     * `!$foldDue` branch above it.
-     */
-    /**
      * Cancel the turn in flight — or a submission parked behind off-thread
      * work — when $turnId is null or names it. Its running tool rows are
      * healed into the same "interrupted" rows the TUI writes, so the next
@@ -1043,21 +944,6 @@ final class SessionHost
         return $count;
     }
 
-    /**
-     * Run the built-in command `/$name $args` (roadmap O-2h, Appendix O §6.3
-     * `command.exec`) and say what it produced. Its rows are already in the
-     * transcript and its effects applied when this returns; off-turn work it
-     * started lands later as a row.
-     *
-     * Refused while a turn holds the session — a command would rewrite the
-     * history that turn is about to append to — except the built-ins the
-     * keyboard itself admits mid-turn: `/workflow pause|status` inside the
-     * workflow run they control, and `/btw` answered beside the run
-     * (C-WEB-2.a). One decision table, two doors: this consults the same
-     * {@see TurnController::midTurnRoute()} {@see admitWhileBusy()} applies.
-     * A name that is no built-in is refused too: unlike {@see submit()},
-     * this never sends text to the model.
-     */
     /**
      * Fold whatever the running turn has reported since the last fold into
      * the transcript — running placeholders and finished tool rows, through
@@ -1274,125 +1160,6 @@ final class SessionHost
     }
 
 
-    /**
-     * A command file's expansion, judged as the TUI judges it: an expansion
-     * that produced nothing is refused, not sent, and its mentions are never
-     * read (audit 15b-15) — the body is repository-authored, with its own `@`
-     * form a trust tier may just have refused. The `/rewind` draft is the line
-     * as typed.
-     *
-     * C-EXT-2.e: $spec is the command file's own spec (null for an expansion
-     * no spec stands behind, like the MCP fetch-refusal leg). Beside it this
-     * route applies the same two judgements Chat::submit() applies to a
-     * command it expands: a `subtask:`/`agent:` command rides out wrapped in
-     * {@see TurnController::wrapCommandDelegation()}'s delegation directive,
-     * and a `model:` command pins exactly this one turn through
-     * {@see TurnController::commandTurnModel()} — the pin is threaded to
-     * {@see dispatch()}'s backend, never stored on the session, so the next
-     * turn answers on the session's model by construction.
-     */
-    /**
-     * Expand $text's command file in a forked child (audit 15b-20) and go on
-     * once it answers. The session is held — mid-turn rules apply — until
-     * then.
-     *
-     * @param array{0: CommandSpec, 1: string} $command
-     */
-    /**
-     * A prompt (typed, or a command file's expansion) from the spend cap on.
-     * $verdicts are a forked turn-hook chain's, on the re-entry that consumes
-     * them; null fires the chain now.
-     *
-     * @param array{0: HookResult, 1: ?HookResult}|null $verdicts
-     * @param list<\SugarCraft\Code\Attachment> $attachments pasted images riding this
-     *     prompt (WEB-5b); threaded unchanged through a forked hook's resume
-     * @param ?PermissionMode $modeCeiling the C-AGT-2.b gate ceiling of the
-     *     submission that starts this turn; threaded unchanged through a
-     *     forked hook's resume, null for an expansion that names none
-     * @param ?string $oneTurnModel C-EXT-2.e: the model a command file's
-     *     `model:` pinned for exactly this turn (see
-     *     {@see TurnController::commandTurnModel()}); threaded unchanged
-     *     through a forked hook's resume so the pin cannot be forked away
-     * @param ?string $commandModelNotice C-EXT-2.e: the fall-back sentence when
-     *     the requested model could not be served and the turn rides the
-     *     session's model instead; a notice row, never an override
-     */
-    /**
-     * Fire `UserPromptSubmit` and, into an empty history, `SessionStart` for
-     * one submission — this host's dispatch site for both, as
-     * `Chat::dispatchTurnHooks()` is the TUI's. In process, the verdicts come
-     * back now; when a hook leaves the process the chain is forked
-     * (audit 15b-04), the session is held, null is returned, and
-     * {@see admitPrompt()} is re-entered with the verdicts when they land.
-     * The two C-EXT-2.e tail parameters ride the fork so a command's one-turn
-     * model pin and its fall-back notice survive the chain.
-     *
-     * @return array{0: HookResult, 1: ?HookResult}|null
-     */
-    /**
-     * Hold the session behind $childWork in a forked child
-     * ({@see TurnController::forkPayload()}) and run $resume with what it
-     * reported — unless the hold was cancelled meanwhile. Whatever the resume
-     * leaves idle releases the queue, as every turn end does.
-     *
-     * @param \Closure(): string $childWork
-     * @param \Closure(string): array<int, mixed> $collect
-     * @param \Closure(): array<int, mixed> $inline
-     * @param \Closure(array<int, mixed>): void $resume
-     */
-
-    /**
-     * Run $text when it is a built-in command and say how it was taken, or
-     * null when it is not one (prose, or a `/word` no built-in answers to).
-     */
-    /**
-     * The built-in $text dispatches to, run through its host command — the
-     * TUI's table (`builtin-commands/`), so the two cannot route one draft
-     * differently. Null when $text names no built-in. A built-in with no host
-     * body, or one whose answer is a screen ({@see CommandEffectKind::OpenTitleEditor}),
-     * is {@see CommandResult::clientOnly()}.
-     */
-    /**
-     * Whether $text is `/workflow pause|status`, typed while the workflow run
-     * it controls holds the session — the one command a busy session runs
-     * (audit WF-4). A command file of that name is a prompt, so it queues.
-     */
-    /**
-     * Apply what a command decided to this session — `Chat::applyCommandResult()`'s
-     * headless twin. Effects first, then the rows, then a save.
-     *
-     * - The session id is this host's for life, so a `/branch` does not move
-     *   it: the branch exists in the store (its reply names it) and a client
-     *   opens it through the hub.
-     * - A rename is already in the store; a host keeps no title in memory.
-     * - Off-turn work runs on the loop; its answer lands as a UI-only row.
-     * - An occupying run (a workflow) holds the session as a turn does, until
-     *   its report lands; a cancelled run's report still lands, and releases
-     *   nothing.
-     *
-     * $commandName is the dispatched name ('' when the caller has none); it
-     * is what lets {@see self::CONTEXT_CHANGING_COMMANDS} mark a result that
-     * rewrote the prompt's sources (C-CTX-2.d).
-     */
-    /**
-     * WEB-2: the typed `/compact` fold on a served session — the shared
-     * {@see CompactionService::compactedHistory()} engine, run now, on this
-     * host's own compactor, window and estimate. A landed ahead-of-need
-     * summary whose fingerprint still matches rides the fold; a landed HOLD
-     * REFUSES it outright (CTX-4's typed-route verdict, the exact branch
-     * `Chat::landModelCompaction()` lands), and anything else folds on the heuristic
-     * the engine builds from the history itself. The echo and report rows come
-     * back INSIDE the folded history — announce what the fold appended, and
-     * the transcript matches the terminal row for row.
-     */
-    /**
-     * One UI-only reply row a command's later answer lands as, saved.
-     *
-     * $error is the row's own verdict (ISS-097): the command's failure arms
-     * pass true so the transcript paints the sentence in the error colour,
-     * while a successful answer keeps the plain `local` label. The renderer
-     * never sniffs the text, so the flag has to arrive with the producer.
-     */
     /**
      * C-MCP-4.c: one UI-only notice row from a later-landing process event —
      * today the served `mcp auth login` beats that {@see \SugarCraft\Code\Host\ServedMcpLogins}
@@ -1882,74 +1649,6 @@ final class SessionHost
         }
     }
 
-    /**
-     * Land a prompt-suggestion answer (C-CTX-2.d, mirroring Chat's
-     * `PromptSuggestionMsg` arm): billed FIRST whatever becomes of it — the
-     * guess ran on the user's key on the title engine, so the OBS-3 model
-     * the ledger sees is that engine's — then shown to the composer as the
-     * ephemeral `prompt.suggested` event only while it is still current:
-     * same generation, same history length, same session, nothing in flight.
-     * A suggestion is NEVER persisted — the point is a ghost prompt the user
-     * may decline, and a transcript row would show the model its own guess
-     * as conversation on the next turn. An answer arriving late, or after
-     * {@see self::release()}, is billed and dropped.
-     */
-    /**
-     * Land a consolidation answer (C-CTX-2.c, mirroring Chat's
-     * `MemoryConsolidatedMsg` arm): billed FIRST whatever the outcome, on the
-     * model the summary engine actually ran (the TUI's OBS-3 rule — the
-     * ledger must not bill a call to a model that did not make it), then the
-     * producer's own notice row, or nothing when the run saved nothing.
-     * An answer arriving after {@see self::release()} is billed and dropped.
-     */
-    /**
-     * Land an auto-commit answer (C-CTX-2.c, mirroring Chat's
-     * `AutoCommittedMsg` arm): the commit is already made (or refused), so
-     * the subject's provider call is billed first — on the title engine's
-     * model per OBS-3 — and the line saying what was committed, or why not,
-     * ALWAYS shows. An answer arriving after {@see self::release()} is
-     * billed and dropped.
-     */
-    /**
-     * Land a dream-pass answer (C-CTX-2.c, mirroring Chat's
-     * `DreamPassCompletedMsg` arm): billed first — the pass ran on the
-     * session's own engine, so the engine {@see self::runSettleWork()} handed
-     * the table IS the OBS-3 model here — then the producer's notice, or
-     * nothing when the pass neither saved nor proposed. An answer arriving
-     * after {@see self::release()} is billed and dropped.
-     */
-    /**
-     * Hold the turn slot and ask the title model to judge the live goal
-     * (W7a-3, mirroring {@see Chat::scheduleGoalJudge()} exactly): the bump
-     * of the generation strands anything already in flight, and the verdict
-     * lands through {@see self::landGoalVerdict()} on this promise's own
-     * channel — the same shape the ahead-of-need compaction uses.
-     */
-    /**
-     * Land the `/goal` judge's verdict on a served session (W7a-3): the
-     * judge's usage is billed first — stamped with the JUDGE's model, the
-     * threaded sink from W7a-1 — then the shared {@see GoalLoop} table says
-     * whether the goal ended (met, budget spent, no usable verdict) or the
-     * agent goes back to work with what is still missing.
-     *
-     * A prompt the user queued while the turn ran goes first and the goal
-     * waits: the user's own message is the conversation carrying on, and the
-     * turn it starts is judged when it settles like any other. The follow-up
-     * prompt goes out through {@see self::submit()}, so every admission gate
-     * applies to it, refusal row and all.
-     */
-    /**
-     * End $goal with $status and say so in $notice, then let the queue move —
-     * the served twin of {@see Chat::endGoal()}/{@see Chat::goalEnded()}
-     * minus the TUI's terminal-notification, which a headless session has no
-     * terminal to notify.
-     */
-    /**
-     * Roadmap 5.7-2: a plan the user approved through `PlanExit` ends plan
-     * mode once its turn is over — the mode the approval names, else
-     * `default` — and only while the session is still in `plan`, before a
-     * queued prompt starts the next turn ({@see TurnRunner::approvedPlanExit()}).
-     */
     /**
      * Send what is queued, the TUI's release rule: a steer the settled turn
      * delivered is done; the rest go out one at a time until one starts a turn

@@ -244,47 +244,10 @@ final class Serve
 
 
     /** @param array<string, string> $env */
-    /**
-     * `--detach`: daemonize, let the daemon bind and report over a socket
-     * pair, and print what it reported. The original process returns as soon
-     * as the daemon has either bound its port or failed to.
-     */
-    /**
-     * Bind, publish the discovery record and control socket, report, and run
-     * the loop until a signal (or the parent-pid watchdog) stops it.
-     *
-     * @param \Closure(array<string, mixed>): void $report called exactly once,
-     *        with `ok` and either the URLs or the `reason` it failed
-     */
-    /**
-     * The `candy-code.v1` protocol over this server's workspace: the launch's
-     * workspace for the served root ({@see Bootstrap::workspace()}, the same
-     * bundle a TUI session is built on), a {@see SessionHub} capped at
-     * `server.maxOpenSessions`, and the {@see Dispatcher} the WebSocket
-     * transport hands its messages to.
-     */
-    /**
-     * The local control socket `serve url` asks for a fresh sign-in URL on:
-     * the login codes live in this process's memory, so a code minted anywhere
-     * else would be one the server never heard of. Inside the 0700 state
-     * directory, created under umask 077, and every request must still carry
-     * the owner token. Registered with the fork registry by {@see Listener}
-     * like the TCP listener. Null (logged) when it cannot be bound: the server
-     * still serves, only `serve url` cannot reach it.
-     *
-     * @param \Closure(string): void $log
-     */
-
     /** @param array<string, string> $env */
     /** @param array<string, string> $env */
     /** @param array<string, string> $env */
     /** @param array<string, string> $env */
-    /**
-     * The host a pairing QR would carry in the clear, or null when the URL is
-     * safe to print: https (TLS — `serve` itself refuses to mint LAN/WAN http
-     * codes elsewhere), or an http bind on a loopback host where the token
-     * never leaves the machine. Names the host only — never the fragment code.
-     */
     /** @param array<string, string> $env */
     // ── helpers ──────────────────────────────────────────────────────────
 
@@ -360,40 +323,8 @@ final class Serve
         return $code;
     }
 
-    /**
-     * The daemon's one-line report, or null when it closed or stayed silent
-     * for $seconds.
-     *
-     * @param resource $stream
-     *
-     * @return array<string, mixed>|null
-     */
     /** Poll until $record's process is gone, up to $seconds; whether it went. */
-    /**
-     * `GET /api/health` on $url, bounded to two seconds: the one route that
-     * needs no credential, so `status` proves the server answers without
-     * spending the token.
-     */
-    /**
-     * One request line on the running server's control socket, and its JSON
-     * answer, bounded to five seconds; null when it does not answer.
-     *
-     * @return array<string, mixed>|null
-     */
-    /**
-     * How long `stop` waits for a drained exit: {@see STOP_DRAIN_SECONDS}, or
-     * the configured `server.drainSeconds` plus a margin when that is longer,
-     * so `stop` never SIGKILLs a server still inside the drain it was told to
-     * allow.
-     *
-     * @param array<string, string> $env
-     */
     /** The token file's token, read without minting one; null when absent. */
-    /**
-     * `logs -f`: print what is appended to $path from $offset on, across a
-     * rotation (the file shrinks or is replaced), until the server named by
-     * $record is gone — or forever if there was none to watch (Ctrl+C ends it).
-     */
     /**
      * The variables `serve` consults, read by name rather than taken from a
      * whole-environment dump, so the set this command depends on is the list
@@ -425,35 +356,6 @@ final class Serve
         return $env;
     }
 
-    /**
-     * The installed `sugarcraft/candy-code-web` build, or null when the
-     * package is absent or its bundle is not built. Looked up by name so this
-     * package carries no hard dependency on it (it is a composer `suggest`).
-     *
-     * CW-P2: this asks the SOFT probe `tryDistPath()` — which answers null for
-     * a half-installed bundle (composer registered the package, `dist/` was
-     * never built) — rather than the throwing `distPath()`. A missing bundle
-     * is the designed "serve the API without a UI" state, not a startup crash:
-     * null here routes through `StaticFiles::new(null)` to the
-     * `cli.serve.announce.web_missing` notice and API-over-WebSocket-only
-     * mode. `distPath()` would raise a `RuntimeException` the caller's catch
-     * turns into a hard `failUsage`, never reaching that graceful branch.
-     */
-    /**
-     * The startup lines (stderr) and, under JSON, the one stdout document —
-     * from the foreground server itself, or from the process that detached
-     * one, reporting what the daemon told it.
-     *
-     * @param array<string, mixed> $report
-     */
-    /**
-     * The sign-in URLs a report or a `serve url` answer carries; one, the
-     * `loginUrl`, when it predates `loginUrls`.
-     *
-     * @param array<string, mixed> $answer
-     *
-     * @return list<string>
-     */
     /**
      * The server's one stderr channel: startup lines, the request log and the
      * stop notice. Stderr alone, never the transcript seam — there is no

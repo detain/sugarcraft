@@ -232,6 +232,24 @@ trait SessionAdmission
         return $this->admitPrompt($text, $options->resolveMentions, $draft, attachments: $options->attachments, modeCeiling: $options->modeCeiling);
     }
 
+    /**
+     * A command file's expansion, judged as the TUI judges it: an expansion
+     * that produced nothing is refused, not sent, and its mentions are never
+     * read (audit 15b-15) — the body is repository-authored, with its own `@`
+     * form a trust tier may just have refused. The `/rewind` draft is the line
+     * as typed.
+     *
+     * C-EXT-2.e: $spec is the command file's own spec (null for an expansion
+     * no spec stands behind, like the MCP fetch-refusal leg). Beside it this
+     * route applies the same two judgements Chat::submit() applies to a
+     * command it expands: a `subtask:`/`agent:` command rides out wrapped in
+     * {@see TurnController::wrapCommandDelegation()}'s delegation directive,
+     * and a `model:` command pins exactly this one turn through
+     * {@see TurnController::commandTurnModel()} — the pin is threaded to
+     * {@see dispatch()}'s backend, never stored on the session, so the next
+     * turn answers on the session's model by construction.
+     */
+
     private function admitExpanded(string $typed, ?string $expanded, ?CommandSpec $spec = null): TurnTicket
     {
         $expanded = trim((string) $expanded);
@@ -258,6 +276,14 @@ trait SessionAdmission
             commandModelNotice: $commandModelNotice,
         );
     }
+
+    /**
+     * Expand $text's command file in a forked child (audit 15b-20) and go on
+     * once it answers. The session is held — mid-turn rules apply — until
+     * then.
+     *
+     * @param array{0: CommandSpec, 1: string} $command
+     */
 
     private function parkExpansion(string $text, array $command): TurnTicket
     {
@@ -339,6 +365,26 @@ trait SessionAdmission
 
         return TurnTicket::pending();
     }
+
+    /**
+     * A prompt (typed, or a command file's expansion) from the spend cap on.
+     * $verdicts are a forked turn-hook chain's, on the re-entry that consumes
+     * them; null fires the chain now.
+     *
+     * @param array{0: HookResult, 1: ?HookResult}|null $verdicts
+     * @param list<\SugarCraft\Code\Attachment> $attachments pasted images riding this
+     *     prompt (WEB-5b); threaded unchanged through a forked hook's resume
+     * @param ?PermissionMode $modeCeiling the C-AGT-2.b gate ceiling of the
+     *     submission that starts this turn; threaded unchanged through a
+     *     forked hook's resume, null for an expansion that names none
+     * @param ?string $oneTurnModel C-EXT-2.e: the model a command file's
+     *     `model:` pinned for exactly this turn (see
+     *     {@see TurnController::commandTurnModel()}); threaded unchanged
+     *     through a forked hook's resume so the pin cannot be forked away
+     * @param ?string $commandModelNotice C-EXT-2.e: the fall-back sentence when
+     *     the requested model could not be served and the turn rides the
+     *     session's model instead; a notice row, never an override
+     */
 
     private function admitPrompt(
         string $text,
@@ -477,6 +523,19 @@ trait SessionAdmission
         return $this->dispatch($text, $resolveMentions, $draft, $baseHistory, $reports, $notes, $refilled, $attachments, $modeCeiling, $oneTurnModel, $commandModelNotice);
     }
 
+    /**
+     * Fire `UserPromptSubmit` and, into an empty history, `SessionStart` for
+     * one submission — this host's dispatch site for both, as
+     * `Chat::dispatchTurnHooks()` is the TUI's. In process, the verdicts come
+     * back now; when a hook leaves the process the chain is forked
+     * (audit 15b-04), the session is held, null is returned, and
+     * {@see admitPrompt()} is re-entered with the verdicts when they land.
+     * The two C-EXT-2.e tail parameters ride the fork so a command's one-turn
+     * model pin and its fall-back notice survive the chain.
+     *
+     * @return array{0: HookResult, 1: ?HookResult}|null
+     */
+
     private function fireTurnHooks(string $text, bool $resolveMentions, string $draft, array $attachments = [], ?PermissionMode $modeCeiling = null, ?string $oneTurnModel = null, ?string $commandModelNotice = null): ?array
     {
         $hooks = $this->workspace->hooks ?? throw new \LogicException('fireTurnHooks() needs a hook manager');
@@ -509,6 +568,18 @@ trait SessionAdmission
 
         return null;
     }
+
+    /**
+     * Hold the session behind $childWork in a forked child
+     * ({@see TurnController::forkPayload()}) and run $resume with what it
+     * reported — unless the hold was cancelled meanwhile. Whatever the resume
+     * leaves idle releases the queue, as every turn end does.
+     *
+     * @param \Closure(): string $childWork
+     * @param \Closure(string): array<int, mixed> $collect
+     * @param \Closure(): array<int, mixed> $inline
+     * @param \Closure(array<int, mixed>): void $resume
+     */
 
     private function park(\Closure $childWork, \Closure $collect, \Closure $inline, \Closure $resume): void
     {
