@@ -57,15 +57,25 @@
     <p class="lede" style="margin-top: 28px;">SugarCraft runtime, SugarStyle for rounded borders + per-piece colours, uniform-shuffled 7-bag (injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style base scoring with modern Guideline bonuses. Full SRS wall-kicks via the Tetris Company Guideline tables, T-Spin detection via the centre-diagonal 3-corner rule, Back-to-Back (1.5×) and combo bonuses, and perfect-clear detection (+5000 × (level+1)).</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-tetris
+    <p>Requires <code>php-cli</code> 8.3+ with <code>ext-intl</code> and <code>ext-mbstring</code>. Both are hard-required transitively by sugar-core, whose cell-width math segments through ICU — on a bare php-cli machine <code>composer install</code> is the step that refuses, naming sugar-core.</p>
+    <pre class="code"><code class="language-shell"># As a Composer consumer (run from your own project):
+composer require sugarcraft/candy-tetris
+./vendor/bin/candy-tetris          # single player
+./vendor/bin/candy-tetris --vs     # VS the computer
 
-# or run the shipped binary from a clone:
-composer install
-./candy-tetris/bin/candy-tetris        # single player
-./candy-tetris/bin/candy-tetris --vs   # VS the computer</code></pre>
+# From a monorepo clone (run from the candy-tetris/ library directory):
+cd candy-tetris && composer install
+./bin/candy-tetris                 # single player
+./bin/candy-tetris --vs            # VS the computer
+
+# As a standalone binary: the rolling development phar, no install
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-tetris/dev/candy-tetris.phar
+php candy-tetris.phar              # single player
+php candy-tetris.phar --vs         # VS the computer</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">./bin/candy-tetris
+    <pre class="code"><code class="language-shell"># From the candy-tetris/ library directory:
+./bin/candy-tetris
 
 # Controls
 # ← / →   Move left / right
