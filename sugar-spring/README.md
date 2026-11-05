@@ -495,9 +495,11 @@ for ($f = 0; $f <= 60; $f++) {
 
 `CubicBezier::evaluate(float $t): float` takes `t` in `[0, 1]` and returns the
 eased progress. The x-mapping is solved to `[0, 1]` monotonicity (control
-x-values are range-checked); the y-output lands exactly on `(0, 1)` for the
-presets but can overshoot outside that interval *between* endpoints for the
-elastic- and back-flavoured control points — same honesty rule as `Easing`.
+x-values are range-checked); the y-output lands exactly on `(0, 1)` for all 26
+named presets, and no preset overshoots the interval — every named curve's
+control y-values sit inside `[0, 1]`, which keeps the whole Bézier inside it.
+Overshoot *between* endpoints arises only from user-supplied elastic- or
+back-flavoured control points — same honesty rule as `Easing`.
 
 ## Public API
 
