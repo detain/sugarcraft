@@ -114,9 +114,10 @@ final class Shell
      *    pre-existing stack is never unwound).
      *
      * Beyond these, segments are untrusted: they pass the same
-     * {@see NavigationItem} title guards (whitespace-only names like a
-     * path component of `" "` are refused, size-capped) and terminal/
-     * sentinel bytes are stripped at render by {@see TitleSanitizer}.
+     * {@see NavigationItem} title guards (names that are blank or purely
+     * terminal/sentinel bytes after sanitizing are refused, size-capped)
+     * and terminal/sentinel bytes are stripped at render by
+     * {@see TitleSanitizer}.
      * A path with more than {@see NavStack::MAX_STACK_DEPTH} components
      * throws part-way (the returned Shell does not exist).
      *

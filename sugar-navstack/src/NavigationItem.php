@@ -10,10 +10,12 @@ namespace SugarCraft\NavStack;
  * Holds the title (used in breadcrumbs) and optional arbitrary data
  * that each navigation level wants to carry (e.g. filter state, selected ID, etc.)
  *
- * The title is validated at construction: whitespace-only titles are
- * refused (they render as dead crumbs and derive `//` URL segments), and
- * titles above {@see self::MAX_TITLE_BYTES} bytes are refused so a hostile
- * path/URL segment cannot smuggle megabytes into every render of the row.
+ * The title is validated at construction: titles that are empty after
+ * trimming AND sanitizing are refused (blank, whitespace-only, or built
+ * purely of terminal/sentinel/invisible bytes — all of them render as dead
+ * crumbs and derive `//` URL segments), and titles above
+ * {@see self::MAX_TITLE_BYTES} bytes are refused so a hostile path/URL
+ * segment cannot smuggle megabytes into every render of the row.
  *
  * Implements {@see Closable}; see that interface for who dispatches the
  * lifecycle hooks (the CONSUMING component does — this library never calls
@@ -34,20 +36,26 @@ final class NavigationItem implements Closable
     public const MAX_TITLE_BYTES = 65536;
 
     /**
-     * @throws \InvalidArgumentException On an empty/whitespace-only title or
-     *                                   one exceeding {@see MAX_TITLE_BYTES}
+     * @throws \InvalidArgumentException On an empty/whitespace/sanitize-empty
+     *                                   title or one exceeding
+     *                                   {@see MAX_TITLE_BYTES}
      */
     public function __construct(
         public readonly string $title,
         public readonly mixed $data = null,
     ) {
-        if (\trim($title) === '') {
-            throw new \InvalidArgumentException('Navigation item title must not be empty');
-        }
         if (\strlen($title) > self::MAX_TITLE_BYTES) {
             throw new \InvalidArgumentException(
                 'Navigation item title must not exceed ' . self::MAX_TITLE_BYTES . ' bytes'
             );
+        }
+        // Size is checked on RAW bytes first (sanitize cost must not run on a
+        // megabyte payload); then the render sanitizer decides emptiness — a
+        // title made purely of ANSI/sentinel/zero-width bytes survives trim()
+        // but prints as nothing at all, i.e. the dead crumb the docblocks
+        // always promised was refused.
+        if (\trim(TitleSanitizer::sanitize($title)) === '') {
+            throw new \InvalidArgumentException('Navigation item title must not be empty');
         }
     }
 

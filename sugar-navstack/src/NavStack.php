@@ -62,8 +62,10 @@ final class NavStack
      * Push a new navigation item onto the stack.
      *
      * The title passes through {@see NavigationItem}'s constructor guards:
-     * empty/whitespace-only titles are refused (they render as dead
-     * unclickable crumbs and derive `//` URL segments).
+     * titles that are empty after trimming and sanitizing are refused
+     * (blank, whitespace-only, or built purely of terminal/sentinel bytes —
+     * all of them render as dead unclickable crumbs and derive `//` URL
+     * segments).
      *
      * @throws \InvalidArgumentException On an empty title or when pushing
      *                                   would exceed {@see MAX_STACK_DEPTH}

@@ -110,8 +110,9 @@ returns a new instance.
 Size and shape ceilings, all of them throwing `InvalidArgumentException`
 rather than silently truncating:
 
-- `push()` refuses empty/whitespace-only titles and refuses to grow past
-  `NavStack::MAX_STACK_DEPTH` (10,000 levels).
+- `push()` refuses titles that are empty after trimming and sanitizing —
+  blank, whitespace-only, or built purely of terminal/sentinel bytes — and
+  refuses to grow past `NavStack::MAX_STACK_DEPTH` (10,000 levels).
 - Every item is born through `NavigationItem`'s constructor, which refuses
   titles above `NavigationItem::MAX_TITLE_BYTES` (65,536 raw bytes).
 - `filter()` walks array payloads recursively and refuses payloads nested
