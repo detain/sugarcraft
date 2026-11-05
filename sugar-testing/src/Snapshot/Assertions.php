@@ -533,8 +533,11 @@ final class Assertions
      * Escape control bytes in a string for human-readable display.
      *
      * ESC becomes `\x1b`, CR/BEL/DEL and every other C0 control except
-     * newline and tab become `\xNN`, so a failure dump cannot reprogram
-     * the reviewer's terminal (or move its cursor mid-report).
+     * newline and tab become `\xNN`, so a failure dump cannot be reprogrammed
+     * by escape sequences or cursor movement arriving as ESC-led or C0 bytes.
+     * The 8-bit C1 range (0x80-0x9F) is not covered: those bytes pass through
+     * raw, which a latin-1-decoding terminal could still interpret as a
+     * single-byte CSI.
      *
      * @param string $bytes
      * @return string
