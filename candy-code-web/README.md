@@ -347,6 +347,16 @@ same-origin object URLs; `'unsafe-inline'` in `style-src` is what inline
 theming costs. The sanitising above stays the primary injection defence —
 CSP is the net under it.
 
+One route serves under a different policy entirely: `GET /canvas/{token}`
+answers with `Responses::CANVAS_HEADERS`, and because an explicit header
+always wins the sibling `Router`'s header merge, that replaces the default
+rather than narrowing it. It is an opaque-origin sandbox
+(`sandbox allow-scripts; default-src 'none'; connect-src 'none';
+form-action 'none'`) — the canvas document runs its own script but can
+never talk back to the server — and its `frame-ancestors 'self'` is the
+one place the general `frame-ancestors 'none'` is deliberately lifted, so
+the app can embed its own canvas tiles while outsiders still cannot.
+
 A deployment wanting tighter can have its front proxy send a stricter
 policy on top: browsers intersect multiple `Content-Security-Policy`
 headers, so additions only ever narrow the default. Typical wins are
@@ -368,8 +378,9 @@ npm run typecheck     # vue-tsc
 npm run lint          # eslint
 npm test              # vitest (happy-dom): protocol client, reducer, stores, components
 npm run build         # writes dist/
+npm run check:dist    # CI law: dist/ must be byte-identical to a clean build of the source
 npm run gen:protocol  # regenerate src-web/protocol/generated.ts from the wire schema
-npm run gen:strings   # regenerate src-web/lib/strings.en.generated.ts from the mirror JSON
+npm run gen:strings   # regenerate src-web/lib/strings.en.generated.ts from candy-code/docs/protocol/web-strings.en.json (that JSON is the source; the TS file is the mirror)
 npm run e2e           # Playwright (Chromium) against a real `candy-code serve`
 ```
 
@@ -488,9 +499,13 @@ of `src-web/` found it already holds: Pinia setup stores expose plain state and
 computed refs, classes use ES `get` accessors, and `defineExpose` surfaces are
 verbs (`focus`, `jumpToEnd`). The `getX()` names that remain here are external
 contracts, not ours to rename: DOM/Web API methods (`getAsFile`, `getItem`,
-`getRandomValues`, `getAttribute`), TanStack Virtual options (`getScrollElement`,
-`getItemKey`, `getVirtualItems`, `getTotalSize`), and Pinia internals
-(`getActivePinia`). TypeScript has no PHP-style name collision (a `getX()` can
+`getRandomValues`, `getAttribute`, `getData`), the push/voice surfaces that
+duck-check browser contracts (`getSubscription`, `getRegistration(s)`,
+`getUserMedia`, and the `getTracks` walk over a MediaStream), TanStack Virtual
+options (`getScrollElement`,
+`getItemKey`, `getVirtualItems`, `getTotalSize`), Pinia internals
+(`getActivePinia`), and vitest's own `vi.getTimerCount()` (test files only).
+TypeScript has no PHP-style name collision (a `getX()` can
 coexist with `x()`), so this side never needed deprecate-and-alias forwarders;
 it needs the opposite discipline — do not mint `getFoo()` twins for state a
 computed or property already reads, and keep any future rename UI-local: wire
