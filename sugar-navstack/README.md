@@ -274,8 +274,11 @@ $shell = $shell->pushDirectory('/home/user/projects');  // appends home, user, p
 ```
 
 `pushDirectory()` stores the accumulated path (`/home`, `/home/user`, …) as each
-crumb's data and does not URL-decode segments. Note `withPop()` empties a
-depth-1 stack (guard with `NavStack::canPop()` to keep the root).
+crumb's data and does not URL-decode segments. Within one call, `.` segments are
+skipped and `..` cancels only same-call segments — a `..`-only path pushes
+NOTHING, and climbing out of an existing stack is `withPop()`, not
+`pushDirectory('..')`. Note `withPop()` empties a depth-1 stack (guard with
+`NavStack::canPop()` to keep the root).
 
 ## Url
 
