@@ -163,7 +163,7 @@ If `$rid` / `$userId` come from untrusted callers, treat them like any other tag
 
 ### `InMemoryBackend`
 
-Useful for tests and as one arm of a fan-out. Counters add up, gauges hold the last value, histograms keep a bounded reservoir of samples per series (default 4 096; once full, each new sample replaces a uniformly random existing one — Algorithm R, so the retained set stays an unbiased sample). Set `maxSeries` to bound the total number of series (FIFO eviction; 0 leaves it uncapped).
+Useful for tests and as one arm of a fan-out. Counters add up, gauges hold the last value, histograms keep a bounded reservoir of samples per series (default 4 096). Until the reservoir fills it keeps every sample in arrival order; after that a new sample is accepted with probability cap/n — it replaces slot `j = random_int(0, n-1)` only when `j` falls inside the reservoir, so most later samples are discarded outright and the retained set stays a uniform random sample of the whole stream (Algorithm R). Set `maxSeries` to bound the total number of series (FIFO eviction; 0 leaves it uncapped).
 
 ### `JsonStreamBackend`
 
