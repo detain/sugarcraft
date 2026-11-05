@@ -228,8 +228,10 @@ final class NavStack
      * e.g. "Home › Settings › Display"
      *
      * Titles are untrusted and run through {@see TitleSanitizer} (terminal
-     * controls, zone sentinels, invisible formatting, CR/LF/tab), so view()
-     * output is display-safe.
+     * controls, zone sentinels, invisible formatting, CR/LF/tab), so the
+     * rendered TITLES are display-safe. The `$separator` itself is NOT
+     * sanitized — it is interpolated raw (control bytes survive), so pass a
+     * host-chosen constant, never user data.
      */
     public function view(string $separator = self::SEPARATOR): string
     {
@@ -252,12 +254,15 @@ final class NavStack
      *
      * Titles run through {@see TitleSanitizer} FIRST (terminal controls,
      * zone sentinels, invisible formatting) and then htmlspecialchars, so
-     * the output is BOTH HTML-safe and free of escape bytes a copy-paste
-     * into a terminal would otherwise reanimate.
+     * the TITLE text is HTML-safe and free of escape bytes a copy-paste
+     * into a terminal would otherwise reanimate. The $href callback's URL
+     * is quote-escaped but NOT scheme-filtered: javascript:/data: URLs you
+     * return pass through.
      *
      * Pass `$href` to wrap every non-final crumb in an anchor:
      * `fn(NavigationItem $item): ?string` returning the URL, or null to
-     * leave that crumb as plain text (unlinked ancestor).
+     * leave that crumb as plain text (unlinked ancestor). The callback MUST
+     * return a validated absolute path or allow-listed-scheme URL.
      *
      * Example output (with `$href = fn($i) => Url::derive(...)` style links):
      * <nav class="breadcrumb" aria-label="Breadcrumb">

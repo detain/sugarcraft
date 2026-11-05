@@ -240,13 +240,25 @@ title-equivalent to its source, never deep-equal.
 
 Trust: untrusted decoded segments are safe to push because every render path
 the LIBRARY owns — `view()`, `viewHtml()`, and the default breadcrumb path —
-runs each title through `TitleSanitizer` (terminal controls, zone sentinels,
-invisible formatting) at the boundary. The one deliberate exception is
-`setItemRenderer()`: a custom closure's return string is emitted RAW so theme
-ANSI styling survives (the trust split in the `Breadcrumb` class docblock).
-A closure that includes user data in its output must sanitize it first with
-your own escaper — the library's `TitleSanitizer` is `@internal` machinery,
-not a published API.
+runs each **title** through `TitleSanitizer` (terminal controls, zone
+sentinels, invisible formatting) at the boundary. But titles are not the only
+text that reaches the output, and FOUR legs carry un-sanitized input by
+design — they are yours to feed safely:
+
+- `setItemRenderer()`: a custom closure's return string is emitted RAW so
+  theme ANSI styling survives (the trust split in the `Breadcrumb` class
+  docblock). Sanitize any user data you embed in it yourself — the library's
+  `TitleSanitizer` is `@internal` machinery, not a published API.
+- `viewHtml($href)`: your callback's URL lands in `href="..."` with only
+  quote-escaping applied, so a returned `javascript:` or `data:` URL passes
+  straight through — `$href` MUST return a validated absolute path or an
+  allow-listed scheme.
+- `view($separator)`: the separator string is interpolated RAW (control
+  bytes and newlines survive into the output) — treat it as a host-chosen
+  constant, never a carrier for user data.
+- `Breadcrumb::renderTitles()`: bare title strings skip the
+  `NavigationItem` constructor entirely — no size or emptiness guards — so
+  sanitize and bound the values before handing them in.
 
 ## Escape
 
