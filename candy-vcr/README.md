@@ -971,12 +971,21 @@ Honest capability boundaries, each with what closing it would take:
 `examples/record.php`, `examples/replay.php`, `examples/inspect.php` — runnable scripts using a tiny `CounterModel`. The `examples/cassettes/counter.cas` fixture is a real recording you can play with:
 
 ```sh
-php examples/record.php examples/cassettes/counter.cas
 bin/candy-vcr inspect examples/cassettes/counter.cas
 bin/candy-vcr stats   examples/cassettes/counter.cas
 bin/candy-vcr replay  examples/cassettes/counter.cas --speed=realtime
 php examples/replay.php examples/cassettes/counter.cas
 ```
+
+To record your own run, point `record.php` at a scratch path — it opens its target with plain `fopen(..., 'wb')` and silently replaces an existing file, so never let it write over the tracked fixture (with no argument it defaults to `examples/cassettes/recorded.cas`):
+
+```sh
+php examples/record.php /tmp/session.cas
+bin/candy-vcr inspect /tmp/session.cas
+bin/candy-vcr replay  /tmp/session.cas --speed=realtime
+```
+
+Note that `examples/replay.php` judges whatever cassette it is given against an 80×24 `ScreenAssertion` (replay.php:69) — replaying a freshly recorded live run diffs the counter's expected frames against your terminal's, which will not match unless you recorded the same 80×24 session.
 
 ### Replay
 
