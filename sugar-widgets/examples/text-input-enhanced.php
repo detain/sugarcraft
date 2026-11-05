@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Widgets\TextInput\TextInput;
+use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Style\Style;
 

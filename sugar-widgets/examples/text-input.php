@@ -13,8 +13,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Widgets\TextInput\EchoMode;
-use SugarCraft\Widgets\TextInput\TextInput;
+use SugarCraft\Forms\TextInput\EchoMode;
+use SugarCraft\Forms\TextInput\TextInput;
 
 $inputs = [
     'empty + placeholder' => TextInput::new()

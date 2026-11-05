@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Widgets\Viewport\Viewport;
+use SugarCraft\Forms\Viewport\Viewport;
 
 $lines = [];
 for ($i = 1; $i <= 30; $i++) {

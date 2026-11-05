@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Widgets\FilePicker\FilePicker;
+use SugarCraft\Forms\FilePicker\FilePicker;
 
 $dir = __DIR__ . '/..';
 

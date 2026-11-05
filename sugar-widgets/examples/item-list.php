@@ -10,8 +10,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Widgets\ItemList\ItemList;
-use SugarCraft\Widgets\ItemList\StringItem;
+use SugarCraft\Forms\ItemList\ItemList;
+use SugarCraft\Forms\ItemList\StringItem;
 
 $items = array_map(
     fn(string $s) => new StringItem($s),

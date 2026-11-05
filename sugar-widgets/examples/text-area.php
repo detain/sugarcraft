@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Widgets\TextArea\TextArea;
+use SugarCraft\Forms\TextArea\TextArea;
 
 $cases = [
     'empty + placeholder' => TextArea::new()

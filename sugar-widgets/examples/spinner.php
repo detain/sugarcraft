@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Widgets\Spinner\Style as SpinStyle;
+use SugarCraft\Forms\Spinner\Style as SpinStyle;
 
 $styles = [
     'line'      => SpinStyle::line(),

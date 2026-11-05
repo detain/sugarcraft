@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Widgets\Cursor\Cursor;
-use SugarCraft\Widgets\Cursor\Mode;
+use SugarCraft\Forms\Cursor\Cursor;
+use SugarCraft\Forms\Cursor\Mode;
 
 foreach ([Mode::Blink, Mode::Static, Mode::Hidden] as $mode) {
     $c = Cursor::new('|', $mode);
