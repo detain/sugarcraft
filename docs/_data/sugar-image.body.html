@@ -8,7 +8,7 @@
 use SugarCraft\Image\ImageSource;
 
 $mosaic = Mosaic::halfBlock();
-$image  = ImageSource::fromFile('cat.png');
+$image  = ImageSource::fromFile('examples/fixture-gradient.png');
 $ansi   = $mosaic->render($image, width: 40, height: 20);
 echo $ansi;</code></pre>
 
@@ -118,7 +118,7 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-image/.vhs/inline-image.gif" alt="Inline Image">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-image/.vhs/inline-image.gif" alt="Terminal session rendering the bundled gradient fixture with the best available graphics protocol">
                 <h3>Inline Image</h3>
                 <span class="demo-caption">Renders a PNG to the terminal via the best available protocol.</span>
             </div>
