@@ -79,7 +79,7 @@ ships as `App\` — called out in the table below.
 | App | Status | Notes |
 |---|:---:|---|
 | **CandyStarter** (`candy-starter/`) | 🟢 ready | `composer create-project` skeleton — counter Model + bin + tests. Namespace is `App\` (exception to the naming rule). |
-| **CandyScriptui** (`candy-scriptui/`) | 🟢 ready | Composer-installable CLI of 13 one-shot subcommands. |
+| **CandyScriptui** (`candy-scriptui/`) | 🟢 ready | Composer-installable CLI of 13 presentation subcommands. |
 | **CandyCodeshot** (`candy-codeshot/`) | 🟢 ready | Code → SVG screenshot (+ optional PNG via ext-gd). |
 | **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes SugarMarkdown). |
 | **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
