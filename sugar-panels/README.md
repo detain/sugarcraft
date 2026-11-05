@@ -390,9 +390,10 @@ written.
   alone. If a layout's meaning depends on which box content belongs to, keep a
   visible frame or a title on it.
 - **There is no focus model.** sugar-panels paints; it has no cursor, selection or
-  active-panel concept, and no border facet can be coloured independently of a
-  node's content style. A host that needs an "active panel" cue renders it itself
-  (a distinct `Border` style or a title is the usual recipe).
+  active-panel concept, and there is no colour channel on the frame — borders are
+  painted unstyled, and no `withStyle()` a node carries reaches them. A host that
+  needs an "active panel" cue renders it itself (a distinct `Border` style or a
+  title is the usual recipe).
 
 ## Examples
 
