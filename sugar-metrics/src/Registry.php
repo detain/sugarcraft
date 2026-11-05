@@ -249,8 +249,11 @@ final class Registry
     }
 
     /**
-     * Start a wall-clock timer. Returns a closure — when invoked,
+     * Start an elapsed-time timer. Returns a closure — when invoked,
      * it records the elapsed seconds as a histogram under `$name`.
+     * The pair reads the monotonic clock (`hrtime()`), not wall time:
+     * a system clock step (NTP correction, manual set) can never turn
+     * a duration negative in a `finally` arm that rethrows.
      *
      * ```php
      * $stop = $registry->time('handler.duration');
@@ -274,10 +277,14 @@ final class Registry
      */
     public function time(string $name, array $tags = []): callable
     {
-        $start = microtime(true);
+        $start = hrtime(true);
         $done = false;
         return function () use ($name, $tags, $start, &$done): float {
-            $elapsed = microtime(true) - $start;
+            // Monotonic nanoseconds → seconds. A CLOCK_REALTIME pair (what
+            // microtime reads give) stepped back between the two samples
+            // yields a negative elapsed, which histogram() refuses — an
+            // exception raised inside the caller's finally arm.
+            $elapsed = (hrtime(true) - $start) / 1e9;
             if ($done === false) {
                 $done = true;
                 $this->histogram($name, $elapsed, $tags);

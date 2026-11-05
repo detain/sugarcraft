@@ -269,4 +269,25 @@ final class RegistryTest extends TestCase
         $r->counter('m', 1.0, ['x' => 'a', 'y' => 'b']);
         $this->assertSame(2, $r->cardinality('m'));
     }
+
+    public function testTimeSamplesOnTheMonotonicClockNeverWallTime(): void
+    {
+        // time() must pair hrtime(), not two microtime(true) reads: a
+        // system clock step-back between them yields a negative elapsed,
+        // which histogram() refuses — thrown from inside the caller's
+        // finally arm, masking the original exception. Pin the shape at
+        // the source (clock injection is not on the library's seam set).
+        $src = (string) file_get_contents(__DIR__ . '/../src/Registry.php');
+        $matched = preg_match('/public function time\(.*?\n    \}\n/s', $src, $m);
+        $this->assertSame(1, $matched, 'time() vanished — clock-shape pin needs re-aiming');
+        $this->assertStringContainsString('hrtime(', $m[0]);
+        // No microtime CALL may survive in the pair (the prose may name it
+        // as the hazard); assert the invocation shape, not the bare word.
+        $this->assertSame(0, preg_match('/microtime\s*\(/', $m[0]));
+
+        // Behavioral floor: an honest reading is a non-negative float.
+        $r = new Registry(new InMemoryBackend());
+        $stop = $r->time('elapsed');
+        $this->assertGreaterThanOrEqual(0.0, $stop());
+    }
 }
