@@ -627,7 +627,12 @@ final class Manager implements Model
         );
     }
 
-    /** Arm rename confirmation — next KeyMsg triggers performRename or cancel. */
+    /**
+     * Arm rename confirmation — a text-entry submode, not the y/n gate:
+     * printables append to the input buffer, Enter commits it through
+     * performRenameWithBuffer() (which delegates to performRename()),
+     * and Esc cancels.
+     */
     private function armRename(): self
     {
         $pane = $this->activePane();

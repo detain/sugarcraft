@@ -7,9 +7,12 @@ namespace SugarCraft\Files;
 /**
  * Pending-confirmation state for the {@see Manager}'s gate.
  *
- * `None` → the manager dispatches keys normally.
- * Any other value → the next keystroke is consumed by the
- * confirmation handler. `y` confirms; anything else cancels.
+ * `None` → the manager dispatches keys normally. Any other value →
+ * the next keystroke is consumed by the confirmation handler, which
+ * takes one of two shapes: DeleteSelected/CopySelected/MoveSelected
+ * run a single-key y/n gate (`y` confirms, anything else cancels),
+ * while RenameSelected is a text-entry submode — printable runes
+ * append to the buffer, Enter commits, Esc cancels.
  */
 enum ConfirmState
 {
