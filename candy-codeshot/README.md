@@ -68,7 +68,7 @@ unrecognised flag).
 - `--border-radius <n>` — corner radius of the frame (default 8).
 - `--window-style <style>` — chrome style: `macos` (default), `windows-terminal`, `iterm`, `hyper`, `none`. `none` collapses the title-bar band (no empty 36 px strip).
 - `--ligatures` — enable ligatures (`font-variant-ligatures: normal`). **SVG only.**
-- `--font <path>` — embed a TTF/OTF/WOFF/WOFF2 font in the SVG. **SVG only.**
+- `--font <path>` — embed a TTF/OTF/WOFF/WOFF2 font in the SVG. **SVG only.** The CLI validates the file's signature; the library-level `SvgRenderer::withFont()` only checks existence and falls back to `font/ttf` for unknown MIME at render time.
 - `--unsafe-paths` — allow input / `--font` / `--output` paths outside the CWD (see Path confinement).
 - `--highlight <start:end[:color]>` — highlight lines `start:end` with an optional colour (default: the theme’s own highlight colour). Ranges are validated: `start >= 1`, `end >= start`, else a friendly refusal, exit 2. **SVG only.**
 - `--format <svg|png>` — output format (default `svg`; `png` requires `ext-gd`).
@@ -141,13 +141,20 @@ file_put_contents('out.svg', $svg);
 ```
 
 ANSI input is honoured — SGR foreground **and background** colours (16 / 256 /
-24-bit truecolor) plus **bold / italic / underline** become `<tspan>` segments
-and per-segment `<rect>` fills in the output. SGR state carries across lines: an unterminated colour sequence keeps painting the following lines, as in a terminal. Foreground colours are read in
-both spellings xterm allows — the flat `38;2;R;G;B` and the grouped
-`38:2::R:G:B` (ECMA-48 sub-parameters, where the slot after the mode is a
-colour-space id and not the red component) — and both resolve to the same
-`#rrggbb`. SGR codes the renderers deliberately do not map: `reverse` (7),
-`hidden` (8), `strikethrough` (9) and `dim` (2) — they are parsed and ignored.
+24-bit truecolor) plus **bold / italic / underline** become per-segment `<text>`
+elements (carrying `fill`, `font-weight`, `font-style` and `text-decoration`
+attributes) plus per-segment `<rect>` background fills. SVG honours these
+attributes; PNG paints only the foreground colour and background bands — bold /
+italic / underline are silently dropped there (see [Known
+limitations](#known-limitations)). SGR state carries across lines: an
+unterminated colour sequence keeps painting the following lines, as in a
+terminal. Foreground colours are read in both spellings xterm allows — the flat
+`38;2;R;G;B` and the grouped `38:2::R:G:B` (ECMA-48 sub-parameters, where the
+slot after the mode is a colour-space id and not the red component) — and both
+resolve to the same `#rrggbb`. SGR codes the renderers deliberately do not
+map: `reverse` (7), `hidden` (8), `strikethrough` (9), `dim` (2), `blink` (5),
+`rapid blink` (6), `fringe` (21), `overlined` (53) — among others — they are
+parsed and ignored.
 
 ```php
 $svg = SvgRenderer::dark()->render("\x1b[31merror:\x1b[0m something broke");
@@ -156,7 +163,7 @@ $svg = SvgRenderer::dark()->render("\x1b[31merror:\x1b[0m something broke");
 $svg = SvgRenderer::dark()->render("\x1b[44m\x1b[37malert:\x1b[0m background highlight");
 ```
 
-`PngRenderer` is the GD-backed sibling with the same fluent surface — except the SVG-only `withLigatures()`, `withFont()`, `withHighlight()` and `withTitle()` setters:
+`PngRenderer` is the GD-backed sibling with the same fluent surface — except the SVG-only `withLigatures()`, `withFont()`, `withHighlight()` and `withTitle()` setters, plus `withBorderRadius()`, which is accepted but not honoured: PNG corners stay square.
 
 ```php
 use SugarCraft\CodeShot\PngRenderer;
@@ -170,7 +177,7 @@ $png = PngRenderer::dracula()
 
 | Class | Role |
 |---|---|
-| `SvgRenderer` | TEA-style renderer producing SVG; factories `dark()/light()/dracula()/tokyoNight()/nord()`, fluent `with*()`. |
+| `SvgRenderer` | Immutable fluent renderer producing SVG; factories `dark()/light()/dracula()/tokyoNight()/nord()`, fluent `with*()`. |
 | `PngRenderer` | GD-backed renderer producing PNG bytes; same theme, fixed bitmap fonts. |
 | `Theme` | Immutable palette + font config shared by both renderers (window-chrome style lives on the renderers). |
 | `WindowStyle` | Enum of chrome styles: `Macos`, `WindowsTerminal`, `ITerm2`, `Hyper`, `None`. |
@@ -181,7 +188,7 @@ $png = PngRenderer::dracula()
 | `Segment` | One styled run of text (text + fg/bg/style flags) produced by the parser/highlighter. |
 | `Theme\VsCodeThemeLoader` | Import a VS Code `themes/*.json` colour scheme into a `Theme`. |
 | `Theme\ChromaThemeLoader` | Import a Chroma style map into a `Theme`. |
-| `OutputWriter` (+ `StringOutputWriter`, `FileOutputWriter`) | Chunked-output helpers for callers that stream screenshots themselves; the renderers return complete bytes and do not call them. |
+| `OutputWriter` (+ `StringOutputWriter`, `FileOutputWriter`) | Buffer/forward helpers for caller-chunked pieces — they do not stream screenshots themselves; the renderers return complete bytes and do not call them. |
 | `Lang` | i18n lookup wrapper (16 locales shipped under `lang/`). |
 
 ## Ligatures
@@ -233,7 +240,9 @@ SvgRenderer::nord();        // #2e3440
 
 Build a custom theme via the `Theme` constructor — set background / foreground
 / border / shadow / line-number colour / window-control colours / font family
-/ size / line height. VS Code and Chroma palettes can be imported with
+/ size / line height / highlight band colour (`Theme::$highlight`, a nullable
+string and the default `--highlight` colour; all five bundled presets set
+their own). VS Code and Chroma palettes can be imported with
 `Theme\VsCodeThemeLoader::load()` and `Theme\ChromaThemeLoader::load()`.
 
 ## Known limitations
@@ -241,15 +250,18 @@ Build a custom theme via the `Theme` constructor — set background / foreground
 - **PNG / GD bitmap fonts** — `PngRenderer` uses GD's built-in bitmap font: no
   Unicode beyond Latin-1, and the theme's `fontSize` / `lineHeight` are not
   honoured. Font embedding, ligatures, `--highlight` and `--border-radius` (PNG corners
-  stay square) are SVG-only (the CLI announces what PNG drops); SGR background
-  bands are honoured in both formats.
+  stay square) are SVG-only (the CLI announces what PNG drops). SGR background
+  bands are honoured in both formats; bold / italic / underline attributes are
+  dropped in PNG — they ride inside the input text, so no drop-announcement
+  can name them.
 - **Shadow technique differs by format** — SVG uses an `feDropShadow` filter;
   PNG draws a flat offset rectangle. Expect slightly different shadows.
 - **`windows-terminal` chrome is deliberately dark** — its title bar uses the
   hard-coded `#1e1e1e` / `#303030` / `#444444` of the real Windows Terminal
   default theme and is not re-tinted by `--theme` (planned future work:
   theme-derived chrome colours). Its title-bar rects are clipped to the rounded frame, so a
-  non-zero `--border-radius` shows rounded top corners.
+  non-zero `--border-radius` shows rounded top corners — the `hyper` chrome
+  receives the same rounded-frame clip.
 - **Accessible SVG output** — every render emits `<title>`, `<desc>` and
   `role="img"`; the CLI names the document after the input basename (or
   `stdin`), the library via `withTitle()`. PNG bitmaps carry no text metadata.
@@ -257,8 +269,9 @@ Build a custom theme via the `Theme` constructor — set background / foreground
   (East-Asian widths) and tabs expand to 8-cell stops, matching a terminal.
   PNG still *draws* with GD's Latin-1 bitmap font, so non-Latin-1 text can
   overrun its computed advance in PNG output.
-- **Theme JSON truncation** — theme loaders read at most 1 MB; larger files
-  fail with a `JsonException`.
+- **Theme JSON truncation** — theme loaders read at most 1 MB; for larger
+  files the truncated JSON almost certainly surfaces as a `JsonException` at
+  parse time.
 - **Numeric ceilings** — the CLI refuses `--padding` above 512 and
   `--border-radius` above 64; engine constructors clamp to 0..4096 /
   0..256, and PNG output above 40,000,000 pixels is refused, not allocated.
@@ -268,9 +281,10 @@ Build a custom theme via the `Theme` constructor — set background / foreground
   a font deleted between that check and the read is caught by the same loud
   refusal — the check→read window is accepted and fail-closed, not chased
   with locks.
-- **Classic ANSI palette** — `AnsiParser::ANSI16` uses original xterm
-  values (blue `#0000ee`) for terminal parity; contrast on dark themes is
-  low by design.
+- **Classic ANSI palette** — `AnsiParser::ANSI16` follows classic terminal
+  values — regular blue is xterm's `#0000ee`, bright black is the Linux-console
+  `#7f7f7f` (xterm classic spells it `#808080`) — so contrast on dark themes
+  is low by design.
 
 ## Demos
 
