@@ -22,15 +22,15 @@ echo "Initial view (June 2026, inside the window):\n";
 echo $picker->View() . "\n\n";
 
 // Navigation is clamped at the bound months — stepping past them is a no-op.
-$march = $picker->GoToPreviousMonth()->GoToPreviousMonth();
+$may = $picker->GoToPreviousMonth()->GoToPreviousMonth();
 echo "Two months back (May 2026 — the min month):\n";
-echo $march->View() . "\n";
-$still = $march->GoToPreviousMonth();
+echo $may->View() . "\n";
+$still = $may->GoToPreviousMonth();
 echo "One more step back stays put: "
     . \sprintf('%04d-%02d', $still->ViewYear(), $still->ViewMonth()) . "\n\n";
 
 // Selection outside the window is refused; the picker comes back unchanged.
-$beforeBound = $march
+$beforeBound = $may
     ->handleKey(DatePicker::KEY_HOME)          // cursor onto the first valid day (May 10, the min)
     ->handleKey(DatePicker::KEY_LEFT);         // clamps into the empty lead-in
 $refused = $beforeBound->handleKey(DatePicker::KEY_ENTER);
@@ -38,7 +38,7 @@ echo "Enter on the empty lead-in cell (fallback = May 1, before the bound): "
     . ($refused->IsSelecting() ? 'SELECTED?!' : 'refused') . "\n";
 
 // May 10 sits at grid index 14 (May 2026 starts Friday, firstDow=5).
-$atBound = $march;
+$atBound = $may;
 for ($i = 0; $i < 14; $i++) {
     $atBound = $atBound->MoveCursorRight();
 }

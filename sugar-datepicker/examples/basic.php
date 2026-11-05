@@ -33,8 +33,10 @@ if ($dp2->SelectedDate() !== null) {
     echo "Selected: " . $dp2->SelectedDate()->format('Y-m-d') . "\n";
 }
 
-// Simulate keyboard navigation
-echo "\n=== Simulate arrow key navigation ===\n";
+// The direct cursor API — keyboard dispatch (handleKey / the Model wrapper
+// routing real KeyMsgs) is documented in README and exercised for bounds in
+// examples/constraints.php.
+echo "\n=== Move the cursor and select (direct API) ===\n";
 $dp3 = DatePicker::new(new \DateTimeImmutable('2026-12-01'))
     ->MoveCursorRight()
     ->MoveCursorRight()
