@@ -449,7 +449,7 @@ research's H1-H5, M1-M3, and Phase-2 terminfo `infocmp` items.
 
 ### candy-flappy
 
-- Variable pipe-gap height (§5.2).
+- Variable pipe-gap height (§5.2) — ✅ shipped (verified 2026-11-06): "Difficulty scaling" in candy-flappy/README.md, PipeGenerator::gapHeightForScore().
 
 ### super-candy
 
