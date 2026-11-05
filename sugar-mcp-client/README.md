@@ -350,6 +350,17 @@ security hole), while an allow entry only globs when it contains `*`
   the contract bind here. The three trailing opt-ins (`onWait:`,
   `timeoutSeconds:`, `onServerMessage:`) exist on `StdioMcpServer` only —
   code typed against the interface cannot pass them.
+- What you can READ when a call comes back badly: most of the failure evidence
+  above arrives inside a message string. The readable surface is
+  `listTools()` (declared on `McpServer`) and, on `StdioMcpServer` only,
+  `isUp()`, `stderrTail()`, `malformedToolDefinitions()` /
+  `malformedToolDefinitionsReport()`, plus the `pumpStderr()` seam and the
+  `onWait:` liveness beats. Frame-strike counts, consecutive `select`
+  failures and swallowed stderr bytes surface only in the messages they
+  produced — nothing exposes them as counters — so code that must branch on
+  failure should key on the signals above rather than parse prose (and the
+  text `stderrTail()` returns is server-authored and UNTRUSTED, render it
+  through a sanitizer).
 
 ## Wire shape
 
