@@ -137,7 +137,9 @@ echo $bc->render($stack);  // "Home › Settings › Display"
 When the trail exceeds `setMaxWidth()`, the OLDEST crumbs are dropped and the
 `setTruncator()` marker (default `"… "`) is prefixed. If even the single newest
 crumb overflows, it is ellipsis-truncated — `setMaxWidth()` is a hard cap.
-`renderTitles(list<string>)` renders a bare title list without a stack.
+`renderTitles(list<string>)` renders a bare title list without a stack — titles
+handed to it skip the stack's size and emptiness guards, so bound hostile lists
+yourself (the trust notes under `Url` spell out why).
 `setItemRenderer(fn(NavigationItem, int): ?string)` customizes each crumb
 (`null` falls back to the SANITIZED title, not the raw one). All `set*` methods
 mutate and return `$this`; `withScanner()` is the one clone-returning method.
@@ -283,8 +285,12 @@ separator you gave `setSeparator()` if it differs.
 as a **vocabulary, not an event bus**: this library never dispatches those
 hooks — your app decides when a level is entered or left and calls them on
 whatever items it manages. `NavigationItem` is `final` (and its hooks are
-no-ops); to react to navigation, implement `Closable` on your own item type or
-track stack changes around your own `push`/`pop` calls.
+no-ops), and `push()` constructs the item itself — a `Closable` of your own
+type can therefore NEVER enter the stack. To react to navigation, carry your
+screen objects as item `data` and dispatch their hooks yourself, or track
+stack changes around your own `push`/`pop` calls. Naming tax: "close" here is
+the upstream port's historical term for LEAVING a level — nothing is
+destroyed or finalized by it.
 
 ## Shared foundations
 
