@@ -21,7 +21,11 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 - **ColorProfile enum**: the single shared color-depth vocabulary (8 levels, `TrueColor` 24-bit → `Ansi256` 256-color → `Ansi240` fixed slots 16-255 → `Ansi` 16-color → `Ansi8` basic 8 → `Fgbg` two-color fg/bg → `Ascii` black/white → `NoTTY`); the former renderer-facing `Profile` enum is now a deprecated `class_alias` façade over it — every old `Profile::X` spelling still resolves
 - **Color conversion**: downsample RGBA colors to any target profile
 - **ProfileWriter**: wrap a stream and automatically degrade color codes to match the terminal
-- **ANSI stripping**: `NoTTY` strips all ANSI sequences from output
+- **ANSI stripping**: `NoTTY` output runs through `Palette::stripAnsi()`, which
+  removes SGR/CSI/OSC/DCS sequences plus SS3, APC/PM/SOS strings, the enumerated
+  Fe escape pairs and charset selectors — decoration (`\x1b[1m`, `\x1b[4m`) is
+  stripped too, so `NO_COLOR=1` loses bold/underline as well. For a color-only
+  strip pin the `Ascii` floor: `Palette::withProfile(ColorProfile::Ascii)`
 - **Environment-aware**: reads `CLICOLOR_FORCE`, `FORCE_COLOR`, `NO_COLOR`, `CLICOLOR`, `TERM`, `COLORTERM`, `TERM_PROGRAM`, `WT_SESSION`, `GOOGLE_CLOUD_SHELL`, `TMUX`, `STY`, `REDUCE_MOTION`, `PREFERS_REDUCED_MOTION`
 - **Probe class**: static convenience layer over the shared detection chain + infocmp Phase 2 upgrade
 - **Perceptual color distance**: CIELAB conversion + ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ (CIEDE2000) metrics with an opt-in nearest-palette matcher (`NearestColor`), palette Lab values memoized for hot loops, a PCA-bucketed exact lookup index for repeated queries (`PaletteIndex`), and error-compensated quantization for dither chains (`NearestColor::withError()`)
@@ -67,7 +71,7 @@ $writer->write("\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
 | Ansi8        | 8         | Basic ANSI, no bright variants                  | no — request-only |
 | Fgbg         | 2         | Two-color fg/bg by brightness (chafa FGBG)      | no — request-only |
 | Ascii        | 2         | Black & white                                   | yes — the falsy-`FORCE_COLOR` floor (ladder step 2) |
-| NoTTY        | 0         | No color (ANSI stripped)                        | yes              |
+| NoTTY        | 0         | No color — `stripAnsi()` drops every escape incl. decoration | yes              |
 
 `Profile` is the deprecated alias of `ColorProfile`; `Profile::ANSI256`
 and `Profile::ANSI` keep resolving through deprecated constant bridges.
@@ -86,7 +90,7 @@ answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade).
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — step 0 can still outrank it)
 2. `FORCE_COLOR` (non-empty) → level: `true|yes|on|>=3` TrueColor, `2` Ansi256, `1` Ansi; any other spelling (`0`/`false`/`off`/…) → `Ascii` (disable color, keep decoration)
-3. `NO_COLOR` (set and **non**-empty; `""` = unset per no-color.org) → none
+3. `NO_COLOR` (set and **non**-empty; `""` = unset per no-color.org) → the `NoTTY` rung — strips **all** ANSI including decoration (bold/underline gone); for a color-only strip pin `Palette::withProfile(ColorProfile::Ascii)`
 4. `CLICOLOR=0` → none
 5. `TERM=dumb` (case-insensitive) → none
 6. `COLORTERM=24bit|truecolor|yes` → TrueColor
@@ -134,7 +138,7 @@ The ladder's env legs, one table row per variable, in ladder order:
 |---------|-------------|--------|
 | `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; the step-0 stream TTY gate still outranks it on stream-taking surfaces) |
 | `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): `true/yes/on/>=3` TrueColor, `2` Ansi256, `1` Ansi; falsy spellings (`0/false/off/no`) land on the `Ascii` floor — decoration kept, color dropped. Outranks `NO_COLOR` by design |
-| `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset per no-color.org) → no color (`NoTTY` rung / `NoColor` capability) |
+| `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset per no-color.org) → no color via the `NoTTY` rung / `NoColor` capability — `stripAnsi()` drops **all** ANSI including decoration (`\x1b[1m`/`\x1b[4m` gone). Contrast: falsy `FORCE_COLOR` lands the `Ascii` floor (step 2) which keeps decoration and reduces color to the black/white pair. Want NO_COLOR to keep bold/underline? Pin `Palette::withProfile(ColorProfile::Ascii)` |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
 | `COLORTERM=24bit\|truecolor\|yes` | 6 | TrueColor (exact value match, case-insensitive) |
@@ -169,6 +173,19 @@ echo $ansi->toAnsi16Foreground();     // "\x1b[…m" — 4-bit SGR
 // Or convert against the detected terminal
 $auto = (new Palette())->convert($color);
 ```
+
+**The two "no color" rungs differ.** A `NoTTY` palette (what `NO_COLOR`,
+`CLICOLOR=0` and `TERM=dumb` land on, and what the step-0 stream gate forces)
+runs every write through `Palette::stripAnsi()`: SGR, full ECMA-48 CSI, OSC,
+DCS/APC/PM/SOS strings, SS3, the enumerated Fe pairs and charset selectors all
+disappear — **decoration too**, so `\x1b[1m` bold and `\x1b[4m` underline are
+gone with the color. The `Ascii` floor (a falsy `FORCE_COLOR` spelling, step 2)
+instead keeps decoration and reduces color to the black/white pair. Two
+accepted gaps in the strip regex family: exotic final bytes outside the
+enumerated classes (`ESC Z`, `ESC %…`, `ESC #8`, `ESC |`/`}`/`~`) pass through
+as literal text. To keep
+bold/underline while dropping color regardless of environment, pin the floor:
+`(new Palette())->withProfile(ColorProfile::Ascii)`.
 
 ## Perceptual Color Distance (opt-in)
 
