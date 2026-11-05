@@ -18,6 +18,8 @@ Lightweight telemetry primitives for SugarCraft / SugarSshServer servers. Six in
 composer require sugarcraft/sugar-metrics
 ```
 
+The `sugarcraft/sugar-ssh-server` hard requirement is by design and serves only the optional drop-in `SessionMetrics` middleware — the `Registry`, the instruments and every backend never touch it, so a consumer that skips the middleware autoloads none of its code (nor its transitive crypto/pty stack).
+
 ## Concepts
 
 | Primitive        | Behaviour                                                                                                                               |
