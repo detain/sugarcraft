@@ -139,13 +139,16 @@ $ring = is_array($decoded)
     : FocusRing::of('sidebar', 'grid', 'filter');  // unreadable file: rebuild defaults
 ```
 
-  For an **array** payload, `restore()` clamps a stale `index` into the
-  surviving ring instead of trusting it (a session file from before a layout
-  change cannot crash startup), drops `disabled` entries for regions that no
-  longer exist, prefers the `focused` id over the positional leg when both are
-  present, and still loads legacy positional-only snapshots. Malformed `ids`
-  throw `InvalidArgumentException`; everything else *in the array payload*
-  degrades fail-soft. Entry comparison is string-on-string: a hand-edited
+  For an **array** payload, `restore()` prefers the `focused` id over the
+  positional leg when both are present, and an *unknown* `focused` id lands on
+  the first region — the `index` leg is consulted only when the focus leg is
+  absent or not a string, and then clamped into the surviving ring rather than
+  trusted (a
+  legacy session file from before a layout change cannot crash startup). It
+  drops `disabled` entries for regions that no longer exist and still loads
+  legacy positional-only snapshots. Malformed `ids` throw
+  `InvalidArgumentException`; everything else *in the array payload* degrades
+  fail-soft. Entry comparison is string-on-string: a hand-edited
   numeric `1` in `disabled` never matches the id `"1"`, so that region comes
   back **enabled** — ids in the list must be JSON strings. Note the parameter
   is typed `array`: a corrupt file
@@ -193,7 +196,7 @@ supported path.
 | `FocusRing::new()` | An empty ring. |
 | `FocusRing::of(string ...$ids)` | A ring of regions (duplicates dropped), focusing the first. |
 | `FocusRing::ofStrict(string ...$ids)` | Like `of()`, but throws `InvalidArgumentException` on a duplicate id. |
-| `FocusRing::restore(array $snapshot): self` | Inverse of `jsonSerialize()` — clamps stale indices, drops unknown disabled entries, loads legacy positional snapshots. Takes a decoded **array**: guard `json_decode()` with `is_array()` before calling. |
+| `FocusRing::restore(array $snapshot): self` | Inverse of `jsonSerialize()` — clamps stale indices on legacy positional-only snapshots, unknown `focused` ids land on the first region, drops unknown disabled entries. Takes a decoded **array**: guard `json_decode()` with `is_array()` before calling. |
 | `register(string $id): self` | Add an enabled region to the end of the order. |
 | `unregister(string $id): self` | Remove a region, preserving focus where possible. |
 | `reorder(string ...$ids): self` | Replace the traversal order, keeping focus on the current id when it survives. |
