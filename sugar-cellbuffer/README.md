@@ -181,7 +181,7 @@ Total: 44 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (wh
 - **`Buffer::fromString()` is test-support**, not a terminal emulator: it walks bytes, skips OSC frames, and is lossy by contract (hyperlinks never re-attached). Only SGR sequences — a CSI terminated by `m` — are interpreted; every other CSI, including the `CUP`/`ECH`/`REP` frames this package itself emits, deposits its parameter text into cells as literal runes when no `m` ever follows (`\x1b[2J` stores `[`, `2`, `J`; measured probe: `fromString("x\x1b[2Jy",10,1)->text()` is `x[2Jy`). If an `m` appears later, everything from the `[` to it is swallowed as SGR parameters and non-digit-run parameters throw (`fromString("\x1b[5;5H\x1b[31mA",5,1)` → `SGR parameters must be semicolon-separated integers, got '5;5H\x1b[31'`). A lone trailing `ESC` or unrecognised `ESC` digraph is stored as a plain rune. Do not feed it untrusted input expecting a parse.
 - **`Buffer::fromGrid()` skips pair enforcement** (see Wide characters) — it validates the dimensions and the exact `width*height` cell count, but takes the cells as given; the pair law is yours there.
 - **Serialize hooks re-validate**: `__unserialize` on Buffer/Cell/Style/Hyperlink/Region re-runs every constructor invariant, so a forged payload fails closed instead of minting a structurally invalid buffer.
-- **`applyDiff()` refuses negative cursor coordinates**; the wire encoder clamps them fail-soft to the grid edge.
+- **`applyDiff()` refuses negative cursor coordinates**; the wire encoder clamps them fail-soft to the origin (first row/column). The encoder holds no grid dimensions, so positive overflow rides through untouched — bounding the grid is the caller's job.
 
 ## Memory model
 
