@@ -267,6 +267,31 @@ final class CliTest extends TestCase
         }
     }
 
+    public function testWindowsShapedNamesAreRelativeFilesInsideTheCwdOnPosix(): void
+    {
+        if (DIRECTORY_SEPARATOR !== '/') {
+            $this->markTestSkipped('drive-letter and backslash names are relative files only on POSIX');
+        }
+        // 'C:out.svg' and '\out.svg' are ordinary legal filenames in the CWD on
+        // POSIX. The confinement check used to read the drive-letter/backslash
+        // prefix as an absolute path, spliced the unprefixed name onto the
+        // ancestor walk, and refused both with 'outside the current working
+        // directory' — a wrong-refusal of a legal in-CWD write.
+        $dir = $this->makeTempDir();
+        try {
+            $drive = $this->runCli(['--no-window', '--no-shadow', '-o', 'C:out.svg'], "test\n", $dir);
+            $this->assertSame(0, $drive['exitCode'], $drive['stderr']);
+            $this->assertFileExists($dir . '/C:out.svg');
+            $this->assertStringStartsWith('<?xml', (string) file_get_contents($dir . '/C:out.svg'));
+
+            $backslash = $this->runCli(['--no-window', '--no-shadow', '-o', '\\out.svg'], "test\n", $dir);
+            $this->assertSame(0, $backslash['exitCode'], $backslash['stderr']);
+            $this->assertFileExists($dir . '/\out.svg');
+        } finally {
+            $this->rmTree($dir);
+        }
+    }
+
     public function testFontWithValidMagicIsEmbedded(): void
     {
         $dir = $this->makeTempDir();

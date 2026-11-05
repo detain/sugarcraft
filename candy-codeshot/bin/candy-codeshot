@@ -128,7 +128,14 @@ function candy_codeshot_confine_path(string $path, bool $unsafe): ?string
     }
     $cwd = rtrim($cwd, DIRECTORY_SEPARATOR);
 
-    $absolute = preg_match('#^([/\\\\]|[A-Za-z]:)#', $path) === 1
+    // Drive-letter and backslash prefixes are Windows path syntax. On POSIX
+    // they are ordinary relative filenames: 'C:out.svg' is a legal file in the
+    // CWD. Classifying such a name as absolute spliced the unprefixed path
+    // onto the ancestor walk's realpath ('.' → the CWD), produced a garbage
+    // '/cwd:out.svg' comparison, and wrongly refused the legal write. Off
+    // Windows, only a leading slash means absolute.
+    $absolutePattern = DIRECTORY_SEPARATOR === '\\' ? '#^([/\\\\]|[A-Za-z]:)#' : '#^/#';
+    $absolute = preg_match($absolutePattern, $path) === 1
         ? $path
         : $cwd . DIRECTORY_SEPARATOR . $path;
 
