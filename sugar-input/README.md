@@ -10,8 +10,8 @@ New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-repl
 
 `sugar-input` is the missing input layer for SugarCraft — it decodes raw TTY bytes into structured `Event` objects that programs can switch on. It handles:
 
-- **Plain ASCII keys** — letters, digits, punctuation, control codes
-- **Legacy escape sequences** — F1–F12, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Backtab (`CSI Z`) — including the MODIFIED numbered-key family `CSI number ; modifier ~` that terminals really emit: xterm/alacritty terminfo ship `kDC=\E[3;2~` (Shift+Delete) and wezterm ships `kf34=\E[21;5~` (Ctrl+F10), so `3;5~` decodes as Ctrl+Delete rather than vanishing
+- **Plain ASCII keys** — letters, digits, punctuation, control codes (the 0x7F byte names `Backspace` — one raw code, no escape sequence)
+- **Legacy escape sequences** — F1–F24, arrow keys, Home/End/PgUp/PgDn, Insert, Delete, Tab, Enter, Escape, Backtab (`CSI Z`) — including the MODIFIED numbered-key family `CSI number ; modifier ~` that terminals really emit: modified forms like `3;2~` (Shift+Delete) and `21;5~` (Ctrl+F10) ship in common terminfo entries, so `3;5~` decodes as Ctrl+Delete rather than vanishing
 - **Kitty keyboard protocol** — event frames `CSI code ; mods u` (the `mods` field is the spec's `1 + bitmask`, so a bare press carries `;1` — release via the legacy `0x20` flag or the spec `:event-type` sub-param; event type 2, auto-repeat, deliberately decodes as an ordinary press with `isRepeat` set). Codepoints follow the spec's private-use layout: `57344`–`57454` carry the functional keys (arrows at `57350`–`57353`, the keypad block from `57399`), and codes below `57344` in `u` frames are TEXT codepoints — legacy tilde numbers like `11u` are counted drops, not F1. On release the key name gains the `Release` prefix and its first letter is upper-cased: a released `a` arrives as `ReleaseA`
 - **xterm modifyOtherKeys** — wrapped keys `CSI 27 ; mods ; keysym ~`, so a modified key with no dedicated sequence is told apart from a plain press
 - **Application keypad (DECKPAM)** — SS3 `ESC O p..y` (digits), `Ol` (decimal), `Om` (minus), `OM` (enter)
@@ -201,9 +201,13 @@ Ctrl modifier — 0x01 arrives as key `a` with `modifiers` carrying Ctrl. The
 bytes with no letter to pair with — NUL (0x00) and the four separators
 0x1C–0x1F (FS/GS/RS/US) — carry the RAW byte itself as the key name, so
 `match ($event->key)` arms test for `"\0"` / `"\x1c"`…`"\x1f"` rather than an
-invented mnemonic. Alt-modified control chords share the bare vocabulary:
-`ESC` + `0x0D` names `Enter` (with Alt), not a raw `\r` (a decoder quirk fixed
-long ago — if you matched on `"\r"`, match on `'Enter'` plus Alt now).
+invented mnemonic. Alt-modified presses of the three symbolic control keys
+share it: `ESC` + `0x09`/`0x0A`/`0x0D`/`0x7F` name `Tab`/`Enter`/`Enter`/`Backspace`
+(with Alt), not raw bytes (a decoder quirk fixed long ago — if you matched
+on `"\r"`, match on `'Enter'` plus Alt now). Under Alt a key name is the byte
+itself — letters keep their character (uppercase arrives lower-cased), and
+every other byte stays raw: Alt + `0x01` is the raw `"\x01"` with Alt, not the
+`a` a Ctrl press produces.
 
 ### Key names (the complete vocabulary)
 
@@ -214,7 +218,7 @@ compare `isRelease()` rather than parsing the prefix.
 
 | Family | Names |
 |---|---|
-| Text | every printable character (`a`… `Z`, digits, punctuation, Unicode runes as the character itself), `Space` |
+| Text | every printable character (`a`… `Z`, digits, punctuation, Unicode runes as the character itself), `Space` (Kitty `32u` only — legacy 0x20 and modifyOtherKeys keysym 32 surface as the literal ` `) |
 | Editing/whitespace | `Tab`, `Enter`, `Backspace`, `Escape`, `Backtab`, `Insert`, `Delete`, `Home`, `End`, `PageUp`, `PageDown` |
 | Arrows | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` |
 | Function | `F1`–`F24` (legacy families), up to `F35` via Kitty |
