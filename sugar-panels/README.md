@@ -374,9 +374,10 @@ written.
   that changed, so capturing a window of output and reading it as text will miss
   most of the screen. To snapshot the grid, call `resetPreviousFrame()` and render
   once more (that frame is a full repaint), or accumulate the frames yourself.
-- **Every row is the viewport width**, and rows end with a newline, so
-  `explode("\n", $frame)` after peeling the leading `ESC [ 2J` / `ESC [ H` gives a
-  rectangular grid; `SugarCraft\Core\Util\Ansi::strip()` reduces it to plain text.
+- **Every row is the viewport width**, and rows are newline-separated — the last
+  row carries no trailing newline — so `explode("\n", $frame)` after peeling the
+  leading `ESC [ 2J` / `ESC [ H` gives a rectangular grid;
+  `SugarCraft\Core\Util\Ansi::strip()` reduces it to plain text.
 - **Framing is not colour.** `Border::hidden()` and a borderless layout at
   `withSpacing(1)` draw no visible boundary, so structure is conveyed by position
   alone. If a layout's meaning depends on which box content belongs to, keep a
