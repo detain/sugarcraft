@@ -109,7 +109,11 @@ echo StatusLine::error('connection refused'), "\n";
   the wall clock.
 - **`HelpText`** — `--help` page: `USAGE` (retitle via the `usageLabel`
   parameter), an optional description, and titled two-column
-  `KEY  description` sections. Wraps to `width` (omitted = the terminal
+  `KEY  description` sections. `HelpText::render($usage, $sections,
+  $description)` takes `$sections` as an `array<string, array<string,
+  string>>` keyed by section title, then entry label, with the description
+  as leaf value — a section title mapped to an empty array renders no
+  block. Wraps to `width` (omitted = the terminal
   width via exported `COLUMNS`, else 80 cells; `null` = never wrap): long
   descriptions continue at the description column, and switch to a
   stacked layout (description under the key) when the key column leaves
