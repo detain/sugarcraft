@@ -44,6 +44,10 @@ echo "=== Sorted by Active (asc) ===\n";
 echo $table->render();
 echo "\n";
 
+// Arm a cursor highlight first: the default cursor style is the empty
+// string, so without this the cursor row renders with no marker bytes.
+$table = $table->withCursorStyle('1;36');
+
 // Set cursor to row 2 (0-indexed), toggle sort
 $table = $table->setCursor(2)->sortByNext(0);  // previous sort was column 2; a different column starts ascending
 echo "=== After setCursor(2) then sortByNext() (Name asc) ===\n";

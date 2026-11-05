@@ -178,6 +178,12 @@ final class Table
         return $this->filter('');
     }
 
+    /**
+     * Move the cursor to $rowIndex of the materialized view. The index is
+     * stored as given — nothing clamps it — so an out-of-range row simply
+     * falls off the view: currentRow() and currentCell() answer null until
+     * a later setCursor() lands back inside.
+     */
     public function setCursor(int $rowIndex): self
     {
         $clone = clone $this;

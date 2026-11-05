@@ -30,7 +30,9 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 - **Filterable** — filter rows by cell content
 - **Configurable columns** — title, width, alignment, formatter
 - **Cell styling** — per-column ANSI style support
-- **Cursor tracking** — get current row/cell on selection
+- **Cursor tracking** — get current row/cell on selection. Note the cursor
+  style is empty by default, so `setCursor()` alone marks nothing on screen —
+  call `withCursorStyle()` to paint the cursor row.
 - **Delta rendering** — the stateful `TableRenderer` emits only the cells that changed between frames (see Buffer diffing below)
 
 ### Viewport
