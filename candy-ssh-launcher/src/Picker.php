@@ -14,7 +14,8 @@ use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
  * Tiny terminal picker — renders a numbered list of {@see Endpoint}s,
- * lets the user move with j/k or ↑/↓, narrow with type-to-search,
+ * lets the user move with j/k, ↑/↓, Home/End and PgUp/PgDn, narrow with
+ * type-to-search,
  * and pick with Enter. Returns the selected Endpoint or null on Esc or
  * the cancel byte; on a real terminal Ctrl-C raises SIGINT, which the
  * picker traps to restore the terminal before exiting 130.
@@ -40,6 +41,12 @@ class Picker
     private const SELECTED_MARKER = "\x1b[1;36m▸\x1b[0m ";
     private const UNSELECTED_MARKER = "  ";
     private const FILTER_COLOR = "\x1b[36m";
+    /**
+     * Rows the visible window shows at once (F-25). A frame with more rows
+     * than the terminal has soft-wraps and strands chrome; ten keeps the
+     * picker inside any real window and gives PgUp/PgDn a page to scroll.
+     */
+    private const WINDOW_ROWS = 10;
 
     /** @var resource */
     protected $in;
@@ -93,6 +100,9 @@ class Picker
                 if ($this->cursor >= count($matches)) {
                     $this->cursor = max(0, count($matches) - 1);
                 }
+                if ($this->cursor < 0) {
+                    $this->cursor = 0;
+                }
                 $this->draw($matches);
 
                 $key = $this->readKey();
@@ -136,6 +146,32 @@ class Picker
                             $this->filter .= $key;
                             $this->cursor = 0;
                         }
+                        break;
+                    case "\x1b[H":
+                    case "\x1b[1~":
+                    case "\x1b[7~":
+                    case "\x1bOH": /* SS3 Home */
+                        // F-25: readEscapeSequence decoded these keys all
+                        // along; the switch silently dropped them. Home/End
+                        // jump to the ends of the match list, PgUp/PgDn
+                        // scroll a visible-window page.
+                        $this->cursor = 0;
+                        break;
+                    case "\x1b[F":
+                    case "\x1b[4~":
+                    case "\x1b[8~":
+                    case "\x1bOF": /* SS3 End */
+                        $this->cursor = max(0, count($matches) - 1);
+                        break;
+                    case "\x1b[5~":
+                    case "\x1bOP": /* SS3 PgUp */
+                        $this->cursor = max(0, $this->cursor - $this->pageSpan($matches));
+                        break;
+                    case "\x1b[6~":
+                    case "\x1bOQ": /* SS3 PgDn */
+                        $this->cursor = $matches === []
+                            ? 0
+                            : min(count($matches) - 1, $this->cursor + $this->pageSpan($matches));
                         break;
                     case "\x7f": /* backspace */
                     case "\x08":
@@ -316,7 +352,14 @@ class Picker
         if ($matches === []) {
             fwrite($this->out, Lang::t('picker.no_matches') . "\r\n");
         }
-        foreach ($matches as $i => $record) {
+        // F-25: render-side visible window. windowTop is recomputed from
+        // the cursor every frame, so no navigation branch has to maintain
+        // it; array_slice keeps original keys, so $i still identifies the
+        // absolute row for the marker test.
+        $total   = count($matches);
+        $visible = min(self::WINDOW_ROWS, $total);
+        $top     = max(0, min($this->cursor, $total - $visible));
+        foreach (array_slice($matches, $top, $visible, true) as $i => $record) {
             $e = $record['endpoint'];
             $marker = $i === $this->cursor ? self::SELECTED_MARKER : self::UNSELECTED_MARKER;
             // The displayLine is already sanitized from filterMatches()
@@ -327,6 +370,17 @@ class Picker
             fwrite($this->out, $this->clampRow("{$marker}{$line}") . "\r\n");
         }
         fwrite($this->out, "\r\n" . Lang::t('picker.help') . "\r\n");
+    }
+
+    /**
+     * Page span for PgUp/PgDn (F-25): what the visible window shows at
+     * once, never below one.
+     *
+     * @param array<int|string, array<string, mixed>> $matches
+     */
+    private function pageSpan(array $matches): int
+    {
+        return min(self::WINDOW_ROWS, max(1, count($matches)));
     }
 
     /**

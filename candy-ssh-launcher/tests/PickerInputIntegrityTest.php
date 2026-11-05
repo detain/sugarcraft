@@ -314,4 +314,12 @@ PHP;
             @unlink($script);
         }
     }
+
+    public function testPagingKeysNeverEnterTheFilter(): void
+    {
+        // F-25 belt: Home/End are navigation, not intake (they were dropped
+        // before, so this stays green across the change by design).
+        [, , $p] = $this->drive("\x1b[H\x1b[F");
+        $this->assertSame('', $this->filterOf($p));
+    }
 }

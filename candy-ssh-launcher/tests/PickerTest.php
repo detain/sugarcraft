@@ -277,4 +277,61 @@ final class PickerTest extends TestCase
         // Backspace on empty filter is a no-op, cursor stays at "dev"
         $this->assertSame('dev', $picked->name);
     }
+
+    public function testHomeKeyJumpsToFirst(): void
+    {
+        // F-25: Home was decoded but dropped; now it jumps to the first match.
+        [, , $p] = $this->makePicker("jjj\x1b[H\r");
+        $picked = $p->pick($this->endpoints());
+        $this->assertSame('production', $picked->name);
+    }
+
+    public function testEndKeyJumpsToLast(): void
+    {
+        [, , $p] = $this->makePicker("\x1b[F\r");
+        $picked = $p->pick($this->endpoints());
+        $this->assertSame('dev', $picked->name);
+    }
+
+    public function testPageDownClampsAtTheEnd(): void
+    {
+        [, , $p] = $this->makePicker("\x1b[6~\r");
+        $picked = $p->pick($this->endpoints());
+        $this->assertSame('dev', $picked->name);
+    }
+
+    public function testPageUpClampsAtTheTop(): void
+    {
+        [, , $p] = $this->makePicker("\x1b[5~\x1b[5~\x1b[5~\r");
+        $picked = $p->pick($this->endpoints());
+        $this->assertSame('production', $picked->name);
+    }
+
+    public function testSs3HomeEndCompose(): void
+    {
+        // SS3 shapes of Home/End (some terminals and application mode).
+        [, , $p] = $this->makePicker("\x1bOH\x1bOF\r");
+        $picked = $p->pick($this->endpoints());
+        $this->assertSame('dev', $picked->name);
+    }
+
+    public function testRenderWindowFollowsTheCursor(): void
+    {
+        // F-25: the frame shows a WINDOW_ROWS-tall slice that follows the
+        // selection — at the bottom of 12 hosts, rows 1-2 are off-frame.
+        $hosts = [];
+        for ($n = 1; $n <= 12; $n++) {
+            $hosts[] = new Endpoint(name: 'e' . $n, host: 'h' . $n . '.test');
+        }
+        [, $out, $p] = $this->makePicker("\x1b[F\r");
+        $picked = $p->pick($hosts);
+        $this->assertSame('e12', $picked?->name);
+        rewind($out);
+        $frames = explode("\x1b[1;1H\x1b[0J", (string) stream_get_contents($out));
+        $last   = (string) end($frames);
+        $this->assertStringContainsString('h12.test', $last);
+        $this->assertStringContainsString('h3.test', $last);
+        $this->assertStringNotContainsString('h1.test', $last);
+        $this->assertStringNotContainsString('h2.test', $last);
+    }
 }

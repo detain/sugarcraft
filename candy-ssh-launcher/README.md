@@ -143,6 +143,8 @@ Limits of the embedded YAML reader: flat entries only, and a nested list is writ
 | ↑ / k     | Move up (arrows always; `k` only while the filter is empty) |
 | ↓ / j     | Move down (arrows always; `j` only while the filter is empty) |
 | Ctrl+H    | Delete one filter character (alias of Backspace) |
+| Home / End | Jump to the first / last match                |
+| PgUp / PgDn | Scroll one page through the matches           |
 | Enter     | Connect to highlighted endpoint |
 | Esc / ^C  | Quit without connecting (exit 130; on a real terminal ^C raises SIGINT, which the picker traps to restore the terminal first) |
 | (typing)  | Type to filter (once non-empty, `j`/`k` count as letters); Backspace deletes one filter codepoint (a compound emoji or flag may need two presses) |
