@@ -12,9 +12,13 @@ Here "client" means the tool-CALLING side: this library is what an AI coding
 agent or editor embeds to spawn and talk to an MCP SERVER process. You run it
 inside your application; the server is the child it launches.
 
-Requires PHP >= 8.3. Speaks protocol revision `2024-11-05` and refuses a
+Requires PHP >= 8.3; the only runtime dependency beyond PHP is
+`sugarcraft/sugar-core`. Speaks protocol revision `2024-11-05` and refuses a
 server that answers the handshake claiming a different revision (a legacy
-server that omits the field is allowed to proceed).
+server that omits the field is allowed to proceed). The Quick start below
+launches the reference server through `npx`, so running it verbatim needs
+Node.js on PATH; substitute any stdio MCP server command for a
+dependency-free trial.
 
 Extracted from the [candy-code](https://github.com/sugarcraft/candy-code)
 MCP stack, where these classes carry its entire stdio server lifecycle. The
@@ -61,6 +65,10 @@ foreach ($server->listTools() as $tool) {
 $result = $server->callTool('echo', ['message' => 'hi']);
 $server->stop();                     // also runs automatically on destruct
 ```
+
+The example needs Node.js/npx on PATH (it spawns
+`npx -y @modelcontextprotocol/server-everything`); any other stdio MCP server
+is the same three constructor arguments — name, command, argv list.
 
 `callTool()` answers with the tool's result envelope — normally
 `['content' => [['type' => 'text', 'text' => ...], ...], 'isError' => bool]`
