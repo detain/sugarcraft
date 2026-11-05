@@ -138,14 +138,23 @@ Set the rendering viewport dimensions before calling `view()`:
 
 ```php
 $model = $model->setViewport(80, 25);     // or setWidth(80)->setHeight(25)
-$model = $model->setCursorOffset(3);      // keep up to 3 rows between cursor and the frame top
-$model = $model->setLineOffset(5);        // context rows reported to initPrefixer()/initSuffixer() for relative markers (the viewport anchor is cursorOffset, not this)
-$model = $model->setWrap(2);              // per-item displayed-row cap (0 = no cap)
+$model = $model->setCursorOffset(3);
+$model = $model->setLineOffset(5);
+$model = $model->setWrap(2);
 ```
 
+| Setter | What it controls |
+| --- | --- |
+| `setCursorOffset(n)` | context gap kept **above** the cursor at the viewport top (render-clamped to `height - 1`) |
+| `setLineOffset(n)` | context value reported to `initPrefixer()`/`initSuffixer()` for relative markers — not the viewport anchor, not a scroll budget |
+| `setWrap(n)` | per-item displayed-row cap — `0` means **no per-item cap**; rows still stay bounded by the viewport height |
+
 Geometry setters reject negative values and dimensions beyond the
-`MAX_DIMENSION`/`MAX_TOTAL_CELLS` caps (zero is accepted at set time and
-refused loudly at render). `setCursorOffset` is additionally **clamped at
+`MAX_DIMENSION` cap; the `MAX_TOTAL_CELLS` area cap applies to the viewport
+(width × height) only. Zero is accepted at set time for every knob; a zero
+viewport dimension is refused loudly at render, while zero
+`cursorOffset`/`lineOffset` are legal steady states and zero `wrap` means no
+per-item cap. `setCursorOffset` is additionally **clamped at
 render** to `height - 1`, so it can never ask for more context rows than the
 viewport has. Scrolling uses a scroll-end clamp: near the bottom of the list
 the window slides back so the frame stays full and the cursor row is always
@@ -254,13 +263,16 @@ exist only for back-compat.
 ## Delta rendering
 
 `Model::view()` keeps a memo of the rows it emitted last time
-(`?list<string> $previousRows` — styled row text, one entry per viewport row).
-The first render emits a full frame; each later render compares rows one by
-one and repaints **only the changed rows**, each addressed absolutely
-(cursor-position + erase-line before and after the row's own bytes). Unchanged
+(`?list<string> $previousRows` — styled row text, one entry per emitted frame
+line). The first render emits a full frame; each later render compares rows one
+by one and repaints **only the changed rows**, each addressed absolutely: one
+cursor-position before the row's own bytes and one erase-line after them. Frame
+lines are joined and terminated with bare `\n` (no carriage return), relying on
+the host terminal's `ONLCR` mapping to wrap each line — the same convention the
+full frame uses. Unchanged
 rows cost nothing; a changed row costs its own content plus a fixed addressing
-overhead. A resize, a filter transition, or `resetPreviousFrame()` clears the
-memo and forces the next `view()` to emit a full repaint.
+overhead. A resize, a filter transition, `resetPreviousFrame()`, or a failed
+frame clears the memo and forces the next `view()` to emit a full repaint.
 
 Because rows are written whole, styled rows round-trip exactly — wide glyphs
 are never split and SGR bytes never land in the grid as literal glyph cells.
@@ -285,17 +297,18 @@ Beyond the fluent setters shown above, the navigation surface is:
 
 - `setCursor(int $index)` — clamped to `0..count-1` (an out-of-range value lands on the nearest end; the setter always returns a fresh clone).
 - `cursorUp(int $n = 1)`/`cursorDown(int $n = 1)` and the page helpers `cursorPageUp(int $pages = 1)`/`cursorPageDown(int $pages = 1)` — movement **saturates** at the list ends (`cursorDown(PHP_INT_MAX)` lands on the last item, never wraps or overflows). A page spans `height` **items**, not displayed lines — a list of multi-line items pages visually faster. `cursorToStart()`/`cursorToEnd()` jump to the ends.
-- `cursorIndex()` — the current row position. `cursorItem()` — the cursor item's `\Stringable`; throws `RuntimeException` on an empty list. `tryCursorItem()` returns `null` instead, matching the `tryItemAt()`/`itemAt()` pair.
+- `cursorIndex()` — the cursor's **item** index (not a row position: with multi-line items, rows and items differ). `cursorItem()` — the cursor item's `\Stringable`; throws `RuntimeException` on an empty list. `tryCursorItem()` returns `null` instead, matching the `tryItemAt()`/`itemAt()` pair.
 - `length()`, `isEmpty()`, `itemAt(int)`, `tryItemAt(int)`, `find(\Stringable)`, `itemIds()` — read-only item access (indices address the **visible** projection, so they follow the active filter).
 - `lines()` — the laid-out frame rows without any delta bookkeeping; throws `RuntimeException` with a localized message (see below) on an empty list or zero viewport. `linesStream()` is a generator-shaped wrapper over the same eager computation — it interleaves nothing.
 - `view()` — full frame or row delta as described above; the only method that mutates in place (its render memo), which is why the immutability contract is scoped to item/configuration data.
 
 ## Localisation
 
-The two refusal strings `lines()` can raise are live `Lang::t()` lookups
-(`list.no_items`, `list.zero_viewport`) across the 16 shipped locales under
-`lang/`. Locale selection is the host application's concern; the renderer only
-formats through `SugarCraft\TreeList\Lang`.
+The two refusal strings raised by `lines()` — `list.no_items` (which
+`cursorItem()` reuses for its own empty-list refusal) and
+`list.zero_viewport` — are live `Lang::t()` lookups across the 16 shipped
+locales under `lang/`. Locale selection is the host application's concern; the
+renderer only formats through `SugarCraft\TreeList\Lang`.
 
 ## License
 
