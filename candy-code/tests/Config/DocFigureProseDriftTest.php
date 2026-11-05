@@ -2378,7 +2378,7 @@ final class DocFigureProseDriftTest extends TestCase
                 while (false !== ($pos = strpos($text, $token, $cursor))) {
                     $cursor = $pos + 1;
 
-                    $found[] = basename($relative, '.php') . '::' . self::enclosingMethodName($relative, $text, $pos);
+                    $found[] = self::citedDispatchScope($relative, $text) . '::' . self::enclosingMethodName($relative, $text, $pos);
                 }
             }
             self::assertNotEmpty($found, "the table dispatches {$event} from cited code, but {$token} occurs nowhere in src/ any more");
@@ -6957,6 +6957,29 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsString($text, "src/{$relative} vanished — a prose pin lost its file");
 
         return $text;
+    }
+
+    /**
+     * The class a dispatch site is cited under in docs: for a companion
+     * trait of the CWPD-14 composition convention, the composing class —
+     * callers reach the method through that name, and the docs table
+     * promises it. A trait not actually composed by its convention parent
+     * keeps its own name, so the mismatch reddens instead of hiding a
+     * second dispatch origin.
+     */
+    private static function citedDispatchScope(string $relative, string $text): string
+    {
+        if (preg_match('/^\s*namespace\s+([A-Za-z0-9_\\\\]+);/m', $text, $ns) !== 1
+            || preg_match('/^\s*trait\s+([A-Za-z0-9_]+)\s*\{/m', $text, $tr) !== 1
+        ) {
+            return basename($relative, '.php');
+        }
+        $composing = $ns[1];
+        if (!class_exists($composing) || !\in_array($composing . '\\' . $tr[1], class_uses($composing, true), true)) {
+            return basename($relative, '.php');
+        }
+
+        return (string) substr($composing, (int) strrpos($composing, '\\') + 1);
     }
 
     /**
