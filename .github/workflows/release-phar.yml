@@ -3,16 +3,27 @@
 # Triggered by pushing a tag spelled `candy-code/v*` (per-lib tagging, the
 # shape the repo already uses for split sync), or manually with a tag input.
 #
-# REPRODUCIBILITY CAVEAT (disclosed, not solved here): the build runs
-# `composer install` with the lock deliberately absent — house rule forbids
-# committing per-lib composer.lock — and the `sugarcraft/*` siblings resolve
-# from Packagist at their `dev-master` moving target. Two builds of the same
-# tag can therefore differ byte-wise; the .sha256 published alongside each
-# release names the bytes that job produced, not a rebuild guarantee. The
-# build script REFUSES symlinked sibling vendors, dirty source trees, and
-# detached HEADs, so a linked-mode working tree can never freeze uncommitted
-# sibling code into a public artifact; the checkout below attaches HEAD to a
-# named branch because the preflight demands exactly that attribution.
+# RELEASE POSTURE (OD-5/OD-7/OD-8, reviews-1103 G6-P): nothing publishes on
+# untested bytes. The gate job refuses a tag whose commit is not an
+# ancestor-or-self of master, then refuses to proceed until the CI workflow
+# run AT THAT EXACT COMMIT is green (bounded poll, fail-closed on absence,
+# red, or timeout). The release job checks the explicit commit out, builds it,
+# and passes only the tagged SHA (never a branch name) as the release
+# target_commitish. Provenance rides with the artifact as release assets:
+# candy-code.phar.commit (the full build SHA) and candy-code.phar.pins.json
+# (the resolved sibling pin map).
+#
+# REPRODUCIBILITY (OD-14 pinning half): the lock stays absent by house rule,
+# but sugarcraft/* siblings no longer float on Packagist dev-master —
+# scripts/pin-siblings.php injects TRANSIENT symlink:false path repositories
+# over the tested checkout for the whole transitive require closure before
+# composer install, and the verify mode aborts if any locked sibling still
+# resolves from the network. The injection exists only inside this runner;
+# committed manifests keep bare @dev requires (tools/check-path-repos.php
+# --no-lib-path-repos stays green, pinned by tools/tests). The build script
+# still REFUSES symlinked sibling vendors, dirty source trees, and detached
+# HEADs; the checkout below attaches the explicit commit to a named branch
+# because the preflight demands exactly that attribution.
 #
 # `phar.readonly=0` is passed with `-d` to the BUILD command only. It is
 # never a runtime requirement: the produced archive executes under a normal
@@ -44,12 +55,25 @@ on:
 permissions:
   contents: write
 
+# G6-P OD-5: two releases of the same tag can never interleave (belt; the
+# per-app lock lives on the release job's concurrency). cancel-in-progress
+# false: a running release is finished, not cancelled by its successor.
+concurrency:
+  group: release-phar-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-  build:
+  gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 250
+    outputs:
+      app: candy-code
+      tag: ${{ steps.tag.outputs.tag }}
+      tag_sha: ${{ steps.ancestry.outputs.tag_sha }}
+      proceed: ${{ steps.ancestry.outputs.proceed }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -72,6 +96,82 @@ jobs:
           EVENT: ${{ github.event_name }}
           TAG: ${{ github.event.inputs.tag }}
 
+      - name: Tag-ancestry door (OD-5)
+        id: ancestry
+        # A candy-code/v* tag that is not an ancestor-or-self of master is
+        # orphaned intent — the release would ship bytes no CI leg ever
+        # covered on the mainline. The SHA lands in this job's outputs so
+        # every later step addresses the explicit commit, never a branch.
+        run: |
+          set -euo pipefail
+          tag="$TAG"
+          if ! printf '%s' "$tag" | grep -qE '^candy-code/v'; then
+            echo "tag '$tag' is not a candy-code/v* tag — refusing to gate it here" >&2
+            exit 1
+          fi
+          tag_sha="$(git rev-parse "$tag^{commit}")"
+          git fetch --no-tags origin master
+          if ! git merge-base --is-ancestor "$tag_sha" origin/master; then
+            echo "refusing release of $tag ($tag_sha): not an ancestor-or-self of master" >&2
+            exit 1
+          fi
+          echo "tag_sha=$tag_sha" >> "$GITHUB_OUTPUT"
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+
+      - name: CI-green door (OD-7)
+        # Bounded poll for the CI workflow run AT THE TAGGED COMMIT — green
+        # only. Fail-closed on every non-green shape: a completed red run is
+        # fatal immediately, a missing or still-running CI is retried until
+        # the attempt budget burns out and REFUSES the release. This workflow
+        # triggers CI indirectly (tags run no CI push leg), so the wait is
+        # the normal case, not an error path.
+        run: |
+          set -euo pipefail
+          deadline=0
+          for attempt in $(seq 1 240); do
+            run_line="$(gh run list --workflow CI --branch master --commit "$TAG_SHA" \
+              --limit 5 --json status,conclusion \
+              --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (sort_by(.conclusion) | .[0].conclusion) end')"
+            if [ "$run_line" = 'success' ]; then
+              echo "CI is green at $TAG_SHA — releasing"
+              exit 0
+            fi
+            case "$run_line" in
+              PENDING)
+                echo "CI at $TAG_SHA not concluded yet (attempt $attempt/240)"
+                ;;
+              *)
+                echo "refusing release: CI at $TAG_SHA concluded '$run_line'" >&2
+                exit 1
+                ;;
+            esac
+            sleep 60
+          done
+          echo "refusing release: no green CI at $TAG_SHA within the poll budget (fail-closed)" >&2
+          exit 1
+        env:
+          TAG_SHA: ${{ steps.ancestry.outputs.tag_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    needs: gate
+    runs-on: ubuntu-latest
+    # G6-P OD-5: per-app concurrency lock — two releases of the SAME app
+    # serialize here; releases of different apps never share this group and
+    # proceed in parallel.
+    concurrency:
+      group: release-phar-${{ needs.gate.outputs.app }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          # G6-P OD-8: build-at-SHA — the explicit tested commit, never a
+          # branch or tag name, comes from the gate's ancestry resolution.
+          ref: ${{ needs.gate.outputs.tag_sha }}
+          fetch-depth: 0
+
       - name: Attach HEAD to the tag
         # The build's integrity preflight refuses detached HEADs (a tag
         # checkout IS detached); re-attaching the same commit to a branch
@@ -80,7 +180,7 @@ jobs:
           set -euo pipefail
           git checkout -B phar-build "$TAG"
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       - name: Setup PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
@@ -88,6 +188,21 @@ jobs:
           php-version: '8.3'
           coverage: none
           extensions: mbstring, intl, sqlite3, pdo_sqlite, curl, openssl, pcntl
+
+      - name: Pin sibling deps to the tested commit (OD-14)
+        # Transient injection of symlink:false path repositories over this
+        # checkout for the full transitive sugarcraft/* closure, so the
+        # artifact is provably built from the SAME bytes the CI run covered
+        # — the Packagist dev-master float is closed for releases. The
+        # injection edits only the app manifest INSIDE THIS RUNNER; the
+        # committed tree never carries it (path-repos inverse policy, pinned
+        # by tools/tests). verify mode below re-proves nothing floated.
+        run: |
+          set -euo pipefail
+          php scripts/pin-siblings.php inject candy-code --root . --sha "$TAG_SHA" --ref "$TAG"
+        env:
+          TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       - name: Install production dependencies
         run: |
@@ -99,15 +214,22 @@ jobs:
           rm -f composer.lock
           composer install --no-dev --prefer-dist --no-interaction --no-progress
 
+      - name: Verify no sibling floated to the network (OD-14)
+        # Fail-closed float detector over the resolved lock: every locked
+        # sugarcraft/* package must carry a path dist. If Packagist ever
+        # wins a resolution race, the release stops HERE, not in the notes.
+        run: |
+          set -euo pipefail
+          php scripts/pin-siblings.php verify candy-code
+          mv candy-code/sibling-pins.json candy-code.pins.json
+
       - name: Build the archive
         run: |
           set -euo pipefail
           # SOURCE_DATE_EPOCH pins metadata['built_at'] to the tagged commit's
           # date so rebuilds of one tag agree on the stamp (DST-1 reproducibility
-          # note); the byte-level guarantee still stops at the moving dev-master
-          # dependency window disclosed in this file's header.
-          # C-SES-6.d: the same epoch line governs the gz twin below, so both
-          # artifacts of one run carry the identical stamp. --manifest-out
+          # note); the dependency window no longer moves — siblings ride the
+          # injected pins of this exact commit (OD-14). --manifest-out
           # (C-SES-6.b) writes the plain build's packages map for publication.
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT "$TAG")"
           php -d phar.readonly=0 candy-code/tools/build-phar.php \
@@ -115,7 +237,7 @@ jobs:
             --manifest-out=dist/candy-code.phar.packages.json \
             --version="$TAG"
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       - name: Build the gz twin (slim transfer asset)
         # C-SES-6.d: a second --gz build of the SAME tree (dev deps are not
@@ -134,7 +256,21 @@ jobs:
             --gz \
             --version="$TAG"
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
+
+      - name: Provenance sidecars (OD-8)
+        # The shipped artifact stays traceable to its tested SHA without
+        # touching build-phar or app source: <app>.phar.commit carries the
+        # full build commit, <app>.phar.pins.json the sibling pin map the
+        # verify step confirmed. Both publish as release assets below.
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$TAG_SHA" > dist/candy-code.phar.commit
+          mv candy-code.pins.json dist/candy-code.phar.pins.json
+          test -s dist/candy-code.phar.pins.json
+          cat dist/candy-code.phar.commit
+        env:
+          TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
 
       - name: Checksum
         # C-SES-5.c: the checksum runs BEFORE signing on purpose — the
@@ -159,7 +295,7 @@ jobs:
           cat dist/candy-code.phar.sha256
           cat dist/candy-code-gz.phar.sha256
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       - name: Sign the archive (pinned-key mode)
         # OPTIONAL step by design: without the SUGARCRAFT_SIGNING_KEY secret it
@@ -281,8 +417,8 @@ jobs:
           CANDY_CODE_PHAR="${GITHUB_WORKSPACE}/dist/candy-code.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
 
       # Deliberately NO upload-artifact step: nothing consumes a run artifact
-      # (single job, no needs:, and the Publish step below ships
-      # dist/candy-code.phar and its .sha256 directly as release assets), and
+      # (the release job publishes dist/candy-code.phar and its sidecars
+      # directly as release assets), and
       # deriving an artifact name from the tag carries the namespace '/' that
       # upload-artifact refuses — run 39379594999 died on exactly that. If a
       # future job ever needs the archive, add a sanitized name here
@@ -295,6 +431,10 @@ jobs:
         # DECLINED the Homebrew tap: candy-code.rb ships as a release asset
         # ONLY — no tap push leg, no new secret. Consumers add it with
         # `brew install --formula <download-url>` or vendor it themselves.
+        # G6-P OD-8: --target names the explicit tagged SHA — a release
+        # created against a branch default would misstate which commit the
+        # artifacts came from. The exists-path uploads onto the release this
+        # door already created with the explicit target.
         run: |
           set -euo pipefail
           tag="$TAG"
@@ -302,6 +442,7 @@ jobs:
             dist/candy-code.phar dist/candy-code.phar.sha256
             dist/candy-code-gz.phar dist/candy-code-gz.phar.sha256
             dist/candy-code.phar.packages.json
+            dist/candy-code.phar.commit dist/candy-code.phar.pins.json
             dist/candy-code.rb dist/install.sh
           )
           if [ -f dist/candy-code.phar.minisig ]; then
@@ -312,13 +453,15 @@ jobs:
           fi
           # The ext-zlib caveat is the plan's named risk for the gz asset and
           # belongs in the notes a downloader reads, not only in this file.
-          notes="Self-contained candy-code PHAR built by .github/workflows/release-phar.yml at commit ${GITHUB_SHA}.\n\nPlain (self-update target): candy-code.phar — Verify: sha256sum -c candy-code.phar.sha256 — Run: php candy-code.phar --version\n\nSlim twin: candy-code-gz.phar (own .sha256/signatures) — REQUIRES the ext-zlib PHP extension at RUNTIME to open; php -m | grep -i zlib before choosing it.\n\nAlso attached: candy-code.phar.packages.json (build manifest), install.sh (fetch-and-verify installer), candy-code.rb (Homebrew formula, release asset only — no tap is published)."
+          notes="Self-contained candy-code PHAR built by .github/workflows/release-phar.yml at commit $TAG_SHA (CI-gated, siblings pinned).\n\nPlain (self-update target): candy-code.phar — Verify: sha256sum -c candy-code.phar.sha256 — Run: php candy-code.phar --version\n\nSlim twin: candy-code-gz.phar (own .sha256/signatures) — REQUIRES the ext-zlib PHP extension at RUNTIME to open; php -m | grep -i zlib before choosing it.\n\nAlso attached: candy-code.phar.packages.json (build manifest), candy-code.phar.commit (full build SHA), candy-code.phar.pins.json (sibling pin map), install.sh (fetch-and-verify installer), candy-code.rb (Homebrew formula, release asset only — no tap is published)."
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
           else
             gh release create "$tag" "${assets[@]}" \
+              --target "$TAG_SHA" \
               --title "candy-code ${tag#candy-code/}" --verify-tag --notes "$(printf '%b' "$notes")"
           fi
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

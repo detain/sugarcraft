@@ -7,17 +7,28 @@
 # Triggered by pushing a tag spelled `<app>/v*` for any other candy-* app
 # (per-lib tagging on the shared repo stream), or manually with a tag input.
 #
-# REPRODUCIBILITY CAVEAT (inherited from the reference pipeline, disclosed
-# not solved): the build runs `composer install` with the lock deliberately
-# absent — house rule forbids committing per-lib composer.lock — and the
-# `sugarcraft/*` siblings resolve from Packagist at their `dev-master` moving
-# target. Two builds of the same tag can therefore differ byte-wise; the
-# .sha256 published alongside each release names the bytes that job produced,
-# not a rebuild guarantee. The build script REFUSES symlinked sibling
-# vendors, dirty source trees, and detached HEADs, so a linked-mode working
-# tree can never freeze uncommitted sibling code into a public artifact; the
-# checkout below attaches HEAD to a named branch because the preflight
-# demands exactly that attribution.
+# RELEASE POSTURE (OD-5/OD-7/OD-8, reviews-1103 G6-P): nothing publishes on
+# untested bytes. The gate job resolves the tag to its commit, refuses a tag
+# that is not an ancestor-or-self of master, and refuses to proceed until the
+# CI workflow run AT THAT EXACT COMMIT is green (bounded poll, fail-closed on
+# absence, red, or timeout). The release job checks the explicit commit out
+# and passes only the tagged SHA (never a branch name) as the release
+# target_commitish. Provenance rides with the artifact as release assets:
+# <app>.phar.commit (the full build SHA) and <app>.phar.pins.json (the
+# resolved sibling pin map). Two releases of the SAME app serialize on the
+# release job's per-app concurrency group; different apps proceed freely.
+#
+# REPRODUCIBILITY (OD-14 pinning half): the lock stays absent by house rule,
+# but sugarcraft/* siblings no longer float on Packagist dev-master —
+# scripts/pin-siblings.php injects TRANSIENT symlink:false path repositories
+# over the tested checkout for the whole transitive require closure before
+# composer install, and the verify mode aborts if any locked sibling still
+# resolves from the network. The injection exists only inside this runner;
+# committed manifests keep bare @dev requires (tools/check-path-repos.php
+# --no-lib-path-repos stays green, pinned by tools/tests). The build script
+# still REFUSES symlinked sibling vendors, dirty source trees, and detached
+# HEADs; the checkout below attaches the explicit commit to a named branch
+# because the preflight demands exactly that attribution.
 #
 # `phar.readonly=0` is passed with `-d` to the BUILD command only. It is
 # never a runtime requirement: the produced archive executes under a normal
@@ -44,6 +55,13 @@ on:
 permissions:
   contents: write
 
+# G6-P OD-5: same-tag races are impossible (belt; the per-app lock lives on
+# the release job's concurrency). cancel-in-progress false: a running release
+# is finished, not cancelled by its successor.
+concurrency:
+  group: release-app-phar-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   # ci.yml's rationale: the detached checkout versions each lib as
@@ -52,10 +70,16 @@ env:
   COMPOSER_ROOT_VERSION: dev-master
 
 jobs:
-  build:
+  gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 250
+    outputs:
+      app: ${{ steps.scope.outputs.app }}
+      tag: ${{ steps.scope.outputs.tag }}
+      tag_sha: ${{ steps.ancestry.outputs.tag_sha }}
+      proceed: ${{ steps.scope.outputs.proceed }}
     steps:
-      - uses: actions/checkout@fbc6f3992d4b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
 
@@ -95,8 +119,81 @@ jobs:
           EVENT: ${{ github.event_name }}
           TAG: ${{ github.event.inputs.tag }}
 
-      - name: Attach HEAD to the tag
+      - name: Tag-ancestry door (OD-5)
+        id: ancestry
         if: steps.scope.outputs.proceed == 'true'
+        # A <app>/v* tag that is not an ancestor-or-self of master is orphaned
+        # intent — the release would ship bytes no CI leg ever covered on the
+        # mainline. The SHA lands in this job's outputs so every later step
+        # addresses the explicit commit, never a branch.
+        run: |
+          set -euo pipefail
+          tag="$TAG"
+          tag_sha="$(git rev-parse "$tag^{commit}")"
+          git fetch --no-tags origin master
+          if ! git merge-base --is-ancestor "$tag_sha" origin/master; then
+            echo "refusing release of $APP $tag ($tag_sha): not an ancestor-or-self of master" >&2
+            exit 1
+          fi
+          echo "tag_sha=$tag_sha" >> "$GITHUB_OUTPUT"
+          echo "gating $APP release of $tag at $tag_sha"
+        env:
+          APP: ${{ steps.scope.outputs.app }}
+          TAG: ${{ steps.scope.outputs.tag }}
+
+      - name: CI-green door (OD-7)
+        if: steps.scope.outputs.proceed == 'true'
+        # Bounded poll for the CI workflow run AT THE TAGGED COMMIT — green
+        # only. Fail-closed on every non-green shape: a completed red run is
+        # fatal immediately, a missing or still-running CI is retried until
+        # the attempt budget burns out and REFUSES the release. Tag pushes
+        # trigger no CI leg of their own, so the wait is the normal case.
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 240); do
+            run_line="$(gh run list --workflow CI --branch master --commit "$TAG_SHA" \
+              --limit 5 --json status,conclusion \
+              --jq '[.[] | select(.status == "completed")] | if length == 0 then "PENDING" else (sort_by(.conclusion) | .[0].conclusion) end')"
+            if [ "$run_line" = 'success' ]; then
+              echo "CI is green at $TAG_SHA — releasing"
+              exit 0
+            fi
+            case "$run_line" in
+              PENDING)
+                echo "CI at $TAG_SHA not concluded yet (attempt $attempt/240)"
+                ;;
+              *)
+                echo "refusing release: CI at $TAG_SHA concluded '$run_line'" >&2
+                exit 1
+                ;;
+            esac
+            sleep 60
+          done
+          echo "refusing release: no green CI at $TAG_SHA within the poll budget (fail-closed)" >&2
+          exit 1
+        env:
+          TAG_SHA: ${{ steps.ancestry.outputs.tag_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    # G6-P OD-5: per-app concurrency lock — two releases of the SAME app
+    # serialize here; releases of different apps never share this group and
+    # proceed in parallel.
+    concurrency:
+      group: release-app-phar-${{ needs.gate.outputs.app }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          # G6-P OD-8: build-at-SHA — the explicit tested commit, never a
+          # branch or tag name, comes from the gate's ancestry resolution.
+          ref: ${{ needs.gate.outputs.tag_sha }}
+          fetch-depth: 0
+
+      - name: Attach HEAD to the tag
         # The build's integrity preflight refuses detached HEADs (a tag
         # checkout IS detached); re-attaching the same commit to a branch
         # name keeps the artifact attributable without weakening the door.
@@ -104,10 +201,9 @@ jobs:
           set -euo pipefail
           git checkout -B phar-build "$TAG"
         env:
-          TAG: ${{ steps.scope.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       - name: Setup PHP
-        if: steps.scope.outputs.proceed == 'true'
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
         with:
           php-version: '8.3'
@@ -117,35 +213,59 @@ jobs:
           # composer-resolve has to be present.
           extensions: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, pdo_mysql, pdo_pgsql, ssh2, gd, curl, openssl, ffi
 
+      - name: Pin sibling deps to the tested commit (OD-14)
+        # Transient injection of symlink:false path repositories over this
+        # checkout for the full transitive sugarcraft/* closure, so the
+        # artifact is provably built from the SAME bytes the CI run covered
+        # — the Packagist dev-master float is closed for releases. The
+        # injection edits only the app manifest INSIDE THIS RUNNER; the
+        # committed tree never carries it (path-repos inverse policy, pinned
+        # by tools/tests). verify mode below re-proves nothing floated.
+        run: |
+          set -euo pipefail
+          php scripts/pin-siblings.php inject "$APP" --root . --sha "$TAG_SHA" --ref "$TAG"
+        env:
+          APP: ${{ needs.gate.outputs.app }}
+          TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
+          TAG: ${{ needs.gate.outputs.tag }}
+
       - name: Install production dependencies
-        if: steps.scope.outputs.proceed == 'true'
         run: |
           set -euo pipefail
           cd "$APP"
           rm -f composer.lock
           composer install --no-dev --prefer-dist --no-interaction --no-progress
         env:
-          APP: ${{ steps.scope.outputs.app }}
+          APP: ${{ needs.gate.outputs.app }}
+
+      - name: Verify no sibling floated to the network (OD-14)
+        # Fail-closed float detector over the resolved lock: every locked
+        # sugarcraft/* package must carry a path dist. If Packagist ever
+        # wins a resolution race, the release stops HERE, not in the notes.
+        run: |
+          set -euo pipefail
+          php scripts/pin-siblings.php verify "$APP"
+          mv "$APP/sibling-pins.json" app-pins.json
+        env:
+          APP: ${{ needs.gate.outputs.app }}
 
       - name: Build the archive
-        if: steps.scope.outputs.proceed == 'true'
         run: |
           set -euo pipefail
           app="$APP"
           # SOURCE_DATE_EPOCH pins metadata['built_at'] to the tagged
           # commit's date so rebuilds of one tag agree on the stamp
-          # (DST-1's discipline); the byte-level guarantee still stops at
-          # the moving dev-master window disclosed in this header.
+          # (DST-1's discipline); the dependency window no longer moves —
+          # siblings ride the injected pins of this exact commit (OD-14).
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%cT "$TAG")"
           php -d phar.readonly=0 "$app/tools/build-phar.php" \
             --out="dist/$app.phar" \
             --version="$TAG"
         env:
-          APP: ${{ steps.scope.outputs.app }}
-          TAG: ${{ steps.scope.outputs.tag }}
+          APP: ${{ needs.gate.outputs.app }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       - name: Assert the archive carries the tagged stamp
-        if: steps.scope.outputs.proceed == 'true'
         # The DST-1 release-shape proof, generalized: the manifest metadata
         # (what --version reads back via Version::fromPharMetadata) must be
         # the tag, never the frozen vendor's dev-master. Asserted on the
@@ -164,11 +284,26 @@ jobs:
             }
           '
         env:
-          PHAR_PATH: ${{ github.workspace }}/dist/${{ steps.scope.outputs.app }}.phar
-          WANT_STAMP: ${{ steps.scope.outputs.tag }}
+          PHAR_PATH: ${{ github.workspace }}/dist/${{ needs.gate.outputs.app }}.phar
+          WANT_STAMP: ${{ needs.gate.outputs.tag }}
+
+      - name: Provenance sidecars (OD-8)
+        # The shipped artifact stays traceable to its tested SHA without
+        # touching build-phar or app source: <app>.phar.commit carries the
+        # full build commit, <app>.phar.pins.json the sibling pin map the
+        # verify step confirmed. Both publish as release assets below.
+        run: |
+          set -euo pipefail
+          app="$APP"
+          printf '%s\n' "$TAG_SHA" > "dist/$app.phar.commit"
+          mv app-pins.json "dist/$app.phar.pins.json"
+          test -s "dist/$app.phar.pins.json"
+          cat "dist/$app.phar.commit"
+        env:
+          APP: ${{ needs.gate.outputs.app }}
+          TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
 
       - name: Checksum
-        if: steps.scope.outputs.proceed == 'true'
         # C-SES-5.c: runs BEFORE signing on purpose — the signing step's
         # headline artifact is a signature over this sidecar's body, so the
         # sidecar has to exist first. The .sha256 names the bytes this job
@@ -179,10 +314,9 @@ jobs:
           (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
           cat "dist/$app.phar.sha256"
         env:
-          APP: ${{ steps.scope.outputs.app }}
+          APP: ${{ needs.gate.outputs.app }}
 
       - name: Sign the archive (pinned-key mode)
-        if: steps.scope.outputs.proceed == 'true'
         # OPTIONAL by design (identical semantics to the reference pipeline):
         # without SUGARCRAFT_SIGNING_KEY the step skips green and the release
         # ships unsigned. When the owner populates the sugarcraft-wide secret
@@ -221,11 +355,10 @@ jobs:
           '
           (cd dist && sha256sum "$app.phar.minisig" > "$app.phar.minisig.sha256")
         env:
-          APP: ${{ steps.scope.outputs.app }}
+          APP: ${{ needs.gate.outputs.app }}
           SUGARCRAFT_SIGNING_KEY: ${{ secrets.SUGARCRAFT_SIGNING_KEY }}
 
       - name: Smoke — version and help on a virgin HOME
-        if: steps.scope.outputs.proceed == 'true'
         # App-agnostic shape (the reference pipelines' candy-code-specific
         # headless-echo arm deliberately does NOT live here): every candy-*
         # app must answer --version and render --help with no config, no
@@ -246,11 +379,10 @@ jobs:
           fi
           HOME="$fake_home" php "dist/$app.phar" --help >/dev/null
         env:
-          APP: ${{ steps.scope.outputs.app }}
-          TAG: ${{ steps.scope.outputs.tag }}
+          APP: ${{ needs.gate.outputs.app }}
+          TAG: ${{ needs.gate.outputs.tag }}
 
       - name: PharCompatTest heavy arm (apps that have one)
-        if: steps.scope.outputs.proceed == 'true'
         # Generalized from the reference pipelines: only apps that actually
         # ship a PharCompatTest run their CANDY_<APP>_PHAR-gated stage 4
         # against the fresh archive — file-existence gate, never a
@@ -269,26 +401,31 @@ jobs:
           env_var="$(printf '%s' "$app" | tr '[:lower:]-' '[:upper:]_')_PHAR"
           env "$env_var=${GITHUB_WORKSPACE}/dist/$app.phar" vendor/bin/phpunit --no-coverage --filter PharCompatTest
         env:
-          APP: ${{ steps.scope.outputs.app }}
+          APP: ${{ needs.gate.outputs.app }}
 
       - name: Publish GitHub release
-        if: steps.scope.outputs.proceed == 'true'
+        # G6-P OD-8: --target names the explicit tagged SHA — a release
+        # created against a branch default would misstate which commit the
+        # artifacts came from. The exists-path uploads onto the release this
+        # door already created with the explicit target.
         run: |
           set -euo pipefail
           app="$APP"
           tag="$TAG"
-          assets=("dist/$app.phar" "dist/$app.phar.sha256")
+          assets=("dist/$app.phar" "dist/$app.phar.sha256" "dist/$app.phar.commit" "dist/$app.phar.pins.json")
           if [ -f "dist/$app.phar.minisig" ]; then
             assets+=("dist/$app.phar.minisig" "dist/$app.phar.minisig.sha256" "dist/$app.phar.sha256.sig")
           fi
-          notes="Self-contained $app PHAR built by .github/workflows/release-app-phar.yml at commit ${GITHUB_SHA}.\n\nVerify: sha256sum -c $app.phar.sha256\n\nRun: php $app.phar --version"
+          notes="Self-contained $app PHAR built by .github/workflows/release-app-phar.yml at commit $TAG_SHA (CI-gated, siblings pinned).\n\nVerify: sha256sum -c $app.phar.sha256\n\nRun: php $app.phar --version\n\nAlso attached: $app.phar.commit (full build SHA), $app.phar.pins.json (sibling pin map)."
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${assets[@]}" --clobber
           else
             gh release create "$tag" "${assets[@]}" \
+              --target "$TAG_SHA" \
               --title "$app ${tag#"$app"/}" --verify-tag --notes "$(printf '%b' "$notes")"
           fi
         env:
-          APP: ${{ steps.scope.outputs.app }}
-          TAG: ${{ steps.scope.outputs.tag }}
+          APP: ${{ needs.gate.outputs.app }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          TAG_SHA: ${{ needs.gate.outputs.tag_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
