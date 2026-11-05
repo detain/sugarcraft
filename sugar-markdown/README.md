@@ -26,21 +26,21 @@ composer require sugarcraft/sugar-markdown
 > The `Renderer` exposes short-form aliases on every option:
 > `theme` / `sanitize` / `wordWrap` / `hyperlinks` / `baseURL` /
 > `tableWrap` / `inlineTableLinks` / `tableColumnBudget` /
-> `fenceColumnBudget` / `preservedNewLines` / `emoji` / `standardStyle`.
-> The long-form `with*` names still work — pick whichever
+> `fenceColumnBudget` / `preservedNewLines` / `emoji` / `standardStyle` /
+> `styleSheet`. The long-form `with*` names still work — pick whichever
 > reads better at the call site.
 
 ## Quickstart
 
-The example below embeds a fenced code block inside its Markdown sample,
-so the snippet itself is fenced with tildes: the outer fence conventionally
-differs from the inner ```` ``` ```` it contains (four backticks would also
-contain three by CommonMark, but the tilde spelling makes the nesting
-legible in the raw source).
+The example below embeds a backtick-fenced code block inside its
+Markdown sample, so the snippet itself is fenced with tildes — a
+marker different from the inner fence it contains, which is what
+makes the nesting legal under CommonMark.
 
 > Note: `render()` ends without a trailing newline on purpose — that byte
-> sequence is exactly what `stream()` yields for a one-chunk document —
-> so an `echo` adds its own `"\n"`. `write()` and `Writer` follow the
+> sequence is exactly what `stream()` yields for a one-chunk document.
+> The example's `echo` supplies its own `"\n"` as a second operand —
+> `echo` itself appends nothing. `write()` and `Writer` follow the
 > same law.
 
 ~~~php
@@ -60,7 +60,7 @@ A few **bold** and _italic_ words, with `inline code` and a
 echo "hello world";
 ```
 MD), "\n";
-~~~~
+~~~
 
 ## Themes
 
@@ -72,7 +72,7 @@ use SugarCraft\Markdown\{Renderer, Theme};
 new Renderer(Theme::ansi());        // default colourful
 new Renderer(Theme::plain());       // no SGR
 new Renderer(Theme::notty());       // alias for plain — non-TTY fallback
-new Renderer(Theme::ascii());       // monochrome bold/italic/underline, no colour
+new Renderer(Theme::ascii());       // monochrome bold/italic/underline/strikethrough, no colour
 new Renderer(Theme::dark());        // dark-bg optimised
 new Renderer(Theme::light());       // light-bg optimised
 new Renderer(Theme::dracula());     // #282a36 / #ff79c6 palette
@@ -98,9 +98,22 @@ defaults. A payload that carries a `document` block is glamour's
 element (`h1`, `block_quote`, `code_block`, …) and `chroma` token
 vocabulary — `new StyleGuide` helpers `fromJsonString()` / `fromFile()`
 / `element()` / `theme()` are public if you want the guide itself.
-Malformed JSON and unreadable files throw.
+`theme()` projects a subset — about thirteen element names (`h1`–`h6`,
+`paragraph`, `strong`, `emph`, `codespan`, `code_block`, `link`,
+`block_quote`, `list`, `hr`, `strikethrough`) plus four chroma slots
+(keyword, string, number, comment); everything else stays addressable
+through `element()` / `chroma()`, nothing is silently lost.
+`Theme::fromJson($path)` throws `RuntimeException` on an unreadable
+file; `Theme::fromJsonString($json)` throws `InvalidArgumentException`
+on malformed JSON or a non-object payload. Within a well-formed object
+the flat reader is lenient about what it does not understand: unknown
+keys are ignored, slots the document omits keep their plain defaults,
+and a bare colour word matching no spec (`"crimson"`) yields no
+colour. It is strict about malformed specs it can parse the shape of:
+bad hex (`"#ff5f"`) and non-numeric or out-of-range `ansi:` /
+`ansi256:` (`"ansi:99"`) all throw `InvalidArgumentException`.
 
-JSON shape (flat): an object keyed by element name (`heading1`, `paragraph`,
+JSON shape (flat): an object keyed by element name (`heading1`–`heading6`, `paragraph`,
 `bold`, `italic`, `code`, `codeBlock`, `link`, `blockquote`,
 `listMarker`, `rule`, `keyword`, `string`, `number`, `comment`,
 `strike`, `linkText`, `image`, `htmlBlock`, `htmlSpan`,
@@ -123,7 +136,8 @@ echo $renderer->render("# Word wrap\n");
 
 `withHyperlinks(true)` (default) wraps every `[text](url)` in
 `OSC 8 ; ; URL ST text OSC 8 ; ; ST` so terminals that support it
-render real clickable links. Falls back to `text (url)` when off.
+render real clickable links. The visible text is `text (url)` in both
+modes — the toggle adds or removes only the OSC-8 envelope around it.
 
 ### Link safety
 
@@ -142,9 +156,11 @@ HTML-entity-decoded spellings, so a refused scheme split by invisibles
 (`java&#8203;script:`) never becomes a target either. A link with an
 empty destination renders its text and nothing more — no `()` noise.
 
-`withSanitize(false)` relaxes only the general text pipeline, for
-trusted input where control characters must survive: raw HTML blocks
-and inline HTML stay control-stripped regardless of the flag, and URL
+`withSanitize(false)` relaxes only the control-character sweep of the
+general text pipeline, for trusted input where control characters must
+survive. Everything else holds regardless of the flag: encoding repair
+(malformed UTF-8, stray C1 bytes) runs before parsing unconditionally,
+raw HTML blocks and inline HTML stay control-stripped, and URL
 stripping is likewise always on. See the fleet-wide trust model in
 [docs/TRUST-BOUNDARY.md](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
 
@@ -167,7 +183,9 @@ foreach ($renderer->stream(["# Heading\n\n", "body prose\n\n## Next heading\n"])
 ```
 
 A section is proven complete when the next top-level ATX heading
-arrives (column one, after a blank line) or the input ends — the tail
+arrives (column one, after a blank line — or on the line directly
+after a closing code fence, which proves the split with no blank
+line; see `src/Render/SectionScanner.php`) or the input ends — the tail
 after the final heading never emits before the stream finishes. A
 section that still references an undefined link label is held (its
 source and first render both kept) and re-rendered whenever a later
@@ -204,9 +222,16 @@ $writer->close();
   bodies stop re-wrapping below 4 usable cells, and at a 1-cell floor
   text letter-wraps; bytes are never dropped, and output grows linearly
   with the document, never per level.
+- Sanitisation is **on** by default (`$sanitize = true` in the
+  `Renderer` constructor): it gates the `stripControls` sweep of
+  rendered text, code spans, and indented and fenced code. Raw-HTML
+  and URL control-stripping run regardless of the flag; see
+  Link safety above.
 - There is no source-size cap: cost is roughly proportional to the
   input. Only syntax highlighting refuses to try — a fenced body over
-  1 MB degrades to the plain code-block style instead of tokenising.
+  `SyntaxHighlighter`'s `MAX_HIGHLIGHT_BYTES` = 1,000,000 bytes
+  (≈ 0.95 MiB) degrades to the plain code-block style instead of
+  tokenising.
 - The thematic break always draws `horizontalRuleLength` cells (default
   40) regardless of the wrap width, and `withTableWrap(true)` wraps each
   cell at the *full* wrap width — pair it with `withTableColumnBudget()`
@@ -228,7 +253,9 @@ $writer->close();
 - GFM tables (rounded border, via the sugar-style table renderer
   `SugarCraft\Style\Table\Table`).
 - Task lists (`☑` / `☐`).
-- Definition lists (`term` / indented `: description`).
+- Definition lists — emitted as a `term` line followed by a
+  flush-left description line; the parser consumes the `:` marker,
+  so input indentation is optional.
 - Links (with OSC 8 hyperlinks), autolinks, images (alt + url).
 - HTML blocks + inline HTML — pass through with theme styling.
 - Thematic breaks.
@@ -317,10 +344,15 @@ GLAMOUR_STYLE=tokyo-night php examples/render.php
 NO_COLOR=1 php examples/render.php
 ```
 
+User-facing strings route through the shipped i18n surface —
+`Lang::t()` (`src/Lang.php`) over 16 locales in `lang/`; candy-mdview
+consumes localized messages such as `theme.read_failed`.
+
 ## Renderer options
 
 ```php
 use SugarCraft\Markdown\{Renderer, Theme};
+use SugarCraft\Markdown\Style\StyleSheet;
 
 $renderer = (new Renderer(Theme::dark()))
     ->withWordWrap(80)               // wrap paragraphs / blockquotes / lists
@@ -328,15 +360,26 @@ $renderer = (new Renderer(Theme::dark()))
     ->withHyperlinks(true)           // emit OSC 8 link envelopes
     ->withBaseURL('https://docs.example.com/')  // prefix relative links
     ->withTableWrap(true)            // wrap text inside table cells
-    ->withInlineTableLinks(false)    // suppress (url) suffix in cells
+    ->withInlineTableLinks(false)    // cells drop BOTH (url) + envelope
     ->withTableColumnBudget(true)    // scale table columns into the wrap
     ->withFenceColumnBudget(true)    // clip fenced lines to the wrap
     ->withPreservedNewLines(true)    // keep source blank-line runs between blocks
     ->withStandardStyle('dracula')   // re-pick the stock theme
-    ->withEmoji(true);               // expand `:smile:` shortcodes
+    ->withEmoji(true)                // expand `:smile:` shortcodes
+    ->withStyleSheet(StyleSheet::base()); // cascade styles per block kind
 
 echo $renderer->render("Hello :wave:\n");
 ```
+
+`withBaseURL($url)` stores the base with exactly one trailing slash
+(added when missing, collapsed when doubled); `withBaseURL(null)` —
+or `withBaseURL('')` — disables resolution.
+
+`withInlineTableLinks(false)` is a visual-only knob for OSC-8-capable
+terminals: with it off a link inside a table cell loses **both** the
+`(url)` suffix and the envelope — the destination disappears from the
+rendered bytes entirely. Avoid it for accessible output and for
+pipelines whose terminals do not render OSC-8.
 
 With emoji on, expansion runs after parsing — code spans, fenced
 blocks and link destinations keep the source bytes. 1,842 codes
@@ -357,12 +400,20 @@ object.
   `Renderer::ansi()`, `Renderer::plain()`, `Renderer::ascii()`,
   `Renderer::fromEnvironment()`, one-shot `Renderer::renderMarkdown($md, ?Theme)`.
 - Channels: `render()` (whole string), `stream()` (chunk generator),
-  `renderSection()` / `sectionBodies()` (per-section), `write()` (render
-  into a stream resource), `writer()` / `Writer::toPath()` /
-  `Writer::toStream()` (push side), `StreamSink` (the sink both share).
-- Readback: `defersStreaming()` tells buffered from streaming regime;
-  `Theme::byName()`, `Theme::fromEnvironment()`, `Theme::fromJson()` and
-  `Theme::fromJsonString()` complete the theme side.
+  `renderSection()` (per-section — the `parseSection()` /
+  `renderParsedSection()` pair behind the streaming family is
+  `@internal`), `write()` (render into a stream resource), `writer()`
+  / `Writer::toPath()` / `Writer::toStream()` (push side), `StreamSink`
+  (the sink both share).
+- Readback: `defersStreaming()` tells buffered from streaming regime.
+  `Theme::byName()` returns `?Theme` — null on an unknown name, which
+  then lands silently on `ansi()` through `new Renderer($theme)`; for
+  name-based construction prefer `withStandardStyle()` (throws on
+  unknown) or `Theme::fromEnvironment($fallback)`. `Theme::fromJson()`
+  and `Theme::fromJsonString()` complete the theme file/inline pair,
+  and `Theme::mapStyles(callable)` rewrites every `Style` slot through
+  one callback — the projection candy-code feeds through its
+  `Theme::pair` colour bridge.
 
 ## Test
 
