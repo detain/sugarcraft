@@ -150,7 +150,7 @@ describe('Composer Ctrl+G history search (C-WEB-4.a)', () => {
 
 /**
  * C-WEB-4.a: the ISS-051 collapse, client-side — a long paste becomes a
- * `[Pasted #n +X lines]` placeholder backed by a chip map, submit expands it,
+ * `[Pasted text #n +X lines]` placeholder backed by a chip map, submit expands it,
  * and deleting the placeholder drops the filed payload with it.
  */
 describe('Composer paste chips (C-WEB-4.a)', () => {
@@ -172,8 +172,8 @@ describe('Composer paste chips (C-WEB-4.a)', () => {
   it('a long paste inserts a chip instead of the payload, and submit sends the expansion', async () => {
     const wrapper = mountComposer()
     await pasteInto(wrapper, LONG)
-    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([`[Pasted #1 +12 lines]`])
-    await wrapper.setProps({ modelValue: '[Pasted #1 +12 lines]' })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([`[Pasted text #1 +12 lines]`])
+    await wrapper.setProps({ modelValue: '[Pasted text #1 +12 lines]' })
     await press(wrapper, 'Enter')
     const send = wrapper.emitted('send')?.[0]
     expect(send?.[0]).toBe(LONG)
@@ -190,21 +190,21 @@ describe('Composer paste chips (C-WEB-4.a)', () => {
   it('deleting the placeholder drops the chip: re-typed chip text stays literal', async () => {
     const wrapper = mountComposer()
     await pasteInto(wrapper, LONG)
-    await wrapper.setProps({ modelValue: '[Pasted #1 +12 lines]' })
+    await wrapper.setProps({ modelValue: '[Pasted text #1 +12 lines]' })
     await wrapper.setProps({ modelValue: 'changed my mind' }) // the deletion prunes the map
-    await wrapper.setProps({ modelValue: '[Pasted #1 +12 lines] typed back' })
+    await wrapper.setProps({ modelValue: '[Pasted text #1 +12 lines] typed back' })
     await press(wrapper, 'Enter')
     const send = wrapper.emitted('send')?.[0]
-    expect(send?.[0]).toBe('[Pasted #1 +12 lines] typed back')
+    expect(send?.[0]).toBe('[Pasted text #1 +12 lines] typed back')
   })
 
   it('two long pastes carry distinct numbers and both expand at submit', async () => {
     const SECOND = Array.from({ length: 11 }, (_, i) => `second ${i}`).join('\n')
     const wrapper = mountComposer()
     await pasteInto(wrapper, LONG) // filed as chip #1
-    await wrapper.setProps({ modelValue: '[Pasted #1 +12 lines]\n' })
+    await wrapper.setProps({ modelValue: '[Pasted text #1 +12 lines]\n' })
     await pasteInto(wrapper, SECOND) // filed as chip #2 (caret placement is the parent's draft)
-    await wrapper.setProps({ modelValue: '[Pasted #1 +12 lines]\n[Pasted #2 +11 lines]' })
+    await wrapper.setProps({ modelValue: '[Pasted text #1 +12 lines]\n[Pasted text #2 +11 lines]' })
     await press(wrapper, 'Enter')
     const send = wrapper.emitted('send')?.[0]
     expect(send?.[0]).toBe(`${LONG}\n${SECOND}`)

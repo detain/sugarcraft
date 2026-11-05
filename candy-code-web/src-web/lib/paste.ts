@@ -91,8 +91,8 @@ async function readImage(file: File): Promise<PastedImage> {
 // one-line chip and `Chat::expandPasteChips()` puts the payload back at every
 // reader that treats the draft as sent text. The composer lands the same
 // machine client-side: the thresholds mirror `Chat::PASTE_COLLAPSE_LINES` /
-// `Chat::PASTE_COLLAPSE_BYTES`, and the chip shape is this surface's own —
-// `[Pasted #n +X lines]`.
+// `Chat::PASTE_COLLAPSE_BYTES`, and the chip wording is unified with the TUI's
+// `tui.paste.chip` (OD-27): `[Pasted text #n +X lines]`.
 
 /** Collapse a paste taller than this many lines (mirrors `Chat::PASTE_COLLAPSE_LINES`). */
 export const PASTE_CHIP_LINES = 10
@@ -107,7 +107,7 @@ export function pasteNeedsCollapse(text: string): boolean {
 
 /** The one-line placeholder filing away a paste of $lines lines, numbered $n. */
 export function pasteChip(n: number, lines: number): string {
-  return `[Pasted #${n} +${lines} lines]`
+  return `[Pasted text #${n} +${lines} lines]`
 }
 
 /**

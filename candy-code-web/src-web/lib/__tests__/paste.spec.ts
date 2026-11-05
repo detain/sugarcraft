@@ -100,16 +100,16 @@ describe('paste chips (C-WEB-4.a)', () => {
   })
 
   it('the chip is the one-line placeholder the composer files the paste under', () => {
-    expect(pasteChip(1, 12)).toBe('[Pasted #1 +12 lines]')
+    expect(pasteChip(1, 12)).toBe('[Pasted text #1 +12 lines]')
   })
 
   it('expansion replaces every known chip, in map order, and leaves unknown text literal', () => {
     const chips = new Map([
-      ['[Pasted #1 +2 lines]', 'a\nb'],
-      ['[Pasted #2 +3 lines]', 'c\nd\ne'],
+      ['[Pasted text #1 +2 lines]', 'a\nb'],
+      ['[Pasted text #2 +3 lines]', 'c\nd\ne'],
     ])
-    expect(expandPasteChips('[Pasted #1 +2 lines] then [Pasted #2 +3 lines]', chips)).toBe('a\nb then c\nd\ne')
-    expect(expandPasteChips('[Pasted #9 +1 lines] untouched', chips)).toBe('[Pasted #9 +1 lines] untouched')
+    expect(expandPasteChips('[Pasted text #1 +2 lines] then [Pasted text #2 +3 lines]', chips)).toBe('a\nb then c\nd\ne')
+    expect(expandPasteChips('[Pasted text #9 +1 lines] untouched', chips)).toBe('[Pasted text #9 +1 lines] untouched')
     expect(expandPasteChips('plain', new Map())).toBe('plain')
   })
 })
