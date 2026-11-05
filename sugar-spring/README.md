@@ -132,7 +132,7 @@ honest patterns:
 
 ### Reduced motion
 
-Spring-driven animation honours a reduce-motion request automatically:
+Spring-driven animation honours a reduced-motion request automatically:
 `Spring::update()` — and everything built from springs, `SpringChain` and
 `SpringCollection` — snaps to `$target` (returning `[<target>, 0.0]`) when the
 signal is on. The signal is **environment-only**: `REDUCE_MOTION` or
