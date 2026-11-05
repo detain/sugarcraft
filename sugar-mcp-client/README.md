@@ -444,7 +444,7 @@ process that started it — one server shared by the whole process tree:
   `posix_kill($pid, 0)` (it cannot `waitpid` a sibling's child). If the OWNER
   is SIGKILLed while a forked child still holds the connection, nothing here
   reaps the server child — that cleanup is the embedding process manager's
-  job (candy-code runs it through its own lifecycle supervisor).
+  job (candy-code runs it through its own `Support\ProcessReaper`).
 - the lock file's name records its owner
   (`sugar-mcp-client-lock-<pid-namespace>-<pid>-<random>`). An owner that is killed
   before it stops its server leaves the file behind, so every new connection
