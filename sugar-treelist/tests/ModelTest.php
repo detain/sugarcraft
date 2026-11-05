@@ -115,6 +115,17 @@ final class ModelTest extends TestCase
         $this->assertSame('a', $this->model->lines()[0]);
     }
 
+    public function testSortOnEmptyListStaysQuiet(): void
+    {
+        // Sorting an empty list must be a loud-free no-op: reading the (absent)
+        // cursor item's id has to tolerate the gap, not warn about it.
+        $model = $this->model->setLessFunc(fn($a, $b) => \strcmp((string) $a, (string) $b));
+        $sorted = $model->sort();
+
+        $this->assertTrue($sorted->isEmpty());
+        $this->assertSame(0, $sorted->cursorIndex());
+    }
+
     public function testFindItem(): void
     {
         foreach (['apple', 'banana', 'cherry'] as $v) {

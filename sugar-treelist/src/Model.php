@@ -607,7 +607,7 @@ final class Model
         if ($this->lessFunc === null) {
             return $this;
         }
-        $cursorId = $this->items[$this->cursorIndex]?->id;
+        $cursorId = ($this->items[$this->cursorIndex] ?? null)?->id;
         $preferred = $this->cursorIndex;
         return $this->mutate(function ($m) use ($cursorId, $preferred) {
             $list = $m->filterFn !== null ? $m->originalItems : $m->items;
