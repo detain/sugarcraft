@@ -13,9 +13,6 @@
 [![PHP](https://img.shields.io/badge/php-8.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-
-![demo](.vhs/screenshot.gif)
-
 candy-codeshot — turn code or terminal output into an SVG (or PNG) screenshot,
 for PHP 8.3+. SVG output needs **no `ext-gd` / Imagick**; the SVG is plain text
 suitable for git diffs and CI artifacts. PNG output is also available and
@@ -25,11 +22,17 @@ requires `ext-gd`.
 composer require sugarcraft/candy-codeshot:dev-master
 ```
 
-No stable release tags exist yet: `dev-master` (with
-`"minimum-stability": "dev"` in the root manifest) is the constraint that
-resolves. A rolling standalone binary is also published:
+> **Stability:** this package requires its `sugarcraft/` siblings
+> (`sugarcraft/sugar-ansi-parser` and `sugarcraft/sugar-core`) at `dev-master`.
+> A Composer project left on the default `stable` minimum-stability cannot
+> resolve them — add `"minimum-stability": "dev", "prefer-stable": true` to the
+> consuming root (or pin the released `sugarcraft/*` tags once cut). The
+> monorepo publishes all libs together, so sibling versions always line up.
+
+A rolling standalone binary is also published:
 `https://github.com/detain/sugarcraft/releases/download/candy-codeshot/dev/candy-codeshot.phar`
-with a sha256 sidecar; stable `candy-codeshot/v*` tags are a maintainer seam.
+with a sha256 sidecar; stable `candy-codeshot/v*` tags are reserved for
+maintainers.
 
 ## CLI
 
@@ -78,16 +81,27 @@ unrecognised flag).
 
 - `0` — success.
 - `1` — I/O failure: unreadable input, unwritable output, or a missing composer `autoload.php` (installation problem; the binary names itself and says to run `composer install`).
-- `2` — usage or input error (bad flag, value missing, path outside the CWD, refused highlight, missing `ext-gd` for PNG, …).
+- `2` — usage or input error: unknown or malformed flag, missing flag value,
+  non-numeric `--padding` / `--border-radius`, unknown theme, `--format` or
+  `--window-style` name, path refused by confinement (input, `--font` or
+  `--output`), refused font (not a file, or not a TTF/OTF/WOFF/WOFF2
+  signature), directory as input, missing `ext-gd` for PNG, PNG output refused
+  to a terminal, refused `--highlight` range, or a render the engine refuses
+  mid-flight (PNG pixel ceiling, font read failure).
 
 ### Path confinement
 
 For security, the input path, `--font` path and `--output` path must resolve
 inside the current working directory; anything outside (including `..`
-traversal) is refused with exit 2. This keeps an untrusted command line — or a
-scripted caller feeding paths from outside data — from reading arbitrary files
-(embedding a font or reading input) or writing outside the project. Pass
-`--unsafe-paths` to lift the restriction deliberately.
+traversal) is refused with exit 2. A path that does not exist yet (a new
+`--output` file) is confined through its nearest existing ancestor, so a
+traversal-laden destination is refused before anything is written. This keeps
+an untrusted command line — or a scripted caller feeding paths from outside
+data — from reading arbitrary files (embedding a font or reading input) or
+writing outside the project. Pass `--unsafe-paths` to lift the restriction
+deliberately. The terminal counts as a protected destination too: `--format
+png` with no `--output` file on an interactive terminal is refused with exit 2
+rather than spewing raw PNG bytes into the shell.
 
 ### PNG output
 
@@ -100,13 +114,16 @@ candy-codeshot script.php --theme dracula --format png -o shot.png
 
 PNG mode is more limited than SVG (see [Known limitations](#known-limitations)):
 theme `fontSize`/`lineHeight` are not honoured (GD's built-in bitmap font is
-fixed-size), fonts cannot be embedded, and the SVG-only options `--ligatures`,
-`--font`, `--highlight` and `--border-radius` are dropped (announced on stderr). When you pass any of them together with
-`--format png`, the CLI **announces each dropped option on stderr** instead of
-failing silently. If `ext-gd` is missing, PNG requests exit 2 with a clear
-message. Writing `--format svg` (or omitting it) to a `*.png` filename — or
-`--format png` to a `*.svg` filename — still writes the bytes of the requested
-format but warns on stderr that the extension and format disagree.
+fixed-size) and fonts cannot be embedded. The SVG-only options `--ligatures`,
+`--font`, `--highlight` and `--border-radius` are dropped; when you pass any of
+them together with `--format png`, the CLI **announces each dropped option on
+stderr** instead of failing silently. If `ext-gd` is missing, PNG requests exit
+2 with a clear message; likewise `--format png` without an `--output` file is
+refused (exit 2) when stdout is a terminal, because raw high-bit PNG bytes
+belong in a file and not on your shell. Writing `--format svg` (or omitting it)
+to a `*.png` filename — or `--format png` to a `*.svg` filename — still writes
+the bytes of the requested format but warns on stderr that the extension and
+format disagree.
 
 ## Library
 
@@ -230,8 +247,8 @@ Build a custom theme via the `Theme` constructor — set background / foreground
   PNG draws a flat offset rectangle. Expect slightly different shadows.
 - **`windows-terminal` chrome is deliberately dark** — its title bar uses the
   hard-coded `#1e1e1e` / `#303030` / `#444444` of the real Windows Terminal
-  default theme and is not re-tinted by `--theme` (future seam: theme-derived
-  chrome colours). Its title-bar rects are clipped to the rounded frame, so a
+  default theme and is not re-tinted by `--theme` (planned future work:
+  theme-derived chrome colours). Its title-bar rects are clipped to the rounded frame, so a
   non-zero `--border-radius` shows rounded top corners.
 - **Accessible SVG output** — every render emits `<title>`, `<desc>` and
   `role="img"`; the CLI names the document after the input basename (or
@@ -247,7 +264,10 @@ Build a custom theme via the `Theme` constructor — set background / foreground
   0..256, and PNG output above 40,000,000 pixels is refused, not allocated.
 - **Font embedding caps at 32 MiB** — unreadable or oversized font files
   raise a loud `RuntimeException` (CLI exit 2); SVG never silently drops
-  the `@font-face`.
+  the `@font-face`. The CLI verifies the font's signature before reading it;
+  a font deleted between that check and the read is caught by the same loud
+  refusal — the check→read window is accepted and fail-closed, not chased
+  with locks.
 - **Classic ANSI palette** — `AnsiParser::ANSI16` uses original xterm
   values (blue `#0000ee`) for terminal parity; contrast on dark themes is
   low by design.
