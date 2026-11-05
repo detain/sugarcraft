@@ -84,7 +84,9 @@ Steps never throw and never wrap: the view position is clamped at the calendar
 floor (January 0001 — earlier years cannot be represented as `Y-m-d` grid
 dates) and, when set, at the `min`/`max` bound months. Stepping at a clamp
 boundary is a no-op. The cursor index is re-clamped into the new month on
-every navigation step, so navigating to a shorter month lands on its last day.
+every navigation step: it keeps its grid position whenever that position is a
+day cell of the new month, so a step into a shorter month lands on its last
+day only when the old index falls past the new month's day-cell window.
 The mirror edge exists at the top: an unbounded picker stepping past year 9999
 enters year 10000, which cannot be written as `%04d`, so the grid date is
 unresolvable — `View()` still renders (reporting year 10000), but
