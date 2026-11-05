@@ -39,6 +39,11 @@ final class Endpoint
         public readonly array         $options = [],
     ) {
         self::assertPort($name, $port);
+        // F-22: an empty host used to mint a selectable picker row that
+        // dispatched a blank destination — refuse construction by name.
+        if ($host === '') {
+            throw new \InvalidArgumentException(Lang::t('endpoint.host_empty', ['name' => $name]));
+        }
     }
 
     /**
@@ -116,6 +121,11 @@ final class Endpoint
             $argv[] = $this->proxyJump;
         }
         foreach ($this->options as $opt) {
+            // F-22: '-o' with an empty value is shipped garbage, not a
+            // setting — refuse by name before the leading-dash guard.
+            if ($opt === '') {
+                throw new \InvalidArgumentException(Lang::t('endpoint.option_empty', ['name' => $this->name]));
+            }
             $this->assertNotOption('option', $opt);
             $argv[] = '-o';
             $argv[] = $opt;

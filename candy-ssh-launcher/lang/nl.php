@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist-endpoint: veld [{field}] heeft een onveilige waarde met een koppelteken aan het begin [{value}]',
+    'endpoint.host_empty' => 'endpoint `{name}` heeft een lege host — een selecteerbare rij heeft een hostnaam nodig',
+    'endpoint.option_empty' => 'endpoint `{name}` heeft een lege optie-ingang — een lege -o-waarde wordt geweigerd',
     'endpoint.port_invalid'     => 'wishlist-endpoint [{host}]: ongeldige poort [{port}] — moet een geheel getal zijn van 1 tot 65535',
 
     'cli.usage'         => 'Gebruik: candy-ssh-launcher [--config <pad>] [--ssh <ssh-binair>] [--list] [-h|--help] [-v|--version]',

@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'эндпоинт wishlist: поле [{field}] содержит небезопасное значение с ведущим дефисом [{value}]',
+    'endpoint.host_empty' => 'эндпоинт `{name}` содержит пустой host — выбираемой строке нужно имя хоста',
+    'endpoint.option_empty' => 'эндпоинт `{name}` содержит пустую запись options — пустое значение -o отклоняется',
     'endpoint.port_invalid'     => 'эндпоинт wishlist [{host}]: недопустимый порт [{port}] — должно быть целое число от 1 до 65535',
 
     'cli.usage'         => 'Использование: candy-ssh-launcher [--config <путь>] [--ssh <ssh-бинарник>] [--list] [-h|--help] [-v|--version]',

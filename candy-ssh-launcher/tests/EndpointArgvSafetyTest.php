@@ -90,4 +90,26 @@ final class EndpointArgvSafetyTest extends TestCase
         ];
         $this->assertSame($expected, $argv);
     }
+
+    public function testEmptyHostRefusedAtConstruction(): void
+    {
+        // F-22 (Step 18): an empty host minted a selectable picker row that
+        // dispatched a blank destination; construction now refuses by name.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('x');
+        new Endpoint(name: 'x', host: '');
+    }
+
+    public function testEmptyOptionRefusedAtDispatch(): void
+    {
+        // F-22 (Step 18): options [''] shipped a bare '-o' argument — the
+        // empty entry is refused by name before the leading-dash guard.
+        $e = new Endpoint(name: 'opt', host: 'o.test', options: ['']);
+        try {
+            $e->toSshArgv('ssh');
+            $this->fail('expected a named refusal');
+        } catch (\InvalidArgumentException $ex) {
+            $this->assertStringContainsString('opt', $ex->getMessage());
+        }
+    }
 }

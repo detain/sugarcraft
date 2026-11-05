@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist uç noktası: [{field}] alanı başında tire olan güvensiz bir değer içeriyor [{value}]',
+    'endpoint.host_empty' => '`{name}` uç noktasının ana makinesi boş — seçilebilir bir satır bir ana makine adına ihtiyaç duyar',
+    'endpoint.option_empty' => '`{name}` uç noktasında boş bir seçenek girdisi var — boş bir -o değeri reddedilir',
     'endpoint.port_invalid'     => 'wishlist uç noktası [{host}]: geçersiz bağlantı noktası [{port}] — 1 ile 65535 arasında bir tam sayı olmalı',
 
     'cli.usage'         => 'Kullanım: candy-ssh-launcher [--config <yol>] [--ssh <ssh-ikili>] [--list] [-h|--help] [-v|--version]',

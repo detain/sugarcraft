@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'punkt końcowy wishlist: pole [{field}] zawiera niebezpieczną wartość zaczynającą się od myślnika [{value}]',
+    'endpoint.host_empty' => 'punkt `{name}` ma pusty host — wiersz do wyboru wymaga nazwy hosta',
+    'endpoint.option_empty' => 'punkt `{name}` ma pustą pozycję options — pusta wartość -o jest odrzucana',
     'endpoint.port_invalid'     => 'punkt końcowy wishlist [{host}]: nieprawidłowy port [{port}] — musi to być liczba całkowita od 1 do 65535',
 
     'cli.usage'         => 'Użycie: candy-ssh-launcher [--config <ścieżka>] [--ssh <ssh-binarny>] [--list] [-h|--help] [-v|--version]',

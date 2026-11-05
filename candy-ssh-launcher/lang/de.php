@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist-Endpunkt: Feld [{field}] enthält unsicheren Wert mit führendem Bindestrich [{value}]',
+    'endpoint.host_empty' => 'Endpoint `{name}` hat einen leeren Host — eine wählbare Zeile braucht einen Hostnamen',
+    'endpoint.option_empty' => 'Endpoint `{name}` hat einen leeren Options-Eintrag — ein leerer -o-Wert wird abgelehnt',
     'endpoint.port_invalid'     => 'wishlist-Endpunkt [{host}]: ungültiger Port [{port}] — muss eine Ganzzahl von 1 bis 65535 sein',
 
 

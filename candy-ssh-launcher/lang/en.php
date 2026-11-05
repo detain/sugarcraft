@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist endpoint: field [{field}] has unsafe leading-dash value [{value}]',
+    'endpoint.host_empty' => 'endpoint `{name}` has an empty host — a selectable row needs a hostname',
+    'endpoint.option_empty' => 'endpoint `{name}` has an empty option entry — a blank -o value is refused',
     'endpoint.port_invalid'     => 'wishlist endpoint [{host}]: invalid port [{port}] — must be an integer from 1 to 65535',
 
     // bin/candy-ssh-launcher

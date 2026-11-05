@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist 엔드포인트: 필드 [{field}]에 대시로 시작하는 안전하지 않은 값 [{value}]이(가) 있습니다',
+    'endpoint.host_empty' => '엔드포인트 `{name}`의 호스트가 비어 있습니다 — 선택 가능한 행에는 호스트 이름이 필요합니다',
+    'endpoint.option_empty' => '엔드포인트 `{name}`에 빈 옵션 항목이 있습니다 — 빈 -o 값은 거부됩니다',
     'endpoint.port_invalid'     => 'wishlist 엔드포인트 [{host}]: 잘못된 포트 [{port}] — 1에서 65535 사이의 정수여야 합니다',
 
     'cli.usage'         => '사용법: candy-ssh-launcher [--config <경로>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version]',

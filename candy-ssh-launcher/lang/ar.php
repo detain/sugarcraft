@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'نقطة نهاية wishlist: الحقل [{field}] يحتوي قيمة غير آمنة تبدأ بشرطة [{value}]',
+    'endpoint.host_empty' => 'النقطة `{name}` تحتوي مضيفًا فارغًا — يحتاج الصف القابل للاختيار إلى اسم مضيف',
+    'endpoint.option_empty' => 'النقطة `{name}` تحتوي مدخل خيار فارغًا — قيمة `-o` الفارغة مرفوضة',
     'endpoint.port_invalid'     => 'نقطة نهاية wishlist [{host}]: منفذ غير صالح [{port}] — يجب أن يكون عدداً صحيحاً من 1 إلى 65535',
 
     'cli.usage'         => 'الاستخدام: candy-ssh-launcher [--config <مسار>] [--ssh <ssh-ثنائي>] [--list] [-h|--help] [-v|--version]',

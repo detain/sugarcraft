@@ -124,15 +124,15 @@ Flat list of endpoint objects (YAML subset or JSON). The reader format follows t
 
 | Key | Type | Meaning |
 |-----|------|---------|
-| `name` | string, required | Label shown in the picker (the filter scores the whole display line `name ─ user@host[:port]`, so usernames and port digits match too). |
-| `host` | string, required | Destination hostname — what ssh connects to. |
+| `name` | string, required (non-empty) | Label shown in the picker (the filter scores the whole display line `name ─ user@host[:port]`, so usernames and port digits match too). |
+| `host` | string, required and non-empty | Destination hostname — what ssh connects to; an empty host is refused. |
 | `port` | `1`–`65535`, default `22` | SSH port; junk values are refused with the endpoint's name. |
 | `user` | string, optional | Remote user (omitted → ssh's own default). |
 | `description` | string, optional | Dimmed text after the endpoint row. |
 | `identityFiles` | list, optional | Identity files, in order, each passed as its own `-i`; a bare scalar (`identityFiles: ~/.ssh/id`) is accepted as a one-item list. |
 | `identity_file` / `identityFile` | string, optional | Singular aliases of the above. They are not merged: the plural `identityFiles` wins when present, else `identity_file`, else `identityFile` — a losing alias is silently discarded, so spell exactly one per endpoint. |
 | `proxyJump` | string, optional | Passed to ssh as `-J`. |
-| `options` | list, optional | Passed verbatim as repeated `-o Key=Value`; a bare scalar is accepted as a one-item list. |
+| `options` | list, optional | Passed verbatim as repeated `-o Key=Value`; a bare scalar is accepted as a one-item list; an empty item is refused at dispatch. |
 
 Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings indented under a list field are refused by name, field and line. A `#` after whitespace starts a comment, and stripping is quote-aware: outside quotes only, so `description: "fix #1"` keeps its hash. Booleans (`name: yes`) are refused at any string field rather than reaching ssh as `"1"`.
 

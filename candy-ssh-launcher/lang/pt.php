@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'endpoint do wishlist: o campo [{field}] tem um valor inseguro com hífen inicial [{value}]',
+    'endpoint.host_empty' => 'o endpoint `{name}` tem um host vazio — uma linha selecionável precisa de um nome de host',
+    'endpoint.option_empty' => 'o endpoint `{name}` tem uma entrada de opção vazia — um valor -o em branco é recusado',
     'endpoint.port_invalid'     => 'endpoint do wishlist [{host}]: porta inválida [{port}] — deve ser um inteiro de 1 a 65535',
 
     'cli.usage'                => 'Uso: candy-ssh-launcher [--config <caminho>] [--ssh <binário-ssh>] [--list] [-h|--help] [-v|--version]',

@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'endpoint de wishlist: el campo [{field}] tiene un valor no seguro con guion inicial [{value}]',
+    'endpoint.host_empty' => 'el endpoint `{name}` tiene un host vacío — una fila seleccionable necesita un nombre de host',
+    'endpoint.option_empty' => 'el endpoint `{name}` tiene una entrada de opción vacía — un valor -o en blanco se rechaza',
     'endpoint.port_invalid'     => 'endpoint de wishlist [{host}]: puerto no válido [{port}] — debe ser un entero de 1 a 65535',
 
 

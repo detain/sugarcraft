@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'endpoint wishlist: pole [{field}] má nebezpečnou hodnotu začínající pomlčkou [{value}]',
+    'endpoint.host_empty' => 'koncový bod `{name}` má prázdného hostitele — vybraný řádek potřebuje hostname',
+    'endpoint.option_empty' => 'koncový bod `{name}` má prázdnou položku options — prázdná hodnota -o je odmítnuta',
     'endpoint.port_invalid'     => 'endpoint wishlist [{host}]: neplatný port [{port}] — musí to být celé číslo od 1 do 65535',
 
     'cli.usage'         => 'Použití: candy-ssh-launcher [--config <cesta>] [--ssh <ssh-binární>] [--list] [-h|--help] [-v|--version]',

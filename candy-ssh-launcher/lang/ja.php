@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'wishlist エンドポイント: フィールド [{field}] に先頭がダッシュの安全でない値 [{value}] があります',
+    'endpoint.host_empty' => 'エンドポイント `{name}` のホストが空です — 選択可能な行にはホスト名が必要です',
+    'endpoint.option_empty' => 'エンドポイント `{name}` に空の options エントリがあります — 空の -o 値は拒否されます',
     'endpoint.port_invalid'     => 'wishlist エンドポイント [{host}]: 無効なポート [{port}] — 1 から 65535 の整数である必要があります',
 
     'cli.usage'                => '用法：candy-ssh-launcher [--config <パス>] [--ssh <sshバイナリ>] [--list] [-h|--help] [-v|--version]',

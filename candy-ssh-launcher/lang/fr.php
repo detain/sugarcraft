@@ -24,6 +24,8 @@ return [
 
     // endpoint security
     'endpoint.option_injection' => 'endpoint wishlist : le champ [{field}] a une valeur non sûre commençant par un tiret [{value}]',
+    'endpoint.host_empty' => "l'endpoint `{name}` a un hôte vide — une ligne sélectionnable a besoin d'un nom d'hôte",
+    'endpoint.option_empty' => "l'endpoint `{name}` a une entrée d'option vide — une valeur -o vide est refusée",
     'endpoint.port_invalid'     => 'endpoint wishlist [{host}] : port invalide [{port}] — doit être un entier de 1 à 65535',
 
 
