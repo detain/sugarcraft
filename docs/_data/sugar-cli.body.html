@@ -42,7 +42,7 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>StatusLine</td><td>success(msg, ?theme, width = Auto)</td><td>Render a success line (error/warn/info/prompt are the same shape)</td></tr>
-<tr><td>Banner</td><td>title(title, subtitle = '', ?theme, ?border, ?width)</td><td>Bordered title banner (control bytes stripped from caller text)</td></tr>
+<tr><td>Banner</td><td>title(title, subtitle = '', ?theme, ?border, ?width)</td><td>Bordered title banner (embedded escapes, control bytes, newlines stripped — single display line)</td></tr>
 <tr><td>Section</td><td>header(label, ?theme, leftPad = 2, width = Auto, rune = '─')</td><td>Label + fill rule; a non-null width is a hard cap (long labels end in …)</td></tr>
 <tr><td>Section</td><td>rule(?theme, width = Auto, rune = '─') / subHeader(label, ?theme, indent = 4, width = Auto, rune = '·')</td><td>Bare divider / indented nested heading</td></tr>
 <tr><td>Stage</td><td>step(n, total, msg, ?theme, glyph, width = Auto)</td><td>Numbered step line</td></tr>
