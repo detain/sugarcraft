@@ -370,7 +370,9 @@ The injected manifest lives only in the runner's checkout — committed lib mani
 `@dev` requires, so `tools/check-path-repos.php --no-lib-path-repos` stays green on the tree
 (pinned by `tools/tests/ReleaseSiblingPinsTest.php`). The rolling `<app>/dev` prerelease
 channel and the split/Packagist sync publish the same way: both wait for CI green at their
-commit, and dev builds carry the same `.phar.commit` / `.phar.pins.json` sidecars. A published
+commit — a green that now includes CI's own `web-bundle` job, which runs the same legs `web.yml`
+builds for the bundle these publishers ship — and dev builds carry the same
+`.phar.commit` / `.phar.pins.json` sidecars. A published
 `.sha256` still names the bytes that job produced rather than a rebuild promise — but those
 bytes are now traceable to one tested SHA, siblings included.
 

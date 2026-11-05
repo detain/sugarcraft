@@ -199,7 +199,14 @@ jobs:
 
   build:
     needs: [detect, ci-gate]
-    if: needs.detect.outputs.matrix_count != '0'
+    # G6-P MAJOR-1 cure: a job-level custom `if` REPLACES GitHub's implicit
+    # "all needs succeeded" gate, so the needs list alone is decorative — the
+    # condition itself must name the gate's verdict. Without the ci-gate.result
+    # leg, a red/cancelled/budget-exhausted CI at the pushed SHA still built
+    # and force-published the rolling <app>/dev prerelease (exactly the
+    # untested-bytes publish OD-7 rules out). With it: matrix_count 0 skips
+    # both jobs in lockstep; any non-success ci-gate outcome skips the build.
+    if: needs.detect.outputs.matrix_count != '0' && needs.ci-gate.result == 'success'
     runs-on: ubuntu-latest
     strategy:
       # One app's broken build must not cancel its siblings' publishes.

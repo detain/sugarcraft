@@ -174,6 +174,16 @@ final class ReleasePublishPostureTest extends TestCase
         );
         $build = $this->jobSection($text, 'build');
         self::assertStringContainsString('needs: [detect, ci-gate]', $build, 'phar-dev build needs the gate');
+        // MAJOR-1 companion pin: the guard's blind spot is semantic
+        // composition — `needs: [detect, ci-gate]` is textually present even
+        // when the gate is decorative, because a custom job-level `if`
+        // REPLACES GitHub's implicit all-needs-succeeded check. The condition
+        // line itself must name the gate's result for the wait to be real.
+        self::assertStringContainsString(
+            "if: needs.detect.outputs.matrix_count != '0' && needs.ci-gate.result == 'success'",
+            $build,
+            'phar-dev build folds needs.ci-gate.result into its custom if (the gate is enforced, not ornamental)'
+        );
         $inject = strpos($text, 'php scripts/pin-siblings.php inject "$APP" --root . --sha "$SHA"');
         $install = strpos($text, 'composer install --no-dev');
         $verify = strpos($text, 'php scripts/pin-siblings.php verify "$APP"');
@@ -210,13 +220,52 @@ final class ReleasePublishPostureTest extends TestCase
         self::assertStringContainsString('git diff --exit-code -- dist/', $job, 'CI proves dist parity');
     }
 
+    /**
+     * Boundedness alone never refuses anything — the terminal `exit 1`s are
+     * the fail-closed half of the OD-5/OD-7 posture (MINOR-1): without a
+     * pin on them, flipping a refuse to `exit 0` or smuggling `|| true` onto
+     * the verdict path guts every gate while this guard stays all-green.
+     * Pinned shapes per gate: the non-success-conclusion refuse (exit 1 glued
+     * to its "refusing <verb>: ... concluded" echo — same line in phar-dev's
+     * one-line case arm, next line in the multi-line arms) and the
+     * budget-exhaustion refuse below the loop, plus the absence of any
+     * `|| true` escape hatch anywhere inside the gate job.
+     */
     public function testEveryGatePollsInsideABoundedTimeout(): void
     {
-        $pollers = array_merge(self::TRIO, ['phar-dev.yml', 'sync-sugarcraft.yml']);
-        foreach ($pollers as $file) {
+        // file => [gate job name, refuse-message verb]
+        $pollers = [
+            'release-phar.yml' => ['gate', 'release'],
+            'release-app-phar.yml' => ['gate', 'release'],
+            'release-candy-top-phar.yml' => ['gate', 'release'],
+            'phar-dev.yml' => ['ci-gate', 'build'],
+            'sync-sugarcraft.yml' => ['ci-gate', 'sync'],
+        ];
+        foreach ($pollers as $file => [$job, $verb]) {
             $text = $this->workflow($file);
             self::assertStringContainsString('timeout-minutes: 250', $text, "$file bounds the gate job");
-            self::assertSame(1, substr_count($text, 'for attempt in $(seq 1 240)'), "$file has one bounded poll (fail-closed)");
+            self::assertSame(
+                1,
+                substr_count($text, 'for attempt in $(seq 1 240)'),
+                "$file has one bounded poll (fail-closed)"
+            );
+
+            $gate = $this->jobSection($text, $job);
+            self::assertMatchesRegularExpression(
+                '/refusing ' . $verb . ': CI at \$\w+ concluded \'\$run_line\'" >&2\W*exit 1/',
+                $gate,
+                "$file gate refuses on any non-green CI conclusion (the refuse's exit 1 is load-bearing)"
+            );
+            self::assertMatchesRegularExpression(
+                '/no green CI at \$\w+ within the poll budget \(fail-closed\)" >&2\W*exit 1/',
+                $gate,
+                "$file gate refuses when the poll budget burns out (the refuse's exit 1 is load-bearing)"
+            );
+            self::assertStringNotContainsString(
+                '|| true',
+                $gate,
+                "$file gate carries no || true escape hatch on the CI-verdict path"
+            );
         }
     }
 }
