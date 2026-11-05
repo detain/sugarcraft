@@ -6,13 +6,14 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\DatePicker\DatePicker;
 
-// Opens on January 2026. The cursor starts on the first cell of the 6×7 grid
-// (a blank before Thursday the 1st); every step returns a new picker.
+// Opens on January 2026 with the cursor aimed at the seed date, 2026-01-15
+// (a cursor on an empty cell falls back to the first valid day); every step
+// returns a new picker.
 $picker = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
-    -&gt;handleKey(DatePicker::KEY_DOWN)   // one week down: Sunday the 4th
-    -&gt;SelectDate();
+    -&gt;handleKey(DatePicker::KEY_DOWN)   // one row down: Thursday the 22nd
+    -&gt;SelectDate();                      // selects the date under the cursor
 
-$picker-&gt;SelectedDate()-&gt;format('Y-m-d');   // '2026-01-04'
+$picker-&gt;SelectedDate()-&gt;format('Y-m-d');   // '2026-01-22'
 echo $picker-&gt;View();                       // month grid, today and cursor highlighted
 
 // Range mode: Enter sets the start, a second Enter the end
@@ -21,7 +22,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
     -&gt;handleKey(DatePicker::KEY_DOWN)-&gt;handleKey(DatePicker::KEY_ENTER)
     -&gt;handleKey(DatePicker::KEY_RIGHT)-&gt;handleKey(DatePicker::KEY_RIGHT)
     -&gt;handleKey(DatePicker::KEY_ENTER);
-[$range-&gt;rangeStart()-&gt;format('j'), $range-&gt;rangeEnd()-&gt;format('j')];   // ['4', '6']</code></pre>
+[$range-&gt;rangeStart()-&gt;format('j'), $range-&gt;rangeEnd()-&gt;format('j')];   // ['22', '24']</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
