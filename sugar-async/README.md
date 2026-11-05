@@ -276,8 +276,13 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
   never stored).
 - `serveStaleOnError` — on a failed load with an existing (expired) entry, the
   caller resolves with the stale value WITHOUT re-stamping its age, so a blip
-  cannot latch the key and polling keeps retrying every tick. A load superseded by
-  `invalidate()`/`clear()` still answers its own callers but is never adopted.
+  cannot latch the key and polling keeps retrying every tick. Read that as
+  *freshness suspended, never extended*: the answer's real-world validity is
+  bounded by the last successful load, and a failing authority does not renew
+  it. Wrong trade for data whose freshness IS the authorization — permission
+  tables, revocation lists, session stores — where serving yesterday's grant
+  fails open; keep the flag off there and let the load reject. A load superseded
+  by `invalidate()`/`clear()` still answers its own callers but is never adopted.
 
 ```php
 use SugarCraft\Async\AsyncCache;
