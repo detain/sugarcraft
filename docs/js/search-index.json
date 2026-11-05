@@ -2,7 +2,7 @@
   {"name":"CandyAnsiInspect","slug":"candy-ansi-inspect","category":"app","description":"ANSI escape-sequence inspector.","url":"lib/candy-ansi-inspect.html"},
   {"name":"CandyCode","slug":"candy-code","category":"app","description":"Terminal AI coding agent — nine LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.","url":"lib/candy-code.html"},
   {"name":"CandyCodeWeb","slug":"candy-code-web","category":"app","description":"The browser face of candy-code's server mode — Vite + Vue 3 + TypeScript + Pinia, shipped pre-built through Composer.","url":"lib/candy-code-web.html"},
-  {"name":"CandyCodeshot","slug":"candy-codeshot","category":"app","description":"Code → SVG screenshot generator.","url":"lib/candy-codeshot.html"},
+  {"name":"CandyCodeshot","slug":"candy-codeshot","category":"app","description":"Code → SVG/PNG screenshot generator.","url":"lib/candy-codeshot.html"},
   {"name":"CandyCodetime","slug":"candy-codetime","category":"app","description":"Privacy-first coding-time tracker.","url":"lib/candy-codetime.html"},
   {"name":"CandyFiles","slug":"candy-files","category":"app","description":"Dual-pane terminal file manager.","url":"lib/candy-files.html"},
   {"name":"CandyFlappy","slug":"candy-flappy","category":"app","description":"Flappy-Bird in your terminal.","url":"lib/candy-flappy.html"},
