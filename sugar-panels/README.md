@@ -92,6 +92,9 @@ echo $panels->render($layout, 60, 7);
 Bottom bar
 ```
 
+(The 60×7 viewport continues with two blank rows — every row the renderer emits
+is the viewport width, padded.)
+
 The doubled `││` seam between the boxes is the documented frame rule (each panel
 draws its own edge; borders are never merged into junction glyphs), and
 `Bottom bar` claims its natural single row because it is a fixed child.
