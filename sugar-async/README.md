@@ -44,6 +44,13 @@ exactly one request.
 composer require sugarcraft/sugar-async
 ```
 
+The library requires `sugarcraft/sugar-core` under a `dev-master` constraint —
+this package ships on the monorepo's dev track. A fresh project on default
+`minimum-stability: stable` may therefore fail to resolve the require; add
+`"minimum-stability": "dev"` with `"prefer-stable": true` to the consuming root
+project (or pin an explicit dev constraint on the sibling packages) so composer
+may pick the branch.
+
 ## Cancellation
 
 `CancellationSource` owns the mutable cancellation flag. It exposes a read-only
