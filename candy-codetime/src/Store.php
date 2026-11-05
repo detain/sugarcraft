@@ -6,6 +6,7 @@ namespace SugarCraft\CodeTime;
 
 use SugarCraft\Async\CancellationToken;
 use SugarCraft\CodeTime\Storage\HeartbeatReader;
+use SugarCraft\Core\Util\Sanitize;
 
 /**
  * JSONL-backed heartbeat store. One file per day under
@@ -145,8 +146,21 @@ final class Store implements HeartbeatReader
         // stacks many of these, so bounded per-line memory matters. The length
         // argument bounds one line too: a chunk that stops short of its newline
         // marks a monster line, which is drained and dropped (MAX_LINE_BYTES).
-        $fh = fopen($file, 'rb');
+        // The @ keeps the degradation exactly one deliberate line: PHP's own
+        // fopen diagnostic would otherwise print a second, un-sanitised one
+        // beside the warning below (which carries the same reason anyway).
+        $fh = @fopen($file, 'rb');
         if ($fh === false) {
+            // Reads degrade loudly: an existing day file we cannot open would
+            // otherwise under-report that day in total silence. Name it on
+            // stderr (the path rode in from CANDY_CODETIME_DIR, so it is
+            // swept like every other way out) and carry on with an empty day
+            // — the reader's exit shape is unchanged.
+            $last = error_get_last();
+            fwrite(STDERR, 'candy-codetime: warning: cannot read day file '
+                . Sanitize::untrusted($file)
+                . (isset($last['message']) ? ': ' . Sanitize::untrusted((string) $last['message']) : '')
+                . "\n");
             return [];
         }
         $rows = [];

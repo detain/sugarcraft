@@ -199,7 +199,9 @@ trade-off is honest: raw `>>` redirection does not take the advisory lock
 `push` uses, so a hand-echoed line could theoretically interleave; plugin
 integrations should `flock` or just call `push`. The dashboard re-reads on
 launch and on `r`; it has no clock subscription, so an open panel never
-refreshes by itself.
+refreshes by itself. Reads degrade loudly too: a day file that exists but
+cannot be opened is named in a one-line stderr warning and counted as an
+empty day, never skipped in silence.
 
 ## Shared foundations
 

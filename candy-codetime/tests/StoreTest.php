@@ -522,4 +522,62 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         }
         $this->assertSame($days * $writers, $lines, 'every raced heartbeat must be on disk exactly once');
     }
+
+    public function testAnUnreadableDayFileWarnsOnStderrAndYieldsAnEmptyDay(): void
+    {
+        // m-12: a day file that exists but cannot be opened used to vanish in
+        // total silence. The warning is one line on stderr; the reader's
+        // shape (empty day, no throw) is unchanged. File modes are asserted
+        // from a child process, and root would shrug off chmod 000.
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root bypasses file permission modes');
+        }
+
+        $day = '2024-05-05';
+        $file = $this->tmp . '/' . $day . '.jsonl';
+        file_put_contents($file, json_encode([
+            'time' => strtotime($day . ' 10:00:00'), 'project' => 'p',
+            'language' => 'php', 'file' => 'a.php', 'duration' => 60, 'tags' => [],
+        ]) . "\n");
+
+        // Positive control: the same child sees the row while the file is openable.
+        [$out, $err, $exit] = $this->runLoadDayChild($day);
+        $this->assertSame(0, $exit, $err);
+        $this->assertSame('1', $out, $err);
+        $this->assertSame('', $err, 'a readable day must print no warning');
+
+        chmod($file, 0o000);
+        try {
+            [$out, $err, $exit] = $this->runLoadDayChild($day);
+            $this->assertSame(0, $exit, $err);
+            $this->assertSame('0', $out, 'the unreadable day still reads as empty');
+            $this->assertStringContainsString('warning', $err);
+            $this->assertStringContainsString($day . '.jsonl', $err);
+            $this->assertStringContainsString('cannot read day file', $err);
+            $this->assertStringEndsWith("\n", $err, 'the warning is one line');
+            $this->assertSame(1, substr_count($err, "\n"), 'exactly one line, no per-attempt pile-up within one read');
+        } finally {
+            chmod($file, 0o600); // restore so tearDown can unlink
+        }
+    }
+
+    /** @return array{0:string,1:string,2:int} stdout, stderr, exit */
+    private function runLoadDayChild(string $day): array
+    {
+        // A planted script beats php -r: no shell quoting can eat the $sigs.
+        $script = sys_get_temp_dir() . '/candy-codetime-loadday-' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export(__DIR__ . '/../vendor/autoload.php', true) . ";\n"
+            . '$store = new \\SugarCraft\\CodeTime\\Store(' . var_export($this->tmp, true) . ");\n"
+            . '$rows = $store->loadDay(new \\DateTimeImmutable(' . var_export($day, true) . "));\n"
+            . 'fwrite(STDOUT, (string) count($rows));' . "\n");
+        $proc = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $out = stream_get_contents($pipes[1]);
+        $err = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($proc);
+        unlink($script);
+        return [$out, $err, $exit];
+    }
 }
