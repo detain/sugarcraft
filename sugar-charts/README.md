@@ -382,10 +382,10 @@ is TrueColor. `Heatmap::withCellStyle(Style)` overlays additional attributes
 
 ## Demos
 
-Every renderer has a runnable demo: `php examples/<name>.php` from the
-`sugar-charts/` directory (see [examples/README.md](examples/README.md)).
+Nine of the ten renderers have a runnable demo: `php examples/<name>.php`
+from the `sugar-charts/` directory (see [examples/README.md](examples/README.md)).
 The eight CI-recorded GIFs cover eight renderers; `line.php` drives
-`Streamline`, and Waveline shares it.
+`Streamline`. Waveline's example is pending.
 
 ### Bar chart
 
@@ -433,7 +433,7 @@ The eight CI-recorded GIFs cover eight renderers; `line.php` drives
 | Heatmap | 🟢 v1 (auto value-range toggle ships: `withAutoValueRange()` / `getAutoValueRange()`) |
 | OHLC | 🟡 candlestick rendering only — volume sub-pane + multi-series pending |
 | Scatter | 🟡 single-dataset only — per-point rune/style sets pending |
-| Picture | 🟢 v1 — Sixel + Kitty + iTerm2 encoders ship; half-block text fallback is plain text for now |
+| Picture | 🟢 v1 — Sixel + Kitty + iTerm2 encoders ship; when no protocol is detected, `view()` prints a plain-text placeholder |
 
 ## Snapshot tests
 
