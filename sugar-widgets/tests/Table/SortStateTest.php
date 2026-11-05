@@ -86,4 +86,37 @@ final class SortStateTest extends TestCase
         // s2 has both
         $this->assertCount(2, $s2->criteria);
     }
+
+    /**
+     * Structural pin (PB-WIDGETS-3): the class is declared `final readonly`,
+     * so the criteria vector is frozen at construction for every instance —
+     * the only writer tree-wide is withCriterion()'s own `new self($criteria)`
+     * local copy. Reflection is the contract: if the declaration is ever
+     * relaxed the first assert reddens even while behaviour looks identical.
+     */
+    public function testTheClassIsDeclaredFinalReadonly(): void
+    {
+        $class = new \ReflectionClass(SortState::class);
+
+        $this->assertTrue($class->isReadOnly(), 'SortState must stay `readonly`');
+        $this->assertTrue($class->isFinal(), 'SortState must stay `final`');
+        $this->assertTrue($class->getProperty('criteria')->isReadOnly());
+    }
+
+    /**
+     * Behavioural pin (PB-WIDGETS-3): an external write to the public
+     * $criteria vector raises an Error — mutation from outside the class
+     * is impossible, not merely unidiomatic.
+     */
+    public function testExternalWriteToCriteriaRaisesError(): void
+    {
+        $s = SortState::empty();
+
+        try {
+            $s->criteria = [[0, SortDirection::Asc]];
+            $this->fail('SortState is final readonly; external write must raise Error');
+        } catch (\Error $e) {
+            $this->assertStringContainsString('Cannot modify readonly property', $e->getMessage());
+        }
+    }
 }
