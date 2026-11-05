@@ -321,7 +321,10 @@ $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 
 `Mosaic::auto()` asks `Detect::probe()` — environment variables first, then a
 DA1/XTWINOPS round trip on the TTY — and `bestBackend()` seats a renderer on
-the answer: kitty → iterm2 → sixel → the symbol-map tier. Chafa is not on that
+the answer: kitty → iterm2 → sixel → the symbol-map tier. Both `Mosaic::auto()`
+and `Mosaic::probe()` resolve capabilities on every call; wrap
+`Detect::cached()` at the application boundary to memoize the probe per-process
+(`Detect::reset()` drops the memo). Chafa is not on that
 ladder (its capability slot is written only by `Capability::universal()`), and
 plain half-block appears only when the text-availability slot is off itself, so
 the practical floor is the glyph-coverage engine. `Mosaic::diagnose()` returns

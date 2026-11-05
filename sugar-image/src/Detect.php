@@ -21,7 +21,8 @@ use SugarCraft\Core\Util\TtyDetect;
  *
  * Probes environment variables and sends DA1 queries to determine
  * which image-rendering protocols the current terminal supports.
- * Results are cached per-process.
+ * {@see probe()} resolves in full on every call; {@see cached()} memoizes
+ * the answer per-process and {@see reset()} drops the memo.
  *
  * Precedence: Kitty → iTerm2 → Sixel → HalfBlock (always available).
  *
@@ -197,8 +198,8 @@ final class Detect
 
     /**
      * Seam: the probe object the live arm consults; null constructs a
-     * default TerminalProbe on each need (Detect::probe() caches
-     * process-wide, so this runs at most once anyway). Tests inject a
+     * default TerminalProbe on each need — the terminfo arm memoizes
+     * nothing, so it runs whenever capability resolution runs. Tests inject a
      * subclass faking the protected runCommand/infocmpAvailable arms — the
      * override contract sugar-colorprofile documents for exactly that.
      */
