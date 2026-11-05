@@ -32,7 +32,7 @@ if (!$result-&gt;ok) {
 }</code></pre>
 
     <h3 style="margin-top: 32px;">Cassette format</h3>
-    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/master/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Use <code>Recorder::withFormat(new RelativeFormat())</code> to record in delta-time mode for deterministic, edit-friendly cassettes.</p>
+    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/master/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Record delta-time cassettes by opening the recorder with a relative-timestamped header — <code>Recorder::open($path, new CassetteHeader(timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE))</code>; <code>withFormat()</code> only confirms the encoding the header already selected and throws on a mismatch — it never flips one.</p>
 
     <h3 style="margin-top: 32px;">CLI</h3>
     <pre class="code"><code class="language-shell">vendor/bin/candy-vcr inspect session.cas               # list events
@@ -59,9 +59,9 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Cassette format</strong><span>JSONL (absolute <code>t</code>) or RelativeFormat (delta <code>dt</code>, asciinema-cast style), YAML secondary (hand-written test fixtures). Both round-trip through the same <code>Cassette</code> value object; <code>Player::open()</code> auto-detects format.</span></div>
+      <div class="feature"><strong>Cassette format</strong><span>Five shipped codecs — JSONL (absolute <code>t</code>, <code>.cas</code>/<code>.jsonl</code>/<code>.cassette</code>), gzip JSONL (<code>.cas.gz</code>), RelativeFormat (delta <code>dt</code>, asciinema-cast style), YAML (<code>.yaml</code>/<code>.yml</code>, hand-written fixtures), and a read-only asciinema importer (<code>.cast</code>, v2/v3); <code>.tape</code> files compile into cassettes through the tape compiler. All decode into the same <code>Cassette</code> value object; <code>Player::open()</code> picks JSONL vs RelativeFormat by content-sniffing (a <code>.gz</code> name routes straight to the gzip codec), while <code>Player::loadAny()</code> dispatches by extension.</span></div>
       <div class="feature"><strong>Recorder hook</strong><span><code>Program::withRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
-      <div class="feature"><strong>Msg serializers</strong><span>17 builtin Msg types (KeyMsg, MouseMsg×4, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are sugar-vterm CSI I/O focus events that round-trip through VCR.</span></div>
+      <div class="feature"><strong>Msg serializers</strong><span>17 builtin Msg types (KeyMsg, MouseClickMsg/MouseMotionMsg/MouseWheelMsg/MouseReleaseMsg, WindowSizeMsg, FocusGainedMsg/FocusLostMsg/BlurMsg, FocusInMsg/FocusOutMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry. FocusInMsg/FocusOutMsg are sugar-vterm CSI I/O focus events that round-trip through VCR.</span></div>
       <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
       <div class="feature"><strong>ByteAssertion</strong><span>Strict byte-equality with hex+printable diff window starting at the first divergence offset.</span></div>
       <div class="feature"><strong>ScreenAssertion</strong><span>Cell-grid equality via <a href="sugar-vterm.html">SugarVterm</a>. Tolerates ANSI-level reordering (redundant SGR, equivalent cursor moves, partial vs full repaints) — the recommended choice for round-trip tests.</span></div>
@@ -79,7 +79,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-vcr">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-vcr/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-vcr/tree/main/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vcr/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/vcr">charmbracelet/x/vcr</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
@@ -88,10 +88,11 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Recorder</td><td>open(path)</td><td>Open cassette for recording</td></tr>
-<tr><td>Recorder</td><td>withFormat(format)</td><td>Select timestamp encoding (e.g. <code>new RelativeFormat()</code> for delta-time)</td></tr>
+<tr><td>Recorder</td><td>open(path, header)</td><td>Open a cassette for recording (file created <code>0600</code>, owner-only)</td></tr>
+<tr><td>Recorder</td><td>withFormat(format)</td><td>Confirm the timestamp encoding the header already selected (e.g. <code>new RelativeFormat()</code> for delta-time) — throws on a mismatch, never flips</td></tr>
 <tr><td>Recorder</td><td>close()</td><td>Close and finalize cassette</td></tr>
-<tr><td>Player</td><td>open(path)</td><td>Open cassette for replay</td></tr>
+<tr><td>Player</td><td>open(path)</td><td>Open a cassette for replay — sniffs <code>t</code> vs <code>dt</code> on the first event line; a <code>.gz</code> name selects the gzip codec without sniffing</td></tr>
+<tr><td>Player</td><td>loadAny(path)</td><td>Load by extension: <code>.cast</code>, <code>.yaml</code>/<code>.yml</code>, <code>.tape</code>, <code>.gz</code>, <code>.cas</code>/<code>.jsonl</code>/<code>.cassette</code>; unknown extensions content-sniff</td></tr>
 <tr><td>Player</td><td>withIdleTrim(?float $seconds)</td><td>Fluent idle-gap threshold for SPEED_REALTIME playback (clamp pauses > N seconds)</td></tr>
 <tr><td>Player</td><td>play(factory, assertion)</td><td>Replay session with assertion</td></tr>
 <tr><td>ByteAssertion</td><td>new()</td><td>Strict byte-equality assertion</td></tr>

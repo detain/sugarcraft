@@ -1,6 +1,6 @@
 {
     "title": "SugarCraft — CandyVcr",
-    "description": "CandyVcr: Record and replay sugar-core terminal sessions.",
+    "description": "Record and replay sugar-core terminal sessions.",
     "ogTitle": "SugarCraft — CandyVcr",
     "ogDescription": "Record + replay sugar-core sessions — JSONL/YAML cassettes, byte + cell-grid assertions, CLI.",
     "emoji": "📼",
