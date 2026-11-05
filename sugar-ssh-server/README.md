@@ -283,9 +283,9 @@ ssh wishuser@your-host
 | Middleware           | Transport       | Purpose                                                                                              |
 |----------------------|-----------------|------------------------------------------------------------------------------------------------------|
 | `Logger`             | both            | One-line JSON event at session start + end, with elapsed time and connection meta. Sink matters: `Logger::auto()` (and `new Logger()`) append to `$SSH_SERVER_LOG` when set, else `php://stderr` — which under `ForceCommand` **is the connecting client's extended-data channel**, not journald. Pass a file path (we create it `0600`; an existing file keeps its mode) or `Logger::toStream($handle)` you control. `target()` reports the choice. |
-| `Auth`               | both            | Username allowlist, key-fingerprint allowlist, or the paired `userKeys` map (name => that name's keys). **The two flat lists are a cross product, not a pairing:** with `users` `['alice','bob']` and `keyFingerprints` `[alice-key, bob-key]`, bob presenting alice's key is admitted *as alice*. Use `userKeys` when the question is whose key this is (`[Auth::ANY_KEY]` = any key, that name only). An empty list arms nothing — `new Auth()` admits every session. |
+| `Auth`               | both            | Username allowlist, key-fingerprint allowlist, or the paired `userKeys` map (name => that name's keys). **The two flat lists are a cross product, not a pairing:** with `users` `['alice','bob']` and `keyFingerprints` `[alice-key, bob-key]`, bob presenting alice's key is admitted *as alice*. Use `userKeys` when the question is whose key this is (`[Auth::ANY_KEY]` admits the login with-or-without key evidence, that name only). An empty list arms nothing — `new Auth()` admits every session. |
 | `PasswordAuth`       | both            | Compares a password from `SSH_PASSWORD` against a caller-supplied callback; a session that delivered no variable at all is refused before the validator is consulted. **Nothing in OpenSSH ever sets that variable**: a wrapper has to supply it out of band, and if you `AcceptEnv` it the value is peer-asserted rather than proven. Absent means denied, with a path-free notice. |
-| `CertificateAuth`    | both            | Hands a certificate string from `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`) to a caller-supplied validator. **Stock OpenSSH exports none of them**, so unless your wrapper maps one in, the gate announces that it checked nothing -- loudly at `required: true`, and now also at `required: false`. |
+| `CertificateAuth`    | both            | Hands a certificate string from `CertificateAuth::ENV_KEYS` (`SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE`) to a caller-supplied validator. **Stock OpenSSH exports none of them**, so unless your wrapper maps one in, the gate announces that it checked nothing -- refusing at `required: true`, forwarding at `required: false`, and saying so either way. |
 | `AuthMethods`        | both            | Declares accepted auth methods and stores the list in Context (`auth.methods`, readable with `AuthMethods::fromContext()`). The `SSH_AUTH_METHODS` line on STDOUT is **opt-in** (`announce: true`) and off by default -- under `ForceCommand` stdout is the client's data channel, so that line is text in the user's terminal, not a protocol field. |
 | `KeyboardInteractive`| both            | Prompts on STDOUT, answers read from STDIN. *Shaped* like RFC 4256, but it is not: no SSH messages exist here. `echo` is a label, not terminal state -- input stays visible (the exchange says so when any prompt asks for silence), each answer is capped at `MAX_RESPONSE_BYTES`, and there is no deadline but the stream you inject. |
 | `RateLimit`          | both            | Per-IP (optionally per-username) token bucket persisted to a JSON state file. Writers serialise on a stable `<state-path>.lock` sidecar — never on the payload inode, which the atomic rename replaces — and refilled idle buckets are pruned on every publish. Default policy on a state error is **fail-open**; `penalize()` exists so a failed credential can drain a bucket faster than connection attempts alone, but **nothing in this library calls it** -- wire it into your own auth path. See `docs/admin/sugar-ssh-server.md`. |
@@ -399,7 +399,7 @@ and who fills each slot changes what you may trust in it.
 
 | Variable | Who sets it | Read by | Trust |
 | --- | --- | --- | --- |
-| `USER`, `LOGNAME` | sshd, for the target account | `Session::fromEnvironment()` | Good -- sshd chose it, the client asked for it. |
+| `USER`, `LOGNAME` | sshd, for the target account | `Session::fromEnvironment()` | Good -- sshd writes it for the account it launched; which account to ask for was the client's choice. |
 | `SSH_CONNECTION` | sshd: `client-ip client-port server-ip server-port` | `Session::fromEnvironment()` | Good -- socket-derived, not peer-asserted. |
 | `SSH_CLIENT` | sshd: `client-ip client-port server-port` (older, 3 fields) | `Session::fromEnvironment()` fallback | Good, but it has no server-IP slot: `fromEnvironment()` counts the fields and leaves `$serverHost` empty rather than storing the port in it (audit MINOR 15). |
 | `SSH_ORIGINAL_COMMAND` | sshd, when `ForceCommand` rewrote `command` `ssh host some command` | `Session::$command`, then your decoder | Good -- but see the [exec policy](#exec-policy-the-program-comes-from-the-peer): the program string is peer-chosen. |
@@ -539,7 +539,7 @@ Prefer pinning it per service to detecting it. `T::detect()` reads
 child when sshd's `AcceptEnv` lists it ([What sshd actually hands your
 middleware](#what-sshd-actually-hands-your-middleware)) — so detection lets
 the connecting peer choose the language your server answers in, beside the
-name it also chose for itself. `Session->$lang` is that same peer-asserted
+name it also chose for itself. `Session::$lang` is that same peer-asserted
 value: log it, do not obey it.
 
 Coverage is uneven, and the suite keeps the list honest rather than letting
@@ -552,12 +552,12 @@ in all fifteen translated locales (`ACCEPTED_UNTRANSLATED` in
 `Session::fromEnvironment()` reads the standard sshd-supplied environment:
 
 ```php
-$s->user;        // 'alice'
-$s->clientHost;  // '203.0.113.7'
-$s->clientPort;  // 54321
-$s->term;        // 'xterm-256color'
-$s->cols;        // 120
-$s->rows;        // 40
+$s->user;          // 'alice'
+$s->clientHost;    // '203.0.113.7'
+$s->clientPort;    // 54321
+$s->term;          // 'xterm-256color'
+$s->cols;          // 120
+$s->rows;          // 40
 $s->tty;          // '/dev/pts/3'   (null when non-interactive)
 $s->command;      // SSH_ORIGINAL_COMMAND if set -- what the peer asked to run,
                   // which ForceCommand ignores unless you decode it (see Status)
@@ -570,7 +570,7 @@ $s->isInteractive();
 $s->toLogContext();
 ```
 
-`s->toLogContext()` is what the bundled `Logger` writes, and since audit
+`$s->toLogContext()` is what the bundled `Logger` writes, and since audit
 MAJOR 3 it carries nine fields: the six above plus `session`, `auth_method`
 and `key_fingerprint` (a dash stands for "not carried", so a line never loses
 the authentication column silently).
@@ -580,11 +580,11 @@ There is no handshake for those to come from — this library speaks no SSH — 
 stack, with values derived locally:
 
 ```php
-$s->sessionId;        // minted per process: bin2hex(random_bytes(16)), not a wire id
-$s->authMethod;      // sniffed from SSH_USER_AUTH when a wrapper exported it
-$s->keyFingerprint;  // no producer in this library today — see the pairing note below
-$s->clientVersion;    // read from SSH_CLIENT_VERSION: stock OpenSSH exports neither
-$s->serverVersion;    // ...so both are usually empty and are not audit columns
+$s->sessionId;     // minted per process: bin2hex(random_bytes(16)), not a wire id
+$s->authMethod;    // sniffed from SSH_USER_AUTH when a wrapper exported it
+$s->keyFingerprint; // no producer in this library today — see the pairing note below
+$s->clientVersion; // read from SSH_CLIENT_VERSION: stock OpenSSH exports neither
+$s->serverVersion; // ...so both are usually empty and are not audit columns
 
 // Build a new Session with protocol metadata attached
 $s = $s->withProtocolMetadata(
@@ -703,7 +703,7 @@ all), suggests `ext-pcntl` (which the default transport needs to fork and
 reap the session child), and lists no `ext-ssh2` — an earlier revision
 suggested it for a "Ssh2 client middleware (forwarding, sftp helpers)" that
 was never built. There is no outbound client here, no port forwarding, and no
-SFTP server: `SftpStub` is a wiring example that quarantines itself, and the
+SFTP server: `SftpStub` is a wiring example, quarantined only by its own docblock, and the
 subsystem middleware only routes a named subsystem to whatever handler you
 register. [Subsystem middleware](#subsystem-middleware-inprocesstransport)
 records what that does and does not buy you.
