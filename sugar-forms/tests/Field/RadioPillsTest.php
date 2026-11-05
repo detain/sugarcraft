@@ -206,7 +206,7 @@ final class RadioPillsTest extends TestCase
 
     /**
      * The provider-wizard roster that motivated the window: eleven pills,
-     * full row 123 cells, a terminal strip that used to silently cut the
+     * full row 129 cells, a terminal strip that used to silently cut the
      * tail off-grid.
      */
     private function nnRoster(): RadioPills
