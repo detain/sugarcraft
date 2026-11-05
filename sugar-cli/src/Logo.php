@@ -61,9 +61,9 @@ final class Logo
      * Every line shares one display width (a 2-cell left margin, the side
      * rails, and a uniform inner column) — the invariant LogoTest pins so a
      * re-flowed figlet row can never again overrun the right rail. That
-     * width is 70 cells: the preset is NOT clamped to the terminal, so on a
+     * width is 66 cells: the preset is NOT clamped to the terminal, so on a
      * narrower one it wraps — supply narrower art via {@see fromAscii()} if
-     * the launch target may be under 70 columns.
+     * the launch target may be under 66 columns.
      *
      * NOTE: the logo has two visual layers — the double-line box border
      * (top/bottom rules and the side rails on every line) and the figlet

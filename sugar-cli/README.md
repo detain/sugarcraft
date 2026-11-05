@@ -67,7 +67,7 @@ echo StatusLine::error('connection refused'), "\n";
   full message).
 - **`Banner`** — render a bordered title block with optional subtitle,
   rounded by default. Useful for app intros / `--version` output.
-- **`Logo`** — Unicode box-drawing text art: `Logo::sugarcraft()` (70
+- **`Logo`** — Unicode box-drawing text art: `Logo::sugarcraft()` (66
   cells wide, deliberately not clamped to the terminal) plus
   `Logo::fromAscii($art)` for custom multi-line art. Control and non-SGR
   escape bytes are stripped on ingress, and newlines are the layout;

@@ -28,6 +28,10 @@ final class LogoTest extends TestCase
             array_values(array_unique($widths)),
             'logo lines must all share one display width, got: ' . implode(', ', $widths),
         );
+        // The docblock advertises one exact width, and the narrower-art
+        // advice below is phrased against it: pin the numeral so prose and
+        // art can never drift apart again.
+        self::assertSame(66, $widths[0], 'preset width advertised in docs is 66 cells');
         foreach ($lines as $i => $line) {
             self::assertContains(
                 mb_substr($line, -1),
