@@ -119,7 +119,7 @@ On first run you get four boxes: **cpu** (per-core meters and load), **memory** 
 
 Any other argument exits with status 2. There is no `--tty` flag. TTY mode comes from the `force_tty` option or from running on a real console, as described in [TTY mode](#tty-mode). Config load warnings (bad values) are printed on stderr at startup, and the option keeps its previous value.
 
-From a monorepo checkout, `php candy-top/bin/candy-top` works as well. `php candy-top/examples/top.php` runs the fake demo with a throwaway config path. The VHS tape `candy-top/.vhs/top.tape` records that demo.
+From a monorepo checkout, `php candy-top/bin/candy-top` works as well. `php candy-top/examples/top.php` runs the fake demo with a throwaway config path; it boots through `bin/candy-top` itself, so the tty requirement under Requirements applies to it too. The VHS tape `candy-top/.vhs/top.tape` records that demo.
 
 ## The boxes
 
