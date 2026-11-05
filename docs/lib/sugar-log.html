@@ -73,7 +73,7 @@ $child-&gt;info('Batch complete');</code></pre>
             <div class="feature"><strong>Three formatters</strong><span>TextFormatter (default), JSONFormatter, LogfmtFormatter — swap via `withFormatter()`.</span></div>
             <div class="feature"><strong>Structured context</strong><span>Arbitrary key/value pairs attached to every log call.</span></div>
             <div class="feature"><strong>Sub-loggers</strong><span><code>with(array $fields)</code> creates a child logger that inherits all context.</span></div>
-            <div class="feature"><strong>StandardLogAdapter</strong><span>Wrap any PSR-3 logger for `*log.Logger` compatibility.</span></div>
+            <div class="feature"><strong>StandardLogAdapter</strong><span>Go-style <code>print()</code>/<code>printLn()</code>/<code>fatal()</code>/<code>panic()</code> call pattern over a sugar-log Logger — a shape, not an interface (implements no contract); for PSR-3 interoperability use <code>PsrBridge</code>.</span></div>
             <div class="feature"><strong>PSR-3 bridge</strong><span>`PsrBridge` wraps a Logger and exposes the full PSR-3 LoggerInterface API.</span></div>
             <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via `HookRegistry::onLevel()` for middleware-style interceptors.</span></div>
             <div class="feature"><strong>Caller info</strong><span>`reportCaller` on Logger adds `file:line` of the true call site to every entry.</span></div>
