@@ -405,8 +405,8 @@ and who fills each slot changes what you may trust in it.
 | `SSH_ORIGINAL_COMMAND` | sshd, when `ForceCommand` rewrote `command` `ssh host some command` | `Session::$command`, then your decoder | Good -- but see the [exec policy](#exec-policy-the-program-comes-from-the-peer): the program string is peer-chosen. |
 | `SSH_TTY` | sshd when a PTY was allocated | `Session::$tty` | Good. |
 | `TERM` | sshd, from the client's pty-request | `Session::$term` | Peer-asserted. Shape it before it reaches a terminfo lookup. |
-| `LANG`, `LC_*` | only if the client sends them **and** `AcceptEnv` allows it | `Session::$lang` | Peer-asserted. This is how a visitor picks your UI language; see the i18n note below. |
-| `COLUMNS`, `LINES` | not by sshd -- the window size lives on the tty (this transport ioctls it, or accepts `withSizeProvider()`) | `Session::$cols/$rows` | Whatever you measured, not the peer's claim. |
+| `LANG`, `LC_*` | only if the client sends them **and** `AcceptEnv` allows it | `Session::$lang` (`LANG` only) | Peer-asserted, for `LANG` alone. `LC_*` reach nothing in this library: they matter solely to sugar-core's `T::detect()`, which nothing here calls. This is how a visitor picks your UI language; see the i18n note below. |
+| `COLUMNS`, `LINES` | not by sshd -- the window size lives on the tty (this transport ioctls it, or accepts `withSizeProvider()`) | `Session::$cols/$rows` | Whatever the transport measured -- with one leak: a peer that smuggles them through `AcceptEnv` reaches `Session::fromEnvironment()`, which seeds `declaredSize` from the env value (80/24 defaults). |
 | `SSH_USER_AUTH` | sshd **only** with `ExposeAuthInfo` (see `sshd_config(5)` on your release): the authorized_keys line that matched | `Auth::fingerprint()` | Good -- server-side, since sshd picked the line. |
 | `SSH_USER_KEY_FINGERPRINT` | not sshd; a wrapper that parses `SSH_USER_AUTH`, or your own `AuthorizedKeysCommand` | `Auth::fingerprint()` | Depends entirely on your wrapper. |
 | `KEY_FINGERPRINT` | same producers — the shorter alternate name the same gate reads | `Auth::fingerprint()` | Depends entirely on your wrapper. |
