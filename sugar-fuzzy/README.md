@@ -7,8 +7,10 @@ Fuzzy string matching library with scored matched character indices — enables 
 ## Installation
 
 ```bash
-composer require sugarcraft/sugar-fuzzy
+composer require sugarcraft/sugar-fuzzy:@dev
 ```
+
+Releases: pre-1.0 — consume `dev-master` (the `:@dev` form above).
 
 ## Role
 
