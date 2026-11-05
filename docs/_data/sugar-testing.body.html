@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneered: <code>ProgramSimulator</code> for driving SugarCraft apps with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for VHS demo capture.</p>
+<p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneered: <code>ProgramSimulator</code> for driving SugarCraft apps with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for composing VHS demo scripts.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require --dev sugarcraft/sugar-testing:@dev</code></pre>
@@ -51,9 +51,9 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
 
     <h3 style="margin-top: 32px;">TapeRecorder</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>to(path)</strong><span>Factory: create a tape recorder writing to the given path.</span></div>
+      <div class="feature"><strong>to(path)</strong><span>Factory: start a script builder whose <code>save()</code> writes the tape to the given path.</span></div>
       <div class="feature"><strong>header()</strong><span>Write VHS header (theme, font size, width, height).</span></div>
-      <div class="feature"><strong>type() / enter() / sleep()</strong><span>Record keypresses and delays for demo playback.</span></div>
+      <div class="feature"><strong>type() / enter() / sleep()</strong><span>Append the demo's choreography — Type/Enter/Sleep directive lines; nothing is captured from a running program and there is no playback API.</span></div>
       <div class="feature"><strong>save()</strong><span>Write the completed .tape file.</span></div>
     </div>
 
@@ -62,7 +62,7 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
       <li><strong>Deterministic Model–Update–View testing</strong> — ProgramSimulator drives Programs without real I/O.</li>
       <li><strong>Snapshot regression testing</strong> — Golden files for ANSI output.</li>
       <li><strong>Cell-grid assertions</strong> — assertCellGrid for Buffer-based renderers.</li>
-      <li><strong>Demo capture</strong> — TapeRecorder emits VHS-compatible .tape files.</li>
+      <li><strong>Demo script building</strong> — TapeRecorder emits VHS-compatible .tape files; CI renders them into GIFs.</li>
       <li><strong>Foundation for sugar-forms + sugar-forms</strong> — both build their test support on it.</li>
     </ul>
 
@@ -94,11 +94,11 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
 <tr><td>Assertions</td><td>assertAnsiEquals(string, string): void</td><td>Byte-exact ANSI diff</td></tr>
 <tr><td>GoldenFile</td><td>load(string): ?string</td><td>Load golden file contents</td></tr>
 <tr><td>GoldenFile</td><td>save(string, string): void</td><td>Save golden file</td></tr>
-<tr><td>TapeRecorder</td><td>to(string): self</td><td>Factory: create recorder</td></tr>
-<tr><td>TapeRecorder</td><td>header(...): self</td><td>Write VHS header</td></tr>
-<tr><td>TapeRecorder</td><td>type(string): self</td><td>Record keypress</td></tr>
-<tr><td>TapeRecorder</td><td>enter(): self</td><td>Record Enter key</td></tr>
-<tr><td>TapeRecorder</td><td>sleep(float): self</td><td>Record delay</td></tr>
+<tr><td>TapeRecorder</td><td>to(string): self</td><td>Factory: start composing the tape saved to that path</td></tr>
+<tr><td>TapeRecorder</td><td>header(...): self</td><td>Emit the VHS Set directives</td></tr>
+<tr><td>TapeRecorder</td><td>type(string): self</td><td>Append a Type directive (escaped)</td></tr>
+<tr><td>TapeRecorder</td><td>enter(): self</td><td>Append an Enter directive</td></tr>
+<tr><td>TapeRecorder</td><td>sleep(float): self</td><td>Append a Sleep directive</td></tr>
 <tr><td>TapeRecorder</td><td>save(): void</td><td>Write .tape file</td></tr>
 </table>
   </div>
