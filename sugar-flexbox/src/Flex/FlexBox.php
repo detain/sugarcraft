@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Ansi;
  *
  * Supports row/column direction, align, gap, and ratio-based sizing.
  *
- * Port of 76creates/stickers FlexBox.
+ * Design antecedent: 76creates/stickers FlexBox (PHP).
  *
  * @see https://github.com/76creates/stickers
  */

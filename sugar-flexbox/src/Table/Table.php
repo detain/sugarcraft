@@ -14,7 +14,7 @@ use SugarCraft\Core\Util\Width;
  * Renders a list of rows (each row is a list of string values) into a
  * formatted table with column headers, alignment, sorting, and filtering.
  *
- * Port of 76creates/stickers Table.
+ * Design antecedent: 76creates/stickers Table (PHP).
  *
  * @see https://github.com/76creates/stickers
  *
