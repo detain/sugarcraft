@@ -6960,6 +6960,30 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
+     * The composition unit of a class file: the class body plus every file
+     * in its companion directory (CWPD-14, OD-30). Methods moved into trait
+     * files under src/Host/SessionHost/ and src/Cli/Serve/ carry their prose
+     * and their call sites with them; pins that read one path see the whole
+     * unit instead.
+     */
+    private static function compositionUnitSource(string $relative): string
+    {
+        $unit = self::sourceOf($relative);
+        $dir = \dirname(__DIR__, 2) . '/src/' . \dirname($relative) . '/' . basename($relative, '.php');
+        if (!is_dir($dir)) {
+            return $unit;
+        }
+        foreach (scandir($dir) as $entry) {
+            if (!str_ends_with($entry, '.php')) {
+                continue;
+            }
+            $unit .= "\n" . self::sourceOf(\dirname($relative) . '/' . basename($relative, '.php') . '/' . $entry);
+        }
+
+        return $unit;
+    }
+
+    /**
      * The class a dispatch site is cited under in docs: for a companion
      * trait of the CWPD-14 composition convention, the composing class —
      * callers reach the method through that name, and the docs table
@@ -7430,7 +7454,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertIsString($underDisk, 'McpPromptCommands::mergeUnderDisk() vanished — the served precedence lost its shared spelling');
         self::assertStringContainsString('array_merge($mcpSpecs, $diskSpecs)', $underDisk, 'mergeUnderDisk drifted from the Chat merge spelling — one precedence law cannot have two orders');
 
-        $host = self::sourceOf('Host/SessionHost.php');
+        $host = self::compositionUnitSource('Host/SessionHost.php');
         $hostSpecs = strpos($host, 'McpPromptCommands::mergeUnderDisk(');
         self::assertNotFalse($hostSpecs, 'the served host no longer merges prompt rows — the page parity sentence lies');
         self::assertSame(1, substr_count($host, 'McpPromptCommands::specs('), 'a second specs() site appeared in the host — the launch-frozen roster now has two merge sites there too');
