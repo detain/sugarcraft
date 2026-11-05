@@ -986,6 +986,7 @@ candy-code/tests/Cli/NonInteractiveTest.php	0.053	25
 candy-code/tests/Tui/StallDetectorTest.php	0.053	21
 candy-code/tests/Tui/McpPanelTest.php	0.053	22
 candy-code/tests/Commands/CommandFailureTranscriptTest.php	0.053	7
+candy-code/tests/Cli/ServeWebRootDegradesTest.php	0.053	2
 candy-code/tests/Permissions/PathRuleRespellingTest.php	0.052	42
 candy-code/tests/Tui/MediaForm/MediaFormRenderTest.php	0.052	5
 candy-code/tests/Tui/Components/SettingsPaneTest.php	0.052	18
