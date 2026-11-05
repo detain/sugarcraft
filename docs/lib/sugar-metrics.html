@@ -82,7 +82,7 @@ $req-&gt;counter('events');</code></pre>
       <div class="feature"><strong>Gauge</strong><span>Instantaneous value that replaces on set (queue depth, RSS).</span></div>
       <div class="feature"><strong>Histogram</strong><span>Distribution of samples (latency, payload size).</span></div>
       <div class="feature"><strong>UpDownCounter</strong><span>Synchronous counter supporting positive and negative increments (active connections, queue depth delta).</span></div>
-      <div class="feature"><strong>AsyncCounter</strong><span>Asynchronous counter observed at collection time via callback. External monotonic values (GC counts, DB pool size).</span></div>
+      <div class="feature"><strong>AsyncCounter</strong><span>Asynchronous counter observed at collection time via callback. External monotonic values (GC counts, bytes served).</span></div>
       <div class="feature"><strong>AsyncGauge</strong><span>Asynchronous gauge observed at collection time via callback. External instantaneous readings (memory, queue depth).</span></div>
       <div class="feature"><strong>Tagged metrics</strong><span><code>->withTags(['user' => $u])</code> returns a registry that pre-tags every emit.</span></div>
       <div class="feature"><strong>Time helper</strong><span><code>$stop = $reg->time('http.duration'); $stop()</code> — emit a histogram sample on close.</span></div>
