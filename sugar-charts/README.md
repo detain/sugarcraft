@@ -451,14 +451,24 @@ The eight CI-recorded GIFs cover eight renderers; `line.php` drives
 
 ## Snapshot tests
 
-Render output is covered by golden-file snapshot tests. Fixture files live
-in `tests/fixtures/` with a `.golden` extension and are compared against
-actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record fixtures after intentional output changes:
+Sparkline render output is covered by golden-file snapshot tests —
+`tests/GoldenRenderTest.php` compares actual ANSI bytes against
+`sparkline-basic.golden`, `sparkline-minmax.golden` and
+`sparkline-styled.golden` in `tests/fixtures/` via
+`SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`. The other
+renderers are covered by inline byte assertions in their class suites;
+that is the extension path for growing the golden family.
+
+The golden writer is create-only: an existing fixture is never
+rewritten, and a mismatch against one still fails with the update arm
+set. To re-record after an intentional output change, delete first:
 
 ```sh
-UPDATE_GOLDENS=1 vendor/bin/phpunit
+rm tests/fixtures/<name>.golden && SUGAR_TESTING_UPDATE_GOLDENS=1 vendor/bin/phpunit
 ```
+
+(`UPDATE_GOLDENS=1` is honored as a legacy spelling; the canonical arm
+is `SUGAR_TESTING_UPDATE_GOLDENS=1`.)
 
 ## Test
 
