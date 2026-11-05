@@ -100,6 +100,16 @@ describe('row buttons', () => {
     expect(notice.find('[data-testid="copy-message"]').exists()).toBe(false)
   })
 
+  // CW-EN-EU02 / LANG REQUEST web.transcript.steered (G5-C): the stored row
+  // stays the '⇥' marker (reducer purity — steeredNotice.spec.ts pins it);
+  // the row's prose is the catalogue string, resolved here at presentation.
+  it('a steered notice row paints the localized steer prose over its marker', () => {
+    const steered = mount(TranscriptItem, {
+      props: { item: { kind: 'notice', key: 'steered:st1', level: 'info', content: '⇥' } as TranscriptItemModel },
+    })
+    expect(steered.find('.notice').text()).toBe('Steered into the running turn')
+  })
+
   it('Transcript relays both user-row actions up with the item', async () => {
     // Rows exist on the first flush (happy-dom measures 0px after that, so
     // the virtualiser drops them on any re-render — house pattern).

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { SubAgent, ToolItem, TranscriptItem, UserItem } from '../stores/reducer'
+import type { NoticeItem, SubAgent, ToolItem, TranscriptItem, UserItem } from '../stores/reducer'
 import MessageMarkdown from './MessageMarkdown.vue'
 import ReasoningFold from './ReasoningFold.vue'
 import ToolCard from './ToolCard.vue'
@@ -41,6 +41,16 @@ async function copyText(text: string): Promise<void> {
   }
 }
 
+/**
+ * CW-EN-EU02 / LANG REQUEST web.transcript.steered (G5-C): the reducer keeps
+ * the steer row's content a locale-free glyph marker — prose is resolved at
+ * presentation so a locale switch repaints rows already on screen, and the
+ * replayed state never freezes whichever language the fold happened in.
+ */
+function noticeText(item: NoticeItem): string {
+  return item.key.startsWith('steered:') ? t('web.transcript.steered') : item.content
+}
+
 // Every run, when this call started one: the card grows the tree below its
 // own runs, so a run they delegated to (another call id) hangs under them.
 const agents = computed(() => {
@@ -71,7 +81,7 @@ const agents = computed(() => {
       <p v-if="item.stepsTruncated" class="flag">{{ t('web.transcript.flag_step_limit') }}</p>
     </template>
     <template v-else-if="item.kind === 'notice'">
-      <p class="notice" :class="item.level">{{ item.content }}</p>
+      <p class="notice" :class="item.level">{{ noticeText(item) }}</p>
     </template>
     <ToolCard v-else-if="item.kind === 'tool'" :item="item" :subagents="agents" :session-id="sessionId" @load-full="(tool) => emit('loadFull', tool)" />
   </div>

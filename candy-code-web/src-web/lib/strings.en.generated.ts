@@ -570,6 +570,7 @@ export const WEB_STRINGS_EN: Record<string, string> = {
     "web.transcript.rewind_here": "Rewind to here",
     "web.transcript.rewind_here_title": "Rewind the conversation to just before this prompt",
     "web.transcript.show_thinking": "Show thinking",
+    "web.transcript.steered": "Steered into the running turn",
     "web.transcript.thinking_done": "Thought",
     "web.transcript.thinking_live": "Thinking…",
     "web.transcript.tool_load_full": "Load the full output",
