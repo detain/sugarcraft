@@ -35,6 +35,8 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 composer require sugarcraft/sugar-panels
 ```
 
+Snippets assume the Composer autoloader (`require 'vendor/autoload.php';`).
+
 ## Quick Start
 
 ```php
