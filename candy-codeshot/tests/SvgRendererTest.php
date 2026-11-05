@@ -155,6 +155,30 @@ final class SvgRendererTest extends TestCase
         $this->assertSame($twinWidth, $tabbedWidth);
     }
 
+    public function testPaddingAndRadiusWithersCeilAtTheSameDoorsAsTheConstructor(): void
+    {
+        // Symmetry pin for the sibling renderer: both renderers floor at zero
+        // and ceiling at MAX_* in their withers (PngRenderer's withers were
+        // floor-only until step 11).
+        $this->assertSame(SvgRenderer::MAX_PADDING, SvgRenderer::dark()->withPadding(99999)->padding);
+        $this->assertSame(SvgRenderer::MAX_BORDER_RADIUS, SvgRenderer::dark()->withBorderRadius(99999)->borderRadius);
+        $this->assertSame(0, SvgRenderer::dark()->withPadding(-5)->padding);
+        $this->assertSame(0, SvgRenderer::dark()->withBorderRadius(-5)->borderRadius);
+
+        // Structural legs (mirror of PngRendererTest): the wither bodies, not
+        // the ctor door, must carry the ceiling clamp on this renderer too.
+        foreach (['withPadding' => 'MAX_PADDING', 'withBorderRadius' => 'MAX_BORDER_RADIUS'] as $wither => $ceiling) {
+            $this->assertSame(
+                1,
+                preg_match(
+                    '/function ' . $wither . '\(int \$[pr]\)[^;]*' . $ceiling . '[^;]*;/',
+                    (string) file_get_contents(dirname(__DIR__) . '/src/SvgRenderer.php'),
+                ),
+                $wither . ' must clamp its own ceiling instead of leaning on the ctor door',
+            );
+        }
+    }
+
     private static function rootWidth(string $svg): string
     {
         $count = preg_match('/<svg\b[^>]*\bwidth="([^"]+)"/', $svg, $matches);

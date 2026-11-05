@@ -51,10 +51,10 @@ final class PngRenderer
 
     public readonly int $borderRadius;
 
-    /** Upper bound accepted for padding (cells); the ctor doors the value. */
+    /** Upper bound accepted for padding (cells); the ctor and withers door the value. */
     public const MAX_PADDING = 4096;
 
-    /** Upper bound for corner rounding (pixels); the ctor doors the value. */
+    /** Upper bound for corner rounding (pixels); the ctor and withers door the value. */
     public const MAX_BORDER_RADIUS = 256;
 
     /** Hard ceiling on output pixels (~40M) to bound GD memory. */
@@ -95,12 +95,12 @@ final class PngRenderer
     public static function nord():       self { return new self(theme: Theme::nord()); }
 
     public function withTheme(Theme $t):       self { return $this->copy(theme: $t); }
-    public function withPadding(int $p):       self { return $this->copy(padding: max(0, $p)); }
+    public function withPadding(int $p):       self { return $this->copy(padding: max(0, min(self::MAX_PADDING, $p))); }
     public function withWindow(bool $on):      self { return $this->copy(window: $on); }
     public function withShadow(bool $on):      self { return $this->copy(shadow: $on); }
     public function withBorder(bool $on):      self { return $this->copy(border: $on); }
     public function withLineNumbers(bool $on): self { return $this->copy(lineNumbers: $on); }
-    public function withBorderRadius(int $r):  self { return $this->copy(borderRadius: max(0, $r)); }
+    public function withBorderRadius(int $r):  self { return $this->copy(borderRadius: max(0, min(self::MAX_BORDER_RADIUS, $r))); }
     public function withWindowStyle(WindowStyle|string $style): self
     {
         $style = $style instanceof WindowStyle ? $style : WindowStyle::from($style);

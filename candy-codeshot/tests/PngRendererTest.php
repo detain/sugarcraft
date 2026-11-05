@@ -205,4 +205,30 @@ final class PngRendererTest extends TestCase
             'WindowStyle::None must remove the 36px header band, not leave it empty',
         );
     }
+
+    public function testPaddingAndRadiusWithersCeilAtTheSameDoorsAsTheConstructor(): void
+    {
+        // The withers used to be floor-only and trusted the ctor's door for
+        // the ceiling. They now clamp symmetrically like SvgRenderer's, and
+        // these pins hold that shape on both ends.
+        $this->assertSame(PngRenderer::MAX_PADDING, PngRenderer::dark()->withPadding(99999)->padding);
+        $this->assertSame(PngRenderer::MAX_BORDER_RADIUS, PngRenderer::dark()->withBorderRadius(99999)->borderRadius);
+        $this->assertSame(0, PngRenderer::dark()->withPadding(-5)->padding);
+        $this->assertSame(0, PngRenderer::dark()->withBorderRadius(-5)->borderRadius);
+
+        // Structural legs: the value pins stay green even under the old
+        // lean-on-the-ctor shape (copy() re-enters the ctor door). These name
+        // the withers themselves clamping their ceiling — the defect shape M5
+        // described must not silently return.
+        foreach (['withPadding' => 'MAX_PADDING', 'withBorderRadius' => 'MAX_BORDER_RADIUS'] as $wither => $ceiling) {
+            $this->assertSame(
+                1,
+                preg_match(
+                    '/function ' . $wither . '\(int \$[pr]\)[^;]*' . $ceiling . '[^;]*;/',
+                    (string) file_get_contents(dirname(__DIR__) . '/src/PngRenderer.php'),
+                ),
+                $wither . ' must clamp its own ceiling instead of leaning on the ctor door',
+            );
+        }
+    }
 }
