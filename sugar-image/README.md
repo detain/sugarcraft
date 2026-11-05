@@ -1,7 +1,8 @@
 # SugarImage
 
 Image-to-cell renderer for the terminal — PNG, JPEG, GIF (still and
-animated), APNG, WebP and BMP decoded via ext-gd and rendered via the best
+animated), APNG, WebP and BMP decoded via ext-gd plus pure-PHP
+animated-container decoders and rendered via the best
 available protocol:
 
 - **Sixel** — xterm, foot, mlterm, contour, rio
