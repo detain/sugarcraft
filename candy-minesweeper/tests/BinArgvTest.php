@@ -294,7 +294,7 @@ final class BinArgvTest extends TestCase
 
     public function testLegacyEnvNameWithControlBytesIsEchoedScrubbed(): void
     {
-        // M6: the deprecation echo interpolates the raw env NAME; an
+        // The deprecation echo interpolates the raw env NAME; an
         // ESC-bearing name must reach stderr scrubbed, never as bytes.
         [$code, , $err] = self::runBinary(['--version'], ["CANDY_MINES_\x1bH" => '1']);
         $this->assertSame(0, $code);
@@ -305,7 +305,7 @@ final class BinArgvTest extends TestCase
 
     public function testCliVisibleTruncationIsClusterSafe(): void
     {
-        // n14: the 40-char clip must not split a UTF-8 codepoint in two.
+        // The 40-char clip must not split a UTF-8 codepoint in two.
         [$code, , $err] = self::runBinary(['--' . str_repeat('é', 45)]);
         $this->assertSame(1, $code);
         $this->assertTrue(mb_check_encoding($err), 'stderr must stay valid UTF-8 through the clip');
