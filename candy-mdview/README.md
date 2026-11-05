@@ -220,9 +220,12 @@ theme set itself is fixed.
 
 candy-mdview declares its direct dependencies: **sugar-markdown** (renderer +
 themes), **sugar-forms** (Viewport), **sugar-core** (TEA runtime, width,
-sanitize), **sugar-colorprofile** (terminal capability probing), and
-**sugar-style**. `RenderCommand::terminalSupportsColor()` consults the
-environment verdict first, then
+sanitize), **sugar-colorprofile** (terminal capability probing),
+**sugar-style**, and **symfony/console** (`^6.4 || ^7.0`) — the app is a
+Symfony Console program (`Application` extends
+`Symfony\Component\Console\Application`; the whole flag and exit-code surface
+rides on it). The command's private static `terminalSupportsColor()` consults
+the environment verdict first, then
 `\SugarCraft\ColorProfile\Probe\TerminalProbe::run()`, and falls back to
 `true` (assume color) if the probe throws — ensuring graceful degradation
 on Windows, over SSH, and in old terminals.
