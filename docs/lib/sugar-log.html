@@ -70,13 +70,13 @@ $child-&gt;info('Batch complete');</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Leveled logging</strong><span>Debug, Info, Warn, Error, Fatal. TTY detection enables color automatically.</span></div>
-            <div class="feature"><strong>Three formatters</strong><span>TextFormatter (default), JSONFormatter, LogfmtFormatter — swap via `withFormatter()`.</span></div>
+            <div class="feature"><strong>Three formatters</strong><span>TextFormatter (default), JSONFormatter, LogfmtFormatter — swap via <code>withFormatter()</code>.</span></div>
             <div class="feature"><strong>Structured context</strong><span>Arbitrary key/value pairs attached to every log call.</span></div>
             <div class="feature"><strong>Sub-loggers</strong><span><code>with(array $fields)</code> creates a child logger that inherits all context.</span></div>
             <div class="feature"><strong>StandardLogAdapter</strong><span>Go-style <code>print()</code>/<code>printLn()</code>/<code>fatal()</code>/<code>panic()</code> call pattern over a sugar-log Logger — a shape, not an interface (implements no contract); for PSR-3 interoperability use <code>PsrBridge</code>.</span></div>
-            <div class="feature"><strong>PSR-3 bridge</strong><span>`PsrBridge` wraps a Logger and exposes the full PSR-3 LoggerInterface API.</span></div>
-            <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via `HookRegistry::onLevel()` for middleware-style interceptors.</span></div>
-            <div class="feature"><strong>Caller info</strong><span>`reportCaller` on Logger adds `file:line` of the true call site to every entry.</span></div>
+            <div class="feature"><strong>PSR-3 bridge</strong><span><code>PsrBridge</code> wraps a Logger and exposes the full PSR-3 <code>LoggerInterface</code> API.</span></div>
+            <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via <code>HookRegistry::onLevel()</code> for middleware-style interceptors.</span></div>
+            <div class="feature"><strong>Caller info</strong><span><code>reportCaller</code> on Logger adds <code>file:line</code> of the true call site to every entry.</span></div>
             <div class="feature"><strong>PartsOrder DTO</strong><span>Configure which log-parts appear and in what order — default, syslog, or custom.</span></div>
 
     </div>
