@@ -244,6 +244,28 @@ terminal title, or log line an attacker-controlled input could reach without
 passing it through your display sanitizer first (`Sanitize::untrusted()` in
 `sugar-core`, or an equivalent for your surface).
 
+### Argument guards
+
+Bad arguments are refused **synchronously at the call site** with an
+`InvalidArgumentException` — no promise is ever produced to carry the error, so
+these throws escape a bare `->then()` chain. Verified guard set:
+
+- `withTimeout`, `withDeadline`, `onPending`, `debounce`, and `throttle` refuse
+  a seconds value that is not positive and finite.
+- `retry` refuses `attempts < 1`, a non-positive-finite `baseBackoffSeconds`, a
+  non-positive-finite `maxTotalSeconds` (when set), and a negative or
+  non-finite `jitter:`.
+- `race` refuses empty input; `singleFlight` refuses a key function that
+  returns `''`.
+- `AsyncCache` refuses a non-positive-finite `ttlSeconds` (constructor and
+  `withTtl()`), an empty key passed to `fetch()`, and a `maxEntries` below 1
+  (when set).
+
+One deliberate exception: a loader that returns a non-promise is NOT a
+synchronous throw — it lands as a rejected `fetch()` promise (the message names
+the returned type), the flight slot is freed, and the next call retries. A
+loader that throws synchronously takes the same failed-load path.
+
 ```php
 use SugarCraft\Async\AsyncOps;
 use function React\Promise\resolve;
