@@ -13,6 +13,7 @@ return [
     'decoder.no_gd'              => 'sugar-animation: nainstalujte rozšíření GD (ext-gd) pro dekódování GIF - přehrávání .ansi umění ho nepotřebuje',
     'decoder.not_gif'            => 'sugar-animation: není soubor GIF',
     'decoder.unreadable'         => 'sugar-animation: soubor nelze přečíst: {path}',
+    'decoder.input_too_large'    => 'sugar-animation: soubor je příliš velký (nejvýše {max} bajtů)',
     'decoder.grid_too_large'     => 'sugar-animation: mřížka buněk je příliš velká (nejvýše {max} buněk)',
     'decoder.grid_too_small'     => 'sugar-animation: rozměry mřížky buněk musí být kladné',
     'decoder.truncated'          => 'sugar-animation: zkrácený soubor GIF',

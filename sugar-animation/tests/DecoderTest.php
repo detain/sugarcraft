@@ -414,4 +414,29 @@ final class DecoderTest extends TestCase
         $this->expectExceptionMessage('sugar-animation: cell grid too large (maximum ' . Decoder::MAX_CELLS . ' cells)');
         Decoder::decode($this->gifPath, 500, 500);
     }
+
+    /**
+     * M-09: a file over MAX_INPUT_BYTES is refused on the stat, BEFORE the
+     * slurp — a sparse allocation proves the order (read-then-check would
+     * instead reach the header walk and name not_gif/truncated).
+     */
+    public function testOversizedFileIsRefusedBeforeItIsRead(): void
+    {
+        $path = sys_get_temp_dir() . '/anim-huge-' . uniqid() . '.gif';
+        $handle = fopen($path, 'wb');
+        $this->assertIsResource($handle);
+        $this->assertTrue(ftruncate($handle, Decoder::MAX_INPUT_BYTES + 1));
+        fclose($handle);
+        try {
+            Decoder::readFile($path);
+            $this->fail('expected a RuntimeException refusal');
+        } catch (\RuntimeException $e) {
+            $this->assertSame(
+                'sugar-animation: file is too large (maximum ' . Decoder::MAX_INPUT_BYTES . ' bytes)',
+                $e->getMessage()
+            );
+        } finally {
+            @unlink($path);
+        }
+    }
 }

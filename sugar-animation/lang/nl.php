@@ -13,6 +13,7 @@ return [
     'decoder.no_gd'              => 'sugar-animation: installeer de GD-image-extensie (ext-gd) om GIFs te decoderen - .ansi-kunstafspeling heeft het niet nodig',
     'decoder.not_gif'            => 'sugar-animation: geen GIF-bestand',
     'decoder.unreadable'         => 'sugar-animation: kan bestand niet lezen: {path}',
+    'decoder.input_too_large'    => 'sugar-animation: bestand te groot (maximaal {max} bytes)',
     'decoder.grid_too_large'     => 'sugar-animation: celraster te groot (maximaal {max} cellen)',
     'decoder.grid_too_small'     => 'sugar-animation: afmetingen van celraster moeten positief zijn',
     'decoder.truncated'          => 'sugar-animation: afgebroken GIF',

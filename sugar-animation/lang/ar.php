@@ -13,6 +13,7 @@ return [
     'decoder.no_gd'              => 'sugar-animation: ثبّت امتداد الصور GD (ext-gd) لفك ترميز GIF - تشغيل فن .ansi لا يحتاجه',
     'decoder.not_gif'            => 'sugar-animation: ليس ملف GIF',
     'decoder.unreadable'         => 'sugar-animation: تعذّرت قراءة الملف: {path}',
+    'decoder.input_too_large'    => 'sugar-animation: الملف كبير جدًا (الحد الأقصى {max} بايت)',
     'decoder.grid_too_large'     => 'sugar-animation: شبكة الخلايا كبيرة جدًا (الحد الأقصى {max} خلية)',
     'decoder.grid_too_small'     => 'sugar-animation: يجب أن تكون أبعاد شبكة الخلايا موجبة',
     'decoder.truncated'          => 'sugar-animation: ملف GIF مبتور',

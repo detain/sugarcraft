@@ -13,6 +13,7 @@ return [
     'decoder.no_gd'              => 'sugar-animation: установите расширение GD (ext-gd) для декодирования GIF — воспроизведение .ansi-арта он не требует',
     'decoder.not_gif'            => 'sugar-animation: не GIF-файл',
     'decoder.unreadable'         => 'sugar-animation: не удаётся прочитать файл: {path}',
+    'decoder.input_too_large'    => 'sugar-animation: файл слишком большой (максимум {max} байт)',
     'decoder.grid_too_large'     => 'sugar-animation: сетка ячеек слишком большая (максимум {max} ячеек)',
     'decoder.grid_too_small'     => 'sugar-animation: размеры сетки ячеек должны быть положительными',
     'decoder.truncated'          => 'sugar-animation: усечённый GIF',

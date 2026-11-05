@@ -13,6 +13,7 @@ return [
     'decoder.no_gd'              => 'sugar-animation: GIF\'leri çözmek için GD görüntü uzantısını (ext-gd) kurun - .ansi sanat oynatma buna ihtiyaç duymaz',
     'decoder.not_gif'            => 'sugar-animation: GIF dosyası değil',
     'decoder.unreadable'         => 'sugar-animation: dosya okunamıyor: {path}',
+    'decoder.input_too_large'    => 'sugar-animation: dosya çok büyük (en fazla {max} bayt)',
     'decoder.grid_too_large'     => 'sugar-animation: hücre ızgarası çok büyük (en fazla {max} hücre)',
     'decoder.grid_too_small'     => 'sugar-animation: hücre ızgara boyutları pozitif olmalı',
     'decoder.truncated'          => 'sugar-animation: eksik GIF',

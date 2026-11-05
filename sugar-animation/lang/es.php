@@ -13,6 +13,7 @@ return [
     'decoder.no_gd'              => 'sugar-animation: instala la extensión GD (ext-gd) para decodificar GIF; la reproducción de arte .ansi no la necesita',
     'decoder.not_gif'            => 'sugar-animation: no es un GIF',
     'decoder.unreadable'         => 'sugar-animation: no se puede leer el archivo: {path}',
+    'decoder.input_too_large'    => 'sugar-animation: archivo demasiado grande (máximo {max} bytes)',
     'decoder.grid_too_large'     => 'sugar-animation: cuadrícula de celdas demasiado grande (máximo {max} celdas)',
     'decoder.grid_too_small'     => 'sugar-animation: las dimensiones de la cuadrícula deben ser positivas',
     'decoder.truncated'          => 'sugar-animation: GIF truncado',

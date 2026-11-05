@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use SugarCraft\Animation\AnsiArt;
 use SugarCraft\Animation\AnsiCell;
+use SugarCraft\Animation\Decoder;
 
 final class AnsiArtTest extends TestCase
 {
@@ -401,6 +402,31 @@ final class AnsiArtTest extends TestCase
             // voice and interpolates the offending path.
             $this->assertStringStartsWith('sugar-animation', $e->getMessage());
             $this->assertStringContainsString($missing, $e->getMessage());
+        }
+    }
+
+    /**
+     * M-09: art files share the Decoder::MAX_INPUT_BYTES gate — the refusal
+     * rides the stat, so a sparse allocation over the line never gets slurped
+     * (read-then-check would reach the parser and name a different refusal).
+     */
+    public function testOversizedArtFileIsRefusedBeforeItIsRead(): void
+    {
+        $path = sys_get_temp_dir() . '/anim-huge-' . uniqid() . '.ansi';
+        $handle = fopen($path, 'wb');
+        $this->assertIsResource($handle);
+        $this->assertTrue(ftruncate($handle, Decoder::MAX_INPUT_BYTES + 1));
+        fclose($handle);
+        try {
+            AnsiArt::fromFile($path);
+            $this->fail('expected a RuntimeException refusal');
+        } catch (RuntimeException $e) {
+            $this->assertSame(
+                'sugar-animation: file is too large (maximum ' . Decoder::MAX_INPUT_BYTES . ' bytes)',
+                $e->getMessage()
+            );
+        } finally {
+            @unlink($path);
         }
     }
 }

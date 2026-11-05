@@ -138,6 +138,14 @@ final class AnsiArt
         if (!is_file($path) || !is_readable($path)) {
             throw new RuntimeException(Lang::t('ansiart.cannot_read', ['path' => $path]));
         }
+        // M-09: the slurp is the one step the decode caps cannot catch, so
+        // refuse by stat before reading. Decoder::MAX_INPUT_BYTES is the
+        // single shared number; ArtLibrary loads art through this method,
+        // which makes this the one choke that bounds the whole file path.
+        $size = filesize($path);
+        if ($size !== false && $size > Decoder::MAX_INPUT_BYTES) {
+            throw new RuntimeException(Lang::t('decoder.input_too_large', ['max' => (string) Decoder::MAX_INPUT_BYTES]));
+        }
         $bytes = file_get_contents($path);
         if ($bytes === false) {
             throw new RuntimeException(Lang::t('ansiart.read_failed', ['path' => $path]));

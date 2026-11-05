@@ -57,6 +57,18 @@ final class Decoder
     public const MAX_FRAMES = 256;
 
     /**
+     * Maximum file size accepted by the disk-reading entry points —
+     * {@see self::readFile()} and {@see AnsiArt::fromFile()} — checked on the
+     * stat, BEFORE the file is slurped. The three caps above bound decoding
+     * and compositing; they engage only once the bytes are already resident,
+     * so the slurp itself was the one unbounded step. 64 MiB matches the
+     * candy-gifview host gate, so the library refuses no file its flagship
+     * viewer would have played. Bytes handed in through decodeBytes() /
+     * AnsiArt::fromString() are already resident — the caller's budget there.
+     */
+    public const MAX_INPUT_BYTES = 64 * 1024 * 1024;
+
+    /**
      * Decode a GIF file on disk into a list of {@see Frame}s.
      *
      * Path ingress is the legacy shape (E-07): the file is read once here and
@@ -84,6 +96,10 @@ final class Decoder
     {
         if (is_file($path) === false) {
             throw new \RuntimeException(Lang::t('decoder.no_file', ['path' => $path]));
+        }
+        $size = filesize($path);
+        if ($size !== false && $size > self::MAX_INPUT_BYTES) {
+            throw new \RuntimeException(Lang::t('decoder.input_too_large', ['max' => (string) self::MAX_INPUT_BYTES]));
         }
         $bytes = file_get_contents($path);
         if ($bytes === false) {

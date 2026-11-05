@@ -107,7 +107,7 @@ The decoder is hand-rolled over the GIF89a byte stream — it never loads the wh
 4. Reassemble a minimal single-frame GIF payload in memory and pass it to `imagecreatefromstring()`.
 5. Area-average downsample the resulting `GdImage` to the requested cell grid, skipping fully transparent pixels in the average.
 
-The caps — 256 frames, a 2,000,000-pixel logical screen, and a 100,000-cell output grid — bound decoding and compositing, so a runaway file or a crafted header cannot balloon the runtime once the first bytes start being processed.
+The caps — 256 frames, a 2,000,000-pixel logical screen, and a 100,000-cell output grid — bound decoding and compositing; on top of them, the file entry points (`Decoder::readFile()`, `Decoder::decode()`, `AnsiArt::fromFile()` — and with it `ArtLibrary`) refuse any file larger than `Decoder::MAX_INPUT_BYTES` (64 MiB) on the stat, before a single byte is read. Bytes you hand in yourself — `Decoder::decodeBytes()`, `AnsiArt::fromString()` — are already resident, so their size is your budget to keep.
 
 ## Architecture
 

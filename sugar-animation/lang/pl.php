@@ -13,6 +13,7 @@ return [
     'decoder.no_gd'              => 'sugar-animation: zainstaluj rozszerzenie GD (ext-gd) aby dekodować GIF-y - odtwarzanie sztuki .ansi go nie wymaga',
     'decoder.not_gif'            => 'sugar-animation: to nie jest plik GIF',
     'decoder.unreadable'         => 'sugar-animation: nie można odczytać pliku: {path}',
+    'decoder.input_too_large'    => 'sugar-animation: plik jest zbyt duży (maksymalnie {max} bajtów)',
     'decoder.grid_too_large'     => 'sugar-animation: siatka komórek zbyt duża (maksymalnie {max} komórek)',
     'decoder.grid_too_small'     => 'sugar-animation: wymiary siatki komórek muszą być dodatnie',
     'decoder.truncated'          => 'sugar-animation: skrócony plik GIF',
