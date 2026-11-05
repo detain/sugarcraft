@@ -117,7 +117,7 @@ vendor/bin/candy-top --version           # version line, no tty needed
 
 On first run you get four boxes: **cpu** (per-core meters and load), **memory** (the legend, plus disks when `show_disks` is on), **network** (one interface with its rates) and **processes** (the sortable list). `1` to `4` toggle the four boxes, `5` to `0` the gpu slots, `F1` (or `h`) opens the help overlay that lists every key, and `q` quits — saving the layout on the way out, as btop does. Nothing needs configuring to start: the defaults are btop's, and a copied `btop.conf` loads as-is. Run it against fake data (`--fake`) to see all of that without touching your host.
 
-Any other argument exits with status 2. There is no `--tty` flag. TTY mode comes from the `force_tty` option or from running on a real console, as described in [TTY mode](#tty-mode). Config load warnings (bad values) are printed on stderr at startup, and the option keeps its default.
+Any other argument exits with status 2. There is no `--tty` flag. TTY mode comes from the `force_tty` option or from running on a real console, as described in [TTY mode](#tty-mode). Config load warnings (bad values) are printed on stderr at startup, and the option keeps its previous value.
 
 From a monorepo checkout, `php candy-top/bin/candy-top` works as well. `php candy-top/examples/top.php` runs the fake demo with a throwaway config path. The VHS tape `candy-top/.vhs/top.tape` records that demo.
 
