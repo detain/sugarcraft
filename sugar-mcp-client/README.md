@@ -227,7 +227,7 @@ What you get when things go wrong, so you can branch on it knowingly:
   through for an unencodable envelope, with nothing written.
 - Diagnostic strings embed SERVER-authored bytes after a control-character
   sweep (no ESC/OSC/NUL survives), but they are still UNTRUSTED text: render
-  them through `SugarCraft\Core\Sanitize::untrusted()` before they reach a
+  them through `SugarCraft\Core\Util\Sanitize::untrusted()` before they reach a
   terminal, never raw.
 
 ## Routing policy

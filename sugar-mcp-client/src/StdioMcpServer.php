@@ -527,7 +527,7 @@ final class StdioMcpServer implements McpServer
      * redraws, OSC-8 hyperlinks, or newlines into a diagnostic this client
      * throws or returns. The result is STILL untrusted content: consumers
      * rendering it into a terminal should route it through
-     * {@see \SugarCraft\Core\Sanitize::untrusted()} as they would for any
+     * {@see \SugarCraft\Core\Util\Sanitize::untrusted()} as they would for any
      * server output.
      */
     private static function printableDiagnostic(string $text): string
