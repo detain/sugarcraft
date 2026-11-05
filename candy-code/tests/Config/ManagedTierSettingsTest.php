@@ -70,7 +70,7 @@ final class ManagedTierSettingsTest extends TestCase
         if (is_string($this->originalPermissionMode)) {
             putenv('CANDY_CODE_PERMISSION_MODE=' . $this->originalPermissionMode);
         }
-        $this->removeTree($this->tmpDir);
+        $this->purgeManagedTree($this->tmpDir);
         parent::tearDown();
     }
 
@@ -135,7 +135,7 @@ final class ManagedTierSettingsTest extends TestCase
 
     public function testTheManagedTierOutranksEveryOtherFileTier(): void
     {
-        $this->writeUserSettings(['theme' => 'user-layer']);
+        $this->writeManagedUserSettings(['theme' => 'user-layer']);
         $canonical = realpath($this->projectRoot);
         self::assertIsString($canonical);
         $this->writeUserConfigFile([
@@ -161,7 +161,7 @@ final class ManagedTierSettingsTest extends TestCase
 
     public function testTheManagedTierOutranksTheSessionTierAndAbsenceLetsTheSessionWin(): void
     {
-        $this->writeUserSettings(['theme' => 'user-layer']);
+        $this->writeManagedUserSettings(['theme' => 'user-layer']);
         SessionSettings::apply(['theme' => 'session-pick']);
 
         // No managed file: the session tier sits on top of the files, as before.
@@ -221,7 +221,7 @@ final class ManagedTierSettingsTest extends TestCase
 
     public function testAMissingManagedFileCostsTheAuditNothingByteForByte(): void
     {
-        $this->writeUserSettings(['theme' => 'user-layer']);
+        $this->writeManagedUserSettings(['theme' => 'user-layer']);
         $canonical = realpath($this->projectRoot);
         self::assertIsString($canonical);
         $this->writeUserConfigFile([
@@ -279,7 +279,7 @@ final class ManagedTierSettingsTest extends TestCase
         chmod($this->configDir . '/config.json', 0o600);
     }
 
-    private function writeUserSettings(array $data): void
+    private function writeManagedUserSettings(array $data): void
     {
         file_put_contents($this->configDir . '/' . LayeredSettings::USER_FILE, (string) json_encode($data));
     }
@@ -289,7 +289,7 @@ final class ManagedTierSettingsTest extends TestCase
         file_put_contents($this->projectRoot . '/' . $relative, (string) json_encode($data));
     }
 
-    private function removeTree(string $dir): void
+    private function purgeManagedTree(string $dir): void
     {
         if (!is_dir($dir)) {
             return;
