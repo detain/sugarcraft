@@ -118,7 +118,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 ### Position / Region / Hyperlink
 
 - `Position::new(int $col, int $row): self` with `col()`/`row()`.
-- `Region::new(Position $origin, int $width, int $height): self` with `origin()`, `width()`, `height()`, `contains(int $col, int $row): bool`. Zero-area regions no-op in `fill()`/`withRegion()`; `copy()` refuses them (its result is region-sized by contract).
+- `Region::new(Position $origin, int $width, int $height): self` — promoted readonly `$origin`/`$width`/`$height` with accessors `origin()`, `width()`, `height()`, inclusive-edge `right()`/`bottom()`, and `contains(int $col, int $row): bool`. Zero-area regions no-op in `fill()`/`withRegion()`; `copy()` refuses them (its result is region-sized by contract).
 - `Hyperlink::new(string $url, string $id = '')` — rejects C0 controls, DEL and the C1 range in both fields, and semicolons in the id; on the wire the id is spelled as the spec's `id=` attribute.
 - Every value object here (`Buffer`, `Cell`, `Position`, `Region`, `Style`, `Hyperlink`) implements `JsonSerializable`. `Position` deliberately admits negative coordinates (relative offsets); `Region` refuses negative dimensions at construction.
 
