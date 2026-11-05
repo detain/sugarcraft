@@ -642,7 +642,6 @@ foreach ($procs as $row => $p) {
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `State` | Application state diagram | |
 | `Persistence` | Atomic JSON state save/load (final; delegates to sugar-core `AtomicJsonFile`) | `save(path, data)`, `load(path): ?array` |
 
 > **Privacy:** state and cache writes publish private files — both `Persistence` and
@@ -655,7 +654,7 @@ foreach ($procs as $row => $p) {
 > write lock and is deliberately **never deleted** — removing it re-opens the race
 > it exists to close.
 
-> **Note:** `TransitionType`, `StateNode`, `StateTransition`, and `StateMachine` moved to `Components\Tree\` namespace (PSR-4 one-class-per-file). The `State\*` classes are retained as `@internal` backward-compatibility re-exports via `class_alias`.
+> **Note:** `TransitionType`, `StateNode`, and `StateTransition` moved to `Components\Tree\` namespace (PSR-4 one-class-per-file) and are retained here as `@internal` backward-compatibility re-exports via `class_alias`. `StateMachine` lives only in `Components\Tree\` — there is no `State\StateMachine` re-export, and no `State\State` type exists; the state-machine diagram component is documented under the Tree section.
 
 ## Position Namespace (ANSI-Aware Geometry)
 
