@@ -133,6 +133,20 @@ final class DocumentedApiTest extends TestCase
                         $fqcn,
                     ),
                 );
+                // PB-WIDGETS-11(a): existence is not reachability. A reader
+                // copying the documented call form only works if the method is
+                // PUBLIC — the Timer row once advertised the private tick().
+                $reflection = new \ReflectionMethod($fqcn, $method);
+                self::assertTrue(
+                    $reflection->isPublic(),
+                    sprintf(
+                        'site body documents %s::%s() as caller API but it is not public on %s — '
+                        . 'rewrite the row against the public surface',
+                        $classToken,
+                        $method,
+                        $fqcn,
+                    ),
+                );
             }
         }
 
@@ -144,6 +158,66 @@ final class DocumentedApiTest extends TestCase
                 sprintf('roster entry "%s" is no longer cited in the site body — prune it', $stale),
             );
         }
+    }
+
+    /**
+     * PB-WIDGETS-11(b): the façade law makes the alias inventory a load-bearing
+     * claim — README.md's counted list is the single canonical record after the
+     * N-13 collapse. Derive the truth from src/ (every directory carrying a
+     * class_alias into SugarCraft\Forms) and reconcile BOTH directions against
+     * the README sentence, including its numeral: a new alias re-export, a
+     * retired one, or a re-worded inventory all redden here fail-closed.
+     */
+    public function testTheAliasFamilyCensusMatchesTheReadmeInventory(): void
+    {
+        $srcRoot = realpath(__DIR__ . '/../src');
+        self::assertIsString($srcRoot, 'src/ vanished from the lib checkout');
+
+        // Both shipped spellings: class_alias('SugarCraft\Forms\...', ...) and
+        // class_alias(\SugarCraft\Forms\...\Foo::class, ...).
+        $aliasPattern = '/class_alias\(\s*[\x27"]?\\\\?SugarCraft\\\\Forms\\\\/';
+
+        $census = [];
+        foreach (scandir($srcRoot) as $entry) {
+            if ($entry === '.' || $entry === '..' || !is_dir($srcRoot . '/' . $entry)) {
+                continue;
+            }
+            foreach (glob($srcRoot . '/' . $entry . '/*.php') ?: [] as $file) {
+                if (preg_match($aliasPattern, (string) file_get_contents($file)) === 1) {
+                    $census[$entry] = true;
+                    break;
+                }
+            }
+        }
+        $fromSrc = array_keys($census);
+        self::assertNotEmpty($fromSrc, 'no alias re-export directories found in src/ — the census scanner broke');
+
+        $readme = (string) file_get_contents(__DIR__ . '/../README.md');
+        self::assertSame(
+            1,
+            preg_match(
+                '#(\d+) deprecated alias re-exports from `sugarcraft/sugar-forms` \(([^)]+)\)#',
+                $readme,
+                $m,
+            ),
+            'the README canonical alias inventory sentence drifted — every consumer of this guard parses it',
+        );
+
+        $documented = array_values(array_filter(array_map(
+            static fn(string $name): string => trim($name),
+            explode(',', $m[2]),
+        ), static fn(string $name): bool => $name !== ''));
+
+        self::assertCount(
+            (int) $m[1],
+            $documented,
+            sprintf('README claims %d alias re-exports but enumerates %d', $m[1], count($documented)),
+        );
+        self::assertEqualsCanonicalizing(
+            $documented,
+            $fromSrc,
+            'README alias inventory and the src/ class_alias census disagree (fail-closed both directions)',
+        );
     }
 
     public function testTheFabricatedCallFormsStayDead(): void
