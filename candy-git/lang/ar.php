@@ -22,7 +22,7 @@ return [
     'cli.bare_repo'           => 'candy-git: {cwd} مستودر مجرد بلا شجرة عمل -- شغّل candy-git من دليل عمل مفحوص',
     'cli.needs_tty'           => 'candy-git: يلزم طرفية تفاعلية (stdout ليست tty)',
     'ui.error_prefix'         => 'خطأ: ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
     'ui.pane.status'         => ' الحالة ',
     'ui.pane.branches'       => ' الفروع ',

@@ -22,7 +22,7 @@ return [
     'cli.bare_repo'           => 'candy-git: {cwd} çalışma ağacı olmayan bir bare depodur -- candy-git\'i çıkarılmış bir çalışma dizininde çalıştırın',
     'cli.needs_tty'           => 'candy-git: etkileşimli terminal gerekli (stdout bir tty değil)',
     'ui.error_prefix'         => 'hata: ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
     'ui.pane.status'         => ' durum ',
     'ui.pane.branches'       => ' dallar ',

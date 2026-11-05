@@ -22,7 +22,7 @@ return [
     'cli.bare_repo'           => 'candy-git: {cwd} je bare repozitář bez pracovního stromu -- spusťte candy-git ve vypnuté pracovní složce',
     'cli.needs_tty'           => 'candy-git: je potřeba interaktivní terminál (stdout není tty)',
     'ui.error_prefix'         => 'chyba: ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
     'ui.pane.status'         => ' stav ',
     'ui.pane.branches'       => ' větve ',

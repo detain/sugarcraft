@@ -22,7 +22,7 @@ return [
     'cli.bare_repo'           => 'candy-git: {cwd} — голый репозиторий без рабочего дерева -- запустите candy-git в проверенном рабочем каталоге',
     'cli.needs_tty'           => 'candy-git: нужен интерактивный терминал (stdout не tty)',
     'ui.error_prefix'         => 'ошибка: ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
     'ui.pane.status'         => ' статус ',
     'ui.pane.branches'       => ' ветки ',

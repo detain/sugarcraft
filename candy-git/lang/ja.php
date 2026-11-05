@@ -22,7 +22,7 @@ return [
     'cli.bare_repo'           => 'candy-git: {cwd} はワークツリーのないベアシストレポジトリです -- チェックアウト済みの作業ディレクトリで実行してください',
     'cli.needs_tty'           => 'candy-git: 対話型ターミナルが必要です (stdout が tty でありません)',
     'ui.error_prefix'         => 'エラー: ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
     'ui.pane.status'         => ' ステータス ',
     'ui.pane.branches'       => ' ブランチ ',

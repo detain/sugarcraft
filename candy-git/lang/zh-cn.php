@@ -22,7 +22,7 @@ return [
     'cli.bare_repo'           => 'candy-git: {cwd} 是没有工作树的裸仓库 -- 请在检出的工作目录中运行 candy-git',
     'cli.needs_tty'           => 'candy-git: 需要交互式终端 (stdout 不是 tty)',
     'ui.error_prefix'         => '错误： ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
     'ui.pane.status'         => ' 状态 ',
     'ui.pane.branches'       => ' 分支 ',

@@ -22,7 +22,7 @@ return [
     'cli.bare_repo'           => 'candy-git: {cwd} 는 작업 트리가 없는 베어 리포지토리입니다 -- 체크아웃된 작업 디렉토리에서 실행하세요',
     'cli.needs_tty'           => 'candy-git: 대화형 터미널이 필요합니다 (stdout 이 tty 아님)',
     'ui.error_prefix'         => '오류: ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
     'ui.pane.status'         => ' 상태 ',
     'ui.pane.branches'       => ' 브랜치 ',

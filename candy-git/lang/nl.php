@@ -22,7 +22,7 @@ return [
     'cli.bare_repo'           => 'candy-git: {cwd} is een bare repository zonder werkboom -- draai candy-git vanuit een uitgecheckte werkmap',
     'cli.needs_tty'           => 'candy-git: een interactieve terminal is vereist (stdout is geen tty)',
     'ui.error_prefix'         => 'fout: ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'           => ' CandyGit ',
     'ui.pane.status'         => ' status ',
     'ui.pane.branches'       => ' takken ',
