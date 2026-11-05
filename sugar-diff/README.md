@@ -1,6 +1,6 @@
 # SugarDiff
 
-Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. First-party: the engine and the scanner were extracted from `candy-code` (`Tools\Concerns\BuildsUnifiedDiff` — now a delegating consumer — and the region model `Tui\DiffGutter` was ported from; the gutter still keeps its own copy today, and delegating it here is an open seam).
+Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. First-party (there is no 1:1 Go counterpart): the engine and the scanner were extracted from `candy-code`, whose `Tools\Concerns\BuildsUnifiedDiff` trait now delegates here. `candy-code`'s `Tui\DiffGutter` is a port of this scanner's region model and still keeps its own copy today — delegating it here is an open seam.
 
 ## Installation
 
