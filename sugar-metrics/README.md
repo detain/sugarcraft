@@ -238,11 +238,13 @@ Pass `extraTags` (a callable receiving the `Session`) to add things like client 
 
 ## Localization
 
-Every exception message in this library goes through `SugarCraft\Core\I18n\Lang`, so failures render in the operator's locale. Select one at startup:
+Every exception message in this library is looked up through `SugarCraft\Core\I18n\Lang` (the metrics namespace facade), so failures render in the operator's locale. The *lookup* flows through `Lang`; the *selection* lives on `T`, and the library never sets the locale itself — out of the box every message renders from `lang/en.php`. Select one at startup:
 
 ```php
-\SugarCraft\Core\I18n\Lang::setLocale('de');   // messages arrive in German
+\SugarCraft\Core\I18n\T::setLocale('de');   // messages arrive in German
 ```
+
+`T::detect()` (reads `LC_ALL`, `LC_MESSAGES`, `LANG`) is the opt-in alternative; prefer pinning the locale per service over detecting it.
 
 Sixteen locales ship: `ar`, `cs`, `de`, `en`, `es`, `fr`, `it`, `ja`, `ko`, `nl`, `pl`, `pt`, `pt-br`, `ru`, `tr`, `zh-cn`. Locale parity is pinned by the test suite.
 
