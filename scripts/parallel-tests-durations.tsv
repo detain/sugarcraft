@@ -38,6 +38,7 @@ candy-code/tests/ClaudeCodeMcpClientStdinWedgeTest.php	11.571	14
 candy-code/tests/MessageWithContentFieldCensusTest.php	11.338	3
 candy-code/tests/Renderer/SessionTabStripClipTest.php	11.308	29
 candy-code/tests/Server/ServeStatusStopTest.php	11.251	7
+candy-code/tests/Config/ManagedTierSettingsTest.php	11.175	15
 candy-code/tests/App/UntouchedDockWidthSweepTest.php	10.912	16
 candy-code/tests/Sessions/BackgroundShellRegistryTest.php	10.845	29
 candy-code/tests/Cli/HelpTest.php	10.723	106
