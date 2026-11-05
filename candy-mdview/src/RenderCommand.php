@@ -148,8 +148,11 @@ final class RenderCommand extends Command
 
         $renderer = (new Renderer($theme))
             ->withWordWrap($width > 0 ? $width : null)
-            // OSC 8 envelopes are a terminal capability: never emit them into
-            // a pipe or file, and never over an explicit --no-hyperlinks.
+            // OSC 8 envelopes ride the decoration decision: skipped on an
+            // undecorated stream and over an explicit --no-hyperlinks, but
+            // forced decoration (--ansi / CLICOLOR_FORCE / FORCE_COLOR) emits
+            // them even into a pipe or file — forcing decoration is forcing
+            // all of it.
             ->withHyperlinks($onTerminal && $input->getOption('no-hyperlinks') === false);
         $rendered = $renderer->render($raw);
 

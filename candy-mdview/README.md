@@ -60,9 +60,12 @@ Flags:
   N columns (1–9999). `0` disables wrapping; unwrapped lines are truncated by
   the pager, so scroll horizontally with `h`/`l`. Anything non-numeric is a
   usage error.
-- `--no-hyperlinks` — OSC 8 envelopes are only emitted on terminals to begin
-  with; this flag also suppresses them there. The visible `text (url)` tail is
-  always rendered either way.
+- `--no-hyperlinks` — suppresses the OSC 8 envelopes. They are emitted for
+  terminal output by default, and also into redirected output when decoration
+  is forced (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`) — forcing decoration
+  means full decoration. Labelled links always show their visible `text (url)`
+  tail; plain autolinks and `mailto:` targets render the URL itself as the
+  text, so the address stays visible either way.
 - `--pager` / `-p` — open in a fullscreen pager.
 - `--ansi` / `--no-ansi` — force / forbid decorated output.
 
