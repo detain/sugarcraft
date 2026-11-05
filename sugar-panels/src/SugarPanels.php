@@ -241,21 +241,6 @@ final class SugarPanels
             );
         }
 
-        // Upper bound, for the same reason as the lower one: the grid is
-        // allocated from these numbers, and they arrive from a terminal that
-        // is allowed to lie. Checked before any allocation so a refused frame
-        // costs nothing.
-        if ($width > self::MAX_VIEWPORT_DIMENSION
-            || $height > self::MAX_VIEWPORT_DIMENSION
-            || $width * $height > self::MAX_VIEWPORT_CELLS
-        ) {
-            throw new \InvalidArgumentException(
-                "Viewport {$width}x{$height} exceeds the supported maximum ("
-                . self::MAX_VIEWPORT_DIMENSION . ' per side, '
-                . self::MAX_VIEWPORT_CELLS . ' cells in total)'
-            );
-        }
-
         // 2D cell grid: each cell holds one logical character (any byte length).
         // Storing as char-cells avoids byte/multibyte boundary corruption that
         // happens when slicing strings containing UTF-8 box-drawing glyphs.
