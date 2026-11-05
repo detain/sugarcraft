@@ -73,7 +73,7 @@ echo $t->View();
 ```php
 Column::new($key, $title, $width)        // key, display title, fixed width
     ->withFlexibleWidth($share)          // weight when ColumnWidth::Flex splits leftover
-    ->withMaxWidth($max)                 // horizontal scroll cap
+    ->withMaxWidth($max)                 // hard width ceiling, applied after flex distribution (content truncates with '…'; 0 = none)
     ->withStyle('1;34')                  // ANSI SGR style
     ->withFilterable()                   // opt into search/Filter scanning (see Global Search)
     ->withAlignLeft()                    // left-align (default is right)
