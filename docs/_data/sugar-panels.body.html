@@ -5,19 +5,24 @@
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Panels\SugarPanels;
-use SugarCraft\Style\{Align, Border};
 
 $panels = SugarPanels::new();
 
 $layout = $panels-&gt;vertical(
     $panels-&gt;horizontal(
-        $panels-&gt;leaf('Left panel'),
-        $panels-&gt;leaf('Right panel'),
-    ),
-    $panels-&gt;leaf('Bottom bar'),
-);
+        $panels-&gt;leaf("Left panel"),
+        $panels-&gt;leaf("Right panel"),
+    )-&gt;withBorder(false),
+    $panels-&gt;leaf("Bottom bar")-&gt;withBorder(false),
+)-&gt;withBorder(false);
 
-echo $panels-&gt;render($layout, 60, 20);</code></pre>
+echo $panels-&gt;render($layout, 60, 7);</code></pre>
+    <p>Every node is bordered <strong>by default</strong> — a plain nested layout paints a doubled frame at each level. Containers are usually scaffolding, so turn their frames off with <code>withBorder(false)</code> (or wrap a subtree in <code>noBorder()</code>, which suppresses every frame and every divider below it), and give the viewport enough rows to hold what you asked for. That prints (protocol and styling stripped):</p>
+    <pre class="code"><code class="language-text">╭────────────────────────────╮╭────────────────────────────╮
+│Left panel                  ││Right panel                 │
+│                            ││                            │
+╰────────────────────────────╯╰────────────────────────────╯
+Bottom bar</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
