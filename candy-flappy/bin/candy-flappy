@@ -16,7 +16,15 @@ declare(strict_types=1);
     // above) a downloaded phar must never boot the app with code from
     // outside the frozen archive. In every composer-mode checkout both
     // probes answer nothing and the filesystem candidates are untouched.
-    $candidates = [__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
+    // M6 hardening: a bare 'vendor/autoload.php' leg leads the filesystem list,
+    // exactly as candy-gifview/bin/candy-gifview spells it, so running the bin
+    // by path from a directory whose vendor/ is the only installed one (a
+    // monorepo root after a root composer install, before per-lib vendors are
+    // refreshed) still boots. With no cwd match the two __DIR__-anchored legs
+    // resolve the checkout and composer-installed shapes as before; the
+    // archive branch below still drops ALL filesystem legs when a phar is
+    // running, so the isolation property is untouched.
+    $candidates = ['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
     $archive = \Phar::running(false) !== ''
         ? 'phar://' . \Phar::running(false)
         : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');

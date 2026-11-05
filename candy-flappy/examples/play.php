@@ -25,5 +25,10 @@ use SugarCraft\Flappy\Game;
 $program = new Program(Game::start(), new ProgramOptions(useAltScreen: true));
 $final = $program->run();
 if ($final instanceof Game) {
-    $final->settleOnExit();
+    try {
+        $final->settleOnExit();
+    } catch (\Throwable) {
+        // m5: a final save must never replace the game's exit status —
+        // mirrors bin/candy-flappy so the documented swallow holds here too.
+    }
 }
