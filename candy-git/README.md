@@ -170,12 +170,12 @@ focus marker is tracked as a known gap).
 
 | File               | Role                                                                                                                             |
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `Git`             | Concrete `git` shell-out — `status --porcelain=v1 -b`, `for-each-ref`, `log --pretty=format:…`, `add`, `restore --staged`. Throws `RuntimeException` on non-zero exit. |
+| `Git`             | Concrete `git` shell-out — `status --porcelain=v1 -b`, `for-each-ref`, `log --pretty=format:…`, `add`, `restore --staged`; `stagePatch()` pipes a selected hunk through `git apply --cached --unidiff-zero -`. Throws `RuntimeException` on non-zero exit. |
 | `GitDriver`        | Interface for all git operations. Tests inject a fixture-backed driver so transition correctness is asserted without staging a real repo. |
 | `Process`          | The ONLY proc_open site — bounded drain loop, pinned child env (`GIT_TERMINAL_PROMPT=0`, pagers and editors neutered), stdin isolated from the UI tty, TERM->grace->KILL teardown. |
-| `HistoryEntry`     | One undoable operation with its forward args and inverse (or a `refuse` marker when undo would lie — discard, amend, merge). |
+| `HistoryEntry`     | One undoable operation with its forward args and inverse (or a `refuse` marker when undo would lie — discard, amend, merge, plus a checkout with no origin to return to and a branch delete whose pre-delete SHA was not recorded). |
 | `HistoryManager`   | Bounded undo/redo stacks (`MAX_HISTORY`); a new operation clears the redo lane. |
-| `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `stagePatch()` turns the selection into an `apply --cached` patch. |
+| `DiffViewer`       | Immutable diff overlay state — raw lines, hunk starts, selected hunk; `hunkCount()` / `withHunkCursor()` drive navigation and `currentHunkPatch()` yields the selection to stage (applying it is `Git::stagePatch()`). |
 | `DiffHighlighter`  | Per-line hunk-header/old/new token spans for the diff overlay. |
 | `Lang`             | i18n lookup over `lang/*.php` (16 locales) on the core `T` registry, namespace `git`. |
 | `Support\Version`  | `--version` line + phar build stamping (dev-build detection mirrors candy-top's DST-1 shape). |
@@ -236,7 +236,7 @@ exact locale → base language → `en` → raw key.
 use SugarCraft\Git\Lang;
 
 $msg = Lang::t('status.clean');                 // 'clean working tree'
-$hint = Lang::t('help.keyhints');               // 'tab  switch pane  ·  ...'
+$hint = Lang::t('help.keyhints');               // 'S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  …'
 $err = Lang::t('ui.error_prefix') . $error;     // 'error: <msg>'
 ```
 
