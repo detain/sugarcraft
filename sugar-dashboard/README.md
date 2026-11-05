@@ -617,8 +617,9 @@ foreach ($procs as $row => $p) {
 > **Privacy:** state and cache writes publish private files — both `Persistence` and
 > `WeatherModule` use `AtomicJsonFile::withPermissions(0600)`, and directories they
 > create are derived to `0700`. The weather cache at `~/.cache/sugar-dashboard/weather.json`
-> holds your location data (explicit `--location` value or IP-derived city) and is
-> world-readable never. An `AtomicJsonFile` write also leaves a contentless
+> holds your location data (the `WeatherModule`'s configured location, or the
+> IP-derived city when it runs in `auto` mode — the live example reads the
+> `WEATHER_LOCATION` environment variable) and is never world-readable. An `AtomicJsonFile` write also leaves a contentless
 > `.<basename>.lock` sidecar (mode 0600) beside the file: it is the cross-process
 > write lock and is deliberately **never deleted** — removing it re-opens the race
 > it exists to close.
@@ -678,9 +679,18 @@ foreach ($procs as $row => $p) {
 > bounded: closing the three pipes gives a well-behaved plugin its graceful EOF
 > exit, a 2 s polite poll follows, then the shared TERM → grace-poll → KILL →
 > reap ladder (sugar-core `BoundedShutdown`) runs, so a wedged plugin binary can
-> never outlive the dashboard that started it. The same bounded-teardown story
+> never outlive the dashboard that started it — the ladder kills the direct
+> child; grandchildren it spawns (say, from a shell wrapper) outlive it, so
+> authors needing tree-killing wrap the command themselves. Plugin children get
+> a small explicit environment allow-list (`PATH`, `HOME`, `USER`, `LANG`,
+> `TERM`, `COLORTERM` — `ExternalModule::pluginEnvironment()`); the dashboard's
+> own secrets are never handed to third-party binaries by inheritance. Any
+> plugin-supplied text reaching terminal chrome (names, error lines) passes
+> through `chromeLabel()`, which strips control bytes, CR reflow, and zone
+> sentinels and clips over-length labels. The same bounded-teardown story
 > covers `GenericModule` and `SystemModule` command runs (5 s deadline, 1 MiB
-> output cap via `BoundedCommand`) and the weather fetch (synchronous inside the
+> output cap via `BoundedCommand`, with the same direct-children-only reap), and
+> the weather fetch (synchronous inside the
 > dispatched command, bounded by the HTTP client's 5 s timeout —
 > `WttrInClient`'s stream context).
 >
