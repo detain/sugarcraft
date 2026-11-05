@@ -82,6 +82,45 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 
 Non-visual engine: no ANSI, no rendering, no demos — view layers (gutters, coloring) consume the model and stay downstream. Sides accept a raw `string` or a `list<string>` (one element = one line; an element containing `"\n"` is refused — `file()` callers pass `FILE_IGNORE_NEW_LINES`). The model is eagerly materialised: `compute()` allocates the full `Line`/`Hunk` row set, and `addedLines()`/`removedLines()` re-walk it per call.
 
+### Diffing two files
+
+Sides take a raw `string` or a `list<string>`; for real files use the string
+channel and cast away `file_get_contents()`'s `string|false`:
+
+```php
+$diff = Diff::compute(
+    (string) file_get_contents($a),
+    (string) file_get_contents($b),
+    DiffOptions::new()->withNoNewlineMarker(),
+);
+echo $diff->unified($a, $b);
+```
+
+Reading with `file($path, FILE_IGNORE_NEW_LINES)` works too, but the two
+channels diff differently once a final newline is missing: a `list<string>`
+side is terminated by construction, so `beforeHasFinalNewline`/
+`afterHasFinalNewline` report `true` there whatever the file held, and when
+some other change triggers a hunk only a string side can carry the
+`\ No newline at end of file` annotation (a terminator-only change stays
+zero hunks on either channel — see the Fidelity notes).
+
+### Consuming rows side by side
+
+`Writer\SideBySideFormat::rows()` pairs one `Diff`'s changed runs into
+`[left?, right?]` rows for split viewers — `fromUnified()` yields exactly the
+same rows from rendered patch text:
+
+```php
+use SugarCraft\Diff\Writer\SideBySideFormat;
+
+foreach (SideBySideFormat::rows($diff) as $row) {
+    $left  = $row->left?->text;    // old column, numbered $row->left?->oldNumber
+    $right = $row->right?->text;   // new column, numbered $row->right?->newNumber
+    // $row->isPaired() separates replacements and context from leftovers,
+    // which stand alone with one half null.
+}
+```
+
 ## Rendering safely
 
 Hunk row text ships exactly what the sides held — the engine never strips control bytes from *content*, because content is the caller's payload. A surface painting diffs of untrusted files should sanitize or escape those bytes for its own output channel (the TUI gutter clips to width; a web view HTML-escapes). The one thing the writer will not do is let a *path label* forge protocol rows: labels containing control bytes, `"` or `\` are C-quoted git-`core.quotePath`-style, so every emitted header stays one physical line.

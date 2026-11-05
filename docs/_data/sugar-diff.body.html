@@ -37,7 +37,11 @@ echo $wide->unified('file.txt') === $patchText ? "same patch\n" : "wider patch\n
 // Number the rows of an existing patch (gutter/viewer support):
 foreach (UnifiedScan::lines($patchText) as $row) {
     // $row->old, $row->new, $row->fileHeader, $row->kind (ScanRowKind enum)
-}</code></pre>
+}
+
+// Real files: (string) file_get_contents() both sides — a file() list side
+// is terminated by construction and hides a missing final newline (README
+// recipe).</code></pre>
 
     <h3 style="margin-top: 32px;">The model</h3>
     <div class="feature-grid">
