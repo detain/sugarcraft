@@ -14,8 +14,12 @@
 <!-- BADGES:END -->
 
 ```sh
-composer require sugarcraft/sugar-cli
+composer require sugarcraft/sugar-cli "@dev"
 ```
+
+> Install note: sibling `sugarcraft/*` packages track `@dev` and the monorepo sets
+> `minimum-stability: dev` with `prefer-stable: true`. A consumer pinning stable releases
+> only should mirror that pair in its own root manifest or install fails to resolve.
 
 sugar-cli — opinionated **CLI presentation helpers** that turn ordinary
 command-line output into something that matches the rest of the
