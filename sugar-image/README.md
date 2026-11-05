@@ -5,7 +5,7 @@ animated), APNG, WebP and BMP decoded via ext-gd plus pure-PHP
 animated-container decoders and rendered via the best
 available protocol:
 
-- **Sixel** — xterm, foot, mlterm, contour, rio
+- **Sixel** — xterm built with sixel support (detection gates the xterm row on <code>XTERM_VERSION</code>), foot, mlterm, contour, rio
 - **Kitty graphics protocol** — kitty, ghostty, wezterm
 - **iTerm2 inline images** (OSC 1337) — iTerm2, mintty, rio (rio and mintty claim sixel too; detection precedence seats them on iTerm2)
 - **Half-block Unicode** (▀ + 24-bit fg/bg) — text fallback where cell
