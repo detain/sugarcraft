@@ -233,14 +233,17 @@ behaviour is always correct.
 
 ## Accessor deprecation (2026-10-24)
 
-Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*")*, `Viewport`'s dimension accessors were renamed to their bare twins. The bare names were unclaimed in-lib (the mutators are the `setWidth()`/`setHeight()` spellings, so there is no fluent collision). The legacy names remain as byte-identical one-line BC forwarders, each marked `@deprecated` with `REMOVED-IN: 2.0.0` in its docblock — they will be removed in sugar-flexbox v2.0.0. The forwards still answer through the wrapped canonical widgets viewport's own names; that hop belongs to the wrapped class, not this lib's era.
+`Viewport`'s dimension accessors follow the house bare-accessor convention:
+call `width()` and `height()`. The legacy `getWidth()`/`getHeight()` still
+work — they are one-line backward-compatibility forwarders that return the
+same values — but each is marked `@deprecated` with `REMOVED-IN: 2.0.0` in
+its docblock and they will be deleted in sugar-flexbox v2.0.0. Migrating is
+a name swap with no behavior change:
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
 | `Flexbox` | `Viewport` | `getWidth()` | `width()` |
 | `Flexbox` | `Viewport` | `getHeight()` | `height()` |
-
-`tests/AccessorDeprecationTest.php` pins the era from four directions: live-object BC identity per pair, forwarder shape (single return line + markers), a discovery-first `src/` census, and this table — adding another deprecation without all rows goes red.
 
 ## License
 
