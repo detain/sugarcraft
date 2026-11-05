@@ -12,6 +12,7 @@ candy-top reads btop's config format and btop's `.theme` files, and its keys, me
 
 - [Requirements](#requirements)
 - [Install](#install)
+- [Phar release and self-update](#phar-release-and-self-update)
 - [Run](#run)
 - [The boxes](#the-boxes)
 - [Menus and overlays](#menus-and-overlays)
