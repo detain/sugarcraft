@@ -1,6 +1,9 @@
 # SugarCraft\Dashboard
 
-sugar-dashboard — a comprehensive TUI component library for PHP 8.3+. Provides 200+ components organized into 12 namespaces for building rich terminal user interfaces.
+sugar-dashboard — a TUI building-block library for PHP 8.3+: column grid,
+constraint layout, ratio grid, data grid, tree, modal, status bar, tabs,
+plot/canvas, and a module/plugin system. Provides 200+ components organized
+into 12 namespaces.
 
 ## Installation
 
