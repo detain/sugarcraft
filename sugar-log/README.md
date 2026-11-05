@@ -139,7 +139,11 @@ try {
 
 $fh = fopen('php://stderr', 'w');
 Log::default()->setOutput($fh); // reach the shared logger itself
-fclose($fh);
+// setOutput is process-lifetime state — the shared logger keeps $fh until it
+// is re-pointed, so closing the handle here would leave every later Log::call
+// writing to a dead resource. Tear down by re-pointing first, then close:
+// Log::default()->setOutput(STDERR);
+// fclose($fh);
 ```
 
 Swap the shared logger wholesale with `Log::setLogger(Logger::new(...))`, and
