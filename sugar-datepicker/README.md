@@ -216,25 +216,54 @@ chord. `PageUp`/`PageDown` step one
 month through the `Model`; larger jumps between months and years go through the
 `GoTo*` methods.
 
+## Events
+
+`Model::new()` takes an optional `EventStore` as its second argument. When one
+is attached, every state *transition* — a value change, never a flag edge — is
+recorded as a typed event the host drains with `release()` after each update:
+
+- **`cursor_moved`** — payload `{index}` — the cursor index changed.
+- **`range_started`** — payload `{date}` (`Y-m-d`) — range mode's first Enter
+  armed the start (unset → set).
+- **`date_selected`** — single mode: payload `{date}` when the selected day
+  changed; range mode: `{date, rangeStart, rangeEnd}` when the end becomes
+  non-null (the start-arming Enter is reported by `range_started`, not here).
+- **`date_cleared`** — empty payload `{}` — the single-mode selection went from
+  set to unset (Esc or a toggling Enter).
+
+The recording is deliberately partial in range mode: an Esc that clears a range
+and a third Enter that restarts one complete no selection, so they record
+**nothing** — `date_cleared` is a single-mode event. A host that must learn
+"user cancelled the range" cannot get it from the store; it has to poll
+`rangeStart()`/`rangeEnd()` itself, which keeps accessor polling authoritative.
+
 ## API surface
 
 Beyond `DatePicker` itself, the shipped public classes are:
 
-- **`DateRange`** — an immutable start/end value object: `contains($date)`
-  (compares calendar days, timezone-safe), `durationInDays(?$now = null)` (an
-  optional clock seam; a null end measures against `$now`), and `isComplete()`.
+- **`DateRange`** — an immutable start/end value object: promoted public
+  readonly `$start`/`$end` plus `withStart()`/`withEnd()` clones;
+  `contains($date)` (compares calendar days, timezone-safe — while the range is
+  open-ended a null end admits every day from the start forward, the
+  mid-selection caveat), `durationInDays(?$now = null)` (whole *elapsed* days —
+  `2026-01-01` to `2026-01-03` returns `2` although the calendar span covers
+  three days; optional clock seam: a null end measures against `$now`), and
+  `isComplete()`.
 - **`EventStore`** / **`EventStoreInterface`** — the host-facing transition
   channel: `record($type, $payload)`, `release()` (drain-and-clear),
-  `hasEvents()`, `count()`. It keeps a bounded ring of `MAX_EVENTS` (1000) and
-  evicts the oldest records beyond that, so a host that never drains cannot grow
-  memory without limit.
+  `hasEvents()`, `count()`, and a `__construct(?\Closure $clock = null)`
+  deterministic-time seam for tests. It keeps a bounded ring of `MAX_EVENTS`
+  (1000) and evicts the oldest records beyond that, so a host that never drains
+  cannot grow memory without limit.
 - **`Navigation::gridIndexToDate($index, $month, $year)`** — maps a raw grid
   index to a date; it throws when `month` is outside 1–12 or `year` is below 1,
   which the picker's view floor prevents from ever reaching it in normal use.
 - **`Model`** — the TEA wrapper (`init()`/`update($msg)`/`view()`/
   `subscriptions()`). Its `update()` command is **always null** — a host learns
   the outcome by polling `picker()->SelectedDate()`/`rangeStart()`/`rangeEnd()`
-  (or the `EventStore`) after each update, never from a returned command. Because
+  after each update, never from a returned command. The `EventStore` reports the
+  same transitions for convenience, but not on range mode's cancel and restart
+  paths (see Events above), so polling stays authoritative. Because
   the shared `Core\Model::view()` contract is argless, a framework-driven host
   renders the default 21×9 grid; call `picker()->View($width, $showWeekNumbers)`
   directly for a sized render.

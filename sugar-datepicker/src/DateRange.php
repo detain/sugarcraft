@@ -46,7 +46,8 @@ final readonly class DateRange
     }
 
     /**
-     * Whole days from start to end (inclusive of the calendar span). With an
+     * Whole elapsed days between start and end — 2026-01-01 to 2026-01-03
+     * returns 2, although the calendar span covers three days. With an
      * open-ended range, $now supplies the closing date; it defaults to real
      * wall-clock now so the pure-integer math stays testable without a clock
      * injection when the caller wants the live figure.

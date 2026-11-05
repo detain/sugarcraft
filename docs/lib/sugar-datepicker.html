@@ -83,7 +83,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
       <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last valid day of the viewed month, Enter selects (single mode) or sets the range start/end, Esc clears.</span></div>
       <div class="feature"><strong>Range selection</strong><span><code>withRangeMode(true)</code>: the first Enter sets the start, the second the end (swapped if needed), a third starts over; Esc clears.</span></div>
       <div class="feature"><strong>Date bounds</strong><span><code>withMinDate()</code>/<code>withMaxDate()</code> clamp navigation to the allowed months and refuse out-of-range selection; <code>withoutMinDate()</code>/<code>withoutMaxDate()</code> lift a bound.</span></div>
-      <div class="feature"><strong>SugarCraft model</strong><span><code>Model</code> wraps the picker as a sugar-core Model with an optional event store.</span></div>
+      <div class="feature"><strong>SugarCraft model</strong><span><code>Model</code> wraps the picker as a sugar-core Model with an optional event store recording <code>cursor_moved</code>, <code>range_started</code>, <code>date_selected</code>, and <code>date_cleared</code> transitions; the payload contract is in the README's Events section.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
