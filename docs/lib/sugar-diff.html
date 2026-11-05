@@ -74,8 +74,9 @@ echo $patchText;
 // -Hello World
 // +Hello PHP
 
-// Immutable, fluent options — the defaults reproduce candy-code's hunk
-// bodies and grouping (headers are GNU-faithful).
+// Immutable, fluent options — context width, folding and GNU
+// annotations are all opt-in; see the README Fidelity notes for
+// exactly which shapes the defaults pin.
 $wide = Diff::compute($before, $after, DiffOptions::new()
     ->withContextLines(10)
     ->withIgnoreWhitespace()
@@ -101,15 +102,15 @@ foreach (UnifiedScan::lines($patchText) as $row) {
     <div class="feature-grid">
       <div class="feature"><strong>Diff</strong><span>compute() entry point; lines, hunks, per-side counts and final-newline facts; isEmpty/addedLines/removedLines/unified/hunkText.</span></div>
       <div class="feature"><strong>Hunk / Line / LineKind</strong><span>One @@ block; one numbered row; eq/del/ins. All immutable value objects.</span></div>
-      <div class="feature"><strong>Writer\UnifiedFormat</strong><span>Renders the GNU diff -u shape: headers (path labels quoted when they carry control bytes), @@ ranges with GNU count elision, opt-in "\ No newline" markers and /dev/null labels.</span></div>
+      <div class="feature"><strong>Writer\UnifiedFormat</strong><span>Renders the GNU diff -u shape: headers (path labels whose text carries control bytes, a double quote or a backslash are C-quoted git core.quotePath-style), @@ ranges with GNU count elision, opt-in "\ No newline" markers and /dev/null labels.</span></div>
       <div class="feature"><strong>Writer\SideBySideFormat / SideBySideRow</strong><span>Pairs a diff into [left?, right?] rows for split viewers — from a computed Diff or raw patch text, one shared pairing rule.</span></div>
-      <div class="feature"><strong>Reader\UnifiedScan</strong><span>Walks any rendered unified diff, honouring each hunk's declared counts and classifying every row with ScanRowKind — the gutter model without the gutter.</span></div>
+      <div class="feature"><strong>Reader\UnifiedScan</strong><span>Walks any rendered unified diff, honouring each hunk's declared counts and classifying every row with ScanRowKind — row classification and numbering, no drawing.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers; every row ships redundant non-colour channels (<code>LineKind::marker()</code>, <code>ScanRowKind</code>), so a viewer can tint with colour without ever making colour carry the change alone (WCAG 1.4.1).</li>
-      <li><strong>Editing tools</strong> — the same engine candy-code's Edit/Write tools use to report changes to the model and the user.</li>
+      <li><strong>Editing tools</strong> — the same engine candy-code's Edit, Write and ApplyPatch tools use to report changes to the model and the user.</li>
       <li><strong>Patch consumers</strong> — UnifiedScan answers "which file line is this row?" for arbitrary incoming diffs, including multi-file git output.</li>
     </ul>
 
@@ -125,7 +126,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Diff</td><td>compute(string|list&lt;string&gt; $before, string|list&lt;string&gt; $after, ?DiffOptions $options = null): self</td><td>Line-mode LCS diff; `degraded` reports the cell-budget fallback (candy-code defaults reproduced for hunk bodies and grouping)</td></tr>
+<tr><td>Diff</td><td>compute(string|list&lt;string&gt; $before, string|list&lt;string&gt; $after, ?DiffOptions $options = null): self</td><td>Line-mode LCS diff; `degraded` reports the cell-budget fallback (the exact default shapes live in the README Fidelity notes)</td></tr>
 <tr><td>Diff</td><td>unified(string $oldPath, ?string $newPath = null): string</td><td>Full diff -u text with --- / +++ headers; the second argument names the new side only</td></tr>
 <tr><td>Diff</td><td>hunkText(): string</td><td>Hunks only, no file headers</td></tr>
 <tr><td>Diff</td><td>isEmpty() / addedLines() / removedLines(): int|bool</td><td>Summary counts</td></tr>
