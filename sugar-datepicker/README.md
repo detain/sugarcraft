@@ -3,7 +3,7 @@
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-datepicker)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-datepicker)
-[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-datepicker?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-datepicker)
+[![Packagist](https://img.shields.io/badge/packagist-dev--master-informational)](https://packagist.org/packages/sugarcraft/sugar-datepicker)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
@@ -38,8 +38,10 @@ sugar-datepicker — an interactive date picker component for terminal UIs, for 
 ## Install
 
 ```bash
-composer require sugarcraft/sugar-datepicker
+composer require sugarcraft/sugar-datepicker:@dev
 ```
+
+No tagged release yet — the package currently ships only `dev-master` from Packagist, so consume it with the `@dev` constraint above until the first version tag lands.
 
 ## Quick Start
 
