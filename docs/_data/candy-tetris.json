@@ -7,5 +7,5 @@
     "displayName": "CandyTetris",
     "tagline": "Tetris on the SugarCraft stack",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/Broderick-Westrope/tetrigo\" style=\"color: inherit;\">Broderick-Westrope/tetrigo</a></span>\n          <span class=\"tag-chip\">game</span>\n          <span class=\"tag-chip\">tetris</span>\n          <span class=\"tag-chip\">srs</span>\n          <span class=\"tag-chip\">deterministic</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/Broderick-Westrope/tetrigo\" style=\"color: inherit;\">Broderick-Westrope/tetrigo</a></span>\n          <span class=\"tag-chip\">game</span>\n          <span class=\"tag-chip\">tetris</span>\n          <span class=\"tag-chip\">srs</span>\n          <span class=\"tag-chip\">7-bag</span>"
 }

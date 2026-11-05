@@ -48,13 +48,13 @@
           <span class="tag-chip">game</span>
           <span class="tag-chip">tetris</span>
           <span class="tag-chip">srs</span>
-          <span class="tag-chip">deterministic</span>
+          <span class="tag-chip">7-bag</span>
         </div>
       </div>
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-tetris"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-tetris" alt="CandyTetris code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">SugarCraft runtime, SugarStyle for rounded borders + per-piece colours, deterministic 7-bag RNG, ghost piece, hard drop, hold, level-driven gravity ramp, NES-style line-clear scoring. Full SRS wall-kicks via official Tetris Association tables, T-Spin detection via the centre-diagonal 3-corner rule, Back-to-Back (1.5×) and combo bonuses, and perfect-clear detection (+5000/level).</p>
+    <p class="lede" style="margin-top: 28px;">SugarCraft runtime, SugarStyle for rounded borders + per-piece colours, uniform-shuffled 7-bag (injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style line-clear scoring. Full SRS wall-kicks via the Tetris Company Guideline tables, T-Spin detection via the centre-diagonal 3-corner rule, Back-to-Back (1.5×) and combo bonuses, and perfect-clear detection (+5000 × (level+1)).</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-tetris
@@ -80,8 +80,8 @@ composer install
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>SRS rotation</strong><span>Full Super Rotation System — official Tetris Association kick tables for J/L/S/T/Z and I piece. Tries up to 5 offsets per rotation transition; the first that fits the board is used. The board y-axis is inverted exactly once, in Piece::rotationsWithKicks.</span></div>
-      <div class="feature"><strong>7-bag RNG</strong><span>Deterministic shuffle of the seven pieces; injectable RNG closure for reproducible tests. Value-semantic: next() returns the piece plus an advanced bag, peek() is a pure preview that consumes neither state nor draws.</span></div>
+      <div class="feature"><strong>SRS rotation</strong><span>Full Super Rotation System — kick tables from the Tetris Company Guideline lineage (the code cites tetris.fandom.com/wiki/SRS), two of them: J/L/S/T/Z and I piece. Each transition tries the naive rotation plus the table's five offsets — up to 6 candidates, first fit wins (the list's own first entry repeats the naive `(0, 0)`). The board y-axis is inverted exactly once, in Piece::rotationsWithKicks.</span></div>
+      <div class="feature"><strong>7-bag RNG</strong><span>Uniform shuffle of the seven pieces; an injectable RNG closure makes tests and replays reproducible. Value-semantic: next() returns the piece plus an advanced bag, peek() is a pure preview that consumes neither state nor draws.</span></div>
       <div class="feature"><strong>Ghost piece</strong><span>Translucent preview at the hard-drop landing position.</span></div>
       <div class="feature"><strong>Hard drop / hold</strong><span>Space-bar drop; level-driven gravity speed-up at every 10 lines. Lock delay (500 ms window, 15-reset cap) in single player; VS boards lock on the grounding tick.</span></div>
       <div class="feature"><strong>Line-clear scoring</strong><span>NES-style base points — 1 → 40, 2 → 100, 3 → 300, 4 → 1200 — multiplied by (level + 1); the T-Spin and B2B bonuses follow the modern Guideline.</span></div>
@@ -119,6 +119,10 @@ composer install
 <tr><td>SrsKickTable</td><td>allKicks(piece)</td><td>Return all transition tables for a piece</td></tr>
 <tr><td>Scoring\TSpin</td><td>detect(board, piece, lastActionWasRotation)</td><td>Centre-diagonal 3-corner rule; returns TSpin(active, mini)</td></tr>
 <tr><td>Scoring\TSpin</td><td>T_SPIN_POINTS / T_SPIN_MINI_POINTS</td><td>Base score constants (400 / 100, scaled by level+1)</td></tr>
+<tr><td>Game</td><td>startWithLockDelay()</td><td>Seed a game with a custom lock-delay window (SRS QoL knob)</td></tr>
+<tr><td>Game</td><td>addGarbageRows(count)</td><td>Push incoming garbage in from the bottom; versus mode's opponent channel</td></tr>
+<tr><td>Tetromino</td><td>rgbColor()</td><td>The piece's 24-bit truecolour value as an int</td></tr>
+<tr><td>Score</td><td>withDropPoints(points)</td><td>Add drop points to the score; lines and level stay put (the game feeds 1 per soft cell, 2 per hard cell)</td></tr>
 </table>
   </div>
 </section>
