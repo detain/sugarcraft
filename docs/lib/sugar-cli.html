@@ -107,7 +107,7 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 <tr><td>Theme</td><td>ansi() / plain() / detect(?env, ?stream) / auto(?msg)</td><td>Colourful palette / no styling / palette downgraded to the stream's ColorProfile / background-adaptive</td></tr>
 <tr><td>Theme</td><td>charm() / dracula() / nord() / catppuccin() / byName(name) / PRESET_NAMES</td><td>Fixed colour presets, the case-insensitive name resolver, and its roster</td></tr>
 <tr><td>Theme</td><td>build() / withColorProfile(ColorProfile $profile)</td><td>Fluent builder (all seven slots required) / downgrade any theme to a colour profile</td></tr>
-<tr><td>Frame</td><td>new() → withTitle(t) / withTitleText(t, style) / withStatus(s) / withBorderStyle(style) → render(body, cols, rows)</td><td>Exactly-rows full-screen box; SGR-preserving ingress sanitation</td></tr>
+<tr><td>Frame</td><td>new() → withTitle(t) / withTitleText(t, style) / withStatus(s) / withBorderStyle(style) → render(body, cols, rows)</td><td>Exactly-rows full-screen box; SGR-preserving ingress sanitation; throws below 6 rows, width floors at 4, body rows past <code>rows - 6</code> are dropped</td></tr>
 <tr><td>Logo</td><td>sugarcraft() / fromAscii(art) / withColor(color) / render()</td><td>Unicode box-drawing art preset / custom page (newlines are the layout) / replaceable tint / styled render</td></tr>
 </table>
   </div>

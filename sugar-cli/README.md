@@ -131,6 +131,11 @@ echo StatusLine::error('connection refused'), "\n";
    terminal. An unclosed
   SGR on width-fitting content can bleed into the surrounding padding —
   close your styles or pass them through `withTitleText()`.
+  Geometry floors are part of the contract: `render()` throws
+  `InvalidArgumentException` below 6 rows (the fixed chrome cost);
+  widths under 4 are clamped up to 4, so a 1-3 column terminal sees
+  wrapped lines; and body rows past `rows - 6` are dropped, never
+  scrolled.
 - **`AutoWidth`** — the `int|AutoWidth|null $width` sentinel shared by the
   presenters: `AutoWidth::Auto` resolves the terminal width (exported
   `COLUMNS`, else 80 cells; implausibly large advertised values are
