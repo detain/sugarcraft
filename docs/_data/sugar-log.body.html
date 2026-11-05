@@ -79,9 +79,9 @@ $child-&gt;info('Batch complete');</code></pre>
 <tr><td>PartsOrder</td><td>PART_TIMESTAMP, PART_LEVEL, PART_PREFIX, PART_CALLER, PART_MESSAGE, PART_FIELDS</td><td>Part name constants</td></tr>
 <tr><td>CallerFormatter</td><td>find(): ?string</td><td>Walk call stack, return "file:line" of first external caller</td></tr>
 <tr><td>Level</td><td>Debug, Info, Warn, Error, Fatal</td><td>Enum: charmbracelet/log-aligned int deltas (-4, 0, 4, 8, 12) — deliberately NOT RFC 5424/syslog severities</td></tr>
-<tr><td>TextFormatter</td><td>new(bool, ?string, bool, bool)</td><td>Human-readable formatter with ANSI color</td></tr>
-<tr><td>JsonFormatter</td><td>new(bool)</td><td>JSON object per log line</td></tr>
-<tr><td>LogfmtFormatter</td><td>new()</td><td>Logfmt key=value format</td></tr>
+<tr><td>TextFormatter</td><td>new(bool, ?string, bool, ?bool, ?Styles, ?PartsOrder)</td><td>Human-readable formatter with ANSI color; <code>useColors</code> is tri-state (null consults the terminal probe), null <code>styles</code>/<code>partsOrder</code> fall back to defaults</td></tr>
+<tr><td>JsonFormatter</td><td>new(bool, ?string)</td><td>JSON object per log line; optional <code>timeFormat</code> (default <code>DateTimeInterface::ATOM</code>)</td></tr>
+<tr><td>LogfmtFormatter</td><td>new(bool, ?string)</td><td>Logfmt key=value format; optional <code>timeFormat</code> (default <code>DateTimeInterface::ATOM</code>)</td></tr>
 <tr><td>Log</td><td>installPanicHandler()</td><td>Install global panic handler (catches fatal errors + uncaught exceptions)</td></tr>
 <tr><td>Log</td><td>restoreTerminal()</td><td>Restore terminal from altscreen mode</td></tr>
 <tr><td>Log</td><td>setLogger(Logger)</td><td>Set the global logger instance</td></tr>
