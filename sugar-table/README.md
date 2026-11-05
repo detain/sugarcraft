@@ -785,6 +785,33 @@ warning under Rows); render untrusted content only through `View()`. Pinned by
 `tests/TableSanitizeTest.php`; see also the fleet-wide
 [`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
 
+## Accessibility
+
+What the renderer does for you:
+
+- **Selection is pure reverse video** (`ESC[0;7m`) composed over the row's
+  winning style — it needs no colour channel, so the cursor row stays readable
+  on light and dark palettes alike. A cursorless table is one call away:
+  `withSelectable(false)`.
+- **Zebra striping is a fixed black-on-white inversion** (`30;47` on even
+  stripes, odd stripes plain) rather than a dimmed grey — again readable
+  without a colour vocabulary. Enable it with `Table::withZebra(true)`.
+- **The empty-state message is translatable** (`no_data`, see
+  Internationalization) instead of a silent blank box.
+
+Known limits — there is no colour-blind or a11y mode:
+
+- No `NO_COLOR`, non-TTY or plain-text degrade path exists: SGR sequences are
+  always emitted (only the Security section's sanitisation ever removes bytes).
+- Box-drawing border glyphs and the default `1;37` header style (slot 7 paints
+  as the fixed TrueColor `#E5E5E5`, which can vanish on light themes — see
+  Border Styling) add screen-reader noise and contrast risk. The quiet form is
+  `withBorder(Border::ascii())` (or `Border::hidden()`) plus
+  `withHeaderStyle('')`.
+- The output is a text grid: there is no semantic association between a header
+  cell and its column beyond visual alignment, so assistive technology reads
+  positions, not relationships.
+
 ## Border Styling
 
 
