@@ -275,13 +275,13 @@ renders key and value as separate styled segments around a bare `=`.
 ### Level text alignment
 
 `Styles::padLevelText($label)` right-pads a level label to 5 characters for
-column-aligned log output:
+column-aligned log output (the formatter pads the short labels it renders):
 
 ```php
 use SugarCraft\Log\Styles;
 
-Styles::padLevelText('INFO');  // "INFO "
-Styles::padLevelText('DEBUG'); // "DEBUG"
+Styles::padLevelText('INF');  // "INF  "
+Styles::padLevelText('DEBUG'); // "DEBUG" (already 5 wide)
 ```
 
 Set the `padLevelText` property on a `Styles` instance to make
@@ -293,7 +293,7 @@ use SugarCraft\Log\Styles;
 
 $log = Logger::new();
 $styles = new Styles();
-$styles->padLevelText = true; // renders "INF  " / "DEBUG" instead of "INF" / "DEBUG"
+$styles->padLevelText = true; // renders "INF  " / "DBG  " instead of "INF" / "DBG"
 $log->setStyles($styles);
 ```
 
