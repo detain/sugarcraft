@@ -53,11 +53,14 @@ deliberately ignores all flags (no `--version`/`--help`/refusal handling).
 
 | Key                  | Action                                                |
 |----------------------|-------------------------------------------------------|
-| `Space` / `Enter` / `↑` / `w` | Flap (the first flap also starts the run)  |
+| `Space` / `Enter` / `↑` / `w` (either case) | Flap (the first flap also starts the run)  |
 | `r`                  | Restart — after a crash or mid-flight; lands on the ready card |
 | `q` / `Esc` / `Ctrl+C` | Quit                                              |
 
-Other `Ctrl`-combinations do nothing; `Ctrl+C` is the only chord the game reads.
+Other `Ctrl`-combinations do nothing; `Ctrl+C` is the only chord the game
+reads. Legacy byte-degraded chords excepted: on terminals without kitty-protocol
+reporting, `Ctrl+M`/`Ctrl+J` arrive as Enter and `Ctrl+I` as Tab — so those
+byte sequences flap like the keys they decode to.
 
 The board opens on a **ready card**: the bird hovers and the world is frozen
 until your first flap, so launching never drops you into the floor. Quitting
@@ -73,13 +76,34 @@ The framed world is a fixed 62 x 21 cells (`Game::MIN_COLS` x `Game::MIN_ROWS`).
   back and the game resumes in place; `r` never snaps the layout away.
 - **`TERM=dumb` / no TTY** (`ColorProfile::NoTty`) — candy-flappy refuses to
   play with a plain message instead of spraying escape codes into a terminal
-  that cannot render them.
-- **ASCII-only terminal** (`ColorProfile::Ascii`, e.g. `NO_COLOR` on a plain
+  that cannot render them. The non-TTY check runs FIRST inside
+  `ColorProfile::detect()`, so piped stdout with `NO_COLOR` set lands here —
+  the plain NoTty refusal, not the ASCII posture. That refusal frame is
+  flappy's own output; sugar-core's program bootstrap may still have emitted
+  alternate-screen enter bytes ahead of it.
+- **ASCII-only terminal** (`ColorProfile::Ascii`, e.g. `NO_COLOR` on a real
   tty) — same layout in plain glyphs: `+--+` borders, `#` pipes, no emoji,
   no colour.
-- **Colour tiers** — 16/256-bit/TrueColor palettes degrade through
-  sugar-style; the status hint collapses to a short form before any line
-  could wrap past the window width.
+- **Colour posture** — the detected `ColorProfile` only gates the refusal /
+  ASCII branch above. Once the game draws in colour, every styled cell emits
+  TrueColor SGR: there is no 16/256-colour degradation step (flappy never
+  calls `Style::setDefaultProfile()`), so a 16- or 256-colour terminal shows
+  whatever the emulator decides to do with the TrueColor bytes. The status
+  hint collapses to a short form before any line could wrap past the window
+  width.
+
+The palette is hardcoded light-on-dark. Against the `#1a1b26` background the
+amber bird reads 14.06:1, the green pipes 11.43:1 and the crash pink 5.95:1;
+on a white background those become 1.26:1, 1.54:1 and 2.97:1 — a light
+terminal should expect the colours to invert (the `·` parallax dot field,
+~1.35:1 there, is declared decorative scenery, not information). The status
+hint that carries the keyboard instructions sits at roughly 3.6:1, below the
+4.5:1 WCAG small-text line: low-vision players may struggle to read it, and
+lightening or bolding it is a deliberate behaviour decision, not a
+documentation fix.
+
+Play happens on the alternate screen (`ProgramOptions(useAltScreen: true)`,
+DECSET 1049), so your normal scrollback is restored untouched on exit.
 
 ## Architecture
 
