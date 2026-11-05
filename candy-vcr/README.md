@@ -198,7 +198,10 @@ $player = new Player($cassette);
 $result = $player->play(programFactory: $factory, speed: Player::SPEED_REALTIME);
 ```
 
-The importer handles asciinema v3's relative timestamps, converts `o` (stdout)
+The importer accepts asciinema v2 and v3 alike. Event lines carry delta-accumulated
+(relative) timestamps in **both** versions — each line is the seconds since the
+previous event; the v2/v3 split is only where the header keeps `width`/`height`
+(flat in v2, nested under `term:` in v3). The importer converts `o` (stdout)
 events to output events, `i` (stdin) events to input events, and `x` (exit)
 events to quit events.
 
@@ -269,7 +272,11 @@ hang. Every verb answers `-h` / `--help` with its own usage block on stdout and
 exit 0; `--version` / `-V` answers before verb dispatch — it prints `candy-vcr <version>` on
 stdout and exits 0 (a `dev` stamp in a plain checkout, the composer or phar version otherwise).
 
-`inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` (the default when the flag is omitted) flushes everything as fast as the kernel will accept it; the header's `playbackSpeed` multiplier scales rendered output (`render-tape`/`render-batch`), not live replay. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
+`inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` (the default when the flag is omitted) flushes everything as fast as the kernel will accept it; the header's `playbackSpeed` multiplier scales rendered output (`render-tape`/`render-batch`), not live replay. `diff` compares headers + per-event payloads and exits non-zero on any difference — event
+timestamps compare with a 2 ms tolerance (`DiffCommand::T_TOLERANCE_SECONDS = 0.002`), and the
+`_id`/`_enc` migration-metadata keys are stripped from both sides before payload comparison so a
+`migrate`d cassette diffs clean against its original; pass `--strict` to keep those keys in the
+comparison. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
 
 ### Recording commands
 
@@ -351,6 +358,11 @@ Benchmark (`tests/Integration/ShirleyOverheadTest.php`: one warmup iteration, th
 | Pump WITH recorder | ~40 ms |
 | Measured overhead | **within noise** |
 
+Figures are trimmed means from a quiet dedicated host; on shared CI runners the
+without/with pair wanders by a few ms per direction, which is why the table's
+headline is a band, not a delta. Treat any single-run reading inside that band
+as "within noise" — the assertion budget below is what carries the signal.
+
 The assertion budget is 8 % to absorb shared-runner jitter while still catching the regression class this test exists to flag (a real serialization-per-chunk regression would land at dozens of percent). The original performance survey's 2 % acceptance target is reported by the test but not asserted.
 
 ### Hook system
@@ -404,7 +416,7 @@ entirely).
 
 | Class | Semantics |
 |-------|-----------|
-| `PassthroughMatcher` | Default — every event matches; pairs with `ByteAssertion` for the actual diff. |
+| `PassthroughMatcher` | Every event matches — equivalent to omitting `matcher:` entirely (`Player::play()` defaults it to `null`, which skips matcher filtering); pairs with `ByteAssertion` for the actual diff. |
 | `ContentMatcher` | Matches on `(kind, payload)`; ignores `t`. Useful when replay timing isn't deterministic. |
 | `TimingTolerantMatcher` | Matches when `\|t_actual - t_recorded\| ≤ $tolerance`. Construct with `$tolerance: float` (seconds). |
 
@@ -811,7 +823,7 @@ imagedestroy($image);
 | Class | Role |
 |---|---|
 | `FontLoader` | Resolves TTF font paths from `fonts/` bundle + system dirs |
-| `Glyphs` | Per-(char, fg, bg, bold, italic, underline) tile cache — the performance key |
+| `Glyphs` | Per-(char, fg, bg, bold, italic, underline, ±truecolor override) tile cache — the performance key |
 | `Rasterizer` | Interface: `rasterize(Snapshot, cellW, cellH, ?FontLoader): GdImage\|Imagick` |
 | `GdRasterizer` | Default ext-gd backend; blits tiles + renders cursor |
 | `ImagickRasterizer` | ext-imagick alternative; better anti-aliasing |
@@ -824,7 +836,11 @@ Development for licensing and override details.
 
 **Glyphs cache:** Typical terminal frames have thousands of cells but only ~50
 unique (char, attrs) combinations. The tile cache makes rasterization O(unique
-tiles) instead of O(cells). Cache key: `"$char|$fg|$bg|$bold|$italic|$underline"`.
+tiles) instead of O(cells). Cache key: `"$char|$fg|$bg|$bold|$italic|$underline"`,
+plus a `|tc<fgRgb>,<bgRgb>` tail whenever either `?int` truecolor override is
+supplied to `tile()`/`tileWide()` — a truecolor cell can never reuse a
+palette-keyed tile, while pure-palette cells keep keys byte-identical to the
+pre-truecolor cache.
 
 **Wide chars:** CJK and fullwidth characters get a 2×-wide tile; the rasterizer
 advances 2 columns after blitting. Checked via `mb_strwidth($char) > 1`.
@@ -842,7 +858,9 @@ order: bundled `candy-vcr/fonts/` → `$fontDirs` overrides →
 `/usr/share/fonts/{truetype,opentype}` → `~/.fonts/` →
 `~/.local/share/fonts/`.
 
-**Glyphs API.** `new Glyphs($cellW, $cellH, $fonts, $fontFamily = 'JetBrainsMono', $fontSize = 14, $theme = null)` (`$fonts` is a `FontLoader`) builds a per-(char, fg, bg, attrs) tile cache. Accessors: `cellWidth()`, `cellHeight()`, `fontFamily()`, `fontSize()`, `theme()`, `cacheStats(): array{hits: int, misses: int, evictions: int}`, `tile($char, $fg, $bg, $bold, $italic, $underline): GdImage`, `tileWide(...)` (2× width for CJK / fullwidth), `measure($char): array{cellW, cellH}`. The instance is hoisted onto the rasterizer as a property so the cache survives across every snapshot in one tape render — a `(cellW, cellH, fontFamily, fontSize, theme)` fingerprint invalidates and rebuilds when any of those change. There is no public `DEFAULT_FONT_FAMILY` constant: `JetBrainsMono` is the constructor default on both `Glyphs` and `GdRasterizer` (whose `DEFAULT_FONT_FAMILY` is private).
+**Glyphs API.** `new Glyphs($cellW, $cellH, $fonts, $fontFamily = 'JetBrainsMono', $fontSize = 14, $theme = null)` (`$fonts` is a `FontLoader`) builds a per-(char, fg, bg, attrs) tile cache. Accessors: `cellWidth()`, `cellHeight()`, `fontFamily()`, `fontSize()`, `theme()`, `cacheStats(): array{hits: int, misses: int, evictions: int}`, `tile($char, $fg, $bg, $bold, $italic, $underline, ?int $fgRgb = null, ?int $bgRgb = null): GdImage`
+(`$fgRgb`/`$bgRgb` are exact 24-bit `0xRRGGBB` truecolor overrides), `tileWide(...)` (same tail,
+2× width for CJK / fullwidth), `measure($char): array{cellW, cellH}`. The instance is hoisted onto the rasterizer as a property so the cache survives across every snapshot in one tape render — a `(cellW, cellH, fontFamily, fontSize, theme)` fingerprint invalidates and rebuilds when any of those change. There is no public `DEFAULT_FONT_FAMILY` constant: `JetBrainsMono` is the constructor default on both `Glyphs` and `GdRasterizer` (whose `DEFAULT_FONT_FAMILY` is private).
 
 ## GIF encoder
 
@@ -1182,7 +1200,7 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
 
 ### Fonts
 
-`candy-vcr/fonts/` ships [JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) (Regular, Bold, Italic, BoldItalic) as the default rasterizer font family. JetBrainsMono is distributed under the [SIL Open Font License, version 1.1](fonts/LICENSE) — the full license text is bundled alongside the TTFs. The default family is `JetBrainsMono` (the `fontFamily:` constructor default on both `Glyphs` and `GdRasterizer`), with `DejaVuSansMono` (also bundled) retained as a fallback when JetBrainsMono is unavailable. To use a different family pass it to the `Glyphs` constructor or call `GdRasterizer::withFont($family, $fontSize)` (the rasterizer has no `font_family` property); `FontLoader` searches the bundled `fonts/` dir first, then `/usr/share/fonts/{truetype,opentype}`, `~/.fonts/`, and `~/.local/share/fonts/`.
+`candy-vcr/fonts/` ships [JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) (Regular, Bold, Italic, BoldItalic) as the default rasterizer font family. JetBrainsMono is distributed under the [SIL Open Font License, version 1.1](fonts/LICENSE) — the full license text is bundled alongside the TTFs. The default family is `JetBrainsMono` (the `fontFamily:` constructor default on both `Glyphs` and `GdRasterizer`). `DejaVuSansMono` (Regular + Bold, also bundled) is a second selectable family — and the first candidate in `Glyphs`' fallback chain: if the requested family cannot be resolved, `FontLoader::load()` throws `RuntimeException` and `Glyphs` then probes `DejaVuSansMono`, then the system-installed `FreeMono` and `NotoSansMono`. To use a different family pass it to the `Glyphs` constructor or call `GdRasterizer::withFont($family, $fontSize)` (the rasterizer has no `font_family` property); `FontLoader` searches the bundled `fonts/` dir first, then `/usr/share/fonts/{truetype,opentype}`, `~/.fonts/`, and `~/.local/share/fonts/`.
 
 ## CI integration
 
