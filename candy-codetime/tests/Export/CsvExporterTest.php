@@ -42,6 +42,30 @@ final class CsvExporterTest extends TestCase
         $this->assertSame([1700000000, 'demo', 'php', 'a.php', 60, 'refactoring,feature'], $rows[0]);
     }
 
+    /**
+     * Step 9 (docs-fix M-6): project/language/file cells pass safeCell but
+     * the tags leg used to implode RAW, so a store-written tag starting with
+     * =, +, -, @ or TAB smuggled a formula past the cell guard — every tag
+     * now rides the same arm.
+     */
+    public function testFormulaPrefixedTagsAreNeutralizedPerTag(): void
+    {
+        $hb = new Heartbeat(
+            time: 1700000000,
+            project: 'demo',
+            language: 'php',
+            file: 'a.php',
+            duration: 60,
+            tags: ['=HYPERLINK("http://evil")', 'safe', '+CMD(x)', "\tleading-tab"],
+        );
+        $rows = $this->exporter->rows([$hb]);
+        $this->assertSame(
+            "'=HYPERLINK(\"http://evil\"),safe,'+CMD(x),'	leading-tab",
+            $rows[0][5],
+            'each prefix-carrying tag gains the quote guard; plain tags are untouched',
+        );
+    }
+
     public function testRowsMultipleHeartbeats(): void
     {
         $hb1 = new Heartbeat(time: 1700000000, project: 'demo', language: 'php', file: 'a.php', duration: 60, tags: ['tag1']);

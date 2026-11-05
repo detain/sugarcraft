@@ -51,7 +51,11 @@ final class CsvExporter implements TabularExporterInterface
                 self::safeCell($hb->language),
                 self::safeCell($hb->file),
                 $hb->duration,
-                implode(',', $hb->tags),
+                // Tags are store-written (see the schema docblock): each one
+                // rides the same formula-prefix neutralization as the other
+                // free-text cells — imploding first would let a tagged
+                // "=HYPERLINK(...)" slip through the comma seam.
+                implode(',', array_map(self::safeCell(...), $hb->tags)),
             ],
             $heartbeats,
         );
