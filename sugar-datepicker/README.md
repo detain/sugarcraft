@@ -23,8 +23,10 @@ sugar-datepicker — an interactive date picker component for terminal UIs, for 
 - **Keyboard handling** — `handleKey()` for arrow keys, Home/End, Enter to
   select, Esc to clear (works in both single and range modes)
 - **Date selection** — select/clear a single date, or a start/end range
-- **Min/max date constraints** — navigation and selection refuse to leave the
-  allowed window
+- **Min/max date constraints** — the month view clamps to the allowed window
+  and Enter silently refuses a selection outside it (the receiver comes back
+  unchanged); the cursor can still rest on out-of-bounds days, which the grid
+  renders dimmed
 - **TEA integration** — a `Model` wrapper implementing the sugar-core
   `Model` contract (`init()`/`update(Msg)`/`view()`), recording picker events
   into an optional `EventStore`
