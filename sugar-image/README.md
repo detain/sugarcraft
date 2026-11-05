@@ -266,8 +266,8 @@ $cache  = new DiskCache($_SERVER['HOME'] . '/.cache/posters', maxEntries: 512);
 // arms share one protocol name, so append modeDetail() to protocol(). The
 // real key Mosaic uses for its own posters is wider still: protocol + mode
 // detail + the Scale NAME + the renderer's config fingerprint + the
-// optimisation mask, each part appended only when non-empty (posterCacheKey).
-// to keep them cache-distinct.
+// optimisation mask, each part appended only when non-empty (private
+// Mosaic::posterCacheKey()) to keep them cache-distinct.
 $key = DiskCache::key($url, width: 24, height: 36, protocol: $mosaic->protocol() . ($mosaic->modeDetail() ? ':' . $mosaic->modeDetail() : ''));
 
 $ansi = $cache->getOrCompute($key, fn (): string =>
