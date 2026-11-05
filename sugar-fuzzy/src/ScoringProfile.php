@@ -13,9 +13,12 @@ namespace SugarCraft\Fuzzy;
  *
  * The {@see self::canonical()} values are the canonical SugarCraft scores and are
  * bit-equivalent to the historical hard-coded constants in
- * `SugarCraft\Forms\Fuzzy\FuzzyMatcher` and `SugarCraft\TreeList\FuzzyMatch`,
- * so passing the default profile (or none) preserves existing matcher output
- * byte-for-byte.
+ * `SugarCraft\Forms\Fuzzy\FuzzyMatcher` and `SugarCraft\TreeList\FuzzyMatch`
+ * for ASCII input, so passing the default profile (or none) preserves existing
+ * matcher output byte-for-byte there. The documented deviations are the legacy
+ * negative empty-candidate score (kept only by the forms shim; this library
+ * returns 0) and CharFold's intentional per-codepoint folds (U+0130, final
+ * sigma), which replace the old whole-string fold that desynced match indices.
  *
  * This class is the scoring SSOT for the ecosystem: `SugarCraft\TreeList\ScoringProfile`
  * is now a `class_alias` to it, and the deprecated

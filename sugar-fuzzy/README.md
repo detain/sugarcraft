@@ -17,7 +17,7 @@ Releases: pre-1.0 — consume `dev-master` (the `:@dev` form above).
 Extracts the canonical Smith-Waterman fuzzy matcher from `sugar-forms` and adds the key feature that was previously impossible: **ranked matches WITH scored matched character indices**, enabling UI filter highlighting.
 
 Provides two algorithms:
-- **SmithWatermanMatcher** — Smith-Waterman local alignment with adjacency bonus. Bit-equivalent to the original `sugar-forms` implementation.
+- **SmithWatermanMatcher** — Smith-Waterman local alignment with adjacency bonus. Bit-equivalent to the original `sugar-forms` implementation for ASCII input within the default length caps; the legacy empty-candidate score and the per-codepoint case-fold deviations are documented under "Canonical matcher & consumer migration".
 - **SahilmMatcher** — Implements the `sahilm/fuzzy` scoring algorithm. Includes separator bonus, camelCase bonus, first-character bonus (`firstCharBonus`), and lower-case bonus (`lowerCaseBonus`).
 
 ## Quickstart
@@ -61,9 +61,10 @@ $styled = $highlighter->highlight($result, fn($matched) => "\033[1m$matched\033[
 ## Scoring profiles
 
 The Smith-Waterman scoring weights are injectable via an immutable `ScoringProfile`.
-The **default** profile is bit-equivalent to the historical hard-coded constants,
-so passing no profile (or `ScoringProfile::canonical()`; `default()` is a deprecated
-alias) preserves existing output byte-for-byte:
+The **default** profile is bit-equivalent to the historical hard-coded constants
+for ASCII input, so passing no profile (or `ScoringProfile::canonical()`; `default()`
+is a deprecated alias) preserves existing ASCII output byte-for-byte — the two
+documented deviations are listed under "Canonical matcher & consumer migration":
 
 ```php
 use SugarCraft\Fuzzy\ScoringProfile;
@@ -207,11 +208,16 @@ remains outside this library:
 - **`sugar-forms`** — `SugarCraft\Forms\Fuzzy\FuzzyMatcher` is a
   `@deprecated` shim whose former hand-rolled DP core was removed; every score
   now delegates to `SmithWatermanMatcher` with the default `ScoringProfile`
-  (bit-equivalent to the historical constants).
+  (bit-equivalent to the historical constants for ASCII input). One legacy
+  quirk stays shim-only: an empty candidate scores negative through the shim,
+  while this library returns 0.
 - **`sugar-treelist`** — `SugarCraft\TreeList\ScoringProfile` is a `class_alias` to
   this library's `ScoringProfile`, and `SugarCraft\TreeList\FuzzyMatch` is a thin
   delegating shim over `SmithWatermanMatcher` (keeping sugar-treelist's own
-  `\Stringable`-item contract and input-order tiebreak).
+  `\Stringable`-item contract and input-order tiebreak). Scores are preserved
+  within the length caps apart from `CharFold`'s intentional per-codepoint case
+  folds (U+0130 and final sigma), where the old whole-string fold desynced
+  match indices.
 
 New code should depend on `SugarCraft\Fuzzy\*` directly.
 
