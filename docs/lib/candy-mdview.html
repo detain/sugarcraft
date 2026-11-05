@@ -56,12 +56,15 @@
     <p class="lede" style="margin-top: 28px;">Composes SugarMarkdown (rendering) and the SugarForms Viewport (scrolling). Render to stdout or open in a fullscreen pager. Twelve built-in themes (ansi, ascii, plain, notty, dark, light, dracula, tokyo-night, pink, solarized, monokai, github) plus custom JSON.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mdview</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mdview   # binary lands in vendor/bin/candy-mdview
+wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/dev/candy-mdview.phar   # standalone dev phar</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">candy-mdview README.md                   # render to stdout (default)
-candy-mdview -p README.md                # open in a fullscreen pager
-git log -1 --pretty=%B | candy-mdview -p # pipe stdin
+    <pre class="code"><code class="language-shell">vendor/bin/candy-mdview README.md                   # render to stdout (default)
+vendor/bin/candy-mdview -p README.md                # open in a fullscreen pager
+git log -1 --pretty=%B | vendor/bin/candy-mdview -p # pipe stdin
+php candy-mdview.phar README.md                     # the phar takes the same flags
+# with vendor/bin (or the phar) on PATH, drop the prefix:
 candy-mdview --theme dracula README.md
 candy-mdview --width 80 --no-hyperlinks README.md
 candy-mdview --theme-config ./my-theme.json README.md</code></pre>
@@ -80,7 +83,7 @@ candy-mdview --theme-config ./my-theme.json README.md</code></pre>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-mdview">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-mdview/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-mdview/tree/master/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mdview/tree/master/examples">Runnable example</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/glow">glow</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
