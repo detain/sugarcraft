@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => '사용 불가 — 세션 저장소가 데이터베이스를 열 수 없음: {error}',
     'cli.doctor.pdo_usable' => '사용 가능',
     'cli.doctor.php' => '{version}이 {binary}에',
-    'cli.doctor.php_too_old' => '{version}이 {binary}에 (candy-code는 PHP 8.3+ 필요)',
+    'cli.doctor.php_too_old' => '{version}이 {binary}에 (candy-code는 PHP 8.3+ 필요 — php8.3 등 더 최신 인터프리터로 다시 실행하거나 PHP 8.3+를 설치하고 php -v로 확인)',
     'cli.doctor.provider' => '{provider} (모델 {model})',
     'cli.doctor.provider_none' => '선택 안 됨 — 오프라인 echo 백엔드가 응답 (CANDY_CODE_PROVIDER 설정)',
     'cli.doctor.provider_shell' => '셸 아웃 백엔드 ($CANDY_CODE_BACKEND_CMD 티어)',

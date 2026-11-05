@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => '不可用 — 工作階段儲存無法開啟資料庫：{error}',
     'cli.doctor.pdo_usable' => '可用',
     'cli.doctor.php' => '{version}（位於 {binary}）',
-    'cli.doctor.php_too_old' => '{version}（位於 {binary}）（candy-code 需要 PHP 8.3+）',
+    'cli.doctor.php_too_old' => '{version}（位於 {binary}）（candy-code 需要 PHP 8.3+ — 請改用較新的直譯器（如 php8.3）重新執行，或安裝 PHP 8.3+ 後以 php -v 驗證）',
     'cli.doctor.provider' => '{provider}（模型 {model}）',
     'cli.doctor.provider_none' => '未選取 — 離線 echo 後端將回應（請設定 CANDY_CODE_PROVIDER）',
     'cli.doctor.provider_shell' => 'shell-out 後端（$CANDY_CODE_BACKEND_CMD 層級）',

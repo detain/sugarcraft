@@ -178,6 +178,72 @@ final class DoctorChecksTest extends TestCase
     // ---- fixtures -------------------------------------------------------------
 
     /** @return array<string, \Closure(): array{status: string, detail: string}> */
+    /**
+     * PHP-m6 (OD-26): the version guard stays, but a FAIL row that only names
+     * the problem is not actionable — on a box where 8.2 is the only php on
+     * PATH, the remedy is to run the 8.3 interpreter that already exists (or
+     * install one), and the row must say so in every locale. The FAIL branch
+     * itself cannot be forced on a healthy runner — \PHP_VERSION_ID is a
+     * compile-time constant of the running binary — so the pin sits on the
+     * catalog: the two language-neutral tokens of the remedy (`php8.3` to run
+     * instead, `php -v` to verify) and both call-site placeholders must
+     * survive in all twelve locales.
+     */
+    public function testThePhpRowNamesTheRemediationInEveryLocale(): void
+    {
+        $failures = [];
+
+        foreach (self::LOCALES as $locale) {
+            /** @var array<string, string> $catalog */
+            $catalog = require __DIR__ . '/../../lang/' . $locale . '.php';
+            $value = $catalog['cli.doctor.php_too_old'] ?? '';
+            self::assertNotSame('', $value, "{$locale} lost the php FAIL row");
+
+            if (!str_contains($value, 'php8.3')) {
+                $failures[] = "{$locale}: names no interpreter to switch to";
+            }
+
+            if (!str_contains($value, 'php -v')) {
+                $failures[] = "{$locale}: names no verify command";
+            }
+
+            foreach (['{version}', '{binary}'] as $token) {
+                if (!str_contains($value, $token)) {
+                    $failures[] = "{$locale}: dropped {$token}";
+                }
+            }
+        }
+
+        self::assertSame([], $failures, 'the php FAIL row must carry the remediation tokens in every locale (PHP-m6, OD-26)');
+    }
+
+    /**
+     * The lang directory's contents must equal the pinned locale roster — a
+     * thirteenth locale added without the remedy (or a dropped one) reddens
+     * here before the catalog loop above could silently skip it.
+     */
+    public function testTheLocaleRosterMatchesTheLangDirectory(): void
+    {
+        $onDisk = [];
+
+        foreach ((array) scandir(__DIR__ . '/../../lang') as $entry) {
+            if (!\is_string($entry) || !str_ends_with($entry, '.php')) {
+                continue;
+            }
+
+            $onDisk[] = substr($entry, 0, -4);
+        }
+
+        sort($onDisk);
+        $expected = self::LOCALES;
+        sort($expected);
+        self::assertSame($expected, $onDisk, 'the lang roster and this pinned list disagree — update the deliberate one');
+    }
+
+    /** The twelve shipped locales, written out because a wildcard literal in
+     * this file would feed the tree-wide glob-dialect corpus (house law). */
+    private const LOCALES = ['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'pt', 'pt-br', 'ru', 'zh-cn', 'zh-tw'];
+
     private static function probes(): array
     {
         $method = new ReflectionMethod(DoctorChecks::class, 'probes');

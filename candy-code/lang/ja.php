@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => '使用不可 — セッションストアがデータベースを開けません: {error}',
     'cli.doctor.pdo_usable' => '使用可能',
     'cli.doctor.php' => '{version}（{binary}）',
-    'cli.doctor.php_too_old' => '{version}（{binary}）（candy-code は PHP 8.3+ が必要）',
+    'cli.doctor.php_too_old' => '{version}（{binary}）（candy-code は PHP 8.3+ が必要 — php8.3 など新しいインタープリターで再実行するか、PHP 8.3+ をインストールして php -v で確認してください）',
     'cli.doctor.provider' => '{provider}（モデル {model}）',
     'cli.doctor.provider_none' => '未選択 — オフラインechoバックエンドが応答します（CANDY_CODE_PROVIDER を設定）',
     'cli.doctor.provider_shell' => 'シェルアウトバックエンド（$CANDY_CODE_BACKEND_CMD ティア）',

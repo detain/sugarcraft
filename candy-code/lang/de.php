@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => 'UNBENUTZBAR — der Sitzungsspeicher kann seine Datenbank nicht öffnen: {error}',
     'cli.doctor.pdo_usable' => 'benutzbar',
     'cli.doctor.php' => '{version} unter {binary}',
-    'cli.doctor.php_too_old' => '{version} unter {binary} (candy-code erfordert PHP 8.3+)',
+    'cli.doctor.php_too_old' => '{version} unter {binary} (candy-code erfordert PHP 8.3+ — mit einem neueren Interpreter erneut ausführen, z. B. php8.3, oder PHP 8.3+ installieren und mit php -v prüfen)',
     'cli.doctor.provider' => '{provider} (Modell {model})',
     'cli.doctor.provider_none' => 'keiner ausgewählt — das Offline-Echo-Backend wird antworten (CANDY_CODE_PROVIDER setzen)',
     'cli.doctor.provider_shell' => 'Shell-Out-Backend (Ebene $CANDY_CODE_BACKEND_CMD)',

@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => 'NON UTILIZZABILE — l\'archivio sessioni non può aprire il database: {error}',
     'cli.doctor.pdo_usable' => 'utilizzabile',
     'cli.doctor.php' => '{version} in {binary}',
-    'cli.doctor.php_too_old' => '{version} in {binary} (candy-code richiede PHP 8.3+)',
+    'cli.doctor.php_too_old' => '{version} in {binary} (candy-code richiede PHP 8.3+ — rieseguire con un interprete più recente, ad es. php8.3, oppure installare PHP 8.3+ e verificare con php -v)',
     'cli.doctor.provider' => '{provider} (modello {model})',
     'cli.doctor.provider_none' => 'nessuno selezionato — risponderà il backend echo offline (impostare CANDY_CODE_PROVIDER)',
     'cli.doctor.provider_shell' => 'backend shell-out (livello $CANDY_CODE_BACKEND_CMD)',

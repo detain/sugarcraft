@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => 'INUTILISABLE — le magasin de sessions ne peut pas ouvrir sa base de données : {error}',
     'cli.doctor.pdo_usable' => 'utilisable',
     'cli.doctor.php' => '{version} à {binary}',
-    'cli.doctor.php_too_old' => '{version} à {binary} (candy-code nécessite PHP 8.3+)',
+    'cli.doctor.php_too_old' => '{version} à {binary} (candy-code nécessite PHP 8.3+ — relancer avec un interpréteur plus récent, par ex. php8.3, ou installer PHP 8.3+ et vérifier avec php -v)',
     'cli.doctor.provider' => '{provider} (modèle {model})',
     'cli.doctor.provider_none' => 'aucun sélectionné — le backend écho hors ligne répondra (définir CANDY_CODE_PROVIDER)',
     'cli.doctor.provider_shell' => 'backend shell (niveau $CANDY_CODE_BACKEND_CMD)',

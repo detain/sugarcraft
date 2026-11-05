@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => 'НЕРАБОТОСПОСОБНО — хранилище сессий не может открыть базу данных: {error}',
     'cli.doctor.pdo_usable' => 'работоспособно',
     'cli.doctor.php' => '{version} в {binary}',
-    'cli.doctor.php_too_old' => '{version} в {binary} (candy-code требует PHP 8.3+)',
+    'cli.doctor.php_too_old' => '{version} в {binary} (candy-code требует PHP 8.3+ — перезапустите с более новым интерпретатором, например php8.3, или установите PHP 8.3+ и проверьте через php -v)',
     'cli.doctor.provider' => '{provider} (модель {model})',
     'cli.doctor.provider_none' => 'не выбран — будет отвечать офлайн-эхо-бэкенд (установите CANDY_CODE_PROVIDER)',
     'cli.doctor.provider_shell' => 'shell-out бэкенд (уровень $CANDY_CODE_BACKEND_CMD)',

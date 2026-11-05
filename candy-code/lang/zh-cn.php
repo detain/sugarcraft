@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => '不可用 — 会话存储无法打开数据库：{error}',
     'cli.doctor.pdo_usable' => '可用',
     'cli.doctor.php' => '{version}，位于 {binary}',
-    'cli.doctor.php_too_old' => '{version}，位于 {binary}（candy-code 需要 PHP 8.3+）',
+    'cli.doctor.php_too_old' => '{version}，位于 {binary}（candy-code 需要 PHP 8.3+ — 请改用更新的解释器（如 php8.3）重新运行，或安装 PHP 8.3+ 后用 php -v 验证）',
     'cli.doctor.provider' => '{provider}（模型 {model}）',
     'cli.doctor.provider_none' => '未选择 — 离线 echo 后端将响应（设置 CANDY_CODE_PROVIDER）',
     'cli.doctor.provider_shell' => 'shell 调用后端（$CANDY_CODE_BACKEND_CMD 层级）',

@@ -227,7 +227,7 @@ return [
     'cli.doctor.pdo_unusable' => 'INUTILIZÁVEL — o repositório de sessões não consegue abrir a base de dados: {error}',
     'cli.doctor.pdo_usable' => 'utilizável',
     'cli.doctor.php' => '{version} em {binary}',
-    'cli.doctor.php_too_old' => '{version} em {binary} (candy-code requer PHP 8.3+)',
+    'cli.doctor.php_too_old' => '{version} em {binary} (candy-code requer PHP 8.3+ — execute novamente com um interpretador mais recente, por exemplo php8.3, ou instale PHP 8.3+ e verifique com php -v)',
     'cli.doctor.provider' => '{provider} (modelo {model})',
     'cli.doctor.provider_none' => 'nenhum selecionado — o backend de eco offline responderá (defina CANDY_CODE_PROVIDER)',
     'cli.doctor.provider_shell' => 'backend de execução externa (nível $CANDY_CODE_BACKEND_CMD)',

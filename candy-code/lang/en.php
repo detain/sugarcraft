@@ -264,7 +264,7 @@ return [
     'cli.doctor.pdo_unusable' => 'UNUSABLE — the session store cannot open its database: {error}',
     'cli.doctor.pdo_usable' => 'usable',
     'cli.doctor.php' => '{version} at {binary}',
-    'cli.doctor.php_too_old' => '{version} at {binary} (candy-code requires PHP 8.3+)',
+    'cli.doctor.php_too_old' => '{version} at {binary} (candy-code requires PHP 8.3+ — re-run with a newer interpreter, e.g. php8.3, or install PHP 8.3+ and verify with php -v)',
     'cli.doctor.provider' => '{provider} (model {model})',
     'cli.doctor.provider_none' => 'none selected — the offline echo backend will answer (set CANDY_CODE_PROVIDER)',
     'cli.doctor.provider_shell' => 'shell-out backend ($CANDY_CODE_BACKEND_CMD tier)',
