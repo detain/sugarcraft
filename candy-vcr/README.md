@@ -1164,7 +1164,8 @@ goes in with `$registry->registerFirst(new MyOne())`.
 Dracula, plain `Type+Enter`, sleep-heavy, Ctrl-sequence, arrow keys,
 wide CJK, `Set Width/Height`, multi-frame animation, idle-rich) and
 their committed `.gif` baselines under both encoders
-(`<name>.php.gif` + `<name>.ffmpeg.gif` one level up in `candy-vcr/tests/golden/`, 20 GIFs, 348 KB total).
+(`<name>.php.gif` + `<name>.ffmpeg.gif` one level up in `candy-vcr/tests/golden/`, 20 GIFs,
+302 KB total — measured: 309,363 bytes summed over the committed `.gif` files).
 
 `tests/Encode/VisualRegressionTest.php` re-renders each tape and
 compares to the golden via:
