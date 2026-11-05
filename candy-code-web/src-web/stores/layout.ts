@@ -246,6 +246,12 @@ export const useLayoutStore = defineStore('layout', () => {
   // never again equals, which silently stopped the cross-tab clear from
   // emptying this tab (and let the pagehide flush below re-persist the dead
   // principal's map into whoever's live bucket the pointer names).
+  // The match is by physical NAME, so a non-null write from a foreign
+  // bucket passes the guard too and this tab merges that map into memory —
+  // the over-clearing-safe law only argued the removal case; this direction
+  // is benign the same way, as the shared-origin era merged every tab's
+  // every write, and the copy only ever flushes into this page's live
+  // bucket, which the next rotate/drop sweep deletes.
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('storage', (event: StorageEvent) => {
       if (event.key !== null && !physicalKeyMatches('drafts', event.key)) return
