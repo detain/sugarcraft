@@ -10,10 +10,7 @@
 
 # SugarTable
 
-
-
-
-sugar-table — a customizable data table component for terminal UIs for PHP 8.3+: programmatic row cursor, keyboard-driven scrolling, and per-cell styling. It does not handle mouse input itself — wire events from sugar-input/sugar-mouse to the cursor + scroll API.
+sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: programmatic row cursor, keyboard-driven scrolling, and per-cell styling. It does not handle mouse input itself — wire events from sugar-input/sugar-mouse to the cursor + scroll API.
 
 ## Features
 
@@ -38,9 +35,6 @@ sugar-table — a customizable data table component for terminal UIs for PHP 8.3
 - **Multi-line row rendering**: `withMultilineMode(bool $multiline)` — when enabled, rows expand to the maximum height of any cell; when disabled (default), cells are clamped to one line (backward compatible)
 
 ## Install
-
-
-
 
 ```bash
 composer require sugarcraft/sugar-table
@@ -73,13 +67,13 @@ echo $t->View();
 
 
 ```php
-Column::new($key, $title, $width)       // key, display title, fixed width
+Column::new($key, $title, $width)        // key, display title, fixed width
     ->withFlexibleWidth($share)          // weight when ColumnWidth::Flex splits leftover
-    ->withMaxWidth($max)                // horizontal scroll cap
+    ->withMaxWidth($max)                 // horizontal scroll cap
     ->withStyle('1;34')                  // ANSI SGR style
     ->withFilterable()                   // opt into search/Filter scanning (see Global Search)
     ->withAlignLeft()                    // left-align (default is right)
-    ->withColumnWidth($mode, $value)    // ColumnWidth::Fixed|Percent|Dynamic|Content|Flex
+    ->withColumnWidth($mode, $value)     // ColumnWidth::Fixed|Percent|Dynamic|Content|Flex
     ->withWrapMode(WrapMode::None)       // WrapMode::None|WordWrap|Character
 ```
 
