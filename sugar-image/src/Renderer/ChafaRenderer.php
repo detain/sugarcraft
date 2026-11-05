@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Renderer;
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
 
@@ -44,7 +45,9 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     /**
      * How many trailing bytes of the child's stderr sink ride into
      * the failure message — chafa's own sentences are one-liners, and 8 KiB
-     * bounds the exception even if the child flooded diagnostics.
+     * bounds the exception even if the child flooded diagnostics. The tail
+     * passes through {@see Sanitize::untrusted()} at {@see self::stderrTail()},
+     * its only reader, so the surviving bound is prose only (see there).
      */
     public const STDERR_TAIL_BYTES = 8 * 1024;
 
@@ -288,7 +291,10 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
     /**
      * Last {@see STDERR_TAIL_BYTES} of the child's stderr sink, fail-soft:
      * an unreadable sink costs us the sentence, never the exception — the
-     * exit code is already in the message around this tail.
+     * exit code is already in the message around this tail. Forged OSC/SGR/CSI
+     * is swept here, at the single read choke (sec-audit M1): the sink is a
+     * hostile-adjacent channel because chafa echoes bytes from the image it
+     * converts and a rogue or wrapper binary controls this fd outright.
      */
     private static function stderrTail(string $path): string
     {
@@ -312,7 +318,9 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             fclose($handle);
         }
 
-        return $tail === false ? '' : rtrim($tail);
+        // TAB/LF/CR survive {@see Sanitize::untrusted()}; the rtrim above the
+        // sweep bounds prose length, the sweep bounds what can repaint.
+        return $tail === false ? '' : Sanitize::untrusted(rtrim($tail));
     }
 
     /**

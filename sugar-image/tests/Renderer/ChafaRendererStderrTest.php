@@ -128,6 +128,32 @@ final class ChafaRendererStderrTest extends TestCase
     }
 
     /**
+     * @testdox sec-audit M1: escape machinery forged into the child's stderr is swept at the read choke, never repainted through the message
+     */
+    public function testAForgedEscapeSequenceInChildStderrIsSweptBeforeItReachesTheMessage(): void
+    {
+        $this->requireTimeoutBinary();
+        $this->plantFakeChafa();
+        putenv('FAKE_CHAFA_MODE=hostile');
+
+        // The fake child writes an OSC window-title set, a BEL and SGR
+        // colours around a printable marker before failing. chafa echoes
+        // bytes from the image it converts, and a rogue or wrapper binary
+        // controls its stderr outright, so the tail that rides the
+        // RuntimeException must pass the sanitizer: the marker prose stays
+        // (the message still explains the failure), while ESC and BEL must
+        // not appear anywhere in what the harness child prints. The pre-fix
+        // choke returned the raw tail, so these two escape assertions are
+        // the discriminating pins.
+        $report = $this->runLeashedRender();
+
+        $this->assertStringContainsString('MSG:Chafa command failed: exit code 1:', $report['stdout']);
+        $this->assertStringContainsString('REDTAIL-HOSTILE-MARKER', $report['stdout'], 'the prose survives the sweep');
+        $this->assertStringNotContainsString("\x1b", $report['stdout'], 'no escape byte may ride the message');
+        $this->assertStringNotContainsString("\x07", $report['stdout'], 'no bell byte may ride the message');
+    }
+
+    /**
      * @testdox D-07: the exception carries the LAST STDERR_TAIL_BYTES of the spew, not its head
      */
     public function testStderrTailIsBoundedToTheTrailingWindow(): void
@@ -348,6 +374,12 @@ fi
 case "$FAKE_CHAFA_MODE" in
     spew)
         printf '%s\n' "chafa: Source image dimensions 4096x4096 exceed maximum (256Mpx)." >&2
+        exit 1
+        ;;
+    hostile)
+        # sec-audit M1 fixture: a rogue child forges an OSC window-title set,
+        # a BEL and SGR colour into its stderr around a printable marker.
+        printf 'x\033]0;pwned\007 and \033[31mREDTAIL-HOSTILE-MARKER\033[0m\n' >&2
         exit 1
         ;;
     megaspew)

@@ -179,6 +179,13 @@ tier ever shells out for pixel data.
 `ChafaRenderer::reset()` re-arms both memos for long-running processes
 that install or override the binary mid-session.
 
+When a chafa run fails, the last 8 KiB of the child's stderr rides the
+exception message **sanitized** — escape machinery forged into that stream
+(curtains, hyperlinks, palette changes) is swept at the single read choke, so
+the sentence can describe the failure but can never repaint the terminal that
+logs it. Ordinary prose from the child, including text chafa echoed from the
+image, still appears.
+
 ## Remote images
 
 Load images straight from a URL. `fromUrl()` is synchronous (PHP stream
