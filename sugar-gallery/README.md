@@ -320,9 +320,10 @@ marking choke point with forgery intact. ImageOverlay art markers live at
 
 `Lang::t()` resolves through `src/Lang.php` (namespace `gallery`) over the 16-locale
 family in `lang/` — ar · cs · de · en · es · fr · it · ja · ko · nl · pl · pt · pt-br ·
-ru · tr · zh-cn — with `en.php` as the source of truth (`lang/pt-br.php` mirrors
-`lang/pt.php` byte-for-byte today — a fleet-parity placeholder awaiting a real
-pt-br voice). Three keys live there: `rail.empty` (the Rail heading's empty
+ru · tr · zh-cn — with `en.php` as the source of truth (`lang/pt-br.php` is a
+partial Brazilian voice: its `grid.empty` reads `(sem pôsteres)` where European
+`lang/pt.php` keeps `(sem cartazes)`, while the other two keys still match pt).
+Three keys live there: `rail.empty` (the Rail heading's empty
 state), `card.failed` (the notice on a `withFailed()` card) and `grid.empty`
 (surfaced by `PosterGrid::emptyMessage()`). They resolve **live at render time**
 — nothing is baked into the widgets — so a mid-session `T::setLocale()` flips
