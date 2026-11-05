@@ -90,7 +90,7 @@ final class SpinCommand extends Command
                 'The command to run. Use `--` to separate from spin\'s own flags.')
             ->addOption('title',       't', InputOption::VALUE_REQUIRED, 'Status text shown next to the spinner.', '')
             ->addOption('style',       null, InputOption::VALUE_REQUIRED,
-                'Spinner style: line | dot | minidot | points | pulse | globe | meter | jump | moon | monkey | hamburger | ellipsis.', 'dot')
+                'Spinner style: line | dot | mini-dot | points | pulse | globe | meter | jump | moon | monkey | hamburger | ellipsis.', 'dot')
             ->addOption('spinner',     's', InputOption::VALUE_REQUIRED, 'Alias for --style (gum compat).', null)
             ->addOption('show-output', null, InputOption::VALUE_NONE,    'Print captured stdout after the command exits.')
             ->addOption('show-error',  null, InputOption::VALUE_NONE,    'Print captured stderr after the command exits.')
