@@ -114,10 +114,10 @@ composer install
 <tr><td>Bag</td><td>next()</td><td>Returns [Tetromino, advanced Bag] — value semantics</td></tr>
 <tr><td>Bag</td><td>peek(n)</td><td>Pure preview; mutates nothing and consumes no draws</td></tr>
 <tr><td>Score</td><td>withLines(count)</td><td>New Score: NES base × (level+1), lines, level re-derived</td></tr>
-<tr><td>Game</td><td>start() / update(msg)</td><td>TEA model: every message yields [Game, ?Cmd]</td></tr>
+<tr><td>Game</td><td>start() / update(msg)</td><td>TEA model: every message yields [Game, ?Cmd] — the literal wire type is <code>array{0: Game, 1: ?\Closure}</code></td></tr>
 <tr><td>SrsKickTable</td><td>kicks(piece, from, to)</td><td>Return kick offsets for a rotation transition</td></tr>
 <tr><td>SrsKickTable</td><td>allKicks(piece)</td><td>Return all transition tables for a piece</td></tr>
-<tr><td>Scoring\TSpin</td><td>detect(board, piece, wasRotated)</td><td>Centre-diagonal 3-corner rule; returns TSpin(active, mini)</td></tr>
+<tr><td>Scoring\TSpin</td><td>detect(board, piece, lastActionWasRotation)</td><td>Centre-diagonal 3-corner rule; returns TSpin(active, mini)</td></tr>
 <tr><td>Scoring\TSpin</td><td>T_SPIN_POINTS / T_SPIN_MINI_POINTS</td><td>Base score constants (400 / 100, scaled by level+1)</td></tr>
 </table>
   </div>
