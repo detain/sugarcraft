@@ -41,7 +41,8 @@ $narrow = $solver->solve(Region::fromSize(10, 24), Direction::Horizontal, [
 ]);
 echo "width  10: {$format(...$narrow)}\n";
 
-// Three panes: floor 10 on the middle, fill weight 2 vs 1 on the right.
+// Four panes: sidebar 24, floor 10 on the list rail, fill weights 2 vs 1
+// on content and detail.
 $mixed = $solver->solve(Region::fromSize(100, 24), Direction::Horizontal, [
     Constraint::length(24),   // sidebar
     Constraint::min(10),      // list rail, floor 10

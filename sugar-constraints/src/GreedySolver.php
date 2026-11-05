@@ -456,7 +456,7 @@ final class GreedySolver implements LayoutSolver
                         }
                     } elseif ($diff > 0 && $diff <= max(0, $proportionalCount - 1)) {
                         // Rounding reclamation: pure Percentage/Ratio layouts lose
-                        // pixels to floor(). Distribute leftover round-robin to
+                        // cells to floor(). Distribute leftover round-robin to
                         // Percentage/Ratio entries only (ratatui "give remainder to
                         // earlier segments first"). Min/Length are exact values and
                         // must not be inflated. Guard: N floored shares whose exact
