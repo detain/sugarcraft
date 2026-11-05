@@ -309,16 +309,65 @@ echo $chart->view();
 ## Accessibility note
 
 Charts encode series and magnitude through **color** and glyph position.
-In monochrome output, under a `NO_COLOR`-style environment, or for
-readers with color-vision deficiency, color carries no signal — pair
-color with the structural channels that survive it: `withDataLabels()`
-(bar values as text), the legend's labels, axis labels, and distinct
-runes (`withRune()` / `withBodyRunes()`). Braille-dot plots lose
-per-series identity entirely when printed without their legend, so keep
-`withLegend()` on for shared or logged output.
-Default glyphs are pure ASCII; the opt-in unicode-connector and braille
-canvas modes introduce runes whose width is ambiguous in some terminals —
-ASCII mode is the portable fallback.
+Color is the channel that fails first — in monochrome output, under a
+`NO_COLOR`-style environment, or for readers with color-vision deficiency.
+Pair it with the structural channels that survive it.
+
+**What color actually drops out when.** The environment ladder
+(`CLICOLOR_FORCE` / `FORCE_COLOR` beat `NO_COLOR`, which beats `CLICOLOR=0`)
+is consulted at exactly one site here: `Legend::colorSuppressed()`, which
+suppresses the legend's color indicators. Everything else — bar bodies,
+the Heatmap's truecolor fill, themed frame rules — keeps emitting SGR
+regardless, and there is no automatic non-TTY degradation: piping a chart
+to a file yields full color. To force monochrome deliberately, set the
+sugar-style profile for the whole process
+(`Style::setDefaultProfile(ColorProfile::Ascii())`) and cool the Heatmap
+separately with `Heatmap::withColorProfile(ColorProfile::Ascii())`; the
+library never installs a profile from the environment on your behalf.
+
+**Structural channels that never carry color.** `withDataLabels()` prints
+bar values as text (BarChart renders them; LineChart's flag and formatter
+are stored, not drawn — reach for BarChart when you need labels). Cell-mode
+LineChart labels its series with six plain-ASCII point runes (`* + o x # .`),
+overridable per-series with `withDatasetPoint()`. Legend entries and axis
+labels are plain text. `withRune()` (Scatter, Heatmap) and
+`withBodyRunes()` (OHLCChart) replace the glyphs themselves. Braille-dot
+plots lose per-series identity entirely when printed without their legend,
+so keep `withLegend()` on for shared or logged output. When no graphics
+protocol is detected, `Picture::view()` degrades to a plain-text
+placeholder, and `examples/picture.php` dumps its frames labeled as hex —
+both readable without any color channel.
+
+**Glyph widths.** Plain-ASCII defaults hold only for those six point runes.
+Bodies and frames default to Unicode: the eight Sparkline block shades,
+BarChart's `█`, the Heatmap fill, OHLC's `│ █ ▒`, MarkLine's `─` / `╌`, and
+Graph's thin frame rules. Several of these are East-Asian-Ambiguous and
+occupy one or two cells depending on terminal configuration, which shifts
+fixed-width rows. There is no library-wide ASCII switch; the per-chart rune
+levers above are the mitigation.
+
+## Untrusted labels
+
+Every string this library can echo to a terminal passes through
+`SugarCraft\Charts\Support\UntrustedText` — the trust boundary for labels
+assembled from application data. The sweep deletes escape-introduced
+sequences (CSI, OSC-8 hyperlinks, OSC 0 title writes, DCS/SOS/PM/APC, both
+spellings), C0 controls except TAB/LF/CR, DEL, 8-bit C1, and forged
+U+E000/U+E001 mouse-zone sentinels; repairs malformed UTF-8 to U+FFFD
+before the Unicode-aware passes; converts bidi overrides and zero-width
+characters into printable markers; and flattens TAB/LF/CR to spaces, so a
+single surviving newline can never desynchronise the fixed-width frame.
+Ordinary printable input comes back byte-identical, and the guard is
+idempotent.
+
+Static strings are swept at their setters: legend items, dataset names and
+runes (`withDatasetPoint()`), axis label arrays, `MarkLine` captions, and
+chart titles. Closure-produced text is swept at the resolve and render
+sites — `withXLabelFormatter()` / `withYLabelFormatter()` results and
+BarChart's `withDataLabelFormatter()` return value — so a formatter that
+echoes hostile data cannot bypass the boundary either. The Canvas and
+Graph internals that compose the frame are trusted layers and stay
+unguarded by design.
 
 ## Localization
 
