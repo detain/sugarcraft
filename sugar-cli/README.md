@@ -169,8 +169,12 @@ leaves every other decision to you.
 - **No interaction machinery.** Line editing and prompts live in
   `sugar-readline`; scripted TUI shells in `candy-scriptui`. This library
   only decorates the text you already decided to print.
-- **No shell-outs and no terminal ioctls.** Width comes from the
-  environment or an explicit parameter — see `AutoWidth` above.
+- **No shell-outs, and width never touches a device.** Width comes from
+  the environment or an explicit parameter — see `AutoWidth` above; the
+  library never issues a terminal ioctl to measure one. (Theme detection
+  does ask whether the stream is a tty via PHP's `stream_isatty()`, which
+  an ioctl backs inside PHP itself — still no subprocess, and no
+  size-probing.)
 - The charmbracelet/fang label describes the *shape* of the output, not a
   parity promise: sugar-cli renders the same kind of status and help
   pages, without cobra-style typed flag metadata (required/optional/default
