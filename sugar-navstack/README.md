@@ -39,6 +39,11 @@ string renderer for it.
 composer require sugarcraft/sugar-navstack
 ```
 
+> Packagist currently serves this package from `dev-master` only (no tagged
+> release yet): require it with a root `minimum-stability: "dev"` plus
+> `prefer-stable: true` — the SugarCraft-wide convention — or pin
+> `sugarcraft/sugar-navstack: "dev-master"`.
+
 ## NavStack Quick Start
 
 ```php
@@ -92,6 +97,24 @@ returns a new instance.
 | `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
 | `viewHtml(): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped |
 | `filter(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive substring (array payloads match when any nested scalar/Stringable value does) |
+
+### Guards — limits & refusals
+
+Size and shape ceilings, all of them throwing `InvalidArgumentException`
+rather than silently truncating:
+
+- `push()` refuses empty/whitespace-only titles and refuses to grow past
+  `NavStack::MAX_STACK_DEPTH` (10,000 levels).
+- Every item is born through `NavigationItem`'s constructor, which refuses
+  titles above `NavigationItem::MAX_TITLE_BYTES` (65,536 raw bytes).
+- `filter()` walks array payloads recursively and refuses payloads nested
+  deeper than 64 levels (a self-referencing payload would otherwise recurse
+  until the process dies).
+- `Shell::pushDirectory()` and `Url::parse()` grow stacks from external input
+  through the same `push()` guards — hostile path/URL input costs at most a
+  loud refusal, never an unbounded render.
+- On the renderer side, `Breadcrumb::setSeparator()` refuses empty and
+  CR/LF-bearing separators and `setMaxWidth()` refuses negative widths.
 
 ## Breadcrumb Rendering
 
