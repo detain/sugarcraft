@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PROMPT_HISTORY_CAP, PROMPT_HISTORY_MAX_ENTRY_CHARS, clearPromptHistory, loadPromptHistory, pushPromptHistory, searchPromptHistory, storageDegraded } from '../promptHistory'
-import { readJson, writeJson } from '../storage'
+import { readJson, storageKey, writeJson } from '../storage'
 
 describe('prompt history ring (WEB-5a-i)', () => {
   beforeEach(() => {
@@ -20,7 +20,9 @@ describe('prompt history ring (WEB-5a-i)', () => {
     ring = pushPromptHistory(ring, 'first prompt')
     ring = pushPromptHistory(ring, 'second prompt')
     expect(ring).toEqual(['second prompt', 'first prompt'])
-    expect(localStorage.getItem('candy-code-web:promptHistory')).toContain('second prompt')
+    // CW-DBA-9: the ring lives under the login's cache scope, so the pin
+    // asks the wrapper for the name instead of spelling it raw.
+    expect(localStorage.getItem(storageKey('promptHistory'))).toContain('second prompt')
     expect(loadPromptHistory()).toEqual(ring)
   })
 
@@ -64,11 +66,12 @@ describe('prompt history ring (WEB-5a-i)', () => {
 
   it('clearPromptHistory erases the key, not just the view of it', () => {
     pushPromptHistory(loadPromptHistory(), 'a typed prompt')
-    expect(localStorage.getItem('candy-code-web:promptHistory')).not.toBeNull()
+    const ringKey = storageKey('promptHistory')
+    expect(localStorage.getItem(ringKey)).not.toBeNull()
 
     clearPromptHistory()
 
-    expect(localStorage.getItem('candy-code-web:promptHistory')).toBeNull()
+    expect(localStorage.getItem(ringKey)).toBeNull()
     expect(loadPromptHistory()).toEqual([])
     // And the ring still works afterwards: clearing is not disabling.
     expect(pushPromptHistory(loadPromptHistory(), 'after clear')).toEqual(['after clear'])
@@ -163,7 +166,7 @@ describe('prompt history entry bound and write truth (CW-DBA-4)', () => {
     const ring = pushPromptHistory([], 'x'.repeat(PROMPT_HISTORY_MAX_ENTRY_CHARS + 10_000))
     expect(ring[0]).toHaveLength(PROMPT_HISTORY_MAX_ENTRY_CHARS)
     expect(loadPromptHistory()[0]).toHaveLength(PROMPT_HISTORY_MAX_ENTRY_CHARS)
-    const stored = JSON.parse(localStorage.getItem('candy-code-web:promptHistory') as string) as string[]
+    const stored = JSON.parse(localStorage.getItem(storageKey('promptHistory')) as string) as string[]
     expect(stored[0]).toHaveLength(PROMPT_HISTORY_MAX_ENTRY_CHARS)
   })
 

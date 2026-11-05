@@ -131,10 +131,11 @@ export function onPromptHistoryCleared(listener: ClearedListener): () => void {
  * (WEB-6-P1: the in-memory ring was once kept deliberately — which let an
  * open tab's next send rewrite the whole pre-sign-out history from memory).
  * Other tabs hear it over the `storage` event.
- * What the viewer typed stays on this browser in `candy-code-web:promptHistory`
- * until it is cleared — the palette's “Clear prompt history” action and
- * sign-out both clear it, and it was never sent anywhere except the server
- * that answered those very prompts.
+ * What the viewer typed stays on this browser — in the ring, under the
+ * current login's cache scope (`stores/storage.ts`, CW-DBA-9) — until it is
+ * cleared: the palette's “Clear prompt history” action and sign-out both
+ * erase it, and it was never sent anywhere except the server that answered
+ * those very prompts.
  */
 export function clearPromptHistory(): void {
   removeJson(KEY)

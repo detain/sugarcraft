@@ -9,7 +9,8 @@ import {
   storedLoginSecret,
   ticket,
 } from '../auth'
-import { writeJson } from '../../stores/storage'
+import { loadPromptHistory } from '../../stores/promptHistory'
+import { onKeyErased, readJson, storageKey, writeJson } from '../../stores/storage'
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -112,9 +113,13 @@ describe('canvasLink (C-TOOL-6.g web half)', () => {
 })
 
 describe('sign-out sweeps the browser (WEB-6 C)', () => {
+  // CW-DBA-9 (OD-28): the ring moved inside the per-login cache scope, so
+  // these pins capture the name the wrapper resolves NOW rather than naming
+  // it raw — the same physical key the logout sweep must delete.
   it('logout clears the prompt-history ring, even when the server call fails', async () => {
     writeJson('promptHistory', ['what the viewer typed'])
-    expect(localStorage.getItem('candy-code-web:promptHistory')).not.toBeNull()
+    const ringKey = storageKey('promptHistory')
+    expect(localStorage.getItem(ringKey)).not.toBeNull()
 
     // The finally-branch is the whole point: an unreachable or angry server
     // must not leave the typed prompts behind either.
@@ -122,13 +127,147 @@ describe('sign-out sweeps the browser (WEB-6 C)', () => {
       throw new TypeError('unreachable')
     })
     await expect(logout(broken.fetchImpl)).rejects.toBeInstanceOf(AuthError)
-    expect(localStorage.getItem('candy-code-web:promptHistory')).toBeNull()
+    expect(localStorage.getItem(ringKey)).toBeNull()
   })
 
   it('a successful logout clears it too', async () => {
     writeJson('promptHistory', ['one more'])
+    const ringKey = storageKey('promptHistory')
     const { fetchImpl } = responder(() => json(200, { ok: true }))
     await logout(fetchImpl)
-    expect(localStorage.getItem('candy-code-web:promptHistory')).toBeNull()
+    expect(localStorage.getItem(ringKey)).toBeNull()
+  })
+
+  it('logout clears the drafts map and the tab-restore state and keeps preferences (OD-28)', async () => {
+    localStorage.clear()
+    writeJson('drafts', { s1: 'typed into the composer' })
+    writeJson('promptHistory', ['a sent prompt'])
+    writeJson('tabs', ['s1'])
+    writeJson('lastSession', 's1')
+    writeJson('focused', 's1')
+    writeJson('theme', 'dracula')
+    writeJson('mode', 'grid')
+    const draftsKey = storageKey('drafts')
+    const ringKey = storageKey('promptHistory')
+    const { fetchImpl } = responder(() => json(200, { ok: true }))
+    await logout(fetchImpl)
+
+    expect(localStorage.getItem(draftsKey)).toBeNull()
+    expect(localStorage.getItem(ringKey)).toBeNull()
+    // The sweep leaves no bucket member anywhere: no scoped name survives.
+    for (let i = 0; i < localStorage.length; i += 1) {
+      expect((localStorage.key(i) ?? '').slice('candy-code-web:'.length)).not.toContain('/')
+    }
+    // The bare tab-restore names carry no session id. An empty re-write from
+    // a live watcher is tolerated; a remembered 's1' would be the leak.
+    expect(localStorage.getItem('candy-code-web:tabs') ?? '[]').toBe('[]')
+    expect(localStorage.getItem('candy-code-web:lastSession') ?? 'null').toBe('null')
+    expect(localStorage.getItem('candy-code-web:focused') ?? 'null').toBe('null')
+    // Preferences survive sign-out verbatim.
+    expect(localStorage.getItem('candy-code-web:theme')).toBe('"dracula"')
+    expect(localStorage.getItem('candy-code-web:mode')).toBe('"grid"')
+  })
+
+  it('the sweep reaches the bare and versioned pre-namespacing copies', async () => {
+    localStorage.clear()
+    localStorage.setItem('candy-code-web:drafts', '{"s1":"legacy typed"}')
+    localStorage.setItem('candy-code-web:promptHistory', '["legacy sent"]')
+    localStorage.setItem('candy-code-web:v1:drafts', '{"s1":"versioned typed"}')
+    localStorage.setItem('candy-code-web:v1:promptHistory', '["versioned sent"]')
+    const { fetchImpl } = responder(() => json(200, { ok: true }))
+    await logout(fetchImpl)
+    for (const key of ['drafts', 'promptHistory']) {
+      expect(localStorage.getItem(`candy-code-web:${key}`)).toBeNull()
+      expect(localStorage.getItem(`candy-code-web:v1:${key}`)).toBeNull()
+    }
+  })
+
+  it('sign-out fires the in-tab erase bus for every swept holder key', async () => {
+    localStorage.clear()
+    const erased: string[] = []
+    const offs = ['drafts', 'tabs', 'lastSession', 'focused'].map((key) =>
+      onKeyErased(key, () => {
+        erased.push(key)
+      }),
+    )
+    const { fetchImpl } = responder(() => json(200, { ok: true }))
+    await logout(fetchImpl)
+    expect([...erased].sort()).toEqual(['drafts', 'focused', 'lastSession', 'tabs'])
+    for (const off of offs) off()
+  })
+})
+
+/**
+ * CW-DBA-9 (OD-28) namespacing: the transcript caches live under a scope
+ * segment minted at login; the pointer itself lives inside storage.ts and is
+ * named here only because spec files are outside the storage-inventory walk.
+ */
+describe('cache scope (CW-DBA-9 / OD-28 namespacing)', () => {
+  const POINTER = 'candy-code-web:cacheScope'
+
+  it('a cold boot with no pointer reads none of the leftover caches', () => {
+    localStorage.clear()
+    localStorage.setItem('candy-code-web:drafts', '{"s1":"waiting"}')
+    localStorage.setItem('candy-code-web:promptHistory', '["waiting"]')
+    localStorage.setItem('candy-code-web:v1:drafts', '{"s2":"waiting too"}')
+    expect(readJson<unknown>('drafts', null)).toBeNull()
+    expect(loadPromptHistory()).toEqual([])
+  })
+
+  it('while a pointer is set, the transcript caches live under its bucket', () => {
+    localStorage.clear()
+    localStorage.setItem(POINTER, 'a0a0a0a0')
+    writeJson('drafts', { s1: 'typed' })
+    writeJson('promptHistory', ['sent'])
+    expect(localStorage.getItem('candy-code-web:a0a0a0a0/drafts')).toBe('{"s1":"typed"}')
+    expect(localStorage.getItem('candy-code-web:a0a0a0a0/promptHistory')).toBe('["sent"]')
+    // Preferences keep the bare names — only the principal caches are scoped.
+    expect(storageKey('theme')).toBe('candy-code-web:theme')
+  })
+
+  it('login sweeps the previous principal entirely and mints a fresh scope', async () => {
+    localStorage.clear()
+    localStorage.setItem(POINTER, 'a0a0a0a0')
+    localStorage.setItem('candy-code-web:a0a0a0a0/drafts', '{"A":"typed"}')
+    localStorage.setItem('candy-code-web:a0a0a0a0/promptHistory', '["sent"]')
+    localStorage.setItem('candy-code-web:drafts', '{"Z":"legacy"}')
+    localStorage.setItem('candy-code-web:v1:promptHistory', '["legacy"]')
+    localStorage.setItem('candy-code-web:tabs', '["A"]')
+    localStorage.setItem('candy-code-web:lastSession', '"A"')
+    localStorage.setItem('candy-code-web:focused', '"A"')
+    localStorage.setItem('candy-code-web:theme', '"dracula"')
+    localStorage.setItem('candy-code-web:keymap', '{"palette":42}')
+    const { fetchImpl } = responder(() => json(200, { ok: true, loginSecret: 'sec' }))
+    await login({ code: 'c0dec0dec0de' }, fetchImpl)
+
+    expect(localStorage.getItem('candy-code-web:a0a0a0a0/drafts')).toBeNull()
+    expect(localStorage.getItem('candy-code-web:a0a0a0a0/promptHistory')).toBeNull()
+    expect(localStorage.getItem('candy-code-web:drafts')).toBeNull()
+    expect(localStorage.getItem('candy-code-web:v1:promptHistory')).toBeNull()
+    expect(localStorage.getItem('candy-code-web:tabs') ?? '[]').toBe('[]')
+    expect(localStorage.getItem('candy-code-web:lastSession') ?? 'null').toBe('null')
+    expect(localStorage.getItem('candy-code-web:focused') ?? 'null').toBe('null')
+    const pointer = localStorage.getItem(POINTER)
+    expect(pointer).not.toBeNull()
+    expect(pointer).not.toBe('a0a0a0a0')
+    expect(localStorage.getItem('candy-code-web:theme')).toBe('"dracula"')
+    expect(localStorage.getItem('candy-code-web:keymap')).toBe('{"palette":42}')
+    // The fresh scope starts empty: the new principal inherits nothing.
+    expect(readJson<unknown>('drafts', null)).toBeNull()
+    expect(loadPromptHistory()).toEqual([])
+  })
+
+  it('logout drops the pointer so the next boot starts from nothing', async () => {
+    localStorage.clear()
+    const { fetchImpl } = responder(() => json(200, { ok: true, loginSecret: 'sec' }))
+    await login({ code: 'c0dec0dec0de' }, fetchImpl)
+    const pointer = localStorage.getItem(POINTER)
+    expect(pointer).not.toBeNull()
+    writeJson('drafts', { s1: 'typed' })
+    expect(localStorage.getItem(`candy-code-web:${pointer}/drafts`)).toBe('{"s1":"typed"}')
+
+    await logout(fetchImpl)
+    expect(localStorage.getItem(POINTER)).toBeNull()
+    expect(localStorage.getItem(`candy-code-web:${pointer}/drafts`)).toBeNull()
   })
 })

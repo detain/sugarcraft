@@ -17,7 +17,7 @@
  * under a path behind a reverse proxy.
  */
 import { clearPromptHistory } from '../stores/promptHistory'
-import { eraseKey } from '../stores/storage'
+import { dropCacheScope, rotateCacheScope } from '../stores/storage'
 
 export class AuthError extends Error {
   readonly status: number
@@ -118,6 +118,10 @@ async function post(fetchImpl: Fetch, path: string, body: unknown): Promise<Reco
 /** Trade a one-time code (or the owner token) for the session cookie and login secret. */
 export async function login(credential: { code: string } | { token: string }, fetchImpl: Fetch = fetch): Promise<void> {
   const json = await post(fetchImpl, 'login', credential)
+  // CW-DBA-9 (OD-28): the sweep is ordered before the secret lands — the
+  // previous principal's caches and tab state are gone the moment this
+  // session's credentials begin to exist, never after.
+  rotateCacheScope()
   const secret = json.loginSecret
   if (typeof secret === 'string' && secret !== '') storeLoginSecret(secret)
 }
@@ -148,11 +152,20 @@ export async function canvasLink(sessionId: string, artifactId: string, fetchImp
 
 /**
  * End the session: the server revokes the cookie, and this browser keeps
- * nothing typed behind — the login secret goes, the prompt history ring
- * goes (`stores/promptHistory.ts`), and so does the draft map (the other
- * half of what-the-viewer-typed, MA-12: user text that had outlived both
- * the session and the sign-out). Layout conveniences that name no user
- * text (tab order, theme, notifications) stay.
+ * nothing one principal left. The login secret goes, the prompt-history ring
+ * goes (`stores/promptHistory.ts`), the draft map goes, and the tab-restore
+ * state goes too — the tab strip, the last-opened session and the focus
+ * pointer (OD-28 ruled the old keep-tabs stance a leak: those name sessions,
+ * and a session is not a layout). What stays is preference only: theme,
+ * notification toggles, diff style, grid/tabs display mode, keymap, panel
+ * and transcript-view settings, push consent.
+ *
+ * `dropCacheScope()` is the sweep that makes this provably complete: every
+ * key under this login's cache scope, every bare or versioned pre-namespacing
+ * copy of a principal key, and the scope pointer itself go together
+ * (`stores/storage.ts`). The same sweep runs at the next login, so a session
+ * that ended without an explicit sign-out never hands its caches to the
+ * following principal either.
  */
 export async function logout(fetchImpl: Fetch = fetch): Promise<void> {
   try {
@@ -160,7 +173,7 @@ export async function logout(fetchImpl: Fetch = fetch): Promise<void> {
   } finally {
     clearLoginSecret()
     clearPromptHistory()
-    eraseKey('drafts')
+    dropCacheScope()
   }
 }
 

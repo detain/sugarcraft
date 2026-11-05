@@ -222,6 +222,20 @@ export const useLayoutStore = defineStore('layout', () => {
     drafts.value = {}
   })
 
+  // OD-28: sign-out sweeps the tab-restore state with the caches — the
+  // in-memory strip and pointers must die with their disk copies, or this
+  // tab's own watch-writers would re-persist session ids the sweep just
+  // erased. (An empty re-write is fine and expected; a remembered id is not.)
+  onKeyErased('tabs', () => {
+    tabs.value = []
+  })
+  onKeyErased('lastSession', () => {
+    lastSessionId.value = null
+  })
+  onKeyErased('focused', () => {
+    focused.value = null
+  })
+
   // A draft written in ANOTHER tab replaces this tab's copy of the whole map
   // (both tabs now RMW, so the arriving map carries this tab's latest keys);
   // a removal — sign-out elsewhere — empties it, so the next keystroke here

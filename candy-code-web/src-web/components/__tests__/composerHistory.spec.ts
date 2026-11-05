@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearPromptHistory, loadPromptHistory } from '../../stores/promptHistory'
-import { removeJson, writeJson } from '../../stores/storage'
+import { removeJson, storageKey, writeJson } from '../../stores/storage'
 import Composer from '../Composer.vue'
 
 function mountComposer(props: Record<string, unknown> = {}) {
@@ -90,7 +90,9 @@ describe('Composer prompt-history clear propagation (WEB-6-P1)', () => {
     // removed the key; a read-merge-write ring (CW-DBA-3) reads storage, so
     // the simulation must delete too, not only announce.
     removeJson('promptHistory')
-    window.dispatchEvent(new StorageEvent('storage', { key: 'candy-code-web:promptHistory', newValue: null }))
+    // CW-DBA-9: the ring lives under the cache scope — the simulated other
+    // tab must announce the name the wrapper resolves, not a raw spelling.
+    window.dispatchEvent(new StorageEvent('storage', { key: storageKey('promptHistory'), newValue: null }))
     await wrapper.setProps({ modelValue: 'ship it' })
     await press(wrapper, 'Enter')
     expect(loadPromptHistory()).toEqual(['ship it'])

@@ -12,7 +12,7 @@ import { createAppRouter } from '../../../router'
 import { usePanelsStore } from '../../../stores/agents/panels'
 import { Wire } from '../../../stores/agents/__tests__/harness'
 import { loadPromptHistory } from '../../../stores/promptHistory'
-import { writeJson } from '../../../stores/storage'
+import { storageKey, writeJson } from '../../../stores/storage'
 import CommandPalette from '../CommandPalette.vue'
 
 let pinia: ReturnType<typeof createPinia>
@@ -62,6 +62,9 @@ describe('CommandPalette clear-prompt-history action', () => {
 
   it('confirming clears the stored ring', async () => {
     writeJson('promptHistory', ['remember this prompt'])
+    // CW-DBA-9: name derived — the ring lives under the cache scope now.
+    const ringKey = storageKey('promptHistory')
+    expect(localStorage.getItem(ringKey)).not.toBeNull()
     expect(loadPromptHistory()).toEqual(['remember this prompt'])
     const confirm = stubConfirm(true)
     const wrapper = await openPalette()
@@ -72,7 +75,7 @@ describe('CommandPalette clear-prompt-history action', () => {
     await flushPromises()
     expect(confirm).toHaveBeenCalledOnce()
     expect(loadPromptHistory()).toEqual([])
-    expect(globalThis.localStorage?.getItem('candy-code-web:promptHistory')).toBeNull()
+    expect(globalThis.localStorage?.getItem(ringKey)).toBeNull()
     wrapper.unmount()
   })
 
