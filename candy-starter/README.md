@@ -88,7 +88,7 @@ Keys are not the only traffic `update()` sees. The harness also dispatches `Wind
 
 ### Trust boundary
 
-`Program` writes whatever `view()` returns to the terminal **unmediated** — the styled frame is the one place your bytes become the user's screen. So render only text you control. Anything from outside — file contents, network responses, another user's input — goes through sugar-core's `Sanitize::untrusted()` first (or `untrustedForMarkedFrames()` when the frame carries image/mouse-zone markers): it strips the terminal-control payload and the private-use U+E000 sentinel arena that forged zone markers would abuse. The demo renders an integer it owns, so it needs none — but the line where your app starts rendering the world is exactly the line this rule bites.
+`Program` writes whatever `view()` returns to the terminal **unmediated** — the styled frame is the one place your bytes become the user's screen. So render only text you control. Anything from outside — file contents, network responses, another user's input — goes through one of sugar-core's two sanitizer policies: `Sanitize::untrusted()` strips terminal-control payload but deliberately preserves the private-use arena U+E000–U+F8FF (widening that sweep would eat legitimate image-overlay markers and Nerd Font glyphs); `Sanitize::untrustedForMarkedFrames()` does the same pass and additionally sweeps the `sugar-mouse` zone sentinels U+E000/U+E001 — that extra sweep is the one a frame carrying image/mouse-zone markers needs, because forged zone markers ride exactly those two bytes. The demo renders an integer it owns, so it needs none — but the line where your app starts rendering the world is exactly the line this rule bites. The fleet-wide law is hubbed in the monorepo's `docs/TRUST-BOUNDARY.md`; the starter keeps the short form.
 
 ## Common next steps
 
@@ -103,6 +103,8 @@ Keys are not the only traffic `update()` sees. The harness also dispatches `Wind
 | Style the frame (bold, faint, colour) | `sugarcraft/sugar-style` — `Style`, `Theme` (the demo already frames itself with a `Style`) |
 | Translate your UI strings         | `sugarcraft/sugar-core` — `Lang::t()` with `lang/<code>.php` lookup files (see `LOCALES.md`) |
 | Make it `ssh`-accessible          | `sugarcraft/sugar-ssh-server`            |
+
+One trust note for the log-tail row: multi-line external text is exactly where CR-overwrite and bidi spoofing apply — pipe log contents (or any other foreign stream) through `Sanitize::untrustedForDisplay()` before it reaches a pane: the `untrusted()` sweep plus CR-to-LF conversion and invisible-format marking (sugar-core).
 
 Add the dep, import its classes, return them from `view()`. Most are renderers on the shared `Style`-based vocabulary — but not all of them are pure: `sugar-ssh-server` runs an authenticated server around your Program, and `sugar-core`'s `Lang` reads locale files at boot. Check each package's own README for setup and side effects instead of assuming the render-on-call shape. The demo itself covers the happy path only — one static frame, no colour beyond the border, and no loading or empty state — and the rows above are where you take it from there.
 
