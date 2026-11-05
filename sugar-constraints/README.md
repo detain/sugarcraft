@@ -17,7 +17,8 @@ whole cells. Why not just `int(0.3 * $width)` per pane? Because a resize must
 answer six panes at once — floors, caps, proportional fills, and rounding
 leftovers all interact, and hand-rolled arithmetic distributes them
 differently on every code path. The solver centralises that decision, keeps it
-integer-exact, and is stateless: identical inputs give identical frames — no
+integer-exact for realistic frames (extreme-magnitude inputs are carve-out 4
+below), and is stateless: identical inputs give identical frames — no
 ambient state, nothing cached between solves. A "cell" here is a terminal
 character column: the library places boxes and never measures text — sizing a
 string with CJK, emoji, or combining marks is the caller's problem, and
@@ -107,6 +108,8 @@ Dock\* (DockLayout/DockGeometry/DockSlot/Side)   standalone IDE-dock surface, no
   step 2 below).
 - `Constraint::percentage(int $n)` — `$n` of the solved-axis span,
   integer `0`–`100` inclusive (so 33⅓ is inexpressible; use `ratio(1, 3)`).
+  The range is the input contract; sizes resolved on spans so huge that the
+  `span × n` product overflows int64 fall under carve-out 4 below.
 - `Constraint::ratio(int $numerator, int $denominator)` — `numerator/denominator`
   of the total span on
   the solved axis, reserved like a fixed size. It is **not** an aspect ratio:
@@ -183,10 +186,10 @@ its Ratio path returned 0). The simplex was deleted rather than rewritten:
 the shim keeps the class name alive for straggling callers and warns them on
 every `solve()`.
 
-## Tiling guarantee — and its three carve-outs
+## Tiling guarantee — and its four carve-outs
 
 `solve()` tiles the region exactly for every well-constrained set: the widths
-(or heights) sum to the region's total. Three deliberate exceptions:
+(or heights) sum to the region's total. Four deliberate exceptions:
 
 1. **Under-constrained fixed-only sets keep their gap.** `[percentage(30)]@100`
    yields one 30-wide region and 70 untiled columns — the constraints never
@@ -196,8 +199,18 @@ every `solve()`.
 3. **Zero total elastic demand keeps its gap.** `[fill(0)]@100` yields one
    0-wide region: a `Fill` weight of 0 is weightless, and with no positive-
    weight recipient the span is never absorbed — the slack stays untiled.
+4. **Extreme-magnitude inputs ride float arithmetic.** The `span × n` /
+   `span × numerator` products are unguarded, so beyond int64 they leave
+   exact integer arithmetic: resolved sizes then carry IEEE-754 rounding,
+   and a final cast that exceeds int64 makes `Region` construction throw a
+   misleading negative-width `InvalidArgumentException` naming components the
+   caller never passed (probe, 2026-11: `percentage(100)` on a
+   `PHP_INT_MAX`-wide frame reported `width=-9223372036854775808`). Terminal
+   frames never approach that scale; the behaviour is documented, not
+   guarded.
 
-The first two are pinned in `tests/`; all three are called out on the
+The first two are pinned in `tests/`; the latter two are probe-measured, and
+all four are called out on the
 `LayoutSolver` interface docblock — check them before painting a pane
 edge-to-edge off the sum law.
 
