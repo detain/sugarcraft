@@ -32,6 +32,9 @@
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
+    "suggest": {
+        "ext-posix": "Liveness probing of server children, lock owners and fork successors (signal 0, plus /proc state and start-time checks where procfs exists); without it these probes fail open as alive"
+    },
     "autoload": {
         "psr-4": {
             "SugarCraft\\McpClient\\": "src/"
