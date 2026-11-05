@@ -111,7 +111,7 @@ an alignment; `gapOpen` only applies when an alignment starts from nothing).
 That score is floored at 1, so a gap-heavy in-order match ranks last rather
 than disappearing.
 
-## DoS length caps
+## Smith-Waterman length caps
 
 An alignment costs O(queryLen × candidateLen) time. To bound worst-case cost,
 only the first `maxQueryLength` query characters (default 128) and the first
@@ -126,7 +126,15 @@ match contract and score scale are the same on both sides of the cap and the
 reported indices stay valid in the original haystack. The trade-off: text past
 the candidate cap is not searched — a candidate whose only match lies beyond it
 does not match. Under full-query mode, a query longer than the query cap never
-matches. The traceback costs one byte per cell (≈1 MB at 1000×1000).
+matches. The traceback keeps one byte per cell, so it costs ≈1 KB per query row
+at the 1000-character candidate cap: ≈128 KB at the default caps, reaching
+≈1 MB only if you raise `maxQueryLength` to 1000.
+
+These caps belong to `SmithWatermanMatcher` alone. `SahilmMatcher` is a
+single-pass linear scan and intentionally **uncapped** — every candidate costs
+O(queryLen × candidateLen) time only in the shared sense that each character is
+visited once per query advance; bound hostile-size candidates host-side if the
+input source is untrusted.
 
 ## Sahilm weights
 
