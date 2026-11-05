@@ -39,6 +39,7 @@ composer require sugarcraft/sugar-dashboard
 |------|-------------|-------------|
 | `Item` | Anything that can be rendered as a string | `render(): string` |
 | `Sizer` | An Item that knows its own dimensions (extends Item) | `setSize(int $width, int $height): Sizer`, `render(): string` |
+| `SizedItem` | A `Sizer` that can also report its intrinsic (unconstrained) size — the measurement contract every layout container in the library uses to size its children (extends `Sizer`) | `getInnerSize(): array` |
 | `Drawable` | Universal draw contract with getRect/setRect/draw | `getRect(): Rect`, `setRect(Rect): void`, `draw(Buffer): void` |
 
 ### Configuration Classes
@@ -60,6 +61,10 @@ composer require sugarcraft/sugar-dashboard
 | `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dashboard SSOT, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
 | `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
 | `Theme` | Pre-defined theme palettes (9 colour slots + helpers; `fg()`/`bg()` emit at the detected capability, `NO_COLOR` → empty string) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
+| `ColorMode` | Process-wide colour capability gate for every renderer in the library — charts, gauges and chrome route through it instead of each deciding on its own whether to honour TrueColor, `NO_COLOR` and `TERM=dumb` | `use(?ColorProfile): void`, `profile(): ColorProfile` |
+| `Threshold` | Maps a numeric value (typically a 0..1 ratio) to a `Color` via ordered stops — the shared "green below 60%, yellow below 80%, red above" pattern that gauges, meters and status indicators would otherwise each reinvent; `health()` is the preset triple | `of(array $stops)`, `health(?ok, ?warn, ?critical)`, `colorFor(float): Color`, `stops()` |
+| `EdgeStyle` | String enum `Solid`/`Dashed`/`Dotted`/`Bold` — currently dormant: no consumers in the library (the live tree-edge variant is `Components\Tree\EdgeStyle`, which carries `Double` in place of `Bold` and is consumed by `Network`) | |
+| `Segment` | 7-segment display component (digital-clock/calculator style) — renders characters from horizontal and vertical segments | `new(string)`, `withDigitWidth()`, `withShowColon()`, `withOnColor()`, `withOffColor()`, `withContent()` |
 
 > **Dual-SSOT note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `sugar-style`/`sugar-core`/`sugar-vterm`. The two families have distinct design lineages and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
 
@@ -522,6 +527,8 @@ itself; everything else in the directory is its value part.
 | `Level` | Toast level enum: `Info`, `Warning`, `Error`, `Success` | `icon()`, `isError()`, `isHighlighted()` | |
 | `Notification` | Toast notification DTO: `message`, `level`, `title` | `info()`, `warning()`, `error()`, `success()` | |
 | `Tooltip` | Tooltip popup | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tooltip.gif) |
+| `Hint` | Hint/caption text line — muted/italic/severity presets, optional icon prefix, wraps long text within the allocated width (lives in `Components\Toast\`) | `new(string)`, `muted()`, `italic()`, `info()`, `success()`, `warning()`, `danger()`, `withText()`, `withColor()`, `withStyle()`, `withIcon()` | |
+| `NoticePosition` | Screen-position enum for toast notifications (lives in `Components\Toast\`): the four corners, edge centres, `Center` and `Anchor` — resolves to vertical/horizontal alignment and maps to the sugar-toast `Position` vocabulary | `vertical()`, `horizontal()`, `isCorner()`, `isCenter()`, `isAnchor()`, `toToastPosition()` | |
 | `Popover` | Popover content | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/popover.gif) |
 | `NProgress` | npm-style progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/nprogress.gif) |
 | `Marquee` | Scrolling marquee text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/marquee.gif) |
@@ -548,6 +555,7 @@ itself; everything else in the directory is its value part.
 |------|-------------|----------------------|-----|
 | `Tabs` | Tabbed interface | `new(tabs)`, `withSelectedIndex()`, `withActiveColor()`, `withTabs()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tabs.gif) |
 | `TabsVertical` | Vertical tab navigation | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tabs-vertical.gif) |
+| `TabPane` | Pane container for tab content — renders content within a tab-pane context with optional border styling (lives in `Components\Tabs\` with `Tabs`/`TabsVertical`) | `new(Item)`, `withBorderColor()`, `withBorderChar()`, `withPadded()` | |
 | `Breadcrumb` | Breadcrumb navigation | `new(items)`, `fromPath()`, `withItems()`, `withSeparator()`, `withActiveIndex()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/breadcrumb.gif) |
 | `Pagination` | Pagination controls | | |
 | `PaginationSimple` | Simple pagination | | |
@@ -700,6 +708,7 @@ itself; everything else in the directory is its value part.
 | `Center` | Calculate centered position | |
 | `HAlign` | `Left`, `Right`, `Center` | |
 | `VAlign` | `Top`, `Middle`, `Bottom` | |
+| `Overlay` | Auto-positioning helper for overlays — computes the optimal position relative to an anchor, choosing above or below based on available space, clamped to container bounds | `calculate(int $overlayWidth, int $overlayHeight, int $anchorX, int $anchorY, int $containerWidth, int $containerHeight): array`, `fitsBelow()`, `fitsAbove()` | |
 
 > Note: `Position\Center` is the geometry helper (computes centered
 > coordinates); `Layout\Center` is a separate renderable wrapper that centres
@@ -726,6 +735,8 @@ itself; everything else in the directory is its value part.
 | `ImagePlacer` | Optional interface for image placements |
 | `ImagePlacement` | Image placement data |
 | `TickEpoch` | Focus-regain epoch counter |
+| `BoundedCommand` | One bounded child-process run: argv array (no shell interpolation), wall-clock deadline (default 5s), 1 MiB output ceiling, and a guaranteed TERM→KILL reap before `proc_close` | `run(array $argv, float $timeoutSeconds, int $maxOutputBytes): array` |
+| `ProcAvailability` | Probe-once availability of Linux `/proc` pseudo-files — probe once, degrade quietly, show a visible 'n/a' sentinel on hosts without `/proc` instead of failing | `has(string $path): bool` |
 
 ## Registry Namespace (Module Registry)
 
