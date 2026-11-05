@@ -141,6 +141,31 @@ final class Picture
         return Sixel::encode($this->pixels, $this->paletteSize);
     }
 
+    /**
+     * The kitty graphics protocol caps any single APC frame at 4 KiB —
+     * a longer frame is truncated by the terminal, corrupting the image.
+     * This is the doctrine sugar-image enforces as
+     * {@see \SugarCraft\Image\KittyOptions::MAX_FRAME_BYTES} (read-only
+     * reference — charts carries no dependency on sugar-image, so the
+     * cap is mirrored here; CH-2, docs-reviews-1104).
+     */
+    private const MAX_FRAME_BYTES = 4096;
+
+    /**
+     * Base64 payload bytes per chunk: the frame cap minus the WORST-CASE
+     * envelope, floored for margin. Envelope bytes are the APC opener
+     * {@see APC_OPEN} (3) + transport header (13 for the opening
+     * `f=100,a=T,m=1`, 3 for continuations) + `;` (1) + string
+     * terminator {@see ST} (2) = 19 worst-case. 4096 - 19 = 4077, floored
+     * to 4072 for a 5-byte safety margin — the same shape as sugar-image's
+     * DEFAULT_CHUNK_BYTES reserving parameter room above its raw envelope.
+     */
+    private const CHUNK_PAYLOAD_BYTES = 4072;
+
+    /** APC opener `ESC _ G` and string terminator `ESC \` around a frame. */
+    private const APC_OPEN = "\x1b_G";
+    private const ST = "\x1b\\";
+
     private function encodeKitty(): string
     {
         if ($this->png === '') {
@@ -149,7 +174,10 @@ final class Picture
         // Kitty: APC G f=100,a=T;<base64 PNG>... ESC \
         // f=100 = PNG, a=T = transmit + display, m=1 = chunked.
         $b64 = base64_encode($this->png);
-        $chunks = str_split($b64, 4096);
+        // CH-2 (M18): the split must be envelope-aware — chunking the
+        // raw base64 at 4096 produced frames of 4114-4115 bytes, above
+        // the protocol cap the terminal measures on the WHOLE frame.
+        $chunks = str_split($b64, self::CHUNK_PAYLOAD_BYTES);
         $out = '';
         $count = count($chunks);
         foreach ($chunks as $i => $chunk) {
@@ -157,7 +185,7 @@ final class Picture
             $header = $i === 0
                 ? "f=100,a=T,m={$more}"
                 : "m={$more}";
-            $out .= "\x1b_G{$header};{$chunk}\x1b\\";
+            $out .= self::APC_OPEN . $header . ';' . $chunk . self::ST;
         }
         return $out;
     }
