@@ -245,7 +245,8 @@ final class Theme
 
     /**
      * Monochrome ASCII theme — every Style emits at most bold / italic
-     * / underline (no colour). Distinct from {@see plain()} (which is a
+     * / underline / strikethrough (no colour; the strike element carries
+     * {@see Style::strikethrough()} for `~~text~~`). Distinct from {@see plain()} (which is a
      * total no-op) and {@see notty()} (an alias of plain). Use this
      * when you want emphasis to survive a colour-less terminal but not
      * a totally bare one — e.g. printer-friendly logs, accessibility

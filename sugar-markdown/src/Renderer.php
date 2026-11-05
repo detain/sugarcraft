@@ -430,9 +430,10 @@ final class Renderer
      */
     public function parseSection(string $section, ?ReferenceMapInterface $seed = null): Document
     {
-        if ($this->sanitize) {
-            $section = self::scrubForParse($section);
-        }
+        // Unconditional encoding repair — the same law as render(): CommonMark
+        // throws on invalid UTF-8 whatever sanitize says, and stream() must
+        // stay byte-identical to render() for the same bytes.
+        $section = self::scrubForParse($section);
         // Post-parse expansion (renderText) is byte-local to a text run, so
         // the stream channel and the whole-document channel see the same
         // nodes and stay byte-identical.
@@ -697,6 +698,7 @@ final class Renderer
     public function preservedNewLines(bool $on = true): self { return $this->withPreservedNewLines($on); }
     public function emoji(bool $on = true): self         { return $this->withEmoji($on); }
     public function standardStyle(string $name): self    { return $this->withStandardStyle($name); }
+    public function styleSheet(StyleSheet $sheet): self  { return $this->withStyleSheet($sheet); }
 
     /** @internal copy-with-overrides for chainable builders. */
     private function copy(
@@ -731,9 +733,13 @@ final class Renderer
 
     public function render(string $markdown): string
     {
-        if ($this->sanitize) {
-            $markdown = self::scrubForParse($markdown);
-        }
+        // Encoding repair runs regardless of sanitize: CommonMark refuses to
+        // parse invalid UTF-8 with an UnexpectedEncodingException, and a
+        // sanitize-off caller asking for raw-HTML passthrough never asked to
+        // trade a crash for it. scrubForParse only touches bytes that cannot
+        // form valid UTF-8; the control-stripping sweep (stripControls) is
+        // what sanitize gates, and it stays gated.
+        $markdown = self::scrubForParse($markdown);
         // Expansion runs post-parse in renderText: the parser sees the
         // source bytes as written, so shortcodes inside code spans, fenced
         // blocks and link destinations stay literal (M1).
@@ -914,9 +920,11 @@ final class Renderer
     }
 
     /**
-     * Make raw source safe to hand the CommonMark parser when sanitising:
+     * Make raw source safe to hand the CommonMark parser:
      * lone 8-bit C1 bytes are removed ({@see stripLoneC1()}), then any other
-     * malformed UTF-8 is repaired to U+FFFD.
+     * malformed UTF-8 is repaired to U+FFFD. Applied whether or not
+     * sanitising is on — it repairs only bytes that cannot survive a
+     * UTF-8 validator, so it is encoding hygiene, not content filtering.
      *
      * Why before the parse and not only in {@see stripControls()}: CommonMark
      * refuses input that is not valid UTF-8 with an

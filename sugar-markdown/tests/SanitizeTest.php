@@ -211,4 +211,61 @@ final class SanitizeTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $rendered);
         $this->assertStringNotContainsString("\x07", $rendered);
     }
+
+    /**
+     * Encoding cliff (m19): before the scrub hoist, a lone C1 byte out of a
+     * sanitize-off renderer crashed inside CommonMark with an
+     * UnexpectedEncodingException — sanitize governs content filtering, not
+     * UTF-8 validity, and refusing to parse is neither. The byte is removed
+     * (matching sugar-core Sanitize::untrusted), the rest renders.
+     */
+    public function testLoneC1ByteRendersInsteadOfThrowingWithSanitizeOff(): void
+    {
+        $input = "a\x80b\x9b done\n";
+        $rendered = Renderer::plain()->withSanitize(false)->render($input);
+        $this->assertStringContainsString('ab', $rendered);
+        $this->assertStringContainsString('done', $rendered);
+        $this->assertStringNotContainsString("\x80", $rendered);
+        $this->assertStringNotContainsString("\x9b", $rendered);
+    }
+
+    /**
+     * Malformed UTF-8 with sanitize off is repaired to U+FFFD (not thrown,
+     * not silently dropped): the repair arm of scrubForParse now runs on
+     * every channel.
+     */
+    public function testMalformedUtf8RepairedToReplacementCharWithSanitizeOff(): void
+    {
+        $rendered = Renderer::plain()->withSanitize(false)->render("x\xffy\n");
+        $this->assertStringContainsString("\u{FFFD}", $rendered);
+        $this->assertStringContainsString('x', $rendered);
+        $this->assertStringContainsString('y', $rendered);
+    }
+
+    /**
+     * The hoist moved only the cliff: hostile-encoding bytes answer the same
+     * bytes whether sanitize is on or off (content filtering still diverges
+     * — see the ESC pins above; encoding repair does not).
+     */
+    public function testEncodingScrubIsIdenticalOnBothSidesOfSanitize(): void
+    {
+        $input = "a\x80b\x9b ü café\n";
+        $this->assertSame(
+            Renderer::plain()->render($input),
+            Renderer::plain()->withSanitize(false)->render($input),
+        );
+    }
+
+    /**
+     * The stream channel prepares each section through parseSection(), which
+     * carries the same hoist — a hostile byte mid-document must not throw
+     * there either, and stream() must stay byte-identical to render().
+     */
+    public function testStreamChannelCarriesTheSameEncodingHoist(): void
+    {
+        $input = "see [a] now\x80\n\n[a]: /url\n";
+        $renderer = Renderer::plain()->withSanitize(false);
+        $streamed = implode('', iterator_to_array($renderer->stream([$input]), false));
+        $this->assertSame($renderer->render($input), $streamed);
+    }
 }

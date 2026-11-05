@@ -6,6 +6,7 @@ namespace SugarCraft\Markdown\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\Style\StyleSheet;
 use SugarCraft\Markdown\Theme;
 
 /**
@@ -68,6 +69,7 @@ final class ShortAliasesTest extends TestCase
         yield 'preserved-new-lines' => ['withPreservedNewLines', 'preservedNewLines', true, "one\n\ntwo\n\n\nthree\n"];
         yield 'standard-style' => ['withStandardStyle', 'standardStyle', 'dracula', self::SAMPLE];
         yield 'sanitize' => ['withSanitize', 'sanitize', false, "hi\x1b[31mred\x1b[0m\n"];
+        yield 'style-sheet' => ['withStyleSheet', 'styleSheet', StyleSheet::base(), self::SAMPLE];
     }
 
     /**
