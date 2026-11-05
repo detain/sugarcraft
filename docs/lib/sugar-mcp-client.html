@@ -108,7 +108,8 @@ $server->stop();               // close pipes first, then TERM→KILL→reap —
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<caption>API surface</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
 <tr><td>McpMessage</td><td>parse(string $json): ?self</td><td>Decode a wire frame; null for anything that is not a valid JSON-RPC 2.0 message (nesting deeper than 64 included)</td></tr>
 <tr><td>McpMessage</td><td>request(string $id, string $method, ?array $params) / notification(string $method, ?array $params): self</td><td>Outbound request and notification envelopes</td></tr>
 <tr><td>McpMessage</td><td>success(string $id, mixed $result) / error(string $id, int $code, string $message, mixed $data = null): self</td><td>Outbound response envelopes; result is mixed by law; an explicit "data": null is indistinguishable from an absent one on round-trip</td></tr>
