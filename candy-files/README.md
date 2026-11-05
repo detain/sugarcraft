@@ -30,7 +30,7 @@ works, and a German `(j/n)` answers to `j`.
 ┃    notes.md                    12.0KB    ┃  │    Xorg.0.log                   4.0KB    │
 ┃    todo.txt                      512B    ┃  └──────────────────────────────────────────┘
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
- Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo
+ focus: left · Tab swap · ↑↓ jk move · Home/End g/G jump · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · Esc clear · t duplicate tab · ^w close tab · ^tab cycle · ^PgUp/^PgDn tabs · u/^z undo · ^y redo
 ```
 
 ## Run it
@@ -105,7 +105,7 @@ on a bare php-cli machine the step that refuses is `composer install`, naming `s
 | `u` / `Ctrl+z`  | Undo last operation                                      |
 | `Ctrl+y`        | Redo last undone operation                               |
 
- Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and `^tab` is Ctrl+Tab. That in-app line is a partial cheat sheet; the full binding table is the one above. Plain `PageUp`/`PageDown` (unmodified) are not bound to anything. The trailing `_` shown while renaming is the text-entry caret.
+ Notation legend: the bottom help line spells chords with a caret — `^w` is Ctrl+w and `^tab` is Ctrl+Tab. That in-app line is a partial cheat sheet; the full binding table is the one above. Plain `PageUp`/`PageDown` (unmodified) are not bound to anything. The trailing `_` shown while renaming is the text-entry caret. The active pane is marked two ways: a thick border, and a localized `focus: left` / `focus: right` label leading every status line (the label is the cue that survives linearized or screen-reader reading).
 
 ### Terminal support for Ctrl+Tab
 

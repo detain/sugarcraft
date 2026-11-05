@@ -104,6 +104,22 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString(Sort::NameAsc->value, $out);
     }
 
+    /**
+     * N-16: the active-pane cue was border weight only (thick vs normal)
+     * — invisible once the frame is linearized or copied as text. Every
+     * rendered status line now leads with a localized focus label, and
+     * Tab (the swap key) flips it.
+     */
+    public function testStatusLineLeadsWithTheFocusCue(): void
+    {
+        $m = Manager::start('/', '/', $this->fakeFs());
+        $this->assertStringContainsString('focus: left', Renderer::render($m));
+
+        [$m] = $m->update(new KeyMsg(KeyType::Tab));
+        $this->assertSame(1, $m->activeIdx, 'premise: Tab swapped the active pane');
+        $this->assertStringContainsString('focus: right', Renderer::render($m));
+    }
+
     public function testRenderHandlesEmptyDirectory(): void
     {
         $empty = static fn(string $p): array => [];

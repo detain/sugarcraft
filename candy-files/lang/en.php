@@ -45,6 +45,9 @@ return [
     'status.redo_with_errors'  => 'redo {description} with {errors} error(s)',
     'status.nothing_to_redo'    => 'nothing to redo',
     'status.copy_undo_noop'    => 'copy left in place (nothing to undo)',
+    'status.focus'             => 'focus: {side}',
+    'side.left'                => 'left',
+    'side.right'               => 'right',
 
     // Undo/redo action descriptions (rendered inside status.undone/&c.)
     'undo.delete' => 'delete {count} item(s)',

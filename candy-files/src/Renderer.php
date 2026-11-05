@@ -25,7 +25,12 @@ final class Renderer
 
         $tabBar = self::renderTabBar($m);
         $search = self::renderSearch($m);
-        $status = $m->status === '' ? self::keyHelp() : $m->status;
+        // N-16: the active-pane cue used to be border weight alone (thick
+        // vs normal) — invisible once the frame is linearized or copied as
+        // text. Lead the status line with a localized focus label so every
+        // frame says which pane answers the keyboard.
+        $focus  = Lang::t('status.focus', ['side' => $active === 0 ? Lang::t('side.left') : Lang::t('side.right')]);
+        $status = $focus . ' · ' . ($m->status === '' ? self::keyHelp() : $m->status);
         return $search . $tabBar . $body . "\n" . self::statusBar($status);
     }
 
