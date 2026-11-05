@@ -17,7 +17,7 @@ Tetris built on the SugarCraft stack. SugarCraft runtime, SugarStyle for the rou
 
 ## Run it
 
-From a source checkout:
+From a source checkout (run the commands below from this `candy-tetris/` directory):
 
 ```bash
 composer install
@@ -86,6 +86,7 @@ Compete against an AI opponent in split-screen mode. When you clear lines, garba
 | Space     | Hard drop         |
 | c         | Hold piece        |
 | p         | Pause / resume    |
+| r         | New game (after game over only) |
 | q         | Quit              |
 
 Hold works on your field, and the VS sidebar does paint your hold card — it
@@ -94,7 +95,8 @@ computer's queue stays private by design: the strip shows its score, not its
 next piece.
 
 The computer opponent uses weighted heuristics (board height, holes, gaps,
-lines) to make optimal moves. If both boards top out on the same tick, the
+lines) to pick the best move available to it — a one-piece greedy search
+under its weights, not provably optimal play. If both boards top out on the same tick, the
 computer wins: the player's field is checked first.
 
 ## Controls
@@ -176,8 +178,9 @@ The record survives the exit. A finished game settles into
 `~/.config/candy-tetris/scores.json`): the solo best score, how many solo
 games ended, and a win/loss tally for versus matches. The banner reads the
 best against your final score and flags `new best!` when the table top was
-beat. Versus games never touch the solo best — the two player boards run
-unwired by design. The file is written atomically at mode 0600; a corrupt or
+beat. Versus games never touch the solo best — the two players keep
+separate boards and tallies by design, and versus results land only in the
+win/loss tally. The file is written atomically at mode 0600; a corrupt or
 unwritable record is announced loudly on stderr and the game starts fresh
 without zeroing the old file, and a refused save is announced while the
 in-memory record stays honest. A launch with no resolvable HOME writes no
@@ -190,8 +193,9 @@ from a clean board and quitting mid-drop loses the run (only the record of
 ### Hold
 
 Press **c** to stash the falling piece into the hold slot; press it again on
-the next piece to swap it back in. You can only hold once per drop — the slot
-dims until the current piece locks.
+the next piece to swap it back in. You can only hold once per drop — while
+the slot is spent for the current drop its card carries an `(used)` cue
+until the piece locks.
 
 ![hold demo](.vhs/hold-demo.gif)
 
@@ -223,7 +227,7 @@ unpausing resumes the same window where it stopped.
 | 3             | 300                        |
 | 4 (Tetris)    | 1200                       |
 
-Level rises every 10 lines. Gravity speeds up at every level — by level 9 pieces fall every 6 frames, by level 29+ they fall every frame. The frame-rate-agnostic `Score::framesPerRow()` is what the gravity tick consults.
+Level rises every 10 lines. Gravity speeds up as levels climb, though consecutive levels can share a speed — by level 9 pieces fall every 6 frames, by level 29+ they fall every frame. The frame-rate-agnostic `Score::framesPerRow()` is what the gravity tick consults.
 
 ### Drop points
 
